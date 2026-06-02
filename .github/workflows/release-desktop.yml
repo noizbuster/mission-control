@@ -1,0 +1,36 @@
+name: release-desktop
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release-desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @mission-control/desktop build
+      - name: Tauri desktop build
+        uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: apps/desktop
+      - name: upload desktop release artifact
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/desktop/src-tauri/target/release/bundle/**/*
+      - name: signing/notarization TODO
+        run: echo "add platform-specific signing after release credentials exist"

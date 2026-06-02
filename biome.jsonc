@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": ["./biome.usd.jsonc"],
+  "files": {
+    "includes": [
+      "!**/apps/**/log",
+      "!**/dist",
+      "!**/target",
+      "!**/.next",
+      "!**/.next-playwright",
+      "!**/node_modules",
+      "!**/.nx",
+      "!**/build",
+      "!**/coverage"
+    ]
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": {
+          "level": "on",
+          "options": {
+            "groups": [
+              [":PACKAGE:", "!@usd/**", "!@fulgurite/**", "!@/**", "!~/**"],
+              "@usd/**",
+              "@fulgurite/**",
+              "@/**",
+              "~/**",
+              ":ALIAS:",
+              ":PATH:"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  }
+}

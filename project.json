@@ -1,0 +1,52 @@
+{
+  "$schema": "./node_modules/nx/schemas/project-schema.json",
+  "name": "workspace",
+  "projectType": "application",
+  "root": ".",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "node -e \"console.log('workspace build is covered by project build targets')\""
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "node -e \"console.log('workspace typecheck is covered by project typecheck targets')\""
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "biome check ."
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{workspaceRoot}/tests/**/*.ts",
+        "{workspaceRoot}/scripts/**/*.ts",
+        "{workspaceRoot}/package.json",
+        "{workspaceRoot}/tsconfig.base.json",
+        "{workspaceRoot}/vitest.config.ts"
+      ],
+      "options": {
+        "command": "vitest run tests scripts --reporter verbose"
+      }
+    },
+    "package-cli": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{workspaceRoot}/scripts/package-cli.ts",
+        "{workspaceRoot}/apps/cli/package.json",
+        "{workspaceRoot}/package.json"
+      ],
+      "options": {
+        "command": "node --experimental-strip-types scripts/package-cli.ts"
+      }
+    }
+  }
+}

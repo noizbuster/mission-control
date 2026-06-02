@@ -1,0 +1,30 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "sidecar",
+  "projectType": "application",
+  "root": "native/sidecar",
+  "sourceRoot": "native/sidecar/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/target"],
+      "options": {
+        "command": "cargo build --manifest-path native/sidecar/Cargo.toml"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "cargo test --manifest-path native/sidecar/Cargo.toml"
+      }
+    },
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo run --manifest-path native/sidecar/Cargo.toml --",
+        "forwardAllArgs": true
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@mission-control/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && vite build",
+    "dev": "sh -c 'while [ \"${1:-}\" = \"--\" ]; do shift; done; vite --host 127.0.0.1 \"$@\"' --",
+    "test": "sh -c 'cd ../.. && while [ \"${1:-}\" = \"--\" ]; do shift; done; vitest run --reporter verbose \"$@\"' --",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@mission-control/config": "workspace:*",
+    "@mission-control/protocol": "workspace:*",
+    "@vitejs/plugin-react": "^5.1.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "vite": "^7.2.7"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
+  }
+}

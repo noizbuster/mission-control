@@ -1,0 +1,55 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "production": [
+      "default",
+      "!{projectRoot}/**/*.test.ts",
+      "!{projectRoot}/**/*.test.tsx",
+      "!{projectRoot}/src/**/*.test.ts",
+      "!{projectRoot}/src/**/*.test.tsx"
+    ],
+    "sharedGlobals": [
+      "{workspaceRoot}/package.json",
+      "{workspaceRoot}/pnpm-lock.yaml",
+      "{workspaceRoot}/pnpm-workspace.yaml",
+      "{workspaceRoot}/tsconfig.base.json",
+      "{workspaceRoot}/vitest.config.ts",
+      "{workspaceRoot}/biome.jsonc",
+      "{workspaceRoot}/biome.usd.jsonc"
+    ]
+  },
+  "targetDefaults": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"],
+      "outputs": ["{projectRoot}/dist", "{projectRoot}/build", "{projectRoot}/target"]
+    },
+    "typecheck": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"]
+    },
+    "test": {
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "outputs": []
+    },
+    "lint": {
+      "cache": true,
+      "inputs": ["default"]
+    },
+    "tauri-test": {
+      "cache": true,
+      "inputs": ["default"],
+      "outputs": []
+    },
+    "dev": {
+      "cache": false
+    },
+    "package-cli": {
+      "cache": false
+    }
+  }
+}

@@ -1,0 +1,46 @@
+name: release-cli
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release-cli:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            os: linux
+            arch: x64
+          - runner: macos-latest
+            os: darwin
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @mission-control/cli build
+      - run: cargo build --release --manifest-path native/sidecar/Cargo.toml
+      - run: pnpm dev:package-cli
+      - name: artifact name
+        run: echo "mctrl-${{ matrix.os }}-${{ matrix.arch }}.tar.gz"
+      - name: upload release artifact
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/release/mctrl-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
+      - name: publish npm
+        if: ${{ secrets.NPM_TOKEN != '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm --filter @mission-control/cli publish --access public --no-git-checks
