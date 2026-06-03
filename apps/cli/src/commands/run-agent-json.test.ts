@@ -17,4 +17,31 @@ describe('runAgent JSON reporter', () => {
         expect(parsed.some((event) => event.type === 'session.started')).toBe(true);
         expect(parsed.some((event) => event.type === 'task.completed')).toBe(true);
     });
+
+    it('json output includes selected provider and model metadata', async () => {
+        const output = await runAgent({
+            mode: 'json',
+            useNative: false,
+            command: 'run',
+            showHelp: false,
+            showVersion: false,
+            modelProviderSelection: {
+                providerID: 'local',
+                modelID: 'local-echo',
+            },
+        });
+        const parsed = output
+            .trim()
+            .split('\n')
+            .map((line) => AgentEventSchema.parse(JSON.parse(line)));
+
+        expect(parsed.find((event) => event.type === 'session.started')?.modelProviderSelection).toEqual({
+            providerID: 'local',
+            modelID: 'local-echo',
+        });
+        expect(parsed.find((event) => event.type === 'task.completed')?.modelProviderSelection).toEqual({
+            providerID: 'local',
+            modelID: 'local-echo',
+        });
+    });
 });

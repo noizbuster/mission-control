@@ -10,6 +10,10 @@ const event: AgentEvent = {
     taskId: 'task_1',
     message: 'completed by mock sidecar',
     nativeSidecarStatus: 'mock',
+    modelProviderSelection: {
+        providerID: 'local',
+        modelID: 'local-echo',
+    },
 };
 
 async function renderWith(renderer: AgentUIRenderer): Promise<string> {
@@ -26,10 +30,16 @@ describe('CLI renderers', () => {
         const jsonOutput = await renderWith(new JsonRenderer());
 
         expect(inkOutput).toContain('event list');
+        expect(inkOutput).toContain('model: local/local-echo');
+        expect(plainOutput).toContain('model: local/local-echo');
         expect(plainOutput).toContain('task.completed completed by mock sidecar');
         expect(JSON.parse(jsonOutput.trim())).toMatchObject({
             type: 'task.completed',
             taskId: 'task_1',
+            modelProviderSelection: {
+                providerID: 'local',
+                modelID: 'local-echo',
+            },
         });
     });
 });

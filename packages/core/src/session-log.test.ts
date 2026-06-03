@@ -55,4 +55,41 @@ describe('SessionEventLog', () => {
             nativeSidecarStatus: 'mock',
         });
     });
+
+    it('derives provider model selection from the latest event in snapshots', () => {
+        const session: AgentSession = {
+            id: 'session_test',
+            status: 'running',
+            startedAt: '2026-06-02T10:00:00.000Z',
+        };
+        const log = new SessionEventLog();
+
+        log.append({
+            type: 'session.started',
+            timestamp: session.startedAt,
+            sessionId: session.id,
+            nativeSidecarStatus: 'mock',
+            modelProviderSelection: {
+                providerID: 'mock',
+                modelID: 'mission-control-demo',
+            },
+        });
+        log.append({
+            type: 'task.completed',
+            timestamp: '2026-06-02T10:00:01.000Z',
+            sessionId: session.id,
+            taskId: 'task_1',
+            message: 'done',
+            nativeSidecarStatus: 'mock',
+            modelProviderSelection: {
+                providerID: 'local',
+                modelID: 'local-echo',
+            },
+        });
+
+        expect(log.getSnapshot(session).modelProviderSelection).toEqual({
+            providerID: 'local',
+            modelID: 'local-echo',
+        });
+    });
 });

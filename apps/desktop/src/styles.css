@@ -23,7 +23,11 @@ button {
     font: inherit;
     font-weight: 700;
     min-height: 40px;
+    max-width: 100%;
+    overflow: hidden;
     padding: 0 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 button:hover {
@@ -67,10 +71,82 @@ h1 {
     padding: 8px 10px;
 }
 
+.status-group {
+    align-items: end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.model-status {
+    background: #e8edf1;
+    border-color: #aebbc6;
+}
+
 .controls {
+    align-items: end;
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
+}
+
+.selection-controls {
+    border-bottom: 1px solid #d6dde2;
+    padding-bottom: 14px;
+}
+
+.field {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.field span {
+    color: #4f5d69;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+input,
+select {
+    background: #ffffff;
+    border: 1px solid #9ba8b3;
+    border-radius: 6px;
+    color: #1b2430;
+    font: inherit;
+    max-width: 100%;
+    min-height: 40px;
+    min-width: 180px;
+    overflow: hidden;
+    padding: 0 10px;
+    text-overflow: ellipsis;
+}
+
+.credential-field input {
+    min-width: 220px;
+}
+
+.credential-status {
+    align-items: center;
+    border: 1px solid #aebbc6;
+    border-radius: 6px;
+    color: #26313d;
+    display: inline-flex;
+    font-size: 14px;
+    font-weight: 700;
+    min-height: 40px;
+    padding: 0 10px;
+}
+
+.credential-status[data-state="credential configured"] {
+    background: #c7e7d4;
+    border-color: #79b28f;
+}
+
+.credential-status[data-state="credential missing"] {
+    background: #fff3c4;
+    border-color: #d7b84d;
 }
 
 .event-log {
@@ -83,12 +159,18 @@ h1 {
 .event-row {
     display: grid;
     gap: 12px;
-    grid-template-columns: minmax(130px, 0.9fr) minmax(210px, 1.2fr) minmax(180px, 1.4fr) minmax(120px, 0.8fr) minmax(
-            90px,
-            0.6fr
-        );
-    min-width: 840px;
+    grid-template-columns:
+        minmax(130px, 0.8fr) minmax(210px, 1fr) minmax(190px, 1.1fr) minmax(150px, 0.85fr)
+        minmax(190px, 0.9fr) minmax(90px, 0.55fr);
+    min-width: 1020px;
     padding: 10px 12px;
+}
+
+.event-log-header > span,
+.event-row > span,
+.event-row > time {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .event-log-header {

@@ -1,7 +1,9 @@
+import { defaultModelProviderSelection } from '@mission-control/config';
 import type {
     AgentEvent,
     AgentSession,
     AgentSnapshot,
+    ModelProviderSelection,
     PermissionDecision,
     PermissionRequest,
 } from '@mission-control/protocol';
@@ -11,10 +13,13 @@ import { ProcessSidecarClient, type SidecarClient } from './native/sidecar-clien
 import { createDefaultPermissionDecision } from './permissions.js';
 import { SessionEventLog } from './session-log.js';
 
+const sidecarEnvKey = 'MISSION_CONTROL_SIDECAR';
+
 export type AgentRuntimeOptions = {
     readonly useNative?: boolean;
     readonly sidecarCommand?: string;
     readonly sidecarTimeoutMs?: number;
+    readonly modelProviderSelection?: ModelProviderSelection;
 };
 
 export class AgentRuntime {
@@ -22,10 +27,12 @@ export class AgentRuntime {
     private readonly log = new SessionEventLog();
     private readonly bus = new EventBus<AgentEvent>();
     private readonly sidecarClient: SidecarClient;
+    private readonly modelProviderSelection: ModelProviderSelection;
     private session: AgentSession | undefined;
 
     constructor(options: AgentRuntimeOptions = {}) {
         this.options = options;
+        this.modelProviderSelection = options.modelProviderSelection ?? defaultModelProviderSelection;
         this.sidecarClient = options.useNative
             ? new ProcessSidecarClient(resolveSidecarCommand(options), options.sidecarTimeoutMs)
             : new MockSidecarClient();
@@ -45,6 +52,7 @@ export class AgentRuntime {
             sessionId: session.id,
             message: 'mission-control session started',
             nativeSidecarStatus: 'mock',
+            modelProviderSelection: this.modelProviderSelection,
         });
         return session;
     }
@@ -65,6 +73,7 @@ export class AgentRuntime {
             ...(sessionId ? { sessionId } : {}),
             message: 'mission-control session stopped',
             nativeSidecarStatus: 'mock',
+            modelProviderSelection: this.modelProviderSelection,
         });
     }
 
@@ -86,6 +95,7 @@ export class AgentRuntime {
             taskId,
             message: 'demo task started',
             nativeSidecarStatus: 'mock',
+            modelProviderSelection: this.modelProviderSelection,
         });
         this.emit({
             type: 'task.progress',
@@ -95,6 +105,7 @@ export class AgentRuntime {
             progress: 0.5,
             message: 'demo task in progress',
             nativeSidecarStatus: 'mock',
+            modelProviderSelection: this.modelProviderSelection,
         });
         const output = await this.runTaskWithFallback(taskId);
         this.emit({
@@ -104,6 +115,7 @@ export class AgentRuntime {
             taskId,
             message: output.message,
             nativeSidecarStatus: 'mock',
+            modelProviderSelection: this.modelProviderSelection,
         });
     }
 
@@ -117,6 +129,7 @@ export class AgentRuntime {
             ...(taskId !== undefined ? { taskId } : {}),
             message: `permission requested: ${request.action}`,
             nativeSidecarStatus: 'mock',
+            modelProviderSelection: this.modelProviderSelection,
             permissionRequest: request,
             permissionDecision: decision,
         });
@@ -164,6 +177,7 @@ export class AgentRuntime {
                 taskId,
                 message: error instanceof Error ? error.message : String(error),
                 nativeSidecarStatus: 'unavailable',
+                modelProviderSelection: this.modelProviderSelection,
             });
             const mock = new MockSidecarClient();
             return mock.runTask({
@@ -177,5 +191,5 @@ export class AgentRuntime {
 }
 
 function resolveSidecarCommand(options: AgentRuntimeOptions): string {
-    return options.sidecarCommand ?? process.env['MISSION_CONTROL_SIDECAR'] ?? 'mission-control-sidecar';
+    return options.sidecarCommand ?? process.env[sidecarEnvKey] ?? 'mission-control-sidecar';
 }

@@ -18,11 +18,16 @@ export const NATIVE_SIDECAR_STATUSES = ['unknown', 'mock', 'native', 'unavailabl
 
 export const PERMISSION_STATUSES = ['allow', 'deny'] as const;
 
+export const MODEL_CATALOG_STATUSES = ['active', 'deprecated'] as const;
+
 export const AgentEventTypeSchema = z.enum(AGENT_EVENT_TYPES);
 export type AgentEventType = z.infer<typeof AgentEventTypeSchema>;
 
 export const PermissionStatusSchema = z.enum(PERMISSION_STATUSES);
 export type PermissionStatus = z.infer<typeof PermissionStatusSchema>;
+
+export const ModelCatalogStatusSchema = z.enum(MODEL_CATALOG_STATUSES);
+export type ModelCatalogStatus = z.infer<typeof ModelCatalogStatusSchema>;
 
 export const AgentMessageSchema = z.object({
     role: z.enum(['system', 'user', 'assistant']),
@@ -58,6 +63,51 @@ export const SidecarTaskOutputSchema = z.object({
 });
 export type SidecarTaskOutput = z.infer<typeof SidecarTaskOutputSchema>;
 
+export const ModelProviderSelectionSchema = z.object({
+    providerID: z.string().min(1),
+    modelID: z.string().min(1),
+});
+export type ModelProviderSelection = z.infer<typeof ModelProviderSelectionSchema>;
+
+export const ProviderCredentialSchema = z.object({
+    providerID: z.string().min(1),
+    type: z.literal('apiKey'),
+    apiKey: z.string().min(1),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+});
+export type ProviderCredential = z.infer<typeof ProviderCredentialSchema>;
+
+export const ProviderAuthFileSchema = z.object({
+    $schema: z.string().url(),
+    default: ModelProviderSelectionSchema.optional(),
+    credentials: z.record(z.string().min(1), ProviderCredentialSchema),
+});
+export type ProviderAuthFile = z.infer<typeof ProviderAuthFileSchema>;
+
+export const ProviderCredentialSummarySchema = z.object({
+    providerID: z.string().min(1),
+    authenticated: z.boolean(),
+    maskedCredential: z.string().optional(),
+});
+export type ProviderCredentialSummary = z.infer<typeof ProviderCredentialSummarySchema>;
+
+export const ModelCatalogEntrySchema = z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    status: ModelCatalogStatusSchema.default('active'),
+});
+export type ModelCatalogEntry = z.infer<typeof ModelCatalogEntrySchema>;
+
+export const ProviderCatalogEntrySchema = z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    defaultModelID: z.string().min(1),
+    authLabel: z.string().min(1),
+    models: z.array(ModelCatalogEntrySchema).min(1),
+});
+export type ProviderCatalogEntry = z.infer<typeof ProviderCatalogEntrySchema>;
+
 export const AgentEventSchema = z.object({
     type: AgentEventTypeSchema,
     timestamp: z.string().datetime(),
@@ -68,6 +118,7 @@ export const AgentEventSchema = z.object({
     nativeSidecarStatus: z.enum(NATIVE_SIDECAR_STATUSES).optional(),
     permissionRequest: PermissionRequestSchema.optional(),
     permissionDecision: PermissionDecisionSchema.optional(),
+    modelProviderSelection: ModelProviderSelectionSchema.optional(),
 });
 export type AgentEvent = z.infer<typeof AgentEventSchema>;
 
@@ -90,5 +141,6 @@ export const AgentSnapshotSchema = z.object({
     lastEvent: AgentEventSchema.optional(),
     lastMessage: z.string().optional(),
     nativeSidecarStatus: z.enum(NATIVE_SIDECAR_STATUSES),
+    modelProviderSelection: ModelProviderSelectionSchema.optional(),
 });
 export type AgentSnapshot = z.infer<typeof AgentSnapshotSchema>;

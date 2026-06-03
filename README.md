@@ -41,11 +41,46 @@ pnpm build
 pnpm dev:cli
 pnpm dev:cli -- --no-tui
 pnpm dev:cli -- --json
+pnpm dev:cli -- --no-tui --provider mock --model mission-control-fast
+pnpm dev:cli -- --json --model local/local-echo
+pnpm dev:cli -- auth login --provider mock --api-key <key>
+pnpm dev:cli -- auth login
+pnpm dev:cli -- auth list
+pnpm dev:cli -- auth logout --provider mock
+pnpm dev:cli -- models local
 pnpm dev:sidecar
 pnpm dev:desktop
 pnpm --filter @mission-control/cli build
 node apps/cli/dist/index.js --no-tui
 ```
+
+## Model Provider Selection
+
+The CLI accepts scaffold model provider metadata for demo runs:
+
+```bash
+pnpm dev:cli -- --no-tui --provider mock --model mission-control-fast
+pnpm dev:cli -- --json --model local/local-echo
+mctrl auth login --provider mock --api-key <key>
+mctrl auth login
+mctrl auth list
+mctrl auth logout --provider mock
+mctrl models local
+```
+
+`mctrl auth login` can prompt interactively for provider and API key when flags are omitted. stored credentials configure the default provider/model for later demo runs, so a later `mctrl --no-tui` can use the saved default when no `--provider` or `--model` flag is passed.
+
+Credential storage defaults to `$XDG_DATA_HOME/mission-control/auth.json` or `~/.local/share/mission-control/auth.json`. Set `MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-auth.json` to use a specific auth file for tests, demos, or isolated workspaces.
+
+API keys are stored as plaintext JSON in that auth file. This scaffold does not use encrypted OS keychain storage yet; this is not encrypted keychain storage.
+
+`mctrl models [provider]` lists scaffold models and shows whether each provider has a configured credential. Command output masks credentials and does not print raw API keys.
+
+The desktop demo control surface exposes provider/model controls, an API key credential field, credential configured/missing state, and the active selection in the status area and event log.
+
+provider/model selection is scaffold metadata for observable control surfaces only. It does not call real LLM providers yet.
+
+credentials are used for scaffold configuration only. They do not enable real LLM calls until a provider execution adapter is added.
 
 ## Distribution
 

@@ -29,6 +29,16 @@ abstract class BufferedRenderer implements AgentUIRenderer {
             'unknown'
         );
     }
+
+    protected get selectedModel(): string {
+        const selection = [...this.events]
+            .reverse()
+            .find((event) => event.modelProviderSelection !== undefined)?.modelProviderSelection;
+        if (selection === undefined) {
+            return 'unknown';
+        }
+        return `${selection.providerID}/${selection.modelID}`;
+    }
 }
 
 export class PlainRenderer extends BufferedRenderer {
@@ -37,6 +47,7 @@ export class PlainRenderer extends BufferedRenderer {
             'mission-control',
             'command: mctrl',
             `session: ${this.sessionId}`,
+            `model: ${this.selectedModel}`,
             ...this.events.map((event) => {
                 const message = event.message ? ` ${event.message}` : '';
                 return `${event.type}${message}`;
@@ -52,6 +63,7 @@ export class InkRenderer extends BufferedRenderer {
             'mission-control',
             'command: mctrl',
             `session: ${this.sessionId}`,
+            `model: ${this.selectedModel}`,
             'current status: running',
             `event list: ${this.events.map((event) => event.type).join(', ')}`,
             'running task count: 0',

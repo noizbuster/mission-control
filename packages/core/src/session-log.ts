@@ -19,6 +19,7 @@ export class SessionEventLog {
         let lastMessage: string | undefined;
         let stoppedAt: string | undefined;
         let nativeSidecarStatus: AgentSnapshot['nativeSidecarStatus'] = 'unknown';
+        let modelProviderSelection: AgentSnapshot['modelProviderSelection'] | undefined;
 
         for (const event of this.events) {
             lastEvent = event;
@@ -27,6 +28,9 @@ export class SessionEventLog {
             }
             if (event.nativeSidecarStatus !== undefined) {
                 nativeSidecarStatus = event.nativeSidecarStatus;
+            }
+            if (event.modelProviderSelection !== undefined) {
+                modelProviderSelection = event.modelProviderSelection;
             }
             if (event.type === 'session.stopped') {
                 stoppedAt = event.timestamp;
@@ -59,6 +63,7 @@ export class SessionEventLog {
             ...(lastEvent !== undefined ? { lastEvent } : {}),
             ...(lastMessage !== undefined ? { lastMessage } : {}),
             nativeSidecarStatus,
+            ...(modelProviderSelection !== undefined ? { modelProviderSelection } : {}),
         };
     }
 }

@@ -63,4 +63,41 @@ describe('README stage-01 contract', () => {
             expect(content, `README missing ${term}`).toContain(term);
         }
     });
+
+    it('documents scaffold-safe model provider selection', () => {
+        const content = readme();
+        const requiredTerms = [
+            'pnpm dev:cli -- --no-tui --provider mock --model mission-control-fast',
+            'pnpm dev:cli -- --json --model local/local-echo',
+            'provider/model controls',
+            'provider/model selection is scaffold metadata',
+            'does not call real LLM providers yet',
+        ] as const;
+
+        for (const term of requiredTerms) {
+            expect(content, `README missing ${term}`).toContain(term);
+        }
+    });
+
+    it('documents auth commands and credential storage', () => {
+        const content = readme();
+        const requiredTerms = [
+            'mctrl auth login --provider mock --api-key <key>',
+            'mctrl auth login',
+            'mctrl auth list',
+            'mctrl auth logout --provider mock',
+            'mctrl models local',
+            'MISSION_CONTROL_AUTH_FILE',
+            '$XDG_DATA_HOME/mission-control/auth.json',
+            '~/.local/share/mission-control/auth.json',
+            'stored credentials configure the default provider/model for later demo runs',
+            'credentials are used for scaffold configuration only',
+            'API keys are stored as plaintext JSON',
+            'not encrypted keychain storage',
+        ] as const;
+
+        for (const term of requiredTerms) {
+            expect(content, `README missing ${term}`).toContain(term);
+        }
+    });
 });
