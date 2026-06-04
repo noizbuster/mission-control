@@ -1,5 +1,10 @@
 import { defaultModelProviderSelection, modelProviderCatalog } from '@mission-control/config';
-import type { AgentEvent, ModelProviderSelection, ProviderCredentialSummary } from '@mission-control/protocol';
+import type {
+    AbgNodeModelOptions,
+    AgentEvent,
+    ModelProviderSelection,
+    ProviderCredentialSummary,
+} from '@mission-control/protocol';
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { createMockDesktopAgentClient } from './lib/agent-client.js';
 
@@ -52,6 +57,18 @@ function formatModelSelection(modelProviderSelection: ModelProviderSelection | u
         return '';
     }
     return `${modelProviderSelection.providerID}/${modelProviderSelection.modelID}`;
+}
+
+function formatAbgModel(model: AbgNodeModelOptions | undefined): string {
+    if (model === undefined) {
+        return '';
+    }
+    return `${model.providerID}/${model.modelID}${model.variantID !== undefined ? `/${model.variantID}` : ''}`;
+}
+
+function formatEventModel(event: AgentEvent): string {
+    const abgModel = formatAbgModel(event.abg?.model);
+    return abgModel.length > 0 ? abgModel : formatModelSelection(event.modelProviderSelection);
 }
 
 export function App({
@@ -205,6 +222,9 @@ export function App({
             <section className="event-log" aria-label="event log">
                 <div className="event-log-header">
                     <span>event type</span>
+                    <span>graph</span>
+                    <span>node</span>
+                    <span>signal</span>
                     <span>timestamp</span>
                     <span>message</span>
                     <span>model</span>
@@ -218,9 +238,12 @@ export function App({
                         key={`${event.type}-${event.timestamp}-${event.taskId ?? 'session'}`}
                     >
                         <span>{event.type}</span>
+                        <span>{event.abg?.graphId ?? ''}</span>
+                        <span>{event.abg?.nodeId ?? ''}</span>
+                        <span>{event.abg?.signalType ?? ''}</span>
                         <time dateTime={event.timestamp}>{event.timestamp}</time>
                         <span>{event.message ?? ''}</span>
-                        <span>{formatModelSelection(event.modelProviderSelection)}</span>
+                        <span>{formatEventModel(event)}</span>
                         <span>{event.taskId ?? ''}</span>
                         <span>{event.nativeSidecarStatus ?? 'mock'}</span>
                     </div>

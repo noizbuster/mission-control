@@ -2,7 +2,7 @@ import { missionControlAuthFileEnvKey } from '@mission-control/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createProviderAuthStore } from '../auth-store.js';
 import { runAgent } from './run-agent.js';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -103,5 +103,88 @@ describe('runAgent plain reporter', () => {
 
         expect(output).toContain('model: local/local-echo');
         await rm(authFilePath, { force: true });
+    });
+
+    it('rejects malformed graph files before running', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'mission-control-bad-graph-'));
+        const graphPath = join(directory, 'bad.graph.json');
+        await writeFile(
+            graphPath,
+            JSON.stringify({
+                id: 'bad-cli-graph',
+                entryNodeId: 'start',
+                nodes: [
+                    {
+                        id: 'start',
+                        kind: 'action',
+                    },
+                ],
+                edges: [
+                    {
+                        source: 'start',
+                        target: 'missing',
+                    },
+                ],
+                rules: [],
+                policies: [],
+            }),
+            'utf8',
+        );
+
+        await expect(
+            runAgent({
+                mode: 'plain',
+                useNative: false,
+                command: 'run',
+                showHelp: false,
+                showVersion: false,
+                graphPath,
+            }),
+        ).rejects.toThrow('unknown ABG edge target: missing');
+        await rm(directory, { recursive: true, force: true });
+    });
+
+    it('rejects graph files with unknown edge condition rules before running', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'mission-control-bad-edge-rule-'));
+        const graphPath = join(directory, 'bad-edge-rule.graph.json');
+        await writeFile(
+            graphPath,
+            JSON.stringify({
+                id: 'bad-cli-edge-rule',
+                entryNodeId: 'start',
+                nodes: [
+                    {
+                        id: 'start',
+                        kind: 'action',
+                    },
+                    {
+                        id: 'next',
+                        kind: 'action',
+                    },
+                ],
+                edges: [
+                    {
+                        source: 'start',
+                        target: 'next',
+                        condition: 'missing-rule',
+                    },
+                ],
+                rules: [],
+                policies: [],
+            }),
+            'utf8',
+        );
+
+        await expect(
+            runAgent({
+                mode: 'plain',
+                useNative: false,
+                command: 'run',
+                showHelp: false,
+                showVersion: false,
+                graphPath,
+            }),
+        ).rejects.toThrow('unknown ABG edge condition rule: missing-rule');
+        await rm(directory, { recursive: true, force: true });
     });
 });

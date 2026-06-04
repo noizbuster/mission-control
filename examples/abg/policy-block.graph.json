@@ -1,0 +1,23 @@
+{
+  "id": "policy-block",
+  "version": "0.1.0",
+  "entryNodeId": "dangerous-tool",
+  "nodes": [
+    {
+      "id": "dangerous-tool",
+      "kind": "tool",
+      "label": "Dangerous filesystem write",
+      "capabilities": ["filesystem.write"]
+    }
+  ],
+  "edges": [],
+  "rules": [],
+  "policies": [
+    {
+      "id": "deny-filesystem-write",
+      "capability": "filesystem.write",
+      "decision": "deny",
+      "reason": "filesystem writes are disabled in the scaffold runtime"
+    }
+  ]
+}

@@ -27,4 +27,63 @@ describe('InMemoryEventStore', () => {
             lastMessage: 'done',
         });
     });
+
+    it('returns ABG timeline for a session', async () => {
+        const store = new InMemoryEventStore();
+
+        await store.append({
+            type: 'graph.started',
+            timestamp: '2026-06-03T10:00:00.000Z',
+            sessionId: 'session_abg',
+            abg: {
+                graphId: 'graph_memory',
+            },
+        });
+        await store.append({
+            type: 'node.completed',
+            timestamp: '2026-06-03T10:00:01.000Z',
+            sessionId: 'session_abg',
+            message: 'node completed: llm',
+            abg: {
+                graphId: 'graph_memory',
+                nodeId: 'llm',
+                signalType: 'success',
+                model: {
+                    providerID: 'local',
+                    modelID: 'local-echo',
+                },
+            },
+        });
+
+        expect(await store.getTimeline('session_abg')).toMatchObject([
+            {
+                type: 'graph.started',
+                graphId: 'graph_memory',
+            },
+            {
+                type: 'node.completed',
+                graphId: 'graph_memory',
+                nodeId: 'llm',
+                model: {
+                    providerID: 'local',
+                    modelID: 'local-echo',
+                },
+            },
+        ]);
+        expect(await store.getGraphSnapshot('session_abg', 'graph_memory')).toMatchObject({
+            graphId: 'graph_memory',
+            nodes: [
+                {
+                    nodeId: 'llm',
+                    status: 'succeeded',
+                },
+            ],
+        });
+    });
+
+    it('returns empty ABG timeline for an unknown session', async () => {
+        const store = new InMemoryEventStore();
+
+        await expect(store.getTimeline('missing_session')).resolves.toEqual([]);
+    });
 });

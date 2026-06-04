@@ -20,11 +20,25 @@ export const modelProviderCatalog = [
                 id: 'mission-control-demo',
                 name: 'Mission Control Demo',
                 status: 'active',
+                variants: [
+                    {
+                        id: 'default',
+                        name: 'Default',
+                        status: 'active',
+                    },
+                ],
             },
             {
                 id: 'mission-control-fast',
                 name: 'Mission Control Fast',
                 status: 'active',
+                variants: [
+                    {
+                        id: 'cheap',
+                        name: 'Cheap',
+                        status: 'active',
+                    },
+                ],
             },
         ],
     },
@@ -38,6 +52,13 @@ export const modelProviderCatalog = [
                 id: 'local-echo',
                 name: 'Local Echo',
                 status: 'active',
+                variants: [
+                    {
+                        id: 'default',
+                        name: 'Default',
+                        status: 'active',
+                    },
+                ],
             },
         ],
     },

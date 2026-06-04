@@ -50,7 +50,13 @@ export class PlainRenderer extends BufferedRenderer {
             `model: ${this.selectedModel}`,
             ...this.events.map((event) => {
                 const message = event.message ? ` ${event.message}` : '';
-                return `${event.type}${message}`;
+                const graph = event.abg?.graphId !== undefined ? ` graph=${event.abg.graphId}` : '';
+                const node = event.abg?.nodeId !== undefined ? ` node=${event.abg.nodeId}` : '';
+                const model =
+                    event.abg?.model !== undefined
+                        ? ` model=${event.abg.model.providerID}/${event.abg.model.modelID}`
+                        : '';
+                return `${event.type}${graph}${node}${model}${message}`;
             }),
         ];
         return `${lines.join('\n')}\n`;

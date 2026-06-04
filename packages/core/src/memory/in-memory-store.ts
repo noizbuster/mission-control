@@ -1,4 +1,5 @@
-import type { AgentEvent, AgentSession, AgentSnapshot } from '@mission-control/protocol';
+import type { AbgGraphSnapshot, AgentEvent, AgentSession, AgentSnapshot } from '@mission-control/protocol';
+import type { AbgTimelineEntry } from '../behavior/timeline.js';
 import { SessionEventLog } from '../session-log.js';
 import type { MemoryStore } from './memory-store.js';
 
@@ -35,6 +36,14 @@ export class InMemoryEventStore implements MemoryStore {
 
     async getSnapshot(sessionId: string): Promise<AgentSnapshot> {
         return this.getOrCreateLog(sessionId).getSnapshot(this.getOrCreateSession(sessionId));
+    }
+
+    async getGraphSnapshot(sessionId: string, graphId: string): Promise<AbgGraphSnapshot> {
+        return this.getOrCreateLog(sessionId).getGraphSnapshot(graphId);
+    }
+
+    async getTimeline(sessionId: string): Promise<readonly AbgTimelineEntry[]> {
+        return this.getOrCreateLog(sessionId).getTimeline();
     }
 
     async compact(_sessionId: string): Promise<void> {}

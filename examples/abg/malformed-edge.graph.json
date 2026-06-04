@@ -1,0 +1,18 @@
+{
+  "id": "malformed-edge",
+  "entryNodeId": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "kind": "action"
+    }
+  ],
+  "edges": [
+    {
+      "source": "start",
+      "target": "missing"
+    }
+  ],
+  "rules": [],
+  "policies": []
+}

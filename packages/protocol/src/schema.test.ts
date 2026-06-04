@@ -25,6 +25,35 @@ describe('protocol schemas', () => {
         expect(AgentEventTypeSchema.parse('native.warning')).toBe('native.warning');
     });
 
+    it('keeps existing protocol event baseline before ABG protocol expansion', () => {
+        const event = AgentEventSchema.parse({
+            type: 'permission.requested',
+            timestamp: '2026-06-02T10:00:00.000Z',
+            sessionId: 'session_existing',
+            taskId: 'task_existing',
+            message: 'permission requested: task.run',
+            nativeSidecarStatus: 'mock',
+            permissionRequest: {
+                id: 'permission_task_existing',
+                action: 'task.run',
+                reason: 'baseline permission gate',
+            },
+            permissionDecision: {
+                requestId: 'permission_task_existing',
+                status: 'deny',
+                reason: 'default JSON permission decision',
+            },
+        });
+
+        expect(event).toMatchObject({
+            type: 'permission.requested',
+            taskId: 'task_existing',
+            permissionDecision: {
+                status: 'deny',
+            },
+        });
+    });
+
     it('rejects unknown event type', () => {
         const parsed = AgentEventSchema.safeParse({
             type: 'task.unknown',
@@ -75,6 +104,13 @@ describe('protocol schemas', () => {
                     id: 'mission-control-demo',
                     name: 'Mission Control Demo',
                     status: 'active',
+                    variants: [
+                        {
+                            id: 'default',
+                            name: 'Default',
+                            status: 'active',
+                        },
+                    ],
                 },
             ],
         });
@@ -84,6 +120,30 @@ describe('protocol schemas', () => {
             modelID: 'mission-control-demo',
         });
         expect(provider.models[0]?.id).toBe('mission-control-demo');
+        expect(provider.models[0]?.variants?.[0]?.id).toBe('default');
+    });
+
+    it('rejects provider catalog entries with malformed model variants', () => {
+        const parsed = ProviderCatalogEntrySchema.safeParse({
+            id: 'mock',
+            name: 'Mock Provider',
+            defaultModelID: 'mission-control-demo',
+            authLabel: 'API key',
+            models: [
+                {
+                    id: 'mission-control-demo',
+                    name: 'Mission Control Demo',
+                    variants: [
+                        {
+                            id: '',
+                            name: 'Default',
+                        },
+                    ],
+                },
+            ],
+        });
+
+        expect(parsed.success).toBe(false);
     });
 
     it('keeps provider model metadata optional on existing events and snapshots', () => {
@@ -131,7 +191,9 @@ describe('protocol schemas', () => {
             maskedCredential: 'mc_t..._key',
         });
 
-        expect(authFile.credentials['mock']?.apiKey).toBe('mc_test_key');
+        const mockProviderID = 'mock';
+
+        expect(authFile.credentials[mockProviderID]?.apiKey).toBe('mc_test_key');
         expect(summary.maskedCredential).toBe('mc_t..._key');
         expect(
             ProviderCredentialSchema.safeParse({

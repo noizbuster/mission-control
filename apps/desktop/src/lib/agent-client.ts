@@ -33,6 +33,12 @@ export function createMockDesktopAgentClient(): DesktopAgentClient {
             modelProviderSelection: ModelProviderSelection,
         ): Promise<readonly AgentEvent[]> {
             const timestamp = new Date().toISOString();
+            const graphId = 'desktop-demo-graph';
+            const nodeId = 'desktop-answer';
+            const model = {
+                ...modelProviderSelection,
+                variantID: 'default',
+            };
             return [
                 {
                     type: 'session.started',
@@ -52,14 +58,76 @@ export function createMockDesktopAgentClient(): DesktopAgentClient {
                     modelProviderSelection,
                 },
                 {
-                    type: 'task.progress',
+                    type: 'graph.started',
                     timestamp,
                     sessionId,
-                    taskId: 'task_desktop_demo',
-                    progress: 0.5,
-                    message: 'desktop demo task in progress',
+                    message: 'desktop demo graph started',
                     nativeSidecarStatus: 'mock',
                     modelProviderSelection,
+                    abg: {
+                        graphId,
+                    },
+                },
+                {
+                    type: 'model.call.started',
+                    timestamp,
+                    sessionId,
+                    message: 'desktop demo model call started',
+                    modelProviderSelection,
+                    abg: {
+                        graphId,
+                        nodeId,
+                        model,
+                    },
+                },
+                {
+                    type: 'node.started',
+                    timestamp,
+                    sessionId,
+                    message: 'desktop demo node started',
+                    modelProviderSelection,
+                    abg: {
+                        graphId,
+                        nodeId,
+                        signalType: 'started',
+                        model,
+                    },
+                },
+                {
+                    type: 'node.completed',
+                    timestamp,
+                    sessionId,
+                    message: 'desktop demo node completed',
+                    modelProviderSelection,
+                    abg: {
+                        graphId,
+                        nodeId,
+                        signalType: 'success',
+                        model,
+                    },
+                },
+                {
+                    type: 'model.call.completed',
+                    timestamp,
+                    sessionId,
+                    message: 'desktop demo model call completed',
+                    modelProviderSelection,
+                    abg: {
+                        graphId,
+                        nodeId,
+                        model,
+                    },
+                },
+                {
+                    type: 'graph.completed',
+                    timestamp,
+                    sessionId,
+                    message: 'desktop demo graph completed',
+                    nativeSidecarStatus: 'mock',
+                    modelProviderSelection,
+                    abg: {
+                        graphId,
+                    },
                 },
                 {
                     type: 'task.completed',

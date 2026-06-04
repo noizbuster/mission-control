@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AbgEventMetadataSchema } from './abg.js';
 
 export const AGENT_EVENT_TYPES = [
     'session.started',
@@ -10,6 +11,23 @@ export const AGENT_EVENT_TYPES = [
     'permission.requested',
     'native.warning',
     'log',
+    'graph.started',
+    'graph.completed',
+    'graph.failed',
+    'graph.cancelled',
+    'node.started',
+    'node.progress',
+    'node.completed',
+    'node.failed',
+    'node.cancelled',
+    'decision.selected',
+    'policy.blocked',
+    'model.call.started',
+    'model.call.completed',
+    'tool.started',
+    'tool.completed',
+    'tool.failed',
+    'workflow.transitioned',
 ] as const;
 
 export const SESSION_STATUSES = ['idle', 'running', 'stopped', 'failed'] as const;
@@ -28,6 +46,13 @@ export type PermissionStatus = z.infer<typeof PermissionStatusSchema>;
 
 export const ModelCatalogStatusSchema = z.enum(MODEL_CATALOG_STATUSES);
 export type ModelCatalogStatus = z.infer<typeof ModelCatalogStatusSchema>;
+
+export const ModelVariantEntrySchema = z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    status: ModelCatalogStatusSchema.default('active'),
+});
+export type ModelVariantEntry = z.infer<typeof ModelVariantEntrySchema>;
 
 export const AgentMessageSchema = z.object({
     role: z.enum(['system', 'user', 'assistant']),
@@ -96,6 +121,7 @@ export const ModelCatalogEntrySchema = z.object({
     id: z.string().min(1),
     name: z.string().min(1),
     status: ModelCatalogStatusSchema.default('active'),
+    variants: z.array(ModelVariantEntrySchema).optional(),
 });
 export type ModelCatalogEntry = z.infer<typeof ModelCatalogEntrySchema>;
 
@@ -119,6 +145,7 @@ export const AgentEventSchema = z.object({
     permissionRequest: PermissionRequestSchema.optional(),
     permissionDecision: PermissionDecisionSchema.optional(),
     modelProviderSelection: ModelProviderSelectionSchema.optional(),
+    abg: AbgEventMetadataSchema.optional(),
 });
 export type AgentEvent = z.infer<typeof AgentEventSchema>;
 

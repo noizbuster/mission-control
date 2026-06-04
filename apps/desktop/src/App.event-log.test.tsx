@@ -52,4 +52,38 @@ describe('Desktop event log fields', () => {
         expect(html).toContain('model');
         expect(html).toContain('local/local-echo');
     });
+
+    it('renders graph metadata in the event log', () => {
+        const html = renderToStaticMarkup(
+            <App
+                initialSessionId="session_test"
+                initialEvents={[
+                    {
+                        type: 'node.completed',
+                        timestamp: '2026-06-03T10:00:00.000Z',
+                        sessionId: 'session_test',
+                        message: 'node completed: answer',
+                        abg: {
+                            graphId: 'research-answer',
+                            nodeId: 'answer',
+                            signalType: 'success',
+                            model: {
+                                providerID: 'local',
+                                modelID: 'local-echo',
+                                variantID: 'default',
+                            },
+                        },
+                    },
+                ]}
+            />,
+        );
+
+        expect(html).toContain('graph');
+        expect(html).toContain('node');
+        expect(html).toContain('signal');
+        expect(html).toContain('research-answer');
+        expect(html).toContain('answer');
+        expect(html).toContain('success');
+        expect(html).toContain('local/local-echo/default');
+    });
 });

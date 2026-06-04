@@ -36,4 +36,30 @@ describe('runModelsCommand', () => {
         expect(output).not.toContain('local_key');
         await rm(authFilePath, { force: true });
     });
+
+    it('keeps existing provider model listing baseline before model variants', async () => {
+        const output = await runModelsCommand(parseArgs(['models']));
+
+        expect(output).toContain('mock/mission-control-demo missing credential');
+        expect(output).toContain('mock/mission-control-fast missing credential');
+        expect(output).toContain('local/local-echo missing credential');
+    });
+
+    it('masks credentials when model variants are listed', async () => {
+        const authFilePath = await useTempAuthFile();
+        const store = createProviderAuthStore();
+        await store.saveCredential({
+            providerID: 'mock',
+            modelID: 'mission-control-demo',
+            apiKey: 'mc_super_secret_key',
+            now: '2026-06-03T10:00:00.000Z',
+        });
+
+        const output = await runModelsCommand(parseArgs(['models', 'mock']), { store });
+
+        expect(output).toContain('mock/mission-control-demo');
+        expect(output).toContain('authenticated');
+        expect(output).not.toContain('mc_super_secret_key');
+        await rm(authFilePath, { force: true });
+    });
 });

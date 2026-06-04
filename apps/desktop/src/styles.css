@@ -160,9 +160,10 @@ select {
     display: grid;
     gap: 12px;
     grid-template-columns:
-        minmax(130px, 0.8fr) minmax(210px, 1fr) minmax(190px, 1.1fr) minmax(150px, 0.85fr)
-        minmax(190px, 0.9fr) minmax(90px, 0.55fr);
-    min-width: 1020px;
+        minmax(140px, 0.8fr) minmax(150px, 0.75fr) minmax(130px, 0.7fr) minmax(90px, 0.55fr)
+        minmax(210px, 1fr) minmax(190px, 1.1fr) minmax(170px, 0.85fr) minmax(150px, 0.7fr)
+        minmax(90px, 0.55fr);
+    min-width: 1360px;
     padding: 10px 12px;
 }
 

@@ -17,11 +17,13 @@ describe('CLI entrypoint', () => {
         expect(help).toContain('--no-native');
         expect(help).toContain('--provider <id>');
         expect(help).toContain('--model <id>');
+        expect(help).toContain('--graph <path>');
         expect(help).toContain('mctrl auth login --provider mock --api-key <key>');
         expect(help).toContain('mctrl auth list');
         expect(help).toContain('mctrl models local');
         expect(help).toContain('--version');
         expect(help).toContain('--help');
         expect(help).toContain('mctrl --no-tui --provider mock --model mission-control-fast');
+        expect(help).toContain('mctrl --json --graph examples/abg/research-answer.graph.json');
     });
 });

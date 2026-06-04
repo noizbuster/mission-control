@@ -15,6 +15,9 @@ describe('parseArgs', () => {
         expect(parseArgs(['--json']).mode).toBe('json');
         expect(parseArgs(['--native']).useNative).toBe(true);
         expect(parseArgs(['--no-native']).useNative).toBe(false);
+        expect(parseArgs(['--graph', 'examples/abg/research-answer.graph.json'])).toMatchObject({
+            graphPath: 'examples/abg/research-answer.graph.json',
+        });
         expect(parseArgs(['--version']).showVersion).toBe(true);
         expect(parseArgs(['--help']).showHelp).toBe(true);
     });
@@ -44,6 +47,7 @@ describe('parseArgs', () => {
     it('rejects incomplete or conflicting provider model flags', () => {
         expect(() => parseArgs(['--provider', 'mock'])).toThrow('--provider requires --model');
         expect(() => parseArgs(['--provider'])).toThrow('--provider requires a value');
+        expect(() => parseArgs(['--graph'])).toThrow('--graph requires a value');
         expect(() => parseArgs(['--model'])).toThrow('--model requires a value');
         expect(() => parseArgs(['--model', 'mission-control-demo'])).toThrow(
             '--model without --provider must use provider/model',

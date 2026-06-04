@@ -1,5 +1,7 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type {
+    AbgGraphInput,
+    AbgGraphSnapshot,
     AgentEvent,
     AgentSession,
     AgentSnapshot,
@@ -7,6 +9,8 @@ import type {
     PermissionDecision,
     PermissionRequest,
 } from '@mission-control/protocol';
+import { type AbgGraphRunResult, runAbgGraph } from './behavior/graph-runner.js';
+import type { AbgTimelineEntry } from './behavior/timeline.js';
 import { EventBus } from './event-bus.js';
 import { MockSidecarClient } from './native/mock-sidecar-client.js';
 import { ProcessSidecarClient, type SidecarClient } from './native/sidecar-client.js';
@@ -119,6 +123,21 @@ export class AgentRuntime {
         });
     }
 
+    async runGraph(graph: unknown, graphInput?: AbgGraphInput): Promise<AbgGraphRunResult> {
+        const session = this.ensureSession();
+        const result = await runAbgGraph({
+            graph,
+            sessionId: session.id,
+            now: () => new Date().toISOString(),
+            modelProviderSelection: this.modelProviderSelection,
+            ...(graphInput !== undefined ? { graphInput } : {}),
+        });
+        for (const event of result.events) {
+            this.emit(event);
+        }
+        return result;
+    }
+
     async requestPermission(request: PermissionRequest, taskId?: string): Promise<PermissionDecision> {
         const session = this.ensureSession();
         const decision: PermissionDecision = createDefaultPermissionDecision(request);
@@ -147,6 +166,16 @@ export class AgentRuntime {
     getSnapshot(): AgentSnapshot {
         const session = this.ensureSession();
         return this.log.getSnapshot(session);
+    }
+
+    getGraphSnapshot(graphId: string): AbgGraphSnapshot {
+        this.ensureSession();
+        return this.log.getGraphSnapshot(graphId);
+    }
+
+    getTimeline(): readonly AbgTimelineEntry[] {
+        this.ensureSession();
+        return this.log.getTimeline();
     }
 
     private emit(event: AgentEvent): void {

@@ -43,6 +43,7 @@ pnpm dev:cli -- --no-tui
 pnpm dev:cli -- --json
 pnpm dev:cli -- --no-tui --provider mock --model mission-control-fast
 pnpm dev:cli -- --json --model local/local-echo
+pnpm dev:cli -- --json --graph examples/abg/research-answer.graph.json
 pnpm dev:cli -- auth login --provider mock --api-key <key>
 pnpm dev:cli -- auth login
 pnpm dev:cli -- auth list
@@ -81,6 +82,30 @@ The desktop demo control surface exposes provider/model controls, an API key cre
 provider/model selection is scaffold metadata for observable control surfaces only. It does not call real LLM providers yet.
 
 credentials are used for scaffold configuration only. They do not enable real LLM calls until a provider execution adapter is added.
+
+The catalog also exposes mock provider/model variants such as `mock/mission-control-demo/default`, `mock/mission-control-fast/cheap`, and `local/local-echo/default`. These variants are metadata for graph and event observability only.
+
+## Authorable ABG MVP
+
+The Authorable ABG MVP validates JSON graph files, runs deterministic mock node implementations, projects graph/node/model events into the existing Event Log, and exposes graph snapshots and timelines from emitted events.
+
+Run the included research graph as JSON Lines:
+
+```bash
+pnpm dev:cli -- --json --graph examples/abg/research-answer.graph.json
+pnpm dev:cli -- --json --graph examples/abg/research-answer.graph.json --model local/local-echo
+```
+
+Authorable graph files live in `examples/abg`:
+
+- `research-answer.graph.json`: LLM node followed by an action node through a declarative success rule.
+- `policy-block.graph.json`: tool node blocked by a deny policy.
+- `parallel-race.graph.json`: parallel, race, and join nodes using deterministic mock child nodes.
+- `malformed-edge.graph.json`: intentionally invalid edge target fixture for CLI and schema tests.
+
+The JSON shape is `id`, `entryNodeId`, `nodes`, `edges`, `rules`, and `policies`. Nodes can specify `kind`, `children`, `capabilities`, `config`, and optional model metadata with `providerID`, `modelID`, `variantID`, and fallback model options. Rules use declarative predicates only; arbitrary JavaScript expressions are rejected.
+
+The full production ABG engine remains TODO. Real providers, real tools, durable persistence, and visual graph editor remain out of scope for this MVP.
 
 ## Distribution
 
@@ -156,7 +181,7 @@ Permission flow is present as a skeleton. The runtime emits `permission.requeste
 
 ## ABG-based extension points
 
-These extension points are placeholder only. They make future ABG features importable without implementing real providers, tools, databases, vector stores, or schedulers.
+These extension points include the bounded mock Authorable ABG MVP plus placeholder only surfaces for future production providers, tools, databases, vector stores, and schedulers.
 
 Sub-agent model:
 
@@ -167,8 +192,9 @@ Sub-agent model:
 Behavior/action graph plan:
 
 - `BehaviorNode`, `ActionGraphNode`, `ActionGraphEdge`, and `createActionGraph` live in `packages/core/src/behavior`.
-- The current graph helper validates node ids and edge endpoints only.
-- A behavior/action graph engine is not implemented.
+- `createAuthorableAbgGraph`, `runAbgGraph`, and `AgentRuntime.runGraph` validate and run authorable mock graphs.
+- The full production behavior/action graph engine is not implemented.
+- Production behavior/action graph execution with retries, compensation, and real tool effects remains out of scope.
 
 Scheduler/executor split:
 
@@ -179,7 +205,7 @@ Scheduler/executor split:
 Memory/event model:
 
 - `MemoryStore` and `InMemoryEventStore` live in `packages/core/src/memory`.
-- The in-memory store appends protocol events and derives snapshots through the same Event Log path.
+- The in-memory store appends protocol events and derives task snapshots, graph snapshots, and ABG timelines through the same Event Log path.
 - Persistent event log storage, memory snapshot compaction, persistent memory store, and vector index are not implemented.
 
 Native sidecar future role:
@@ -212,7 +238,7 @@ Boundary alignment:
 - Sidecar boundary: `native/sidecar` communicates through JSON Lines and does not import TypeScript runtime internals.
 - UI/runtime separation: CLI renderers and the desktop event log consume protocol events instead of owning runtime execution.
 
-ABG reflection in this boilerplate is intentionally small: names, package boundaries, event schemas, fallback behavior, and extension points are present; full behavior/action graph execution is not.
+ABG reflection in this boilerplate is intentionally bounded: names, package boundaries, event schemas, fallback behavior, extension points, and a mock authorable graph runtime are present; the full production ABG engine is not.
 
 ABG runtime TODOs:
 
@@ -226,8 +252,10 @@ ABG runtime TODOs:
 ## Not Implemented Yet
 
 - TODO: ABG full engine is not implemented.
+- TODO: full production ABG engine is not implemented.
 - TODO: real LLM provider is not implemented.
 - TODO: real file-editing tools are not implemented.
+- TODO: real providers, real tools, durable persistence, and visual graph editor remain out of scope.
 - TODO: persistent memory store, vector index, and database storage are not implemented.
 - TODO: advanced scheduler, executor, cancellation propagation, and behavior/action graph engine are not implemented.
 

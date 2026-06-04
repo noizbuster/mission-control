@@ -20,6 +20,9 @@ describe('README ABG alignment', () => {
             'vector index',
             'real LLM provider',
             'behavior/action graph engine',
+            'Authorable ABG MVP',
+            'full production ABG engine',
+            'real providers, real tools, durable persistence, and visual graph editor remain out of scope',
         ] as const;
 
         for (const term of requiredTerms) {

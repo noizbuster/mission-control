@@ -1,0 +1,36 @@
+{
+  "id": "research-answer",
+  "version": "0.1.0",
+  "entryNodeId": "draft-answer",
+  "nodes": [
+    {
+      "id": "draft-answer",
+      "kind": "llm",
+      "label": "Draft answer"
+    },
+    {
+      "id": "finish",
+      "kind": "action",
+      "label": "Finish"
+    }
+  ],
+  "edges": [
+    {
+      "source": "draft-answer",
+      "target": "finish",
+      "condition": "draft-succeeded",
+      "priority": 10
+    }
+  ],
+  "rules": [
+    {
+      "id": "draft-succeeded",
+      "when": {
+        "kind": "signal.type.equals",
+        "signalType": "success"
+      },
+      "activate": "finish"
+    }
+  ],
+  "policies": []
+}

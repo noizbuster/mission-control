@@ -10,6 +10,7 @@ export type CliArgs = {
     readonly command: CliCommand;
     readonly showHelp: boolean;
     readonly showVersion: boolean;
+    readonly graphPath?: string;
     readonly modelProviderSelection?: ModelProviderSelection;
     readonly authProviderID?: string;
     readonly authModelID?: string;
@@ -25,6 +26,7 @@ export const supportedCliFlags = [
     '--no-native',
     '--provider',
     '--model',
+    '--graph',
     '--api-key',
     '--version',
     '--help',
@@ -92,6 +94,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     let showVersion = false;
     let providerID: string | undefined;
     let modelID: string | undefined;
+    let graphPath: string | undefined;
     let index = 0;
 
     while (index < argv.length) {
@@ -130,15 +133,16 @@ export function parseArgs(argv: readonly string[]): CliArgs {
                 modelID = readFlagValue(argv, index, '--model');
                 index += 2;
                 break;
+            case '--graph':
+                graphPath = readFlagValue(argv, index, '--graph');
+                index += 2;
+                break;
             case '--version':
                 showVersion = true;
                 index += 1;
                 break;
             case '--help':
                 showHelp = true;
-                index += 1;
-                break;
-            case undefined:
                 index += 1;
                 break;
             default:
@@ -152,6 +156,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
         command: 'run',
         showHelp,
         showVersion,
+        ...(graphPath !== undefined ? { graphPath } : {}),
     } satisfies CliArgs;
     const modelProviderSelection = resolveModelProviderSelection(providerID, modelID);
     if (modelProviderSelection === undefined) {
@@ -200,9 +205,6 @@ function parseAuthLoginArgs(argv: readonly string[]): CliArgs {
                 apiKey = readFlagValue(argv, index, '--api-key');
                 index += 2;
                 break;
-            case undefined:
-                index += 1;
-                break;
             default:
                 throw new Error(`Unsupported auth login argument: ${current}`);
         }
@@ -227,9 +229,6 @@ function parseAuthLogoutArgs(argv: readonly string[]): CliArgs {
             case '-p':
                 providerID = readFlagValue(argv, index, current);
                 index += 2;
-                break;
-            case undefined:
-                index += 1;
                 break;
             default:
                 throw new Error(`Unsupported auth logout argument: ${current}`);

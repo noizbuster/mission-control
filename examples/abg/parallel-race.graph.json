@@ -1,0 +1,70 @@
+{
+  "id": "parallel-race",
+  "version": "0.1.0",
+  "entryNodeId": "gather-context",
+  "nodes": [
+    {
+      "id": "gather-context",
+      "kind": "parallel",
+      "label": "Gather context",
+      "children": ["memory", "search"]
+    },
+    {
+      "id": "memory",
+      "kind": "memory",
+      "label": "Local memory"
+    },
+    {
+      "id": "search",
+      "kind": "tool",
+      "label": "Mock search"
+    },
+    {
+      "id": "race-context",
+      "kind": "race",
+      "label": "Pick first context source",
+      "children": ["memory", "search"]
+    },
+    {
+      "id": "join-evidence",
+      "kind": "join",
+      "label": "Join evidence",
+      "config": {
+        "items": ["local-memory", "mock-search", "local-memory"]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "gather-context",
+      "target": "race-context",
+      "condition": "gather-succeeded",
+      "priority": 10
+    },
+    {
+      "source": "race-context",
+      "target": "join-evidence",
+      "condition": "race-succeeded",
+      "priority": 5
+    }
+  ],
+  "rules": [
+    {
+      "id": "gather-succeeded",
+      "when": {
+        "kind": "signal.type.equals",
+        "signalType": "success"
+      },
+      "activate": "race-context"
+    },
+    {
+      "id": "race-succeeded",
+      "when": {
+        "kind": "signal.type.equals",
+        "signalType": "success"
+      },
+      "activate": "join-evidence"
+    }
+  ],
+  "policies": []
+}

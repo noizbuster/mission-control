@@ -22,4 +22,16 @@ describe('config catalog constants', () => {
         expect(missionControlAuthFileEnvKey).toBe('MISSION_CONTROL_AUTH_FILE');
         expect(missionControlAuthSchemaURL).toBe('https://mission-control.local/auth.schema.json');
     });
+
+    it('exports scaffold model variants', () => {
+        const mockProvider = modelProviderCatalog.find((provider) => provider.id === 'mock');
+        const localProvider = modelProviderCatalog.find((provider) => provider.id === 'local');
+        const demoModel = mockProvider?.models.find((model) => model.id === 'mission-control-demo');
+        const fastModel = mockProvider?.models.find((model) => model.id === 'mission-control-fast');
+        const localModel = localProvider?.models.find((model) => model.id === 'local-echo');
+
+        expect(demoModel?.variants?.map((variant) => variant.id)).toEqual(['default']);
+        expect(fastModel?.variants?.map((variant) => variant.id)).toEqual(['cheap']);
+        expect(localModel?.variants?.map((variant) => variant.id)).toEqual(['default']);
+    });
 });

@@ -9,12 +9,15 @@ describe('desktop agent client', () => {
         const events = await client.runDemoTask(session.id, defaultModelProviderSelection);
 
         expect(session.id).toMatch(/^session_/);
-        expect(events.map((event) => event.type)).toEqual([
-            'session.started',
-            'task.started',
-            'task.progress',
-            'task.completed',
-        ]);
+        expect(events.map((event) => event.type)).toEqual(
+            expect.arrayContaining([
+                'session.started',
+                'task.started',
+                'graph.started',
+                'node.completed',
+                'task.completed',
+            ]),
+        );
     });
 
     it('mock desktop client emits selected provider and model metadata', async () => {
@@ -31,6 +34,29 @@ describe('desktop agent client', () => {
                 modelID: 'local-echo',
             })),
         );
+    });
+
+    it('mock desktop client emits graph metadata for the demo event log', async () => {
+        const client = createMockDesktopAgentClient();
+        const session = await client.startDemoSession();
+        const events = await client.runDemoTask(session.id, {
+            providerID: 'local',
+            modelID: 'local-echo',
+        });
+
+        expect(events.map((event) => event.type)).toEqual(
+            expect.arrayContaining(['graph.started', 'node.completed', 'graph.completed']),
+        );
+        expect(events.find((event) => event.type === 'node.completed')?.abg).toMatchObject({
+            graphId: 'desktop-demo-graph',
+            nodeId: 'desktop-answer',
+            signalType: 'success',
+            model: {
+                providerID: 'local',
+                modelID: 'local-echo',
+                variantID: 'default',
+            },
+        });
     });
 
     it('returns provider credential summaries for desktop', async () => {
