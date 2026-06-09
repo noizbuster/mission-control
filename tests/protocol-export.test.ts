@@ -11,10 +11,13 @@ import {
     PermissionDecisionSchema,
     PermissionRequestSchema,
     PermissionStatusSchema,
+    ProviderApiKeyCredentialSchema,
     ProviderAuthFileSchema,
     ProviderCatalogEntrySchema,
+    ProviderCredentialFieldSchema,
     ProviderCredentialSchema,
     ProviderCredentialSummarySchema,
+    ProviderFieldsCredentialSchema,
     SidecarTaskInputSchema,
     SidecarTaskOutputSchema,
 } from '../packages/protocol/src/index.js';
@@ -31,7 +34,18 @@ describe('protocol public exports', () => {
         expect(ModelProviderSelectionSchema.shape.providerID).toBeDefined();
         expect(ModelVariantEntrySchema.shape.id).toBeDefined();
         expect(ProviderCatalogEntrySchema.shape.models).toBeDefined();
-        expect(ProviderCredentialSchema.shape.apiKey).toBeDefined();
+        expect(ProviderApiKeyCredentialSchema.shape.apiKey).toBeDefined();
+        expect(ProviderCredentialFieldSchema.shape.secret).toBeDefined();
+        expect(ProviderFieldsCredentialSchema.shape.fields).toBeDefined();
+        expect(
+            ProviderCredentialSchema.parse({
+                providerID: 'local',
+                type: 'apiKey',
+                apiKey: 'local_test_key',
+                createdAt: '2026-06-03T10:00:00.000Z',
+                updatedAt: '2026-06-03T10:00:00.000Z',
+            }).type,
+        ).toBe('apiKey');
         expect(ProviderAuthFileSchema.shape.credentials).toBeDefined();
         expect(ProviderCredentialSummarySchema.shape.authenticated).toBeDefined();
     });

@@ -20,8 +20,8 @@ describe('ProcessSidecarClient fallback', () => {
         expect(events).toContain('task.completed');
         expect(snapshot.lastMessage).toBe('completed by mock sidecar');
         expect(snapshot.modelProviderSelection).toEqual({
-            providerID: 'mock',
-            modelID: 'mission-control-demo',
+            providerID: 'local',
+            modelID: 'local-echo',
         });
     });
 });

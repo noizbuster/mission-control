@@ -10,8 +10,8 @@ describe('ABG protocol schemas', () => {
             entryNodeId: 'classify-intent',
             defaults: {
                 model: {
-                    providerID: 'mock',
-                    modelID: 'mission-control-demo',
+                    providerID: 'local',
+                    modelID: 'local-echo',
                     variantID: 'default',
                     role: 'planner',
                     temperature: 0.2,
@@ -172,8 +172,8 @@ describe('ABG protocol schemas', () => {
             rules: [],
         });
         const invalidModelOptions = AbgNodeModelOptionsSchema.safeParse({
-            providerID: 'mock',
-            modelID: 'mission-control-demo',
+            providerID: 'local',
+            modelID: 'local-echo',
             temperature: 3,
         });
 

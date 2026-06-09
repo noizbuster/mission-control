@@ -3,18 +3,44 @@ import {
     type ModelProviderSelection,
     type ProviderAuthFile,
     ProviderAuthFileSchema,
+    type ProviderCredential,
     type ProviderCredentialSummary,
 } from '@mission-control/protocol';
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
-export type SaveProviderCredentialInput = {
+export type SaveProviderCredentialFieldInput = {
+    readonly id: string;
+    readonly value: string;
+    readonly secret: boolean;
+};
+
+export type SaveProviderOAuthCredentialInput = {
+    readonly accessToken: string;
+    readonly refreshToken?: string;
+    readonly expiresAt?: string;
+    readonly scopes?: readonly string[];
+    readonly accountLabel?: string;
+};
+
+type SaveProviderCredentialBaseInput = {
     readonly providerID: string;
     readonly modelID: string;
-    readonly apiKey: string;
     readonly now: string;
 };
+
+export type SaveProviderCredentialInput =
+    | (SaveProviderCredentialBaseInput & {
+          readonly apiKey: string;
+      })
+    | (SaveProviderCredentialBaseInput & {
+          readonly fields: readonly SaveProviderCredentialFieldInput[];
+      })
+    | (SaveProviderCredentialBaseInput & {
+          readonly oauth: SaveProviderOAuthCredentialInput;
+      });
 
 export type ProviderAuthStore = {
     readonly authFilePath: string;
@@ -48,13 +74,7 @@ export function createProviderAuthStore(): ProviderAuthStore {
                 },
                 credentials: {
                     ...current.credentials,
-                    [input.providerID]: {
-                        providerID: input.providerID,
-                        type: 'apiKey',
-                        apiKey: input.apiKey,
-                        createdAt: existing?.createdAt ?? input.now,
-                        updatedAt: input.now,
-                    },
+                    [input.providerID]: buildStoredCredential(input, existing),
                 },
             });
             await writeAuthFile(authFilePath, next);
@@ -75,17 +95,92 @@ export function createProviderAuthStore(): ProviderAuthStore {
         },
         async listCredentialSummaries() {
             const current = await readAuthFile(authFilePath);
-            return Object.values(current.credentials).map((credential) => ({
-                providerID: credential.providerID,
-                authenticated: true,
-                maskedCredential: maskCredential(credential.apiKey),
-            }));
+            return Object.values(current.credentials).map(summarizeCredential);
         },
         async getDefaultSelection() {
             const current = await readAuthFile(authFilePath);
             return current.default;
         },
     };
+}
+
+function buildStoredCredential(
+    input: SaveProviderCredentialInput,
+    existing: ProviderCredential | undefined,
+): ProviderCredential {
+    if ('apiKey' in input) {
+        return {
+            providerID: input.providerID,
+            type: 'apiKey',
+            apiKey: input.apiKey,
+            createdAt: existing?.createdAt ?? input.now,
+            updatedAt: input.now,
+        };
+    }
+
+    if ('oauth' in input) {
+        return {
+            providerID: input.providerID,
+            type: 'oauth',
+            accessToken: input.oauth.accessToken,
+            ...(input.oauth.refreshToken !== undefined ? { refreshToken: input.oauth.refreshToken } : {}),
+            ...(input.oauth.expiresAt !== undefined ? { expiresAt: input.oauth.expiresAt } : {}),
+            ...(input.oauth.scopes !== undefined ? { scopes: [...input.oauth.scopes] } : {}),
+            ...(input.oauth.accountLabel !== undefined ? { accountLabel: input.oauth.accountLabel } : {}),
+            createdAt: existing?.createdAt ?? input.now,
+            updatedAt: input.now,
+        };
+    }
+
+    return {
+        providerID: input.providerID,
+        type: 'fields',
+        fields: Object.fromEntries(
+            input.fields.map((field) => [
+                field.id,
+                {
+                    value: field.value,
+                    secret: field.secret,
+                },
+            ]),
+        ),
+        createdAt: existing?.createdAt ?? input.now,
+        updatedAt: input.now,
+    };
+}
+
+function summarizeCredential(credential: ProviderCredential): ProviderCredentialSummary {
+    switch (credential.type) {
+        case 'apiKey':
+            return {
+                providerID: credential.providerID,
+                authenticated: true,
+                maskedCredential: maskCredential(credential.apiKey),
+            };
+        case 'fields': {
+            const fieldEntries = Object.entries(credential.fields).sort(([leftID], [rightID]) =>
+                leftID.localeCompare(rightID),
+            );
+            const secretValue = fieldEntries.find((entry) => entry[1].secret)?.[1].value;
+            const fieldCountLabel = formatFieldCount(fieldEntries.length);
+            return {
+                providerID: credential.providerID,
+                authenticated: true,
+                maskedCredential:
+                    secretValue === undefined ? fieldCountLabel : `${maskCredential(secretValue)} (${fieldCountLabel})`,
+                credentialFieldCount: fieldEntries.length,
+            };
+        }
+        case 'oauth':
+            return {
+                providerID: credential.providerID,
+                authenticated: true,
+                credentialType: 'oauth',
+                maskedCredential: formatOAuthCredentialLabel(credential.accountLabel),
+            };
+        default:
+            return assertNever(credential);
+    }
 }
 
 function resolveAuthFilePath(): string {
@@ -101,7 +196,12 @@ function resolveAuthFilePath(): string {
 
 async function readAuthFile(authFilePath: string): Promise<ProviderAuthFile> {
     try {
-        return ProviderAuthFileSchema.parse(JSON.parse(await readFile(authFilePath, 'utf8')));
+        const contents = await readFile(authFilePath, 'utf8');
+        await chmod(authFilePath, 0o600);
+        if (contents.trim().length === 0) {
+            return defaultAuthFile;
+        }
+        return ProviderAuthFileSchema.parse(JSON.parse(contents));
     } catch (error: unknown) {
         if (isMissingFileError(error)) {
             return defaultAuthFile;
@@ -111,8 +211,17 @@ async function readAuthFile(authFilePath: string): Promise<ProviderAuthFile> {
 }
 
 async function writeAuthFile(authFilePath: string, authFile: ProviderAuthFile): Promise<void> {
-    await mkdir(dirname(authFilePath), { recursive: true });
-    await writeFile(authFilePath, `${JSON.stringify(authFile, null, 2)}\n`, { mode: 0o600 });
+    const authFileDirectory = dirname(authFilePath);
+    const tempAuthFilePath = join(authFileDirectory, `.${basename(authFilePath)}.${process.pid}.${randomUUID()}.tmp`);
+
+    await mkdir(authFileDirectory, { recursive: true });
+    try {
+        await writeFile(tempAuthFilePath, `${JSON.stringify(authFile, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+        await chmod(tempAuthFilePath, 0o600);
+        await rename(tempAuthFilePath, authFilePath);
+    } finally {
+        await rm(tempAuthFilePath, { force: true });
+    }
     await chmod(authFilePath, 0o600);
 }
 
@@ -121,6 +230,19 @@ function maskCredential(apiKey: string): string {
         return '********';
     }
     return `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}`;
+}
+
+function formatFieldCount(fieldCount: number): string {
+    return fieldCount === 1 ? '1 field' : `${fieldCount} fields`;
+}
+
+function formatOAuthCredentialLabel(accountLabel: string | undefined): string {
+    return accountLabel === undefined ? 'OAuth token' : `OAuth (${accountLabel})`;
+}
+
+function assertNever(value: never): never {
+    void value;
+    throw new Error('Unhandled provider credential type');
 }
 
 function isMissingFileError(error: unknown): boolean {

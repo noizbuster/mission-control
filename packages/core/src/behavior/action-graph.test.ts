@@ -60,8 +60,8 @@ describe('ActionGraph', () => {
             entryNodeId: 'classify-intent',
             defaults: {
                 model: {
-                    providerID: 'mock',
-                    modelID: 'mission-control-demo',
+                    providerID: 'local',
+                    modelID: 'local-echo',
                     variantID: 'default',
                 },
             },
@@ -101,8 +101,8 @@ describe('ActionGraph', () => {
         expect(rule?.matches({ signalType: 'success' })).toBe(true);
         expect(rule?.matches({ signalType: 'failure' })).toBe(false);
         expect(resolveAbgNodeModel(graph, 'gather-context')).toEqual({
-            providerID: 'mock',
-            modelID: 'mission-control-demo',
+            providerID: 'local',
+            modelID: 'local-echo',
             variantID: 'default',
         });
     });

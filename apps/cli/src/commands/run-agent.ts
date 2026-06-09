@@ -1,28 +1,63 @@
-import { modelProviderCatalog } from '@mission-control/config';
+import { defaultModelProviderSelection, modelProviderCatalog } from '@mission-control/config';
 import { AgentRuntime, type AgentRuntimeOptions } from '@mission-control/core';
 import {
     type AbgGraphSpec,
     AbgGraphSpecSchema,
     type AbgNodeModelOptions,
+    type AgentEvent,
     type ModelProviderSelection,
 } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
 import { type AgentUIRenderer, InkRenderer, JsonRenderer, PlainRenderer } from '../ui/renderers.js';
+import { type ChatInput, type ChatOutput, type ModelSelector, runInteractiveChatSession } from './interactive-chat.js';
+import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
+import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 
 export type RunAgentOptions = {
     readonly authStore?: ProviderAuthStore;
+    readonly chatInput?: ChatInput;
+    readonly chatOutput?: ChatOutput;
+    readonly selectModel?: ModelSelector;
+    readonly modelDiscovery?: ModelDiscovery;
+    readonly onRuntimeEvent?: (event: AgentEvent) => void;
 };
 
 export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Promise<string> {
-    const modelProviderSelection = validateModelProviderSelection(await resolveModelProviderSelection(args, options));
+    const authStore = options.authStore ?? createProviderAuthStore();
+    const modelProviderSelection = validateModelProviderSelection(await resolveModelProviderSelection(args, authStore));
     const graph = args.graphPath !== undefined ? await readGraphFile(args.graphPath) : undefined;
     if (graph !== undefined) {
         validateGraphModelOptions(graph);
     }
     const runtime = new AgentRuntime(createRuntimeOptions(args.useNative, modelProviderSelection));
+    if (shouldRunInteractiveChat(args, graph, options)) {
+        const unsubscribeRuntimeEvents =
+            options.onRuntimeEvent === undefined ? undefined : runtime.onEvent(options.onRuntimeEvent);
+        let didStart = false;
+        try {
+            await runtime.start();
+            didStart = true;
+            return await runInteractiveChatSession(runtime, {
+                modelProviderSelection: modelProviderSelection ?? defaultModelProviderSelection,
+                modelChoices: await listAuthenticatedModelChoices(
+                    authStore,
+                    options.modelDiscovery ?? createDefaultModelDiscovery(),
+                ),
+                ...(options.chatInput !== undefined ? { input: options.chatInput } : {}),
+                ...(options.chatOutput !== undefined ? { output: options.chatOutput } : {}),
+                ...(options.selectModel !== undefined ? { selectModel: options.selectModel } : {}),
+            });
+        } finally {
+            if (didStart) {
+                await runtime.stop();
+            }
+            unsubscribeRuntimeEvents?.();
+        }
+    }
+
     const renderer = createRenderer(args.mode);
     await renderer.start(runtime);
     const unsubscribe = runtime.onEvent((event) => {
@@ -39,15 +74,57 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     return renderer.getOutput();
 }
 
+function shouldRunInteractiveChat(args: CliArgs, graph: AbgGraphSpec | undefined, options: RunAgentOptions): boolean {
+    return (
+        graph === undefined &&
+        args.mode === 'ink' &&
+        (options.chatInput !== undefined || (process.stdin.isTTY === true && process.stdout.isTTY === true))
+    );
+}
+
 async function resolveModelProviderSelection(
     args: CliArgs,
-    options: RunAgentOptions,
+    authStore: ProviderAuthStore,
 ): Promise<ModelProviderSelection | undefined> {
     if (args.modelProviderSelection !== undefined) {
         return args.modelProviderSelection;
     }
-    const store = options.authStore ?? createProviderAuthStore();
-    return store.getDefaultSelection();
+    return authStore.getDefaultSelection();
+}
+
+async function listAuthenticatedProviderIDs(authStore: ProviderAuthStore): Promise<readonly string[]> {
+    const summaries = await authStore.listCredentialSummaries();
+    return summaries.filter((summary) => summary.authenticated).map((summary) => summary.providerID);
+}
+
+async function listAuthenticatedModelChoices(
+    authStore: ProviderAuthStore,
+    modelDiscovery: ModelDiscovery,
+): Promise<readonly ModelChoice[]> {
+    const authFile = await authStore.readAuthFile();
+    const providerIDs = await listAuthenticatedProviderIDs(authStore);
+    const baseChoices = createModelChoices({ providerIDs });
+    const choices: ModelChoice[] = [];
+
+    for (const providerID of providerIDs) {
+        const provider = modelProviderCatalog.find((entry) => entry.id === providerID);
+        const credential = authFile.credentials[providerID];
+        const providerChoices = baseChoices.filter((choice) => choice.selection.providerID === providerID);
+        if (provider === undefined || credential === undefined) {
+            choices.push(...providerChoices);
+            continue;
+        }
+
+        const discoveredModelIDs = await modelDiscovery({ provider, credential });
+        if (discoveredModelIDs === undefined) {
+            choices.push(...providerChoices);
+            continue;
+        }
+        const discoveredModelIDSet = new Set(discoveredModelIDs);
+        choices.push(...providerChoices.filter((choice) => discoveredModelIDSet.has(choice.selection.modelID)));
+    }
+
+    return choices;
 }
 
 function createRuntimeOptions(

@@ -71,8 +71,8 @@ describe('SessionEventLog', () => {
             sessionId: session.id,
             nativeSidecarStatus: 'mock',
             modelProviderSelection: {
-                providerID: 'mock',
-                modelID: 'mission-control-demo',
+                providerID: 'local',
+                modelID: 'local-echo',
             },
         });
         log.append({

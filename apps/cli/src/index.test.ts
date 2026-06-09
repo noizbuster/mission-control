@@ -18,12 +18,24 @@ describe('CLI entrypoint', () => {
         expect(help).toContain('--provider <id>');
         expect(help).toContain('--model <id>');
         expect(help).toContain('--graph <path>');
-        expect(help).toContain('mctrl auth login --provider mock --api-key <key>');
+        expect(help).toContain('--method <id>');
+        expect(help).toContain('mctrl auth login --provider local --api-key <key>');
+        expect(help).toContain('mctrl auth login --provider anthropic --api-key <key>');
+        expect(help).toContain('mctrl auth login --provider openai --method oauth-headless');
+        expect(help).toContain('mctrl auth login --provider github-copilot --method oauth');
+        expect(help).toContain(
+            'mctrl auth login --provider cloudflare-ai-gateway --credential apiToken=<token> --credential accountId=<account> --credential gatewayId=<gateway>',
+        );
+        expect(help).toContain('--credential FIELD=VALUE');
+        expect(help).not.toContain('sk-test');
         expect(help).toContain('mctrl auth list');
         expect(help).toContain('mctrl models local');
         expect(help).toContain('--version');
         expect(help).toContain('--help');
-        expect(help).toContain('mctrl --no-tui --provider mock --model mission-control-fast');
+        expect(help).toContain('mctrl --no-tui --provider local --model local-echo');
         expect(help).toContain('mctrl --json --graph examples/abg/research-answer.graph.json');
+        expect(help).toContain('/model <provider>/<model>');
+        expect(help).toContain('$<skill> [args]');
+        expect(help).toContain('$ skill invocations are scaffolded inside Mission Control');
     });
 });

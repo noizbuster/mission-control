@@ -30,7 +30,7 @@ describe('README extension points', () => {
         const terms = [
             'Authorable ABG MVP',
             'pnpm dev:cli -- --json --graph examples/abg/research-answer.graph.json',
-            'mock provider/model variants',
+            'local provider/model variant',
             'real providers, real tools, durable persistence, and visual graph editor remain out of scope',
         ] as const;
 

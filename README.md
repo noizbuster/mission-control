@@ -41,13 +41,17 @@ pnpm build
 pnpm dev:cli
 pnpm dev:cli -- --no-tui
 pnpm dev:cli -- --json
-pnpm dev:cli -- --no-tui --provider mock --model mission-control-fast
+pnpm dev:cli -- --no-tui --provider local --model local-echo
 pnpm dev:cli -- --json --model local/local-echo
 pnpm dev:cli -- --json --graph examples/abg/research-answer.graph.json
-pnpm dev:cli -- auth login --provider mock --api-key <key>
+pnpm dev:cli -- auth login --provider local --api-key <key>
+pnpm dev:cli -- auth login --provider anthropic --api-key <key>
+pnpm dev:cli -- auth login --provider openai --method oauth-headless
+pnpm dev:cli -- auth login --provider github-copilot --method oauth
+pnpm dev:cli -- auth login --provider cloudflare-ai-gateway --credential apiToken=<token> --credential accountId=<account> --credential gatewayId=<gateway>
 pnpm dev:cli -- auth login
 pnpm dev:cli -- auth list
-pnpm dev:cli -- auth logout --provider mock
+pnpm dev:cli -- auth logout --provider local
 pnpm dev:cli -- models local
 pnpm dev:sidecar
 pnpm dev:desktop
@@ -55,35 +59,54 @@ pnpm --filter @mission-control/cli build
 node apps/cli/dist/index.js --no-tui
 ```
 
+## Interactive chat commands
+
+`mctrl` opens a chat prompt by default. `/model opens a searchable model picker`, and `/model provider/model selects the model for the current chat only`. The selection updates scaffold metadata for subsequent prompt events and does not persist credentials or auth defaults.
+
+`$skill args records a scaffold agent skill invocation` inside Mission Control. It does not run actual Codex host skills, spawn agents, or make provider calls. Normal prompt text still sends a prompt, and Ctrl+C twice exits.
+
+The chat command surface is still scaffolded: model/provider selection remains metadata, skill calls are recorded as Mission Control events, and real LLM calls are not implemented.
+
 ## Model Provider Selection
 
-The CLI accepts scaffold model provider metadata for demo runs:
+The CLI accepts provider/model metadata for demo runs. The catalog combines the scaffold `local` provider with the OpenCode/Models.dev provider credential catalog, so credentials can be configured for every vendored OpenCode provider while runtime execution remains scaffolded.
 
 ```bash
-pnpm dev:cli -- --no-tui --provider mock --model mission-control-fast
+pnpm dev:cli -- --no-tui --provider local --model local-echo
 pnpm dev:cli -- --json --model local/local-echo
-mctrl auth login --provider mock --api-key <key>
+mctrl auth login --provider local --api-key <key>
+mctrl auth login --provider anthropic --api-key <key>
+mctrl auth login --provider openai --method oauth-headless
+mctrl auth login --provider github-copilot --method oauth
+mctrl auth login --provider cloudflare-ai-gateway --credential apiToken=<token> --credential accountId=<account> --credential gatewayId=<gateway>
+mctrl auth login --provider amazon-bedrock --credential region=<region> --credential accessKeyId=<key-id> --credential secretAccessKey=<secret>
 mctrl auth login
 mctrl auth list
-mctrl auth logout --provider mock
+mctrl auth logout --provider local
 mctrl models local
 ```
 
-`mctrl auth login` can prompt interactively for provider and API key when flags are omitted. stored credentials configure the default provider/model for later demo runs, so a later `mctrl --no-tui` can use the saved default when no `--provider` or `--model` flag is passed.
+The vendored Models.dev snapshot is generated from `https://models.dev/api.json` and is stored under `packages/config/src/generated/`. Refresh it with `node --experimental-strip-types scripts/sync-models-dev-catalog.ts`. Normal CLI commands use the vendored file only; there is no runtime fetch to Models.dev.
+
+`mctrl auth login` supports credential setup for every vendored OpenCode provider. Single-secret providers can use `--api-key <key>` as an alias for their primary secret. Multi-field providers use repeatable `--credential FIELD=VALUE` flags. OAuth-capable providers expose OpenCode-style `--method` choices: OpenAI supports browser and headless ChatGPT OAuth plus API key login, and GitHub Copilot supports OAuth device login plus API key login. Missing credential fields are resolved from explicit CLI values, matching environment variables, existing stored values, and interactive prompts, in that order.
+
+`mctrl auth login` can prompt interactively for provider, auth method, and credential fields when flags are omitted. Stored credentials configure the default provider/model for later demo runs, so a later `mctrl --no-tui` can use the saved default when no `--provider` or `--model` flag is passed.
 
 Credential storage defaults to `$XDG_DATA_HOME/mission-control/auth.json` or `~/.local/share/mission-control/auth.json`. Set `MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-auth.json` to use a specific auth file for tests, demos, or isolated workspaces.
 
-API keys are stored as plaintext JSON in that auth file. This scaffold does not use encrypted OS keychain storage yet; this is not encrypted keychain storage.
+API keys, OAuth tokens, and multi-field provider credentials are stored as plaintext JSON in that auth file. This scaffold does not use encrypted OS keychain storage yet; this is not encrypted keychain storage.
 
-`mctrl models [provider]` lists scaffold models and shows whether each provider has a configured credential. Command output masks credentials and does not print raw API keys.
+`mctrl models [provider]` lists scaffold and vendored provider models and shows whether each provider has a configured credential. Command output masks credentials and does not print raw API keys or raw multi-field secret values.
+
+Interactive `/model` choices are narrower than `mctrl models`: they first require a logged-in provider, and API-key credentials for supported providers can call the provider's model-list API at chat startup. When discovery succeeds, `/model` intersects the live provider model IDs with the vendored catalog before showing, searching, or accepting a model selection. OAuth credentials, unsupported providers, failed requests, and malformed responses fall back to the vendored models for that logged-in provider.
 
 The desktop demo control surface exposes provider/model controls, an API key credential field, credential configured/missing state, and the active selection in the status area and event log.
 
 provider/model selection is scaffold metadata for observable control surfaces only. It does not call real LLM providers yet.
 
-credentials are used for scaffold configuration only. They do not enable real LLM calls until a provider execution adapter is added.
+credentials are used for scaffold configuration only. They do not enable real LLM calls until a provider execution adapter is added. Mission Control does not implement real LLM provider execution in this scaffold.
 
-The catalog also exposes mock provider/model variants such as `mock/mission-control-demo/default`, `mock/mission-control-fast/cheap`, and `local/local-echo/default`. These variants are metadata for graph and event observability only.
+The catalog also exposes the local provider/model variant `local/local-echo/default`. These variants are metadata for graph and event observability only.
 
 ## Authorable ABG MVP
 

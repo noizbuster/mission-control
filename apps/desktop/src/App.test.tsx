@@ -27,7 +27,7 @@ describe('Desktop App', () => {
         expect(html).toContain('completed by mock sidecar');
         expect(html).toContain('mock');
         expect(html).toContain('data-testid="active-model"');
-        expect(html).toContain('model mock/mission-control-demo');
+        expect(html).toContain('model local/local-echo');
     });
 
     it('renders provider and model controls with the active selection', () => {
@@ -37,21 +37,30 @@ describe('Desktop App', () => {
         expect(html).toContain('aria-label="model"');
         expect(html).toContain('aria-label="API key"');
         expect(html).toContain('Save credential');
-        expect(html).toContain('Mock Provider');
-        expect(html).toContain('Mission Control Demo');
-        expect(html).toContain('model mock/mission-control-demo');
+        expect(html).toContain('Local Sandbox');
+        expect(html).toContain('Local Echo');
+        expect(html).toContain('model local/local-echo');
         expect(html).toContain('credential missing');
     });
 
     it('resolves model options when the provider changes', () => {
         expect(getModelsForProvider('local').map((model) => model.id)).toEqual(['local-echo']);
-        expect(resolveSelectionForProviderChange('local', 'mission-control-demo')).toEqual({
+        expect(resolveSelectionForProviderChange('local', 'removed-model')).toEqual({
             providerID: 'local',
             modelID: 'local-echo',
         });
-        expect(resolveSelectionForProviderChange('mock', 'mission-control-fast')).toEqual({
-            providerID: 'mock',
-            modelID: 'mission-control-fast',
+    });
+
+    it('renders and resolves generated provider catalog options without assuming the full list', () => {
+        const html = renderToStaticMarkup(<App />);
+
+        expect(html).toContain('Local Sandbox');
+        expect(html).toContain('Anthropic');
+        expect(html).toContain('Cloudflare AI Gateway');
+        expect(getModelsForProvider('anthropic').map((model) => model.id)).toContain('claude-3-5-haiku-20241022');
+        expect(resolveSelectionForProviderChange('anthropic', 'removed-model')).toEqual({
+            providerID: 'anthropic',
+            modelID: 'claude-3-5-haiku-20241022',
         });
     });
 
@@ -60,9 +69,9 @@ describe('Desktop App', () => {
             <App
                 initialCredentialSummaries={[
                     {
-                        providerID: 'mock',
+                        providerID: 'local',
                         authenticated: true,
-                        maskedCredential: 'mc_t..._key',
+                        maskedCredential: 'loca..._key',
                     },
                 ]}
             />,
@@ -82,6 +91,15 @@ describe('Desktop App', () => {
                 },
             ]),
         ).toBe('credential configured');
-        expect(getCredentialStatus('mock', [])).toBe('credential missing');
+        expect(
+            getCredentialStatus('anthropic', [
+                {
+                    providerID: 'anthropic',
+                    authenticated: true,
+                    maskedCredential: 'anth..._key (1 field)',
+                },
+            ]),
+        ).toBe('credential configured');
+        expect(getCredentialStatus('openai', [])).toBe('credential missing');
     });
 });

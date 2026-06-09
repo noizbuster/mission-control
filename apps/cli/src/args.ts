@@ -1,8 +1,14 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import { parseAuthArgs } from './auth-args.js';
 
 export type CliMode = 'ink' | 'plain' | 'json';
 
 export type CliCommand = 'run' | 'auth-login' | 'auth-list' | 'auth-logout' | 'models';
+
+export type AuthCredentialArg = {
+    readonly fieldID: string;
+    readonly value: string;
+};
 
 export type CliArgs = {
     readonly mode: CliMode;
@@ -14,7 +20,9 @@ export type CliArgs = {
     readonly modelProviderSelection?: ModelProviderSelection;
     readonly authProviderID?: string;
     readonly authModelID?: string;
+    readonly authMethodID?: string;
     readonly authApiKey?: string;
+    readonly authCredentials?: readonly AuthCredentialArg[];
     readonly modelsProviderID?: string;
 };
 
@@ -28,6 +36,8 @@ export const supportedCliFlags = [
     '--model',
     '--graph',
     '--api-key',
+    '--credential',
+    '--method',
     '--version',
     '--help',
 ] as const;
@@ -165,83 +175,6 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     return {
         ...baseArgs,
         modelProviderSelection,
-    };
-}
-
-function parseAuthArgs(argv: readonly string[]): CliArgs {
-    const subcommand = argv[0];
-    switch (subcommand) {
-        case 'login':
-            return parseAuthLoginArgs(argv.slice(1));
-        case 'list':
-        case 'ls':
-            return createBaseArgs('auth-list');
-        case 'logout':
-            return parseAuthLogoutArgs(argv.slice(1));
-        default:
-            throw new Error(`Unsupported auth command: ${subcommand ?? 'missing'}`);
-    }
-}
-
-function parseAuthLoginArgs(argv: readonly string[]): CliArgs {
-    let providerID: string | undefined;
-    let modelID: string | undefined;
-    let apiKey: string | undefined;
-    let index = 0;
-
-    while (index < argv.length) {
-        const current = argv[index];
-        switch (current) {
-            case '--provider':
-            case '-p':
-                providerID = readFlagValue(argv, index, current);
-                index += 2;
-                break;
-            case '--model':
-                modelID = readFlagValue(argv, index, '--model');
-                index += 2;
-                break;
-            case '--api-key':
-                apiKey = readFlagValue(argv, index, '--api-key');
-                index += 2;
-                break;
-            default:
-                throw new Error(`Unsupported auth login argument: ${current}`);
-        }
-    }
-
-    return {
-        ...createBaseArgs('auth-login'),
-        ...(providerID !== undefined ? { authProviderID: providerID } : {}),
-        ...(modelID !== undefined ? { authModelID: modelID } : {}),
-        ...(apiKey !== undefined ? { authApiKey: apiKey } : {}),
-    };
-}
-
-function parseAuthLogoutArgs(argv: readonly string[]): CliArgs {
-    let providerID: string | undefined;
-    let index = 0;
-
-    while (index < argv.length) {
-        const current = argv[index];
-        switch (current) {
-            case '--provider':
-            case '-p':
-                providerID = readFlagValue(argv, index, current);
-                index += 2;
-                break;
-            default:
-                throw new Error(`Unsupported auth logout argument: ${current}`);
-        }
-    }
-
-    if (providerID === undefined) {
-        throw new Error('auth logout requires --provider');
-    }
-
-    return {
-        ...createBaseArgs('auth-logout'),
-        authProviderID: providerID,
     };
 }
 

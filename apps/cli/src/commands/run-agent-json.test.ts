@@ -52,6 +52,33 @@ describe('runAgent JSON reporter', () => {
         });
     });
 
+    it('json output includes generated provider and model metadata', async () => {
+        const output = await runAgent({
+            mode: 'json',
+            useNative: false,
+            command: 'run',
+            showHelp: false,
+            showVersion: false,
+            modelProviderSelection: {
+                providerID: 'anthropic',
+                modelID: 'claude-sonnet-4-6',
+            },
+        });
+        const parsed = output
+            .trim()
+            .split('\n')
+            .map((line) => AgentEventSchema.parse(JSON.parse(line)));
+
+        expect(parsed.find((event) => event.type === 'session.started')?.modelProviderSelection).toEqual({
+            providerID: 'anthropic',
+            modelID: 'claude-sonnet-4-6',
+        });
+        expect(parsed.find((event) => event.type === 'task.completed')?.modelProviderSelection).toEqual({
+            providerID: 'anthropic',
+            modelID: 'claude-sonnet-4-6',
+        });
+    });
+
     it('json reporter emits graph events for authored graph', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'mission-control-cli-graph-'));
         const graphPath = join(directory, 'research.graph.json');

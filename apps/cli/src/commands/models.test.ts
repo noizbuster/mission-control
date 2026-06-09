@@ -40,26 +40,50 @@ describe('runModelsCommand', () => {
     it('keeps existing provider model listing baseline before model variants', async () => {
         const output = await runModelsCommand(parseArgs(['models']));
 
-        expect(output).toContain('mock/mission-control-demo missing credential');
-        expect(output).toContain('mock/mission-control-fast missing credential');
         expect(output).toContain('local/local-echo missing credential');
+        expect(output).not.toContain('mock/');
     });
 
     it('masks credentials when model variants are listed', async () => {
         const authFilePath = await useTempAuthFile();
         const store = createProviderAuthStore();
         await store.saveCredential({
-            providerID: 'mock',
-            modelID: 'mission-control-demo',
-            apiKey: 'mc_super_secret_key',
+            providerID: 'local',
+            modelID: 'local-echo',
+            apiKey: 'local_super_secret_key',
             now: '2026-06-03T10:00:00.000Z',
         });
 
-        const output = await runModelsCommand(parseArgs(['models', 'mock']), { store });
+        const output = await runModelsCommand(parseArgs(['models', 'local']), { store });
 
-        expect(output).toContain('mock/mission-control-demo');
+        expect(output).toContain('local/local-echo');
         expect(output).toContain('authenticated');
-        expect(output).not.toContain('mc_super_secret_key');
+        expect(output).not.toContain('local_super_secret_key');
+        await rm(authFilePath, { force: true });
+    });
+
+    it('lists generated OpenCode provider models without requiring credentials', async () => {
+        const output = await runModelsCommand(parseArgs(['models', 'anthropic']));
+
+        expect(output).toContain('Models');
+        expect(output).toContain('anthropic/claude-3-5-haiku-20241022 missing credential');
+        expect(output).not.toContain('mock/');
+    });
+
+    it('shows authenticated status for generated provider credentials', async () => {
+        const authFilePath = await useTempAuthFile();
+        const store = createProviderAuthStore();
+        await store.saveCredential({
+            providerID: 'anthropic',
+            modelID: 'claude-3-5-haiku-20241022',
+            fields: [{ id: 'apiKey', value: 'anthropic_secret_key', secret: true }],
+            now: '2026-06-03T10:00:00.000Z',
+        });
+
+        const output = await runModelsCommand(parseArgs(['models', 'anthropic']), { store });
+
+        expect(output).toContain('anthropic/claude-3-5-haiku-20241022 authenticated');
+        expect(output).not.toContain('anthropic_secret_key');
         await rm(authFilePath, { force: true });
     });
 });

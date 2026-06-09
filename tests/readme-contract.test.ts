@@ -67,7 +67,7 @@ describe('README stage-01 contract', () => {
     it('documents scaffold-safe model provider selection', () => {
         const content = readme();
         const requiredTerms = [
-            'pnpm dev:cli -- --no-tui --provider mock --model mission-control-fast',
+            'pnpm dev:cli -- --no-tui --provider local --model local-echo',
             'pnpm dev:cli -- --json --model local/local-echo',
             'provider/model controls',
             'provider/model selection is scaffold metadata',
@@ -79,20 +79,56 @@ describe('README stage-01 contract', () => {
         }
     });
 
+    it('documents interactive chat commands', () => {
+        const content = readme();
+        const requiredTerms = [
+            'Interactive chat commands',
+            '/model opens a searchable model picker',
+            '/model provider/model selects the model for the current chat only',
+            '$skill args records a scaffold agent skill invocation',
+            'Normal prompt text still sends a prompt',
+            'Ctrl+C twice exits',
+            'does not run actual Codex host skills',
+            'real LLM calls are not implemented',
+        ] as const;
+
+        for (const term of requiredTerms) {
+            expect(content, `README missing ${term}`).toContain(term);
+        }
+    });
+
     it('documents auth commands and credential storage', () => {
         const content = readme();
         const requiredTerms = [
-            'mctrl auth login --provider mock --api-key <key>',
+            'mctrl auth login --provider local --api-key <key>',
+            'mctrl auth login --provider anthropic --api-key <key>',
+            'mctrl auth login --provider openai --method oauth-headless',
+            'mctrl auth login --provider github-copilot --method oauth',
+            'mctrl auth login --provider cloudflare-ai-gateway --credential apiToken=<token> --credential accountId=<account> --credential gatewayId=<gateway>',
+            'mctrl auth login --provider amazon-bedrock --credential region=<region> --credential accessKeyId=<key-id> --credential secretAccessKey=<secret>',
+            '--credential FIELD=VALUE',
+            'OAuth-capable providers expose OpenCode-style `--method` choices',
+            'OpenAI supports browser and headless ChatGPT OAuth plus API key login',
+            'GitHub Copilot supports OAuth device login plus API key login',
+            'OpenCode/Models.dev provider credential catalog',
+            'vendored Models.dev snapshot',
+            'supports credential setup for every vendored OpenCode provider',
+            'does not implement real LLM provider execution',
+            'no runtime fetch to Models.dev',
+            'explicit CLI values, matching environment variables, existing stored values, and interactive prompts',
             'mctrl auth login',
             'mctrl auth list',
-            'mctrl auth logout --provider mock',
+            'mctrl auth logout --provider local',
             'mctrl models local',
             'MISSION_CONTROL_AUTH_FILE',
             '$XDG_DATA_HOME/mission-control/auth.json',
             '~/.local/share/mission-control/auth.json',
-            'stored credentials configure the default provider/model for later demo runs',
+            'Stored credentials configure the default provider/model for later demo runs',
+            'Interactive `/model` choices are narrower than `mctrl models`',
+            "call the provider's model-list API at chat startup",
+            'OAuth credentials, unsupported providers, failed requests, and malformed responses fall back to the vendored models',
             'credentials are used for scaffold configuration only',
-            'API keys are stored as plaintext JSON',
+            'API keys, OAuth tokens, and multi-field provider credentials are stored as plaintext JSON',
             'not encrypted keychain storage',
         ] as const;
 

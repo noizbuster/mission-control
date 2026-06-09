@@ -26,13 +26,19 @@ export type AgentRuntimeOptions = {
     readonly modelProviderSelection?: ModelProviderSelection;
 };
 
+export type SkillInvocationTaskInput = {
+    readonly skillID: string;
+    readonly argumentsText: string;
+};
+
 export class AgentRuntime {
     readonly options: AgentRuntimeOptions;
     private readonly log = new SessionEventLog();
     private readonly bus = new EventBus<AgentEvent>();
     private readonly sidecarClient: SidecarClient;
-    private readonly modelProviderSelection: ModelProviderSelection;
+    private modelProviderSelection: ModelProviderSelection;
     private session: AgentSession | undefined;
+    private promptTaskCounter = 0;
 
     constructor(options: AgentRuntimeOptions = {}) {
         this.options = options;
@@ -123,6 +129,76 @@ export class AgentRuntime {
         });
     }
 
+    async runPromptTask(prompt: string): Promise<string> {
+        const session = this.ensureSession();
+        const taskId = this.createPromptTaskId();
+        await this.requestPermission(
+            {
+                id: `permission_${taskId}`,
+                action: 'prompt.submit',
+                reason: 'user chat prompt permission gate',
+            },
+            taskId,
+        );
+        this.emit({
+            type: 'task.started',
+            timestamp: new Date().toISOString(),
+            sessionId: session.id,
+            taskId,
+            message: `user prompt: ${prompt}`,
+            nativeSidecarStatus: 'mock',
+            modelProviderSelection: this.modelProviderSelection,
+        });
+        const response = `received prompt: ${prompt}`;
+        this.emit({
+            type: 'task.completed',
+            timestamp: new Date().toISOString(),
+            sessionId: session.id,
+            taskId,
+            message: response,
+            nativeSidecarStatus: 'mock',
+            modelProviderSelection: this.modelProviderSelection,
+        });
+        return response;
+    }
+
+    async runSkillInvocationTask(input: SkillInvocationTaskInput): Promise<string> {
+        const session = this.ensureSession();
+        const taskId = this.createPromptTaskId();
+        await this.requestPermission(
+            {
+                id: `permission_${taskId}`,
+                action: 'skill.invoke',
+                reason: `skill invocation permission gate: ${input.skillID}`,
+            },
+            taskId,
+        );
+        this.emit({
+            type: 'task.started',
+            timestamp: new Date().toISOString(),
+            sessionId: session.id,
+            taskId,
+            message: `skill invocation started: ${input.skillID}`,
+            nativeSidecarStatus: 'mock',
+            modelProviderSelection: this.modelProviderSelection,
+        });
+        const response = `skill invocation scaffolded: ${input.skillID}`;
+        this.emit({
+            type: 'task.completed',
+            timestamp: new Date().toISOString(),
+            sessionId: session.id,
+            taskId,
+            message: response,
+            nativeSidecarStatus: 'mock',
+            modelProviderSelection: this.modelProviderSelection,
+        });
+        return response;
+    }
+
+    setModelProviderSelection(modelProviderSelection: ModelProviderSelection): void {
+        this.modelProviderSelection = modelProviderSelection;
+    }
+
     async runGraph(graph: unknown, graphInput?: AbgGraphInput): Promise<AbgGraphRunResult> {
         const session = this.ensureSession();
         const result = await runAbgGraph({
@@ -188,6 +264,11 @@ export class AgentRuntime {
             return this.session;
         }
         throw new Error('AgentRuntime has not been started');
+    }
+
+    private createPromptTaskId(): string {
+        this.promptTaskCounter += 1;
+        return `task_prompt_${this.promptTaskCounter}`;
     }
 
     private async runTaskWithFallback(taskId: string) {

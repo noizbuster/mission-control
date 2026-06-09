@@ -58,4 +58,19 @@ describe('CLI integration', () => {
         expect(output).toContain('model: local/local-echo');
         await rm(authFilePath, { force: true });
     });
+
+    it('uses auth configured OpenCode provider defaults through CLI integration', async () => {
+        const authFilePath = await useTempAuthFile();
+        await runAuthCommand(parseArgs(['auth', 'login', '--provider', 'anthropic', '--api-key', 'anthropic_key']), {
+            now: '2026-06-03T10:00:00.000Z',
+            store: createProviderAuthStore(),
+        });
+
+        const output = await runAgent(parseArgs(['--no-tui']));
+
+        expect(output).toContain('model: anthropic/claude-3-5-haiku-20241022');
+        expect(output).toContain('task.completed');
+        expect(output).not.toContain('anthropic_key');
+        await rm(authFilePath, { force: true });
+    });
 });

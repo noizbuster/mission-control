@@ -60,10 +60,10 @@ describe('runAgent plain reporter', () => {
                 showVersion: false,
                 modelProviderSelection: {
                     providerID: 'local',
-                    modelID: 'mission-control-demo',
+                    modelID: 'removed-model',
                 },
             }),
-        ).rejects.toThrow('Model mission-control-demo is not available for provider local');
+        ).rejects.toThrow('Model removed-model is not available for provider local');
 
         await expect(
             runAgent({
@@ -74,7 +74,7 @@ describe('runAgent plain reporter', () => {
                 showVersion: false,
                 modelProviderSelection: {
                     providerID: 'unknown',
-                    modelID: 'mission-control-demo',
+                    modelID: 'removed-model',
                 },
             }),
         ).rejects.toThrow('Unknown provider: unknown');
@@ -103,6 +103,50 @@ describe('runAgent plain reporter', () => {
 
         expect(output).toContain('model: local/local-echo');
         await rm(authFilePath, { force: true });
+    });
+
+    it('uses configured OpenCode provider defaults when no provider flags are passed', async () => {
+        const authFilePath = await useTempAuthFile();
+        const store = createProviderAuthStore();
+        await store.saveCredential({
+            providerID: 'anthropic',
+            modelID: 'claude-3-5-haiku-20241022',
+            fields: [{ id: 'apiKey', value: 'anthropic_secret_key', secret: true }],
+            now: '2026-06-03T10:00:00.000Z',
+        });
+
+        const output = await runAgent(
+            {
+                mode: 'plain',
+                useNative: false,
+                command: 'run',
+                showHelp: false,
+                showVersion: false,
+            },
+            { authStore: store },
+        );
+
+        expect(output).toContain('model: anthropic/claude-3-5-haiku-20241022');
+        expect(output).toContain('task.completed');
+        expect(output).not.toContain('anthropic_secret_key');
+        await rm(authFilePath, { force: true });
+    });
+
+    it('validates explicit generated provider model selections', async () => {
+        const output = await runAgent({
+            mode: 'plain',
+            useNative: false,
+            command: 'run',
+            showHelp: false,
+            showVersion: false,
+            modelProviderSelection: {
+                providerID: 'anthropic',
+                modelID: 'claude-sonnet-4-6',
+            },
+        });
+
+        expect(output).toContain('model: anthropic/claude-sonnet-4-6');
+        expect(output).toContain('task.completed');
     });
 
     it('rejects malformed graph files before running', async () => {

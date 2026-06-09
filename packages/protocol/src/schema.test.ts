@@ -91,18 +91,18 @@ describe('protocol schemas', () => {
 
     it('parses provider model selection and catalog entries', () => {
         const selection = ModelProviderSelectionSchema.parse({
-            providerID: 'mock',
-            modelID: 'mission-control-demo',
+            providerID: 'local',
+            modelID: 'local-echo',
         });
         const provider = ProviderCatalogEntrySchema.parse({
-            id: 'mock',
-            name: 'Mock Provider',
-            defaultModelID: 'mission-control-demo',
+            id: 'local',
+            name: 'Local Sandbox',
+            defaultModelID: 'local-echo',
             authLabel: 'API key',
             models: [
                 {
-                    id: 'mission-control-demo',
-                    name: 'Mission Control Demo',
+                    id: 'local-echo',
+                    name: 'Local Echo',
                     status: 'active',
                     variants: [
                         {
@@ -116,23 +116,23 @@ describe('protocol schemas', () => {
         });
 
         expect(selection).toEqual({
-            providerID: 'mock',
-            modelID: 'mission-control-demo',
+            providerID: 'local',
+            modelID: 'local-echo',
         });
-        expect(provider.models[0]?.id).toBe('mission-control-demo');
+        expect(provider.models[0]?.id).toBe('local-echo');
         expect(provider.models[0]?.variants?.[0]?.id).toBe('default');
     });
 
     it('rejects provider catalog entries with malformed model variants', () => {
         const parsed = ProviderCatalogEntrySchema.safeParse({
-            id: 'mock',
-            name: 'Mock Provider',
-            defaultModelID: 'mission-control-demo',
+            id: 'local',
+            name: 'Local Sandbox',
+            defaultModelID: 'local-echo',
             authLabel: 'API key',
             models: [
                 {
-                    id: 'mission-control-demo',
-                    name: 'Mission Control Demo',
+                    id: 'local-echo',
+                    name: 'Local Echo',
                     variants: [
                         {
                             id: '',
@@ -169,40 +169,94 @@ describe('protocol schemas', () => {
 
     it('parses provider credential records and auth file snapshots', () => {
         const credential = ProviderCredentialSchema.parse({
-            providerID: 'mock',
+            providerID: 'local',
             type: 'apiKey',
-            apiKey: 'mc_test_key',
+            apiKey: 'local_test_key',
             createdAt: '2026-06-03T10:00:00.000Z',
             updatedAt: '2026-06-03T10:00:00.000Z',
         });
         const authFile = ProviderAuthFileSchema.parse({
             $schema: 'https://mission-control.local/auth.schema.json',
             default: {
-                providerID: 'mock',
-                modelID: 'mission-control-demo',
+                providerID: 'local',
+                modelID: 'local-echo',
             },
             credentials: {
-                mock: credential,
+                local: credential,
             },
         });
         const summary = ProviderCredentialSummarySchema.parse({
-            providerID: 'mock',
+            providerID: 'local',
             authenticated: true,
-            maskedCredential: 'mc_t..._key',
+            maskedCredential: 'loca..._key',
         });
 
-        const mockProviderID = 'mock';
+        const localProviderID = 'local';
 
-        expect(authFile.credentials[mockProviderID]?.apiKey).toBe('mc_test_key');
-        expect(summary.maskedCredential).toBe('mc_t..._key');
+        expect(authFile.credentials[localProviderID]).toMatchObject({
+            apiKey: 'local_test_key',
+        });
+        expect(summary.maskedCredential).toBe('loca..._key');
         expect(
             ProviderCredentialSchema.safeParse({
-                providerID: 'mock',
+                providerID: 'local',
                 type: 'apiKey',
                 apiKey: '',
                 createdAt: '2026-06-03T10:00:00.000Z',
                 updatedAt: '2026-06-03T10:00:00.000Z',
             }).success,
         ).toBe(false);
+    });
+
+    it('parses multi-field provider credentials and legacy API-key credentials', () => {
+        const multiFieldCredential = ProviderCredentialSchema.parse({
+            providerID: 'cloudflare-ai-gateway',
+            type: 'fields',
+            fields: {
+                accountId: {
+                    value: 'acct_test',
+                    secret: false,
+                },
+                apiToken: {
+                    value: 'cf_secret_token',
+                    secret: true,
+                },
+                gatewayId: {
+                    value: 'gw_test',
+                    secret: false,
+                },
+            },
+            createdAt: '2026-06-03T10:00:00.000Z',
+            updatedAt: '2026-06-03T10:00:00.000Z',
+        });
+        const legacyCredential = ProviderCredentialSchema.parse({
+            providerID: 'local',
+            type: 'apiKey',
+            apiKey: 'local_test_key',
+            createdAt: '2026-06-03T10:00:00.000Z',
+            updatedAt: '2026-06-03T10:00:00.000Z',
+        });
+        const summary = ProviderCredentialSummarySchema.parse({
+            providerID: 'cloudflare-ai-gateway',
+            authenticated: true,
+            maskedCredential: 'cf_s...oken (3 fields)',
+            credentialFieldCount: 3,
+        });
+
+        expect(multiFieldCredential).toMatchObject({
+            providerID: 'cloudflare-ai-gateway',
+            type: 'fields',
+            fields: {
+                apiToken: {
+                    secret: true,
+                },
+            },
+        });
+        expect(legacyCredential).toMatchObject({
+            providerID: 'local',
+            type: 'apiKey',
+            apiKey: 'local_test_key',
+        });
+        expect(summary.credentialFieldCount).toBe(3);
     });
 });

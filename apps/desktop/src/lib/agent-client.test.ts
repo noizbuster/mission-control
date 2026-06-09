@@ -36,6 +36,20 @@ describe('desktop agent client', () => {
         );
     });
 
+    it('mock desktop client preserves generated provider and model metadata', async () => {
+        const client = createMockDesktopAgentClient();
+        const session = await client.startDemoSession();
+        const events = await client.runDemoTask(session.id, {
+            providerID: 'anthropic',
+            modelID: 'claude-3-5-haiku-20241022',
+        });
+
+        expect(events.find((event) => event.type === 'task.completed')?.modelProviderSelection).toEqual({
+            providerID: 'anthropic',
+            modelID: 'claude-3-5-haiku-20241022',
+        });
+    });
+
     it('mock desktop client emits graph metadata for the demo event log', async () => {
         const client = createMockDesktopAgentClient();
         const session = await client.startDemoSession();

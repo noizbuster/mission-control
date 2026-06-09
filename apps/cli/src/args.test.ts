@@ -27,10 +27,10 @@ describe('parseArgs', () => {
     });
 
     it('parses explicit provider and model flags', () => {
-        expect(parseArgs(['--provider', 'mock', '--model', 'mission-control-fast'])).toMatchObject({
+        expect(parseArgs(['--provider', 'local', '--model', 'local-echo'])).toMatchObject({
             modelProviderSelection: {
-                providerID: 'mock',
-                modelID: 'mission-control-fast',
+                providerID: 'local',
+                modelID: 'local-echo',
             },
         });
     });
@@ -45,23 +45,23 @@ describe('parseArgs', () => {
     });
 
     it('rejects incomplete or conflicting provider model flags', () => {
-        expect(() => parseArgs(['--provider', 'mock'])).toThrow('--provider requires --model');
+        expect(() => parseArgs(['--provider', 'local'])).toThrow('--provider requires --model');
         expect(() => parseArgs(['--provider'])).toThrow('--provider requires a value');
         expect(() => parseArgs(['--graph'])).toThrow('--graph requires a value');
         expect(() => parseArgs(['--model'])).toThrow('--model requires a value');
-        expect(() => parseArgs(['--model', 'mission-control-demo'])).toThrow(
+        expect(() => parseArgs(['--model', 'local-echo'])).toThrow(
             '--model without --provider must use provider/model',
         );
-        expect(() => parseArgs(['--provider', 'mock', '--model', 'local/local-echo'])).toThrow(
+        expect(() => parseArgs(['--provider', 'local', '--model', 'anthropic/claude-3-5-haiku-20241022'])).toThrow(
             '--model provider/model cannot be combined with --provider',
         );
     });
 
     it('parses auth login list logout and models commands', () => {
-        expect(parseArgs(['auth', 'login', '--provider', 'mock', '--api-key', 'mc_test_key'])).toMatchObject({
+        expect(parseArgs(['auth', 'login', '--provider', 'local', '--api-key', 'local_key'])).toMatchObject({
             command: 'auth-login',
-            authProviderID: 'mock',
-            authApiKey: 'mc_test_key',
+            authProviderID: 'local',
+            authApiKey: 'local_key',
         });
         expect(
             parseArgs(['auth', 'login', '-p', 'local', '--model', 'local-echo', '--api-key', 'local_key']),
@@ -71,11 +71,38 @@ describe('parseArgs', () => {
             authModelID: 'local-echo',
             authApiKey: 'local_key',
         });
+        expect(parseArgs(['auth', 'login', '--provider', 'openai', '--method', 'oauth'])).toMatchObject({
+            command: 'auth-login',
+            authProviderID: 'openai',
+            authMethodID: 'oauth',
+        });
+        expect(
+            parseArgs([
+                'auth',
+                'login',
+                '--provider',
+                'cloudflare-ai-gateway',
+                '--credential',
+                'accountId=acct_test',
+                '--credential',
+                'gatewayId=gw_test',
+            ]),
+        ).toMatchObject({
+            command: 'auth-login',
+            authProviderID: 'cloudflare-ai-gateway',
+            authCredentials: [
+                { fieldID: 'accountId', value: 'acct_test' },
+                { fieldID: 'gatewayId', value: 'gw_test' },
+            ],
+        });
         expect(parseArgs(['auth', 'list']).command).toBe('auth-list');
         expect(parseArgs(['auth', 'ls']).command).toBe('auth-list');
-        expect(parseArgs(['auth', 'logout', '--provider', 'mock'])).toMatchObject({
+        expect(parseArgs(['auth', 'logout', '--provider', 'local'])).toMatchObject({
             command: 'auth-logout',
-            authProviderID: 'mock',
+            authProviderID: 'local',
+        });
+        expect(parseArgs(['auth', 'logout'])).toMatchObject({
+            command: 'auth-logout',
         });
         expect(parseArgs(['models']).command).toBe('models');
         expect(parseArgs(['models', 'local'])).toMatchObject({
@@ -83,6 +110,11 @@ describe('parseArgs', () => {
             modelsProviderID: 'local',
         });
         expect(() => parseArgs(['auth', 'login', '--api-key'])).toThrow('--api-key requires a value');
-        expect(() => parseArgs(['auth', 'logout'])).toThrow('auth logout requires --provider');
+        expect(() => parseArgs(['auth', 'login', '--credential', 'missing-equals'])).toThrow(
+            '--credential requires FIELD=VALUE',
+        );
+        expect(() => parseArgs(['auth', 'login', '--method'])).toThrow('--method requires a value');
+        expect(() => parseArgs(['auth', 'login', 'sk_positional_secret'])).toThrow(/^Unsupported auth login argument$/);
+        expect(() => parseArgs(['auth', 'sk_command_secret'])).toThrow(/^Unsupported auth command$/);
     });
 });

@@ -63,13 +63,87 @@ describe('AgentRuntime', () => {
         unsubscribe();
 
         expect(events[0]?.modelProviderSelection).toEqual({
-            providerID: 'mock',
-            modelID: 'mission-control-demo',
+            providerID: 'local',
+            modelID: 'local-echo',
         });
         expect(snapshot.modelProviderSelection).toEqual({
-            providerID: 'mock',
-            modelID: 'mission-control-demo',
+            providerID: 'local',
+            modelID: 'local-echo',
         });
+    });
+
+    it('uses a session-local active model selection', async () => {
+        const runtime = new AgentRuntime({ useNative: false });
+        const otherRuntime = new AgentRuntime({ useNative: false });
+
+        await runtime.start();
+        runtime.setModelProviderSelection({
+            providerID: 'anthropic',
+            modelID: 'claude-3-5-haiku-20241022',
+        });
+        await runtime.runPromptTask('explain model routing');
+        await otherRuntime.start();
+        await otherRuntime.runPromptTask('default model routing');
+        const completed = runtime
+            .getEvents()
+            .find(
+                (event) =>
+                    event.type === 'task.completed' && event.message === 'received prompt: explain model routing',
+            );
+        const otherCompleted = otherRuntime
+            .getEvents()
+            .find(
+                (event) =>
+                    event.type === 'task.completed' && event.message === 'received prompt: default model routing',
+            );
+
+        expect(completed?.modelProviderSelection).toEqual({
+            providerID: 'anthropic',
+            modelID: 'claude-3-5-haiku-20241022',
+        });
+        expect(otherCompleted?.modelProviderSelection).toEqual({
+            providerID: 'local',
+            modelID: 'local-echo',
+        });
+    });
+
+    it('emits scaffold skill invocation events', async () => {
+        const runtime = new AgentRuntime({ useNative: false });
+
+        await runtime.start();
+        runtime.setModelProviderSelection({
+            providerID: 'anthropic',
+            modelID: 'claude-3-5-haiku-20241022',
+        });
+        const response = await runtime.runSkillInvocationTask({
+            skillID: 'omo:ulw-plan',
+            argumentsText: 'plan auth',
+        });
+        const events = runtime.getEvents();
+
+        expect(response).toBe('skill invocation scaffolded: omo:ulw-plan');
+        expect(events).toContainEqual(
+            expect.objectContaining({
+                type: 'permission.requested',
+                message: 'permission requested: skill.invoke',
+                modelProviderSelection: {
+                    providerID: 'anthropic',
+                    modelID: 'claude-3-5-haiku-20241022',
+                },
+            }),
+        );
+        expect(events).toContainEqual(
+            expect.objectContaining({
+                type: 'task.started',
+                message: 'skill invocation started: omo:ulw-plan',
+            }),
+        );
+        expect(events).toContainEqual(
+            expect.objectContaining({
+                type: 'task.completed',
+                message: 'skill invocation scaffolded: omo:ulw-plan',
+            }),
+        );
     });
 
     it('runGraph emits graph and node lifecycle events', async () => {
@@ -198,8 +272,8 @@ function createRuntimeGraph(): AbgGraphSpec {
         entryNodeId: 'draft-answer',
         defaults: {
             model: {
-                providerID: 'mock',
-                modelID: 'mission-control-demo',
+                providerID: 'local',
+                modelID: 'local-echo',
                 variantID: 'default',
             },
         },
