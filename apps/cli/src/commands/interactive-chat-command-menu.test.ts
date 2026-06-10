@@ -40,6 +40,17 @@ describe('interactive chat command menu', () => {
         expect(resolveSlashCommandMenuSubmission('/mo', upState)).toBe('/model');
     });
 
+    it('selects slash commands with CSI arrow press and repeat reports while ignoring releases', () => {
+        const initialState = createSlashCommandMenuState();
+        const downState = reduceSlashCommandMenuSelection(initialState, '\u001b[1;1B', '/mo');
+        const releaseState = reduceSlashCommandMenuSelection(downState, '\u001b[1;1:3B', '/mo');
+        const repeatState = reduceSlashCommandMenuSelection(releaseState, '\u001b[1;1:2B', '/mo');
+
+        expect(createSlashCommandMenuView('/mo', downState, 5).selectedIndex).toBe(1);
+        expect(createSlashCommandMenuView('/mo', releaseState, 5).selectedIndex).toBe(1);
+        expect(createSlashCommandMenuView('/mo', repeatState, 5).selectedIndex).toBe(2);
+    });
+
     it('shows an empty state for unmatched slash command searches without rewriting submission', () => {
         const state = createSlashCommandMenuState();
         const view = createSlashCommandMenuView('/zz', state, 5);

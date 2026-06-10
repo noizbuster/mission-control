@@ -28,6 +28,7 @@ export type SaveProviderOAuthCredentialInput = {
 type SaveProviderCredentialBaseInput = {
     readonly providerID: string;
     readonly modelID: string;
+    readonly variantID?: string;
     readonly now: string;
 };
 
@@ -46,6 +47,7 @@ export type ProviderAuthStore = {
     readonly authFilePath: string;
     readonly readAuthFile: () => Promise<ProviderAuthFile>;
     readonly saveCredential: (input: SaveProviderCredentialInput) => Promise<void>;
+    readonly setDefaultSelection: (selection: ModelProviderSelection) => Promise<void>;
     readonly deleteCredential: (providerID: string) => Promise<void>;
     readonly listCredentialSummaries: () => Promise<readonly ProviderCredentialSummary[]>;
     readonly getDefaultSelection: () => Promise<ModelProviderSelection | undefined>;
@@ -71,11 +73,20 @@ export function createProviderAuthStore(): ProviderAuthStore {
                 default: {
                     providerID: input.providerID,
                     modelID: input.modelID,
+                    ...(input.variantID !== undefined ? { variantID: input.variantID } : {}),
                 },
                 credentials: {
                     ...current.credentials,
                     [input.providerID]: buildStoredCredential(input, existing),
                 },
+            });
+            await writeAuthFile(authFilePath, next);
+        },
+        async setDefaultSelection(selection) {
+            const current = await readAuthFile(authFilePath);
+            const next = ProviderAuthFileSchema.parse({
+                ...current,
+                default: selection,
             });
             await writeAuthFile(authFilePath, next);
         },

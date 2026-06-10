@@ -8,7 +8,7 @@ import type { AgentEvent, ModelProviderSelection } from '@mission-control/protoc
 import type { ChatLineAction } from './chat-commands.js';
 import type { ModelSelector } from './interactive-chat.js';
 import type { ChatOutput } from './interactive-chat-io.js';
-import type { ModelChoice } from './interactive-chat-model.js';
+import { createVariantChoices, type ModelChoice } from './interactive-chat-model.js';
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { type ActiveCodingAgentTurn, startCodingAgentTurn } from './interactive-coding-agent.js';
 
@@ -137,14 +137,23 @@ async function runModelPickAction(
         chatOutput.write('No models are available for logged-in providers\n');
         return actionResult(currentSelection, coding.activeTurn);
     }
-    const selection = await selectModel(modelChoices, currentSelection);
+    const selection = await selectModel(modelChoices, currentSelection, { title: 'Select model' });
     if (selection === undefined) {
         chatOutput.write(formatModelProviderStatus(currentSelection, { nodeMode: 'none' }));
         return actionResult(currentSelection, coding.activeTurn);
     }
-    runtime.setModelProviderSelection(selection);
-    chatOutput.write(formatModelProviderStatus(selection, { nodeMode: 'none' }));
-    return actionResult(selection, coding.activeTurn);
+    const variantChoices = createVariantChoices(selection);
+    const selectedVariant =
+        variantChoices.length === 0
+            ? selection
+            : await selectModel(variantChoices, selection, { title: 'Select variant' });
+    if (selectedVariant === undefined) {
+        chatOutput.write(formatModelProviderStatus(currentSelection, { nodeMode: 'none' }));
+        return actionResult(currentSelection, coding.activeTurn);
+    }
+    runtime.setModelProviderSelection(selectedVariant);
+    chatOutput.write(formatModelProviderStatus(selectedVariant, { nodeMode: 'none' }));
+    return actionResult(selectedVariant, coding.activeTurn);
 }
 
 function runModelListAction(

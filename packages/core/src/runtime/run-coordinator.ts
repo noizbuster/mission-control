@@ -14,6 +14,7 @@ import type { AdmitPromptInput, PromptInputState, SessionAdmissionEventStore } f
 import * as runAdmission from './run-coordinator-admission.js';
 import { RunCoordinatorIdSequence } from './run-coordinator-ids.js';
 import { providerRunnerOptions } from './run-coordinator-provider-options.js';
+import { providerTurnSelection } from './run-coordinator-provider-selection.js';
 
 export type RunCoordinatorStore = SessionAdmissionEventStore;
 
@@ -190,8 +191,7 @@ export class SessionRunCoordinator {
             sessionId: this.options.sessionId,
             turnId,
             requestId,
-            providerID: this.options.modelProviderSelection.providerID,
-            modelID: this.options.modelProviderSelection.modelID,
+            ...providerTurnSelection(this.options.modelProviderSelection),
             messages: await this.modelVisibleMessages(),
             startSequence: 0,
             signal,

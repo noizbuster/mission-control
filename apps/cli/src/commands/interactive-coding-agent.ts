@@ -71,6 +71,9 @@ async function runCodingAgentTurn(
         requestId: `provider_request_${options.turnId}`,
         providerID: options.modelProviderSelection.providerID,
         modelID: options.modelProviderSelection.modelID,
+        ...(options.modelProviderSelection.variantID !== undefined
+            ? { variantID: options.modelProviderSelection.variantID }
+            : {}),
         messages: [{ role: 'user', content: options.prompt }],
         startSequence: 0,
         signal,

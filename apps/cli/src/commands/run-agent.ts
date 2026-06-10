@@ -29,6 +29,7 @@ export type RunAgentOptions = {
     readonly modelDiscovery?: ModelDiscovery;
     readonly onRuntimeEvent?: (event: AgentEvent) => void;
     readonly provider?: ProviderAdapter;
+    readonly createProvider?: (selection: ModelProviderSelection) => ProviderAdapter;
     readonly workspaceRoot?: string;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
 };
@@ -42,9 +43,10 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     }
     const selectedModelProvider = modelProviderSelection ?? defaultModelProviderSelection;
     const shouldRunChat = shouldRunInteractiveChat(args, graph, options);
+    const createProvider = options.createProvider ?? ((selection) => createProviderForSelection(selection, authStore));
     const provider =
         options.provider ??
-        (shouldRunChat ? createProviderForSelection(selectedModelProvider, authStore) : createLocalCodingProvider());
+        (shouldRunChat ? createProvider(selectedModelProvider) : createLocalCodingProvider());
     const runtime = new AgentRuntime(createRuntimeOptions(args.useNative, modelProviderSelection, provider));
     if (shouldRunChat) {
         const recorder = await createRunEventRecorder(args);
@@ -67,6 +69,10 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     options.modelDiscovery ?? createDefaultModelDiscovery(),
                 ),
                 emitEvent: emitRuntimeEvent,
+                ...(options.provider === undefined ? { resolveProviderForSelection: createProvider } : {}),
+                persistModelProviderSelection: async (selection) => {
+                    await authStore.setDefaultSelection(selection);
+                },
                 ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
                 ...(options.chatInput !== undefined ? { input: options.chatInput } : {}),
                 ...(options.chatOutput !== undefined ? { output: options.chatOutput } : {}),

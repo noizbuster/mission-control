@@ -1,3 +1,4 @@
+import { readTerminalCursorDirection } from './interactive-chat-terminal-keys.js';
 import { terminalDisplayWidth, truncateTerminalText } from './terminal-text.js';
 
 export type SlashCommandMenuChoice = {
@@ -20,8 +21,6 @@ export type SlashCommandMenuView = {
     readonly empty: boolean;
 };
 
-const arrowUpSequence = '\u001b[A';
-const arrowDownSequence = '\u001b[B';
 const resetStyle = '\u001b[0m';
 const selectedStyle = '\u001b[48;5;60m\u001b[38;5;231m';
 
@@ -110,10 +109,11 @@ export function reduceSlashCommandMenuSelection(
     if (!view.open || view.totalCount === 0) {
         return { selectedIndex: 0 };
     }
-    if (chunk.includes(arrowDownSequence)) {
+    const cursorDirection = readTerminalCursorDirection(chunk);
+    if (cursorDirection === 'down') {
         return { selectedIndex: Math.min(view.selectedIndex + 1, view.totalCount - 1) };
     }
-    if (chunk.includes(arrowUpSequence)) {
+    if (cursorDirection === 'up') {
         return { selectedIndex: Math.max(view.selectedIndex - 1, 0) };
     }
     return { selectedIndex: view.selectedIndex };

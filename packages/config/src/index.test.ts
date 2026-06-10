@@ -96,4 +96,34 @@ describe('config catalog constants', () => {
             'thinking',
         ]);
     });
+
+    it('exports provider-specific model variants for reasoning and thinking capable providers', () => {
+        const openAIProvider = modelProviderCatalog.find((provider) => provider.id === 'openai');
+        const openAIReasoningModel = openAIProvider?.models.find((model) => model.id === 'gpt-5');
+        const openAILatestReasoningModel = openAIProvider?.models.find((model) => model.id === 'gpt-5.5');
+        const openAINonReasoningModel = openAIProvider?.models.find((model) => model.id === 'gpt-4o-mini');
+        const anthropicProvider = modelProviderCatalog.find((provider) => provider.id === 'anthropic');
+        const anthropicThinkingModel = anthropicProvider?.models.find((model) => model.id === 'claude-sonnet-4-6');
+
+        expect(openAIReasoningModel?.variants?.map((variant) => variant.id)).toEqual([
+            'reasoning-minimal',
+            'reasoning-low',
+            'reasoning-medium',
+            'reasoning-high',
+        ]);
+        expect(openAILatestReasoningModel?.variants?.map((variant) => variant.id)).toEqual([
+            'reasoning-none',
+            'reasoning-low',
+            'reasoning-medium',
+            'reasoning-high',
+            'reasoning-xhigh',
+        ]);
+        expect(openAINonReasoningModel?.variants).toBeUndefined();
+        expect(anthropicThinkingModel?.variants?.map((variant) => variant.id)).toEqual([
+            'thinking-off',
+            'thinking-low',
+            'thinking-medium',
+            'thinking-high',
+        ]);
+    });
 });

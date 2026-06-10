@@ -1,7 +1,6 @@
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { parseArgs } from '../args.js';
-import type { ProviderAuthStore } from '../auth-store.js';
 import { runAgent } from './run-agent.js';
 import {
     createAuthStoreWithSummaries,
@@ -80,7 +79,7 @@ describe('runAgent /model chat command', () => {
 
     it('opens a model picker for /model without arguments', async () => {
         const chatOutput = createBufferedChatOutput();
-        let pickerChoices: readonly string[] = [];
+        const pickerChoices: string[][] = [];
 
         const output = await runAgent(parseArgs([]), {
             authStore: createAuthStoreWithSummaries([createCredentialSummary('local')]),
@@ -92,12 +91,16 @@ describe('runAgent /model chat command', () => {
             ]),
             chatOutput: chatOutput.output,
             selectModel: async (choices) => {
-                pickerChoices = choices.map((choice) => choice.label);
-                return choices.find((choice) => choice.selection.variantID === 'fast')?.selection;
+                pickerChoices.push(choices.map((choice) => choice.label));
+                return choices.find((choice) =>
+                    pickerChoices.length === 1
+                        ? choice.selection.modelID === 'local-echo'
+                        : choice.selection.variantID === 'fast',
+                )?.selection;
             },
         });
 
-        expect(pickerChoices).toContain('local/local-echo#fast');
+        expect(pickerChoices).toEqual([['local/local-echo'], expect.arrayContaining(['local/local-echo#fast'])]);
         expect(output).toContain('provider: local');
         expect(output).toContain('model: local-echo');
         expect(output).toContain('variant: fast');
@@ -130,30 +133,6 @@ describe('runAgent /model chat command', () => {
         expect(output).toContain('provider: anthropic');
         expect(output).toContain('selection: anthropic/');
         expect(output).toContain('Assistant: received prompt: after picker');
-    });
-
-    it('suspends chat input while the /model picker owns raw keypresses', async () => {
-        const chatOutput = createBufferedChatOutput();
-        const chatInput = createSuspendableScriptedChatInput([
-            { type: 'line', value: '/model' },
-            { type: 'line', value: '/exit' },
-        ]);
-        const selectorSuspendedStates: boolean[] = [];
-
-        await runAgent(parseArgs([]), {
-            authStore: createAuthStoreWithSummaries([createCredentialSummary('local')]),
-            chatInput: chatInput.input,
-            chatOutput: chatOutput.output,
-            selectModel: async () => {
-                selectorSuspendedStates.push(chatInput.isSuspended());
-                return undefined;
-            },
-        });
-
-        expect(selectorSuspendedStates).toEqual([true]);
-        expect(chatInput.getSuspendCount()).toBe(1);
-        expect(chatInput.getResumeCount()).toBe(1);
-        expect(chatOutput.getOutput()).toContain('Exiting mission-control chat');
     });
 
     it('rejects /model direct selection for providers that are not logged in', async () => {
@@ -250,36 +229,6 @@ describe('runAgent /model chat command', () => {
         expect(output).toContain('No models are available for logged-in providers');
         expect(output).not.toContain('No logged-in providers are available for /model');
     });
-
-    it('does not persist /model changes to the auth store', async () => {
-        const chatOutput = createBufferedChatOutput();
-        const store = createAuthStoreWithSummaries([createCredentialSummary('anthropic')]);
-        let saveCount = 0;
-        const trackingStore: ProviderAuthStore = {
-            ...store,
-            saveCredential: async () => {
-                saveCount += 1;
-            },
-        };
-
-        await runAgent(parseArgs([]), {
-            authStore: trackingStore,
-            chatInput: createScriptedChatInput([
-                { type: 'line', value: '/model anthropic/claude-3-5-haiku-20241022' },
-                { type: 'interrupt' },
-                { type: 'interrupt' },
-            ]),
-            chatOutput: chatOutput.output,
-        });
-        const laterOutput = await runAgent(parseArgs([]), {
-            authStore: trackingStore,
-            chatInput: createScriptedChatInput([{ type: 'interrupt' }, { type: 'interrupt' }]),
-            chatOutput: createBufferedChatOutput().output,
-        });
-
-        expect(saveCount).toBe(0);
-        expect(laterOutput).toContain('selection: local/local-echo');
-    });
 });
 
 function sliceModelListOutput(output: string, marker: string): string {
@@ -289,42 +238,4 @@ function sliceModelListOutput(output: string, marker: string): string {
     }
     const nextPromptIndex = output.indexOf('> ', startIndex);
     return output.slice(startIndex, nextPromptIndex === -1 ? undefined : nextPromptIndex);
-}
-
-type SuspendableScriptedChatEvent =
-    | {
-          readonly type: 'line';
-          readonly value: string;
-      }
-    | {
-          readonly type: 'interrupt';
-          readonly interruptedPartialInput?: boolean;
-      };
-
-function createSuspendableScriptedChatInput(events: readonly SuspendableScriptedChatEvent[]) {
-    let index = 0;
-    let suspended = false;
-    let suspendCount = 0;
-    let resumeCount = 0;
-    return {
-        input: {
-            read: async () => {
-                const event = events[index] ?? { type: 'interrupt' as const };
-                index += 1;
-                return event;
-            },
-            suspend: () => {
-                suspended = true;
-                suspendCount += 1;
-            },
-            resume: () => {
-                suspended = false;
-                resumeCount += 1;
-            },
-            close: () => {},
-        },
-        isSuspended: () => suspended,
-        getSuspendCount: () => suspendCount,
-        getResumeCount: () => resumeCount,
-    };
 }

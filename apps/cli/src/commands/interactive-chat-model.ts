@@ -42,16 +42,20 @@ export function createModelChoices(options: ModelChoiceOptions = {}): readonly M
         if (providerIDs !== undefined && !providerIDs.includes(provider.id)) {
             return [];
         }
-        return provider.models.flatMap((model) => {
-            const variants = model.variants ?? [];
-            if (variants.length === 0) {
-                return [createModelChoice({ providerID: provider.id, modelID: model.id })];
-            }
-            return variants.map((variant) =>
-                createModelChoice({ providerID: provider.id, modelID: model.id, variantID: variant.id }),
-            );
-        });
+        return provider.models.map((model) => createModelChoice({ providerID: provider.id, modelID: model.id }));
     });
+}
+
+export function createVariantChoices(
+    selection: ModelProviderSelection,
+    options: ModelChoiceOptions = {},
+): readonly ModelChoice[] {
+    const catalog = options.catalog ?? modelProviderCatalog;
+    const provider = catalog.find((entry) => entry.id === selection.providerID);
+    const model = provider?.models.find((entry) => entry.id === selection.modelID);
+    return (model?.variants ?? []).map((variant) =>
+        createModelChoice({ providerID: selection.providerID, modelID: selection.modelID, variantID: variant.id }),
+    );
 }
 
 export function resolveModelCommand(
@@ -97,7 +101,14 @@ export function resolveModelCommand(
         }
     }
     const model = provider?.models.find((entry) => entry.id === selection.modelID);
-    if (selection.variantID !== undefined && hasVariantCatalog(model)) {
+    if (selection.variantID !== undefined) {
+        if (!hasVariantCatalog(model)) {
+            return {
+                type: 'invalid',
+                message: `Variant ${selection.variantID} is not available for model ${selection.providerID}/${selection.modelID}`,
+                currentSelection,
+            };
+        }
         const variantExists = model.variants.some((variant) => variant.id === selection.variantID);
         if (!variantExists) {
             return {

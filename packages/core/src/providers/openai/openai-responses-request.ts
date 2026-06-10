@@ -1,7 +1,9 @@
+import { modelProviderCatalog } from '@mission-control/config';
 import type { ProviderCredential, ToolDefinition } from '@mission-control/protocol';
 import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver.js';
 import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
 import type {
+    OpenAIReasoningEffort,
     OpenAIResponsesRequestBody,
     OpenAIResponsesTool,
     OpenAIResponsesTransportRequest,
@@ -67,14 +69,47 @@ export function bearerTokenForCredential(credential: ProviderCredential): string
 
 function createRequestBody(request: ProviderTurnRequest): OpenAIResponsesRequestBody {
     const tools = (request.tools ?? []).map(openAIToolForDefinition);
+    const reasoning = openAIReasoningForVariant(request.modelID, request.variantID);
     return {
         model: request.modelID,
         input: request.messages.map((message) => ({ role: message.role, content: message.content })),
         stream: true,
         store: false,
         stream_options: { include_obfuscation: false },
+        ...(reasoning !== undefined ? { reasoning } : {}),
         ...(tools.length > 0 ? { tools } : {}),
     };
+}
+
+function openAIReasoningForVariant(
+    modelID: string,
+    variantID: string | undefined,
+): { readonly effort: OpenAIReasoningEffort } | undefined {
+    if (variantID === undefined || !isConfiguredOpenAIVariant(modelID, variantID)) {
+        return undefined;
+    }
+    switch (variantID) {
+        case 'reasoning-none':
+            return { effort: 'none' };
+        case 'reasoning-minimal':
+            return { effort: 'minimal' };
+        case 'reasoning-low':
+            return { effort: 'low' };
+        case 'reasoning-medium':
+            return { effort: 'medium' };
+        case 'reasoning-high':
+            return { effort: 'high' };
+        case 'reasoning-xhigh':
+            return { effort: 'xhigh' };
+        default:
+            return undefined;
+    }
+}
+
+function isConfiguredOpenAIVariant(modelID: string, variantID: string): boolean {
+    const openAIProvider = modelProviderCatalog.find((provider) => provider.id === 'openai');
+    const model = openAIProvider?.models.find((entry) => entry.id === modelID);
+    return (model?.variants ?? []).some((variant) => variant.id === variantID);
 }
 
 function openAIToolForDefinition(tool: ToolDefinition): OpenAIResponsesTool {

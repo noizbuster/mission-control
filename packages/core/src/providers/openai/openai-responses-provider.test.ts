@@ -55,6 +55,7 @@ describe('OpenAI Responses provider adapter', () => {
                 stream_options: { include_obfuscation: false },
             },
         });
+        expect(hasOwn(requests[0]?.body, 'reasoning')).toBe(false);
         expect(chunks).toMatchObject([
             { kind: 'response_started', providerResponseId: 'resp_1' },
             { kind: 'text_delta', delta: 'hel' },
@@ -154,6 +155,7 @@ describe('OpenAI Responses provider adapter', () => {
             },
         ]);
     });
+
 });
 
 function credential(providerID: string, apiKey: string) {
@@ -197,4 +199,8 @@ async function collectChunks(stream: AsyncIterable<ProviderStreamChunk>): Promis
         chunks.push(chunk);
     }
     return chunks;
+}
+
+function hasOwn(value: object | undefined, key: string): boolean {
+    return value !== undefined && Object.hasOwn(value, key);
 }

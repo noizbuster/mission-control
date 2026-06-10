@@ -95,13 +95,11 @@ function validateNodeModelOptions(model: AbgNodeModelOptions): void {
     if (modelEntry === undefined) {
         throw new Error(`Model ${model.modelID} is not available for provider ${model.providerID}`);
     }
-    if (
-        model.variantID !== undefined &&
-        modelEntry.variants !== undefined &&
-        modelEntry.variants.length > 0 &&
-        !modelEntry.variants.some((variant) => variant.id === model.variantID)
-    ) {
-        throw new Error(`Variant ${model.variantID} is not available for model ${model.providerID}/${model.modelID}`);
+    if (model.variantID !== undefined) {
+        const variantExists = (modelEntry.variants ?? []).some((variant) => variant.id === model.variantID);
+        if (!variantExists) {
+            throw new Error(`Variant ${model.variantID} is not available for model ${model.providerID}/${model.modelID}`);
+        }
     }
     for (const fallback of model.fallbacks ?? []) {
         validateNodeModelOptions(fallback);

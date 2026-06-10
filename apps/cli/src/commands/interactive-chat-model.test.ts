@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createModelChoices, formatModelSelection, resolveModelCommand } from './interactive-chat-model.js';
+import {
+    createModelChoices,
+    createVariantChoices,
+    formatModelSelection,
+    resolveModelCommand,
+} from './interactive-chat-model.js';
 
 const currentSelection = {
     providerID: 'local',
@@ -31,12 +36,12 @@ describe('interactive chat model command', () => {
                 modelID: 'claude-3-5-haiku-20241022',
             },
         });
-        expect(resolveModelCommand('anthropic/claude-3-5-haiku-20241022#thinking', currentSelection)).toEqual({
+        expect(resolveModelCommand('anthropic/claude-sonnet-4-6#thinking-high', currentSelection)).toEqual({
             type: 'select',
             selection: {
                 providerID: 'anthropic',
-                modelID: 'claude-3-5-haiku-20241022',
-                variantID: 'thinking',
+                modelID: 'claude-sonnet-4-6',
+                variantID: 'thinking-high',
             },
         });
         expect(resolveModelCommand('anthropic claude-3-5-haiku-20241022', currentSelection)).toEqual({
@@ -74,7 +79,7 @@ describe('interactive chat model command', () => {
         }
         expect(list.totalCount).toBeGreaterThan(20);
         expect(list.visibleChoices).toHaveLength(20);
-        expect(list.visibleChoices[0]?.label).toBe('local/local-echo#default');
+        expect(list.visibleChoices[0]?.label).toBe('local/local-echo');
         expect(JSON.stringify(list)).not.toContain('apiKey');
     });
 
@@ -89,6 +94,11 @@ describe('interactive chat model command', () => {
             message: 'Variant missing is not available for model local/local-echo',
             currentSelection,
         });
+        expect(resolveModelCommand('openai/gpt-4o-mini#missing', currentSelection)).toEqual({
+            type: 'invalid',
+            message: 'Variant missing is not available for model openai/gpt-4o-mini',
+            currentSelection,
+        });
     });
 
     it('formats model selections', () => {
@@ -97,6 +107,16 @@ describe('interactive chat model command', () => {
         expect(formatModelSelection(currentSelection)).toBe('local/local-echo');
         expect(formatModelSelection({ ...currentSelection, variantID: 'fast' })).toBe('local/local-echo#fast');
         expect(choices[0]).toMatchObject({
+            id: 'local/local-echo',
+            label: 'local/local-echo',
+            selection: currentSelection,
+        });
+    });
+
+    it('formats variant choices separately from model choices', () => {
+        const variants = createVariantChoices(currentSelection);
+
+        expect(variants[0]).toMatchObject({
             id: 'local/local-echo#default',
             label: 'local/local-echo#default',
             selection: { ...currentSelection, variantID: 'default' },

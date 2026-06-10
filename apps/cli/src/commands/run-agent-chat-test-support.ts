@@ -45,6 +45,7 @@ export function createEmptyAuthStore(): ProviderAuthStore {
             credentials: {},
         }),
         saveCredential: async () => {},
+        setDefaultSelection: async () => {},
         deleteCredential: async () => {},
         listCredentialSummaries: async () => [],
         getDefaultSelection: async () => undefined,

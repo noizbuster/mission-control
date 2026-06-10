@@ -63,6 +63,117 @@ describe('provider prompt keypress reducer', () => {
         expect(moved.pendingEscape).toBe('');
     });
 
+    it('keeps repeated identical down-arrow sequences as separate keypresses', () => {
+        const moved = reduceProviderPromptKeypress(
+            createProviderPromptKeypressState(),
+            '\u001b[B\u001b[B',
+            providerChoices,
+        );
+
+        expect(moved.selectedIndex).toBe(2);
+        expect(moved.searchQuery).toBe('');
+        expect(moved.pendingEscape).toBe('');
+    });
+
+    it('coalesces duplicated equivalent down-arrow reports from one physical keypress', () => {
+        const moved = reduceProviderPromptKeypress(
+            createProviderPromptKeypressState(),
+            '\u001b[B\u001b[1;1B',
+            providerChoices,
+        );
+
+        expect(moved.selectedIndex).toBe(1);
+        expect(moved.searchQuery).toBe('');
+        expect(moved.pendingEscape).toBe('');
+    });
+
+    it('coalesces duplicate equivalent down-arrow sequences in one raw input chunk', () => {
+        const moved = reduceProviderPromptKeypress(
+            createProviderPromptKeypressState(),
+            '\u001bOB\u001b[1;1B',
+            providerChoices,
+        );
+
+        expect(moved.selectedIndex).toBe(1);
+        expect(moved.searchQuery).toBe('');
+        expect(moved.pendingEscape).toBe('');
+    });
+
+    it('coalesces duplicate equivalent down-arrow sequences across adjacent chunks', () => {
+        const applicationCursor = reduceProviderPromptKeypress(
+            createProviderPromptKeypressState(),
+            '\u001bOB',
+            providerChoices,
+        );
+        const modifierCursor = reduceProviderPromptKeypress(applicationCursor, '\u001b[1;1B', providerChoices);
+
+        expect(modifierCursor.selectedIndex).toBe(1);
+        expect(modifierCursor.searchQuery).toBe('');
+        expect(modifierCursor.pendingEscape).toBe('');
+    });
+
+    it('coalesces duplicate equivalent up-arrow sequences in one raw input chunk', () => {
+        const start = reduceProviderPromptKeypress(createProviderPromptKeypressState(), 'jj', providerChoices);
+        const moved = reduceProviderPromptKeypress(start, '\u001bOA\u001b[1;1A', providerChoices);
+
+        expect(moved.selectedIndex).toBe(1);
+        expect(moved.searchQuery).toBe('');
+        expect(moved.pendingEscape).toBe('');
+    });
+
+    it('ignores Kitty-style down-arrow release events without adding search text', () => {
+        const state = reduceProviderPromptKeypress(
+            createProviderPromptKeypressState(),
+            '\u001b[1;1:3B',
+            providerChoices,
+        );
+
+        expect(state.selectedIndex).toBe(0);
+        expect(state.searchQuery).toBe('');
+        expect(state.pendingEscape).toBe('');
+    });
+
+    it('ignores Kitty-style up-arrow release events without adding search text', () => {
+        const start = reduceProviderPromptKeypress(createProviderPromptKeypressState(), 'jj', providerChoices);
+        const state = reduceProviderPromptKeypress(start, '\u001b[1;1:3A', providerChoices);
+
+        expect(state.selectedIndex).toBe(2);
+        expect(state.searchQuery).toBe('');
+        expect(state.pendingEscape).toBe('');
+    });
+
+    it('keeps Kitty-style repeat arrow events as navigation', () => {
+        const moved = reduceProviderPromptKeypress(
+            createProviderPromptKeypressState(),
+            '\u001b[B\u001b[1;1:2B',
+            providerChoices,
+        );
+
+        expect(moved.selectedIndex).toBe(2);
+        expect(moved.searchQuery).toBe('');
+        expect(moved.pendingEscape).toBe('');
+    });
+
+    it('ignores malformed CSI arrow reports instead of treating them as navigation', () => {
+        const unknownEvent = reduceProviderPromptKeypress(
+            createProviderPromptKeypressState(),
+            '\u001b[1;1:9B',
+            providerChoices,
+        );
+        const invalidModifier = reduceProviderPromptKeypress(
+            createProviderPromptKeypressState(),
+            '\u001b[1;:2B',
+            providerChoices,
+        );
+
+        expect(unknownEvent.selectedIndex).toBe(0);
+        expect(unknownEvent.searchQuery).toBe('');
+        expect(unknownEvent.pendingEscape).toBe('');
+        expect(invalidModifier.selectedIndex).toBe(0);
+        expect(invalidModifier.searchQuery).toBe('');
+        expect(invalidModifier.pendingEscape).toBe('');
+    });
+
     it('cancels on Kitty CSI-u Ctrl+C while modified keys are enabled', () => {
         const state = reduceProviderPromptKeypress(
             createProviderPromptKeypressState(),
@@ -71,6 +182,18 @@ describe('provider prompt keypress reducer', () => {
         );
 
         expect(state.cancelled).toBe(true);
+        expect(state.pendingEscape).toBe('');
+        expect(state.searchQuery).toBe('');
+    });
+
+    it('ignores Kitty CSI-u Ctrl+C release events while modified keys are enabled', () => {
+        const state = reduceProviderPromptKeypress(
+            createProviderPromptKeypressState(),
+            '\u001b[99;5:3u',
+            providerChoices,
+        );
+
+        expect(state.cancelled).toBe(false);
         expect(state.pendingEscape).toBe('');
         expect(state.searchQuery).toBe('');
     });

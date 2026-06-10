@@ -74,6 +74,7 @@ describe('runAuthCommand auth list and logout', () => {
                     credentials: {},
                 }),
                 saveCredential: async () => {},
+                setDefaultSelection: async () => {},
                 deleteCredential: async () => {},
                 listCredentialSummaries: async () => [
                     {

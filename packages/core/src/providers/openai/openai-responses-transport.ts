@@ -14,6 +14,8 @@ export type OpenAIResponsesTool = {
     readonly parameters: Readonly<Record<string, unknown>>;
 };
 
+export type OpenAIReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
 export type OpenAIResponsesRequestBody = {
     readonly model: string;
     readonly input: readonly OpenAIResponsesInputMessage[];
@@ -21,6 +23,9 @@ export type OpenAIResponsesRequestBody = {
     readonly store: false;
     readonly stream_options: {
         readonly include_obfuscation: false;
+    };
+    readonly reasoning?: {
+        readonly effort: OpenAIReasoningEffort;
     };
     readonly tools?: readonly OpenAIResponsesTool[];
 };

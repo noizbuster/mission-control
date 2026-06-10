@@ -1,4 +1,5 @@
 import modelsDevCatalogSnapshot from './generated/models-dev-catalog.json' with { type: 'json' };
+import { variantsForGeneratedModel } from './model-variant-presets.js';
 
 export const appName = 'mission-control';
 export const cliCommandName = 'mctrl';
@@ -169,11 +170,15 @@ export const opencodeProviderCatalog: readonly ModelProviderCatalogEntry[] = mod
                 required: field.required,
             })),
             authMethods: createProviderAuthMethods(provider.id, provider.authLabel),
-            models: provider.models.map((model) => ({
-                id: model.id,
-                name: model.name,
-                status: 'active',
-            })),
+            models: provider.models.map((model) => {
+                const variants = variantsForGeneratedModel(provider.id, model.id);
+                return {
+                    id: model.id,
+                    name: model.name,
+                    status: 'active',
+                    ...(variants !== undefined ? { variants } : {}),
+                };
+            }),
         }),
     )
     .sort(compareProvidersByLoginPriority);

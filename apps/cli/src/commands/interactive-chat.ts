@@ -25,6 +25,7 @@ export type { ChatInput, ChatInputEvent, ChatOutput };
 export type ModelSelector = (
     choices: readonly ModelChoice[],
     currentSelection: ModelProviderSelection,
+    options?: { readonly title?: string },
 ) => Promise<ModelProviderSelection | undefined>;
 
 export type InteractiveChatOptions = {
@@ -36,9 +37,11 @@ export type InteractiveChatOptions = {
     readonly selectModel?: ModelSelector;
     readonly sessionId?: string;
     readonly provider?: ProviderAdapter;
+    readonly resolveProviderForSelection?: (selection: ModelProviderSelection) => ProviderAdapter;
     readonly workspaceRoot?: string;
     readonly emitEvent?: (event: AgentEvent) => void;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
+    readonly persistModelProviderSelection?: (selection: ModelProviderSelection) => Promise<void>;
 };
 
 export async function runInteractiveChatSession(
@@ -62,6 +65,7 @@ export async function runInteractiveChatSession(
     let turnCounter = 0;
     const inputPump = new ChatInputPump(chatInput);
     const sessionId = options.sessionId;
+    let currentProvider = options.resolveProviderForSelection?.(currentModelProviderSelection) ?? options.provider;
     const unregisterProcessCleanup = registerProcessTerminalCleanup(chatInput);
 
     try {
@@ -142,11 +146,16 @@ export async function runInteractiveChatSession(
                         turnCounter += 1;
                         return `turn_interactive_${turnCounter}`;
                     },
-                    provider: options.provider,
+                    provider: currentProvider,
                     sessionId,
                     workspaceRoot: options.workspaceRoot,
                 },
             );
+            if (!areModelProviderSelectionsEqual(currentModelProviderSelection, result.modelProviderSelection)) {
+                currentProvider =
+                    options.resolveProviderForSelection?.(result.modelProviderSelection) ?? currentProvider;
+                await options.persistModelProviderSelection?.(result.modelProviderSelection);
+            }
             currentModelProviderSelection = result.modelProviderSelection;
             activeTurn = result.activeTurn;
         }
@@ -166,6 +175,10 @@ async function stopActiveTurn(activeTurn: ActiveCodingAgentTurn | undefined): Pr
     activeTurn.interrupt('force');
     await activeTurn.done;
     return undefined;
+}
+
+function areModelProviderSelectionsEqual(left: ModelProviderSelection, right: ModelProviderSelection): boolean {
+    return left.providerID === right.providerID && left.modelID === right.modelID && left.variantID === right.variantID;
 }
 
 type ChatLoopEvent =
@@ -213,10 +226,10 @@ async function readAfterActiveYield(inputPump: ChatInputPump): Promise<ChatLoopE
 }
 
 function suspendChatInputWhileSelectingModel(selectModel: ModelSelector, input: ChatInput): ModelSelector {
-    return async (choices, currentSelection) => {
+    return async (choices, currentSelection, options) => {
         input.suspend?.();
         try {
-            return await selectModel(choices, currentSelection);
+            return await selectModel(choices, currentSelection, options);
         } finally {
             input.resume?.();
         }
