@@ -204,6 +204,62 @@ describe('runAgent interactive coding agent UX', () => {
         expect(await replayedTypes('session_task20_control')).toEqual(expect.arrayContaining(['run.interrupted']));
     });
 
+    it('requires two idle Ctrl+C interrupts after stopping an active provider turn', async () => {
+        // Given
+        const dataDir = await tempRoot('mctrl-chat-data-');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        const chatOutput = createBufferedChatOutput();
+
+        // When
+        const output = await runAgent(parseArgs(['--session', 'session_task20_interrupt_then_exit']), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: 'start a slow provider turn' },
+                { type: 'interrupt' },
+                { type: 'interrupt' },
+                { type: 'interrupt' },
+            ]),
+            chatOutput: chatOutput.output,
+            provider: createDeterministicProvider([
+                { kind: 'wait', ms: 30_000 },
+                { kind: 'response_completed', content: 'too late' },
+            ]),
+        });
+
+        // Then
+        expect(output).toContain('Interrupted active run');
+        expect(output).toContain('Press Ctrl+C twice to exit');
+        expect(output.match(/Press Ctrl\+C again to exit/g)).toHaveLength(1);
+        expect(output).not.toContain('too late');
+    });
+
+    it('exits and force-stops an active provider turn with /exit', async () => {
+        // Given
+        const dataDir = await tempRoot('mctrl-chat-data-');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        const chatOutput = createBufferedChatOutput();
+
+        // When
+        const output = await runAgent(parseArgs(['--session', 'session_task20_exit']), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: 'start a child run' },
+                { type: 'line', value: '/exit' },
+            ]),
+            chatOutput: chatOutput.output,
+            provider: createDeterministicProvider([
+                { kind: 'wait', ms: 30_000 },
+                { kind: 'response_completed', content: 'too late' },
+            ]),
+        });
+
+        // Then
+        expect(output).toContain('Interrupted active run');
+        expect(output).toContain('Exiting mission-control chat');
+        expect(output).not.toContain('too late');
+        expect(await replayedTypes('session_task20_exit')).toEqual(expect.arrayContaining(['run.interrupted']));
+    });
+
     async function tempRoot(prefix: string): Promise<string> {
         const path = await mkdtemp(join(tmpdir(), prefix));
         tempRoots.push(path);

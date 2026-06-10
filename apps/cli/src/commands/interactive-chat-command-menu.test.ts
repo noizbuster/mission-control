@@ -86,15 +86,28 @@ describe('interactive chat command menu', () => {
 
         expect(highlightedLines).toHaveLength(4);
         expect(block).toContain('> hello');
-        expect(block).toContain('| world');
+        expect(block).toContain('  world');
+        expect(block).not.toContain('| world');
         expect(block).toContain('provider: local  model: local-echo');
         expect(block).toContain('\u001b[2A\r\u001b[7C');
+    });
+
+    it('formats newline-created empty input lines with whitespace fill', () => {
+        const block = renderTerminalChatInputBlock('hello\n', createSlashCommandMenuState(), 60);
+        const highlightedLines = block.text.split('\n').filter((line) => line.includes('\u001b[48;5;236m'));
+        const emptyContinuationLine = highlightedLines[2] ?? '';
+
+        expect(block.text).toContain('> hello');
+        expect(emptyContinuationLine).not.toContain('|');
+        expect(emptyContinuationLine.replaceAll('\u001b[48;5;236m', '')).toContain('   ');
+        expect(block.cursorLineIndex).toBe(2);
+        expect(block.text).toContain('\u001b[1A\r\u001b[2C');
     });
 
     it('formats committed multiline input as plain history without model status', () => {
         const committedLine = formatTerminalChatCommittedInputLine('hello\nworld', 100);
 
-        expect(committedLine).toBe('> hello\n| world');
+        expect(committedLine).toBe('> hello\n  world');
         expect(committedLine).not.toContain('provider:');
         expect(committedLine).not.toContain('\u001b[48;5;236m');
     });
@@ -109,7 +122,8 @@ describe('interactive chat command menu', () => {
         expect(edited.value).toBe('hello\nwor!ld');
         expect(edited.cursorOffset).toBe(10);
         expect(block.cursorLineIndex).toBe(2);
-        expect(block.text).toContain('| wor!ld');
+        expect(block.text).toContain('  wor!ld');
+        expect(block.text).not.toContain('| wor!ld');
         expect(block.text).toContain('\u001b[1A\r\u001b[6C');
     });
 
@@ -142,6 +156,30 @@ describe('interactive chat command menu', () => {
 
         expect(movedUp.cursorOffset).toBe('한'.length);
         expect(block.text).toContain('\u001b[2A\r\u001b[4C');
+    });
+
+    it('moves by editor navigation keys across lines and words', () => {
+        const value = 'alpha beta\nsecond line\nthird';
+        const insideSecondLine = { value, cursorOffset: 'alpha beta\nsec'.length };
+        const atBeta = { value: 'alpha beta gamma', cursorOffset: 'alpha beta gamma'.length };
+
+        expect(moveTerminalChatInputCursor(insideSecondLine, 'line-start').cursorOffset).toBe('alpha beta\n'.length);
+        expect(moveTerminalChatInputCursor(insideSecondLine, 'line-end').cursorOffset).toBe(
+            'alpha beta\nsecond line'.length,
+        );
+        expect(moveTerminalChatInputCursor(insideSecondLine, 'input-start').cursorOffset).toBe(0);
+        expect(moveTerminalChatInputCursor(insideSecondLine, 'input-end').cursorOffset).toBe(value.length);
+        expect(moveTerminalChatInputCursor(atBeta, 'word-left').cursorOffset).toBe('alpha beta '.length);
+        expect(
+            moveTerminalChatInputCursor(moveTerminalChatInputCursor(atBeta, 'word-left'), 'word-left').cursorOffset,
+        ).toBe('alpha '.length);
+        expect(moveTerminalChatInputCursor({ value: atBeta.value, cursorOffset: 0 }, 'word-right').cursorOffset).toBe(
+            'alpha '.length,
+        );
+        expect(
+            moveTerminalChatInputCursor({ value: atBeta.value, cursorOffset: 'alpha be'.length }, 'word-right')
+                .cursorOffset,
+        ).toBe('alpha beta '.length);
     });
 
     it('recognizes terminal Shift+Enter sequences without treating their trailing return as submit', () => {

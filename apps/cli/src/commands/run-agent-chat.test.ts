@@ -10,7 +10,7 @@ import {
 } from './run-agent-chat-test-support.js';
 
 describe('runAgent interactive chat', () => {
-    it('opens a prompt for default mctrl execution and exits after two Ctrl+C interrupts', async () => {
+    it('opens a prompt for default mctrl execution and exits after two consecutive Ctrl+C interrupts', async () => {
         const chatOutput = createBufferedChatOutput();
 
         const output = await runAgent(parseArgs([]), {
@@ -52,6 +52,23 @@ describe('runAgent interactive chat', () => {
 
         expect(output).toContain('Assistant: received prompt: continue after interrupted text');
         expect(output.match(/Press Ctrl\+C again to exit/g)).toHaveLength(3);
+    });
+
+    it('exits with /exit without submitting a prompt task', async () => {
+        const chatOutput = createBufferedChatOutput();
+        const events: AgentEvent[] = [];
+
+        const output = await runAgent(parseArgs([]), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([{ type: 'line', value: '/exit' }]),
+            chatOutput: chatOutput.output,
+            onRuntimeEvent: (event) => {
+                events.push(event);
+            },
+        });
+
+        expect(output).toContain('Exiting mission-control chat');
+        expect(events.some((event) => event.type === 'task.started')).toBe(false);
     });
 
     it('uses demo output when stdout is redirected', async () => {

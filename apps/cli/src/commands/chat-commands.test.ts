@@ -44,6 +44,16 @@ describe('chat command parser', () => {
         });
     });
 
+    it('parses exit as a no-argument slash command', () => {
+        expect(parseChatLine('/exit')).toEqual({
+            kind: 'exit',
+        });
+        expect(parseChatLine('/exit now')).toEqual({
+            kind: 'invalid',
+            message: '/exit does not accept arguments',
+        });
+    });
+
     it('returns unknown slash commands without treating them as prompts', () => {
         expect(parseChatLine('/unknown run this')).toEqual({
             kind: 'unknown-slash',

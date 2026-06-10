@@ -66,7 +66,7 @@ export async function runInteractiveChatSession(
         if (sessionId !== undefined) {
             chatOutput.write(`resumed session: ${sessionId}\n`);
         }
-        chatOutput.write('Press Ctrl+C twice to exit\n\n');
+        chatOutput.write('Press Ctrl+C twice or /exit to exit\n\n');
 
         for (;;) {
             if (activeTurn === undefined) {
@@ -89,6 +89,7 @@ export async function runInteractiveChatSession(
                     await interruptedTurn.done;
                     activeTurn = undefined;
                     pendingInterrupt = false;
+                    chatOutput.write('\nPress Ctrl+C twice to exit\n');
                     continue;
                 }
                 if (pendingInterrupt && event.interruptedPartialInput !== true) {
@@ -117,6 +118,11 @@ export async function runInteractiveChatSession(
             }
 
             const action = parseChatLine(prompt, { modelChoices });
+            if (action.kind === 'exit') {
+                activeTurn = await stopActiveTurn(activeTurn);
+                chatOutput.write('Exiting mission-control chat\n');
+                break;
+            }
             const result = await runChatAction(
                 runtime,
                 chatOutput,
@@ -146,6 +152,15 @@ export async function runInteractiveChatSession(
     }
 
     return chatOutput.getOutput?.() ?? '';
+}
+
+async function stopActiveTurn(activeTurn: ActiveCodingAgentTurn | undefined): Promise<undefined> {
+    if (activeTurn === undefined) {
+        return undefined;
+    }
+    activeTurn.interrupt('force');
+    await activeTurn.done;
+    return undefined;
 }
 
 type ChatLoopEvent =

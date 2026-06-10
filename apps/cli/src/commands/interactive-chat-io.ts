@@ -1,34 +1,22 @@
+import { createSlashCommandMenuState } from './interactive-chat-command-menu.js';
+import { createTerminalChatInputBuffer } from './interactive-chat-input-block.js';
 import {
-    createSlashCommandMenuState,
-    createSlashCommandMenuView,
-    reduceSlashCommandMenuSelection,
-    resolveSlashCommandMenuSubmission,
-    type SlashCommandMenuState,
-} from './interactive-chat-command-menu.js';
-import {
-    createTerminalChatInputBuffer,
-    deleteTerminalChatInputCharacterBeforeCursor,
-    insertTerminalChatInputText,
-    moveTerminalChatInputCursor,
-    type TerminalChatCursorDirection,
-    type TerminalChatInputBlock,
-    type TerminalChatInputBuffer,
-} from './interactive-chat-input-block.js';
-import {
-    isTerminalShiftEnterSequence,
     type TerminalKeyboardMode,
     terminalModifiedKeyDisableSequence,
     terminalModifiedKeyEnableSequence,
 } from './interactive-chat-keyboard.js';
+import { createTerminalInputParser } from './interactive-chat-terminal-input-parser.js';
+import {
+    readTerminalChatEvent,
+    type TerminalInputStream,
+    type TerminalOutputStream,
+} from './interactive-chat-terminal-read.js';
 import {
     type ChatInputRenderContext,
-    commitTerminalInputBlock,
-    discardTerminalInputBlock,
     emptyRenderedInputBlock,
     renderTerminalInputBlock,
 } from './interactive-chat-terminal-renderer.js';
-import { stdin as input, stdout as output } from 'node:process';
-import { segmentTerminalText } from './terminal-text.js';
+import { stdin as processInput, stdout as processOutput } from 'node:process';
 
 export type { ChatInputRenderContext } from './interactive-chat-terminal-renderer.js';
 
@@ -54,28 +42,39 @@ export type ChatOutput = {
     readonly getOutput?: () => string;
 };
 
+type TerminalChatInputStreams = {
+    readonly input: TerminalInputStream;
+    readonly output: TerminalOutputStream;
+};
+
 export const maxChatPromptLength = 8_000;
 
 export function createTerminalChatOutput(): ChatOutput {
     return {
         write: (text: string) => {
-            output.write(text);
+            processOutput.write(text);
         },
     };
 }
 
 export function createTerminalChatInput(): ChatInput {
-    const wasRaw = input.isRaw === true;
+    return createTerminalChatInputFromStreams({ input: processInput, output: processOutput });
+}
+
+export function createTerminalChatInputFromStreams(streams: TerminalChatInputStreams): ChatInput {
+    const wasRaw = streams.input.isRaw === true;
     let closed = false;
     let buffer = createTerminalChatInputBuffer();
     let menuState = createSlashCommandMenuState();
     let renderedBlock = emptyRenderedInputBlock;
     let promptRendered = false;
     let renderContext: ChatInputRenderContext | undefined;
+    let lastInterruptTokenAtMs: number | undefined;
     const keyboardMode = { modifiedKeysEnabled: true } satisfies TerminalKeyboardMode;
-    input.setRawMode(true);
-    input.resume();
-    output.write(terminalModifiedKeyEnableSequence);
+    const inputParser = createTerminalInputParser();
+    streams.input.setRawMode(true);
+    streams.input.resume();
+    streams.output.write(terminalModifiedKeyEnableSequence);
 
     function resetLineState(): void {
         buffer = createTerminalChatInputBuffer();
@@ -91,7 +90,7 @@ export function createTerminalChatInput(): ChatInput {
             menuState = createSlashCommandMenuState();
             promptRendered = true;
         }
-        renderedBlock = renderTerminalInputBlock(output, buffer, menuState, renderedBlock, renderContext);
+        renderedBlock = renderTerminalInputBlock(streams.output, buffer, menuState, renderedBlock, renderContext);
     }
 
     return {
@@ -119,6 +118,19 @@ export function createTerminalChatInput(): ChatInput {
                 setRenderedBlock: (nextBlock) => {
                     renderedBlock = nextBlock;
                 },
+                readBufferedTokens: inputParser.takeBufferedTokens,
+                pushBufferedTokens: inputParser.pushBufferedTokens,
+                readTokens: inputParser.readTokens,
+                shouldCoalesceInterruptToken: () => {
+                    const now = Date.now();
+                    const shouldCoalesce =
+                        lastInterruptTokenAtMs !== undefined &&
+                        now - lastInterruptTokenAtMs <= duplicateInterruptCoalescingWindowMs;
+                    lastInterruptTokenAtMs = now;
+                    return shouldCoalesce;
+                },
+                input: streams.input,
+                output: streams.output,
                 resetLineState,
             });
         },
@@ -127,163 +139,11 @@ export function createTerminalChatInput(): ChatInput {
                 return;
             }
             closed = true;
-            output.write(terminalModifiedKeyDisableSequence);
-            input.setRawMode(wasRaw);
-            input.pause();
+            streams.output.write(terminalModifiedKeyDisableSequence);
+            streams.input.setRawMode(wasRaw);
+            streams.input.pause();
         },
     };
 }
 
-type TerminalReadState = {
-    readonly getBuffer: () => TerminalChatInputBuffer;
-    readonly getMenuState: () => SlashCommandMenuState;
-    readonly getRenderContext: () => ChatInputRenderContext | undefined;
-    readonly getKeyboardMode: () => TerminalKeyboardMode;
-    readonly setBuffer: (buffer: TerminalChatInputBuffer) => void;
-    readonly setMenuState: (state: SlashCommandMenuState) => void;
-    readonly getRenderedBlock: () => TerminalChatInputBlock;
-    readonly setRenderedBlock: (block: TerminalChatInputBlock) => void;
-    readonly resetLineState: () => void;
-};
-
-function readTerminalChatEvent(state: TerminalReadState): Promise<ChatInputEvent> {
-    return new Promise((resolve) => {
-        let settled = false;
-        let pendingSubmitTimer: ReturnType<typeof setTimeout> | undefined;
-
-        function finish(event: ChatInputEvent): void {
-            if (settled) {
-                return;
-            }
-            settled = true;
-            if (pendingSubmitTimer !== undefined) {
-                clearTimeout(pendingSubmitTimer);
-            }
-            input.off('data', onData);
-            resolve(event);
-        }
-
-        function scheduleSubmit(): void {
-            if (pendingSubmitTimer !== undefined) {
-                return;
-            }
-            pendingSubmitTimer = setTimeout(() => {
-                pendingSubmitTimer = setTimeout(() => {
-                    const value = resolveSlashCommandMenuSubmission(state.getBuffer().value, state.getMenuState());
-                    commitTerminalInputBlock(output, value, state.getRenderedBlock());
-                    state.resetLineState();
-                    finish({ type: 'line', value });
-                }, 0);
-            }, 0);
-        }
-
-        function onData(chunk: Buffer | string): void {
-            const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-            if (text.startsWith('\u001b')) {
-                handleTerminalEscape(text, state);
-                return;
-            }
-            for (const { segment: character } of segmentTerminalText(text)) {
-                if (character === '\u0003') {
-                    const interruptedPartialInput = state.getBuffer().value.length > 0;
-                    discardTerminalInputBlock(output, state.getRenderedBlock());
-                    state.resetLineState();
-                    finish({
-                        type: 'interrupt',
-                        ...(interruptedPartialInput ? { interruptedPartialInput } : {}),
-                    });
-                    return;
-                }
-                if (isTerminalShiftEnterSequence(character, state.getKeyboardMode())) {
-                    insertTerminalInputText('\n', state);
-                    continue;
-                }
-                if (character === '\n' || character === '\r') {
-                    scheduleSubmit();
-                    return;
-                }
-                if (character === '\b' || character === '\u007f') {
-                    removeTerminalInputCharacter(state);
-                    continue;
-                }
-                if (state.getBuffer().value.length >= maxChatPromptLength) {
-                    output.write('\u0007');
-                    continue;
-                }
-                insertTerminalInputText(character, state);
-            }
-        }
-
-        input.on('data', onData);
-    });
-}
-
-function handleTerminalEscape(text: string, state: TerminalReadState): void {
-    if (isTerminalShiftEnterSequence(text, state.getKeyboardMode())) {
-        insertTerminalInputText('\n', state);
-        return;
-    }
-    const cursorDirection = readTerminalCursorDirection(text);
-    const menuView = createSlashCommandMenuView(state.getBuffer().value, state.getMenuState(), 5);
-    if (menuView.open && (cursorDirection === 'up' || cursorDirection === 'down')) {
-        const nextState = reduceSlashCommandMenuSelection(state.getMenuState(), text, state.getBuffer().value);
-        state.setMenuState(nextState);
-        rerenderTerminalInputBlock(state);
-        return;
-    }
-    if (cursorDirection !== undefined) {
-        state.setBuffer(moveTerminalChatInputCursor(state.getBuffer(), cursorDirection));
-        rerenderTerminalInputBlock(state);
-    }
-}
-
-function insertTerminalInputText(text: string, state: TerminalReadState): void {
-    if (state.getBuffer().value.length + text.length > maxChatPromptLength) {
-        output.write('\u0007');
-        return;
-    }
-    const nextBuffer = insertTerminalChatInputText(state.getBuffer(), text);
-    const nextState = createSlashCommandMenuState();
-    state.setBuffer(nextBuffer);
-    state.setMenuState(nextState);
-    rerenderTerminalInputBlock(state);
-}
-
-function removeTerminalInputCharacter(state: TerminalReadState): void {
-    const nextBuffer = deleteTerminalChatInputCharacterBeforeCursor(state.getBuffer());
-    if (nextBuffer === state.getBuffer()) {
-        return;
-    }
-    const nextState = createSlashCommandMenuState();
-    state.setBuffer(nextBuffer);
-    state.setMenuState(nextState);
-    rerenderTerminalInputBlock(state);
-}
-
-function rerenderTerminalInputBlock(state: TerminalReadState): void {
-    state.setRenderedBlock(
-        renderTerminalInputBlock(
-            output,
-            state.getBuffer(),
-            state.getMenuState(),
-            state.getRenderedBlock(),
-            state.getRenderContext(),
-        ),
-    );
-}
-
-function readTerminalCursorDirection(text: string): TerminalChatCursorDirection | undefined {
-    if (text.includes('\u001b[D')) {
-        return 'left';
-    }
-    if (text.includes('\u001b[C')) {
-        return 'right';
-    }
-    if (text.includes('\u001b[A')) {
-        return 'up';
-    }
-    if (text.includes('\u001b[B')) {
-        return 'down';
-    }
-    return undefined;
-}
+const duplicateInterruptCoalescingWindowMs = 120;

@@ -62,6 +62,11 @@ const slashCommandChoices = [
         description: 'Interrupt the active run',
     },
     {
+        id: '/exit',
+        insertText: '/exit',
+        description: 'Stop active runs and exit',
+    },
+    {
         id: '/branch',
         insertText: '/branch ',
         description: 'Continue from a message id',

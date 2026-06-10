@@ -30,6 +30,9 @@ export type ChatLineAction =
           readonly kind: 'interrupt';
       }
     | {
+          readonly kind: 'exit';
+      }
+    | {
           readonly kind: 'model-status';
       }
     | {
@@ -110,6 +113,8 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
             return parseNoArgumentCommand('resume', parts.tail);
         case 'interrupt':
             return parseNoArgumentCommand('interrupt', parts.tail);
+        case 'exit':
+            return parseNoArgumentCommand('exit', parts.tail);
         case 'branch':
             return parseBranchCommand(parts.tail);
         default:
@@ -124,7 +129,7 @@ function parsePromptCommand(kind: 'queue' | 'steer', prompt: string): ChatLineAc
     return { kind, prompt };
 }
 
-function parseNoArgumentCommand(kind: 'resume' | 'interrupt', input: string): ChatLineAction {
+function parseNoArgumentCommand(kind: 'resume' | 'interrupt' | 'exit', input: string): ChatLineAction {
     if (input.length > 0) {
         return { kind: 'invalid', message: `/${kind} does not accept arguments` };
     }
