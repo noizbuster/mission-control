@@ -1,6 +1,7 @@
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { AgentRuntime } from '../agent-runtime.js';
+import { createAllowPermissionDecision } from '../permissions.js';
 import { join } from 'node:path';
 
 const root = process.cwd();
@@ -11,6 +12,7 @@ describe('sidecar timeout fallback', () => {
             useNative: true,
             sidecarCommand: join(root, 'scripts/fixtures/hanging-sidecar.sh'),
             sidecarTimeoutMs: 50,
+            permissionDecisionResolver: createAllowPermissionDecision,
         });
         const events: AgentEvent[] = [];
         runtime.onEvent((event) => {

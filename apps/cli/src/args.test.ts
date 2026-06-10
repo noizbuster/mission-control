@@ -13,10 +13,14 @@ describe('parseArgs', () => {
         expect(parseArgs(['--ui', 'ink']).mode).toBe('ink');
         expect(parseArgs(['--no-tui']).mode).toBe('plain');
         expect(parseArgs(['--json']).mode).toBe('json');
+        expect(parseArgs(['--jsonl']).mode).toBe('jsonl');
         expect(parseArgs(['--native']).useNative).toBe(true);
         expect(parseArgs(['--no-native']).useNative).toBe(false);
         expect(parseArgs(['--graph', 'examples/abg/research-answer.graph.json'])).toMatchObject({
             graphPath: 'examples/abg/research-answer.graph.json',
+        });
+        expect(parseArgs(['--session', 'session_cli'])).toMatchObject({
+            sessionId: 'session_cli',
         });
         expect(parseArgs(['--version']).showVersion).toBe(true);
         expect(parseArgs(['--help']).showHelp).toBe(true);
@@ -109,6 +113,37 @@ describe('parseArgs', () => {
             command: 'models',
             modelsProviderID: 'local',
         });
+        expect(parseArgs(['session', 'list']).command).toBe('session-list');
+        expect(parseArgs(['session', 'show', 'session_cli'])).toMatchObject({
+            command: 'session-show',
+            sessionId: 'session_cli',
+        });
+        expect(parseArgs(['session', 'replay', 'session_cli', '--jsonl'])).toMatchObject({
+            command: 'session-replay',
+            mode: 'jsonl',
+            sessionId: 'session_cli',
+        });
+        expect(parseArgs(['run', 'summarize this repository', '--session', 'session_cli', '--jsonl'])).toMatchObject({
+            command: 'run',
+            mode: 'jsonl',
+            prompt: 'summarize this repository',
+            sessionId: 'session_cli',
+        });
+        expect(
+            parseArgs([
+                'graph',
+                'run',
+                'examples/abg/research-answer.graph.json',
+                '--session',
+                'session_graph',
+                '--jsonl',
+            ]),
+        ).toMatchObject({
+            command: 'run',
+            mode: 'jsonl',
+            graphPath: 'examples/abg/research-answer.graph.json',
+            sessionId: 'session_graph',
+        });
         expect(() => parseArgs(['auth', 'login', '--api-key'])).toThrow('--api-key requires a value');
         expect(() => parseArgs(['auth', 'login', '--credential', 'missing-equals'])).toThrow(
             '--credential requires FIELD=VALUE',
@@ -116,5 +151,10 @@ describe('parseArgs', () => {
         expect(() => parseArgs(['auth', 'login', '--method'])).toThrow('--method requires a value');
         expect(() => parseArgs(['auth', 'login', 'sk_positional_secret'])).toThrow(/^Unsupported auth login argument$/);
         expect(() => parseArgs(['auth', 'sk_command_secret'])).toThrow(/^Unsupported auth command$/);
+        expect(() => parseArgs(['session', 'replay', 'session_cli'])).toThrow(
+            'session replay requires --jsonl for event output',
+        );
+        expect(() => parseArgs(['graph', 'run'])).toThrow('graph run requires a graph file');
+        expect(() => parseArgs(['--json', '--jsonl'])).toThrow('--json and --jsonl cannot be combined');
     });
 });

@@ -1,44 +1,26 @@
 import { z } from 'zod';
-import { AbgEmbeddedEventSchema, AbgSignalSchema, AbgSignalTypeSchema } from './abg-signal.js';
+import { AbgNodeKindSchema, AbgNodeStatusSchema } from './abg-constants.js';
+import { AbgEmbeddedEventSchema, AbgSignalTypeSchema } from './abg-signal.js';
+import { ApprovalPolicyDecisionSchema } from './approval.js';
 
-export const ABG_NODE_KINDS = [
-    'condition',
-    'action',
-    'selector',
-    'sequence',
-    'parallel',
-    'race',
-    'join',
-    'watch',
-    'policy',
-    'statechart',
-    'actor',
-    'memory',
-    'tool',
-    'llm',
-    'human-approval',
-] as const;
+export {
+    ABG_TOOL_OUTCOME_STATUSES,
+    type AbgBlackboardEntry,
+    AbgBlackboardEntrySchema,
+    type AbgGraphSnapshot,
+    AbgGraphSnapshotSchema,
+    type AbgNodeSnapshot,
+    AbgNodeSnapshotSchema,
+    type AbgToolOutcomeSnapshot,
+    AbgToolOutcomeSnapshotSchema,
+    type AbgToolOutcomeStatus,
+    AbgToolOutcomeStatusSchema,
+} from './abg-snapshot.js';
 
-export const ABG_NODE_STATUSES = [
-    'idle',
-    'starting',
-    'running',
-    'succeeded',
-    'failed',
-    'cancelled',
-    'blocked',
-] as const;
-
-export const ABG_GRAPH_STATUSES = ['created', 'active', 'blocked', 'completed', 'failed', 'cancelled'] as const;
-
-export const AbgNodeKindSchema = z.enum(ABG_NODE_KINDS);
-export type AbgNodeKind = z.infer<typeof AbgNodeKindSchema>;
-
-export const AbgNodeStatusSchema = z.enum(ABG_NODE_STATUSES);
-export type AbgNodeStatus = z.infer<typeof AbgNodeStatusSchema>;
-
-export const AbgGraphStatusSchema = z.enum(ABG_GRAPH_STATUSES);
-export type AbgGraphStatus = z.infer<typeof AbgGraphStatusSchema>;
+const AuthorablePolicyDecisionSchema = z.preprocess(
+    (value) => (value === 'requires-approval' ? 'requires_approval' : value),
+    ApprovalPolicyDecisionSchema,
+);
 
 export const AbgModelFallbackSchema = z.object({
     providerID: z.string().min(1),
@@ -85,7 +67,7 @@ export const AbgRulePredicateSchema = z.discriminatedUnion('kind', [
     }),
     z.object({
         kind: z.literal('policy.decision.equals'),
-        decision: z.enum(['allow', 'deny', 'requires-approval']),
+        decision: AuthorablePolicyDecisionSchema,
     }),
 ]);
 export type AbgRulePredicate = z.infer<typeof AbgRulePredicateSchema>;
@@ -124,15 +106,18 @@ export type AbgNodeSpec = z.infer<typeof AbgNodeSpecSchema>;
 export const AbgPolicySpecSchema = z.object({
     id: z.string().min(1),
     capability: z.string().min(1),
-    decision: z.enum(['allow', 'deny', 'requires-approval']),
+    decision: AuthorablePolicyDecisionSchema,
     reason: z.string().min(1).optional(),
 });
 export type AbgPolicySpec = z.infer<typeof AbgPolicySpecSchema>;
+export const AbgPolicyDecisionSchema = ApprovalPolicyDecisionSchema;
+export type AbgPolicyDecision = z.infer<typeof AbgPolicyDecisionSchema>;
 
 export const AbgGraphDefaultsSchema = z.object({
     model: AbgNodeModelOptionsSchema.optional(),
     timeoutMs: z.number().int().positive().optional(),
     retryLimit: z.number().int().nonnegative().optional(),
+    maxNodeRuns: z.number().int().positive().optional(),
 });
 export type AbgGraphDefaults = z.infer<typeof AbgGraphDefaultsSchema>;
 
@@ -212,13 +197,6 @@ export const AbgGraphSpecSchema = z
     });
 export type AbgGraphSpec = z.infer<typeof AbgGraphSpecSchema>;
 
-export const AbgBlackboardEntrySchema = z.object({
-    key: z.string().min(1),
-    value: z.unknown(),
-    updatedAt: z.string().datetime().optional(),
-});
-export type AbgBlackboardEntry = z.infer<typeof AbgBlackboardEntrySchema>;
-
 export const AbgGraphInputSchema = z.object({
     graphId: z.string().min(1).optional(),
     input: z.record(z.string().min(1), z.unknown()).optional(),
@@ -226,22 +204,12 @@ export const AbgGraphInputSchema = z.object({
 });
 export type AbgGraphInput = z.infer<typeof AbgGraphInputSchema>;
 
-export const AbgNodeSnapshotSchema = z.object({
-    nodeId: z.string().min(1),
-    status: AbgNodeStatusSchema,
-    lastSignalType: AbgSignalTypeSchema.optional(),
+export const AbgRuntimeErrorSchema = z.object({
+    code: z.string().min(1),
+    message: z.string().min(1),
+    retryable: z.boolean().optional(),
 });
-export type AbgNodeSnapshot = z.infer<typeof AbgNodeSnapshotSchema>;
-
-export const AbgGraphSnapshotSchema = z.object({
-    graphId: z.string().min(1),
-    status: AbgGraphStatusSchema,
-    activeNodeIds: z.array(z.string().min(1)).default([]),
-    nodes: z.array(AbgNodeSnapshotSchema),
-    blackboard: z.array(AbgBlackboardEntrySchema).default([]),
-    lastSignal: AbgSignalSchema.optional(),
-});
-export type AbgGraphSnapshot = z.infer<typeof AbgGraphSnapshotSchema>;
+export type AbgRuntimeError = z.infer<typeof AbgRuntimeErrorSchema>;
 
 export const AbgEventMetadataSchema = z.object({
     graphId: z.string().min(1).optional(),
@@ -250,9 +218,23 @@ export const AbgEventMetadataSchema = z.object({
     causationId: z.string().min(1).optional(),
     correlationId: z.string().min(1).optional(),
     model: AbgNodeModelOptionsSchema.optional(),
+    attempt: z.number().int().positive().optional(),
+    maxAttempts: z.number().int().positive().optional(),
+    error: AbgRuntimeErrorSchema.optional(),
 });
 export type AbgEventMetadata = z.infer<typeof AbgEventMetadataSchema>;
 
+export {
+    ABG_GRAPH_STATUSES,
+    ABG_NODE_KINDS,
+    ABG_NODE_STATUSES,
+    type AbgGraphStatus,
+    AbgGraphStatusSchema,
+    type AbgNodeKind,
+    AbgNodeKindSchema,
+    type AbgNodeStatus,
+    AbgNodeStatusSchema,
+} from './abg-constants.js';
 export {
     ABG_SIGNAL_TYPES,
     type AbgEmbeddedEvent,

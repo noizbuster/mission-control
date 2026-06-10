@@ -31,7 +31,8 @@ describe('README extension points', () => {
             'Authorable ABG MVP',
             'pnpm dev:cli -- --json --graph examples/abg/research-answer.graph.json',
             'local provider/model variant',
-            'real providers, real tools, durable persistence, and visual graph editor remain out of scope',
+            'visual graph editor remains out of scope',
+            'OpenAI provider calls, durable JSONL replay, safe tools, and approval gates are implemented for the coding-agent MVP',
         ] as const;
 
         for (const term of terms) {
@@ -44,6 +45,8 @@ describe('README extension points', () => {
             'research-answer.graph.json',
             'policy-block.graph.json',
             'parallel-race.graph.json',
+            'coding-agent.graph.json',
+            'coding-agent-denied.graph.json',
         ] as const;
 
         for (const fileName of validExamples) {

@@ -7,3 +7,11 @@ export function createDefaultPermissionDecision(request: PermissionRequest): Per
         reason: 'default JSON permission decision',
     };
 }
+
+export function createAllowPermissionDecision(request: PermissionRequest): PermissionDecision {
+    return {
+        requestId: request.id,
+        status: 'allow',
+        reason: 'scaffold permission allow',
+    };
+}

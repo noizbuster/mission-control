@@ -18,6 +18,10 @@ jobs:
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
       - run: pnpm install --frozen-lockfile
+      - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm build
+      - run: pnpm lint
+      - run: cargo test --manifest-path native/sidecar/Cargo.toml
+      - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
       - run: cargo build --manifest-path native/sidecar/Cargo.toml

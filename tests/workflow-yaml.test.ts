@@ -3,19 +3,26 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = process.cwd();
+const githubExpressionPrefix = '$';
 
 function readWorkflow(name: string): string {
     return readFileSync(join(root, '.github/workflows', name), 'utf8');
 }
 
 describe('GitHub workflow distribution contract', () => {
-    it('ci workflow installs, typechecks, builds, and builds the sidecar', () => {
+    it('ci workflow installs, tests, lints, builds, and tests Rust surfaces without live provider secrets', () => {
         const ci = readWorkflow('ci.yml');
 
         expect(ci).toContain('pnpm install');
+        expect(ci).toContain('pnpm test');
         expect(ci).toContain('pnpm typecheck');
         expect(ci).toContain('pnpm build');
+        expect(ci).toContain('pnpm lint');
+        expect(ci).toContain('cargo test --manifest-path native/sidecar/Cargo.toml');
+        expect(ci).toContain('cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml');
         expect(ci).toContain('cargo build --manifest-path native/sidecar/Cargo.toml');
+        expect(ci).not.toContain('OPENAI_API_KEY');
+        expect(ci).not.toContain('OPENAI_LIVE');
     });
 
     it('release workflows define CLI and desktop release jobs', () => {
@@ -25,7 +32,9 @@ describe('GitHub workflow distribution contract', () => {
         expect(releaseCli).toContain('v*');
         expect(releaseCli).toContain('pnpm dev:package-cli');
         expect(releaseCli).toContain('NPM_TOKEN');
-        expect(releaseCli).toContain('mctrl-${{ matrix.os }}-${{ matrix.arch }}.tar.gz');
+        expect(releaseCli).toContain(
+            `mctrl-${githubExpressionPrefix}{{ matrix.os }}-${githubExpressionPrefix}{{ matrix.arch }}.tar.gz`,
+        );
         expect(releaseDesktop).toContain('release-desktop');
         expect(releaseDesktop).toContain('tauri');
         expect(releaseDesktop).toContain('signing/notarization TODO');

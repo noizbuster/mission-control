@@ -8,12 +8,15 @@ export type AbgSignalProjectionInput = {
     readonly causationId?: string;
     readonly correlationId?: string;
     readonly model?: AbgNodeModelOptions;
+    readonly attempt?: number;
+    readonly maxAttempts?: number;
 };
 
 export function projectAbgSignalToEvent(input: AbgSignalProjectionInput): AgentEvent {
     return {
         type: eventTypeForSignal(input.signal),
         timestamp: input.timestamp,
+        durability: 'durable',
         sessionId: input.sessionId,
         message: messageForSignal(input.signal),
         abg: {
@@ -23,6 +26,8 @@ export function projectAbgSignalToEvent(input: AbgSignalProjectionInput): AgentE
             ...(input.causationId !== undefined ? { causationId: input.causationId } : {}),
             ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
             ...(input.model !== undefined ? { model: input.model } : {}),
+            ...(input.attempt !== undefined ? { attempt: input.attempt } : {}),
+            ...(input.maxAttempts !== undefined ? { maxAttempts: input.maxAttempts } : {}),
         },
         ...(modelProviderSelection(input.model) ?? {}),
     };

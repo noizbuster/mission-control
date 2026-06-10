@@ -1,0 +1,102 @@
+{
+  "id": "coding-agent",
+  "version": "0.1.0",
+  "entryNodeId": "chat-intake",
+  "defaults": {
+    "model": {
+      "providerID": "local",
+      "modelID": "local-echo"
+    }
+  },
+  "nodes": [
+    {
+      "id": "chat-intake",
+      "kind": "llm",
+      "label": "Chat intake"
+    },
+    {
+      "id": "repo-analysis",
+      "kind": "tool",
+      "label": "Repository analysis",
+      "capabilities": ["repo.read", "repo.search"]
+    },
+    {
+      "id": "patch-proposal",
+      "kind": "llm",
+      "label": "Patch proposal"
+    },
+    {
+      "id": "approval",
+      "kind": "human-approval",
+      "label": "Patch approval",
+      "config": {
+        "reason": "patch proposal requires approval"
+      }
+    },
+    {
+      "id": "patch-application",
+      "kind": "tool",
+      "label": "Patch application",
+      "capabilities": ["filesystem.write"]
+    },
+    {
+      "id": "test-typecheck",
+      "kind": "tool",
+      "label": "Test and typecheck",
+      "capabilities": ["command.run"]
+    },
+    {
+      "id": "final-summary",
+      "kind": "llm",
+      "label": "Final summary"
+    }
+  ],
+  "edges": [
+    {
+      "source": "chat-intake",
+      "target": "repo-analysis",
+      "condition": "node-succeeded",
+      "priority": 10
+    },
+    {
+      "source": "repo-analysis",
+      "target": "patch-proposal",
+      "condition": "node-succeeded",
+      "priority": 10
+    },
+    {
+      "source": "patch-proposal",
+      "target": "approval",
+      "condition": "node-succeeded",
+      "priority": 10
+    },
+    {
+      "source": "approval",
+      "target": "patch-application",
+      "condition": "node-succeeded",
+      "priority": 10
+    },
+    {
+      "source": "patch-application",
+      "target": "test-typecheck",
+      "condition": "node-succeeded",
+      "priority": 10
+    },
+    {
+      "source": "test-typecheck",
+      "target": "final-summary",
+      "condition": "node-succeeded",
+      "priority": 10
+    }
+  ],
+  "rules": [
+    {
+      "id": "node-succeeded",
+      "when": {
+        "kind": "signal.type.equals",
+        "signalType": "success"
+      }
+    }
+  ],
+  "policies": []
+}

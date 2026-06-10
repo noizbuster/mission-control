@@ -136,4 +136,40 @@ describe('README stage-01 contract', () => {
             expect(content, `README missing ${term}`).toContain(term);
         }
     });
+
+    it('documents the implemented coding-agent runtime scope and safety boundaries', () => {
+        const content = readme();
+        const requiredTerms = [
+            'Coding Agent Runtime',
+            'OpenAI Responses adapter is implemented behind stored provider credentials',
+            'MCTRL_DATA_DIR',
+            'sessions/<session-id>.jsonl',
+            'approval.requested',
+            'approval.updated',
+            'approval.resumed',
+            'approval.blocked',
+            'repo.read',
+            'repo.list',
+            'repo.search',
+            'file.patch',
+            'command.run',
+            'graph node concurrency defaults to 2',
+            'provider parallel tool calls default to 4',
+            'shell/process concurrency defaults to 1',
+            'desktop Tauri write commands are placeholder receipt bridges until the Rust shell is wired to the core command service',
+            'The desktop shell never mutates files directly',
+            'Sidecar protocol v1 negotiates task.run only',
+            'file.patch and command.run stay on the TypeScript core path by default',
+        ] as const;
+
+        for (const term of requiredTerms) {
+            expect(content, `README missing ${term}`).toContain(term);
+        }
+        expect(content).not.toContain(
+            'real providers, real tools, durable persistence, and visual graph editor remain out of scope',
+        );
+        expect(content).not.toContain(
+            'Mission Control does not implement real LLM provider execution in this scaffold',
+        );
+    });
 });

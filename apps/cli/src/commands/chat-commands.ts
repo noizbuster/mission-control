@@ -11,6 +11,25 @@ export type ChatLineAction =
           readonly prompt: string;
       }
     | {
+          readonly kind: 'queue';
+          readonly prompt: string;
+      }
+    | {
+          readonly kind: 'steer';
+          readonly prompt: string;
+      }
+    | {
+          readonly kind: 'resume';
+      }
+    | {
+          readonly kind: 'branch';
+          readonly parentMessageId: string;
+          readonly prompt: string;
+      }
+    | {
+          readonly kind: 'interrupt';
+      }
+    | {
           readonly kind: 'model-status';
       }
     | {
@@ -83,9 +102,45 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
     switch (parts.head) {
         case 'model':
             return parseModelCommand(parts.tail, options);
+        case 'queue':
+            return parsePromptCommand('queue', parts.tail);
+        case 'steer':
+            return parsePromptCommand('steer', parts.tail);
+        case 'resume':
+            return parseNoArgumentCommand('resume', parts.tail);
+        case 'interrupt':
+            return parseNoArgumentCommand('interrupt', parts.tail);
+        case 'branch':
+            return parseBranchCommand(parts.tail);
         default:
             return { kind: 'unknown-slash', command: parts.head };
     }
+}
+
+function parsePromptCommand(kind: 'queue' | 'steer', prompt: string): ChatLineAction {
+    if (prompt.length === 0) {
+        return { kind: 'invalid', message: `/${kind} requires prompt text` };
+    }
+    return { kind, prompt };
+}
+
+function parseNoArgumentCommand(kind: 'resume' | 'interrupt', input: string): ChatLineAction {
+    if (input.length > 0) {
+        return { kind: 'invalid', message: `/${kind} does not accept arguments` };
+    }
+    return { kind };
+}
+
+function parseBranchCommand(input: string): ChatLineAction {
+    const parts = splitCommandParts(input);
+    if (parts.head.length === 0 || parts.tail.length === 0) {
+        return { kind: 'invalid', message: '/branch requires parent message id and prompt text' };
+    }
+    return {
+        kind: 'branch',
+        parentMessageId: parts.head,
+        prompt: parts.tail,
+    };
 }
 
 function parseModelCommand(input: string, options: ChatLineOptions): ChatLineAction {

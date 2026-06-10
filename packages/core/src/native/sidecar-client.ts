@@ -1,7 +1,18 @@
-import type { AgentEvent, SidecarTaskInput, SidecarTaskOutput } from '@mission-control/protocol';
+import {
+    type AgentEvent,
+    type NativeSidecarStatus,
+    SIDECAR_PROTOCOL_VERSION,
+    type SidecarCapability,
+    type SidecarTaskInput,
+    type SidecarTaskOutput,
+    type SidecarWireResponse,
+    SidecarWireResponseSchema,
+} from '@mission-control/protocol';
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 
 export interface SidecarClient {
+    status(): NativeSidecarStatus;
+    capabilities(): readonly SidecarCapability[];
     start(): Promise<void>;
     stop(): Promise<void>;
     runTask(input: SidecarTaskInput): Promise<SidecarTaskOutput>;
@@ -16,11 +27,22 @@ export class SidecarProtocolError extends Error {
 
 export class ProcessSidecarClient implements SidecarClient {
     private child: ChildProcessWithoutNullStreams | undefined;
+    private nativeStatus: NativeSidecarStatus = 'unknown';
+    private negotiatedCapabilities: readonly SidecarCapability[] = [];
+    private handshakeCompleted = false;
 
     constructor(
         private readonly command: string,
         private readonly timeoutMs = 5000,
     ) {}
+
+    status(): NativeSidecarStatus {
+        return this.nativeStatus;
+    }
+
+    capabilities(): readonly SidecarCapability[] {
+        return this.negotiatedCapabilities;
+    }
 
     async start(): Promise<void> {
         if (this.child !== undefined) {
@@ -40,6 +62,7 @@ export class ProcessSidecarClient implements SidecarClient {
             };
             const onError = (error: Error): void => {
                 cleanup();
+                this.nativeStatus = 'unavailable';
                 reject(new SidecarProtocolError(`failed to start sidecar: ${error.message}`));
             };
 
@@ -54,6 +77,9 @@ export class ProcessSidecarClient implements SidecarClient {
             return;
         }
         this.child = undefined;
+        this.nativeStatus = 'unknown';
+        this.negotiatedCapabilities = [];
+        this.handshakeCompleted = false;
         if (child.pid === undefined) {
             child.kill();
             return;
@@ -75,6 +101,7 @@ export class ProcessSidecarClient implements SidecarClient {
         return new Promise<SidecarTaskOutput>((resolve, reject) => {
             let buffer = '';
             let settled = false;
+            let handshakeAccepted = this.handshakeCompleted;
             const timeoutId = setTimeout(() => {
                 void this.stop();
                 settleReject(new SidecarProtocolError('sidecar task timed out'));
@@ -110,11 +137,24 @@ export class ProcessSidecarClient implements SidecarClient {
                     if (line.trim().length === 0) {
                         continue;
                     }
-                    const event = normalizeSidecarLine(line);
+                    const response = parseSidecarWireResponse(line);
+                    if (response.type === 'handshake_completed') {
+                        this.nativeStatus = 'native';
+                        this.negotiatedCapabilities = response.capabilities;
+                        this.handshakeCompleted = true;
+                        handshakeAccepted = true;
+                        continue;
+                    }
+                    if (!handshakeAccepted) {
+                        settleReject(new SidecarProtocolError('sidecar response arrived before handshake completed'));
+                        return;
+                    }
+                    const event = sidecarResponseToAgentEvent(response);
                     if (event.type === 'task.completed') {
                         settleResolve({
                             id: event.taskId ?? input.id,
                             message: event.message ?? 'completed by rust sidecar',
+                            nativeSidecarStatus: 'native',
                         });
                     }
                 }
@@ -123,63 +163,88 @@ export class ProcessSidecarClient implements SidecarClient {
                 settleReject(new SidecarProtocolError(`sidecar process error: ${error.message}`));
             };
             const onExit = (code: number | null): void => {
+                this.nativeStatus = 'unavailable';
                 settleReject(new SidecarProtocolError(`sidecar exited before completing task: ${String(code)}`));
             };
 
             child.stdout.on('data', onData);
             child.once('error', onError);
             child.once('exit', onExit);
+            if (!this.handshakeCompleted) {
+                child.stdin.write(
+                    `${JSON.stringify({
+                        type: 'handshake',
+                        id: `handshake_${input.id}`,
+                        payload: {
+                            protocolVersion: SIDECAR_PROTOCOL_VERSION,
+                            clientName: 'mission-control-core',
+                        },
+                    })}\n`,
+                );
+            }
             child.stdin.write(`${JSON.stringify({ type: 'run_task', id: input.id, payload: input.payload })}\n`);
         });
     }
 }
 
 export function normalizeSidecarLine(line: string, sessionId?: string): AgentEvent {
-    const parsed: unknown = JSON.parse(line);
-    if (!isRecord(parsed)) {
-        throw new SidecarProtocolError('sidecar response must be an object');
+    return sidecarResponseToAgentEvent(parseSidecarWireResponse(line), sessionId);
+}
+
+export function parseSidecarWireResponse(line: string): SidecarWireResponse {
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(line);
+    } catch (error: unknown) {
+        if (error instanceof SyntaxError) {
+            throw new SidecarProtocolError(`sidecar response is not valid JSON: ${error.message}`);
+        }
+        throw error;
     }
 
-    const type = parsed['type'];
-    const id = parsed['id'];
-    if (typeof type !== 'string' || typeof id !== 'string') {
-        throw new SidecarProtocolError('sidecar response requires string type and id');
+    const result = SidecarWireResponseSchema.safeParse(parsed);
+    if (!result.success) {
+        throw new SidecarProtocolError('sidecar response failed protocol validation');
     }
+    return result.data;
+}
 
-    switch (type) {
+function sidecarResponseToAgentEvent(response: SidecarWireResponse, sessionId?: string): AgentEvent {
+    switch (response.type) {
+        case 'handshake_completed':
+            return {
+                type: 'native.status',
+                timestamp: new Date().toISOString(),
+                ...(sessionId ? { sessionId } : {}),
+                taskId: response.id,
+                message: `sidecar protocol v${String(response.protocolVersion)} capabilities: ${response.capabilities.join(', ')}`,
+                nativeSidecarStatus: 'native',
+            };
         case 'task_progress': {
-            const progress = parsed['progress'];
-            if (typeof progress !== 'number') {
-                throw new SidecarProtocolError('task_progress requires numeric progress');
-            }
             return {
                 type: 'task.progress',
                 timestamp: new Date().toISOString(),
                 ...(sessionId ? { sessionId } : {}),
-                taskId: id,
-                progress,
+                taskId: response.id,
+                progress: response.progress,
                 nativeSidecarStatus: 'native',
             };
         }
         case 'task_completed': {
-            const result = parsed['result'];
-            if (!isRecord(result) || typeof result['message'] !== 'string') {
-                throw new SidecarProtocolError('task_completed requires result.message');
-            }
             return {
                 type: 'task.completed',
                 timestamp: new Date().toISOString(),
                 ...(sessionId ? { sessionId } : {}),
-                taskId: id,
-                message: result['message'],
+                taskId: response.id,
+                message: response.result.message,
                 nativeSidecarStatus: 'native',
             };
         }
         default:
-            throw new SidecarProtocolError(`unsupported sidecar response type: ${type}`);
+            return assertNever(response);
     }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
+function assertNever(value: never): never {
+    throw new TypeError(`Unexpected sidecar response: ${JSON.stringify(value)}`);
 }

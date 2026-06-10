@@ -1,10 +1,10 @@
-import type { AbgGraphSpec, AgentEvent } from '@mission-control/protocol';
+import type { AgentEvent, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { AgentRuntime } from './agent-runtime.js';
 
 describe('AgentRuntime', () => {
     it('runDemoTask emits start/progress/completed events and snapshot', async () => {
-        const runtime = new AgentRuntime({ useNative: false });
+        const runtime = new AgentRuntime({ useNative: false, permissionDecisionResolver: allowAllPermissions });
         const events: string[] = [];
         const unsubscribe = runtime.onEvent((event) => {
             events.push(event.type);
@@ -28,6 +28,7 @@ describe('AgentRuntime', () => {
     it('emits selected provider and model on session and task events', async () => {
         const runtime = new AgentRuntime({
             useNative: false,
+            permissionDecisionResolver: allowAllPermissions,
             modelProviderSelection: {
                 providerID: 'local',
                 modelID: 'local-echo',
@@ -51,7 +52,7 @@ describe('AgentRuntime', () => {
     });
 
     it('uses the default model provider selection when none is configured', async () => {
-        const runtime = new AgentRuntime({ useNative: false });
+        const runtime = new AgentRuntime({ useNative: false, permissionDecisionResolver: allowAllPermissions });
         const events: AgentEvent[] = [];
         const unsubscribe = runtime.onEvent((event) => {
             events.push(event);
@@ -73,8 +74,8 @@ describe('AgentRuntime', () => {
     });
 
     it('uses a session-local active model selection', async () => {
-        const runtime = new AgentRuntime({ useNative: false });
-        const otherRuntime = new AgentRuntime({ useNative: false });
+        const runtime = new AgentRuntime({ useNative: false, permissionDecisionResolver: allowAllPermissions });
+        const otherRuntime = new AgentRuntime({ useNative: false, permissionDecisionResolver: allowAllPermissions });
 
         await runtime.start();
         runtime.setModelProviderSelection({
@@ -108,7 +109,7 @@ describe('AgentRuntime', () => {
     });
 
     it('emits scaffold skill invocation events', async () => {
-        const runtime = new AgentRuntime({ useNative: false });
+        const runtime = new AgentRuntime({ useNative: false, permissionDecisionResolver: allowAllPermissions });
 
         await runtime.start();
         runtime.setModelProviderSelection({
@@ -146,170 +147,55 @@ describe('AgentRuntime', () => {
         );
     });
 
-    it('runGraph emits graph and node lifecycle events', async () => {
-        const runtime = new AgentRuntime({
-            useNative: false,
-            modelProviderSelection: {
-                providerID: 'local',
-                modelID: 'local-echo',
-            },
+    it('blocks default-denied demo effects before task execution', async () => {
+        const runtime = new AgentRuntime({ useNative: false });
+        const events: AgentEvent[] = [];
+        const unsubscribe = runtime.onEvent((event) => {
+            events.push(event);
         });
-        const graph = createRuntimeGraph();
 
         await runtime.start();
-        const result = await runtime.runGraph(graph, {
-            input: {
-                question: 'What changed?',
-            },
-        });
-        const events = runtime.getEvents();
-        const eventTypes = events.map((event) => event.type);
-        const llmCompleted = events.find(
-            (event) => event.type === 'node.completed' && event.abg?.nodeId === 'draft-answer',
-        );
+        await expect(runtime.runDemoTask()).rejects.toMatchObject({ code: 'permission_denied' });
+        unsubscribe();
 
-        expect(result.status).toBe('completed');
-        expect(eventTypes).toEqual(
-            expect.arrayContaining([
-                'graph.started',
-                'node.started',
-                'decision.selected',
-                'node.completed',
-                'graph.completed',
-            ]),
+        expect(events.map((event) => event.type)).toEqual(
+            expect.arrayContaining(['permission.requested', 'approval.blocked']),
         );
-        expect(llmCompleted?.abg?.model).toEqual({
-            providerID: 'local',
-            modelID: 'local-echo',
-            variantID: 'default',
-        });
-        expect(events.at(-1)).toMatchObject({
-            type: 'graph.completed',
-            abg: {
-                graphId: 'runtime-research',
-            },
-        });
+        expect(events.some((event) => event.type === 'task.started')).toBe(false);
+        expect(runtime.getSnapshot().completedTaskCount).toBe(0);
     });
 
-    it('runGraph rejects malformed graph before graph events are emitted', async () => {
+    it('does not call a fake effect callback under default deny', async () => {
         const runtime = new AgentRuntime({ useNative: false });
+        let effectCalls = 0;
 
         await runtime.start();
         await expect(
-            runtime.runGraph({
-                id: 'bad-runtime-graph',
-                entryNodeId: 'missing',
-                nodes: [
-                    {
-                        id: 'start',
-                        kind: 'action',
-                    },
-                ],
+            runPermissionedFakeEffect(runtime, () => {
+                effectCalls += 1;
             }),
-        ).rejects.toThrow('invalid ABG graph spec');
+        ).rejects.toMatchObject({ code: 'permission_denied' });
 
-        expect(runtime.getEvents().filter((event) => event.type.startsWith('graph.'))).toEqual([]);
-    });
-
-    it('runGraph blocks destructive tool by policy', async () => {
-        const runtime = new AgentRuntime({ useNative: false });
-        const graph: AbgGraphSpec = {
-            id: 'policy-blocked-runtime',
-            entryNodeId: 'delete-files',
-            nodes: [
-                {
-                    id: 'delete-files',
-                    kind: 'tool',
-                    capabilities: ['filesystem.write'],
-                },
-            ],
-            edges: [],
-            rules: [],
-            policies: [
-                {
-                    id: 'deny-write',
-                    capability: 'filesystem.write',
-                    decision: 'deny',
-                    reason: 'filesystem writes are disabled',
-                },
-            ],
-        };
-
-        await runtime.start();
-        const result = await runtime.runGraph(graph);
-        const events = runtime.getEvents();
-
-        expect(result.status).toBe('blocked');
-        expect(events.map((event) => event.type)).toEqual(
-            expect.arrayContaining(['permission.requested', 'policy.blocked', 'graph.failed']),
-        );
-        expect(events.find((event) => event.type === 'permission.requested')?.permissionDecision).toEqual({
-            requestId: 'permission_policy-blocked-runtime_delete-files',
-            status: 'deny',
-            reason: 'filesystem writes are disabled',
-        });
-    });
-
-    it('runGraph exposes graph snapshot and timeline from emitted events', async () => {
-        const runtime = new AgentRuntime({ useNative: false });
-
-        await runtime.start();
-        await runtime.runGraph(createRuntimeGraph());
-
-        expect(runtime.getGraphSnapshot('runtime-research')).toMatchObject({
-            graphId: 'runtime-research',
-            status: 'completed',
-        });
-        expect(runtime.getTimeline().map((entry) => entry.type)).toEqual(
-            expect.arrayContaining(['graph.started', 'node.completed', 'decision.selected', 'graph.completed']),
+        expect(effectCalls).toBe(0);
+        expect(runtime.getEvents().map((event) => event.type)).toEqual(
+            expect.arrayContaining(['permission.requested', 'approval.blocked']),
         );
     });
 });
 
-function createRuntimeGraph(): AbgGraphSpec {
+async function runPermissionedFakeEffect(runtime: AgentRuntime, effect: () => void): Promise<void> {
+    await runtime.requestPermission({
+        id: 'permission_fake_effect',
+        action: 'fake.effect',
+        reason: 'fake effect permission gate',
+    });
+    effect();
+}
+
+function allowAllPermissions(request: PermissionRequest): PermissionDecision {
     return {
-        id: 'runtime-research',
-        entryNodeId: 'draft-answer',
-        defaults: {
-            model: {
-                providerID: 'local',
-                modelID: 'local-echo',
-                variantID: 'default',
-            },
-        },
-        nodes: [
-            {
-                id: 'draft-answer',
-                kind: 'llm',
-                model: {
-                    providerID: 'local',
-                    modelID: 'local-echo',
-                    variantID: 'default',
-                },
-            },
-            {
-                id: 'finish',
-                kind: 'action',
-            },
-        ],
-        edges: [
-            {
-                source: 'draft-answer',
-                target: 'finish',
-                condition: 'draft-succeeded',
-                priority: 10,
-            },
-        ],
-        rules: [
-            {
-                id: 'draft-succeeded',
-                when: {
-                    kind: 'signal.type.equals',
-                    signalType: 'success',
-                },
-                activate: 'finish',
-            },
-        ],
-        policies: [],
+        requestId: request.id,
+        status: 'allow',
+        reason: 'test allow',
     };
 }

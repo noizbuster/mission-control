@@ -10,8 +10,10 @@
       "!**/.next-playwright",
       "!**/node_modules",
       "!**/.nx",
+      "!**/.omo",
       "!**/build",
-      "!**/coverage"
+      "!**/coverage",
+      "!temp/ref-repos"
     ]
   },
   "assist": {

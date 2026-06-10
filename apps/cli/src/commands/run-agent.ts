@@ -1,20 +1,25 @@
 import { defaultModelProviderSelection, modelProviderCatalog } from '@mission-control/config';
-import { AgentRuntime, type AgentRuntimeOptions } from '@mission-control/core';
 import {
-    type AbgGraphSpec,
-    AbgGraphSpecSchema,
-    type AbgNodeModelOptions,
-    type AgentEvent,
-    type ModelProviderSelection,
-} from '@mission-control/protocol';
+    AgentRuntime,
+    type AgentRuntimeOptions,
+    type CommandExecutionRequest,
+    type CommandExecutionResult,
+    createAllowPermissionDecision,
+    createNodeOpenAIResponsesTransport,
+    createOpenAIResponsesProvider,
+    type ProviderAdapter,
+} from '@mission-control/core';
+import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
+import { createCliProviderCredentialResolver } from '../provider-credential-resolver.js';
 import { type AgentUIRenderer, InkRenderer, JsonRenderer, PlainRenderer } from '../ui/renderers.js';
 import { type ChatInput, type ChatOutput, type ModelSelector, runInteractiveChatSession } from './interactive-chat.js';
 import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
+import { createLocalCodingProvider } from './local-coding-provider.js';
 import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
-import { readFile } from 'node:fs/promises';
-import { isAbsolute, resolve } from 'node:path';
+import { readGraphFile, validateGraphModelOptions, validateModelProviderSelection } from './run-agent-graph.js';
+import { createRunEventRecorder } from './run-agent-session.js';
 
 export type RunAgentOptions = {
     readonly authStore?: ProviderAuthStore;
@@ -23,6 +28,9 @@ export type RunAgentOptions = {
     readonly selectModel?: ModelSelector;
     readonly modelDiscovery?: ModelDiscovery;
     readonly onRuntimeEvent?: (event: AgentEvent) => void;
+    readonly provider?: ProviderAdapter;
+    readonly workspaceRoot?: string;
+    readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
 };
 
 export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Promise<string> {
@@ -32,20 +40,34 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     if (graph !== undefined) {
         validateGraphModelOptions(graph);
     }
-    const runtime = new AgentRuntime(createRuntimeOptions(args.useNative, modelProviderSelection));
-    if (shouldRunInteractiveChat(args, graph, options)) {
-        const unsubscribeRuntimeEvents =
-            options.onRuntimeEvent === undefined ? undefined : runtime.onEvent(options.onRuntimeEvent);
+    const selectedModelProvider = modelProviderSelection ?? defaultModelProviderSelection;
+    const shouldRunChat = shouldRunInteractiveChat(args, graph, options);
+    const provider =
+        options.provider ??
+        (shouldRunChat ? createProviderForSelection(selectedModelProvider, authStore) : createLocalCodingProvider());
+    const runtime = new AgentRuntime(createRuntimeOptions(args.useNative, modelProviderSelection, provider));
+    if (shouldRunChat) {
+        const recorder = await createRunEventRecorder(args);
+        const emitRuntimeEvent = (event: AgentEvent) => {
+            const recorded = recorder.record(event);
+            options.onRuntimeEvent?.(recorded);
+        };
+        const unsubscribeRuntimeEvents = runtime.onEvent(emitRuntimeEvent);
         let didStart = false;
         try {
-            await runtime.start();
+            const session = await runtime.start();
             didStart = true;
             return await runInteractiveChatSession(runtime, {
-                modelProviderSelection: modelProviderSelection ?? defaultModelProviderSelection,
+                modelProviderSelection: selectedModelProvider,
+                provider,
+                sessionId: args.sessionId ?? session.id,
+                workspaceRoot: options.workspaceRoot ?? process.cwd(),
                 modelChoices: await listAuthenticatedModelChoices(
                     authStore,
                     options.modelDiscovery ?? createDefaultModelDiscovery(),
                 ),
+                emitEvent: emitRuntimeEvent,
+                ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
                 ...(options.chatInput !== undefined ? { input: options.chatInput } : {}),
                 ...(options.chatOutput !== undefined ? { output: options.chatOutput } : {}),
                 ...(options.selectModel !== undefined ? { selectModel: options.selectModel } : {}),
@@ -55,22 +77,40 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                 await runtime.stop();
             }
             unsubscribeRuntimeEvents?.();
+            await recorder.close();
         }
     }
 
+    const recorder = await createRunEventRecorder(args);
     const renderer = createRenderer(args.mode);
-    await renderer.start(runtime);
     const unsubscribe = runtime.onEvent((event) => {
-        renderer.render(event);
+        renderer.render(recorder.record(event));
     });
-    await runtime.start();
-    if (graph === undefined) {
-        await runtime.runDemoTask();
-    } else {
-        await runtime.runGraph(graph);
+    let didStart = false;
+    try {
+        await renderer.start(runtime);
+        await runtime.start();
+        didStart = true;
+        if (graph !== undefined) {
+            await runtime.runGraph(graph);
+        } else if (args.prompt !== undefined) {
+            await runtime.runPromptTask(args.prompt);
+        } else {
+            await runtime.runDemoTask();
+        }
+        await runtime.stop();
+        didStart = false;
+    } finally {
+        if (didStart) {
+            await runtime.stop();
+        }
+        unsubscribe();
+        try {
+            await recorder.close();
+        } finally {
+            await renderer.stop();
+        }
     }
-    unsubscribe();
-    await renderer.stop();
     return renderer.getOutput();
 }
 
@@ -130,119 +170,28 @@ async function listAuthenticatedModelChoices(
 function createRuntimeOptions(
     useNative: boolean | undefined,
     modelProviderSelection: ModelProviderSelection | undefined,
+    provider: ProviderAdapter,
 ): AgentRuntimeOptions {
     if (useNative === undefined) {
         if (modelProviderSelection === undefined) {
-            return {};
+            return { provider, permissionDecisionResolver: createAllowPermissionDecision };
         }
-        return { modelProviderSelection };
+        return { modelProviderSelection, provider, permissionDecisionResolver: createAllowPermissionDecision };
     }
     if (modelProviderSelection === undefined) {
-        return { useNative };
+        return { useNative, provider, permissionDecisionResolver: createAllowPermissionDecision };
     }
-    return { useNative, modelProviderSelection };
+    return { useNative, modelProviderSelection, provider, permissionDecisionResolver: createAllowPermissionDecision };
 }
 
-function validateModelProviderSelection(
-    modelProviderSelection: ModelProviderSelection | undefined,
-): ModelProviderSelection | undefined {
-    if (modelProviderSelection === undefined) {
-        return undefined;
+function createProviderForSelection(selection: ModelProviderSelection, authStore: ProviderAuthStore): ProviderAdapter {
+    if (selection.providerID === 'openai') {
+        return createOpenAIResponsesProvider({
+            credentialResolver: createCliProviderCredentialResolver(authStore),
+            transport: createNodeOpenAIResponsesTransport(),
+        });
     }
-    const provider = modelProviderCatalog.find((entry) => entry.id === modelProviderSelection.providerID);
-    if (provider === undefined) {
-        throw new Error(`Unknown provider: ${modelProviderSelection.providerID}`);
-    }
-    if (!provider.models.some((model) => model.id === modelProviderSelection.modelID)) {
-        throw new Error(
-            `Model ${modelProviderSelection.modelID} is not available for provider ${modelProviderSelection.providerID}`,
-        );
-    }
-    return modelProviderSelection;
-}
-
-async function readGraphFile(graphPath: string): Promise<AbgGraphSpec> {
-    const raw = await readFirstGraphPath(graphPath);
-    let parsedJson: unknown;
-    try {
-        parsedJson = JSON.parse(raw);
-    } catch (error: unknown) {
-        if (error instanceof SyntaxError) {
-            throw new Error(`Invalid graph JSON ${graphPath}: ${error.message}`);
-        }
-        throw error;
-    }
-    const parsed = AbgGraphSpecSchema.safeParse(parsedJson);
-    if (!parsed.success) {
-        throw new Error(
-            `Invalid graph file ${graphPath}: ${parsed.error.issues[0]?.message ?? 'invalid ABG graph spec'}`,
-        );
-    }
-    return parsed.data;
-}
-
-async function readFirstGraphPath(graphPath: string): Promise<string> {
-    let missingPath: string | undefined;
-    for (const candidate of resolveGraphPathCandidates(graphPath)) {
-        try {
-            return await readFile(candidate, 'utf8');
-        } catch (error: unknown) {
-            if (isMissingFileError(error)) {
-                missingPath = candidate;
-                continue;
-            }
-            throw error;
-        }
-    }
-    throw new Error(`Graph file not found: ${missingPath ?? graphPath}`);
-}
-
-function resolveGraphPathCandidates(graphPath: string): readonly string[] {
-    if (isAbsolute(graphPath)) {
-        return [graphPath];
-    }
-    const { INIT_CWD: invocationCwd } = process.env;
-    const bases = [
-        ...(invocationCwd !== undefined && invocationCwd.length > 0 ? [invocationCwd] : []),
-        process.cwd(),
-        resolve(process.cwd(), '../..'),
-    ];
-    return [...new Set(bases.map((base) => resolve(base, graphPath)))];
-}
-
-function isMissingFileError(error: unknown): boolean {
-    return error instanceof Error && Reflect.get(error, 'code') === 'ENOENT';
-}
-
-function validateGraphModelOptions(graph: AbgGraphSpec): void {
-    if (graph.defaults?.model !== undefined) {
-        validateNodeModelOptions(graph.defaults.model);
-    }
-    for (const node of graph.nodes) {
-        if (node.model !== undefined) {
-            validateNodeModelOptions(node.model);
-        }
-    }
-}
-
-function validateNodeModelOptions(model: AbgNodeModelOptions): void {
-    const provider = modelProviderCatalog.find((entry) => entry.id === model.providerID);
-    if (provider === undefined) {
-        throw new Error(`Unknown provider: ${model.providerID}`);
-    }
-    const modelEntry = provider.models.find((entry) => entry.id === model.modelID);
-    if (modelEntry === undefined) {
-        throw new Error(`Model ${model.modelID} is not available for provider ${model.providerID}`);
-    }
-    if (
-        model.variantID !== undefined &&
-        modelEntry.variants?.some((variant) => variant.id === model.variantID) !== true
-    ) {
-        throw new Error(`Variant ${model.variantID} is not available for model ${model.providerID}/${model.modelID}`);
-    }
-    for (const fallback of model.fallbacks ?? []) {
-        validateNodeModelOptions(fallback);
-    }
+    return createLocalCodingProvider();
 }
 
 function createRenderer(mode: CliArgs['mode']): AgentUIRenderer {
@@ -250,6 +199,7 @@ function createRenderer(mode: CliArgs['mode']): AgentUIRenderer {
         case 'plain':
             return new PlainRenderer();
         case 'json':
+        case 'jsonl':
             return new JsonRenderer();
         case 'ink':
             return new InkRenderer();

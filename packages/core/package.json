@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@mission-control/config": "workspace:*",
-    "@mission-control/protocol": "workspace:*"
+    "@mission-control/protocol": "workspace:*",
+    "zod": "^4.1.13"
   }
 }

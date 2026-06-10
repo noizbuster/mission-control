@@ -13,11 +13,13 @@ describe('CLI entrypoint', () => {
         expect(help).toContain('mctrl');
         expect(help).toContain('--no-tui');
         expect(help).toContain('--json');
+        expect(help).toContain('--jsonl');
         expect(help).toContain('--native');
         expect(help).toContain('--no-native');
         expect(help).toContain('--provider <id>');
         expect(help).toContain('--model <id>');
         expect(help).toContain('--graph <path>');
+        expect(help).toContain('--session <id>');
         expect(help).toContain('--method <id>');
         expect(help).toContain('mctrl auth login --provider local --api-key <key>');
         expect(help).toContain('mctrl auth login --provider anthropic --api-key <key>');
@@ -30,6 +32,12 @@ describe('CLI entrypoint', () => {
         expect(help).not.toContain('sk-test');
         expect(help).toContain('mctrl auth list');
         expect(help).toContain('mctrl models local');
+        expect(help).toContain('mctrl run "summarize this repository" --session session_demo --jsonl');
+        expect(help).toContain(
+            'mctrl graph run examples/abg/research-answer.graph.json --session session_graph --jsonl',
+        );
+        expect(help).toContain('mctrl session list');
+        expect(help).toContain('mctrl session replay session_demo --jsonl');
         expect(help).toContain('--version');
         expect(help).toContain('--help');
         expect(help).toContain('mctrl --no-tui --provider local --model local-echo');

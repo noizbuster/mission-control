@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+    AgentEventEnvelopeSchema,
+    AgentEventLogSchema,
     AgentEventSchema,
     AgentEventTypeSchema,
     AgentSnapshotSchema,
-    ModelProviderSelectionSchema,
-    ProviderAuthFileSchema,
-    ProviderCatalogEntrySchema,
-    ProviderCredentialSchema,
-    ProviderCredentialSummarySchema,
+    EventDurabilitySchema,
+    NativeSidecarStatusSchema,
+    ReplayCursorSchema,
+    SidecarCapabilitySchema,
+    SidecarHandshakeResponseSchema,
     SidecarTaskInputSchema,
     SidecarTaskOutputSchema,
 } from './schema.js';
@@ -63,6 +65,103 @@ describe('protocol schemas', () => {
         expect(parsed.success).toBe(false);
     });
 
+    it('parses durable event envelopes around existing agent events', () => {
+        const envelope = AgentEventEnvelopeSchema.parse({
+            eventId: 'event_1',
+            sequence: 0,
+            createdAt: '2026-06-02T10:00:00.000Z',
+            sessionId: 'session_1',
+            durability: 'durable',
+            causationId: 'event_parent',
+            correlationId: 'correlation_1',
+            event: {
+                type: 'task.completed',
+                timestamp: '2026-06-02T10:00:00.000Z',
+                sessionId: 'session_1',
+                taskId: 'task_1',
+                message: 'demo completed',
+            },
+        });
+
+        expect(envelope).toMatchObject({
+            eventId: 'event_1',
+            sequence: 0,
+            durability: 'durable',
+            event: {
+                type: 'task.completed',
+            },
+        });
+        expect(EventDurabilitySchema.parse('ephemeral')).toBe('ephemeral');
+    });
+
+    it('rejects malformed event envelopes and invalid durability values', () => {
+        const missingEventId = AgentEventEnvelopeSchema.safeParse({
+            sequence: 0,
+            createdAt: '2026-06-02T10:00:00.000Z',
+            sessionId: 'session_1',
+            durability: 'durable',
+            event: {
+                type: 'task.completed',
+                timestamp: '2026-06-02T10:00:00.000Z',
+            },
+        });
+        const invalidDurability = AgentEventEnvelopeSchema.safeParse({
+            eventId: 'event_1',
+            sequence: 0,
+            createdAt: '2026-06-02T10:00:00.000Z',
+            sessionId: 'session_1',
+            durability: 'archived',
+            event: {
+                type: 'task.completed',
+                timestamp: '2026-06-02T10:00:00.000Z',
+            },
+        });
+
+        expect(missingEventId.success).toBe(false);
+        expect(invalidDurability.success).toBe(false);
+    });
+
+    it('rejects non-monotonic event log sequences', () => {
+        const parsed = AgentEventLogSchema.safeParse([
+            {
+                eventId: 'event_1',
+                sequence: 2,
+                createdAt: '2026-06-02T10:00:00.000Z',
+                sessionId: 'session_1',
+                durability: 'durable',
+                event: {
+                    type: 'task.started',
+                    timestamp: '2026-06-02T10:00:00.000Z',
+                },
+            },
+            {
+                eventId: 'event_2',
+                sequence: 1,
+                createdAt: '2026-06-02T10:00:01.000Z',
+                sessionId: 'session_1',
+                durability: 'durable',
+                event: {
+                    type: 'task.completed',
+                    timestamp: '2026-06-02T10:00:01.000Z',
+                },
+            },
+        ]);
+
+        expect(parsed.success).toBe(false);
+    });
+
+    it('round trips replay cursors through stable JSON', () => {
+        const cursor = ReplayCursorSchema.parse({
+            sessionId: 'session_1',
+            sequence: 42,
+            eventId: 'event_42',
+        });
+        const serialized = JSON.stringify(cursor);
+
+        expect(ReplayCursorSchema.parse(JSON.parse(serialized))).toEqual(cursor);
+        expect(serialized).toBe('{"sessionId":"session_1","sequence":42,"eventId":"event_42"}');
+    });
+
     it('parses snapshots and sidecar task boundaries', () => {
         const snapshot = AgentSnapshotSchema.parse({
             sessionId: 'session_1',
@@ -89,61 +188,43 @@ describe('protocol schemas', () => {
         expect(output.message).toBe('completed by mock sidecar');
     });
 
-    it('parses provider model selection and catalog entries', () => {
-        const selection = ModelProviderSelectionSchema.parse({
-            providerID: 'local',
-            modelID: 'local-echo',
+    it('parses sidecar protocol handshake and native status boundaries', () => {
+        const handshake = SidecarHandshakeResponseSchema.parse({
+            type: 'handshake_completed',
+            id: 'handshake_1',
+            protocolVersion: 1,
+            capabilities: ['task.run'],
         });
-        const provider = ProviderCatalogEntrySchema.parse({
-            id: 'local',
-            name: 'Local Sandbox',
-            defaultModelID: 'local-echo',
-            authLabel: 'API key',
-            models: [
-                {
-                    id: 'local-echo',
-                    name: 'Local Echo',
-                    status: 'active',
-                    variants: [
-                        {
-                            id: 'default',
-                            name: 'Default',
-                            status: 'active',
-                        },
-                    ],
-                },
-            ],
+        const output = SidecarTaskOutputSchema.parse({
+            id: 'task_1',
+            message: 'completed by rust sidecar',
+            nativeSidecarStatus: 'native',
         });
 
-        expect(selection).toEqual({
-            providerID: 'local',
-            modelID: 'local-echo',
-        });
-        expect(provider.models[0]?.id).toBe('local-echo');
-        expect(provider.models[0]?.variants?.[0]?.id).toBe('default');
+        expect(handshake.capabilities).toEqual(['task.run']);
+        expect(SidecarCapabilitySchema.safeParse('command.run').success).toBe(false);
+        expect(NativeSidecarStatusSchema.parse('native')).toBe('native');
+        expect(output.nativeSidecarStatus).toBe('native');
     });
 
-    it('rejects provider catalog entries with malformed model variants', () => {
-        const parsed = ProviderCatalogEntrySchema.safeParse({
-            id: 'local',
-            name: 'Local Sandbox',
-            defaultModelID: 'local-echo',
-            authLabel: 'API key',
-            models: [
-                {
-                    id: 'local-echo',
-                    name: 'Local Echo',
-                    variants: [
-                        {
-                            id: '',
-                            name: 'Default',
-                        },
-                    ],
-                },
-            ],
+    it('preserves provider stream chunks on agent events', () => {
+        const event = AgentEventSchema.parse({
+            type: 'task.progress',
+            timestamp: '2026-06-08T10:00:00.000Z',
+            sessionId: 'session_provider_chunk',
+            message: 'hel',
+            providerStreamChunk: {
+                kind: 'text_delta',
+                requestId: 'request_provider_chunk',
+                sequence: 1,
+                delta: 'hel',
+            },
         });
 
-        expect(parsed.success).toBe(false);
+        expect(event.providerStreamChunk).toMatchObject({
+            kind: 'text_delta',
+            delta: 'hel',
+        });
     });
 
     it('keeps provider model metadata optional on existing events and snapshots', () => {
@@ -165,98 +246,5 @@ describe('protocol schemas', () => {
 
         expect(event.modelProviderSelection).toBeUndefined();
         expect(snapshot.modelProviderSelection).toBeUndefined();
-    });
-
-    it('parses provider credential records and auth file snapshots', () => {
-        const credential = ProviderCredentialSchema.parse({
-            providerID: 'local',
-            type: 'apiKey',
-            apiKey: 'local_test_key',
-            createdAt: '2026-06-03T10:00:00.000Z',
-            updatedAt: '2026-06-03T10:00:00.000Z',
-        });
-        const authFile = ProviderAuthFileSchema.parse({
-            $schema: 'https://mission-control.local/auth.schema.json',
-            default: {
-                providerID: 'local',
-                modelID: 'local-echo',
-            },
-            credentials: {
-                local: credential,
-            },
-        });
-        const summary = ProviderCredentialSummarySchema.parse({
-            providerID: 'local',
-            authenticated: true,
-            maskedCredential: 'loca..._key',
-        });
-
-        const localProviderID = 'local';
-
-        expect(authFile.credentials[localProviderID]).toMatchObject({
-            apiKey: 'local_test_key',
-        });
-        expect(summary.maskedCredential).toBe('loca..._key');
-        expect(
-            ProviderCredentialSchema.safeParse({
-                providerID: 'local',
-                type: 'apiKey',
-                apiKey: '',
-                createdAt: '2026-06-03T10:00:00.000Z',
-                updatedAt: '2026-06-03T10:00:00.000Z',
-            }).success,
-        ).toBe(false);
-    });
-
-    it('parses multi-field provider credentials and legacy API-key credentials', () => {
-        const multiFieldCredential = ProviderCredentialSchema.parse({
-            providerID: 'cloudflare-ai-gateway',
-            type: 'fields',
-            fields: {
-                accountId: {
-                    value: 'acct_test',
-                    secret: false,
-                },
-                apiToken: {
-                    value: 'cf_secret_token',
-                    secret: true,
-                },
-                gatewayId: {
-                    value: 'gw_test',
-                    secret: false,
-                },
-            },
-            createdAt: '2026-06-03T10:00:00.000Z',
-            updatedAt: '2026-06-03T10:00:00.000Z',
-        });
-        const legacyCredential = ProviderCredentialSchema.parse({
-            providerID: 'local',
-            type: 'apiKey',
-            apiKey: 'local_test_key',
-            createdAt: '2026-06-03T10:00:00.000Z',
-            updatedAt: '2026-06-03T10:00:00.000Z',
-        });
-        const summary = ProviderCredentialSummarySchema.parse({
-            providerID: 'cloudflare-ai-gateway',
-            authenticated: true,
-            maskedCredential: 'cf_s...oken (3 fields)',
-            credentialFieldCount: 3,
-        });
-
-        expect(multiFieldCredential).toMatchObject({
-            providerID: 'cloudflare-ai-gateway',
-            type: 'fields',
-            fields: {
-                apiToken: {
-                    secret: true,
-                },
-            },
-        });
-        expect(legacyCredential).toMatchObject({
-            providerID: 'local',
-            type: 'apiKey',
-            apiKey: 'local_test_key',
-        });
-        expect(summary.credentialFieldCount).toBe(3);
     });
 });

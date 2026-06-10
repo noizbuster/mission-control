@@ -1,5 +1,83 @@
 import { z } from 'zod';
 import { AbgEventMetadataSchema } from './abg.js';
+import { APPROVAL_POLICY_DECISIONS, ApprovalPolicyDecisionSchema, ApprovalRecordSchema } from './approval.js';
+import { CommandRunEventMetadataSchema } from './command-events.js';
+import { DiffFileSchema } from './diff-events.js';
+import { EventIdSchema, EventSequenceSchema } from './event-primitives.js';
+import { ModelProviderSelectionSchema } from './provider-auth.js';
+import { ProviderStreamChunkSchema } from './provider-events.js';
+import { RunCoordinatorEventMetadataSchema } from './run-coordinator.js';
+import { NativeSidecarStatusSchema } from './sidecar.js';
+import { TranscriptEventMetadataSchema } from './transcript.js';
+
+export {
+    APPROVAL_LIFECYCLE_STATES,
+    APPROVAL_POLICY_DECISIONS,
+    type ApprovalLifecycleState,
+    ApprovalLifecycleStateSchema,
+    type ApprovalPolicyDecision,
+    ApprovalPolicyDecisionSchema,
+    type ApprovalRecord,
+    ApprovalRecordSchema,
+    type ApprovalSubject,
+    ApprovalSubjectSchema,
+} from './approval.js';
+export {
+    MODEL_CATALOG_STATUSES,
+    type ModelCatalogEntry,
+    ModelCatalogEntrySchema,
+    type ModelCatalogStatus,
+    ModelCatalogStatusSchema,
+    type ModelProviderSelection,
+    ModelProviderSelectionSchema,
+    type ModelVariantEntry,
+    ModelVariantEntrySchema,
+    type ProviderApiKeyCredential,
+    ProviderApiKeyCredentialSchema,
+    type ProviderAuthFile,
+    ProviderAuthFileSchema,
+    type ProviderCatalogEntry,
+    ProviderCatalogEntrySchema,
+    type ProviderCredential,
+    type ProviderCredentialField,
+    ProviderCredentialFieldSchema,
+    ProviderCredentialSchema,
+    type ProviderCredentialSummary,
+    ProviderCredentialSummarySchema,
+    type ProviderFieldsCredential,
+    ProviderFieldsCredentialSchema,
+    type ProviderOAuthCredential,
+    ProviderOAuthCredentialSchema,
+} from './provider-auth.js';
+export {
+    RUN_COORDINATOR_COMMANDS,
+    RUN_COORDINATOR_STATES,
+    type RunCoordinatorCommand,
+    RunCoordinatorCommandSchema,
+    type RunCoordinatorEventMetadata,
+    RunCoordinatorEventMetadataSchema,
+    type RunCoordinatorState,
+    RunCoordinatorStateSchema,
+} from './run-coordinator.js';
+export {
+    NATIVE_SIDECAR_STATUSES,
+    type NativeSidecarStatus,
+    NativeSidecarStatusSchema,
+    SIDECAR_CAPABILITIES,
+    SIDECAR_PROTOCOL_VERSION,
+    type SidecarCapability,
+    SidecarCapabilitySchema,
+    type SidecarHandshakeCommand,
+    SidecarHandshakeCommandSchema,
+    type SidecarHandshakeResponse,
+    SidecarHandshakeResponseSchema,
+    type SidecarTaskInput,
+    SidecarTaskInputSchema,
+    type SidecarTaskOutput,
+    SidecarTaskOutputSchema,
+    type SidecarWireResponse,
+    SidecarWireResponseSchema,
+} from './sidecar.js';
 
 export const AGENT_EVENT_TYPES = [
     'session.started',
@@ -9,12 +87,28 @@ export const AGENT_EVENT_TYPES = [
     'task.completed',
     'task.failed',
     'permission.requested',
+    'approval.requested',
+    'approval.updated',
+    'approval.blocked',
+    'approval.resumed',
+    'prompt.admitted',
+    'prompt.promoted',
+    'run.command.received',
+    'run.started',
+    'run.completed',
+    'run.interrupted',
+    'run.idle',
+    'native.status',
     'native.warning',
     'log',
     'graph.started',
     'graph.completed',
     'graph.failed',
     'graph.cancelled',
+    'attempt.started',
+    'attempt.completed',
+    'attempt.failed',
+    'node.waiting',
     'node.started',
     'node.progress',
     'node.completed',
@@ -27,38 +121,29 @@ export const AGENT_EVENT_TYPES = [
     'tool.started',
     'tool.completed',
     'tool.failed',
+    'command.started',
+    'command.completed',
+    'command.failed',
+    'command.timed_out',
+    'file.diff.proposed',
+    'file.diff.applied',
     'workflow.transitioned',
 ] as const;
 
 export const SESSION_STATUSES = ['idle', 'running', 'stopped', 'failed'] as const;
 
-export const NATIVE_SIDECAR_STATUSES = ['unknown', 'mock', 'native', 'unavailable'] as const;
+export const PERMISSION_STATUSES = APPROVAL_POLICY_DECISIONS;
 
-export const PERMISSION_STATUSES = ['allow', 'deny'] as const;
-
-export const MODEL_CATALOG_STATUSES = ['active', 'deprecated'] as const;
+export const EVENT_DURABILITIES = ['durable', 'ephemeral'] as const;
 
 export const AgentEventTypeSchema = z.enum(AGENT_EVENT_TYPES);
 export type AgentEventType = z.infer<typeof AgentEventTypeSchema>;
 
-export const PermissionStatusSchema = z.enum(PERMISSION_STATUSES);
+export const PermissionStatusSchema = ApprovalPolicyDecisionSchema;
 export type PermissionStatus = z.infer<typeof PermissionStatusSchema>;
 
-export const ModelCatalogStatusSchema = z.enum(MODEL_CATALOG_STATUSES);
-export type ModelCatalogStatus = z.infer<typeof ModelCatalogStatusSchema>;
-
-export const ModelVariantEntrySchema = z.object({
-    id: z.string().min(1),
-    name: z.string().min(1),
-    status: ModelCatalogStatusSchema.default('active'),
-});
-export type ModelVariantEntry = z.infer<typeof ModelVariantEntrySchema>;
-
-export const AgentMessageSchema = z.object({
-    role: z.enum(['system', 'user', 'assistant']),
-    content: z.string(),
-});
-export type AgentMessage = z.infer<typeof AgentMessageSchema>;
+export const EventDurabilitySchema = z.enum(EVENT_DURABILITIES);
+export type EventDurability = z.infer<typeof EventDurabilitySchema>;
 
 export const PermissionRequestSchema = z.object({
     id: z.string().min(1),
@@ -74,119 +159,73 @@ export const PermissionDecisionSchema = z.object({
 });
 export type PermissionDecision = z.infer<typeof PermissionDecisionSchema>;
 
-export const SidecarTaskInputSchema = z.object({
-    id: z.string().min(1),
-    payload: z.object({
-        label: z.string().min(1),
-    }),
-});
-export type SidecarTaskInput = z.infer<typeof SidecarTaskInputSchema>;
-
-export const SidecarTaskOutputSchema = z.object({
-    id: z.string().min(1),
-    message: z.string().min(1),
-});
-export type SidecarTaskOutput = z.infer<typeof SidecarTaskOutputSchema>;
-
-export const ModelProviderSelectionSchema = z.object({
-    providerID: z.string().min(1),
-    modelID: z.string().min(1),
-});
-export type ModelProviderSelection = z.infer<typeof ModelProviderSelectionSchema>;
-
-export const ProviderApiKeyCredentialSchema = z.object({
-    providerID: z.string().min(1),
-    type: z.literal('apiKey'),
-    apiKey: z.string().min(1),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
-});
-export type ProviderApiKeyCredential = z.infer<typeof ProviderApiKeyCredentialSchema>;
-
-export const ProviderCredentialFieldSchema = z.object({
-    value: z.string().min(1),
-    secret: z.boolean(),
-});
-export type ProviderCredentialField = z.infer<typeof ProviderCredentialFieldSchema>;
-
-export const ProviderFieldsCredentialSchema = z.object({
-    providerID: z.string().min(1),
-    type: z.literal('fields'),
-    fields: z
-        .record(z.string().min(1), ProviderCredentialFieldSchema)
-        .refine((fields) => Object.keys(fields).length > 0, 'credential fields must not be empty'),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
-});
-export type ProviderFieldsCredential = z.infer<typeof ProviderFieldsCredentialSchema>;
-
-export const ProviderOAuthCredentialSchema = z.object({
-    providerID: z.string().min(1),
-    type: z.literal('oauth'),
-    accessToken: z.string().min(1),
-    refreshToken: z.string().min(1).optional(),
-    expiresAt: z.string().datetime().optional(),
-    scopes: z.array(z.string().min(1)).optional(),
-    accountLabel: z.string().min(1).optional(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
-});
-export type ProviderOAuthCredential = z.infer<typeof ProviderOAuthCredentialSchema>;
-
-export const ProviderCredentialSchema = z.discriminatedUnion('type', [
-    ProviderApiKeyCredentialSchema,
-    ProviderFieldsCredentialSchema,
-    ProviderOAuthCredentialSchema,
-]);
-export type ProviderCredential = z.infer<typeof ProviderCredentialSchema>;
-
-export const ProviderAuthFileSchema = z.object({
-    $schema: z.string().url(),
-    default: ModelProviderSelectionSchema.optional(),
-    credentials: z.record(z.string().min(1), ProviderCredentialSchema),
-});
-export type ProviderAuthFile = z.infer<typeof ProviderAuthFileSchema>;
-
-export const ProviderCredentialSummarySchema = z.object({
-    providerID: z.string().min(1),
-    authenticated: z.boolean(),
-    credentialType: z.enum(['apiKey', 'fields', 'oauth']).optional(),
-    maskedCredential: z.string().optional(),
-    credentialFieldCount: z.number().int().nonnegative().optional(),
-});
-export type ProviderCredentialSummary = z.infer<typeof ProviderCredentialSummarySchema>;
-
-export const ModelCatalogEntrySchema = z.object({
-    id: z.string().min(1),
-    name: z.string().min(1),
-    status: ModelCatalogStatusSchema.default('active'),
-    variants: z.array(ModelVariantEntrySchema).optional(),
-});
-export type ModelCatalogEntry = z.infer<typeof ModelCatalogEntrySchema>;
-
-export const ProviderCatalogEntrySchema = z.object({
-    id: z.string().min(1),
-    name: z.string().min(1),
-    defaultModelID: z.string().min(1),
-    authLabel: z.string().min(1),
-    models: z.array(ModelCatalogEntrySchema).min(1),
-});
-export type ProviderCatalogEntry = z.infer<typeof ProviderCatalogEntrySchema>;
-
 export const AgentEventSchema = z.object({
     type: AgentEventTypeSchema,
     timestamp: z.string().datetime(),
+    durability: EventDurabilitySchema.optional(),
     sessionId: z.string().optional(),
     taskId: z.string().optional(),
     message: z.string().optional(),
     progress: z.number().min(0).max(1).optional(),
-    nativeSidecarStatus: z.enum(NATIVE_SIDECAR_STATUSES).optional(),
+    nativeSidecarStatus: NativeSidecarStatusSchema.optional(),
     permissionRequest: PermissionRequestSchema.optional(),
     permissionDecision: PermissionDecisionSchema.optional(),
+    approvalRecord: ApprovalRecordSchema.optional(),
     modelProviderSelection: ModelProviderSelectionSchema.optional(),
+    providerStreamChunk: z.lazy(() => ProviderStreamChunkSchema).optional(),
+    diffFiles: z.array(DiffFileSchema).optional(),
+    command: CommandRunEventMetadataSchema.optional(),
+    run: RunCoordinatorEventMetadataSchema.optional(),
+    transcript: TranscriptEventMetadataSchema.optional(),
     abg: AbgEventMetadataSchema.optional(),
 });
 export type AgentEvent = z.infer<typeof AgentEventSchema>;
+
+export const AgentEventEnvelopeSchema = z.object({
+    eventId: EventIdSchema,
+    sequence: EventSequenceSchema,
+    createdAt: z.string().datetime(),
+    sessionId: z.string().min(1),
+    durability: EventDurabilitySchema,
+    causationId: EventIdSchema.optional(),
+    correlationId: z.string().min(1).optional(),
+    event: AgentEventSchema,
+});
+export type AgentEventEnvelope = z.infer<typeof AgentEventEnvelopeSchema>;
+
+export const AgentEventLogSchema = z.array(AgentEventEnvelopeSchema).superRefine((events, context) => {
+    let previousSequence = -1;
+    const seenEventIds = new Set<string>();
+
+    events.forEach((event, index) => {
+        if (event.sequence <= previousSequence) {
+            context.addIssue({
+                code: 'custom',
+                message: 'event sequences must be strictly increasing',
+                path: [index, 'sequence'],
+            });
+        }
+
+        if (seenEventIds.has(event.eventId)) {
+            context.addIssue({
+                code: 'custom',
+                message: 'event ids must be unique within a log',
+                path: [index, 'eventId'],
+            });
+        }
+
+        previousSequence = event.sequence;
+        seenEventIds.add(event.eventId);
+    });
+});
+export type AgentEventLog = z.infer<typeof AgentEventLogSchema>;
+
+export const ReplayCursorSchema = z.object({
+    sessionId: z.string().min(1),
+    sequence: EventSequenceSchema,
+    eventId: EventIdSchema,
+});
+export type ReplayCursor = z.infer<typeof ReplayCursorSchema>;
 
 export const AgentSessionSchema = z.object({
     id: z.string().min(1),
@@ -206,7 +245,16 @@ export const AgentSnapshotSchema = z.object({
     failedTaskCount: z.number().int().nonnegative(),
     lastEvent: AgentEventSchema.optional(),
     lastMessage: z.string().optional(),
-    nativeSidecarStatus: z.enum(NATIVE_SIDECAR_STATUSES),
+    nativeSidecarStatus: NativeSidecarStatusSchema,
     modelProviderSelection: ModelProviderSelectionSchema.optional(),
 });
 export type AgentSnapshot = z.infer<typeof AgentSnapshotSchema>;
+
+export {
+    type AgentMessage,
+    AgentMessageSchema,
+    type EventId,
+    EventIdSchema,
+    type EventSequence,
+    EventSequenceSchema,
+} from './event-primitives.js';

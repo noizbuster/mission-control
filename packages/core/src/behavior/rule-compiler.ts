@@ -1,5 +1,6 @@
 import {
     type AbgNodeStatus,
+    type AbgPolicyDecision,
     type AbgRulePredicate,
     AbgRuleSpecSchema,
     type AbgSignalType,
@@ -20,7 +21,7 @@ export type AbgRuleEvaluationInput = {
     readonly signalType?: AbgSignalType;
     readonly nodeStatuses?: Readonly<Record<string, AbgNodeStatus | undefined>>;
     readonly blackboard?: Readonly<Record<string, unknown>>;
-    readonly policyDecision?: 'allow' | 'deny' | 'requires-approval';
+    readonly policyDecision?: AbgPolicyDecision;
 };
 
 export type CompiledAbgRule = {

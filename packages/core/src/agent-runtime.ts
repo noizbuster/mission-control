@@ -3,39 +3,47 @@ import type {
     AbgGraphInput,
     AbgGraphSnapshot,
     AgentEvent,
+    AgentEventEnvelope,
     AgentSession,
     AgentSnapshot,
     ModelProviderSelection,
     PermissionDecision,
     PermissionRequest,
 } from '@mission-control/protocol';
+import { runRuntimeDemoTask } from './agent-runtime-demo.js';
+import { runRuntimeProviderPromptTask } from './agent-runtime-provider-turn.js';
+import { resolveSidecarCommand } from './agent-runtime-sidecar.js';
+import { runRuntimeSkillInvocationTask, type SkillInvocationTaskInput } from './agent-runtime-skill.js';
+import { type ApprovalUpdateInput, type PermissionDecisionResolver, PermissionGate } from './approval-gate.js';
 import { type AbgGraphRunResult, runAbgGraph } from './behavior/graph-runner.js';
 import type { AbgTimelineEntry } from './behavior/timeline.js';
 import { EventBus } from './event-bus.js';
 import { MockSidecarClient } from './native/mock-sidecar-client.js';
 import { ProcessSidecarClient, type SidecarClient } from './native/sidecar-client.js';
 import { createDefaultPermissionDecision } from './permissions.js';
+import type { ProviderAdapter } from './providers/provider-turn-types.js';
 import { SessionEventLog } from './session-log.js';
-
-const sidecarEnvKey = 'MISSION_CONTROL_SIDECAR';
 
 export type AgentRuntimeOptions = {
     readonly useNative?: boolean;
     readonly sidecarCommand?: string;
     readonly sidecarTimeoutMs?: number;
     readonly modelProviderSelection?: ModelProviderSelection;
+    readonly provider?: ProviderAdapter;
+    readonly providerTimeoutMs?: number;
+    readonly providerRetryLimit?: number;
+    readonly providerTurnLoopLimit?: number;
+    readonly permissionDecisionResolver?: PermissionDecisionResolver;
 };
 
-export type SkillInvocationTaskInput = {
-    readonly skillID: string;
-    readonly argumentsText: string;
-};
+export type { SkillInvocationTaskInput };
 
 export class AgentRuntime {
     readonly options: AgentRuntimeOptions;
     private readonly log = new SessionEventLog();
     private readonly bus = new EventBus<AgentEvent>();
     private readonly sidecarClient: SidecarClient;
+    private readonly approvalGate: PermissionGate;
     private modelProviderSelection: ModelProviderSelection;
     private session: AgentSession | undefined;
     private promptTaskCounter = 0;
@@ -46,6 +54,13 @@ export class AgentRuntime {
         this.sidecarClient = options.useNative
             ? new ProcessSidecarClient(resolveSidecarCommand(options), options.sidecarTimeoutMs)
             : new MockSidecarClient();
+        this.approvalGate = new PermissionGate({
+            resolveDecision: options.permissionDecisionResolver ?? createDefaultPermissionDecision,
+            emit: (event) => {
+                this.emit(event);
+            },
+            now: () => new Date().toISOString(),
+        });
     }
 
     async start(): Promise<AgentSession> {
@@ -61,7 +76,7 @@ export class AgentRuntime {
             timestamp: startedAt,
             sessionId: session.id,
             message: 'mission-control session started',
-            nativeSidecarStatus: 'mock',
+            nativeSidecarStatus: this.sidecarClient.status(),
             modelProviderSelection: this.modelProviderSelection,
         });
         return session;
@@ -82,50 +97,21 @@ export class AgentRuntime {
             timestamp,
             ...(sessionId ? { sessionId } : {}),
             message: 'mission-control session stopped',
-            nativeSidecarStatus: 'mock',
+            nativeSidecarStatus: this.sidecarClient.status(),
             modelProviderSelection: this.modelProviderSelection,
         });
     }
 
     async runDemoTask(): Promise<void> {
         const session = this.ensureSession();
-        const taskId = 'task_demo';
-        await this.requestPermission(
-            {
-                id: `permission_${taskId}`,
-                action: 'task.run',
-                reason: 'demo task permission gate',
+        await runRuntimeDemoTask({
+            sessionId: session.id,
+            sidecarClient: this.sidecarClient,
+            modelProviderSelection: this.modelProviderSelection,
+            requestPermission: (request, taskId) => this.requestPermission(request, taskId),
+            emit: (event) => {
+                this.emit(event);
             },
-            taskId,
-        );
-        this.emit({
-            type: 'task.started',
-            timestamp: new Date().toISOString(),
-            sessionId: session.id,
-            taskId,
-            message: 'demo task started',
-            nativeSidecarStatus: 'mock',
-            modelProviderSelection: this.modelProviderSelection,
-        });
-        this.emit({
-            type: 'task.progress',
-            timestamp: new Date().toISOString(),
-            sessionId: session.id,
-            taskId,
-            progress: 0.5,
-            message: 'demo task in progress',
-            nativeSidecarStatus: 'mock',
-            modelProviderSelection: this.modelProviderSelection,
-        });
-        const output = await this.runTaskWithFallback(taskId);
-        this.emit({
-            type: 'task.completed',
-            timestamp: new Date().toISOString(),
-            sessionId: session.id,
-            taskId,
-            message: output.message,
-            nativeSidecarStatus: 'mock',
-            modelProviderSelection: this.modelProviderSelection,
         });
     }
 
@@ -149,7 +135,7 @@ export class AgentRuntime {
             nativeSidecarStatus: 'mock',
             modelProviderSelection: this.modelProviderSelection,
         });
-        const response = `received prompt: ${prompt}`;
+        const response = await this.runProviderPromptTask(taskId, prompt);
         this.emit({
             type: 'task.completed',
             timestamp: new Date().toISOString(),
@@ -165,34 +151,16 @@ export class AgentRuntime {
     async runSkillInvocationTask(input: SkillInvocationTaskInput): Promise<string> {
         const session = this.ensureSession();
         const taskId = this.createPromptTaskId();
-        await this.requestPermission(
-            {
-                id: `permission_${taskId}`,
-                action: 'skill.invoke',
-                reason: `skill invocation permission gate: ${input.skillID}`,
+        return runRuntimeSkillInvocationTask({
+            task: input,
+            sessionId: session.id,
+            taskId,
+            modelProviderSelection: this.modelProviderSelection,
+            requestPermission: (request, requestedTaskId) => this.requestPermission(request, requestedTaskId),
+            emit: (event) => {
+                this.emit(event);
             },
-            taskId,
-        );
-        this.emit({
-            type: 'task.started',
-            timestamp: new Date().toISOString(),
-            sessionId: session.id,
-            taskId,
-            message: `skill invocation started: ${input.skillID}`,
-            nativeSidecarStatus: 'mock',
-            modelProviderSelection: this.modelProviderSelection,
         });
-        const response = `skill invocation scaffolded: ${input.skillID}`;
-        this.emit({
-            type: 'task.completed',
-            timestamp: new Date().toISOString(),
-            sessionId: session.id,
-            taskId,
-            message: response,
-            nativeSidecarStatus: 'mock',
-            modelProviderSelection: this.modelProviderSelection,
-        });
-        return response;
     }
 
     setModelProviderSelection(modelProviderSelection: ModelProviderSelection): void {
@@ -216,19 +184,16 @@ export class AgentRuntime {
 
     async requestPermission(request: PermissionRequest, taskId?: string): Promise<PermissionDecision> {
         const session = this.ensureSession();
-        const decision: PermissionDecision = createDefaultPermissionDecision(request);
-        this.emit({
-            type: 'permission.requested',
-            timestamp: new Date().toISOString(),
+        return this.approvalGate.requestPermission(request, {
             sessionId: session.id,
             ...(taskId !== undefined ? { taskId } : {}),
-            message: `permission requested: ${request.action}`,
-            nativeSidecarStatus: 'mock',
             modelProviderSelection: this.modelProviderSelection,
-            permissionRequest: request,
-            permissionDecision: decision,
         });
-        return decision;
+    }
+
+    updateApproval(input: ApprovalUpdateInput): void {
+        this.ensureSession();
+        this.approvalGate.updateApproval(input);
     }
 
     onEvent(listener: (event: AgentEvent) => void): () => void {
@@ -259,6 +224,14 @@ export class AgentRuntime {
         this.bus.emit(event);
     }
 
+    private emitProviderEnvelope(envelope: AgentEventEnvelope): void {
+        if (envelope.durability === 'durable') {
+            this.emit(envelope.event);
+            return;
+        }
+        this.bus.emit(envelope.event);
+    }
+
     private ensureSession(): AgentSession {
         if (this.session) {
             return this.session;
@@ -271,35 +244,29 @@ export class AgentRuntime {
         return `task_prompt_${this.promptTaskCounter}`;
     }
 
-    private async runTaskWithFallback(taskId: string) {
-        try {
-            return await this.sidecarClient.runTask({
-                id: taskId,
-                payload: {
-                    label: 'demo',
-                },
-            });
-        } catch (error: unknown) {
-            this.emit({
-                type: 'native.warning',
-                timestamp: new Date().toISOString(),
-                sessionId: this.session?.id,
-                taskId,
-                message: error instanceof Error ? error.message : String(error),
-                nativeSidecarStatus: 'unavailable',
-                modelProviderSelection: this.modelProviderSelection,
-            });
-            const mock = new MockSidecarClient();
-            return mock.runTask({
-                id: taskId,
-                payload: {
-                    label: 'demo',
-                },
-            });
+    private async runProviderPromptTask(taskId: string, prompt: string): Promise<string> {
+        const session = this.ensureSession();
+        if (this.options.provider === undefined) {
+            return `received prompt: ${prompt}`;
         }
+        return runRuntimeProviderPromptTask({
+            provider: this.options.provider,
+            sessionId: session.id,
+            taskId,
+            prompt,
+            modelProviderSelection: this.modelProviderSelection,
+            ...(this.options.providerTimeoutMs !== undefined
+                ? { providerTimeoutMs: this.options.providerTimeoutMs }
+                : {}),
+            ...(this.options.providerRetryLimit !== undefined
+                ? { providerRetryLimit: this.options.providerRetryLimit }
+                : {}),
+            ...(this.options.providerTurnLoopLimit !== undefined
+                ? { providerTurnLoopLimit: this.options.providerTurnLoopLimit }
+                : {}),
+            onEnvelope: (envelope) => {
+                this.emitProviderEnvelope(envelope);
+            },
+        });
     }
-}
-
-function resolveSidecarCommand(options: AgentRuntimeOptions): string {
-    return options.sidecarCommand ?? process.env[sidecarEnvKey] ?? 'mission-control-sidecar';
 }

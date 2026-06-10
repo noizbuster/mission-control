@@ -71,7 +71,7 @@ describe('ABG leaf nodes', () => {
                         {
                             id: 'destructive-files',
                             capability: 'file.delete',
-                            decision: 'requires-approval',
+                            decision: 'requires_approval',
                             reason: 'destructive file operation',
                         },
                     ],

@@ -1,28 +1,43 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { App, getCredentialStatus, getModelsForProvider, resolveSelectionForProviderChange } from './App.js';
+import type { DesktopSessionLog } from './lib/agent-client.js';
 
 describe('Desktop App', () => {
-    it('renders mission-control title, controls, and event log after demo task', () => {
+    it('renders mission-control title, controls, and read-only session timeline', () => {
+        // Given
+        const log = sessionLog({
+            type: 'task.completed',
+            timestamp: '2026-06-02T10:00:00.000Z',
+            sessionId: 'session_test',
+            taskId: 'task_1',
+            message: 'completed by mock sidecar',
+            nativeSidecarStatus: 'mock',
+        });
+
+        // When
         const html = renderToStaticMarkup(
             <App
                 initialSessionId="session_test"
-                initialEvents={[
+                initialSessionSummaries={[
                     {
-                        type: 'task.completed',
-                        timestamp: '2026-06-02T10:00:00.000Z',
-                        taskId: 'task_1',
-                        message: 'completed by mock sidecar',
-                        nativeSidecarStatus: 'mock',
+                        sessionId: 'session_test',
+                        fileName: 'session_test.jsonl',
+                        state: 'available',
+                        eventCount: 1,
+                        diagnostics: [],
                     },
                 ]}
+                initialSessionLog={log}
             />,
         );
 
+        // Then
         expect(html).toContain('mission-control');
         expect(html).toContain('session_test');
-        expect(html).toContain('Start demo session');
-        expect(html).toContain('Run demo task');
+        expect(html).toContain('Refresh sessions');
+        expect(html).toContain('Load session');
+        expect(html).toContain('Session timeline');
         expect(html).toContain('task.completed');
         expect(html).toContain('completed by mock sidecar');
         expect(html).toContain('mock');
@@ -103,3 +118,24 @@ describe('Desktop App', () => {
         expect(getCredentialStatus('openai', [])).toBe('credential missing');
     });
 });
+
+type EventInput = DesktopSessionLog['envelopes'][number]['event'];
+
+function sessionLog(event: EventInput): DesktopSessionLog {
+    return {
+        sessionId: event.sessionId ?? 'session_test',
+        state: 'available',
+        contents: 'jsonl',
+        diagnostics: [],
+        envelopes: [
+            {
+                eventId: 'event_1',
+                sequence: 0,
+                createdAt: event.timestamp,
+                sessionId: event.sessionId ?? 'session_test',
+                durability: 'durable',
+                event,
+            },
+        ],
+    };
+}

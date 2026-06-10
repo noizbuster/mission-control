@@ -77,18 +77,18 @@ describe('desktop agent client', () => {
         const client = createMockDesktopAgentClient();
         const beforeSave = await client.listProviderCredentials();
         const saved = await client.saveProviderCredential({
-            providerID: 'local',
-            apiKey: 'local_key',
+            providerID: 'openai',
+            apiKey: 'sk-test-secret',
         });
         const afterSave = await client.listProviderCredentials();
 
         expect(beforeSave).toEqual([]);
         expect(saved).toEqual({
-            providerID: 'local',
+            providerID: 'openai',
             authenticated: true,
-            maskedCredential: 'loca..._key',
+            maskedCredential: 'sk-t...cret',
         });
         expect(afterSave).toEqual([saved]);
-        expect(JSON.stringify(afterSave)).not.toContain('local_key');
+        expect(JSON.stringify(afterSave)).not.toContain('sk-test-secret');
     });
 });

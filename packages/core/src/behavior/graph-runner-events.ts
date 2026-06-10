@@ -1,8 +1,11 @@
 import type {
+    AbgEventMetadata,
     AbgNodeModelOptions,
     AbgNodeSpec,
     AbgPolicySpec,
+    AbgRuntimeError,
     AgentEvent,
+    ApprovalRecord,
     PermissionDecision,
 } from '@mission-control/protocol';
 import type { AbgGraphRunnerInput } from './graph-runner.js';
@@ -12,15 +15,89 @@ export function graphEvent(
     graphId: string,
     input: AbgGraphRunnerInput,
     message: string,
+    abg?: Omit<AbgEventMetadata, 'graphId'>,
 ): AgentEvent {
     return {
         type,
         timestamp: input.now(),
         sessionId: input.sessionId,
         message,
+        durability: 'durable',
         nativeSidecarStatus: 'mock',
         modelProviderSelection: input.modelProviderSelection,
-        abg: { graphId },
+        abg: { graphId, ...abg },
+    };
+}
+
+export function attemptEvent(
+    type: 'attempt.started' | 'attempt.completed' | 'attempt.failed',
+    graphId: string,
+    node: AbgNodeSpec,
+    input: AbgGraphRunnerInput,
+    attempt: number,
+    maxAttempts: number,
+    error?: AbgRuntimeError,
+): AgentEvent {
+    return {
+        type,
+        timestamp: input.now(),
+        sessionId: input.sessionId,
+        message: `${type}: ${node.id}#${attempt}`,
+        durability: 'durable',
+        nativeSidecarStatus: 'mock',
+        modelProviderSelection: input.modelProviderSelection,
+        abg: {
+            graphId,
+            nodeId: node.id,
+            attempt,
+            maxAttempts,
+            ...(error !== undefined ? { error } : {}),
+        },
+    };
+}
+
+export function nodeWaitingEvent(
+    graphId: string,
+    node: AbgNodeSpec,
+    input: AbgGraphRunnerInput,
+    reason: string,
+): AgentEvent {
+    return {
+        type: 'node.waiting',
+        timestamp: input.now(),
+        sessionId: input.sessionId,
+        message: `node waiting: ${node.id} (${reason})`,
+        durability: 'durable',
+        nativeSidecarStatus: 'mock',
+        modelProviderSelection: input.modelProviderSelection,
+        abg: {
+            graphId,
+            nodeId: node.id,
+        },
+    };
+}
+
+export function approvalLifecycleEvent(
+    type: 'approval.requested' | 'approval.updated' | 'approval.blocked' | 'approval.resumed',
+    graphId: string,
+    node: AbgNodeSpec,
+    input: AbgGraphRunnerInput,
+    approvalRecord: ApprovalRecord,
+    message: string,
+): AgentEvent {
+    return {
+        type,
+        timestamp: input.now(),
+        sessionId: input.sessionId,
+        message,
+        durability: 'durable',
+        nativeSidecarStatus: 'mock',
+        modelProviderSelection: input.modelProviderSelection,
+        approvalRecord,
+        abg: {
+            graphId,
+            nodeId: node.id,
+        },
     };
 }
 
@@ -36,6 +113,7 @@ export function modelCallEvent(
         timestamp: input.now(),
         sessionId: input.sessionId,
         message: `${type}: ${node.id}`,
+        durability: 'durable',
         modelProviderSelection: {
             providerID: model.providerID,
             modelID: model.modelID,
@@ -44,6 +122,29 @@ export function modelCallEvent(
             graphId,
             nodeId: node.id,
             model,
+        },
+    };
+}
+
+export function toolLifecycleEvent(
+    type: 'tool.started' | 'tool.completed' | 'tool.failed',
+    graphId: string,
+    node: AbgNodeSpec,
+    input: AbgGraphRunnerInput,
+    message: string,
+): AgentEvent {
+    return {
+        type,
+        timestamp: input.now(),
+        sessionId: input.sessionId,
+        taskId: node.id,
+        message,
+        durability: 'durable',
+        nativeSidecarStatus: 'mock',
+        modelProviderSelection: input.modelProviderSelection,
+        abg: {
+            graphId,
+            nodeId: node.id,
         },
     };
 }
@@ -60,6 +161,7 @@ export function permissionEvent(
         timestamp: input.now(),
         sessionId: input.sessionId,
         message: `permission requested: ${policy.capability}`,
+        durability: 'durable',
         nativeSidecarStatus: 'mock',
         modelProviderSelection: input.modelProviderSelection,
         permissionRequest: {
@@ -86,6 +188,7 @@ export function policyBlockedEvent(
         timestamp: input.now(),
         sessionId: input.sessionId,
         message: policy.reason ?? `ABG policy blocked capability: ${policy.capability}`,
+        durability: 'durable',
         nativeSidecarStatus: 'mock',
         modelProviderSelection: input.modelProviderSelection,
         abg: {
@@ -98,7 +201,7 @@ export function policyBlockedEvent(
 function deniedDecision(requestId: string, policy: AbgPolicySpec): PermissionDecision {
     return {
         requestId,
-        status: 'deny',
+        status: policy.decision,
         ...(policy.reason !== undefined ? { reason: policy.reason } : {}),
     };
 }

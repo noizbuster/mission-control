@@ -2065,7 +2065,7 @@ Async Behavior Graph는 LLM 에이전트 워크플로우를 단순한 prompt cha
 모든 과정을 event log로 남기는 시스템이다.
 ```
 
-mission-control은 이 시스템을 위한 control plane이다. TUI의 `mctrl`은 빠른 운용과 실시간 관찰에 적합하고, Desktop App은 시각적 graph 편집과 timeline 분석에 적합하다. 그러나 두 인터페이스의 본질은 같다.
+mission-control은 이 시스템을 위한 control plane이다. TUI의 `mctrl`은 빠른 운용과 실시간 관찰에 적합하고, Desktop App은 timeline 분석, graph/session projection, approval 검토, 더 깊은 분석에 적합하다. 그러나 두 인터페이스의 본질은 같다.
 
 ```text
 LLM 에이전트를 실행하는 것이 아니라,
@@ -2121,3 +2121,31 @@ Event Log는 기억과 감사의 원장이다.
 Policy는 자율성의 울타리다.
 Async Behavior Graph는 이 모든 것을 묶는 mission runtime이다.
 ```
+
+---
+
+## 부록 D. Mission Control 구현 상태
+
+현재 `mission-control` 구현은 위 이론 전체를 완성한 엔진이 아니라, 범위가 제한된 ABG coding-agent MVP다.
+
+구현된 runtime surface:
+
+- `MCTRL_DATA_DIR` 또는 플랫폼 application-data 디렉터리 아래의 durable JSONL session event storage.
+- chat, graph snapshot, transcript branch, approval state, file diff, command output을 재구성하는 replay projection.
+- deterministic local provider 실행과 저장된 credential 뒤의 OpenAI Responses adapter.
+- raw credential 저장을 피하는 provider-neutral streaming event, typed provider error, redaction metadata.
+- `approval.requested`, `approval.updated`, `approval.resumed`, `approval.blocked` approval lifecycle event.
+- `repo.read`, `repo.list`, `repo.search`, `file.patch`, `command.run` safe tool set과 permission gate.
+- 기본 graph node concurrency 2, provider parallel tool call 4, shell/process concurrency 1, retry cap, loop limit을 가진 bounded graph coordination.
+- CLI JSONL 및 interactive coding-agent flow.
+- Desktop event inspection과 timeline/graph/session projection은 Tauri shell에 연결되어 있다.
+- core desktop command service는 prompt, queue follow-up, steer, interrupt, resume, approval decision을 처리한다. 현재 Tauri write command는 Rust shell이 그 service에 연결되기 전까지 placeholder receipt bridge다.
+- `task.run` capability를 협상하는 Sidecar protocol v1 Rust handshake와 native/mock/unavailable status event.
+
+아직 연기된 범위:
+
+- full production ABG engine semantics, compensation policy, autonomous long-running scheduler.
+- visual graph editing.
+- vector memory, persistent memory store, JSONL을 넘어서는 database index.
+- unrestricted tool, automatic rollback, `file.patch` 또는 `command.run`의 기본 sidecar 실행.
+- deterministic local path와 OpenAI Responses path를 넘어서는 provider adapter.

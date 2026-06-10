@@ -1,17 +1,17 @@
 # mission-control
 
-`mission-control` is a boilerplate control surface for operating observable LLM-agent workflows. The command-line entrypoint is `mctrl`, the desktop app is `mission-control`, and the native helper binary is `mission-control-sidecar`.
+`mission-control` is a staged control surface for operating observable LLM-agent workflows. The command-line entrypoint is `mctrl`, the desktop app is `mission-control`, and the native helper binary is `mission-control-sidecar`.
 
 ## Architecture
 
-`ABG.md` is the root design reference. This scaffold reflects ABG concepts in package naming, event-oriented boundaries, UI/runtime separation, protocol boundaries, and sidecar naming only.
+`ABG.md` is the root design reference. The current runtime implements a bounded coding-agent MVP over the original scaffold: provider turns, durable JSONL sessions, approval-gated tools, replay projections, graph coordination, behavior/action graph execution for authorable graphs, CLI chat, desktop inspection, core desktop command services, and a versioned sidecar handshake.
 
 Directory structure:
 
 - `apps/cli`: `mctrl` command-line app.
 - `apps/desktop`: Tauri + React desktop app.
 - `packages/protocol`: shared event/session/sidecar schemas.
-- `packages/core`: runtime skeleton and sidecar client boundary.
+- `packages/core`: runtime services, durable session replay, provider turns, approval-gated tools, graph coordination, and sidecar client boundary.
 - `packages/config`: shared constants.
 - `native/sidecar`: Rust JSON Lines sidecar binary.
 - `tests`: root workspace and integration contract tests.
@@ -23,7 +23,7 @@ Package responsibilities:
 - `@mission-control/config`: shared configuration constants.
 - `@mission-control/cli`: Ink/plain/JSON command-line surface for `mctrl`.
 - `@mission-control/desktop`: Tauri + React desktop surface for `mission-control`.
-- `native/sidecar`: Rust JSON Lines sidecar, prepared for future scheduler and memory roles.
+- `native/sidecar`: Rust JSON Lines sidecar with protocol v1 handshake and `task.run` capability negotiation.
 
 Confirmed names:
 
@@ -61,15 +61,15 @@ node apps/cli/dist/index.js --no-tui
 
 ## Interactive chat commands
 
-`mctrl` opens a chat prompt by default. `/model opens a searchable model picker`, and `/model provider/model selects the model for the current chat only`. The selection updates scaffold metadata for subsequent prompt events and does not persist credentials or auth defaults.
+`mctrl` opens a chat prompt by default. `/model opens a searchable model picker`, and `/model provider/model selects the model for the current chat only`. The selection updates the active chat model and does not persist credentials or auth defaults.
 
 `$skill args records a scaffold agent skill invocation` inside Mission Control. It does not run actual Codex host skills, spawn agents, or make provider calls. Normal prompt text still sends a prompt, and Ctrl+C twice exits.
 
-The chat command surface is still scaffolded: model/provider selection remains metadata, skill calls are recorded as Mission Control events, and real LLM calls are not implemented.
+The chat command surface is mixed: normal prompts can run through the deterministic local provider or the OpenAI Responses adapter when credentials are configured, while skill calls remain recorded scaffold events and real LLM calls are not implemented for those skill invocations.
 
 ## Model Provider Selection
 
-The CLI accepts provider/model metadata for demo runs. The catalog combines the scaffold `local` provider with the OpenCode/Models.dev provider credential catalog, so credentials can be configured for every vendored OpenCode provider while runtime execution remains scaffolded.
+The CLI accepts provider/model selection for demo and coding-agent runs. The catalog combines the scaffold `local` provider with the OpenCode/Models.dev provider credential catalog. Runtime execution is implemented for the deterministic local provider and OpenAI Responses adapter; other vendored providers can be configured for credentials and catalog selection but do not have execution adapters yet.
 
 ```bash
 pnpm dev:cli -- --no-tui --provider local --model local-echo
@@ -102,11 +102,57 @@ Interactive `/model` choices are narrower than `mctrl models`: they first requir
 
 The desktop demo control surface exposes provider/model controls, an API key credential field, credential configured/missing state, and the active selection in the status area and event log.
 
-provider/model selection is scaffold metadata for observable control surfaces only. It does not call real LLM providers yet.
+provider/model selection is scaffold metadata for observable control surfaces only in demo-only commands, and a demo command does not call real LLM providers yet.
 
-credentials are used for scaffold configuration only. They do not enable real LLM calls until a provider execution adapter is added. Mission Control does not implement real LLM provider execution in this scaffold.
+credentials are used by implemented provider adapters only. For providers without execution adapters, credentials are used for scaffold configuration only. The OpenAI Responses adapter is implemented behind stored provider credentials, defaults requests to `store: false`, and keeps raw secrets out of protocol events, JSONL logs, CLI output, desktop props/state snapshots, and error messages. Mission Control does not implement real LLM provider execution for providers without an adapter.
 
 The catalog also exposes the local provider/model variant `local/local-echo/default`. These variants are metadata for graph and event observability only.
+
+## Coding Agent Runtime
+
+The coding-agent MVP now includes durable chat sessions, provider streaming, approval-gated local tools, replay projections, bounded graph orchestration, CLI chat, and core desktop approval services.
+
+Session storage:
+
+- `MCTRL_DATA_DIR` overrides the Mission Control data directory.
+- Without `MCTRL_DATA_DIR`, session logs use the platform application-data directory.
+- Session event logs live at `sessions/<session-id>.jsonl`.
+- JSONL logs contain durable event envelopes with stable event ids, sequence numbers, causation/correlation ids, and replay cursors.
+
+Provider path:
+
+- The deterministic `local/local-echo` provider is available for offline tests and demos.
+- The OpenAI Responses adapter is implemented for real provider turns when OpenAI credentials are configured.
+- Live OpenAI smoke tests are opt-in only and are not required for CI.
+- Unsupported providers remain catalog/auth entries until an execution adapter is added.
+
+Approval lifecycle and safe tools:
+
+- Approval events use `approval.requested`, `approval.updated`, `approval.resumed`, and `approval.blocked`.
+- Effectful tools do not execute until approval state is `approved`.
+- The safe tool set is `repo.read`, `repo.list`, `repo.search`, `file.patch`, and `command.run`.
+- `file.patch` enforces workspace containment, symlink escape rejection, patch bounds, dirty tracked-file checks, and before/after diff events.
+- `command.run` uses an allowlist, non-interactive execution, timeouts, output caps, and command lifecycle events.
+
+Graph limits:
+
+- graph node concurrency defaults to 2.
+- provider parallel tool calls default to 4.
+- shell/process concurrency defaults to 1.
+- node retries and graph loops are bounded by explicit runtime limits.
+
+Desktop scope:
+
+- The desktop reads durable JSONL logs, renders timeline/graph/session projections, and shows patch/test output.
+- `packages/core` contains desktop command services for prompt, queue follow-up, steer, interrupt, resume, and approval decisions.
+- desktop Tauri write commands are placeholder receipt bridges until the Rust shell is wired to the core command service.
+- The desktop shell never mutates files directly; permission enforcement and file/command effects stay in `packages/core`.
+
+Sidecar status:
+
+- Sidecar protocol v1 negotiates task.run only.
+- The runtime emits `native.status` and `native.warning` to distinguish `unknown`, `native`, `unavailable`, and `mock` sidecar states.
+- file.patch and command.run stay on the TypeScript core path by default.
 
 ## Authorable ABG MVP
 
@@ -123,12 +169,13 @@ Authorable graph files live in `examples/abg`:
 
 - `research-answer.graph.json`: LLM node followed by an action node through a declarative success rule.
 - `policy-block.graph.json`: tool node blocked by a deny policy.
+- `coding-agent-denied.graph.json`: coding-agent graph whose write node is blocked by a deny policy after approval.
 - `parallel-race.graph.json`: parallel, race, and join nodes using deterministic mock child nodes.
 - `malformed-edge.graph.json`: intentionally invalid edge target fixture for CLI and schema tests.
 
 The JSON shape is `id`, `entryNodeId`, `nodes`, `edges`, `rules`, and `policies`. Nodes can specify `kind`, `children`, `capabilities`, `config`, and optional model metadata with `providerID`, `modelID`, `variantID`, and fallback model options. Rules use declarative predicates only; arbitrary JavaScript expressions are rejected.
 
-The full production ABG engine remains TODO. Real providers, real tools, durable persistence, and visual graph editor remain out of scope for this MVP.
+The full production ABG engine remains TODO. OpenAI provider calls, durable JSONL replay, safe tools, and approval gates are implemented for the coding-agent MVP. The visual graph editor remains out of scope for this MVP.
 
 ## Distribution
 
@@ -171,7 +218,7 @@ Desktop release:
 
 CI/CD with GitHub Actions:
 
-- `.github/workflows/ci.yml` runs install, typecheck, build, and sidecar build.
+- `.github/workflows/ci.yml` runs install, `pnpm test`, typecheck, build, lint, native sidecar tests, Tauri Rust tests, and sidecar build without live provider credentials.
 - `.github/workflows/release-cli.yml` packages CLI artifacts and publishes npm only when `NPM_TOKEN` is present.
 - `.github/workflows/release-desktop.yml` runs Tauri release builds and uploads desktop artifacts.
 
@@ -187,6 +234,8 @@ The CLI should try the configured native sidecar when `--native` is used. If the
 
 Native sidecar calls use a 5000ms timeout. On timeout, the runtime emits `native.warning`, stops the sidecar process group when possible, and falls back to the mock sidecar result.
 
+The native sidecar speaks JSON Lines protocol v1. Core sends a `handshake` command before task work, and the sidecar responds with `handshake_completed`, protocol version, and capabilities. The current sidecar capability list is `task.run`; it is not the default executor for `file.patch` or `command.run`.
+
 ## Runtime Extension
 
 CLI renderers implement `AgentUIRenderer` in `apps/cli/src/ui/renderers.ts`.
@@ -200,11 +249,11 @@ Renderer contract:
 
 The built-in renderers are `InkRenderer`, `PlainRenderer`, and `JsonRenderer`. To add a renderer, implement `AgentUIRenderer`, render from protocol events instead of runtime internals, and add the renderer selection in `apps/cli/src/commands/run-agent.ts`.
 
-Permission flow is present as a skeleton. The runtime emits `permission.requested` with a `PermissionRequest` and a default `PermissionDecision`. The default decision is `deny`; no real permission UI input is implemented yet.
+Permission flow is implemented for the coding-agent tool path. The runtime emits permission and approval lifecycle events, default policy remains conservative, CLI can prompt synchronously, and the core desktop command service can append approval decisions over the same event stream.
 
 ## ABG-based extension points
 
-These extension points include the bounded mock Authorable ABG MVP plus placeholder only surfaces for future production providers, tools, databases, vector stores, and schedulers.
+These extension points include the bounded Authorable ABG MVP, the coding-agent provider/tool/session path, and placeholder only surfaces for future databases, vector stores, visual graph editing, and advanced schedulers.
 
 Sub-agent model:
 
@@ -215,9 +264,9 @@ Sub-agent model:
 Behavior/action graph plan:
 
 - `BehaviorNode`, `ActionGraphNode`, `ActionGraphEdge`, and `createActionGraph` live in `packages/core/src/behavior`.
-- `createAuthorableAbgGraph`, `runAbgGraph`, and `AgentRuntime.runGraph` validate and run authorable mock graphs.
+- `createAuthorableAbgGraph`, `runAbgGraph`, and `AgentRuntime.runGraph` validate and run authorable graphs with bounded retries, loops, approval gates, and graph snapshots.
 - The full production behavior/action graph engine is not implemented.
-- Production behavior/action graph execution with retries, compensation, and real tool effects remains out of scope.
+- Production compensation policies and visual graph editing remain out of scope.
 
 Scheduler/executor split:
 
@@ -228,14 +277,15 @@ Scheduler/executor split:
 Memory/event model:
 
 - `MemoryStore` and `InMemoryEventStore` live in `packages/core/src/memory`.
-- The in-memory store appends protocol events and derives task snapshots, graph snapshots, and ABG timelines through the same Event Log path.
-- Persistent event log storage, memory snapshot compaction, persistent memory store, and vector index are not implemented.
+- JSONL session storage appends durable protocol events and derives replay projections, graph snapshots, approval state, branch summaries, and ABG timelines.
+- Persistent memory snapshot compaction, persistent memory store, and vector index are not implemented.
 
 Native sidecar future role:
 
 - The Rust sidecar remains a JSON Lines execution boundary.
-- Future scheduler, executor, memory, and tool-running work can attach behind that boundary.
-- Real tool execution is not implemented.
+- Protocol v1 negotiates the `task.run` capability.
+- Future scheduler, executor, memory, and tool-running work can attach behind that boundary after feature flags and tests.
+- Default `file.patch` and `command.run` execution is intentionally not routed through the sidecar.
 
 Renderer future role:
 
@@ -251,41 +301,43 @@ ABG concepts used in this scaffold:
 
 - Event-oriented runtime state: sessions and task events are modeled as shared protocol objects.
 - Observable control surface: CLI JSON Lines, plain output, and desktop event log all expose the same event flow.
+- Snapshot projections are derived from durable events for graph, approval, branch, and session views.
 - Runtime boundary separation: UI packages talk through core/protocol boundaries instead of directly owning native process behavior.
 - Native execution slot: the Rust sidecar establishes a future place for scheduler and execution work without implementing the full engine.
+- Durable replay: JSONL event logs reconstruct chat, approval, graph, diff, and command output state after restart.
+- Approval-gated tools: core enforces permission decisions before file or command effects.
 
 Boundary alignment:
 
-- Runtime boundary: `packages/core` owns `AgentRuntime`, append-only Event Log, Snapshot derivation, permissions, timeout fallback, and cancellation interfaces.
-- Protocol boundary: `packages/protocol` owns shared Zod schemas and TypeScript types for events, sessions, permissions, messages, and sidecar tasks.
+- Runtime boundary: `packages/core` owns `AgentRuntime`, durable session services, replay projections, provider turns, approval enforcement, safe tools, graph coordination, timeout fallback, and cancellation interfaces.
+- Protocol boundary: `packages/protocol` owns shared Zod schemas and TypeScript types for events, sessions, permissions, approvals, messages, provider streams, diffs, commands, and sidecar tasks.
 - Sidecar boundary: `native/sidecar` communicates through JSON Lines and does not import TypeScript runtime internals.
 - UI/runtime separation: CLI renderers and the desktop event log consume protocol events instead of owning runtime execution.
 
-ABG reflection in this boilerplate is intentionally bounded: names, package boundaries, event schemas, fallback behavior, extension points, and a mock authorable graph runtime are present; the full production ABG engine is not.
+ABG reflection in this boilerplate is intentionally bounded: names, package boundaries, event schemas, fallback behavior, extension points, durable sessions, provider turns, approval-gated tools, graph snapshots, desktop inspection, and core desktop approval services are present; the full production ABG engine is not.
 
 ABG runtime TODOs:
 
-- Event replay from persisted logs.
+- SQLite indexes over persisted logs.
 - Full cancellation propagation through task handles.
-- Retry and compensation policy.
-- Scheduler/executor separation beyond the demo task.
-- Real permission UI and policy decisions.
+- Compensation policy.
+- Scheduler/executor separation beyond the current bounded coordinator.
 - Context packing and memory injection.
 
 ## Not Implemented Yet
 
 - TODO: ABG full engine is not implemented.
 - TODO: full production ABG engine is not implemented.
-- TODO: real LLM provider is not implemented.
-- TODO: real file-editing tools are not implemented.
-- TODO: real providers, real tools, durable persistence, and visual graph editor remain out of scope.
+- TODO: provider adapters beyond local deterministic and OpenAI Responses are not implemented.
+- TODO: unrestricted file-editing tools are not implemented.
+- TODO: visual graph editor remains out of scope.
 - TODO: persistent memory store, vector index, and database storage are not implemented.
 - TODO: advanced scheduler, executor, cancellation propagation, and behavior/action graph engine are not implemented.
 
 ## Next Stage TODO
 
 - Add cancellation propagation and resume semantics to the runtime.
-- Replace mock permission/session flows with typed command APIs.
-- Wire desktop to Tauri commands through `agent-client.ts`.
+- Add SQLite indexing for JSONL session logs.
+- Add sidecar feature flags for long-running native command/file execution after parity tests.
 - Add distribution packaging for npm, GitHub Releases, and Tauri artifacts.
-- Add CI once Stage 02 runtime behavior is stable.
+- Keep CI free of live provider credentials; live OpenAI smoke tests stay opt-in.

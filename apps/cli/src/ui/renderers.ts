@@ -20,7 +20,10 @@ abstract class BufferedRenderer implements AgentUIRenderer {
     }
 
     protected get lastMessage(): string {
-        return [...this.events].reverse().find((event) => event.message !== undefined)?.message ?? 'waiting';
+        return (
+            [...this.events].reverse().find((event) => event.type !== 'session.stopped' && event.message !== undefined)
+                ?.message ?? 'waiting'
+        );
     }
 
     protected get nativeSidecarStatus(): string {

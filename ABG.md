@@ -2175,7 +2175,7 @@ stays inside policy and user-defined boundaries,
 and records the entire process as an event log.
 ```
 
-`mission-control` is the control plane for this system. The TUI command `mctrl` is suitable for fast operation and real-time observation. The Desktop application is suitable for visual graph editing, timeline inspection, and deeper analysis. Their essence is the same:
+`mission-control` is the control plane for this system. The TUI command `mctrl` is suitable for fast operation and real-time observation. The Desktop application is suitable for timeline inspection, graph/session projections, approval review, and deeper analysis. Their essence is the same:
 
 ```text
 Do not merely run an LLM agent.
@@ -2230,3 +2230,31 @@ An Event Log is the ledger of memory and audit.
 A Policy is the fence around autonomy.
 An Async Behavior Graph is the mission runtime that binds them together.
 ```
+
+---
+
+## Appendix D. Mission Control Implementation Status
+
+The current `mission-control` implementation is a bounded ABG coding-agent MVP, not the full theoretical engine described above.
+
+Implemented runtime surfaces:
+
+- Durable JSONL session event storage under `MCTRL_DATA_DIR` or the platform application-data directory.
+- Replay projections for chat, graph snapshots, transcript branches, approval state, file diffs, and command output.
+- Deterministic local provider execution and an OpenAI Responses adapter behind stored credentials.
+- Provider-neutral streaming events, typed provider errors, and redaction metadata that avoids raw credential storage.
+- Approval lifecycle events: `approval.requested`, `approval.updated`, `approval.resumed`, and `approval.blocked`.
+- Permission-gated safe tools: `repo.read`, `repo.list`, `repo.search`, `file.patch`, and `command.run`.
+- Bounded graph coordination with default graph node concurrency 2, provider parallel tool calls 4, shell/process concurrency 1, retry caps, and loop limits.
+- CLI JSONL and interactive coding-agent flows.
+- Desktop event inspection and timeline/graph/session projections are wired in the Tauri shell.
+- Core desktop command services handle prompt, queue follow-up, steer, interrupt, resume, and approval decisions; the current Tauri write commands are placeholder receipt bridges until the Rust shell is wired to that service.
+- Sidecar protocol v1 uses a Rust handshake with `task.run` capability negotiation and native/mock/unavailable status events.
+
+Still deferred:
+
+- Full production ABG engine semantics, compensation policies, and autonomous long-running schedulers.
+- Visual graph editing.
+- Vector memory, persistent memory stores, and database indexes beyond JSONL storage.
+- Unrestricted tools, automatic rollback, and default sidecar execution for `file.patch` or `command.run`.
+- Provider adapters beyond the deterministic local path and OpenAI Responses path.

@@ -3,6 +3,7 @@ import { parseArgs } from './args.js';
 import { runAuthCommand } from './commands/auth.js';
 import { runModelsCommand } from './commands/models.js';
 import { runAgent } from './commands/run-agent.js';
+import { runSessionCommand } from './commands/session.js';
 import { pathToFileURL } from 'node:url';
 
 export function getVersion(): string {
@@ -20,12 +21,14 @@ export function createHelpText(): string {
         'Options:',
         '  --ui ink       Use Ink UI output',
         '  --no-tui       Use plain text output',
-        '  --json         Emit JSON Lines events',
+        '  --json         Emit legacy JSON Lines events',
+        '  --jsonl        Emit JSON Lines events and persist a replayable session log',
         '  --native       Try the Rust sidecar',
         '  --no-native    Force mock sidecar',
         '  --provider <id>  Select provider for the demo run',
         '  --model <id>     Select model, or use provider/model shorthand',
         '  --graph <path>   Run an authorable ABG graph JSON file',
+        '  --session <id>   Reuse or create a replayable session id',
         '  --method <id>    Select auth login method',
         '  --version      Print version',
         '  --help         Print help',
@@ -40,6 +43,11 @@ export function createHelpText(): string {
         '  mctrl',
         '  mctrl --no-tui --provider local --model local-echo',
         '  mctrl --json --graph examples/abg/research-answer.graph.json --model local/local-echo',
+        '  mctrl run "summarize this repository" --session session_demo --jsonl',
+        '  mctrl graph run examples/abg/research-answer.graph.json --session session_graph --jsonl',
+        '  mctrl session list',
+        '  mctrl session show session_demo',
+        '  mctrl session replay session_demo --jsonl',
         '  mctrl auth login --provider local --api-key <key>',
         '  mctrl auth login --provider anthropic --api-key <key>',
         '  mctrl auth login --provider openai --method oauth-headless',
@@ -71,6 +79,11 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
             return;
         case 'models':
             process.stdout.write(await runModelsCommand(args));
+            return;
+        case 'session-list':
+        case 'session-show':
+        case 'session-replay':
+            process.stdout.write(await runSessionCommand(args));
             return;
         case 'run':
             process.stdout.write(await runAgent(args));

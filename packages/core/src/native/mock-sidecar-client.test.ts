@@ -17,6 +17,9 @@ describe('MockSidecarClient', () => {
         expect(output).toEqual({
             id: 'task_1',
             message: 'completed by mock sidecar',
+            nativeSidecarStatus: 'mock',
         });
+        expect(client.status()).toBe('mock');
+        expect(client.capabilities()).toEqual(['task.run']);
     });
 });
