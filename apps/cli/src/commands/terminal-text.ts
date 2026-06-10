@@ -83,7 +83,8 @@ export function terminalOffsetForDisplayColumn(value: string, column: number): n
 }
 
 function createGraphemeSegmenter(): IntlSegmenter {
-    const segmenter = Intl.Segmenter === undefined ? undefined : new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+    const segmenter =
+        Intl.Segmenter === undefined ? undefined : new Intl.Segmenter(undefined, { granularity: 'grapheme' });
     if (segmenter !== undefined) {
         return segmenter;
     }

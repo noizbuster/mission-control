@@ -88,8 +88,21 @@ describe('interactive chat command menu', () => {
         expect(block).toContain('> hello');
         expect(block).toContain('  world');
         expect(block).not.toContain('| world');
-        expect(block).toContain('provider: local  model: local-echo');
+        expect(block).toContain('Local Echo(Default)');
+        expect(block).toContain('Local Sandbox');
+        expect(block).toContain('\u001b[2mLocal Sandbox\u001b[0m');
         expect(block).toContain('\u001b[2A\r\u001b[7C');
+    });
+
+    it('formats unknown status variants without dropping the selected variant id', () => {
+        const block = formatTerminalChatInputBlock('', createSlashCommandMenuState(), 60, {
+            providerID: 'custom-provider',
+            modelID: 'custom-model',
+            variantID: 'thinking',
+        });
+
+        expect(block).toContain('custom-model(thinking)');
+        expect(block).toContain('custom-provider');
     });
 
     it('formats newline-created empty input lines with whitespace fill', () => {

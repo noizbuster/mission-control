@@ -18,6 +18,7 @@ describe('CLI entrypoint', () => {
         expect(help).toContain('--no-native');
         expect(help).toContain('--provider <id>');
         expect(help).toContain('--model <id>');
+        expect(help).toContain('provider/model#variant');
         expect(help).toContain('--graph <path>');
         expect(help).toContain('--session <id>');
         expect(help).toContain('--method <id>');
@@ -42,7 +43,8 @@ describe('CLI entrypoint', () => {
         expect(help).toContain('--help');
         expect(help).toContain('mctrl --no-tui --provider local --model local-echo');
         expect(help).toContain('mctrl --json --graph examples/abg/research-answer.graph.json');
-        expect(help).toContain('/model <provider>/<model>');
+        expect(help).toContain('/model <provider>/<model>[#variant]');
+        expect(help).toContain('local/local-echo#fast');
         expect(help).toContain('$<skill> [args]');
         expect(help).toContain('$ skill invocations are scaffolded inside Mission Control');
     });

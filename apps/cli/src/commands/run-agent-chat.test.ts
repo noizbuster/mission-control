@@ -71,6 +71,28 @@ describe('runAgent interactive chat', () => {
         expect(events.some((event) => event.type === 'task.started')).toBe(false);
     });
 
+    it('closes chat input when a process SIGINT interrupts the terminal', async () => {
+        const chatOutput = createBufferedChatOutput();
+        const chatInput = createClosablePendingChatInput();
+        const run = runAgent(parseArgs([]), {
+            authStore: createEmptyAuthStore(),
+            chatInput: chatInput.input,
+            chatOutput: chatOutput.output,
+        });
+
+        await waitForReadToStart(chatInput);
+        process.emit('SIGINT');
+
+        const result = await promiseWithTimeout(run, 80);
+        if (result.type === 'timeout') {
+            chatInput.close();
+            await run;
+        }
+
+        expect(result.type).toBe('resolved');
+        expect(chatInput.getCloseCount()).toBeGreaterThanOrEqual(1);
+    });
+
     it('uses demo output when stdout is redirected', async () => {
         const restoreTtyState = setTtyState({ input: true, output: false });
 
@@ -158,3 +180,56 @@ describe('runAgent interactive chat', () => {
         expect(events.some((event) => event.type === 'task.started')).toBe(false);
     });
 });
+
+function createClosablePendingChatInput() {
+    let closed = false;
+    let closeCount = 0;
+    let readStarted: (() => void) | undefined;
+    let resolvePendingRead: ((event: { readonly type: 'interrupt' }) => void) | undefined;
+    const readStartedPromise = new Promise<void>((resolve) => {
+        readStarted = resolve;
+    });
+    return {
+        input: {
+            read: async () => {
+                if (closed) {
+                    return { type: 'interrupt' as const };
+                }
+                readStarted?.();
+                return new Promise<{ readonly type: 'interrupt' }>((resolve) => {
+                    resolvePendingRead = resolve;
+                });
+            },
+            close: () => {
+                closeCount += 1;
+                closed = true;
+                resolvePendingRead?.({ type: 'interrupt' });
+            },
+        },
+        close: () => {
+            closeCount += 1;
+            closed = true;
+            resolvePendingRead?.({ type: 'interrupt' });
+        },
+        getCloseCount: () => closeCount,
+        readStarted: () => readStartedPromise,
+    };
+}
+
+async function waitForReadToStart(input: ReturnType<typeof createClosablePendingChatInput>): Promise<void> {
+    await input.readStarted();
+}
+
+async function promiseWithTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+): Promise<{ readonly type: 'resolved'; readonly value: T } | { readonly type: 'timeout' }> {
+    return Promise.race([
+        promise.then((value) => ({ type: 'resolved' as const, value })),
+        new Promise<{ readonly type: 'timeout' }>((resolve) => {
+            setTimeout(() => {
+                resolve({ type: 'timeout' });
+            }, timeoutMs);
+        }),
+    ]);
+}

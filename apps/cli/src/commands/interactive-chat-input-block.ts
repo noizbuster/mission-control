@@ -1,3 +1,4 @@
+import { modelProviderCatalog } from '@mission-control/config';
 import {
     createSlashCommandMenuView,
     formatSlashCommandMenuLines,
@@ -17,6 +18,7 @@ import {
 export type TerminalChatInputStatus = {
     readonly providerID: string;
     readonly modelID: string;
+    readonly variantID?: string;
 };
 
 export type TerminalChatInputBuffer = {
@@ -34,7 +36,7 @@ export type { TerminalChatCursorDirection };
 
 const resetStyle = '\u001b[0m';
 const inputStyle = '\u001b[48;5;236m';
-const statusStyle = '\u001b[2m';
+const providerStatusStyle = '\u001b[2m';
 export function createTerminalChatInputBuffer(): TerminalChatInputBuffer {
     return { value: '', cursorOffset: 0 };
 }
@@ -125,10 +127,7 @@ function formatInputSurfaceLines(
         formatInputSurfaceLine(truncateTerminalText(formatEditableInputLine(line, index), columns), columns),
     );
     const blankLine = formatInputSurfaceLine('', columns);
-    const statusLines =
-        status === undefined
-            ? []
-            : [`${statusStyle}${truncateTerminalText(formatStatusText(status), columns)}${resetStyle}`];
+    const statusLines = status === undefined ? [] : [formatStatusLine(status, columns)];
     return [blankLine, ...editorLines, blankLine, ...statusLines];
 }
 
@@ -141,8 +140,44 @@ function formatEditableInputLine(line: string, lineIndex: number): string {
     return `${getInputLinePrefix(lineIndex)}${line}`;
 }
 
-function formatStatusText(status: TerminalChatInputStatus): string {
-    return `provider: ${status.providerID}  model: ${status.modelID}`;
+type TerminalStatusDisplay = {
+    readonly modelName: string;
+    readonly providerName: string;
+    readonly variantName?: string;
+};
+
+function formatStatusLine(status: TerminalChatInputStatus, columns: number): string {
+    const display = resolveTerminalStatusDisplay(status);
+    const modelText = formatModelWithVariant(display);
+    const separator = '  ';
+    const providerColumns = columns - terminalDisplayWidth(modelText) - terminalDisplayWidth(separator);
+    if (providerColumns <= 0) {
+        return truncateTerminalText(modelText, columns);
+    }
+    const providerText = truncateTerminalText(display.providerName, providerColumns);
+    return `${modelText}${separator}${providerStatusStyle}${providerText}${resetStyle}`;
+}
+
+function resolveTerminalStatusDisplay(status: TerminalChatInputStatus): TerminalStatusDisplay {
+    const provider = modelProviderCatalog.find((entry) => entry.id === status.providerID);
+    const model = provider?.models.find((entry) => entry.id === status.modelID);
+    const variant =
+        status.variantID === undefined
+            ? model?.variants?.at(0)
+            : model?.variants?.find((entry) => entry.id === status.variantID);
+    return {
+        modelName: model?.name ?? status.modelID,
+        providerName: provider?.name ?? status.providerID,
+        ...(variant !== undefined ? { variantName: variant.name } : {}),
+        ...(variant === undefined && status.variantID !== undefined ? { variantName: status.variantID } : {}),
+    };
+}
+
+function formatModelWithVariant(display: TerminalStatusDisplay): string {
+    if (display.variantName === undefined) {
+        return display.modelName;
+    }
+    return `${display.modelName}(${display.variantName})`;
 }
 
 function formatCursorMove(lineCount: number, cursorLineIndex: number, cursorColumn: number): string {

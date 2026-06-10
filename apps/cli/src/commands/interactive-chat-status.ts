@@ -8,6 +8,7 @@ export function formatModelProviderStatus(
     const lines = [
         `provider: ${selection.providerID}`,
         `model: ${selection.modelID}`,
+        ...(selection.variantID !== undefined ? [`variant: ${selection.variantID}`] : []),
         `selection: ${formatModelSelection(selection)}`,
     ];
     if (options.nodeMode !== undefined) {

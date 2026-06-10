@@ -17,6 +17,7 @@ export function eventForProviderChunk(
         modelProviderSelection: {
             providerID: input.providerID,
             modelID: input.modelID,
+            ...(input.variantID !== undefined ? { variantID: input.variantID } : {}),
         },
         providerStreamChunk: redactedChunk,
         ...(redactedChunk.kind === 'response_completed'

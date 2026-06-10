@@ -176,13 +176,33 @@ function resolveModelProviderSelection(
         if (slashIndex >= 0) {
             throw new Error('--model provider/model cannot be combined with --provider');
         }
-        return { providerID, modelID };
+        return selectionFromProviderAndModel(providerID, modelID);
     }
     if (slashIndex <= 0 || slashIndex === modelID.length - 1) {
         throw new Error('--model without --provider must use provider/model');
     }
+    return selectionFromProviderAndModel(modelID.slice(0, slashIndex), modelID.slice(slashIndex + 1));
+}
+
+function selectionFromProviderAndModel(providerID: string, modelInput: string): ModelProviderSelection {
+    const parsed = splitModelVariant(modelInput);
     return {
-        providerID: modelID.slice(0, slashIndex),
-        modelID: modelID.slice(slashIndex + 1),
+        providerID,
+        modelID: parsed.modelID,
+        ...(parsed.variantID !== undefined ? { variantID: parsed.variantID } : {}),
+    };
+}
+
+function splitModelVariant(modelInput: string): { readonly modelID: string; readonly variantID?: string } {
+    const variantSeparatorIndex = modelInput.lastIndexOf('#');
+    if (variantSeparatorIndex < 0) {
+        return { modelID: modelInput };
+    }
+    if (variantSeparatorIndex === 0 || variantSeparatorIndex === modelInput.length - 1) {
+        throw new Error('--model variant must use model#variant');
+    }
+    return {
+        modelID: modelInput.slice(0, variantSeparatorIndex),
+        variantID: modelInput.slice(variantSeparatorIndex + 1),
     };
 }

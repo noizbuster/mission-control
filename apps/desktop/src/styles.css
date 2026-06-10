@@ -179,6 +179,7 @@ select {
 }
 
 .prompt-field {
+    align-content: start;
     grid-row: span 2;
 }
 
@@ -208,12 +209,35 @@ textarea {
     font-size: 13px;
     font-weight: 700;
     gap: 8px;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .composer-meta > span {
     min-width: 0;
     overflow-wrap: anywhere;
+}
+
+.composer-model-selection {
+    align-items: baseline;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 13px;
+    font-weight: 700;
+    gap: 10px;
+    line-height: 1.3;
+    min-height: 20px;
+}
+
+.composer-model-name,
+.composer-provider-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.composer-provider-name {
+    color: var(--ink);
+    font-weight: 800;
 }
 
 .inspector {

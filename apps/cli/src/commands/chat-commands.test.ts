@@ -3,20 +3,21 @@ import { formatSkillInvocationPrompt, parseChatLine } from './chat-commands.js';
 
 describe('chat command parser', () => {
     it('parses model commands when a provider model shorthand is supplied', () => {
-        const action = parseChatLine('/model anthropic/claude-3-5-haiku-20241022');
+        const action = parseChatLine('/model local/local-echo#fast');
 
         expect(action).toEqual({
             kind: 'model',
             selection: {
-                providerID: 'anthropic',
-                modelID: 'claude-3-5-haiku-20241022',
+                providerID: 'local',
+                modelID: 'local-echo',
+                variantID: 'fast',
             },
         });
     });
 
-    it('parses bare model commands as status and explicit pick commands as picker requests', () => {
+    it('parses bare and explicit pick model commands as picker requests', () => {
         expect(parseChatLine('/model')).toEqual({
-            kind: 'model-status',
+            kind: 'model-pick',
         });
         expect(parseChatLine('/model pick')).toEqual({
             kind: 'model-pick',

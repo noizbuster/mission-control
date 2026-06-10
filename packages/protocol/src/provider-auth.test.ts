@@ -12,6 +12,7 @@ describe('provider auth and catalog schemas', () => {
         const selection = ModelProviderSelectionSchema.parse({
             providerID: 'local',
             modelID: 'local-echo',
+            variantID: 'fast',
         });
         const provider = ProviderCatalogEntrySchema.parse({
             id: 'local',
@@ -37,6 +38,7 @@ describe('provider auth and catalog schemas', () => {
         expect(selection).toEqual({
             providerID: 'local',
             modelID: 'local-echo',
+            variantID: 'fast',
         });
         expect(provider.models[0]?.id).toBe('local-echo');
         expect(provider.models[0]?.variants?.[0]?.id).toBe('default');

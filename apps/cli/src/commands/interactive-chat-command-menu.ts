@@ -29,7 +29,7 @@ const slashCommandChoices = [
     {
         id: '/model',
         insertText: '/model',
-        description: 'Show current provider and model',
+        description: 'Open the model and variant picker',
     },
     {
         id: '/model pick',

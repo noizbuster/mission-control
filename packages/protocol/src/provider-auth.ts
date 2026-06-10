@@ -15,6 +15,7 @@ export type ModelVariantEntry = z.infer<typeof ModelVariantEntrySchema>;
 export const ModelProviderSelectionSchema = z.object({
     providerID: z.string().min(1),
     modelID: z.string().min(1),
+    variantID: z.string().min(1).optional(),
 });
 export type ModelProviderSelection = z.infer<typeof ModelProviderSelectionSchema>;
 

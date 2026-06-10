@@ -97,7 +97,9 @@ function validateNodeModelOptions(model: AbgNodeModelOptions): void {
     }
     if (
         model.variantID !== undefined &&
-        modelEntry.variants?.some((variant) => variant.id === model.variantID) !== true
+        modelEntry.variants !== undefined &&
+        modelEntry.variants.length > 0 &&
+        !modelEntry.variants.some((variant) => variant.id === model.variantID)
     ) {
         throw new Error(`Variant ${model.variantID} is not available for model ${model.providerID}/${model.modelID}`);
     }

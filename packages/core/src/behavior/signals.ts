@@ -97,6 +97,7 @@ function modelProviderSelection(
         modelProviderSelection: {
             providerID: model.providerID,
             modelID: model.modelID,
+            ...(model.variantID !== undefined ? { variantID: model.variantID } : {}),
         },
     };
 }

@@ -8,11 +8,35 @@ const currentSelection = {
 
 describe('interactive chat model command', () => {
     it('resolves direct provider/model selections', () => {
+        expect(resolveModelCommand('local/local-echo#fast', currentSelection)).toEqual({
+            type: 'select',
+            selection: {
+                providerID: 'local',
+                modelID: 'local-echo',
+                variantID: 'fast',
+            },
+        });
+        expect(resolveModelCommand('local local-echo thinking', currentSelection)).toEqual({
+            type: 'select',
+            selection: {
+                providerID: 'local',
+                modelID: 'local-echo',
+                variantID: 'thinking',
+            },
+        });
         expect(resolveModelCommand('anthropic/claude-3-5-haiku-20241022', currentSelection)).toEqual({
             type: 'select',
             selection: {
                 providerID: 'anthropic',
                 modelID: 'claude-3-5-haiku-20241022',
+            },
+        });
+        expect(resolveModelCommand('anthropic/claude-3-5-haiku-20241022#thinking', currentSelection)).toEqual({
+            type: 'select',
+            selection: {
+                providerID: 'anthropic',
+                modelID: 'claude-3-5-haiku-20241022',
+                variantID: 'thinking',
             },
         });
         expect(resolveModelCommand('anthropic claude-3-5-haiku-20241022', currentSelection)).toEqual({
@@ -50,7 +74,7 @@ describe('interactive chat model command', () => {
         }
         expect(list.totalCount).toBeGreaterThan(20);
         expect(list.visibleChoices).toHaveLength(20);
-        expect(list.visibleChoices[0]?.label).toBe('local/local-echo');
+        expect(list.visibleChoices[0]?.label).toBe('local/local-echo#default');
         expect(JSON.stringify(list)).not.toContain('apiKey');
     });
 
@@ -60,16 +84,22 @@ describe('interactive chat model command', () => {
             message: 'Unknown model: missing/provider',
             currentSelection,
         });
+        expect(resolveModelCommand('local/local-echo#missing', currentSelection)).toEqual({
+            type: 'invalid',
+            message: 'Variant missing is not available for model local/local-echo',
+            currentSelection,
+        });
     });
 
     it('formats model selections', () => {
         const choices = createModelChoices();
 
         expect(formatModelSelection(currentSelection)).toBe('local/local-echo');
+        expect(formatModelSelection({ ...currentSelection, variantID: 'fast' })).toBe('local/local-echo#fast');
         expect(choices[0]).toMatchObject({
-            id: 'local/local-echo',
-            label: 'local/local-echo',
-            selection: currentSelection,
+            id: 'local/local-echo#default',
+            label: 'local/local-echo#default',
+            selection: { ...currentSelection, variantID: 'default' },
         });
     });
 });

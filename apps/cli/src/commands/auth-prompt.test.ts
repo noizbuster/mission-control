@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { createProviderAuthStore } from '../auth-store.js';
 import { runAuthCommand } from './auth.js';
+import { createPromptSession } from './auth-prompts.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -145,6 +146,42 @@ describe('runAuthCommand auth prompts', () => {
         await rm(authFilePath, { force: true });
     });
 
+    it('does not echo terminal secret prompt input', async () => {
+        const terminal = stubTerminalPromptStreams();
+
+        try {
+            const session = createPromptSession();
+            const secret = session.promptSecret('API key');
+
+            process.stdin.emit('data', 'secret_key\r');
+
+            await expect(secret).resolves.toBe('secret_key');
+            expect(terminal.getOutput()).toContain('API key: ');
+            expect(terminal.getOutput()).not.toContain('secret_key');
+            expect(terminal.getRawModes()).toEqual([true, false]);
+            session.close();
+        } finally {
+            terminal.restore();
+        }
+    });
+
+    it('does not echo terminal secret prompt edits', async () => {
+        const terminal = stubTerminalPromptStreams();
+
+        try {
+            const session = createPromptSession();
+            const secret = session.promptSecret('API key');
+
+            process.stdin.emit('data', 'ab\u007fc\r');
+
+            await expect(secret).resolves.toBe('ac');
+            expect(terminal.getOutput()).toBe('API key: \n');
+            session.close();
+        } finally {
+            terminal.restore();
+        }
+    });
+
     it('prompts text credential fields visibly and secret credential fields with the secret prompt', async () => {
         const authFilePath = await useTempAuthFile();
         const store = createProviderAuthStore();
@@ -178,3 +215,72 @@ describe('runAuthCommand auth prompts', () => {
         await rm(authFilePath, { force: true });
     });
 });
+
+function stubTerminalPromptStreams() {
+    const stdinTTYDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+    const stdinRawDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'isRaw');
+    const stdinSetRawModeDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'setRawMode');
+    const stdinResumeDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'resume');
+    const stdinPauseDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'pause');
+    const stdoutWriteDescriptor = Object.getOwnPropertyDescriptor(process.stdout, 'write');
+    const outputChunks: string[] = [];
+    const rawModes: boolean[] = [];
+
+    Object.defineProperty(process.stdin, 'isTTY', {
+        configurable: true,
+        value: true,
+    });
+    Object.defineProperty(process.stdin, 'isRaw', {
+        configurable: true,
+        value: false,
+        writable: true,
+    });
+    Object.defineProperty(process.stdin, 'setRawMode', {
+        configurable: true,
+        value: (isRaw: boolean) => {
+            rawModes.push(isRaw);
+            Object.defineProperty(process.stdin, 'isRaw', {
+                configurable: true,
+                value: isRaw,
+                writable: true,
+            });
+            return process.stdin;
+        },
+    });
+    Object.defineProperty(process.stdin, 'resume', {
+        configurable: true,
+        value: () => process.stdin,
+    });
+    Object.defineProperty(process.stdin, 'pause', {
+        configurable: true,
+        value: () => process.stdin,
+    });
+    Object.defineProperty(process.stdout, 'write', {
+        configurable: true,
+        value: (chunk: string | Uint8Array) => {
+            outputChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+            return true;
+        },
+    });
+
+    return {
+        getOutput: () => outputChunks.join(''),
+        getRawModes: () => [...rawModes],
+        restore: () => {
+            restoreProperty(process.stdin, 'isTTY', stdinTTYDescriptor);
+            restoreProperty(process.stdin, 'isRaw', stdinRawDescriptor);
+            restoreProperty(process.stdin, 'setRawMode', stdinSetRawModeDescriptor);
+            restoreProperty(process.stdin, 'resume', stdinResumeDescriptor);
+            restoreProperty(process.stdin, 'pause', stdinPauseDescriptor);
+            restoreProperty(process.stdout, 'write', stdoutWriteDescriptor);
+        },
+    };
+}
+
+function restoreProperty(target: object, property: string, descriptor: PropertyDescriptor | undefined): void {
+    if (descriptor === undefined) {
+        Reflect.deleteProperty(target, property);
+        return;
+    }
+    Object.defineProperty(target, property, descriptor);
+}

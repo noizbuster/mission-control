@@ -47,7 +47,10 @@ export async function runInteractiveChatSession(
 ): Promise<string> {
     const chatInput = options.input ?? createTerminalChatInput();
     const chatOutput = options.output ?? createTerminalChatOutput();
-    const selectModel = options.selectModel ?? createTerminalModelSelector(chatOutput);
+    const selectModel = suspendChatInputWhileSelectingModel(
+        options.selectModel ?? createTerminalModelSelector(chatOutput),
+        chatInput,
+    );
     const modelChoices =
         options.modelChoices ??
         createModelChoices(
@@ -59,6 +62,7 @@ export async function runInteractiveChatSession(
     let turnCounter = 0;
     const inputPump = new ChatInputPump(chatInput);
     const sessionId = options.sessionId;
+    const unregisterProcessCleanup = registerProcessTerminalCleanup(chatInput);
 
     try {
         chatOutput.write('mission-control chat\n');
@@ -147,6 +151,7 @@ export async function runInteractiveChatSession(
             activeTurn = result.activeTurn;
         }
     } finally {
+        unregisterProcessCleanup();
         activeTurn?.interrupt('force');
         chatInput.close();
     }
@@ -205,4 +210,42 @@ async function readAfterActiveYield(inputPump: ChatInputPump): Promise<ChatLoopE
         setImmediate(resolve);
     });
     return { type: 'input', event: await inputPump.read() };
+}
+
+function suspendChatInputWhileSelectingModel(selectModel: ModelSelector, input: ChatInput): ModelSelector {
+    return async (choices, currentSelection) => {
+        input.suspend?.();
+        try {
+            return await selectModel(choices, currentSelection);
+        } finally {
+            input.resume?.();
+        }
+    };
+}
+
+function registerProcessTerminalCleanup(input: ChatInput): () => void {
+    let cleaned = false;
+    const cleanup = () => {
+        if (cleaned) {
+            return;
+        }
+        cleaned = true;
+        input.close();
+    };
+    const onSignal = () => {
+        cleanup();
+    };
+    const onExit = () => {
+        cleanup();
+    };
+
+    process.once('SIGINT', onSignal);
+    process.once('SIGTERM', onSignal);
+    process.once('exit', onExit);
+
+    return () => {
+        process.off('SIGINT', onSignal);
+        process.off('SIGTERM', onSignal);
+        process.off('exit', onExit);
+    };
 }

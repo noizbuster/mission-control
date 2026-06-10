@@ -148,12 +148,14 @@ describe('runAgent plain reporter', () => {
             modelProviderSelection: {
                 providerID: 'anthropic',
                 modelID: 'claude-sonnet-4-6',
+                variantID: 'thinking',
             },
         });
 
         expect(output).toContain('provider: anthropic');
         expect(output).toContain('model: claude-sonnet-4-6');
-        expect(output).toContain('selection: anthropic/claude-sonnet-4-6');
+        expect(output).toContain('variant: thinking');
+        expect(output).toContain('selection: anthropic/claude-sonnet-4-6#thinking');
         expect(output).toContain('task.completed');
     });
 

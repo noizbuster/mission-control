@@ -33,6 +33,8 @@ export type ChatInputEvent =
 export type ChatInput = {
     readonly read: () => Promise<ChatInputEvent>;
     readonly close: () => void;
+    readonly suspend?: () => void;
+    readonly resume?: () => void;
     readonly controlsPrompt?: boolean;
     readonly renderPrompt?: (context?: ChatInputRenderContext) => void;
 };
@@ -46,6 +48,9 @@ type TerminalChatInputStreams = {
     readonly input: TerminalInputStream;
     readonly output: TerminalOutputStream;
 };
+
+type TerminalDataListener = (chunk: Buffer | string) => void;
+type TerminalReadCancellation = () => void;
 
 export const maxChatPromptLength = 8_000;
 
@@ -70,17 +75,67 @@ export function createTerminalChatInputFromStreams(streams: TerminalChatInputStr
     let promptRendered = false;
     let renderContext: ChatInputRenderContext | undefined;
     let lastInterruptTokenAtMs: number | undefined;
+    let suspended = false;
+    const activeDataListeners = new Set<TerminalDataListener>();
+    const activeReadCancellations = new Set<TerminalReadCancellation>();
     const keyboardMode = { modifiedKeysEnabled: true } satisfies TerminalKeyboardMode;
     const inputParser = createTerminalInputParser();
     streams.input.setRawMode(true);
     streams.input.resume();
     streams.output.write(terminalModifiedKeyEnableSequence);
 
+    const input: TerminalInputStream = {
+        get isRaw() {
+            return streams.input.isRaw === true;
+        },
+        setRawMode: (isRaw) => {
+            streams.input.setRawMode(isRaw);
+        },
+        resume: () => {
+            streams.input.resume();
+        },
+        pause: () => {
+            streams.input.pause();
+        },
+        on: (event, listener) => {
+            activeDataListeners.add(listener);
+            if (!suspended) {
+                streams.input.on(event, listener);
+            }
+            return input;
+        },
+        off: (event, listener) => {
+            activeDataListeners.delete(listener);
+            streams.input.off(event, listener);
+            return input;
+        },
+    };
+
     function resetLineState(): void {
         buffer = createTerminalChatInputBuffer();
         menuState = createSlashCommandMenuState();
         renderedBlock = emptyRenderedInputBlock;
         promptRendered = false;
+    }
+
+    function suspend(): void {
+        if (closed || suspended) {
+            return;
+        }
+        suspended = true;
+        for (const listener of activeDataListeners) {
+            streams.input.off('data', listener);
+        }
+    }
+
+    function resume(): void {
+        if (closed || !suspended) {
+            return;
+        }
+        suspended = false;
+        for (const listener of activeDataListeners) {
+            streams.input.on('data', listener);
+        }
     }
 
     function renderPrompt(context?: ChatInputRenderContext): void {
@@ -129,16 +184,32 @@ export function createTerminalChatInputFromStreams(streams: TerminalChatInputStr
                     lastInterruptTokenAtMs = now;
                     return shouldCoalesce;
                 },
-                input: streams.input,
+                input,
                 output: streams.output,
                 resetLineState,
+                registerCancel: (cancel) => {
+                    activeReadCancellations.add(cancel);
+                    return () => {
+                        activeReadCancellations.delete(cancel);
+                    };
+                },
             });
         },
+        suspend,
+        resume,
         close: () => {
             if (closed) {
                 return;
             }
             closed = true;
+            for (const cancel of [...activeReadCancellations]) {
+                cancel();
+            }
+            activeReadCancellations.clear();
+            for (const listener of activeDataListeners) {
+                streams.input.off('data', listener);
+            }
+            activeDataListeners.clear();
             streams.output.write(terminalModifiedKeyDisableSequence);
             streams.input.setRawMode(wasRaw);
             streams.input.pause();

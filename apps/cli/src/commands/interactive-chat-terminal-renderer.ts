@@ -82,5 +82,8 @@ function toTerminalChatInputStatus(context: ChatInputRenderContext | undefined):
     return {
         providerID: context.modelProviderSelection.providerID,
         modelID: context.modelProviderSelection.modelID,
+        ...(context.modelProviderSelection.variantID !== undefined
+            ? { variantID: context.modelProviderSelection.variantID }
+            : {}),
     };
 }

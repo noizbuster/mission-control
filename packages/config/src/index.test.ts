@@ -87,6 +87,13 @@ describe('config catalog constants', () => {
         const localProvider = modelProviderCatalog.find((provider) => provider.id === 'local');
         const localModel = localProvider?.models.find((model) => model.id === 'local-echo');
 
-        expect(localModel?.variants?.map((variant) => variant.id)).toEqual(['default']);
+        expect(localModel?.variants?.map((variant) => variant.id)).toEqual([
+            'default',
+            'fast',
+            'reasoning-low',
+            'reasoning-medium',
+            'reasoning-high',
+            'thinking',
+        ]);
     });
 });

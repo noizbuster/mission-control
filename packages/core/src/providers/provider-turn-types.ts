@@ -25,6 +25,7 @@ export type ProviderTurnRequest = {
     readonly turnId: string;
     readonly providerID: string;
     readonly modelID: string;
+    readonly variantID?: string;
     readonly messages: readonly AgentMessage[];
     readonly tools?: readonly ToolDefinition[];
 };

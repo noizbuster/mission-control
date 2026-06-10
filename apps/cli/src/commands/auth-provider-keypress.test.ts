@@ -47,6 +47,46 @@ describe('provider prompt keypress reducer', () => {
         });
     });
 
+    it('treats application cursor arrows as navigation without adding search text', () => {
+        const moved = reduceProviderPromptKeypress(createProviderPromptKeypressState(), '\u001bOB', providerChoices);
+
+        expect(moved.selectedIndex).toBe(1);
+        expect(moved.searchQuery).toBe('');
+        expect(moved.pendingEscape).toBe('');
+    });
+
+    it('treats modifier CSI arrows as navigation without adding search text', () => {
+        const moved = reduceProviderPromptKeypress(createProviderPromptKeypressState(), '\u001b[1;5B', providerChoices);
+
+        expect(moved.selectedIndex).toBe(1);
+        expect(moved.searchQuery).toBe('');
+        expect(moved.pendingEscape).toBe('');
+    });
+
+    it('cancels on Kitty CSI-u Ctrl+C while modified keys are enabled', () => {
+        const state = reduceProviderPromptKeypress(
+            createProviderPromptKeypressState(),
+            '\u001b[99;5u',
+            providerChoices,
+        );
+
+        expect(state.cancelled).toBe(true);
+        expect(state.pendingEscape).toBe('');
+        expect(state.searchQuery).toBe('');
+    });
+
+    it('cancels on xterm modifyOtherKeys Ctrl+C while modified keys are enabled', () => {
+        const state = reduceProviderPromptKeypress(
+            createProviderPromptKeypressState(),
+            '\u001b[27;5;99~',
+            providerChoices,
+        );
+
+        expect(state.cancelled).toBe(true);
+        expect(state.pendingEscape).toBe('');
+        expect(state.searchQuery).toBe('');
+    });
+
     it('filters provider choices with typed search text before submitting', () => {
         const state = reduceProviderPromptKeypress(createProviderPromptKeypressState(), 'anth\r', providerChoices);
         const view = createProviderPromptView(state, providerChoices, 5);

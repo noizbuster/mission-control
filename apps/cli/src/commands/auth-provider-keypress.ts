@@ -1,3 +1,10 @@
+import {
+    isCompletePromptControlSequence,
+    isPendingPromptControlSequence,
+    readPromptControlArrowDirection,
+} from './auth-provider-keypress-escape.js';
+import { isTerminalInterruptToken } from './interactive-chat-terminal-keys.js';
+
 export type ProviderPromptKeypressChoice = {
     readonly id: string;
     readonly name: string;
@@ -21,9 +28,6 @@ export type ProviderPromptView = {
     readonly totalCount: number;
     readonly searchQuery: string;
 };
-
-const arrowUpSequence = '\u001b[A';
-const arrowDownSequence = '\u001b[B';
 
 export function createProviderPromptKeypressState(): ProviderPromptKeypressState {
     return {
@@ -103,7 +107,7 @@ function reduceProviderPromptKeypressCharacter(
     if (character === '\u001b') {
         return { ...state, pendingEscape: character };
     }
-    if (character === '\u0003') {
+    if (isTerminalInterruptToken(character)) {
         return { ...state, cancelled: true, pendingEscape: '' };
     }
     if (character === '\r' || character === '\n') {
@@ -160,14 +164,18 @@ function reducePendingEscape(
     choices: readonly ProviderPromptKeypressChoice[],
 ): ProviderPromptKeypressState {
     const sequence = `${state.pendingEscape}${character}`;
-    if (sequence === arrowDownSequence) {
-        return moveSelection({ ...state, pendingEscape: '' }, choices, 1);
+    if (isTerminalInterruptToken(sequence)) {
+        return { ...state, cancelled: true, pendingEscape: '' };
     }
-    if (sequence === arrowUpSequence) {
-        return moveSelection({ ...state, pendingEscape: '' }, choices, -1);
+    const arrowDirection = readPromptControlArrowDirection(sequence);
+    if (arrowDirection !== undefined) {
+        return moveSelection({ ...state, pendingEscape: '' }, choices, arrowDirection);
     }
-    if (arrowDownSequence.startsWith(sequence) || arrowUpSequence.startsWith(sequence)) {
+    if (isPendingPromptControlSequence(sequence)) {
         return { ...state, pendingEscape: sequence };
+    }
+    if (isCompletePromptControlSequence(sequence)) {
+        return { ...state, pendingEscape: '' };
     }
     return reduceProviderPromptKeypressCharacter({ ...state, pendingEscape: '' }, character, choices);
 }

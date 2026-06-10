@@ -136,6 +136,7 @@ function runtimeModel(modelProviderSelection: ModelProviderSelection): AbgNodeMo
     return {
         providerID: modelProviderSelection.providerID,
         modelID: modelProviderSelection.modelID,
+        ...(modelProviderSelection.variantID !== undefined ? { variantID: modelProviderSelection.variantID } : {}),
     };
 }
 

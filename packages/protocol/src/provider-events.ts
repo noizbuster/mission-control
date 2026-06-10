@@ -81,6 +81,7 @@ export const ProviderRequestSchema = z
         turnId: z.string().min(1),
         providerID: z.string().min(1),
         modelID: z.string().min(1),
+        variantID: z.string().min(1).optional(),
         messages: z.array(AgentMessageSchema),
         tools: z.array(ToolDefinitionSchema).optional(),
     })

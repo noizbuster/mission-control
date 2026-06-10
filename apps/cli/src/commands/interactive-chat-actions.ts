@@ -58,9 +58,6 @@ export async function runChatAction(
             return runInterruptAction(chatOutput, currentModelProviderSelection, coding.activeTurn);
         case 'exit':
             return actionResult(currentModelProviderSelection, coding.activeTurn);
-        case 'model-status':
-            chatOutput.write(formatModelProviderStatus(currentModelProviderSelection, { nodeMode: 'none' }));
-            return actionResult(currentModelProviderSelection, coding.activeTurn);
         case 'model-pick':
             return runModelPickAction(
                 runtime,

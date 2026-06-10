@@ -47,22 +47,62 @@ describe('runAgent /model chat command', () => {
         });
     });
 
-    it('prints current provider and model for /model without arguments', async () => {
+    it('changes the current chat model variant with the /model command before later prompts', async () => {
         const chatOutput = createBufferedChatOutput();
+        const events: AgentEvent[] = [];
 
         const output = await runAgent(parseArgs([]), {
-            authStore: createEmptyAuthStore(),
+            authStore: createAuthStoreWithSummaries([createCredentialSummary('local')]),
             chatInput: createScriptedChatInput([
-                { type: 'line', value: '/model' },
+                { type: 'line', value: '/model local/local-echo#fast' },
+                { type: 'line', value: 'explain variant routing' },
                 { type: 'interrupt' },
                 { type: 'interrupt' },
             ]),
             chatOutput: chatOutput.output,
+            onRuntimeEvent: (event) => {
+                events.push(event);
+            },
         });
 
+        expect(output).toContain('variant: fast');
+        expect(output).toContain('selection: local/local-echo#fast');
+        expect(output).toContain('Assistant: received prompt: explain variant routing');
+        const promptCompleted = events.find(
+            (event) => event.type === 'task.completed' && event.message === 'received prompt: explain variant routing',
+        );
+        expect(promptCompleted?.modelProviderSelection).toEqual({
+            providerID: 'local',
+            modelID: 'local-echo',
+            variantID: 'fast',
+        });
+    });
+
+    it('opens a model picker for /model without arguments', async () => {
+        const chatOutput = createBufferedChatOutput();
+        let pickerChoices: readonly string[] = [];
+
+        const output = await runAgent(parseArgs([]), {
+            authStore: createAuthStoreWithSummaries([createCredentialSummary('local')]),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: '/model' },
+                { type: 'line', value: 'after bare picker' },
+                { type: 'interrupt' },
+                { type: 'interrupt' },
+            ]),
+            chatOutput: chatOutput.output,
+            selectModel: async (choices) => {
+                pickerChoices = choices.map((choice) => choice.label);
+                return choices.find((choice) => choice.selection.variantID === 'fast')?.selection;
+            },
+        });
+
+        expect(pickerChoices).toContain('local/local-echo#fast');
         expect(output).toContain('provider: local');
         expect(output).toContain('model: local-echo');
-        expect(output).toContain('selection: local/local-echo');
+        expect(output).toContain('variant: fast');
+        expect(output).toContain('selection: local/local-echo#fast');
+        expect(output).toContain('Assistant: received prompt: after bare picker');
     });
 
     it('opens a model picker for /model pick', async () => {
@@ -90,6 +130,30 @@ describe('runAgent /model chat command', () => {
         expect(output).toContain('provider: anthropic');
         expect(output).toContain('selection: anthropic/');
         expect(output).toContain('Assistant: received prompt: after picker');
+    });
+
+    it('suspends chat input while the /model picker owns raw keypresses', async () => {
+        const chatOutput = createBufferedChatOutput();
+        const chatInput = createSuspendableScriptedChatInput([
+            { type: 'line', value: '/model' },
+            { type: 'line', value: '/exit' },
+        ]);
+        const selectorSuspendedStates: boolean[] = [];
+
+        await runAgent(parseArgs([]), {
+            authStore: createAuthStoreWithSummaries([createCredentialSummary('local')]),
+            chatInput: chatInput.input,
+            chatOutput: chatOutput.output,
+            selectModel: async () => {
+                selectorSuspendedStates.push(chatInput.isSuspended());
+                return undefined;
+            },
+        });
+
+        expect(selectorSuspendedStates).toEqual([true]);
+        expect(chatInput.getSuspendCount()).toBe(1);
+        expect(chatInput.getResumeCount()).toBe(1);
+        expect(chatOutput.getOutput()).toContain('Exiting mission-control chat');
     });
 
     it('rejects /model direct selection for providers that are not logged in', async () => {
@@ -225,4 +289,42 @@ function sliceModelListOutput(output: string, marker: string): string {
     }
     const nextPromptIndex = output.indexOf('> ', startIndex);
     return output.slice(startIndex, nextPromptIndex === -1 ? undefined : nextPromptIndex);
+}
+
+type SuspendableScriptedChatEvent =
+    | {
+          readonly type: 'line';
+          readonly value: string;
+      }
+    | {
+          readonly type: 'interrupt';
+          readonly interruptedPartialInput?: boolean;
+      };
+
+function createSuspendableScriptedChatInput(events: readonly SuspendableScriptedChatEvent[]) {
+    let index = 0;
+    let suspended = false;
+    let suspendCount = 0;
+    let resumeCount = 0;
+    return {
+        input: {
+            read: async () => {
+                const event = events[index] ?? { type: 'interrupt' as const };
+                index += 1;
+                return event;
+            },
+            suspend: () => {
+                suspended = true;
+                suspendCount += 1;
+            },
+            resume: () => {
+                suspended = false;
+                resumeCount += 1;
+            },
+            close: () => {},
+        },
+        isSuspended: () => suspended,
+        getSuspendCount: () => suspendCount,
+        getResumeCount: () => resumeCount,
+    };
 }

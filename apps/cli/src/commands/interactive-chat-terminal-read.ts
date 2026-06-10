@@ -51,6 +51,7 @@ export type TerminalReadState = {
     readonly input: TerminalInputStream;
     readonly output: TerminalOutputStream;
     readonly resetLineState: () => void;
+    readonly registerCancel?: (cancel: () => void) => () => void;
 };
 
 export function readTerminalChatEvent(state: TerminalReadState): Promise<ChatInputEvent> {
@@ -58,6 +59,7 @@ export function readTerminalChatEvent(state: TerminalReadState): Promise<ChatInp
         let settled = false;
         let submitting = false;
         let pendingSubmitTimer: ReturnType<typeof setTimeout> | undefined;
+        let unregisterCancel: (() => void) | undefined;
 
         function finish(event: ChatInputEvent): void {
             if (settled) {
@@ -68,6 +70,7 @@ export function readTerminalChatEvent(state: TerminalReadState): Promise<ChatInp
                 clearTimeout(pendingSubmitTimer);
             }
             state.input.off('data', onData);
+            unregisterCancel?.();
             resolve(event);
         }
 
@@ -114,6 +117,13 @@ export function readTerminalChatEvent(state: TerminalReadState): Promise<ChatInp
             }
         }
 
+        function cancelRead(): void {
+            discardTerminalInputBlock(state.output, state.getRenderedBlock());
+            state.resetLineState();
+            finish({ type: 'interrupt' });
+        }
+
+        unregisterCancel = state.registerCancel?.(cancelRead);
         processInputTokens(state.readBufferedTokens());
         if (settled) {
             return;
@@ -137,6 +147,9 @@ function handleTerminalInputToken(
         return false;
     }
     if (character === '\n' || character === '\r') {
+        if (state.getBuffer().value.trim().length === 0) {
+            return false;
+        }
         state.pushBufferedTokens(remainingTokens);
         submitLine();
         return true;

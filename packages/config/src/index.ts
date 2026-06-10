@@ -123,6 +123,31 @@ const scaffoldModelProviderCatalog = [
                         name: 'Default',
                         status: 'active',
                     },
+                    {
+                        id: 'fast',
+                        name: 'Fast',
+                        status: 'active',
+                    },
+                    {
+                        id: 'reasoning-low',
+                        name: 'Reasoning Low',
+                        status: 'active',
+                    },
+                    {
+                        id: 'reasoning-medium',
+                        name: 'Reasoning Medium',
+                        status: 'active',
+                    },
+                    {
+                        id: 'reasoning-high',
+                        name: 'Reasoning High',
+                        status: 'active',
+                    },
+                    {
+                        id: 'thinking',
+                        name: 'Thinking',
+                        status: 'active',
+                    },
                 ],
             },
         ],

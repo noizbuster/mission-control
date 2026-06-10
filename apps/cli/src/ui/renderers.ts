@@ -46,12 +46,16 @@ abstract class BufferedRenderer implements AgentUIRenderer {
         return this.selectedModelProviderSelection?.modelID ?? 'unknown';
     }
 
+    protected get selectedVariant(): string | undefined {
+        return this.selectedModelProviderSelection?.variantID;
+    }
+
     protected get selectedSelection(): string {
         const selection = this.selectedModelProviderSelection;
         if (selection === undefined) {
             return 'unknown';
         }
-        return `${selection.providerID}/${selection.modelID}`;
+        return formatSelection(selection);
     }
 
     protected get currentNodeMode(): string {
@@ -67,6 +71,7 @@ export class PlainRenderer extends BufferedRenderer {
             `session: ${this.sessionId}`,
             `provider: ${this.selectedProvider}`,
             `model: ${this.selectedModel}`,
+            ...(this.selectedVariant === undefined ? [] : [`variant: ${this.selectedVariant}`]),
             `selection: ${this.selectedSelection}`,
             `node mode: ${this.currentNodeMode}`,
             ...this.events.map((event) => {
@@ -74,10 +79,7 @@ export class PlainRenderer extends BufferedRenderer {
                 const graph = event.abg?.graphId !== undefined ? ` graph=${event.abg.graphId}` : '';
                 const node = event.abg?.nodeId !== undefined ? ` node=${event.abg.nodeId}` : '';
                 const mode = event.abg?.nodeKind !== undefined ? ` mode=${event.abg.nodeKind}` : '';
-                const model =
-                    event.abg?.model !== undefined
-                        ? ` model=${event.abg.model.providerID}/${event.abg.model.modelID}`
-                        : '';
+                const model = event.abg?.model !== undefined ? ` model=${formatSelection(event.abg.model)}` : '';
                 return `${event.type}${graph}${node}${mode}${model}${message}`;
             }),
         ];
@@ -93,6 +95,7 @@ export class InkRenderer extends BufferedRenderer {
             `session: ${this.sessionId}`,
             `provider: ${this.selectedProvider}`,
             `model: ${this.selectedModel}`,
+            ...(this.selectedVariant === undefined ? [] : [`variant: ${this.selectedVariant}`]),
             `selection: ${this.selectedSelection}`,
             `node mode: ${this.currentNodeMode}`,
             'current status: running',
@@ -116,6 +119,10 @@ function eventMessageSuffix(event: AgentEvent): string {
         return '';
     }
     return ` ${event.message}`;
+}
+
+function formatSelection(selection: ModelProviderSelection): string {
+    return `${selection.providerID}/${selection.modelID}${selection.variantID === undefined ? '' : `#${selection.variantID}`}`;
 }
 
 export type { AgentUIRenderer };

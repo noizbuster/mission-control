@@ -95,6 +95,10 @@ describe('Desktop composer and approval inspection', () => {
         expect(html).toContain('Steer');
         expect(html).toContain('Interrupt');
         expect(html).toContain('Resume');
+        expect(html).toContain('data-testid="composer-model-selection"');
+        expect(html).toContain('Local Echo(Default)');
+        expect(html).toContain('composer-provider-name');
+        expect(html).toContain('Local Sandbox');
         expect(html).toContain('Approve');
         expect(html).toContain('Deny');
         expect(html).toContain('desktop approval preview');

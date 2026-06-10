@@ -27,6 +27,9 @@ export async function runRuntimeProviderPromptTask(input: RuntimeProviderPromptI
         requestId: `provider_request_${input.taskId}`,
         providerID: input.modelProviderSelection.providerID,
         modelID: input.modelProviderSelection.modelID,
+        ...(input.modelProviderSelection.variantID !== undefined
+            ? { variantID: input.modelProviderSelection.variantID }
+            : {}),
         messages: [{ role: 'user', content: input.prompt }],
         startSequence: 0,
         onEnvelope: input.onEnvelope,

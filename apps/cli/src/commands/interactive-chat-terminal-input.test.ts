@@ -52,6 +52,41 @@ describe('terminal chat input stream handling', () => {
         chatInput.close();
     });
 
+    it('suspends a pending terminal read while another prompt owns stdin', async () => {
+        const input = new FakeTerminalInput();
+        const output = new FakeTerminalOutput();
+        const chatInput = createTerminalChatInputFromStreams({ input, output });
+        const read = chatInput.read();
+
+        chatInput.suspend?.();
+        input.send('ignored');
+
+        await expect(readWithTimeout(read)).resolves.toEqual({ type: 'timeout' });
+        expect(input.listenerCount('data')).toBe(0);
+
+        chatInput.resume?.();
+        input.send('kept\r');
+
+        await expect(read).resolves.toEqual({ type: 'line', value: 'kept' });
+        expect(input.listenerCount('data')).toBe(0);
+        chatInput.close();
+    });
+
+    it('settles a suspended pending terminal read when closed', async () => {
+        const input = new FakeTerminalInput();
+        const output = new FakeTerminalOutput();
+        const chatInput = createTerminalChatInputFromStreams({ input, output });
+        const read = chatInput.read();
+
+        chatInput.suspend?.();
+        chatInput.close();
+
+        await expect(readWithTimeout(read)).resolves.toEqual({ type: 'interrupt' });
+        expect(input.listenerCount('data')).toBe(0);
+        expect(input.isRaw).toBe(false);
+        expect(input.isPaused).toBe(true);
+    });
+
     it('buffers a split left-arrow escape before editing Korean text at the cursor', async () => {
         const input = new FakeTerminalInput();
         const output = new FakeTerminalOutput();

@@ -46,6 +46,20 @@ describe('parseArgs', () => {
                 modelID: 'local-echo',
             },
         });
+        expect(parseArgs(['--model', 'local/local-echo#fast'])).toMatchObject({
+            modelProviderSelection: {
+                providerID: 'local',
+                modelID: 'local-echo',
+                variantID: 'fast',
+            },
+        });
+        expect(parseArgs(['--provider', 'local', '--model', 'local-echo#thinking'])).toMatchObject({
+            modelProviderSelection: {
+                providerID: 'local',
+                modelID: 'local-echo',
+                variantID: 'thinking',
+            },
+        });
     });
 
     it('rejects incomplete or conflicting provider model flags', () => {
