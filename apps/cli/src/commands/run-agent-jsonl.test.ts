@@ -60,6 +60,11 @@ describe('runAgent JSONL session automation', () => {
         }).projection;
 
         expect(events.map((event) => event.type)).toEqual(expect.arrayContaining(['graph.started', 'graph.completed']));
+        expect(
+            events.find((event) => event.type === 'node.started' && event.abg?.nodeId === 'draft-answer')?.abg,
+        ).toMatchObject({
+            nodeKind: 'llm',
+        });
         expect(replay.graphSnapshots).toEqual(
             expect.arrayContaining([expect.objectContaining({ graphId: 'research-answer', status: 'completed' })]),
         );

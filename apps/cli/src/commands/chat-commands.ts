@@ -144,6 +144,10 @@ function parseBranchCommand(input: string): ChatLineAction {
 }
 
 function parseModelCommand(input: string, options: ChatLineOptions): ChatLineAction {
+    const trimmed = input.trim();
+    if (trimmed.length === 0) {
+        return { kind: 'model-status' };
+    }
     const result = resolveModelCommand(input, defaultModelProviderSelection, {
         ...(options.modelChoices !== undefined ? { choices: options.modelChoices } : {}),
     });

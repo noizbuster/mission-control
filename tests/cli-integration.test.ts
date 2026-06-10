@@ -42,7 +42,9 @@ describe('CLI integration', () => {
     it('emits selected provider and model through CLI integration', async () => {
         const output = await runAgent(parseArgs(['--no-tui', '--provider', 'local', '--model', 'local-echo']));
 
-        expect(output).toContain('model: local/local-echo');
+        expect(output).toContain('provider: local');
+        expect(output).toContain('model: local-echo');
+        expect(output).toContain('selection: local/local-echo');
         expect(output).toContain('task.completed');
     });
 
@@ -55,7 +57,9 @@ describe('CLI integration', () => {
 
         const output = await runAgent(parseArgs(['--no-tui']));
 
-        expect(output).toContain('model: local/local-echo');
+        expect(output).toContain('provider: local');
+        expect(output).toContain('model: local-echo');
+        expect(output).toContain('selection: local/local-echo');
         await rm(authFilePath, { force: true });
     });
 
@@ -68,7 +72,9 @@ describe('CLI integration', () => {
 
         const output = await runAgent(parseArgs(['--no-tui']));
 
-        expect(output).toContain('model: anthropic/claude-3-5-haiku-20241022');
+        expect(output).toContain('provider: anthropic');
+        expect(output).toContain('model: claude-3-5-haiku-20241022');
+        expect(output).toContain('selection: anthropic/claude-3-5-haiku-20241022');
         expect(output).toContain('task.completed');
         expect(output).not.toContain('anthropic_key');
         await rm(authFilePath, { force: true });

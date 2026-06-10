@@ -97,6 +97,7 @@ function enqueueSelectedTargets(
                             ? `rule matched: ${edge.condition}`
                             : `edge selected: ${edge.target}`,
                 },
+                nodeKind: node.kind,
                 model: nodeModel(graph, node.id, input.modelProviderSelection),
             }),
         );

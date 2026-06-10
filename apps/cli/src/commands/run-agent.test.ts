@@ -47,7 +47,9 @@ describe('runAgent plain reporter', () => {
             },
         });
 
-        expect(output).toContain('model: local/local-echo');
+        expect(output).toContain('provider: local');
+        expect(output).toContain('model: local-echo');
+        expect(output).toContain('selection: local/local-echo');
     });
 
     it('rejects unknown provider model combinations before running', async () => {
@@ -101,7 +103,9 @@ describe('runAgent plain reporter', () => {
             { authStore: store },
         );
 
-        expect(output).toContain('model: local/local-echo');
+        expect(output).toContain('provider: local');
+        expect(output).toContain('model: local-echo');
+        expect(output).toContain('selection: local/local-echo');
         await rm(authFilePath, { force: true });
     });
 
@@ -126,7 +130,9 @@ describe('runAgent plain reporter', () => {
             { authStore: store },
         );
 
-        expect(output).toContain('model: anthropic/claude-3-5-haiku-20241022');
+        expect(output).toContain('provider: anthropic');
+        expect(output).toContain('model: claude-3-5-haiku-20241022');
+        expect(output).toContain('selection: anthropic/claude-3-5-haiku-20241022');
         expect(output).toContain('task.completed');
         expect(output).not.toContain('anthropic_secret_key');
         await rm(authFilePath, { force: true });
@@ -145,8 +151,31 @@ describe('runAgent plain reporter', () => {
             },
         });
 
-        expect(output).toContain('model: anthropic/claude-sonnet-4-6');
+        expect(output).toContain('provider: anthropic');
+        expect(output).toContain('model: claude-sonnet-4-6');
+        expect(output).toContain('selection: anthropic/claude-sonnet-4-6');
         expect(output).toContain('task.completed');
+    });
+
+    it('plain reporter prints graph node mode for authored graph events', async () => {
+        const output = await runAgent({
+            mode: 'plain',
+            useNative: false,
+            command: 'run',
+            showHelp: false,
+            showVersion: false,
+            graphPath: 'examples/abg/coding-agent.graph.json',
+            modelProviderSelection: {
+                providerID: 'local',
+                modelID: 'local-echo',
+            },
+        });
+
+        expect(output).toContain('provider: local');
+        expect(output).toContain('model: local-echo');
+        expect(output).toContain('selection: local/local-echo');
+        expect(output).toContain('node=chat-intake mode=llm');
+        expect(output).toContain('node=repo-analysis mode=tool');
     });
 
     it('rejects malformed graph files before running', async () => {

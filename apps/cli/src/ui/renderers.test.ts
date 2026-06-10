@@ -30,8 +30,13 @@ describe('CLI renderers', () => {
         const jsonOutput = await renderWith(new JsonRenderer());
 
         expect(inkOutput).toContain('event list');
-        expect(inkOutput).toContain('model: local/local-echo');
-        expect(plainOutput).toContain('model: local/local-echo');
+        expect(inkOutput).toContain('provider: local');
+        expect(inkOutput).toContain('model: local-echo');
+        expect(inkOutput).toContain('selection: local/local-echo');
+        expect(inkOutput).toContain('node mode: none');
+        expect(plainOutput).toContain('provider: local');
+        expect(plainOutput).toContain('model: local-echo');
+        expect(plainOutput).toContain('selection: local/local-echo');
         expect(plainOutput).toContain('task.completed completed by mock sidecar');
         expect(JSON.parse(jsonOutput.trim())).toMatchObject({
             type: 'task.completed',
@@ -41,5 +46,27 @@ describe('CLI renderers', () => {
                 modelID: 'local-echo',
             },
         });
+    });
+
+    it('plain renderer prints graph node mode when graph node context exists', async () => {
+        const renderer = new PlainRenderer();
+
+        renderer.render({
+            type: 'node.started',
+            timestamp: '2026-06-02T10:00:00.000Z',
+            sessionId: 'session_graph',
+            message: 'node started: draft-answer',
+            modelProviderSelection: {
+                providerID: 'local',
+                modelID: 'local-echo',
+            },
+            abg: {
+                graphId: 'research-answer',
+                nodeId: 'draft-answer',
+                nodeKind: 'llm',
+            },
+        });
+
+        expect(renderer.getOutput()).toContain('node.started graph=research-answer node=draft-answer mode=llm');
     });
 });

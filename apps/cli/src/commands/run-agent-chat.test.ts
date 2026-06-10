@@ -25,7 +25,10 @@ describe('runAgent interactive chat', () => {
 
         expect(output).toBe(chatOutput.getOutput());
         expect(output).toContain('mission-control chat');
-        expect(output).toContain('You: ');
+        expect(output).toContain('provider: local');
+        expect(output).toContain('model: local-echo');
+        expect(output).toContain('selection: local/local-echo');
+        expect(output).toContain('> ');
         expect(output).toContain('Assistant: received prompt: summarize the current mission');
         expect(output).toContain('Press Ctrl+C again to exit');
         expect(output).not.toContain('demo task started');

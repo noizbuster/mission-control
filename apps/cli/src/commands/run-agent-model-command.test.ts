@@ -31,8 +31,12 @@ describe('runAgent /model chat command', () => {
             },
         });
 
-        expect(output).toContain('model: local/local-echo');
-        expect(output).toContain('model: anthropic/claude-3-5-haiku-20241022');
+        expect(output).toContain('provider: local');
+        expect(output).toContain('model: local-echo');
+        expect(output).toContain('selection: local/local-echo');
+        expect(output).toContain('provider: anthropic');
+        expect(output).toContain('model: claude-3-5-haiku-20241022');
+        expect(output).toContain('selection: anthropic/claude-3-5-haiku-20241022');
         expect(output).toContain('Assistant: received prompt: explain model routing');
         const promptCompleted = events.find(
             (event) => event.type === 'task.completed' && event.message === 'received prompt: explain model routing',
@@ -43,14 +47,32 @@ describe('runAgent /model chat command', () => {
         });
     });
 
-    it('opens a model picker for /model without arguments', async () => {
+    it('prints current provider and model for /model without arguments', async () => {
+        const chatOutput = createBufferedChatOutput();
+
+        const output = await runAgent(parseArgs([]), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: '/model' },
+                { type: 'interrupt' },
+                { type: 'interrupt' },
+            ]),
+            chatOutput: chatOutput.output,
+        });
+
+        expect(output).toContain('provider: local');
+        expect(output).toContain('model: local-echo');
+        expect(output).toContain('selection: local/local-echo');
+    });
+
+    it('opens a model picker for /model pick', async () => {
         const chatOutput = createBufferedChatOutput();
         let pickerChoices: readonly string[] = [];
 
         const output = await runAgent(parseArgs([]), {
             authStore: createAuthStoreWithSummaries([createCredentialSummary('anthropic')]),
             chatInput: createScriptedChatInput([
-                { type: 'line', value: '/model' },
+                { type: 'line', value: '/model pick' },
                 { type: 'line', value: 'after picker' },
                 { type: 'interrupt' },
                 { type: 'interrupt' },
@@ -65,7 +87,8 @@ describe('runAgent /model chat command', () => {
         expect(pickerChoices.length).toBeGreaterThan(0);
         expect(pickerChoices.every((choice) => choice.startsWith('anthropic/'))).toBe(true);
         expect(pickerChoices).not.toContain('local/local-echo');
-        expect(output).toContain('model: anthropic/');
+        expect(output).toContain('provider: anthropic');
+        expect(output).toContain('selection: anthropic/');
         expect(output).toContain('Assistant: received prompt: after picker');
     });
 
@@ -88,7 +111,7 @@ describe('runAgent /model chat command', () => {
         });
 
         expect(output).toContain('Provider is not logged in: anthropic');
-        expect(output).not.toContain('model: anthropic/claude-3-5-haiku-20241022');
+        expect(output).not.toContain('selection: anthropic/claude-3-5-haiku-20241022');
         const promptCompleted = events.find(
             (event) => event.type === 'task.completed' && event.message === 'received prompt: after rejected model',
         );
@@ -140,7 +163,7 @@ describe('runAgent /model chat command', () => {
         expect(modelListOutput).toContain('anthropic/claude-3-5-haiku-20241022');
         expect(modelListOutput).not.toContain('anthropic/claude-opus-4-5');
         expect(output).toContain('Unknown model: anthropic/claude-opus-4-5');
-        expect(output).toContain('model: anthropic/claude-3-5-haiku-20241022');
+        expect(output).toContain('selection: anthropic/claude-3-5-haiku-20241022');
     });
 
     it('reports no available models when discovery filters out every catalog model', async () => {
@@ -152,7 +175,7 @@ describe('runAgent /model chat command', () => {
             }),
             chatInput: createScriptedChatInput([
                 { type: 'line', value: '/model list' },
-                { type: 'line', value: '/model' },
+                { type: 'line', value: '/model pick' },
                 { type: 'interrupt' },
                 { type: 'interrupt' },
             ]),
@@ -191,7 +214,7 @@ describe('runAgent /model chat command', () => {
         });
 
         expect(saveCount).toBe(0);
-        expect(laterOutput).toContain('model: local/local-echo');
+        expect(laterOutput).toContain('selection: local/local-echo');
     });
 });
 
@@ -200,6 +223,6 @@ function sliceModelListOutput(output: string, marker: string): string {
     if (startIndex === -1) {
         return '';
     }
-    const nextPromptIndex = output.indexOf('You:', startIndex);
+    const nextPromptIndex = output.indexOf('> ', startIndex);
     return output.slice(startIndex, nextPromptIndex === -1 ? undefined : nextPromptIndex);
 }

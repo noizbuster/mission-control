@@ -62,7 +62,7 @@ export function resolveModelCommand(
     options: ResolveModelCommandOptions = {},
 ): ModelCommandResult {
     const trimmed = input.trim();
-    if (trimmed.length === 0) {
+    if (trimmed.length === 0 || trimmed === 'pick') {
         return { type: 'pick' };
     }
     const catalog = options.catalog ?? modelProviderCatalog;

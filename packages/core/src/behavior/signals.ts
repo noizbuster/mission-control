@@ -1,4 +1,4 @@
-import type { AbgNodeModelOptions, AbgSignal, AgentEvent } from '@mission-control/protocol';
+import type { AbgNodeKind, AbgNodeModelOptions, AbgSignal, AgentEvent } from '@mission-control/protocol';
 
 export type AbgSignalProjectionInput = {
     readonly graphId: string;
@@ -7,6 +7,7 @@ export type AbgSignalProjectionInput = {
     readonly signal: AbgSignal;
     readonly causationId?: string;
     readonly correlationId?: string;
+    readonly nodeKind?: AbgNodeKind;
     readonly model?: AbgNodeModelOptions;
     readonly attempt?: number;
     readonly maxAttempts?: number;
@@ -22,6 +23,7 @@ export function projectAbgSignalToEvent(input: AbgSignalProjectionInput): AgentE
         abg: {
             graphId: input.graphId,
             nodeId: input.signal.nodeId,
+            ...(input.nodeKind !== undefined ? { nodeKind: input.nodeKind } : {}),
             signalType: input.signal.type,
             ...(input.causationId !== undefined ? { causationId: input.causationId } : {}),
             ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),

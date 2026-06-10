@@ -49,6 +49,7 @@ export function attemptEvent(
         abg: {
             graphId,
             nodeId: node.id,
+            nodeKind: node.kind,
             attempt,
             maxAttempts,
             ...(error !== undefined ? { error } : {}),
@@ -73,6 +74,7 @@ export function nodeWaitingEvent(
         abg: {
             graphId,
             nodeId: node.id,
+            nodeKind: node.kind,
         },
     };
 }
@@ -97,6 +99,7 @@ export function approvalLifecycleEvent(
         abg: {
             graphId,
             nodeId: node.id,
+            nodeKind: node.kind,
         },
     };
 }
@@ -121,6 +124,7 @@ export function modelCallEvent(
         abg: {
             graphId,
             nodeId: node.id,
+            nodeKind: node.kind,
             model,
         },
     };
@@ -145,6 +149,7 @@ export function toolLifecycleEvent(
         abg: {
             graphId,
             nodeId: node.id,
+            nodeKind: node.kind,
         },
     };
 }
@@ -173,6 +178,7 @@ export function permissionEvent(
         abg: {
             graphId,
             nodeId: node.id,
+            nodeKind: node.kind,
         },
     };
 }
@@ -194,6 +200,7 @@ export function policyBlockedEvent(
         abg: {
             graphId,
             nodeId: node.id,
+            nodeKind: node.kind,
         },
     };
 }

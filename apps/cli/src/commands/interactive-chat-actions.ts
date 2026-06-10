@@ -5,10 +5,11 @@ import type {
     ProviderAdapter,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
-import { type ChatLineAction, formatModelProviderSelection } from './chat-commands.js';
+import type { ChatLineAction } from './chat-commands.js';
 import type { ModelSelector } from './interactive-chat.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import type { ModelChoice } from './interactive-chat-model.js';
+import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { type ActiveCodingAgentTurn, startCodingAgentTurn } from './interactive-coding-agent.js';
 
 export type ChatActionResult = {
@@ -56,7 +57,7 @@ export async function runChatAction(
         case 'interrupt':
             return runInterruptAction(chatOutput, currentModelProviderSelection, coding.activeTurn);
         case 'model-status':
-            chatOutput.write(`model: ${formatModelProviderSelection(currentModelProviderSelection)}\n`);
+            chatOutput.write(formatModelProviderStatus(currentModelProviderSelection, { nodeMode: 'none' }));
             return actionResult(currentModelProviderSelection, coding.activeTurn);
         case 'model-pick':
             return runModelPickAction(
@@ -77,7 +78,7 @@ export async function runChatAction(
             );
         case 'model':
             runtime.setModelProviderSelection(action.selection);
-            chatOutput.write(`model: ${formatModelProviderSelection(action.selection)}\n`);
+            chatOutput.write(formatModelProviderStatus(action.selection, { nodeMode: 'none' }));
             return actionResult(action.selection, coding.activeTurn);
         case 'skill':
             await runtime.runSkillInvocationTask({ skillID: action.name, argumentsText: action.instruction });
@@ -139,11 +140,11 @@ async function runModelPickAction(
     }
     const selection = await selectModel(modelChoices, currentSelection);
     if (selection === undefined) {
-        chatOutput.write(`model: ${formatModelProviderSelection(currentSelection)}\n`);
+        chatOutput.write(formatModelProviderStatus(currentSelection, { nodeMode: 'none' }));
         return actionResult(currentSelection, coding.activeTurn);
     }
     runtime.setModelProviderSelection(selection);
-    chatOutput.write(`model: ${formatModelProviderSelection(selection)}\n`);
+    chatOutput.write(formatModelProviderStatus(selection, { nodeMode: 'none' }));
     return actionResult(selection, coding.activeTurn);
 }
 

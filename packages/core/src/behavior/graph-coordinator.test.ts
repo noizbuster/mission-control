@@ -35,6 +35,7 @@ describe('bounded ABG graph coordinator', () => {
             ]),
         );
         expect(result.events.find((event) => event.type === 'attempt.started')?.durability).toBe('durable');
+        expect(result.events.find((event) => event.type === 'node.started')?.abg?.nodeKind).toBe('action');
     });
 
     it('retries a failed node attempt and completes when the retry succeeds', async () => {

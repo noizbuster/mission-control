@@ -5,7 +5,7 @@ import type {
     ProviderAdapter,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
-import { formatModelProviderSelection, parseChatLine } from './chat-commands.js';
+import { parseChatLine } from './chat-commands.js';
 import { runChatAction } from './interactive-chat-actions.js';
 import {
     type ChatInput,
@@ -17,6 +17,7 @@ import {
 } from './interactive-chat-io.js';
 import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
 import { createTerminalModelSelector } from './interactive-chat-model-selector.js';
+import { formatModelProviderStatus } from './interactive-chat-status.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
@@ -61,7 +62,7 @@ export async function runInteractiveChatSession(
 
     try {
         chatOutput.write('mission-control chat\n');
-        chatOutput.write(`model: ${formatModelProviderSelection(currentModelProviderSelection)}\n`);
+        chatOutput.write(formatModelProviderStatus(currentModelProviderSelection, { nodeMode: 'none' }));
         if (sessionId !== undefined) {
             chatOutput.write(`resumed session: ${sessionId}\n`);
         }
@@ -69,7 +70,11 @@ export async function runInteractiveChatSession(
 
         for (;;) {
             if (activeTurn === undefined) {
-                chatOutput.write('You: ');
+                if (chatInput.controlsPrompt === true) {
+                    chatInput.renderPrompt?.({ modelProviderSelection: currentModelProviderSelection });
+                } else {
+                    chatOutput.write('> ');
+                }
             }
             const next = await nextChatLoopEvent(inputPump, activeTurn);
             if (next.type === 'active-completed') {

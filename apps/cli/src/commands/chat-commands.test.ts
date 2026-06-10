@@ -14,6 +14,15 @@ describe('chat command parser', () => {
         });
     });
 
+    it('parses bare model commands as status and explicit pick commands as picker requests', () => {
+        expect(parseChatLine('/model')).toEqual({
+            kind: 'model-status',
+        });
+        expect(parseChatLine('/model pick')).toEqual({
+            kind: 'model-pick',
+        });
+    });
+
     it('parses skill invocations when input starts with a dollar sign', () => {
         const action = parseChatLine('$planner draft a rollout checklist');
 

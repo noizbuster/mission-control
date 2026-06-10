@@ -54,6 +54,9 @@ describe('runAgent interactive coding agent UX', () => {
 
         // Then
         expect(output).toContain('resumed session: session_task20_stream');
+        expect(output).toContain('provider: local');
+        expect(output).toContain('model: local-echo');
+        expect(output).toContain('selection: local/local-echo');
         expect(output).toContain('Assistant: stream chunk');
         expect(events).toContainEqual(
             expect.objectContaining({

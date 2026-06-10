@@ -1,5 +1,5 @@
 import type { AgentRuntime } from '@mission-control/core';
-import type { AgentEvent } from '@mission-control/protocol';
+import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { AgentUIRenderer } from './ui-adapter.js';
 
 abstract class BufferedRenderer implements AgentUIRenderer {
@@ -33,14 +33,29 @@ abstract class BufferedRenderer implements AgentUIRenderer {
         );
     }
 
+    protected get selectedModelProviderSelection(): ModelProviderSelection | undefined {
+        return [...this.events].reverse().find((event) => event.modelProviderSelection !== undefined)
+            ?.modelProviderSelection;
+    }
+
+    protected get selectedProvider(): string {
+        return this.selectedModelProviderSelection?.providerID ?? 'unknown';
+    }
+
     protected get selectedModel(): string {
-        const selection = [...this.events]
-            .reverse()
-            .find((event) => event.modelProviderSelection !== undefined)?.modelProviderSelection;
+        return this.selectedModelProviderSelection?.modelID ?? 'unknown';
+    }
+
+    protected get selectedSelection(): string {
+        const selection = this.selectedModelProviderSelection;
         if (selection === undefined) {
             return 'unknown';
         }
         return `${selection.providerID}/${selection.modelID}`;
+    }
+
+    protected get currentNodeMode(): string {
+        return [...this.events].reverse().find((event) => event.abg?.nodeKind !== undefined)?.abg?.nodeKind ?? 'none';
     }
 }
 
@@ -50,16 +65,20 @@ export class PlainRenderer extends BufferedRenderer {
             'mission-control',
             'command: mctrl',
             `session: ${this.sessionId}`,
+            `provider: ${this.selectedProvider}`,
             `model: ${this.selectedModel}`,
+            `selection: ${this.selectedSelection}`,
+            `node mode: ${this.currentNodeMode}`,
             ...this.events.map((event) => {
-                const message = event.message ? ` ${event.message}` : '';
+                const message = eventMessageSuffix(event);
                 const graph = event.abg?.graphId !== undefined ? ` graph=${event.abg.graphId}` : '';
                 const node = event.abg?.nodeId !== undefined ? ` node=${event.abg.nodeId}` : '';
+                const mode = event.abg?.nodeKind !== undefined ? ` mode=${event.abg.nodeKind}` : '';
                 const model =
                     event.abg?.model !== undefined
                         ? ` model=${event.abg.model.providerID}/${event.abg.model.modelID}`
                         : '';
-                return `${event.type}${graph}${node}${model}${message}`;
+                return `${event.type}${graph}${node}${mode}${model}${message}`;
             }),
         ];
         return `${lines.join('\n')}\n`;
@@ -72,7 +91,10 @@ export class InkRenderer extends BufferedRenderer {
             'mission-control',
             'command: mctrl',
             `session: ${this.sessionId}`,
+            `provider: ${this.selectedProvider}`,
             `model: ${this.selectedModel}`,
+            `selection: ${this.selectedSelection}`,
+            `node mode: ${this.currentNodeMode}`,
             'current status: running',
             `event list: ${this.events.map((event) => event.type).join(', ')}`,
             'running task count: 0',
@@ -87,6 +109,13 @@ export class JsonRenderer extends BufferedRenderer {
     getOutput(): string {
         return `${this.events.map((event) => JSON.stringify(event)).join('\n')}\n`;
     }
+}
+
+function eventMessageSuffix(event: AgentEvent): string {
+    if (event.message === undefined || event.message.startsWith(`${event.type}: `)) {
+        return '';
+    }
+    return ` ${event.message}`;
 }
 
 export type { AgentUIRenderer };

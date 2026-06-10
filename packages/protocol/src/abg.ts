@@ -214,6 +214,7 @@ export type AbgRuntimeError = z.infer<typeof AbgRuntimeErrorSchema>;
 export const AbgEventMetadataSchema = z.object({
     graphId: z.string().min(1).optional(),
     nodeId: z.string().min(1).optional(),
+    nodeKind: AbgNodeKindSchema.optional(),
     signalType: AbgSignalTypeSchema.optional(),
     causationId: z.string().min(1).optional(),
     correlationId: z.string().min(1).optional(),

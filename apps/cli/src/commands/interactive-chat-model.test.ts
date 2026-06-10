@@ -41,7 +41,7 @@ describe('interactive chat model command', () => {
 
     it('returns list and picker resolutions without exposing credentials', () => {
         const list = resolveModelCommand('list', currentSelection);
-        const picker = resolveModelCommand('', currentSelection);
+        const picker = resolveModelCommand('pick', currentSelection);
 
         expect(list.type).toBe('list');
         expect(picker).toEqual({ type: 'pick' });

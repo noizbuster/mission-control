@@ -1,0 +1,164 @@
+import { describe, expect, it } from 'vitest';
+import {
+    createSlashCommandMenuState,
+    createSlashCommandMenuView,
+    reduceSlashCommandMenuSelection,
+    resolveSlashCommandMenuSubmission,
+} from './interactive-chat-command-menu.js';
+import {
+    deleteTerminalChatInputCharacterBeforeCursor,
+    formatTerminalChatCommittedInputLine,
+    formatTerminalChatInputBlock,
+    insertTerminalChatInputText,
+    moveTerminalChatInputCursor,
+    renderTerminalChatInputBlock,
+} from './interactive-chat-input-block.js';
+import {
+    isTerminalShiftEnterSequence,
+    terminalModifiedKeyDisableSequence,
+    terminalModifiedKeyEnableSequence,
+} from './interactive-chat-keyboard.js';
+
+describe('interactive chat command menu', () => {
+    it('opens slash commands, filters by typed query, and submits the arrow-selected command', () => {
+        const initialState = createSlashCommandMenuState();
+        const filteredView = createSlashCommandMenuView('/mo', initialState, 5);
+
+        expect(filteredView.open).toBe(true);
+        expect(filteredView.query).toBe('mo');
+        expect(filteredView.visibleChoices.map((choice) => choice.id)).toEqual([
+            '/model',
+            '/model pick',
+            '/model list',
+        ]);
+
+        const downState = reduceSlashCommandMenuSelection(initialState, '\u001b[B', '/mo');
+        const upState = reduceSlashCommandMenuSelection(downState, '\u001b[A', '/mo');
+
+        expect(createSlashCommandMenuView('/mo', downState, 5).selectedIndex).toBe(1);
+        expect(createSlashCommandMenuView('/mo', upState, 5).selectedIndex).toBe(0);
+        expect(resolveSlashCommandMenuSubmission('/mo', upState)).toBe('/model');
+    });
+
+    it('shows an empty state for unmatched slash command searches without rewriting submission', () => {
+        const state = createSlashCommandMenuState();
+        const view = createSlashCommandMenuView('/zz', state, 5);
+
+        expect(view.open).toBe(true);
+        expect(view.empty).toBe(true);
+        expect(view.visibleChoices).toEqual([]);
+        expect(resolveSlashCommandMenuSubmission('/zz', state)).toBe('/zz');
+    });
+
+    it('formats a terminal input block with a menu above a styled prompt', () => {
+        const block = formatTerminalChatInputBlock('/mo', createSlashCommandMenuState(), 100);
+
+        expect(block).toContain('/model');
+        expect(block).toContain('Commands');
+        expect(block).toContain('\u001b[48;5;236m> /mo');
+    });
+
+    it('formats the typing area as a three-line highlighted input surface', () => {
+        const block = formatTerminalChatInputBlock('hello', createSlashCommandMenuState(), 40);
+        const highlightedLines = block.split('\n').filter((line) => line.includes('\u001b[48;5;236m'));
+
+        expect(highlightedLines).toHaveLength(3);
+        expect(highlightedLines[0]?.replaceAll('\u001b[48;5;236m', '')).toContain(' ');
+        expect(highlightedLines[1]).toContain('> hello');
+        expect(highlightedLines[2]?.replaceAll('\u001b[48;5;236m', '')).toContain(' ');
+        expect(block).toContain('\u001b[1A\r\u001b[7C');
+    });
+
+    it('formats committed input as a plain history line without the transient menu', () => {
+        const committedLine = formatTerminalChatCommittedInputLine('/model', 100);
+
+        expect(committedLine).toBe('> /model');
+        expect(committedLine).not.toContain('Commands');
+        expect(committedLine).not.toContain('\u001b[48;5;236m');
+    });
+
+    it('formats a multiline input surface with model status below the editor', () => {
+        const block = formatTerminalChatInputBlock('hello\nworld', createSlashCommandMenuState(), 60, {
+            providerID: 'local',
+            modelID: 'local-echo',
+        });
+        const highlightedLines = block.split('\n').filter((line) => line.includes('\u001b[48;5;236m'));
+
+        expect(highlightedLines).toHaveLength(4);
+        expect(block).toContain('> hello');
+        expect(block).toContain('| world');
+        expect(block).toContain('provider: local  model: local-echo');
+        expect(block).toContain('\u001b[2A\r\u001b[7C');
+    });
+
+    it('formats committed multiline input as plain history without model status', () => {
+        const committedLine = formatTerminalChatCommittedInputLine('hello\nworld', 100);
+
+        expect(committedLine).toBe('> hello\n| world');
+        expect(committedLine).not.toContain('provider:');
+        expect(committedLine).not.toContain('\u001b[48;5;236m');
+    });
+
+    it('inserts multiline text at the active cursor and renders the cursor on that line', () => {
+        const firstLine = insertTerminalChatInputText({ value: '', cursorOffset: 0 }, 'hello');
+        const multiline = insertTerminalChatInputText(firstLine, '\nworld');
+        const moved = moveTerminalChatInputCursor(moveTerminalChatInputCursor(multiline, 'left'), 'left');
+        const edited = insertTerminalChatInputText(moved, '!');
+        const block = renderTerminalChatInputBlock(edited, createSlashCommandMenuState(), 60);
+
+        expect(edited.value).toBe('hello\nwor!ld');
+        expect(edited.cursorOffset).toBe(10);
+        expect(block.cursorLineIndex).toBe(2);
+        expect(block.text).toContain('| wor!ld');
+        expect(block.text).toContain('\u001b[1A\r\u001b[6C');
+    });
+
+    it('moves and deletes by grapheme when editing Korean and emoji input', () => {
+        const initial = insertTerminalChatInputText({ value: '', cursorOffset: 0 }, '한글🙂');
+        const moved = moveTerminalChatInputCursor(initial, 'left');
+        const edited = insertTerminalChatInputText(moved, '!');
+        const deletedEmoji = deleteTerminalChatInputCharacterBeforeCursor(initial);
+        const deletedKorean = deleteTerminalChatInputCharacterBeforeCursor(deletedEmoji);
+
+        expect(initial.cursorOffset).toBe('한글🙂'.length);
+        expect(moved.cursorOffset).toBe('한글'.length);
+        expect(edited.value).toBe('한글!🙂');
+        expect(deletedEmoji).toEqual({ value: '한글', cursorOffset: '한글'.length });
+        expect(deletedKorean).toEqual({ value: '한', cursorOffset: '한'.length });
+    });
+
+    it('renders cursor columns and padding with terminal display width', () => {
+        const block = formatTerminalChatInputBlock('한국어', createSlashCommandMenuState(), 20);
+        const highlightedLines = block.split('\n').filter((line) => line.includes('\u001b[48;5;236m'));
+
+        expect(highlightedLines[1]).toContain('> 한국어');
+        expect(block).toContain('\u001b[1A\r\u001b[8C');
+    });
+
+    it('keeps vertical cursor movement aligned by display columns for CJK text', () => {
+        const input = insertTerminalChatInputText({ value: '', cursorOffset: 0 }, '한국어\nab');
+        const movedUp = moveTerminalChatInputCursor(input, 'up');
+        const block = renderTerminalChatInputBlock(movedUp, createSlashCommandMenuState(), 40);
+
+        expect(movedUp.cursorOffset).toBe('한'.length);
+        expect(block.text).toContain('\u001b[2A\r\u001b[4C');
+    });
+
+    it('recognizes terminal Shift+Enter sequences without treating their trailing return as submit', () => {
+        const mode = { modifiedKeysEnabled: true };
+
+        expect(isTerminalShiftEnterSequence('\u001b[13;2u', mode)).toBe(true);
+        expect(isTerminalShiftEnterSequence('\u001b[13;2u\r', mode)).toBe(true);
+        expect(isTerminalShiftEnterSequence('\u001b[27;2;13~', mode)).toBe(true);
+        expect(isTerminalShiftEnterSequence('\u001b\r', mode)).toBe(true);
+        expect(isTerminalShiftEnterSequence('\n', mode)).toBe(true);
+        expect(isTerminalShiftEnterSequence('\r', mode)).toBe(false);
+    });
+
+    it('emits terminal modified-key protocol toggles for distinguishing Shift+Enter from Enter', () => {
+        expect(terminalModifiedKeyEnableSequence).toContain('\u001b[>7u');
+        expect(terminalModifiedKeyEnableSequence).toContain('\u001b[>4;2m');
+        expect(terminalModifiedKeyDisableSequence).toContain('\u001b[<u');
+        expect(terminalModifiedKeyDisableSequence).toContain('\u001b[>4;0m');
+    });
+});

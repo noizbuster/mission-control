@@ -49,6 +49,7 @@ describe('ABG runtime metadata protocol schemas', () => {
             abg: {
                 graphId: 'approval-graph',
                 nodeId: 'approve-patch',
+                nodeKind: 'human-approval',
                 attempt: 3,
                 maxAttempts: 3,
             },
@@ -59,6 +60,7 @@ describe('ABG runtime metadata protocol schemas', () => {
         expect(graph.policies[0]?.decision).toBe('requires_approval');
         expect(limitEvent.abg?.error?.code).toBe('graph_loop_limit');
         expect(attemptEvent.durability).toBe('durable');
+        expect(attemptEvent.abg?.nodeKind).toBe('human-approval');
         expect(attemptEvent.abg?.attempt).toBe(3);
     });
 
