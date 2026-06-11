@@ -1,11 +1,12 @@
 import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
-    createDeterministicProvider,
     missionControlDataDirEnvKey,
+    type ProviderAdapter,
+    type ProviderTurnRequest,
     projectJsonlSessionReplayPrefix,
 } from '@mission-control/core';
-import { type AgentEvent, AgentEventSchema } from '@mission-control/protocol';
+import { type AgentEvent, AgentEventSchema, type ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../apps/cli/src/args.js';
 import { runAgent } from '../apps/cli/src/commands/run-agent.js';
@@ -50,23 +51,29 @@ describe('coding-agent end-to-end smoke', () => {
             chatOutput: chatOutput.output,
             workspaceRoot,
             commandExecutor: fakeTypecheckExecutor,
-            provider: createDeterministicProvider([
-                { kind: 'text_delta', delta: 'Preparing smoke patch.' },
-                {
-                    kind: 'tool_call_completed',
-                    toolCallId: 'smoke_patch',
-                    toolName: 'file.patch',
-                    argumentsJson: JSON.stringify({
-                        patch: addFilePatch('.mission-control-smoke.txt', 'smoke complete'),
-                    }),
-                },
-                {
-                    kind: 'tool_call_completed',
-                    toolCallId: 'smoke_typecheck',
-                    toolName: 'command.run',
-                    argumentsJson: JSON.stringify({ command: 'pnpm', args: ['typecheck'] }),
-                },
-                { kind: 'response_completed', content: 'smoke complete' },
+            provider: providerFromTurns([
+                [
+                    { kind: 'text_delta', delta: 'Preparing smoke patch.' },
+                    {
+                        kind: 'tool_call_completed',
+                        toolCallId: 'smoke_patch',
+                        toolName: 'file.patch',
+                        argumentsJson: JSON.stringify({
+                            patch: addFilePatch('.mission-control-smoke.txt', 'smoke complete'),
+                        }),
+                    },
+                    { kind: 'response_completed', content: 'patch requested' },
+                ],
+                [
+                    {
+                        kind: 'tool_call_completed',
+                        toolCallId: 'smoke_typecheck',
+                        toolName: 'command.run',
+                        argumentsJson: JSON.stringify({ command: 'pnpm', args: ['typecheck'] }),
+                    },
+                    { kind: 'response_completed', content: 'typecheck requested' },
+                ],
+                [{ kind: 'response_completed', content: 'smoke complete' }],
             ]),
         });
         const replayedChatEvents = parseEventLines(
@@ -155,6 +162,64 @@ function addFilePatch(path: string, content: string): string {
         `+${content}`,
         '',
     ].join('\n');
+}
+
+type ProviderStep =
+    | {
+          readonly kind: 'text_delta';
+          readonly delta: string;
+      }
+    | {
+          readonly kind: 'tool_call_completed';
+          readonly toolCallId: string;
+          readonly toolName: string;
+          readonly argumentsJson: string;
+      }
+    | {
+          readonly kind: 'response_completed';
+          readonly content: string;
+      };
+
+function providerFromTurns(turns: readonly (readonly ProviderStep[])[]): ProviderAdapter {
+    const requests: ProviderTurnRequest[] = [];
+    return {
+        async *streamTurn(request) {
+            requests.push(request);
+            const steps = turns[requests.length - 1] ?? [{ kind: 'response_completed', content: 'done' }];
+            for (const [index, step] of steps.entries()) {
+                yield chunkForStep(request, step, index + 1);
+            }
+        },
+    };
+}
+
+function chunkForStep(request: ProviderTurnRequest, step: ProviderStep, sequence: number): ProviderStreamChunk {
+    if (step.kind === 'text_delta') {
+        return { kind: 'text_delta', requestId: request.requestId, sequence, delta: step.delta };
+    }
+    if (step.kind === 'tool_call_completed') {
+        return {
+            kind: 'tool_call_completed',
+            requestId: request.requestId,
+            sequence,
+            toolCall: {
+                toolCallId: step.toolCallId,
+                toolName: step.toolName,
+                argumentsJson: step.argumentsJson,
+            },
+        };
+    }
+    return {
+        kind: 'response_completed',
+        requestId: request.requestId,
+        sequence,
+        message: {
+            messageId: `message_${request.turnId}`,
+            role: 'assistant',
+            content: step.content,
+        },
+        finishReason: 'stop',
+    };
 }
 
 async function fakeTypecheckExecutor(request: CommandExecutionRequest): Promise<CommandExecutionResult> {

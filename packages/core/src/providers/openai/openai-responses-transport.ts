@@ -1,11 +1,30 @@
-import type { AgentMessage } from '@mission-control/protocol';
+import type { TextAgentMessage } from '@mission-control/protocol';
 
 export const defaultOpenAIResponsesEndpoint = 'https://api.openai.com/v1/responses';
 
 export type OpenAIResponsesInputMessage = {
-    readonly role: AgentMessage['role'];
+    readonly role: TextAgentMessage['role'];
     readonly content: string;
 };
+
+export type OpenAIResponsesFunctionCallOutput = {
+    readonly type: 'function_call_output';
+    readonly call_id: string;
+    readonly output: string;
+};
+
+export type OpenAIResponsesFunctionCallInput = {
+    readonly type: 'function_call';
+    readonly id: string;
+    readonly call_id: string;
+    readonly name: string;
+    readonly arguments: string;
+};
+
+export type OpenAIResponsesInputItem =
+    | OpenAIResponsesInputMessage
+    | OpenAIResponsesFunctionCallInput
+    | OpenAIResponsesFunctionCallOutput;
 
 export type OpenAIResponsesTool = {
     readonly type: 'function';
@@ -18,7 +37,7 @@ export type OpenAIReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'hig
 
 export type OpenAIResponsesRequestBody = {
     readonly model: string;
-    readonly input: readonly OpenAIResponsesInputMessage[];
+    readonly input: readonly OpenAIResponsesInputItem[];
     readonly stream: true;
     readonly store: false;
     readonly stream_options: {

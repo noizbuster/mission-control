@@ -58,7 +58,13 @@ async function searchWithRipgrep(
     input: RepoSearchInput,
     options: RepoSearchOptions,
 ): Promise<RepoSearchResult | undefined> {
+    if (guard.hasAllowedDenylistedPaths) {
+        return undefined;
+    }
     const args = ['--json', '--line-number', '--color=never', '--hidden', '--no-messages'];
+    for (const glob of guard.denylistRipgrepGlobs) {
+        args.push('--glob', glob);
+    }
     if (input.include !== undefined) {
         args.push('--glob', input.include);
     }
@@ -125,6 +131,9 @@ function parseRgMatch(guard: WorkspaceGuard, line: string, maxLineChars: number)
     if (path === undefined || lineNumber === undefined || text === undefined) {
         return [];
     }
+    if (guard.isDeniedAbsolutePath(path)) {
+        return [];
+    }
     return [formatMatch(guard.relativeFromAbsolute(path), lineNumber, text.replace(/\n$/, ''), maxLineChars)];
 }
 
@@ -134,7 +143,7 @@ async function searchWithNode(
     input: RepoSearchInput,
     options: RepoSearchOptions,
 ): Promise<RepoSearchResult> {
-    const files = target.stats.isDirectory() ? await collectFiles(target.absolutePath) : [target.absolutePath];
+    const files = target.stats.isDirectory() ? await collectFiles(guard, target.absolutePath) : [target.absolutePath];
     const matches: RepoSearchMatch[] = [];
     let totalMatches = 0;
     for (const file of files) {
@@ -159,15 +168,16 @@ async function searchWithNode(
     return { matches, totalMatches };
 }
 
-async function collectFiles(root: string): Promise<readonly string[]> {
+async function collectFiles(guard: WorkspaceGuard, root: string): Promise<readonly string[]> {
     const entries = await readdir(root, { withFileTypes: true });
     const files: string[] = [];
     for (const entry of entries) {
         const absolutePath = join(root, entry.name);
+        if (!guard.shouldTraverseAbsolutePath(absolutePath)) {
+            continue;
+        }
         if (entry.isDirectory()) {
-            if (entry.name !== '.git' && entry.name !== 'node_modules') {
-                files.push(...(await collectFiles(absolutePath)));
-            }
+            files.push(...(await collectFiles(guard, absolutePath)));
             continue;
         }
         if (entry.isFile()) {

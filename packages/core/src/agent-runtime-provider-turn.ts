@@ -1,4 +1,9 @@
-import type { AgentEventEnvelope, ModelProviderSelection } from '@mission-control/protocol';
+import type {
+    AgentEventEnvelope,
+    ModelProviderSelection,
+    PermissionDecision,
+    PermissionRequest,
+} from '@mission-control/protocol';
 import { ProviderTurnRunner } from './providers/provider-turn-runner.js';
 import { type ProviderAdapter, ProviderTurnError } from './providers/provider-turn-types.js';
 
@@ -11,6 +16,7 @@ export type RuntimeProviderPromptInput = {
     readonly providerTimeoutMs?: number;
     readonly providerRetryLimit?: number;
     readonly providerTurnLoopLimit?: number;
+    readonly requestPermission: (request: PermissionRequest) => Promise<PermissionDecision>;
     readonly onEnvelope: (envelope: AgentEventEnvelope) => void;
 };
 
@@ -35,7 +41,25 @@ export async function runRuntimeProviderPromptTask(input: RuntimeProviderPromptI
         onEnvelope: input.onEnvelope,
     });
     if (result.status === 'completed') {
+        await requireProviderToolPermissions(input, result.envelopes);
         return result.message.content;
     }
     throw new ProviderTurnError(result.error);
+}
+
+async function requireProviderToolPermissions(
+    input: RuntimeProviderPromptInput,
+    envelopes: readonly AgentEventEnvelope[],
+): Promise<void> {
+    for (const envelope of envelopes) {
+        const chunk = envelope.event.providerStreamChunk;
+        if (chunk?.kind !== 'tool_call_completed') {
+            continue;
+        }
+        await input.requestPermission({
+            id: `permission_${chunk.toolCall.toolCallId}`,
+            action: chunk.toolCall.toolName,
+            reason: `provider requested tool: ${chunk.toolCall.toolName}`,
+        });
+    }
 }

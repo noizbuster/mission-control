@@ -1,37 +1,23 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { type OpenAIResponsesErrorRedactor, protocolErrorFromOpenAIError } from './openai-responses-errors.js';
 import {
-    type OpenAIFunctionCallItem,
     parseOpenAIFunctionCallItem,
     parseOpenAIMessageOutputText,
     parseOpenAIResponsesStreamEvent,
 } from './openai-responses-events.js';
+import {
+    completeToolCall,
+    completeToolCallsFromResponseOutput,
+    createOpenAIResponsesMappingState,
+    type OpenAIResponsesMappingState,
+    providerCallId,
+    providerResponseId,
+    providerToolCallMessageFields,
+    rememberFunctionCall,
+    requireToolCallState,
+} from './openai-responses-tool-calls.js';
 
-type ToolCallState = {
-    toolCallId: string;
-    providerItemId: string;
-    providerCallId?: string;
-    toolName?: string;
-    argumentsJson: string;
-    completed: boolean;
-};
-
-export type OpenAIResponsesMappingState = {
-    requestId: string;
-    nextSequence: number;
-    providerResponseId?: string;
-    toolCallsByItemId: Map<string, ToolCallState>;
-    toolItemIdsByOutputIndex: Map<number, string>;
-};
-
-export function createOpenAIResponsesMappingState(requestId: string): OpenAIResponsesMappingState {
-    return {
-        requestId,
-        nextSequence: 0,
-        toolCallsByItemId: new Map(),
-        toolItemIdsByOutputIndex: new Map(),
-    };
-}
+export { createOpenAIResponsesMappingState, type OpenAIResponsesMappingState };
 
 export function* mapOpenAIResponsesStreamEvent(
     rawEvent: unknown,
@@ -84,7 +70,20 @@ export function* mapOpenAIResponsesStreamEvent(
         case 'response.function_call_arguments.done': {
             const toolCall = requireToolCallState(state, event.item_id, event.output_index);
             toolCall.argumentsJson = event.arguments;
-            yield* completeToolCall(state, toolCall, sequence, event.type, event.response_id, event.name);
+            if (event.name !== undefined) {
+                toolCall.toolName = event.name;
+            }
+            if (toolCall.providerCallId === undefined) {
+                return;
+            }
+            yield* completeToolCall({
+                state,
+                toolCall,
+                sequence,
+                sourceEventType: event.type,
+                responseId: event.response_id,
+                toolName: event.name,
+            });
             return;
         }
         case 'response.output_item.done': {
@@ -94,11 +93,25 @@ export function* mapOpenAIResponsesStreamEvent(
             }
             const toolCall = rememberFunctionCall(state, event.output_index, item);
             toolCall.argumentsJson = item.arguments;
-            yield* completeToolCall(state, toolCall, sequence, event.type, event.response_id, item.name);
+            yield* completeToolCall({
+                state,
+                toolCall,
+                sequence,
+                sourceEventType: event.type,
+                responseId: event.response_id,
+                toolName: item.name,
+            });
             return;
         }
         case 'response.completed':
             state.providerResponseId = event.response.id;
+            yield* completeToolCallsFromResponseOutput({
+                state,
+                sequence,
+                sourceEventType: event.type,
+                responseId: event.response.id,
+                output: event.response.output ?? [],
+            });
             yield {
                 kind: 'response_completed',
                 requestId: state.requestId,
@@ -109,6 +122,7 @@ export function* mapOpenAIResponsesStreamEvent(
                     messageId: `message_${event.response.id}`,
                     role: 'assistant',
                     content: completedResponseText(event.response.output ?? []),
+                    ...providerToolCallMessageFields(state),
                 },
                 finishReason: 'stop',
                 ...usageFromResponse(event.response.usage),
@@ -137,94 +151,6 @@ export function* mapOpenAIResponsesStreamEvent(
         default:
             return;
     }
-}
-
-function rememberFunctionCall(
-    state: OpenAIResponsesMappingState,
-    outputIndex: number,
-    item: OpenAIFunctionCallItem | undefined,
-): ToolCallState {
-    const existingItemId = item?.id ?? state.toolItemIdsByOutputIndex.get(outputIndex);
-    if (existingItemId !== undefined) {
-        const existing = state.toolCallsByItemId.get(existingItemId);
-        if (existing !== undefined) {
-            if (item !== undefined) {
-                existing.toolName = item.name;
-                if (item.call_id !== undefined) {
-                    existing.providerCallId = item.call_id;
-                }
-            }
-            return existing;
-        }
-    }
-
-    const providerItemId = item?.id ?? `output_${outputIndex}`;
-    const toolCall: ToolCallState = {
-        toolCallId: `tool_call_${providerItemId}`,
-        providerItemId,
-        argumentsJson: item?.arguments ?? '',
-        completed: false,
-        ...(item?.call_id !== undefined ? { providerCallId: item.call_id } : {}),
-        ...(item?.name !== undefined ? { toolName: item.name } : {}),
-    };
-    state.toolCallsByItemId.set(providerItemId, toolCall);
-    state.toolItemIdsByOutputIndex.set(outputIndex, providerItemId);
-    return toolCall;
-}
-
-function requireToolCallState(state: OpenAIResponsesMappingState, itemId: string, outputIndex: number): ToolCallState {
-    const existing = state.toolCallsByItemId.get(itemId);
-    if (existing !== undefined) {
-        return existing;
-    }
-    state.toolItemIdsByOutputIndex.set(outputIndex, itemId);
-    const created: ToolCallState = {
-        toolCallId: `tool_call_${itemId}`,
-        providerItemId: itemId,
-        argumentsJson: '',
-        completed: false,
-    };
-    state.toolCallsByItemId.set(itemId, created);
-    return created;
-}
-
-function* completeToolCall(
-    state: OpenAIResponsesMappingState,
-    toolCall: ToolCallState,
-    sequence: number,
-    sourceEventType: string,
-    responseId: string | undefined,
-    toolName: string | undefined,
-): Iterable<ProviderStreamChunk> {
-    if (toolCall.completed) {
-        return;
-    }
-    toolCall.completed = true;
-    if (toolName !== undefined) {
-        toolCall.toolName = toolName;
-    }
-    yield {
-        kind: 'tool_call_completed',
-        requestId: state.requestId,
-        sequence,
-        sourceEventType,
-        ...providerResponseId(responseId ?? state.providerResponseId),
-        toolCall: {
-            toolCallId: toolCall.toolCallId,
-            toolName: toolCall.toolName ?? 'unknown_function',
-            argumentsJson: toolCall.argumentsJson,
-            ...providerCallId(toolCall.providerCallId),
-            providerItemId: toolCall.providerItemId,
-        },
-    };
-}
-
-function providerResponseId(providerResponse: string | undefined): { readonly providerResponseId?: string } {
-    return providerResponse === undefined ? {} : { providerResponseId: providerResponse };
-}
-
-function providerCallId(providerCall: string | undefined): { readonly providerCallId?: string } {
-    return providerCall === undefined ? {} : { providerCallId: providerCall };
 }
 
 function completedResponseText(output: readonly unknown[]): string {

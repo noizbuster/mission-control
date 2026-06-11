@@ -12,6 +12,7 @@ import {
     type ToolRegistrationMetadata,
     ToolRegistrationMetadataSchema,
 } from './tool-registry-types.js';
+import { completedToolEvent, failedToolEvent } from './tool-settlement-events.js';
 import { createHash } from 'node:crypto';
 
 const neverAbortSignal = new AbortController().signal;
@@ -92,20 +93,18 @@ async function invokeRegisteredTool(
         parsedOutput.modelOutput,
         registered.advertisement.outputLimit.maxModelOutputChars,
     );
+    const result = ToolResultSchema.parse({
+        toolCallId: input.toolCallId,
+        status: 'completed',
+        output: modelOutput.content,
+    });
     return {
         toolCallId: input.toolCallId,
         toolName: input.toolName,
-        result: ToolResultSchema.parse({
-            toolCallId: input.toolCallId,
-            status: 'completed',
-            output: modelOutput.content,
-        }),
+        result,
         structuredOutput: parsedOutput.value,
         modelOutput,
-        events: [
-            ...parsedOutput.events,
-            toolEvent('tool.completed', input.toolCallId, `tool completed: ${input.toolName}`),
-        ],
+        events: [...parsedOutput.events, completedToolEvent(input.toolCallId, input.toolName, result)],
     };
 }
 
@@ -212,25 +211,16 @@ function failedSettlement(
     error: ProtocolError,
     events: readonly AgentEvent[] = [],
 ): ToolInvocationSettlement {
+    const result = ToolResultSchema.parse({
+        toolCallId: input.toolCallId,
+        status: 'failed',
+        error,
+    });
     return {
         toolCallId: input.toolCallId,
         toolName: input.toolName,
-        result: ToolResultSchema.parse({
-            toolCallId: input.toolCallId,
-            status: 'failed',
-            error,
-        }),
-        events: [...events, toolEvent('tool.failed', input.toolCallId, `tool failed: ${input.toolName}`)],
-    };
-}
-
-function toolEvent(type: 'tool.completed' | 'tool.failed', toolCallId: string, message: string): AgentEvent {
-    return {
-        type,
-        timestamp: new Date().toISOString(),
-        taskId: toolCallId,
-        message,
-        nativeSidecarStatus: 'mock',
+        result,
+        events: [...events, failedToolEvent(input.toolCallId, input.toolName, result)],
     };
 }
 

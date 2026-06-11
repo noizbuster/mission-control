@@ -98,7 +98,9 @@ function validateNodeModelOptions(model: AbgNodeModelOptions): void {
     if (model.variantID !== undefined) {
         const variantExists = (modelEntry.variants ?? []).some((variant) => variant.id === model.variantID);
         if (!variantExists) {
-            throw new Error(`Variant ${model.variantID} is not available for model ${model.providerID}/${model.modelID}`);
+            throw new Error(
+                `Variant ${model.variantID} is not available for model ${model.providerID}/${model.modelID}`,
+            );
         }
     }
     for (const fallback of model.fallbacks ?? []) {

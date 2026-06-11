@@ -1,6 +1,7 @@
-import type { AgentEvent } from '@mission-control/protocol';
+import type { AgentEvent, AgentMessage } from '@mission-control/protocol';
 import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
 import type { ProviderAdapter, ProviderTurnRequest } from '../providers/provider-turn-types.js';
+import type { ToolRegistry } from '../tools/tool-registry.js';
 import { type RunCoordinatorStore, SessionRunCoordinator } from './run-coordinator.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -12,12 +13,18 @@ export type CoordinatorContext = {
     readonly sessionId: string;
     readonly dataDir: string;
     readonly store: JsonlSessionEventStore;
-    readonly createCoordinator: (provider: ProviderAdapter) => SessionRunCoordinator;
+    readonly createCoordinator: (provider: ProviderAdapter, options?: CoordinatorToolOptions) => SessionRunCoordinator;
     readonly createCoordinatorWithStore: (
         store: RunCoordinatorStore,
         provider: ProviderAdapter,
+        options?: CoordinatorToolOptions,
     ) => SessionRunCoordinator;
     readonly events: () => Promise<readonly AgentEvent[]>;
+};
+
+export type CoordinatorToolOptions = {
+    readonly toolRegistry?: ToolRegistry;
+    readonly toolCallLoopLimit?: number;
 };
 
 export async function cleanupCoordinatorContexts(): Promise<void> {
@@ -54,6 +61,10 @@ export function providerFromRequests(
             };
         },
     };
+}
+
+export function messageContents(messages: readonly AgentMessage[]): readonly string[] {
+    return messages.flatMap((message) => (message.role === 'tool' ? [] : [message.content]));
 }
 
 export function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
@@ -101,11 +112,11 @@ async function openCoordinatorContextAt(sessionId: string, dataDir: string): Pro
         sessionId,
         dataDir,
         store,
-        createCoordinator(provider) {
-            return createCoordinator({ sessionId, store, provider });
+        createCoordinator(provider, options = {}) {
+            return createCoordinator({ sessionId, store, provider, ...options });
         },
-        createCoordinatorWithStore(customStore, provider) {
-            return createCoordinator({ sessionId, store: customStore, provider });
+        createCoordinatorWithStore(customStore, provider, options = {}) {
+            return createCoordinator({ sessionId, store: customStore, provider, ...options });
         },
         events: () => store.getEvents(sessionId),
     };
@@ -115,6 +126,8 @@ function createCoordinator(input: {
     readonly sessionId: string;
     readonly store: RunCoordinatorStore;
     readonly provider: ProviderAdapter;
+    readonly toolRegistry?: ToolRegistry;
+    readonly toolCallLoopLimit?: number;
 }): SessionRunCoordinator {
     return new SessionRunCoordinator({
         sessionId: input.sessionId,
@@ -123,6 +136,8 @@ function createCoordinator(input: {
         modelProviderSelection: { providerID: 'local', modelID: 'deterministic' },
         now: fixedNow,
         timeoutMs: 50,
+        ...(input.toolCallLoopLimit !== undefined ? { toolCallLoopLimit: input.toolCallLoopLimit } : {}),
+        ...(input.toolRegistry !== undefined ? { toolRegistry: input.toolRegistry } : {}),
         createId: (prefix, index) => `${prefix}_${index}`,
     });
 }

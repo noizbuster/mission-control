@@ -2,8 +2,10 @@ import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
     createDeterministicProvider,
+    type ProviderAdapter,
+    type ProviderTurnRequest,
 } from '@mission-control/core';
-import { type AgentEvent, AgentEventEnvelopeSchema } from '@mission-control/protocol';
+import { type AgentEvent, AgentEventEnvelopeSchema, type ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
@@ -13,7 +15,7 @@ import {
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
 import { runSessionCommand } from './session.js';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -110,6 +112,7 @@ describe('runAgent interactive coding agent UX', () => {
         const workspaceRoot = await tempRoot('mctrl-chat-workspace-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const chatOutput = createBufferedChatOutput();
+        const requests: ProviderTurnRequest[] = [];
 
         // When
         const output = await runAgent(parseArgs(['--session', 'session_task20_allow']), {
@@ -124,31 +127,56 @@ describe('runAgent interactive coding agent UX', () => {
             chatOutput: chatOutput.output,
             workspaceRoot,
             commandExecutor: fakeCommandExecutor,
-            provider: createDeterministicProvider([
-                {
-                    kind: 'tool_call_completed',
-                    toolCallId: 'patch_call',
-                    toolName: 'file.patch',
-                    argumentsJson: JSON.stringify({ patch: addFilePatch('.mctrl-task20.txt', 'approved') }),
-                },
-                {
-                    kind: 'tool_call_completed',
-                    toolCallId: 'command_call',
-                    toolName: 'command.run',
-                    argumentsJson: JSON.stringify({
-                        command: 'pnpm',
-                        args: ['exec', 'vitest', 'run', 'packages/core/src/tools/command-run.fixture.test.ts'],
-                    }),
-                },
-                { kind: 'response_completed', content: 'patch and test complete' },
-            ]),
+            provider: providerFromApprovedToolRequests(requests),
         });
 
         // Then
+        expect(requests).toHaveLength(2);
         expect(output).toContain('Applied patch: .mctrl-task20.txt');
         expect(output).toContain('Command output for command.run');
         expect(output).toContain('stdout:\ntask20 ok');
+        expect(output).toContain('Assistant: patch and test complete');
         expect(await readFile(join(workspaceRoot, '.mctrl-task20.txt'), 'utf8')).toBe('approved\n');
+    });
+
+    it('continues after a read tool result and renders the final provider answer', async () => {
+        // Given
+        const dataDir = await tempRoot('mctrl-chat-data-');
+        const workspaceRoot = await tempRoot('mctrl-chat-workspace-');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await writeFixtureFile(workspaceRoot, 'README.md', 'tool result from workspace\n');
+        const chatOutput = createBufferedChatOutput();
+        const requests: ProviderTurnRequest[] = [];
+
+        // When
+        const output = await runAgent(parseArgs(['--session', 'session_task20_continuation']), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: 'read the readme and summarize it' },
+                { type: 'interrupt' },
+                { type: 'interrupt' },
+            ]),
+            chatOutput: chatOutput.output,
+            workspaceRoot,
+            provider: providerFromTurnRequests(requests),
+        });
+
+        // Then
+        expect(requests).toHaveLength(2);
+        expect(requests[0]?.tools?.map((tool) => tool.name)).toEqual(
+            expect.arrayContaining(['repo.read', 'repo.list', 'repo.search', 'file.patch', 'command.run']),
+        );
+        expect(requests[1]?.messages).toEqual([
+            { role: 'user', content: 'read the readme and summarize it' },
+            { role: 'assistant', content: 'reading README' },
+            {
+                role: 'tool',
+                toolCallId: 'read_call_cli',
+                status: 'completed',
+                output: expect.stringContaining('tool result from workspace'),
+            },
+        ]);
+        expect(output).toContain('Assistant: final summary saw tool result from workspace');
     });
 
     it('admits queue, steer, resume, branch continue, and interrupts an active provider turn', async () => {
@@ -314,5 +342,100 @@ async function fakeCommandExecutor(_request: CommandExecutionRequest): Promise<C
         stdout: 'task20 ok\n',
         stderr: '',
         durationMs: 1,
+    };
+}
+
+async function writeFixtureFile(workspaceRoot: string, path: string, content: string): Promise<void> {
+    await writeFile(join(workspaceRoot, path), content);
+}
+
+function providerFromApprovedToolRequests(requests: ProviderTurnRequest[]): ProviderAdapter {
+    return {
+        async *streamTurn(request) {
+            requests.push(request);
+            if (requests.length === 1) {
+                yield {
+                    kind: 'tool_call_completed',
+                    requestId: request.requestId,
+                    sequence: 1,
+                    toolCall: {
+                        toolCallId: 'patch_call',
+                        toolName: 'file.patch',
+                        argumentsJson: JSON.stringify({ patch: addFilePatch('.mctrl-task20.txt', 'approved') }),
+                    },
+                };
+                yield {
+                    kind: 'tool_call_completed',
+                    requestId: request.requestId,
+                    sequence: 2,
+                    toolCall: {
+                        toolCallId: 'command_call',
+                        toolName: 'command.run',
+                        argumentsJson: JSON.stringify({
+                            command: 'pnpm',
+                            args: ['exec', 'vitest', 'run', 'packages/core/src/tools/command-run.fixture.test.ts'],
+                        }),
+                    },
+                };
+                yield cliCompletedChunk(request, 'tools requested', ['patch_call', 'command_call']);
+                return;
+            }
+            yield cliCompletedChunk(request, 'patch and test complete');
+        },
+    };
+}
+
+function providerFromTurnRequests(requests: ProviderTurnRequest[]): ProviderAdapter {
+    return {
+        async *streamTurn(request) {
+            requests.push(request);
+            if (requests.length === 1) {
+                yield cliToolCallChunk(request);
+                yield cliCompletedChunk(request, 'reading README', ['read_call_cli']);
+                return;
+            }
+            const toolMessage = request.messages.find((message) => message.role === 'tool');
+            yield cliCompletedChunk(request, `final summary saw ${lastNonEmptyLine(toolMessage?.output)}`);
+        },
+    };
+}
+
+function lastNonEmptyLine(value: string | undefined): string {
+    if (value === undefined) {
+        return 'missing tool output';
+    }
+    const lines = value.split(/\r?\n/).filter((line) => line.trim().length > 0);
+    return lines.at(-1)?.trim() ?? 'missing tool output';
+}
+
+function cliToolCallChunk(request: ProviderTurnRequest): ProviderStreamChunk {
+    return {
+        kind: 'tool_call_completed',
+        requestId: request.requestId,
+        sequence: 1,
+        toolCall: {
+            toolCallId: 'read_call_cli',
+            toolName: 'repo.read',
+            argumentsJson: JSON.stringify({ path: 'README.md' }),
+        },
+    };
+}
+
+function cliCompletedChunk(
+    request: ProviderTurnRequest,
+    content: string,
+    toolCallIds?: readonly string[],
+): ProviderStreamChunk {
+    return {
+        kind: 'response_completed',
+        requestId: request.requestId,
+        sequence: 2,
+        message: {
+            messageId: `message_${request.turnId}`,
+            role: 'assistant',
+            content,
+            ...(toolCallIds !== undefined ? { toolCallIds: [...toolCallIds] } : {}),
+        },
+        finishReason: toolCallIds === undefined ? 'stop' : 'tool_calls',
     };
 }

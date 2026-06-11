@@ -178,6 +178,20 @@ describe('file.patch tool', () => {
         expect(result.result.error?.message).toContain('b.txt');
         expect(await readText(workspaceRoot, 'a.txt')).toBe('ONE\n');
         expect(await readText(workspaceRoot, 'b.txt')).toBe('two\n');
+        expect(result.events).toContainEqual(
+            expect.objectContaining({
+                type: 'file.diff.applied',
+                taskId: 'patch_call',
+                diffFiles: [expect.objectContaining({ filePath: 'a.txt' })],
+            }),
+        );
+        expect(result.events).toContainEqual(
+            expect.objectContaining({
+                type: 'tool.failed',
+                taskId: 'patch_call',
+                toolResult: result.result,
+            }),
+        );
     });
 
     async function createWorkspace(): Promise<string> {

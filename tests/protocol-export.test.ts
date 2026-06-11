@@ -26,10 +26,12 @@ import {
     ProtocolErrorSchema,
     ProviderApiKeyCredentialSchema,
     ProviderAuthFileSchema,
+    ProviderCapabilityStatusSchema,
     ProviderCatalogEntrySchema,
     ProviderCredentialFieldSchema,
     ProviderCredentialSchema,
     ProviderCredentialSummarySchema,
+    ProviderExecutionCapabilitySchema,
     ProviderFieldsCredentialSchema,
     ProviderMessageSchema,
     ProviderRequestSchema,
@@ -64,6 +66,8 @@ describe('protocol public exports', () => {
         expect(SidecarTaskOutputSchema.shape.message).toBeDefined();
         expect(ModelProviderSelectionSchema.shape.providerID).toBeDefined();
         expect(ModelVariantEntrySchema.shape.id).toBeDefined();
+        expect(ProviderCapabilityStatusSchema.parse('model-discovery-only')).toBe('model-discovery-only');
+        expect(ProviderExecutionCapabilitySchema.shape.status).toBeDefined();
         expect(ProviderCatalogEntrySchema.shape.models).toBeDefined();
         expect(ProviderApiKeyCredentialSchema.shape.apiKey).toBeDefined();
         expect(ProviderCredentialFieldSchema.shape.secret).toBeDefined();

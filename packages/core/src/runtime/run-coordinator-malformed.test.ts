@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { projectSessionAdmission } from '../session-admission.js';
 import {
     cleanupCoordinatorContexts,
+    messageContents,
     openCoordinatorContext,
     providerFromRequests,
 } from './run-coordinator-test-support.js';
@@ -17,7 +18,7 @@ describe('SessionRunCoordinator malformed prompt handling', () => {
         const requests: string[][] = [];
         const coordinator = context.createCoordinator(
             providerFromRequests((request) => {
-                requests.push(request.messages.map((message) => message.content));
+                requests.push([...messageContents(request.messages)]);
                 return Promise.resolve();
             }),
         );
@@ -45,7 +46,7 @@ describe('SessionRunCoordinator malformed prompt handling', () => {
         const requests: string[][] = [];
         const coordinator = context.createCoordinator(
             providerFromRequests((request) => {
-                requests.push(request.messages.map((message) => message.content));
+                requests.push([...messageContents(request.messages)]);
                 return Promise.resolve();
             }),
         );

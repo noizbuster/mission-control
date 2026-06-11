@@ -3,6 +3,8 @@ import {
     type CommandExecutionResult,
     registerCommandRunTool,
     registerFilePatchTool,
+    registerReadOnlyRepoTools,
+    type ToolInvocationSettlement,
     ToolRegistry,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection, ToolCall } from '@mission-control/protocol';
@@ -24,6 +26,9 @@ export async function createInteractiveToolRegistry(
     approvals: InteractiveApprovalBroker,
 ): Promise<ToolRegistry> {
     const registry = new ToolRegistry();
+    await registerReadOnlyRepoTools(registry, {
+        workspaceRoot: options.workspaceRoot,
+    });
     await registerFilePatchTool(registry, {
         workspaceRoot: options.workspaceRoot,
         requestPermission: approvals.requestPermission,
@@ -42,12 +47,12 @@ export async function settleInteractiveToolCall(
     options: InteractiveToolOptions,
     approvals: InteractiveApprovalBroker,
     signal: AbortSignal,
-): Promise<void> {
+): Promise<ToolInvocationSettlement | undefined> {
     renderToolPreview(toolCall, options.output);
     const advertisement = registry.advertise().find((tool) => tool.name === toolCall.toolName);
     if (advertisement === undefined) {
         options.output.write(`Unknown tool: ${toolCall.toolName}\n`);
-        return;
+        return undefined;
     }
     if (toolCall.toolName === 'file.patch' || toolCall.toolName === 'command.run') {
         const decision = await approvals.requestApproval({
@@ -57,7 +62,7 @@ export async function settleInteractiveToolCall(
         });
         if (decision.status !== 'allow') {
             options.output.write(`${toolCall.toolName} failed: approval_denied: ${decision.reason ?? 'denied'}\n`);
-            return;
+            return undefined;
         }
     }
     const settlement = await registry.invoke({
@@ -72,18 +77,19 @@ export async function settleInteractiveToolCall(
     }
     if (settlement.result.status === 'failed') {
         options.output.write(`${toolCall.toolName} failed: ${settlement.result.error?.message ?? 'unknown error'}\n`);
-        return;
+        return settlement;
     }
     if (toolCall.toolName === 'file.patch') {
         const parsed = parseFilePatchOutput(settlement.structuredOutput);
         if (parsed !== undefined) {
             options.output.write(`Applied patch: ${parsed.appliedFiles.join(', ')}\n`);
         }
-        return;
+        return settlement;
     }
     if (toolCall.toolName === 'command.run') {
         options.output.write(`Command output for command.run\n${settlement.modelOutput?.content ?? ''}\n`);
     }
+    return settlement;
 }
 
 function sessionEvent(options: InteractiveToolOptions, event: AgentEvent): AgentEvent {

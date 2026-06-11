@@ -4,6 +4,7 @@ import type {
     AgentEventEnvelope,
     AgentSnapshot,
     ApprovalRecord,
+    ToolResult,
 } from '@mission-control/protocol';
 import type { AbgTimelineEntry } from './behavior/timeline.js';
 
@@ -44,6 +45,8 @@ export type ToolOutcomeProjection = {
     readonly completedAt?: string;
     readonly failedAt?: string;
     readonly lastMessage?: string;
+    readonly result?: ToolResult;
+    readonly appliedFiles?: readonly string[];
 };
 
 export type SessionReplayProjection = {

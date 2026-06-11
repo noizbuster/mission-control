@@ -1,7 +1,28 @@
 import { z } from 'zod';
-import { AgentMessageSchema, EventIdSchema, EventSequenceSchema } from './event-primitives.js';
+import {
+    AgentMessageSchema,
+    EventIdSchema,
+    EventSequenceSchema,
+    ProviderToolCallTranscriptSchema,
+} from './event-primitives.js';
+import { ProtocolErrorSchema, RedactionMetadataSchema, ToolResultStatusSchema } from './tool-result-primitives.js';
 
-export const REDACTION_CLASSIFICATIONS = ['secret', 'credential', 'path', 'command', 'model_output'] as const;
+export {
+    PROTOCOL_ERROR_CODES,
+    type ProtocolError,
+    type ProtocolErrorCode,
+    ProtocolErrorCodeSchema,
+    ProtocolErrorSchema,
+    REDACTION_CLASSIFICATIONS,
+    type RedactionClassification,
+    RedactionClassificationSchema,
+    type RedactionMetadata,
+    RedactionMetadataSchema,
+    TOOL_RESULT_STATUSES,
+    type ToolResultStatus,
+    ToolResultStatusSchema,
+} from './tool-result-primitives.js';
+
 export const PROVIDER_STREAM_CHUNK_KINDS = [
     'response_started',
     'text_delta',
@@ -10,7 +31,6 @@ export const PROVIDER_STREAM_CHUNK_KINDS = [
     'response_completed',
     'response_failed',
 ] as const;
-export const TOOL_RESULT_STATUSES = ['completed', 'failed'] as const;
 export const PROVIDER_FINISH_REASONS = [
     'stop',
     'length',
@@ -20,50 +40,12 @@ export const PROVIDER_FINISH_REASONS = [
     'error',
     'unknown',
 ] as const;
-export const PROTOCOL_ERROR_CODES = [
-    'provider_auth_failed',
-    'provider_rate_limited',
-    'provider_timeout',
-    'provider_aborted',
-    'provider_context_overflow',
-    'tool_failed',
-    'schema_invalid',
-    'unknown',
-] as const;
-
-export const RedactionClassificationSchema = z.enum(REDACTION_CLASSIFICATIONS);
-export type RedactionClassification = z.infer<typeof RedactionClassificationSchema>;
 
 export const ProviderStreamChunkKindSchema = z.enum(PROVIDER_STREAM_CHUNK_KINDS);
 export type ProviderStreamChunkKind = z.infer<typeof ProviderStreamChunkKindSchema>;
 
-export const ToolResultStatusSchema = z.enum(TOOL_RESULT_STATUSES);
-export type ToolResultStatus = z.infer<typeof ToolResultStatusSchema>;
-
 export const ProviderFinishReasonSchema = z.enum(PROVIDER_FINISH_REASONS);
 export type ProviderFinishReason = z.infer<typeof ProviderFinishReasonSchema>;
-
-export const ProtocolErrorCodeSchema = z.enum(PROTOCOL_ERROR_CODES);
-export type ProtocolErrorCode = z.infer<typeof ProtocolErrorCodeSchema>;
-
-export const RedactionMetadataSchema = z
-    .object({
-        classification: RedactionClassificationSchema,
-        reason: z.string().min(1),
-        replacement: z.string().min(1),
-    })
-    .strict();
-export type RedactionMetadata = z.infer<typeof RedactionMetadataSchema>;
-
-export const ProtocolErrorSchema = z
-    .object({
-        code: ProtocolErrorCodeSchema,
-        message: z.string().min(1),
-        retryable: z.boolean(),
-        redactions: z.array(RedactionMetadataSchema).optional(),
-    })
-    .strict();
-export type ProtocolError = z.infer<typeof ProtocolErrorSchema>;
 
 export const ToolDefinitionSchema = z
     .object({
@@ -125,6 +107,7 @@ export const ProviderMessageSchema = z
         role: z.literal('assistant'),
         content: z.string(),
         toolCallIds: z.array(z.string().min(1)).optional(),
+        providerToolCalls: z.array(ProviderToolCallTranscriptSchema).optional(),
         redactions: z.array(RedactionMetadataSchema).optional(),
     })
     .strict();

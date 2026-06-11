@@ -85,7 +85,11 @@ describe('runAgent model validation', () => {
                         kind: 'response_completed' as const,
                         requestId: request.requestId,
                         sequence: 1,
-                        message: { messageId: `message_${request.turnId}`, role: 'assistant' as const, content: 'done' },
+                        message: {
+                            messageId: `message_${request.turnId}`,
+                            role: 'assistant' as const,
+                            content: 'done',
+                        },
                         finishReason: 'stop' as const,
                     };
                 },

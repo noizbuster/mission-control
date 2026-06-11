@@ -60,7 +60,7 @@ async function applyPatchTool(
     const parsedPatch = parseUnifiedPatch(input.patch);
     const targets = await preflightTargets(options.workspaceRoot, guard, parsedPatch, options.allowDirtyPaths);
     await requireApproval(options, toolCallId, parsedPatch);
-    return applyTargets(parsedPatch, targets);
+    return applyTargets(parsedPatch, targets, toolCallId);
 }
 
 async function preflightTargets(
@@ -105,8 +105,10 @@ async function requireApproval(
 async function applyTargets(
     parsedPatch: readonly ParsedPatchFile[],
     targets: readonly PatchTarget[],
+    toolCallId: string,
 ): Promise<FilePatchOutput> {
     const appliedFiles: string[] = [];
+    const appliedPatchFiles: ParsedPatchFile[] = [];
     for (const [index, file] of parsedPatch.entries()) {
         const target = targets[index];
         if (target === undefined) {
@@ -115,12 +117,16 @@ async function applyTargets(
         try {
             await applyOneFile(file, target);
             appliedFiles.push(target.relativePath);
+            appliedPatchFiles.push(file);
         } catch (error: unknown) {
+            const isPartial = appliedFiles.length > 0;
+            const message = `${isPartial ? `applied ${appliedFiles.join(', ')}; ` : ''}failed ${
+                target.relativePath
+            }: ${errorMessage(error)}`;
             throw filePatchFailure(
-                appliedFiles.length > 0 ? 'partial_failed' : 'patch_apply_failed',
-                `${appliedFiles.length > 0 ? `applied ${appliedFiles.join(', ')}; ` : ''}failed ${
-                    target.relativePath
-                }: ${errorMessage(error)}`,
+                isPartial ? 'partial_failed' : 'patch_apply_failed',
+                message,
+                isPartial ? partialAppliedEvents(toolCallId, appliedPatchFiles) : [],
             );
         }
     }
@@ -130,6 +136,21 @@ async function applyTargets(
         appliedFiles,
         diffFiles: diffFileOutput(toDiffFiles(parsedPatch)),
     };
+}
+
+function partialAppliedEvents(
+    toolCallId: string,
+    appliedPatchFiles: readonly ParsedPatchFile[],
+): readonly AgentEvent[] {
+    return [
+        diffEvent(
+            'file.diff.applied',
+            new Date().toISOString(),
+            toolCallId,
+            'patch partially applied',
+            diffFileOutput(toDiffFiles(appliedPatchFiles)),
+        ),
+    ];
 }
 
 async function applyOneFile(file: ParsedPatchFile, target: PatchTarget): Promise<void> {

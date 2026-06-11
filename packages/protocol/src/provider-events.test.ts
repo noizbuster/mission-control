@@ -23,6 +23,12 @@ describe('provider event protocol schemas', () => {
                     role: 'user',
                     content: 'Summarize this repository.',
                 },
+                {
+                    role: 'tool',
+                    toolCallId: 'tool_call_1',
+                    status: 'completed',
+                    output: 'README contents',
+                },
             ],
             tools: [
                 {
@@ -51,6 +57,7 @@ describe('provider event protocol schemas', () => {
             },
         });
 
+        expect(request.messages[1]).toMatchObject({ role: 'tool', toolCallId: 'tool_call_1' });
         expect(request.tools?.[0]?.name).toBe('repo.read');
         expect(withRawCredential.success).toBe(false);
     });
@@ -158,6 +165,13 @@ describe('provider event protocol schemas', () => {
 
         expect(settlement.result.toolCallId).toBe(settlement.toolCall.toolCallId);
         expect(settlement.finalMessage.toolCallIds).toContain(settlement.toolCall.toolCallId);
+        expect(
+            ToolCallSettlementSchema.safeParse({
+                toolCall,
+                result: { ...result, toolCallId: 'other_tool_call' },
+                finalMessage,
+            }).success,
+        ).toBe(false);
     });
 
     it('rejects redaction metadata that retains raw values', () => {

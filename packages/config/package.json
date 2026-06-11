@@ -13,5 +13,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "sh -c 'cd ../.. && while [ \"${1:-}\" = \"--\" ]; do shift; done; vitest run --reporter verbose \"$@\"' --",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@mission-control/protocol": "workspace:*"
   }
 }

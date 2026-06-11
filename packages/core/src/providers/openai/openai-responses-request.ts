@@ -4,6 +4,7 @@ import { ProviderCredentialResolutionError, type ProviderCredentialResolver } fr
 import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
 import type {
     OpenAIReasoningEffort,
+    OpenAIResponsesInputItem,
     OpenAIResponsesRequestBody,
     OpenAIResponsesTool,
     OpenAIResponsesTransportRequest,
@@ -72,13 +73,58 @@ function createRequestBody(request: ProviderTurnRequest): OpenAIResponsesRequest
     const reasoning = openAIReasoningForVariant(request.modelID, request.variantID);
     return {
         model: request.modelID,
-        input: request.messages.map((message) => ({ role: message.role, content: message.content })),
+        input: request.messages.flatMap(openAIInputMessageForAgentMessage),
         stream: true,
         store: false,
         stream_options: { include_obfuscation: false },
         ...(reasoning !== undefined ? { reasoning } : {}),
         ...(tools.length > 0 ? { tools } : {}),
     };
+}
+
+function openAIInputMessageForAgentMessage(
+    message: ProviderTurnRequest['messages'][number],
+): readonly OpenAIResponsesInputItem[] {
+    switch (message.role) {
+        case 'system':
+        case 'user':
+            return [{ role: message.role, content: message.content }];
+        case 'assistant':
+            return [
+                { role: message.role, content: message.content },
+                ...(message.providerToolCalls ?? [])
+                    .filter((toolCall) => toolCall.providerID === 'openai')
+                    .map((toolCall) => ({
+                        type: 'function_call' as const,
+                        id: toolCall.providerItemId ?? toolCall.toolCallId,
+                        call_id: toolCall.providerCallId ?? toolCall.toolCallId,
+                        name: toolCall.toolName,
+                        arguments: toolCall.argumentsJson,
+                    })),
+            ];
+        case 'tool':
+            return [
+                {
+                    type: 'function_call_output',
+                    call_id: message.toolCallId,
+                    output: openAIToolOutputForAgentMessage(message),
+                },
+            ];
+        default:
+            return assertNever(message);
+    }
+}
+
+function openAIToolOutputForAgentMessage(
+    message: Extract<ProviderTurnRequest['messages'][number], { role: 'tool' }>,
+): string {
+    if (message.output !== undefined) {
+        return message.output;
+    }
+    if (message.error !== undefined) {
+        return `${message.error.code}: ${message.error.message}`;
+    }
+    return '';
 }
 
 function openAIReasoningForVariant(

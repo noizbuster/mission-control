@@ -1,4 +1,4 @@
-import type { ProtocolError } from '@mission-control/protocol';
+import type { AgentEvent, ProtocolError } from '@mission-control/protocol';
 import { ToolExecutionError } from './tool-registry-types.js';
 
 export type FilePatchFailureCode =
@@ -15,8 +15,12 @@ export type FilePatchFailureCode =
     | 'workspace_escape'
     | 'write_failed';
 
-export function filePatchFailure(code: FilePatchFailureCode, message: string): ToolExecutionError {
-    return new ToolExecutionError(protocolError(`${code}: ${message}`));
+export function filePatchFailure(
+    code: FilePatchFailureCode,
+    message: string,
+    events: readonly AgentEvent[] = [],
+): ToolExecutionError {
+    return new ToolExecutionError(protocolError(`${code}: ${message}`), events);
 }
 
 function protocolError(message: string): ProtocolError {

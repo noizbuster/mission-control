@@ -3,6 +3,7 @@ import { ToolExecutionError } from './tool-registry-types.js';
 
 export type RepoToolFailureCode =
     | 'workspace_escape'
+    | 'workspace_denied'
     | 'not_found'
     | 'not_file'
     | 'not_directory'

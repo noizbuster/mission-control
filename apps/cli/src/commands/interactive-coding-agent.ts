@@ -1,10 +1,16 @@
 import {
+    appendProviderToolResultMessages,
     type CommandExecutionRequest,
     type CommandExecutionResult,
+    DEFAULT_PROVIDER_TOOL_CONTINUATION_LIMIT,
     type ProviderAdapter,
+    ProviderTurnError,
     ProviderTurnRunner,
+    providerToolLoopLimitError,
+    type ToolInvocationSettlement,
+    toolCallsFromProviderEnvelopes,
 } from '@mission-control/core';
-import type { AgentEvent, ModelProviderSelection, ToolCall } from '@mission-control/protocol';
+import type { AgentEvent, AgentMessage, ModelProviderSelection } from '@mission-control/protocol';
 import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { createInteractiveToolRegistry, settleInteractiveToolCall } from './interactive-coding-tools.js';
@@ -59,75 +65,103 @@ async function runCodingAgentTurn(
     registry: Awaited<ReturnType<typeof createInteractiveToolRegistry>>,
     state: TurnState,
 ): Promise<void> {
-    const toolCalls: ToolCall[] = [];
-    let streamedText = false;
     emitTaskEvent(options, 'task.started', `user prompt: ${options.prompt}`);
     emitRunEvent(options, 'run.started', 'run started');
 
-    const runner = new ProviderTurnRunner({ provider: options.provider });
-    const result = await runner.runTurn({
-        sessionId: options.sessionId,
-        turnId: options.turnId,
-        requestId: `provider_request_${options.turnId}`,
-        providerID: options.modelProviderSelection.providerID,
-        modelID: options.modelProviderSelection.modelID,
-        ...(options.modelProviderSelection.variantID !== undefined
-            ? { variantID: options.modelProviderSelection.variantID }
-            : {}),
-        messages: [{ role: 'user', content: options.prompt }],
-        startSequence: 0,
-        signal,
-        onEnvelope: (envelope) => {
-            const chunk = envelope.event.providerStreamChunk;
-            if (chunk?.kind === 'text_delta') {
-                if (!streamedText) {
-                    options.output.write('Assistant: ');
-                    streamedText = true;
+    let messages: readonly AgentMessage[] = [{ role: 'user', content: options.prompt }];
+    let toolContinuationTurns = 0;
+
+    while (!signal.aborted) {
+        state.phase = 'provider';
+        let streamedText = false;
+        const runner = new ProviderTurnRunner({ provider: options.provider });
+        const result = await runner.runTurn({
+            sessionId: options.sessionId,
+            turnId: providerTurnId(options.turnId, toolContinuationTurns),
+            requestId: providerRequestId(options.turnId, toolContinuationTurns),
+            providerID: options.modelProviderSelection.providerID,
+            modelID: options.modelProviderSelection.modelID,
+            ...(options.modelProviderSelection.variantID !== undefined
+                ? { variantID: options.modelProviderSelection.variantID }
+                : {}),
+            messages,
+            tools: registry.advertise().map((tool) => tool.providerTool),
+            startSequence: 0,
+            signal,
+            onEnvelope: (envelope) => {
+                const chunk = envelope.event.providerStreamChunk;
+                if (chunk?.kind === 'text_delta') {
+                    if (!streamedText) {
+                        options.output.write('Assistant: ');
+                        streamedText = true;
+                    }
+                    options.output.write(chunk.delta);
                 }
-                options.output.write(chunk.delta);
-            }
-            if (chunk?.kind === 'tool_call_completed') {
-                toolCalls.push(chunk.toolCall);
-            }
-            if (envelope.durability === 'durable') {
-                options.emitEvent(envelope.event);
-            }
-        },
-    });
+                if (envelope.durability === 'durable') {
+                    options.emitEvent(envelope.event);
+                }
+            },
+        });
 
-    if (streamedText) {
-        options.output.write('\n');
-    }
-    if (result.status === 'failed') {
-        if (result.error.code === 'provider_aborted') {
-            emitInterrupted(options, 'provider turn interrupted');
+        if (streamedText) {
+            options.output.write('\n');
+        }
+        if (result.status === 'failed') {
+            if (result.error.code === 'provider_aborted') {
+                emitInterrupted(options, 'provider turn interrupted');
+                return;
+            }
+            emitTaskEvent(options, 'task.failed', result.error.message);
+            throw new ProviderTurnError(result.error);
+        }
+
+        const toolCalls = toolCallsFromProviderEnvelopes(result.envelopes);
+        if (toolCalls.length === 0) {
+            if (!streamedText) {
+                options.output.write(`Assistant: ${result.message.content}\n`);
+            }
+            emitTaskEvent(options, 'task.completed', result.message.content);
+            emitRunEvent(options, 'run.completed', 'run completed');
             return;
         }
-        emitTaskEvent(options, 'task.failed', result.error.message);
-        throw new Error(result.error.message);
-    }
-    if (!streamedText) {
-        options.output.write(`Assistant: ${result.message.content}\n`);
+        if (toolContinuationTurns >= DEFAULT_PROVIDER_TOOL_CONTINUATION_LIMIT) {
+            const error = providerToolLoopLimitError(DEFAULT_PROVIDER_TOOL_CONTINUATION_LIMIT);
+            emitTaskEvent(options, 'task.failed', error.message);
+            throw new ProviderTurnError(error);
+        }
+
+        state.phase = 'tools';
+        const settlements: ToolInvocationSettlement[] = [];
+        for (const toolCall of toolCalls) {
+            if (signal.aborted) {
+                emitInterrupted(options, 'tool execution interrupted');
+                return;
+            }
+            if (approvals.hasPending()) {
+                emitTaskEvent(options, 'task.failed', 'tool approval already pending');
+                return;
+            }
+            const settlement = await settleInteractiveToolCall(registry, toolCall, options, approvals, signal);
+            if (settlement === undefined) {
+                emitTaskEvent(options, 'task.failed', `tool not settled: ${toolCall.toolName}`);
+                return;
+            }
+            settlements.push(settlement);
+            if (signal.aborted) {
+                emitInterrupted(options, 'tool execution interrupted');
+                return;
+            }
+        }
+
+        messages = appendProviderToolResultMessages({
+            messages,
+            assistantMessage: result.message,
+            settlements,
+        });
+        toolContinuationTurns += 1;
     }
 
-    state.phase = 'tools';
-    for (const toolCall of toolCalls) {
-        if (signal.aborted) {
-            emitInterrupted(options, 'tool execution interrupted');
-            return;
-        }
-        if (approvals.hasPending()) {
-            break;
-        }
-        await settleInteractiveToolCall(registry, toolCall, options, approvals, signal);
-        if (signal.aborted) {
-            emitInterrupted(options, 'tool execution interrupted');
-            return;
-        }
-    }
-
-    emitTaskEvent(options, 'task.completed', result.message.content);
-    emitRunEvent(options, 'run.completed', 'run completed');
+    emitInterrupted(options, 'provider turn interrupted');
 }
 
 type TurnState = {
@@ -173,4 +207,12 @@ function emitRunEvent(
         },
         modelProviderSelection: options.modelProviderSelection,
     });
+}
+
+function providerTurnId(baseTurnId: string, continuationTurns: number): string {
+    return continuationTurns === 0 ? baseTurnId : `${baseTurnId}_continue_${continuationTurns}`;
+}
+
+function providerRequestId(baseTurnId: string, continuationTurns: number): string {
+    return `provider_request_${providerTurnId(baseTurnId, continuationTurns)}`;
 }

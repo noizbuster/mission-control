@@ -4,6 +4,7 @@
   "projectType": "library",
   "root": "packages/config",
   "sourceRoot": "packages/config/src",
+  "implicitDependencies": ["protocol"],
   "targets": {
     "build": {
       "executor": "nx:run-commands",

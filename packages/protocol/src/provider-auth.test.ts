@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ProviderExecutionCapabilitySchema } from './provider-auth.js';
 import {
     ModelProviderSelectionSchema,
     ProviderAuthFileSchema,
@@ -19,6 +20,10 @@ describe('provider auth and catalog schemas', () => {
             name: 'Local Sandbox',
             defaultModelID: 'local-echo',
             authLabel: 'API key',
+            capability: {
+                status: 'executable',
+                adapterFamily: 'local',
+            },
             models: [
                 {
                     id: 'local-echo',
@@ -44,12 +49,38 @@ describe('provider auth and catalog schemas', () => {
         expect(provider.models[0]?.variants?.[0]?.id).toBe('default');
     });
 
+    it('parses explicit provider execution capability metadata', () => {
+        expect(
+            ProviderExecutionCapabilitySchema.parse({
+                status: 'executable',
+                adapterFamily: 'openai-responses',
+            }),
+        ).toEqual({
+            status: 'executable',
+            adapterFamily: 'openai-responses',
+        });
+        expect(ProviderExecutionCapabilitySchema.parse({ status: 'model-discovery-only' })).toEqual({
+            status: 'model-discovery-only',
+        });
+        expect(ProviderExecutionCapabilitySchema.safeParse({ status: 'executable' }).success).toBe(false);
+        expect(
+            ProviderExecutionCapabilitySchema.safeParse({
+                status: 'model-discovery-only',
+                adapterFamily: 'openai-responses',
+            }).success,
+        ).toBe(false);
+    });
+
     it('rejects provider catalog entries with malformed model variants', () => {
         const parsed = ProviderCatalogEntrySchema.safeParse({
             id: 'local',
             name: 'Local Sandbox',
             defaultModelID: 'local-echo',
             authLabel: 'API key',
+            capability: {
+                status: 'executable',
+                adapterFamily: 'local',
+            },
             models: [
                 {
                     id: 'local-echo',

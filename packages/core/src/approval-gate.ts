@@ -10,6 +10,7 @@ export type PermissionDecisionResolver = (
     request: PermissionRequest,
 ) => PermissionDecision | Promise<PermissionDecision>;
 
+export type PendingApprovalBehavior = 'wait' | 'block';
 export type ApprovalTerminalState = 'approved' | 'denied' | 'expired' | 'cancelled';
 type BlockedApprovalState = Exclude<ApprovalTerminalState, 'approved'>;
 type ApprovalEventType = Extract<
@@ -29,6 +30,7 @@ export class PermissionGateError extends Error {
         | 'approval_denied'
         | 'approval_expired'
         | 'approval_cancelled'
+        | 'approval_required'
         | 'approval_not_found';
     readonly requestId: string;
     readonly approvalId: string;
@@ -57,6 +59,7 @@ type PermissionGateOptions = {
     readonly resolveDecision: PermissionDecisionResolver;
     readonly emit: (event: AgentEvent) => void;
     readonly now: () => string;
+    readonly pendingApprovalBehavior?: PendingApprovalBehavior;
 };
 
 type PendingApproval = {
@@ -72,12 +75,14 @@ export class PermissionGate {
     private readonly resolveDecision: PermissionDecisionResolver;
     private readonly emit: (event: AgentEvent) => void;
     private readonly now: () => string;
+    private readonly pendingApprovalBehavior: PendingApprovalBehavior;
     private readonly pendingApprovals = new Map<string, PendingApproval>();
 
     constructor(options: PermissionGateOptions) {
         this.resolveDecision = options.resolveDecision;
         this.emit = options.emit;
         this.now = options.now;
+        this.pendingApprovalBehavior = options.pendingApprovalBehavior ?? 'wait';
     }
 
     async requestPermission(request: PermissionRequest, context: PermissionGateContext): Promise<PermissionDecision> {
@@ -92,6 +97,9 @@ export class PermissionGate {
             const record = approvalRecord(request, decision, approvalId, 'denied', timestamp, timestamp);
             this.emitApproval('approval.blocked', record, `approval blocked: ${request.action}`, context);
             throw permissionError('permission_denied', request.id, approvalId, decision.reason ?? request.reason);
+        }
+        if (this.pendingApprovalBehavior === 'block') {
+            return this.blockRequiredApproval(request, decision, context);
         }
         return this.waitForApproval(request, decision, context);
     }
@@ -141,6 +149,23 @@ export class PermissionGate {
         });
         this.emitApproval('approval.requested', record, `approval requested: ${request.action}`, context);
         return promise;
+    }
+
+    private blockRequiredApproval(
+        request: PermissionRequest,
+        decision: PermissionDecision,
+        context: PermissionGateContext,
+    ): Promise<PermissionDecision> {
+        const approvalId = approvalIdFor(request.id);
+        const requestedAt = this.now();
+        const pending = approvalRecord(request, decision, approvalId, 'pending', requestedAt);
+        this.emitApproval('approval.requested', pending, `approval requested: ${request.action}`, context);
+        const decidedAt = this.now();
+        const blocked = approvalRecord(request, decision, approvalId, 'cancelled', requestedAt, decidedAt);
+        this.emitApproval('approval.blocked', blocked, `approval blocked: ${request.action}`, context);
+        return Promise.reject(
+            permissionError('approval_required', request.id, approvalId, decision.reason ?? request.reason),
+        );
     }
 
     private emitPermissionRequested(

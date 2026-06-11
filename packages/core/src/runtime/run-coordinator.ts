@@ -6,15 +6,14 @@ import type {
     RunCoordinatorEventMetadata,
     RunCoordinatorState,
 } from '@mission-control/protocol';
-import { ProviderTurnRunner } from '../providers/provider-turn-runner.js';
 import type { ProviderAdapter } from '../providers/provider-turn-types.js';
 import { projectSessionAdmission } from '../session-admission-projection.js';
 import { SessionAdmissionService } from '../session-admission-service.js';
 import type { AdmitPromptInput, PromptInputState, SessionAdmissionEventStore } from '../session-admission-types.js';
+import type { ToolRegistry } from '../tools/tool-registry.js';
 import * as runAdmission from './run-coordinator-admission.js';
 import { RunCoordinatorIdSequence } from './run-coordinator-ids.js';
-import { providerRunnerOptions } from './run-coordinator-provider-options.js';
-import { providerTurnSelection } from './run-coordinator-provider-selection.js';
+import { runCoordinatorProviderTurn } from './run-coordinator-provider-turn.js';
 
 export type RunCoordinatorStore = SessionAdmissionEventStore;
 
@@ -38,6 +37,7 @@ export type SessionRunCoordinatorOptions = {
     readonly timeoutMs?: number;
     readonly retryLimit?: number;
     readonly toolCallLoopLimit?: number;
+    readonly toolRegistry?: ToolRegistry;
     readonly createId?: (prefix: string, index: number) => string;
 };
 
@@ -181,30 +181,23 @@ export class SessionRunCoordinator {
     }
 
     private async runProviderTurn(signal: AbortSignal): Promise<{ readonly status: 'completed' | 'interrupted' }> {
-        const runner = new ProviderTurnRunner({
-            provider: this.options.provider,
-            ...providerRunnerOptions(this.options),
-        });
-        const turnId = await this.ids.next('turn');
-        const requestId = await this.ids.next('request');
-        const result = await runner.runTurn({
-            sessionId: this.options.sessionId,
-            turnId,
-            requestId,
-            ...providerTurnSelection(this.options.modelProviderSelection),
-            messages: await this.modelVisibleMessages(),
-            startSequence: 0,
-            signal,
-            writeEnvelope: async (envelope) => {
-                if (envelope.durability === 'durable') {
-                    await this.appendDurableEvent(envelope.event);
-                }
+        return runCoordinatorProviderTurn(
+            {
+                sessionId: this.options.sessionId,
+                provider: this.options.provider,
+                modelProviderSelection: this.options.modelProviderSelection,
+                ...(this.options.timeoutMs !== undefined ? { timeoutMs: this.options.timeoutMs } : {}),
+                ...(this.options.retryLimit !== undefined ? { retryLimit: this.options.retryLimit } : {}),
+                ...(this.options.toolCallLoopLimit !== undefined
+                    ? { toolCallLoopLimit: this.options.toolCallLoopLimit }
+                    : {}),
+                ...(this.options.toolRegistry !== undefined ? { toolRegistry: this.options.toolRegistry } : {}),
+                readMessages: () => this.modelVisibleMessages(),
+                nextId: (prefix) => this.ids.next(prefix),
+                appendDurableEvent: (event) => this.appendDurableEvent(event),
             },
-        });
-        if (result.status === 'failed' && result.error.code === 'provider_aborted') {
-            return { status: 'interrupted' };
-        }
-        return { status: 'completed' };
+            signal,
+        );
     }
 
     private async promoteWakeBatch(): Promise<'promoted' | 'idle' | 'run_requested'> {

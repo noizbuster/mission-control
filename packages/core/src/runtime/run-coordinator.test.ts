@@ -1,9 +1,13 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import type { ProviderTurnRequest } from '../providers/provider-turn-types.js';
 import { projectSessionAdmission } from '../session-admission.js';
+import { ToolRegistry } from '../tools/tool-registry.js';
 import {
     cleanupCoordinatorContexts,
     deferred,
+    messageContents,
     openCoordinatorContext,
     providerFromRequests,
     reopenCoordinatorContext,
@@ -22,7 +26,7 @@ describe('SessionRunCoordinator', () => {
         const requests: string[][] = [];
         const coordinator = context.createCoordinator(
             providerFromRequests((request, index) => {
-                requests.push(request.messages.map((message) => message.content));
+                requests.push([...messageContents(request.messages)]);
                 if (index === 0) {
                     firstStarted.resolve();
                     return releaseFirst.promise;
@@ -71,7 +75,7 @@ describe('SessionRunCoordinator', () => {
         await restarted
             .createCoordinator(
                 providerFromRequests((request) => {
-                    requests.push(request.messages.map((message) => message.content));
+                    requests.push([...messageContents(request.messages)]);
                     return Promise.resolve();
                 }),
             )
@@ -119,7 +123,7 @@ describe('SessionRunCoordinator', () => {
         const result = await context
             .createCoordinator(
                 providerFromRequests((request) => {
-                    requests.push(request.messages.map((message) => message.content));
+                    requests.push([...messageContents(request.messages)]);
                     return Promise.resolve();
                 }),
             )
@@ -137,7 +141,7 @@ describe('SessionRunCoordinator', () => {
         const requests: string[][] = [];
         const coordinator = context.createCoordinator(
             providerFromRequests((request) => {
-                requests.push(request.messages.map((message) => message.content));
+                requests.push([...messageContents(request.messages)]);
                 return Promise.resolve();
             }),
         );
@@ -184,6 +188,83 @@ describe('SessionRunCoordinator', () => {
         // Then
         expect(events.some((event) => event.providerStreamChunk?.kind === 'tool_call_completed')).toBe(true);
         expect(events.some((event) => event.providerStreamChunk?.kind === 'response_completed')).toBe(true);
+        await context.store.close();
+    });
+
+    it('continues a provider turn with a model-visible tool result after settlement', async () => {
+        // Given
+        const context = await openCoordinatorContext('session_run_tool_continuation');
+        const registry = createReadToolRegistry('README contents');
+        const requests: ProviderTurnRequest[] = [];
+        const coordinator = context.createCoordinator(
+            {
+                async *streamTurn(request) {
+                    requests.push(request);
+                    if (requests.length === 1) {
+                        yield toolCallChunk(request, 'read_call_1', 'repo.read', { path: 'README.md' });
+                        yield completedChunk(request, 'need README', ['read_call_1']);
+                        return;
+                    }
+                    const toolMessage = request.messages.find((message) => message.role === 'tool');
+                    yield completedChunk(request, `final after ${toolMessage?.output ?? 'missing tool output'}`);
+                },
+            },
+            { toolRegistry: registry },
+        );
+        await coordinator.steer({
+            inputId: 'input_read',
+            messageId: 'message_read',
+            prompt: 'read README',
+        });
+
+        // When
+        const result = await coordinator.wake();
+        const events = await context.events();
+
+        // Then
+        expect(result).toMatchObject({ status: 'completed', turns: 1 });
+        expect(requests).toHaveLength(2);
+        expect(requests[0]?.tools?.map((tool) => tool.name)).toEqual(['repo.read']);
+        expect(requests[1]?.messages).toEqual([
+            { role: 'user', content: 'read README' },
+            { role: 'assistant', content: 'need README' },
+            { role: 'tool', toolCallId: 'read_call_1', status: 'completed', output: 'README contents' },
+        ]);
+        expect(events.map((event) => event.type)).toEqual(
+            expect.arrayContaining(['tool.completed', 'model.call.completed', 'run.completed']),
+        );
+        expect(events.at(-2)).toMatchObject({
+            type: 'model.call.completed',
+            message: 'final after README contents',
+        });
+        await context.store.close();
+    });
+
+    it('fails a provider continuation loop that exceeds the configured tool loop cap', async () => {
+        // Given
+        const context = await openCoordinatorContext('session_run_tool_loop_cap');
+        const registry = createReadToolRegistry('loop output');
+        const requests: ProviderTurnRequest[] = [];
+        const coordinator = context.createCoordinator(
+            {
+                async *streamTurn(request) {
+                    requests.push(request);
+                    const toolCallId = `read_call_${requests.length}`;
+                    yield toolCallChunk(request, toolCallId, 'repo.read', { path: 'README.md' });
+                    yield completedChunk(request, 'need another read', [toolCallId]);
+                },
+            },
+            { toolRegistry: registry, toolCallLoopLimit: 1 },
+        );
+        await coordinator.steer({
+            inputId: 'input_loop',
+            messageId: 'message_loop',
+            prompt: 'loop forever',
+        });
+
+        // When / Then
+        await expect(coordinator.wake()).rejects.toThrow('provider turn tool loop limit exceeded: 1');
+        expect(requests).toHaveLength(2);
         await context.store.close();
     });
 
@@ -282,3 +363,63 @@ describe('SessionRunCoordinator', () => {
         await context.store.close();
     });
 });
+
+function createReadToolRegistry(content: string): ToolRegistry {
+    const registry = new ToolRegistry();
+    registry.register({
+        name: 'repo.read',
+        description: 'Read a test repository file.',
+        capabilityClasses: ['read'],
+        parametersJsonSchema: {
+            type: 'object',
+            properties: {
+                path: { type: 'string' },
+            },
+            required: ['path'],
+            additionalProperties: false,
+        },
+        inputSchema: z.object({ path: z.string().min(1) }).strict(),
+        outputSchema: z.object({ content: z.string() }).strict(),
+        outputLimit: { maxModelOutputChars: 1_000 },
+        execute: () => ({ content }),
+        toModelOutput: (output) => output.content,
+    });
+    return registry;
+}
+
+function toolCallChunk(
+    request: ProviderTurnRequest,
+    toolCallId: string,
+    toolName: string,
+    args: Readonly<Record<string, unknown>>,
+): ProviderStreamChunk {
+    return {
+        kind: 'tool_call_completed',
+        requestId: request.requestId,
+        sequence: 1,
+        toolCall: {
+            toolCallId,
+            toolName,
+            argumentsJson: JSON.stringify(args),
+        },
+    };
+}
+
+function completedChunk(
+    request: ProviderTurnRequest,
+    content: string,
+    toolCallIds?: readonly string[],
+): ProviderStreamChunk {
+    return {
+        kind: 'response_completed',
+        requestId: request.requestId,
+        sequence: 2,
+        message: {
+            messageId: `assistant_${request.turnId}`,
+            role: 'assistant',
+            content,
+            ...(toolCallIds !== undefined ? { toolCallIds: [...toolCallIds] } : {}),
+        },
+        finishReason: toolCallIds === undefined ? 'stop' : 'tool_calls',
+    };
+}

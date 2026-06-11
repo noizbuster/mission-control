@@ -11,31 +11,20 @@ import type {
     PermissionRequest,
 } from '@mission-control/protocol';
 import { runRuntimeDemoTask } from './agent-runtime-demo.js';
+import type { AgentRuntimeOptions } from './agent-runtime-options.js';
 import { runRuntimeProviderPromptTask } from './agent-runtime-provider-turn.js';
 import { resolveSidecarCommand } from './agent-runtime-sidecar.js';
 import { runRuntimeSkillInvocationTask, type SkillInvocationTaskInput } from './agent-runtime-skill.js';
-import { type ApprovalUpdateInput, type PermissionDecisionResolver, PermissionGate } from './approval-gate.js';
+import { type ApprovalUpdateInput, PermissionGate } from './approval-gate.js';
 import { type AbgGraphRunResult, runAbgGraph } from './behavior/graph-runner.js';
 import type { AbgTimelineEntry } from './behavior/timeline.js';
 import { EventBus } from './event-bus.js';
 import { MockSidecarClient } from './native/mock-sidecar-client.js';
 import { ProcessSidecarClient, type SidecarClient } from './native/sidecar-client.js';
 import { createDefaultPermissionDecision } from './permissions.js';
-import type { ProviderAdapter } from './providers/provider-turn-types.js';
 import { SessionEventLog } from './session-log.js';
 
-export type AgentRuntimeOptions = {
-    readonly useNative?: boolean;
-    readonly sidecarCommand?: string;
-    readonly sidecarTimeoutMs?: number;
-    readonly modelProviderSelection?: ModelProviderSelection;
-    readonly provider?: ProviderAdapter;
-    readonly providerTimeoutMs?: number;
-    readonly providerRetryLimit?: number;
-    readonly providerTurnLoopLimit?: number;
-    readonly permissionDecisionResolver?: PermissionDecisionResolver;
-};
-
+export type { AgentRuntimeOptions } from './agent-runtime-options.js';
 export type { SkillInvocationTaskInput };
 
 export class AgentRuntime {
@@ -60,6 +49,9 @@ export class AgentRuntime {
                 this.emit(event);
             },
             now: () => new Date().toISOString(),
+            ...(options.pendingApprovalBehavior !== undefined
+                ? { pendingApprovalBehavior: options.pendingApprovalBehavior }
+                : {}),
         });
     }
 
@@ -264,6 +256,7 @@ export class AgentRuntime {
             ...(this.options.providerTurnLoopLimit !== undefined
                 ? { providerTurnLoopLimit: this.options.providerTurnLoopLimit }
                 : {}),
+            requestPermission: (request) => this.requestPermission(request, taskId),
             onEnvelope: (envelope) => {
                 this.emitProviderEnvelope(envelope);
             },

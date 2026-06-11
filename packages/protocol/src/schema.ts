@@ -5,7 +5,7 @@ import { CommandRunEventMetadataSchema } from './command-events.js';
 import { DiffFileSchema } from './diff-events.js';
 import { EventIdSchema, EventSequenceSchema } from './event-primitives.js';
 import { ModelProviderSelectionSchema } from './provider-auth.js';
-import { ProviderStreamChunkSchema } from './provider-events.js';
+import { ProviderStreamChunkSchema, ToolResultSchema } from './provider-events.js';
 import { RunCoordinatorEventMetadataSchema } from './run-coordinator.js';
 import { NativeSidecarStatusSchema } from './sidecar.js';
 import { TranscriptEventMetadataSchema } from './transcript.js';
@@ -173,6 +173,7 @@ export const AgentEventSchema = z.object({
     approvalRecord: ApprovalRecordSchema.optional(),
     modelProviderSelection: ModelProviderSelectionSchema.optional(),
     providerStreamChunk: z.lazy(() => ProviderStreamChunkSchema).optional(),
+    toolResult: ToolResultSchema.optional(),
     diffFiles: z.array(DiffFileSchema).optional(),
     command: CommandRunEventMetadataSchema.optional(),
     run: RunCoordinatorEventMetadataSchema.optional(),
@@ -257,4 +258,10 @@ export {
     EventIdSchema,
     type EventSequence,
     EventSequenceSchema,
+    type ProviderToolCallTranscript,
+    ProviderToolCallTranscriptSchema,
+    type TextAgentMessage,
+    TextAgentMessageSchema,
+    type ToolAgentMessage,
+    ToolAgentMessageSchema,
 } from './event-primitives.js';

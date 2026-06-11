@@ -190,6 +190,75 @@ describe('session replay projectors', () => {
             },
         ]);
     });
+
+    it('projects replayable failed tool settlements with partial applied files', () => {
+        // Given
+        const sessionId = 'session_replay_partial_tool';
+        const failedResult = {
+            toolCallId: 'tool_patch_partial',
+            status: 'failed' as const,
+            error: {
+                code: 'tool_failed' as const,
+                message: 'partial_failed: applied a.txt; failed b.txt',
+                retryable: false,
+            },
+        };
+        const envelopes = [
+            envelope(
+                {
+                    type: 'file.diff.applied',
+                    timestamp: '2026-06-05T10:00:02.000Z',
+                    sessionId,
+                    taskId: 'tool_patch_partial',
+                    message: 'patch partially applied',
+                    nativeSidecarStatus: 'mock',
+                    diffFiles: [
+                        {
+                            filePath: 'a.txt',
+                            changeKind: 'modified',
+                            hunks: [
+                                {
+                                    oldStart: 1,
+                                    oldLines: 1,
+                                    newStart: 1,
+                                    newLines: 1,
+                                    lines: [{ kind: 'added', content: 'ONE' }],
+                                },
+                            ],
+                        },
+                    ],
+                },
+                0,
+            ),
+            envelope(
+                {
+                    type: 'tool.failed',
+                    timestamp: '2026-06-05T10:00:03.000Z',
+                    sessionId,
+                    taskId: 'tool_patch_partial',
+                    message: 'tool failed: file.patch',
+                    nativeSidecarStatus: 'mock',
+                    toolResult: failedResult,
+                },
+                1,
+            ),
+        ];
+
+        // When
+        const replay = projectSessionReplay({ sessionId, envelopes });
+
+        // Then
+        expect(replay.toolOutcomes).toEqual([
+            {
+                toolId: 'tool_patch_partial',
+                status: 'failed',
+                failedAt: '2026-06-05T10:00:03.000Z',
+                lastMessage: 'tool failed: file.patch',
+                result: failedResult,
+                appliedFiles: ['a.txt'],
+            },
+        ]);
+    });
 });
 
 type EnvelopeOptions = {

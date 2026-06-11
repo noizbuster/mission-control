@@ -86,6 +86,16 @@ export {
     DiffLineSchema,
 } from './diff-events.js';
 export {
+    PROVIDER_ADAPTER_FAMILIES,
+    PROVIDER_CAPABILITY_STATUSES,
+    type ProviderAdapterFamily,
+    ProviderAdapterFamilySchema,
+    type ProviderCapabilityStatus,
+    ProviderCapabilityStatusSchema,
+    type ProviderExecutionCapability,
+    ProviderExecutionCapabilitySchema,
+} from './provider-auth.js';
+export {
     PROTOCOL_ERROR_CODES,
     PROVIDER_FINISH_REASONS,
     PROVIDER_STREAM_CHUNK_KINDS,
@@ -190,6 +200,8 @@ export {
     ProviderFieldsCredentialSchema,
     type ProviderOAuthCredential,
     ProviderOAuthCredentialSchema,
+    type ProviderToolCallTranscript,
+    ProviderToolCallTranscriptSchema,
     type ReplayCursor,
     ReplayCursorSchema,
     SESSION_STATUSES,
@@ -207,6 +219,10 @@ export {
     SidecarTaskOutputSchema,
     type SidecarWireResponse,
     SidecarWireResponseSchema,
+    type TextAgentMessage,
+    TextAgentMessageSchema,
+    type ToolAgentMessage,
+    ToolAgentMessageSchema,
 } from './schema.js';
 export {
     TRANSCRIPT_DELIVERY_MODES,

@@ -1,3 +1,4 @@
+import { ProviderCatalogEntrySchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import {
     defaultModelProviderSelection,
@@ -126,4 +127,72 @@ describe('config catalog constants', () => {
             'thinking-high',
         ]);
     });
+
+    it('classifies provider execution capability explicitly', () => {
+        const localProvider = modelProviderCatalog.find((provider) => provider.id === 'local');
+        const openAIProvider = opencodeProviderCatalog.find((provider) => provider.id === 'openai');
+        const cloudflareProvider = opencodeProviderCatalog.find((provider) => provider.id === 'cloudflare-ai-gateway');
+        const githubCopilotProvider = opencodeProviderCatalog.find((provider) => provider.id === 'github-copilot');
+
+        expect(localProvider?.capability).toEqual({
+            status: 'executable',
+            adapterFamily: 'local',
+        });
+        expect(openAIProvider?.capability).toEqual({
+            status: 'executable',
+            adapterFamily: 'openai-responses',
+        });
+        expect(cloudflareProvider?.authFields.length).toBeGreaterThan(1);
+        expect(cloudflareProvider?.capability).toEqual({
+            status: 'model-discovery-only',
+        });
+        expect(githubCopilotProvider?.capability).toEqual({
+            status: 'auth-only',
+        });
+
+        const capabilityCounts = capabilityStatusCounts(opencodeProviderCatalog);
+        expect(capabilityCounts.executable).toBe(1);
+        expect(capabilityCounts['auth-only']).toBe(1);
+        expect(capabilityCounts['model-discovery-only']).toBe(138);
+        expect(capabilityCounts.unsupported).toBe(0);
+        expect(opencodeProviderCatalog.every((provider) => provider.capability.status.length > 0)).toBe(true);
+    });
+
+    it('rejects provider catalog entries without explicit capability metadata', () => {
+        const parsed = ProviderCatalogEntrySchema.safeParse({
+            id: 'fixture',
+            name: 'Fixture',
+            defaultModelID: 'fixture-model',
+            authLabel: 'API key',
+            models: [
+                {
+                    id: 'fixture-model',
+                    name: 'Fixture Model',
+                    status: 'active',
+                },
+            ],
+        });
+
+        expect(parsed.success).toBe(false);
+    });
 });
+
+type CapabilityStatusCounts = {
+    executable: number;
+    'model-discovery-only': number;
+    'auth-only': number;
+    unsupported: number;
+};
+
+function capabilityStatusCounts(providers: typeof opencodeProviderCatalog): CapabilityStatusCounts {
+    const counts: CapabilityStatusCounts = {
+        executable: 0,
+        'model-discovery-only': 0,
+        'auth-only': 0,
+        unsupported: 0,
+    };
+    for (const provider of providers) {
+        counts[provider.capability.status] = (counts[provider.capability.status] ?? 0) + 1;
+    }
+    return counts;
+}

@@ -79,6 +79,7 @@ export type ReadOnlyRepoToolOptions = {
     readonly maxSearchMatches?: number;
     readonly maxSearchLineChars?: number;
     readonly maxModelOutputChars?: number;
+    readonly allowDenylistedPaths?: readonly string[];
 };
 
 export type ResolvedReadOnlyRepoToolOptions = {
@@ -87,6 +88,7 @@ export type ResolvedReadOnlyRepoToolOptions = {
     readonly maxSearchMatches: number;
     readonly maxSearchLineChars: number;
     readonly maxModelOutputChars: number;
+    readonly allowDenylistedPaths: readonly string[];
 };
 
 export function readModelOutput(output: ReadOutput): string {
@@ -114,6 +116,7 @@ export function resolveOptions(options: ReadOnlyRepoToolOptions): ResolvedReadOn
         maxSearchMatches: options.maxSearchMatches ?? 100,
         maxSearchLineChars: options.maxSearchLineChars ?? 500,
         maxModelOutputChars: options.maxModelOutputChars ?? 8 * 1024,
+        allowDenylistedPaths: options.allowDenylistedPaths ?? [],
     };
 }
 

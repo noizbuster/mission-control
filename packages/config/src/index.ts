@@ -1,3 +1,4 @@
+import type { ProviderExecutionCapability } from '@mission-control/protocol';
 import modelsDevCatalogSnapshot from './generated/models-dev-catalog.json' with { type: 'json' };
 import { variantsForGeneratedModel } from './model-variant-presets.js';
 
@@ -40,6 +41,7 @@ export type ModelProviderCatalogEntry = {
     readonly authLabel: string;
     readonly authFields: readonly ProviderAuthField[];
     readonly authMethods: readonly ProviderAuthMethod[];
+    readonly capability: ProviderExecutionCapability;
     readonly models: readonly ModelCatalogEntry[];
 };
 
@@ -100,6 +102,25 @@ const githubCopilotAuthMethods = [
     },
 ] as const satisfies readonly ProviderAuthMethod[];
 
+const localProviderCapability = {
+    status: 'executable',
+    adapterFamily: 'local',
+} as const satisfies ProviderExecutionCapability;
+
+const generatedProviderCapabilities: Readonly<Record<string, ProviderExecutionCapability>> = {
+    openai: {
+        status: 'executable',
+        adapterFamily: 'openai-responses',
+    },
+    'github-copilot': {
+        status: 'auth-only',
+    },
+};
+
+const generatedDefaultProviderCapability = {
+    status: 'model-discovery-only',
+} as const satisfies ProviderExecutionCapability;
+
 export const defaultModelProviderSelection = {
     providerID: 'local',
     modelID: 'local-echo',
@@ -113,6 +134,7 @@ const scaffoldModelProviderCatalog = [
         authLabel: 'API key',
         authFields: apiKeyAuthFields,
         authMethods: [createApiKeyAuthMethod('API key')],
+        capability: localProviderCapability,
         models: [
             {
                 id: 'local-echo',
@@ -170,6 +192,7 @@ export const opencodeProviderCatalog: readonly ModelProviderCatalogEntry[] = mod
                 required: field.required,
             })),
             authMethods: createProviderAuthMethods(provider.id, provider.authLabel),
+            capability: capabilityForGeneratedProvider(provider.id),
             models: provider.models.map((model) => {
                 const variants = variantsForGeneratedModel(provider.id, model.id);
                 return {
@@ -205,6 +228,10 @@ function createApiKeyAuthMethod(authLabel: string): ProviderAuthMethod {
         type: 'apiKey',
         label: authLabel,
     };
+}
+
+function capabilityForGeneratedProvider(providerID: string): ProviderExecutionCapability {
+    return generatedProviderCapabilities[providerID] ?? generatedDefaultProviderCapability;
 }
 
 function compareProvidersByLoginPriority(left: ModelProviderCatalogEntry, right: ModelProviderCatalogEntry): number {

@@ -127,15 +127,19 @@ function projectApprovals(envelopes: readonly AgentEventEnvelope[]): readonly Ap
 function projectToolOutcomes(events: readonly AgentEvent[]): readonly ToolOutcomeProjection[] {
     const outcomes = new Map<string, ToolOutcomeProjection>();
     for (const event of events) {
-        const toolStatus = toolStatusForEvent(event.type);
-        if (toolStatus === undefined) {
-            continue;
-        }
         const toolId = event.taskId ?? event.abg?.nodeId;
         if (toolId === undefined) {
             continue;
         }
-        outcomes.set(toolId, nextToolOutcome(outcomes.get(toolId), toolId, toolStatus, event));
+        const withDiff = nextDiffOutcome(outcomes.get(toolId), toolId, event);
+        const toolStatus = toolStatusForEvent(event.type);
+        if (toolStatus === undefined) {
+            if (withDiff !== undefined) {
+                outcomes.set(toolId, withDiff);
+            }
+            continue;
+        }
+        outcomes.set(toolId, nextToolOutcome(withDiff, toolId, toolStatus, event));
     }
     return [...outcomes.values()];
 }
@@ -160,6 +164,33 @@ function nextToolOutcome(
             : current?.lastMessage !== undefined
               ? { lastMessage: current.lastMessage }
               : {}),
+        ...(current?.result !== undefined ? { result: current.result } : {}),
+        ...(event.toolResult !== undefined ? { result: event.toolResult } : {}),
+        ...(current?.appliedFiles !== undefined ? { appliedFiles: current.appliedFiles } : {}),
+    };
+}
+
+function nextDiffOutcome(
+    current: ToolOutcomeProjection | undefined,
+    toolId: string,
+    event: AgentEvent,
+): ToolOutcomeProjection | undefined {
+    if (event.type !== 'file.diff.applied' || event.diffFiles === undefined) {
+        return current;
+    }
+    const appliedFiles = uniqueStrings([
+        ...(current?.appliedFiles ?? []),
+        ...event.diffFiles.map((diffFile) => diffFile.filePath),
+    ]);
+    return {
+        toolId,
+        status: current?.status ?? 'started',
+        ...(current?.startedAt !== undefined ? { startedAt: current.startedAt } : {}),
+        ...(current?.completedAt !== undefined ? { completedAt: current.completedAt } : {}),
+        ...(current?.failedAt !== undefined ? { failedAt: current.failedAt } : {}),
+        ...(current?.lastMessage !== undefined ? { lastMessage: current.lastMessage } : {}),
+        ...(current?.result !== undefined ? { result: current.result } : {}),
+        appliedFiles,
     };
 }
 
@@ -174,6 +205,10 @@ function toolStatusForEvent(eventType: AgentEvent['type']): ToolOutcomeStatus | 
         default:
             return undefined;
     }
+}
+
+function uniqueStrings(values: readonly string[]): readonly string[] {
+    return [...new Set(values)];
 }
 
 function deriveSession(sessionId: string, events: readonly AgentEvent[]): AgentSession {

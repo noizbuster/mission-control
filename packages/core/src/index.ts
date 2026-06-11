@@ -46,6 +46,22 @@ export { JsonlSessionEventStore, JsonlSessionEventStoreError } from './memory/js
 export type { MemoryStore } from './memory/memory-store.js';
 export { createAllowPermissionDecision, createDefaultPermissionDecision } from './permissions.js';
 export {
+    appendProviderToolResultMessages,
+    DEFAULT_PROVIDER_TOOL_CONTINUATION_LIMIT,
+    providerToolLoopLimitError,
+    sessionScopedToolEvent,
+    settleToolCallWithRegistry,
+    toolCallsFromProviderEnvelopes,
+} from './provider-tool-continuation.js';
+export {
+    type AnthropicMessagesProviderOptions,
+    type AnthropicMessagesTransport,
+    AnthropicMessagesTransportError,
+    type AnthropicMessagesTransportRequest,
+    createAnthropicMessagesProvider,
+    createNodeAnthropicMessagesTransport,
+} from './providers/anthropic/anthropic-messages-provider.js';
+export {
     createCredentialRedactions,
     createStaticProviderCredentialResolver,
     ProviderCredentialResolutionError,
@@ -60,6 +76,14 @@ export {
     type DeterministicProvider,
     type DeterministicProviderStep,
 } from './providers/deterministic-provider.js';
+export {
+    createGeminiGenerateContentProvider,
+    createNodeGeminiGenerateContentTransport,
+    type GeminiGenerateContentProviderOptions,
+    type GeminiGenerateContentTransport,
+    GeminiGenerateContentTransportError,
+    type GeminiGenerateContentTransportRequest,
+} from './providers/google/gemini-generate-content-provider.js';
 export {
     createNodeOpenAIResponsesTransport,
     createOpenAIResponsesProvider,

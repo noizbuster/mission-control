@@ -30,9 +30,7 @@ describe('OpenAI Responses provider variants', () => {
         const requests: OpenAIResponsesTransportRequest[] = [];
         const provider = createProviderWithRequests(requests);
 
-        await collectChunks(
-            provider.streamTurn(turnRequest(), { attempt: 1, signal: new AbortController().signal }),
-        );
+        await collectChunks(provider.streamTurn(turnRequest(), { attempt: 1, signal: new AbortController().signal }));
 
         expect(hasOwn(requests[0]?.body, 'reasoning')).toBe(false);
     });

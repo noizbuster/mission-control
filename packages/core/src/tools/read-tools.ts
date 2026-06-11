@@ -25,6 +25,7 @@ import {
 import { searchRepoText } from './read-tools-search.js';
 import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
 import { open, readdir } from 'node:fs/promises';
+import { join } from 'node:path';
 
 export type { ReadOnlyRepoToolOptions } from './read-tools-schemas.js';
 
@@ -45,8 +46,10 @@ export async function registerReadOnlyRepoTools(
 export async function createReadOnlyRepoToolRegistrations(
     options: ReadOnlyRepoToolOptions,
 ): Promise<ReadOnlyRepoToolRegistrations> {
-    const guard = await createWorkspaceGuard(options.workspaceRoot);
     const resolved = resolveOptions(options);
+    const guard = await createWorkspaceGuard(options.workspaceRoot, {
+        allowDenylistedPaths: resolved.allowDenylistedPaths,
+    });
     return [createReadTool(guard, resolved), createListTool(guard, resolved), createSearchTool(guard, resolved)];
 }
 
@@ -161,15 +164,18 @@ async function listWorkspaceDirectory(
     const entries = (await readdir(target.absolutePath, { withFileTypes: true })).sort((left, right) =>
         left.name.localeCompare(right.name),
     );
+    const visibleEntries = entries.filter(
+        (entry) => !guard.isDeniedAbsolutePath(join(target.absolutePath, entry.name)),
+    );
     return {
         kind: 'directory',
         path: target.relativePath,
-        entries: entries.slice(0, options.maxListEntries).map((entry) => ({
+        entries: visibleEntries.slice(0, options.maxListEntries).map((entry) => ({
             name: entry.name,
             kind: entryKind(entry),
         })),
-        truncated: entries.length > options.maxListEntries,
-        totalEntries: entries.length,
+        truncated: visibleEntries.length > options.maxListEntries,
+        totalEntries: visibleEntries.length,
     };
 }
 

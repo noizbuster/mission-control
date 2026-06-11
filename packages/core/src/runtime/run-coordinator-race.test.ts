@@ -5,6 +5,7 @@ import {
     deferred,
     delayAdmissionStore,
     delaySecondAdmissionStore,
+    messageContents,
     openCoordinatorContext,
     providerFromRequests,
 } from './run-coordinator-test-support.js';
@@ -25,7 +26,7 @@ describe('SessionRunCoordinator admission races', () => {
         const coordinator = context.createCoordinatorWithStore(
             delaySecondAdmissionStore(context.store, admissionBlocked, holdAdmission),
             providerFromRequests((request, index) => {
-                requests.push(request.messages.map((message) => message.content));
+                requests.push([...messageContents(request.messages)]);
                 if (index === 0) {
                     firstStarted.resolve();
                     return releaseFirst.promise;

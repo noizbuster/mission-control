@@ -1,4 +1,10 @@
-import type { AgentEvent, ProtocolError, ProviderStreamChunk, RedactionMetadata } from '@mission-control/protocol';
+import type {
+    AgentEvent,
+    ProtocolError,
+    ProviderStreamChunk,
+    ProviderToolCallTranscript,
+    RedactionMetadata,
+} from '@mission-control/protocol';
 import { credentialRedactionsForText, redactCredentialText } from './credential-resolver.js';
 import type { ProviderTurnRunInput } from './provider-turn-types.js';
 
@@ -59,6 +65,7 @@ export function redactProviderChunk(chunk: ProviderStreamChunk): ProviderStreamC
                 message: {
                     ...chunk.message,
                     content: redactCredentialText(chunk.message.content, []),
+                    ...redactedProviderToolCalls(chunk.message.providerToolCalls),
                     ...redactionField(redactions),
                 },
             };
@@ -144,6 +151,19 @@ function redactionsForText(text: string, existing: readonly RedactionMetadata[] 
 
 function redactionField(redactions: readonly RedactionMetadata[]): { readonly redactions?: RedactionMetadata[] } {
     return redactions.length > 0 ? { redactions: [...redactions] } : {};
+}
+
+function redactedProviderToolCalls(providerToolCalls: readonly ProviderToolCallTranscript[] | undefined): {
+    readonly providerToolCalls?: ProviderToolCallTranscript[];
+} {
+    return providerToolCalls === undefined
+        ? {}
+        : {
+              providerToolCalls: providerToolCalls.map((toolCall) => ({
+                  ...toolCall,
+                  argumentsJson: redactCredentialText(toolCall.argumentsJson, []),
+              })),
+          };
 }
 
 function assertNever(value: never): never {

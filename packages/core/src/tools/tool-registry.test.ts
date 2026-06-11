@@ -61,6 +61,7 @@ describe('ToolRegistry', () => {
             expect.objectContaining({
                 type: 'tool.failed',
                 taskId: 'tool_call_stale',
+                toolResult: settlement.result,
             }),
         );
     });
@@ -137,6 +138,7 @@ describe('ToolRegistry', () => {
                 type: 'tool.completed',
                 taskId: 'tool_call_success',
                 message: 'tool completed: repo.echo',
+                toolResult: settlement.result,
             }),
         );
         expect(settlement.result.toolCallId).toBe('tool_call_success');

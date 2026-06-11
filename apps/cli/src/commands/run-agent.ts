@@ -1,12 +1,11 @@
 import { defaultModelProviderSelection, modelProviderCatalog } from '@mission-control/config';
 import {
     AgentRuntime,
-    type AgentRuntimeOptions,
     type CommandExecutionRequest,
     type CommandExecutionResult,
-    createAllowPermissionDecision,
     createNodeOpenAIResponsesTransport,
     createOpenAIResponsesProvider,
+    PermissionGateError,
     type ProviderAdapter,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
@@ -14,6 +13,7 @@ import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
 import { createCliProviderCredentialResolver } from '../provider-credential-resolver.js';
 import { type AgentUIRenderer, InkRenderer, JsonRenderer, PlainRenderer } from '../ui/renderers.js';
+import { createCliRuntimeOptions } from './cli-runtime-options.js';
 import { type ChatInput, type ChatOutput, type ModelSelector, runInteractiveChatSession } from './interactive-chat.js';
 import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
 import { createLocalCodingProvider } from './local-coding-provider.js';
@@ -45,9 +45,14 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     const shouldRunChat = shouldRunInteractiveChat(args, graph, options);
     const createProvider = options.createProvider ?? ((selection) => createProviderForSelection(selection, authStore));
     const provider =
-        options.provider ??
-        (shouldRunChat ? createProvider(selectedModelProvider) : createLocalCodingProvider());
-    const runtime = new AgentRuntime(createRuntimeOptions(args.useNative, modelProviderSelection, provider));
+        options.provider ?? (shouldRunChat ? createProvider(selectedModelProvider) : createLocalCodingProvider());
+    const runtime = new AgentRuntime(
+        createCliRuntimeOptions({
+            ...(args.useNative !== undefined ? { useNative: args.useNative } : {}),
+            ...(modelProviderSelection !== undefined ? { modelProviderSelection } : {}),
+            provider,
+        }),
+    );
     if (shouldRunChat) {
         const recorder = await createRunEventRecorder(args);
         const emitRuntimeEvent = (event: AgentEvent) => {
@@ -97,12 +102,18 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         await renderer.start(runtime);
         await runtime.start();
         didStart = true;
-        if (graph !== undefined) {
-            await runtime.runGraph(graph);
-        } else if (args.prompt !== undefined) {
-            await runtime.runPromptTask(args.prompt);
-        } else {
-            await runtime.runDemoTask();
+        try {
+            if (graph !== undefined) {
+                await runtime.runGraph(graph);
+            } else if (args.prompt !== undefined) {
+                await runtime.runPromptTask(args.prompt);
+            } else {
+                await runtime.runDemoTask();
+            }
+        } catch (error: unknown) {
+            if (!(error instanceof PermissionGateError)) {
+                throw error;
+            }
         }
         await runtime.stop();
         didStart = false;
@@ -171,23 +182,6 @@ async function listAuthenticatedModelChoices(
     }
 
     return choices;
-}
-
-function createRuntimeOptions(
-    useNative: boolean | undefined,
-    modelProviderSelection: ModelProviderSelection | undefined,
-    provider: ProviderAdapter,
-): AgentRuntimeOptions {
-    if (useNative === undefined) {
-        if (modelProviderSelection === undefined) {
-            return { provider, permissionDecisionResolver: createAllowPermissionDecision };
-        }
-        return { modelProviderSelection, provider, permissionDecisionResolver: createAllowPermissionDecision };
-    }
-    if (modelProviderSelection === undefined) {
-        return { useNative, provider, permissionDecisionResolver: createAllowPermissionDecision };
-    }
-    return { useNative, modelProviderSelection, provider, permissionDecisionResolver: createAllowPermissionDecision };
 }
 
 function createProviderForSelection(selection: ModelProviderSelection, authStore: ProviderAuthStore): ProviderAdapter {

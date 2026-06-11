@@ -70,7 +70,10 @@ describe('runAgent /model provider variant picker', () => {
             authStore: createAuthStoreWithSummaries([createCredentialSummary('openai')], {
                 openai: createFieldsCredential('openai', 'sk-test-secret'),
             }),
-            chatInput: createScriptedChatInput([{ type: 'line', value: '/model' }, { type: 'line', value: '/exit' }]),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: '/model' },
+                { type: 'line', value: '/exit' },
+            ]),
             chatOutput: chatOutput.output,
             modelDiscovery: async () => undefined,
             selectModel: async (choices) => {
