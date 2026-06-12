@@ -33,14 +33,17 @@ export type {
 export { DesktopCommandReceiptSchema } from './desktop-command-schemas.js';
 export type {
     DesktopSessionDiagnostic,
+    DesktopSessionLockState,
     DesktopSessionLog,
     DesktopSessionSnapshot,
     DesktopSessionState,
     DesktopSessionSummary,
 } from './desktop-session-schemas.js';
 export {
+    DESKTOP_SESSION_LOCK_STATES,
     DESKTOP_SESSION_STATES,
     DesktopSessionDiagnosticSchema,
+    DesktopSessionLockStateSchema,
     DesktopSessionLogSchema,
     DesktopSessionSnapshotSchema,
     DesktopSessionStateSchema,

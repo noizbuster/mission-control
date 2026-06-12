@@ -1,9 +1,11 @@
-import type {
-    AgentRuntime,
-    CommandExecutionRequest,
-    CommandExecutionResult,
-    JsonlSessionEventStore,
-    ProviderAdapter,
+import {
+    type AgentRuntime,
+    type CommandExecutionRequest,
+    type CommandExecutionResult,
+    type JsonlSessionEventStore,
+    type ProviderAdapter,
+    ProviderTurnError,
+    ProviderTurnRunner,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { ChatOutput } from './interactive-chat-io.js';
@@ -33,6 +35,61 @@ export async function startPromptTurn(
         coding.workspaceRoot === undefined ||
         coding.sessionStore === undefined
     ) {
+        if (coding.provider !== undefined) {
+            const taskId = coding.nextTurnId();
+            const sessionId = coding.sessionId ?? 'interactive_session';
+            await runtime.requestPermission(
+                {
+                    id: `permission_${taskId}`,
+                    action: 'prompt.submit',
+                    reason: 'user chat prompt permission gate',
+                },
+                taskId,
+            );
+            emitFallbackTaskEvent(
+                coding,
+                'task.started',
+                sessionId,
+                taskId,
+                'user prompt submitted',
+                modelProviderSelection,
+            );
+            const runner = new ProviderTurnRunner({
+                provider: coding.provider,
+            });
+            const result = await runner.runTurn({
+                sessionId,
+                turnId: taskId,
+                requestId: `provider_request_${taskId}`,
+                providerID: modelProviderSelection.providerID,
+                modelID: modelProviderSelection.modelID,
+                ...(modelProviderSelection.variantID !== undefined
+                    ? { variantID: modelProviderSelection.variantID }
+                    : {}),
+                messages: [{ role: 'user', content: prompt }],
+                startSequence: 0,
+                onEnvelope: (envelope) => {
+                    if (envelope.durability === 'durable') {
+                        coding.emitEvent?.(envelope.event);
+                        return;
+                    }
+                    coding.observeStoredEvent?.(envelope.event);
+                },
+            });
+            if (result.status === 'failed') {
+                throw new ProviderTurnError(result.error);
+            }
+            chatOutput.write(`Assistant: ${result.message.content}\n`);
+            emitFallbackTaskEvent(
+                coding,
+                'task.completed',
+                sessionId,
+                taskId,
+                result.message.content,
+                modelProviderSelection,
+            );
+            return undefined;
+        }
         const response = await runtime.runPromptTask(prompt);
         chatOutput.write(`Assistant: ${response}\n`);
         return undefined;
@@ -49,5 +106,24 @@ export async function startPromptTurn(
         emitEvent: coding.emitEvent ?? (() => undefined),
         ...(coding.observeStoredEvent !== undefined ? { observeStoredEvent: coding.observeStoredEvent } : {}),
         ...(coding.commandExecutor !== undefined ? { commandExecutor: coding.commandExecutor } : {}),
+    });
+}
+
+function emitFallbackTaskEvent(
+    coding: PromptTurnContext,
+    type: 'task.started' | 'task.completed',
+    sessionId: string,
+    taskId: string,
+    message: string,
+    modelProviderSelection: ModelProviderSelection,
+): void {
+    coding.emitEvent?.({
+        type,
+        timestamp: new Date().toISOString(),
+        sessionId,
+        taskId,
+        message,
+        nativeSidecarStatus: 'mock',
+        modelProviderSelection,
     });
 }

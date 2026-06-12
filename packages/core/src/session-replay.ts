@@ -1,12 +1,17 @@
 import {
     type AgentEvent,
     type AgentEventEnvelope,
+    AgentEventEnvelopeSchema,
     AgentEventLogSchema,
     type AgentSession,
 } from '@mission-control/protocol';
 import { deriveAbgGraphSnapshot } from './behavior/graph-state.js';
 import { projectAbgTimeline } from './behavior/timeline.js';
-import { parseJsonlSessionLog } from './memory/jsonl-session-records.js';
+import {
+    JSONL_SESSION_EVENT_RECORD_KIND,
+    JSONL_SESSION_LOG_HEADER_KIND,
+    JSONL_SESSION_LOG_RECORD_VERSION,
+} from './memory/jsonl-session-records.js';
 import { projectBranchSummaries, projectSessionBranchTree } from './session-branch-projection.js';
 import { SessionEventLog } from './session-log.js';
 import { projectCodingSteps, projectReplayDiagnostics } from './session-replay-coding.js';
@@ -68,37 +73,30 @@ export function projectJsonlSessionReplayPrefix(input: {
     readonly contents: string;
 }): JsonlSessionReplayPrefixProjection {
     const lines = nonEmptyLines(input.contents);
-    for (let lineCount = lines.length; lineCount > 0; lineCount -= 1) {
-        const candidate = `${lines
-            .slice(0, lineCount)
-            .map((line) => line.text)
-            .join('\n')}\n`;
-        try {
-            const parsed = parseJsonlSessionLog({
-                contents: candidate,
-                filePath: `jsonl-prefix:${input.sessionId}`,
-                sessionId: input.sessionId,
-            });
-            const excludedLine = lines.at(lineCount);
-            const projection = projectSessionReplay({ sessionId: input.sessionId, envelopes: parsed.envelopes });
-            const diagnostics =
-                excludedLine === undefined
-                    ? projection.diagnostics
-                    : [...projection.diagnostics, corruptTrailingRecord(input.sessionId, excludedLine.lineNumber)];
-            return { projection, diagnostics };
-        } catch {
-            if (lineCount === 1) {
-                return {
-                    projection: projectSessionReplay({ sessionId: input.sessionId, envelopes: [] }),
-                    diagnostics: [corruptTrailingRecord(input.sessionId, lines.at(0)?.lineNumber ?? 1)],
-                };
-            }
-        }
+    const headerLine = lines.at(0);
+    if (headerLine === undefined) {
+        return {
+            projection: projectSessionReplay({ sessionId: input.sessionId, envelopes: [] }),
+            diagnostics: [],
+        };
     }
-    return {
-        projection: projectSessionReplay({ sessionId: input.sessionId, envelopes: [] }),
-        diagnostics: [],
-    };
+    if (!isValidHeaderLine(headerLine.text, input.sessionId)) {
+        return emptyProjectionWithDiagnostic(input.sessionId, headerLine.lineNumber);
+    }
+    const envelopes: AgentEventEnvelope[] = [];
+    let previousSequence = -1;
+    const seenEventIds = new Set<string>();
+    for (const line of lines.slice(1)) {
+        const parsed = parseReplayEnvelopeLine(line.text, input.sessionId);
+        if (parsed === undefined || parsed.sequence <= previousSequence || seenEventIds.has(parsed.eventId)) {
+            return prefixProjection(input.sessionId, envelopes, line.lineNumber);
+        }
+        previousSequence = parsed.sequence;
+        seenEventIds.add(parsed.eventId);
+        envelopes.push(parsed);
+    }
+    const projection = projectSessionReplay({ sessionId: input.sessionId, envelopes });
+    return { projection, diagnostics: projection.diagnostics };
 }
 
 function graphIdsFor(events: readonly AgentEvent[]): readonly string[] {
@@ -132,6 +130,75 @@ function nonEmptyLines(contents: string): readonly { readonly text: string; read
         .split(/\r?\n/)
         .map((text, index) => ({ text, lineNumber: index + 1 }))
         .filter((line) => line.text.trim().length > 0);
+}
+
+function isValidHeaderLine(line: string, sessionId: string): boolean {
+    const value = parseJsonLine(line);
+    return (
+        isRecord(value) &&
+        value.kind === JSONL_SESSION_LOG_HEADER_KIND &&
+        value.version === JSONL_SESSION_LOG_RECORD_VERSION &&
+        value.sessionId === sessionId &&
+        typeof value.createdAt === 'string' &&
+        value.createdAt.length > 0
+    );
+}
+
+function parseReplayEnvelopeLine(line: string, sessionId: string): AgentEventEnvelope | undefined {
+    const value = parseJsonLine(line);
+    if (
+        !isRecord(value) ||
+        value.kind !== JSONL_SESSION_EVENT_RECORD_KIND ||
+        value.version !== JSONL_SESSION_LOG_RECORD_VERSION
+    ) {
+        return undefined;
+    }
+    const parsedEnvelope = AgentEventEnvelopeSchema.safeParse(value.event);
+    if (!parsedEnvelope.success) {
+        return undefined;
+    }
+    const envelope = parsedEnvelope.data;
+    if (envelope.sessionId !== sessionId || envelope.event.sessionId !== sessionId) {
+        return undefined;
+    }
+    return envelope.durability === 'durable' ? envelope : undefined;
+}
+
+function parseJsonLine(line: string): unknown {
+    try {
+        return JSON.parse(line);
+    } catch {
+        return undefined;
+    }
+}
+
+function prefixProjection(
+    sessionId: string,
+    envelopes: readonly AgentEventEnvelope[],
+    lineNumber: number,
+): JsonlSessionReplayPrefixProjection {
+    const projection = projectSessionReplay({ sessionId, envelopes });
+    return {
+        projection,
+        diagnostics: [...projection.diagnostics, corruptTrailingRecord(sessionId, lineNumber)],
+    };
+}
+
+function emptyProjectionWithDiagnostic(sessionId: string, lineNumber: number): JsonlSessionReplayPrefixProjection {
+    return {
+        projection: projectSessionReplay({ sessionId, envelopes: [] }),
+        diagnostics: [corruptTrailingRecord(sessionId, lineNumber)],
+    };
+}
+
+function isRecord(value: unknown): value is {
+    readonly kind?: unknown;
+    readonly version?: unknown;
+    readonly sessionId?: unknown;
+    readonly createdAt?: unknown;
+    readonly event?: unknown;
+} {
+    return typeof value === 'object' && value !== null;
 }
 
 function corruptTrailingRecord(sessionId: string, lineNumber: number): ReplayDiagnostic {

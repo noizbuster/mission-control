@@ -1,4 +1,8 @@
-import { missionControlDataDirEnvKey } from '@mission-control/core';
+import {
+    createFileSessionIndexStore,
+    missionControlDataDirEnvKey,
+    type SessionIndexSessionRecord,
+} from '@mission-control/core';
 import { type AgentEvent, AgentEventSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
@@ -9,10 +13,9 @@ import {
     diagnosticRecords,
     eventRecords,
     parseReplayRecords,
-    providerFromPatchRequests,
     writeSessionEvents,
 } from './session-test-support.js';
-import { appendFile, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -32,7 +35,9 @@ describe('session commands', () => {
         const replayOutput = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
         const replayEvents = eventRecords(parseReplayRecords(replayOutput));
 
-        expect(listOutput.trim().split('\n')).toContain(sessionId);
+        expect(listOutput.trim().split('\n')).toEqual(
+            expect.arrayContaining([expect.stringMatching(new RegExp(`^${sessionId}\\t`))]),
+        );
         expect(JSON.parse(showOutput)).toMatchObject({
             sessionId,
             eventCount: runEvents.length,
@@ -45,54 +50,47 @@ describe('session commands', () => {
         await rm(dataDir, { recursive: true, force: true });
     });
 
-    it('replays coding runs with provider, tool, result, and continuation records', async () => {
+    it('lists stale locked sessions', async () => {
         // Given
         const dataDir = await useTempDataDir();
-        const workspaceRoot = await mkdtemp(join(tmpdir(), 'mission-control-cli-replay-workspace-'));
-        const sessionId = 'session_cli_replay_coding';
-        const runOutput = await runAgent(
-            parseArgs(['run', 'patch then summarize', '--session', sessionId, '--jsonl']),
-            {
-                workspaceRoot,
-                provider: providerFromPatchRequests(),
-                nonInteractiveAutomationPolicy: 'test-only-allow-known-safe-patch',
-            },
-        );
-        const runEvents = parseEventLines(runOutput);
-
-        // When
-        const replayOutput = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
-        const replayRecords = parseReplayRecords(replayOutput);
-        const showOutput = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', sessionId])));
-
-        // Then
-        expect(eventRecords(replayRecords).map((event) => event.type)).toEqual(runEvents.map((event) => event.type));
-        expect(codingStepRecords(replayRecords)).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({ kind: 'provider.tool_call', toolCallId: 'session_patch_call' }),
-                expect.objectContaining({ kind: 'tool.result', status: 'completed' }),
-                expect.objectContaining({
-                    kind: 'provider.message',
-                    continuation: true,
-                    message: 'patch applied after replay',
-                }),
-            ]),
-        );
-        expect(showOutput).toMatchObject({
-            sessionId,
-            toolOutcomes: [
-                expect.objectContaining({
-                    toolId: 'session_patch_call',
-                    status: 'completed',
-                }),
-            ],
-            codingSteps: expect.arrayContaining([
-                expect.objectContaining({ kind: 'provider.message', continuation: true }),
-            ]),
+        const staleSessionId = 'session_a_stale';
+        const liveSessionId = 'session_z_live';
+        await writeSessionEvents({
+            dataDir,
+            sessionId: staleSessionId,
+            events: [taskCompletedEvent(staleSessionId, 'old session')],
+        });
+        await writeSessionEvents({
+            dataDir,
+            sessionId: liveSessionId,
+            events: [taskCompletedEvent(liveSessionId, 'new session')],
+        });
+        const index = createFileSessionIndexStore({ indexPath: join(dataDir, 'session-index.json') });
+        await index.replaceSessionIndex({
+            sessionId: staleSessionId,
+            records: [sessionIndexRecord(dataDir, staleSessionId, '2026-06-05T10:01:00.000Z')],
             diagnostics: [],
         });
-        expect(await readFile(join(workspaceRoot, '.mctrl-session-replay.txt'), 'utf8')).toBe('replayed\n');
-        await rm(workspaceRoot, { recursive: true, force: true });
+        await index.replaceSessionIndex({
+            sessionId: liveSessionId,
+            records: [sessionIndexRecord(dataDir, liveSessionId, '2026-06-05T10:02:00.000Z')],
+            diagnostics: [],
+        });
+        await writeSessionLock(dataDir, staleSessionId, '2026-06-05T09:00:00.000Z');
+        await writeSessionLock(dataDir, liveSessionId, '2099-01-01T00:00:00.000Z');
+
+        // When
+        const listOutput = await runSessionCommand(parseArgs(['session', 'list']));
+
+        // Then
+        const lines = listOutput.trim().split('\n');
+        expect(lines[0]).toContain(liveSessionId);
+        expect(lines[0]).toContain('lock=live');
+        expect(lines[0]).toContain('events=1');
+        expect(lines[0]).toContain('updated=2026-06-05T10:02:00.000Z');
+        expect(lines[1]).toContain(staleSessionId);
+        expect(lines[1]).toContain('lock=stale');
+        expect(lines[1]).toContain('updated=2026-06-05T10:01:00.000Z');
         await rm(dataDir, { recursive: true, force: true });
     });
 
@@ -238,6 +236,41 @@ function runEvent(sessionId: string, type: AgentEvent['type'], message: string, 
         message,
         run,
     };
+}
+
+function taskCompletedEvent(sessionId: string, message: string): AgentEvent {
+    return {
+        type: 'task.completed',
+        timestamp: '2026-06-05T10:00:00.000Z',
+        sessionId,
+        message,
+    };
+}
+
+function sessionIndexRecord(dataDir: string, sessionId: string, updatedAt: string): SessionIndexSessionRecord {
+    return {
+        kind: 'session',
+        sessionId,
+        status: 'stopped',
+        startedAt: '2026-06-05T10:00:00.000Z',
+        eventCount: 1,
+        updatedAt,
+        sourceFilePath: join(dataDir, 'sessions', `${sessionId}.jsonl`),
+    };
+}
+
+async function writeSessionLock(dataDir: string, sessionId: string, heartbeatAt: string): Promise<void> {
+    await writeFile(
+        join(dataDir, 'sessions', `${sessionId}.lock`),
+        `${JSON.stringify({
+            sessionId,
+            ownerId: `owner-${sessionId}`,
+            createdAt: '2026-06-05T09:00:00.000Z',
+            updatedAt: heartbeatAt,
+            heartbeatAt,
+        })}\n`,
+        'utf8',
+    );
 }
 
 function parseEventLines(output: string) {

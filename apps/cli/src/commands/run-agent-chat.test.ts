@@ -35,6 +35,29 @@ describe('runAgent interactive chat', () => {
         expect(output).not.toContain('completed by mock sidecar');
     });
 
+    it('does not copy raw no-session prompts into emitted fallback task events', async () => {
+        const chatOutput = createBufferedChatOutput();
+        const events: AgentEvent[] = [];
+        const secretPrompt = 'summarize sk-test-secret-token';
+
+        await runAgent(parseArgs([]), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: secretPrompt },
+                { type: 'interrupt' },
+                { type: 'interrupt' },
+            ]),
+            chatOutput: chatOutput.output,
+            onRuntimeEvent: (event) => {
+                events.push(event);
+            },
+        });
+
+        const taskStarted = events.find((event) => event.type === 'task.started');
+        expect(taskStarted?.message).toBe('user prompt submitted');
+        expect(events.map((event) => event.message ?? '').join('\n')).not.toContain(secretPrompt);
+    });
+
     it('does not exit when typed input separates Ctrl+C interrupts', async () => {
         const chatOutput = createBufferedChatOutput();
 

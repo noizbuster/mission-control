@@ -1,4 +1,5 @@
 import type { SessionInspectorProjection } from './lib/session-inspector.js';
+import './SessionInspector.css';
 
 export type SessionInspectorProps = {
     readonly projection: SessionInspectorProjection;
@@ -57,6 +58,7 @@ export function SessionInspector({
                     {projection.sessions.map((session) => (
                         <button
                             className="session-item"
+                            data-lock-state={session.lockState ?? 'none'}
                             data-state={session.state}
                             key={session.sessionId}
                             type="button"
@@ -64,6 +66,8 @@ export function SessionInspector({
                         >
                             <span>{session.sessionId}</span>
                             <span>{session.eventCount} events</span>
+                            <span>lock {session.lockState ?? 'none'}</span>
+                            {session.updatedAt !== undefined ? <span>updated {session.updatedAt}</span> : null}
                         </button>
                     ))}
                     <h2>Branch navigator</h2>

@@ -6,7 +6,8 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
-import { readdir, readFile } from 'node:fs/promises';
+import { formatSessionCatalogEntry, listSessionCatalogEntries, readSessionCatalogEntry } from './session-catalog.js';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export type CliSessionCommandErrorCode = 'invalid_session_id' | 'session_not_found' | 'unsupported_session_command';
@@ -32,7 +33,7 @@ export class CliSessionCommandError extends Error {
 export async function runSessionCommand(args: CliArgs): Promise<string> {
     switch (args.command) {
         case 'session-list':
-            return `${(await listSessionIds()).join('\n')}\n`;
+            return `${(await listSessionCatalogEntries()).map(formatSessionCatalogEntry).join('\n')}\n`;
         case 'session-show':
             return `${JSON.stringify(await showSession(requireSessionId(args)), null, 2)}\n`;
         case 'session-replay':
@@ -45,38 +46,26 @@ export async function runSessionCommand(args: CliArgs): Promise<string> {
     }
 }
 
-async function listSessionIds(): Promise<readonly string[]> {
-    const sessionsDir = sessionLogsDir();
-    let entries: readonly string[];
-    try {
-        entries = await readdir(sessionsDir);
-    } catch (error: unknown) {
-        if (isMissingFileError(error)) {
-            return [];
-        }
-        throw error;
-    }
-    return entries
-        .filter((entry) => entry.endsWith('.jsonl'))
-        .map((entry) => entry.slice(0, -'.jsonl'.length))
-        .filter((sessionId) => parseSessionId(sessionId) !== undefined)
-        .sort();
-}
-
 async function showSession(sessionId: string) {
+    const summary = await readSessionCatalogEntry(sessionId);
     const projection = projectJsonlSessionReplayPrefix({
         sessionId,
         contents: await readSessionLog(sessionId),
     });
     return {
         sessionId,
-        eventCount: projection.projection.events.length,
+        status: summary.status,
+        eventCount: summary.eventCount,
+        lockState: summary.lockState,
+        indexed: summary.indexed,
+        indexState: summary.indexState,
+        updatedAt: summary.updatedAt,
         snapshot: projection.projection.snapshot,
         graphSnapshots: projection.projection.graphSnapshots,
         approvals: projection.projection.approvals,
         toolOutcomes: projection.projection.toolOutcomes,
         codingSteps: projection.projection.codingSteps,
-        diagnostics: projection.diagnostics,
+        diagnostics: summary.diagnostics,
     };
 }
 

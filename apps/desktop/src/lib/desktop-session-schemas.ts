@@ -6,6 +6,10 @@ export const DESKTOP_SESSION_STATES = ['available', 'empty', 'missing', 'corrupt
 export const DesktopSessionStateSchema = z.enum(DESKTOP_SESSION_STATES);
 export type DesktopSessionState = z.infer<typeof DesktopSessionStateSchema>;
 
+export const DESKTOP_SESSION_LOCK_STATES = ['none', 'live', 'stale', 'corrupt'] as const;
+export const DesktopSessionLockStateSchema = z.enum(DESKTOP_SESSION_LOCK_STATES);
+export type DesktopSessionLockState = z.infer<typeof DesktopSessionLockStateSchema>;
+
 export const DesktopSessionDiagnosticSchema = z
     .object({
         code: z.string().min(1),
@@ -21,6 +25,9 @@ export const DesktopSessionSummarySchema = z
         fileName: z.string().min(1),
         state: DesktopSessionStateSchema,
         eventCount: z.number().int().nonnegative(),
+        lockState: DesktopSessionLockStateSchema.optional(),
+        indexed: z.boolean().optional(),
+        updatedAt: z.string().min(1).optional(),
         diagnostics: z.array(DesktopSessionDiagnosticSchema),
     })
     .strict();
@@ -54,6 +61,9 @@ export const DesktopSessionSnapshotSchema = z
         state: DesktopSessionStateSchema,
         eventCount: z.number().int().nonnegative(),
         graphIds: z.array(z.string().min(1)),
+        lockState: DesktopSessionLockStateSchema.optional(),
+        indexed: z.boolean().optional(),
+        updatedAt: z.string().min(1).optional(),
         diagnostics: z.array(DesktopSessionDiagnosticSchema),
     })
     .strict();

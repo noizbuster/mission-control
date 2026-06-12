@@ -15,7 +15,7 @@ afterEach(async () => {
 });
 
 describe('SessionRunCoordinator admission races', () => {
-    it('does not miss a queued follow-up when admission durability is still in flight', async () => {
+    it('does not miss a queued follow-up after delayed admission durability', async () => {
         // Given
         const context = await openCoordinatorContext('session_run_queue_race');
         const holdAdmission = deferred<void>();
@@ -42,8 +42,8 @@ describe('SessionRunCoordinator admission races', () => {
         const queue = coordinator.queue({ inputId: 'input_second', messageId: 'message_second', prompt: 'second' });
         await admissionBlocked.promise;
         releaseFirst.resolve();
-        const result = await wake;
         holdAdmission.resolve();
+        const result = await wake;
         await queue;
         const projection = projectSessionAdmission(await context.store.getEvents(context.sessionId), context.sessionId);
 
@@ -54,7 +54,7 @@ describe('SessionRunCoordinator admission races', () => {
         await context.store.close();
     });
 
-    it('preserves queued branch context when admission durability is still in flight', async () => {
+    it('preserves queued branch context after delayed admission durability', async () => {
         // Given
         const context = await openCoordinatorContext('session_run_queue_context_race');
         const holdAdmission = deferred<void>();
@@ -88,8 +88,8 @@ describe('SessionRunCoordinator admission races', () => {
         });
         await admissionBlocked.promise;
         releaseActive.resolve();
-        await wake;
         holdAdmission.resolve();
+        await wake;
         await queue;
         const projection = projectSessionAdmission(await context.store.getEvents(context.sessionId), context.sessionId);
         const branch = projection.modelVisibleMessages.find((message) => message.inputId === 'input_branch');

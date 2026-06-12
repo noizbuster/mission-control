@@ -1,7 +1,12 @@
 mod desktop_command_bridge;
 mod desktop_command_bridge_stream;
 mod desktop_commands;
+mod session_catalog;
 mod session_datetime;
+mod session_index;
+mod session_index_format;
+mod session_index_format_fields;
+mod session_index_format_records;
 mod session_log_scan;
 mod session_parse;
 mod session_protocol;
@@ -14,8 +19,8 @@ pub use desktop_commands::{
     save_provider_credential, steer_run, submit_prompt,
 };
 pub use sessions::{
-    DesktopSessionLog, DesktopSessionSnapshot, DesktopSessionSummary, SessionLogState,
-    list_sessions_in_data_dir, read_session_events_from_data_dir,
+    DesktopSessionLog, DesktopSessionSnapshot, DesktopSessionSummary, SessionLockState,
+    SessionLogState, list_sessions_in_data_dir, read_session_events_from_data_dir,
     read_session_snapshot_from_data_dir,
 };
 
@@ -84,15 +89,30 @@ mod desktop_command_run_owner_tests;
 mod session_log_invariant_tests;
 
 #[cfg(test)]
+mod session_index_fallback_tests;
+
+#[cfg(test)]
+mod session_index_security_tests;
+
+#[cfg(test)]
+mod session_index_shape_tests;
+
+#[cfg(test)]
+mod session_list_tests;
+
+#[cfg(test)]
+mod session_read_validation_tests;
+
+#[cfg(test)]
 mod tests {
     use super::{
         DesktopApprovalDecisionInput, DesktopPromptCommandInput, DesktopRunCommandInput,
-        SessionLogState, decide_approval, greet, interrupt_run, list_sessions_in_data_dir,
-        queue_follow_up, read_session_events_from_data_dir, resume_run, steer_run, submit_prompt,
+        SessionLogState, decide_approval, greet, interrupt_run, queue_follow_up,
+        read_session_events_from_data_dir, resume_run, steer_run, submit_prompt,
     };
     use crate::sessions::override_data_dir_for_test;
     use std::error::Error;
-    use std::fs::{create_dir_all, remove_dir_all, write};
+    use std::fs::remove_dir_all;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -147,133 +167,6 @@ mod tests {
         assert!(!log.envelopes.is_empty());
         remove_dir_all(data_dir)?;
         Ok(())
-    }
-
-    #[test]
-    fn lists_sessions_and_reads_valid_events() -> Result<(), Box<dyn Error>> {
-        let data_dir = temp_data_dir("valid")?;
-        create_dir_all(data_dir.join("sessions"))?;
-        write(
-            data_dir.join("sessions").join("session_valid.jsonl"),
-            session_log(
-                "session_valid",
-                &[
-                    r#"{"eventId":"event_1","sequence":0,"createdAt":"2026-06-09T00:00:00.000Z","sessionId":"session_valid","durability":"durable","event":{"type":"task.completed","timestamp":"2026-06-09T00:00:00.000Z","sessionId":"session_valid","message":"done"}}"#,
-                ],
-            ),
-        )?;
-
-        let sessions = list_sessions_in_data_dir(&data_dir)?;
-        let log = read_session_events_from_data_dir(&data_dir, "session_valid")?;
-
-        assert_eq!(sessions.len(), 1);
-        assert_eq!(sessions[0].session_id, "session_valid");
-        assert_eq!(sessions[0].state, SessionLogState::Available);
-        assert_eq!(sessions[0].event_count, 1);
-        assert_eq!(log.envelopes.len(), 1);
-        assert_eq!(log.state, SessionLogState::Available);
-        remove_dir_all(data_dir)?;
-        Ok(())
-    }
-
-    #[test]
-    fn corrupt_session_returns_valid_prefix_and_diagnostic() -> Result<(), Box<dyn Error>> {
-        let data_dir = temp_data_dir("corrupt")?;
-        create_dir_all(data_dir.join("sessions"))?;
-        write(
-            data_dir.join("sessions").join("session_corrupt.jsonl"),
-            format!(
-                "{}{}",
-                session_log(
-                    "session_corrupt",
-                    &[
-                        r#"{"eventId":"event_1","sequence":0,"createdAt":"2026-06-09T00:00:00.000Z","sessionId":"session_corrupt","durability":"durable","event":{"type":"task.completed","timestamp":"2026-06-09T00:00:00.000Z","sessionId":"session_corrupt","message":"done"}}"#
-                    ],
-                ),
-                "{bad json\n",
-            ),
-        )?;
-
-        let log = read_session_events_from_data_dir(&data_dir, "session_corrupt")?;
-
-        assert_eq!(log.state, SessionLogState::Corrupt);
-        assert_eq!(log.envelopes.len(), 1);
-        assert_eq!(log.diagnostics.len(), 1);
-        assert_eq!(log.diagnostics[0].line_number, Some(3));
-        remove_dir_all(data_dir)?;
-        Ok(())
-    }
-
-    #[test]
-    fn schema_invalid_envelope_returns_diagnostic() -> Result<(), Box<dyn Error>> {
-        let data_dir = temp_data_dir("invalid-envelope")?;
-        create_dir_all(data_dir.join("sessions"))?;
-        write(
-            data_dir.join("sessions").join("session_invalid.jsonl"),
-            session_log("session_invalid", &[r#"{"eventId":"event_1"}"#]),
-        )?;
-
-        let log = read_session_events_from_data_dir(&data_dir, "session_invalid")?;
-
-        assert_eq!(log.state, SessionLogState::Corrupt);
-        assert_eq!(log.envelopes.len(), 0);
-        assert_eq!(log.diagnostics.len(), 1);
-        assert_eq!(log.diagnostics[0].line_number, Some(2));
-        remove_dir_all(data_dir)?;
-        Ok(())
-    }
-
-    #[test]
-    fn schema_invalid_envelope_enum_values_return_diagnostic() -> Result<(), Box<dyn Error>> {
-        let data_dir = temp_data_dir("invalid-envelope-enum")?;
-        create_dir_all(data_dir.join("sessions"))?;
-        write(
-            data_dir.join("sessions").join("session_invalid_enum.jsonl"),
-            session_log(
-                "session_invalid_enum",
-                &[
-                    r#"{"eventId":"event_1","sequence":0,"createdAt":"2026-06-09T00:00:00.000Z","sessionId":"session_invalid_enum","durability":"archived","event":{"type":"task.unknown","timestamp":"not-a-date"}}"#,
-                ],
-            ),
-        )?;
-
-        let log = read_session_events_from_data_dir(&data_dir, "session_invalid_enum")?;
-
-        assert_eq!(log.state, SessionLogState::Corrupt);
-        assert_eq!(log.envelopes.len(), 0);
-        assert_eq!(log.diagnostics.len(), 1);
-        assert_eq!(log.diagnostics[0].line_number, Some(2));
-        remove_dir_all(data_dir)?;
-        Ok(())
-    }
-
-    #[test]
-    fn missing_session_is_non_crashing_state() -> Result<(), Box<dyn Error>> {
-        let data_dir = temp_data_dir("missing")?;
-
-        let log = read_session_events_from_data_dir(&data_dir, "session_missing")?;
-
-        assert_eq!(log.state, SessionLogState::Missing);
-        assert_eq!(log.envelopes.len(), 0);
-        assert_eq!(log.diagnostics.len(), 0);
-        if data_dir.exists() {
-            remove_dir_all(data_dir)?;
-        }
-        Ok(())
-    }
-
-    fn session_log(session_id: &str, event_records: &[&str]) -> String {
-        let mut output = format!(
-            "{{\"kind\":\"mission-control.session-log\",\"version\":1,\"sessionId\":\"{}\",\"createdAt\":\"2026-06-09T00:00:00.000Z\"}}\n",
-            session_id,
-        );
-        for event_record in event_records {
-            output.push_str(&format!(
-                "{{\"kind\":\"mission-control.session-event\",\"version\":1,\"event\":{}}}\n",
-                event_record,
-            ));
-        }
-        output
     }
 
     fn temp_data_dir(label: &str) -> Result<PathBuf, Box<dyn Error>> {

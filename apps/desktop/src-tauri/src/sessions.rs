@@ -1,9 +1,10 @@
+pub use crate::session_catalog::{list_sessions_in_data_dir, read_session_snapshot_from_data_dir};
 use crate::session_parse::{empty_log, parse_session_contents};
 use serde::Serialize;
 use serde_json::Value;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::fs::{metadata, read_dir, read_to_string};
+use std::fs::{metadata, read_to_string};
 use std::path::{Path, PathBuf};
 #[cfg(test)]
 use std::sync::Mutex;
@@ -22,6 +23,15 @@ pub enum SessionLogState {
     Corrupt,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionLockState {
+    None,
+    Live,
+    Stale,
+    Corrupt,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionDiagnostic {
@@ -37,6 +47,10 @@ pub struct DesktopSessionSummary {
     pub file_name: String,
     pub state: SessionLogState,
     pub event_count: usize,
+    pub lock_state: SessionLockState,
+    pub indexed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
     pub diagnostics: Vec<SessionDiagnostic>,
 }
 
@@ -57,6 +71,10 @@ pub struct DesktopSessionSnapshot {
     pub state: SessionLogState,
     pub event_count: usize,
     pub graph_ids: Vec<String>,
+    pub lock_state: SessionLockState,
+    pub indexed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
     pub diagnostics: Vec<SessionDiagnostic>,
 }
 
@@ -73,7 +91,7 @@ impl Display for DesktopSessionError {
 
 impl Error for DesktopSessionError {}
 
-type DesktopResult<T> = Result<T, DesktopSessionError>;
+pub(crate) type DesktopResult<T> = Result<T, DesktopSessionError>;
 
 pub fn resolve_data_dir() -> DesktopResult<PathBuf> {
     #[cfg(test)]
@@ -89,42 +107,6 @@ pub fn resolve_data_dir() -> DesktopResult<PathBuf> {
         .map(PathBuf::from)
         .ok_or_else(|| session_error("HOME is required when MCTRL_DATA_DIR is not set"))?;
     Ok(home.join(".local").join("share").join("mission-control"))
-}
-
-pub fn list_sessions_in_data_dir(data_dir: &Path) -> DesktopResult<Vec<DesktopSessionSummary>> {
-    let sessions_dir = data_dir.join("sessions");
-    if !sessions_dir.exists() {
-        return Ok(Vec::new());
-    }
-    let entries = read_dir(&sessions_dir).map_err(|error| {
-        session_error(format!(
-            "could not list sessions in {}: {error}",
-            sessions_dir.display()
-        ))
-    })?;
-    let mut summaries = Vec::new();
-    for entry_result in entries {
-        let entry = entry_result
-            .map_err(|error| session_error(format!("could not read session entry: {error}")))?;
-        let path = entry.path();
-        if path.extension().and_then(|value| value.to_str()) != Some("jsonl") {
-            continue;
-        }
-        let session_id = match path.file_stem().and_then(|value| value.to_str()) {
-            Some(value) => value.to_owned(),
-            None => continue,
-        };
-        let log = read_session_events_from_data_dir(data_dir, &session_id)?;
-        summaries.push(DesktopSessionSummary {
-            session_id,
-            file_name: entry.file_name().to_string_lossy().into_owned(),
-            state: log.state,
-            event_count: log.envelopes.len(),
-            diagnostics: log.diagnostics,
-        });
-    }
-    summaries.sort_by(|left, right| left.session_id.cmp(&right.session_id));
-    Ok(summaries)
 }
 
 pub fn read_session_events_from_data_dir(
@@ -148,34 +130,7 @@ pub fn read_session_events_from_data_dir(
     Ok(parse_session_contents(&parsed_session_id, contents))
 }
 
-pub fn read_session_snapshot_from_data_dir(
-    data_dir: &Path,
-    session_id: &str,
-) -> DesktopResult<DesktopSessionSnapshot> {
-    let log = read_session_events_from_data_dir(data_dir, session_id)?;
-    let mut graph_ids = Vec::new();
-    for envelope in &log.envelopes {
-        if let Some(graph_id) = envelope
-            .get("event")
-            .and_then(|event| event.get("abg"))
-            .and_then(|abg| abg.get("graphId"))
-            .and_then(Value::as_str)
-        {
-            if !graph_ids.iter().any(|value| value == graph_id) {
-                graph_ids.push(graph_id.to_owned());
-            }
-        }
-    }
-    Ok(DesktopSessionSnapshot {
-        session_id: log.session_id,
-        state: log.state,
-        event_count: log.envelopes.len(),
-        graph_ids,
-        diagnostics: log.diagnostics,
-    })
-}
-
-fn parse_session_id(session_id: &str) -> DesktopResult<String> {
+pub(crate) fn parse_session_id(session_id: &str) -> DesktopResult<String> {
     if session_id
         .chars()
         .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
@@ -191,7 +146,7 @@ pub(crate) fn session_path(data_dir: &Path, session_id: &str) -> PathBuf {
         .join(format!("{session_id}.jsonl"))
 }
 
-fn session_error(message: impl Into<String>) -> DesktopSessionError {
+pub(crate) fn session_error(message: impl Into<String>) -> DesktopSessionError {
     DesktopSessionError {
         message: message.into(),
     }

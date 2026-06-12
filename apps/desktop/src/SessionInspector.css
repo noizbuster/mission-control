@@ -1,0 +1,13 @@
+.session-item[data-lock-state="live"] {
+    border-color: var(--ok-border);
+}
+
+.session-item[data-lock-state="stale"] {
+    background: var(--warn);
+    border-color: var(--warn-border);
+}
+
+.session-item[data-lock-state="corrupt"] {
+    background: var(--danger);
+    border-color: var(--danger-border);
+}
