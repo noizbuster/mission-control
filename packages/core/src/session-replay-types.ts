@@ -4,6 +4,8 @@ import type {
     AgentEventEnvelope,
     AgentSnapshot,
     ApprovalRecord,
+    ApprovalSubject,
+    ProtocolError,
     ToolResult,
 } from '@mission-control/protocol';
 import type { AbgTimelineEntry } from './behavior/timeline.js';
@@ -49,6 +51,44 @@ export type ToolOutcomeProjection = {
     readonly appliedFiles?: readonly string[];
 };
 
+export type CodingReplayStep =
+    | {
+          readonly kind: 'provider.tool_call';
+          readonly eventId: string;
+          readonly timestamp: string;
+          readonly taskId?: string;
+          readonly toolCallId: string;
+          readonly toolName: string;
+      }
+    | {
+          readonly kind: 'provider.message';
+          readonly eventId: string;
+          readonly timestamp: string;
+          readonly providerTurnId?: string;
+          readonly messageId: string;
+          readonly message: string;
+          readonly continuation: boolean;
+      }
+    | {
+          readonly kind: 'approval';
+          readonly eventId: string;
+          readonly timestamp: string;
+          readonly approvalId: string;
+          readonly state: ApprovalRecord['state'];
+          readonly subject: ApprovalSubject;
+      }
+    | {
+          readonly kind: 'tool.result';
+          readonly eventId: string;
+          readonly timestamp: string;
+          readonly toolCallId: string;
+          readonly status: ToolResult['status'];
+          readonly message?: string;
+          readonly output?: string;
+          readonly error?: ProtocolError;
+          readonly appliedFiles?: readonly string[];
+      };
+
 export type SessionReplayProjection = {
     readonly sessionId: string;
     readonly envelopes: readonly AgentEventEnvelope[];
@@ -60,13 +100,23 @@ export type SessionReplayProjection = {
     readonly branchSummaries: readonly SessionBranchSummary[];
     readonly approvals: readonly ApprovalProjection[];
     readonly toolOutcomes: readonly ToolOutcomeProjection[];
+    readonly codingSteps: readonly CodingReplayStep[];
+    readonly diagnostics: readonly ReplayDiagnostic[];
 };
 
-export type ReplayDiagnostic = {
-    readonly code: 'corrupt_trailing_record';
-    readonly lineNumber: number;
-    readonly sessionId: string;
-};
+export type ReplayDiagnostic =
+    | {
+          readonly code: 'corrupt_trailing_record';
+          readonly lineNumber: number;
+          readonly sessionId: string;
+      }
+    | {
+          readonly code: 'missing_provider_continuation';
+          readonly eventId: string;
+          readonly sessionId: string;
+          readonly toolCallId: string;
+          readonly toolName: string;
+      };
 
 export type JsonlSessionReplayPrefixProjection = {
     readonly projection: SessionReplayProjection;

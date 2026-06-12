@@ -28,6 +28,8 @@ export type RunCoordinatorResult = {
     readonly turns: number;
 };
 
+export type RunCoordinatorReadMessages = () => Promise<readonly AgentMessage[]>;
+
 export type SessionRunCoordinatorOptions = {
     readonly sessionId: string;
     readonly store: RunCoordinatorStore;
@@ -39,6 +41,7 @@ export type SessionRunCoordinatorOptions = {
     readonly toolCallLoopLimit?: number;
     readonly toolRegistry?: ToolRegistry;
     readonly createId?: (prefix: string, index: number) => string;
+    readonly readMessages?: RunCoordinatorReadMessages;
 };
 
 type DrainCommand = 'wake' | 'run' | 'resume';
@@ -233,6 +236,9 @@ export class SessionRunCoordinator {
     }
 
     private async modelVisibleMessages(): Promise<readonly AgentMessage[]> {
+        if (this.options.readMessages !== undefined) {
+            return this.options.readMessages();
+        }
         const projection = projectSessionAdmission(
             await this.options.store.getEvents(this.options.sessionId),
             this.options.sessionId,

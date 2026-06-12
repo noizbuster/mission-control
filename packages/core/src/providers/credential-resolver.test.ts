@@ -87,6 +87,44 @@ describe('ProviderCredentialResolver', () => {
             message: expect.stringContaining('sk-test-secret'),
         });
     });
+
+    it('redacts fields and OAuth access refresh credentials from output and summaries', async () => {
+        // Given
+        const fieldSecret = 'field-provider-secret';
+        const fieldPublicValue = 'field-provider-public';
+        const accessToken = 'oauth-access-secret';
+        const refreshToken = 'oauth-refresh-secret';
+        const resolver = createStaticProviderCredentialResolver([
+            fieldsCredential('perplexity', fieldSecret, fieldPublicValue),
+            oauthCredential('github', accessToken, refreshToken),
+        ]);
+
+        // When
+        const redacted = resolver.redactForOutput(
+            `fields ${fieldSecret} ${fieldPublicValue} oauth ${accessToken} ${refreshToken}`,
+        );
+        const fieldSummary = await resolver.summarizeProviderCredential({ providerID: 'perplexity' });
+        const oauthSummary = await resolver.summarizeProviderCredential({ providerID: 'github' });
+        const missingCredential = resolver.resolveRequiredProviderCredential({ providerID: 'openai' });
+
+        // Then
+        expect(redacted).toBe(
+            `fields [REDACTED_CREDENTIAL] ${fieldPublicValue} oauth [REDACTED_CREDENTIAL] [REDACTED_CREDENTIAL]`,
+        );
+        expect(JSON.stringify({ redacted, fieldSummary, oauthSummary })).not.toContain(fieldSecret);
+        expect(JSON.stringify({ redacted, fieldSummary, oauthSummary })).not.toContain(accessToken);
+        expect(JSON.stringify({ redacted, fieldSummary, oauthSummary })).not.toContain(refreshToken);
+        expect(JSON.stringify({ redacted, fieldSummary, oauthSummary })).toContain(fieldPublicValue);
+        await expect(missingCredential).rejects.not.toMatchObject({
+            message: expect.stringContaining(fieldSecret),
+        });
+        await expect(missingCredential).rejects.not.toMatchObject({
+            message: expect.stringContaining(accessToken),
+        });
+        await expect(missingCredential).rejects.not.toMatchObject({
+            message: expect.stringContaining(refreshToken),
+        });
+    });
 });
 
 async function createTempDataDir(): Promise<string> {
@@ -100,6 +138,31 @@ function apiKeyCredential(providerID: string, apiKey: string): ProviderCredentia
         providerID,
         type: 'apiKey',
         apiKey,
+        createdAt: '2026-06-07T10:00:00.000Z',
+        updatedAt: '2026-06-07T10:00:00.000Z',
+    };
+}
+
+function fieldsCredential(providerID: string, secretValue: string, publicValue: string): ProviderCredential {
+    return {
+        providerID,
+        type: 'fields',
+        fields: {
+            apiKey: { value: secretValue, secret: true },
+            endpoint: { value: publicValue, secret: false },
+        },
+        createdAt: '2026-06-07T10:00:00.000Z',
+        updatedAt: '2026-06-07T10:00:00.000Z',
+    };
+}
+
+function oauthCredential(providerID: string, accessToken: string, refreshToken: string): ProviderCredential {
+    return {
+        providerID,
+        type: 'oauth',
+        accessToken,
+        refreshToken,
+        accountLabel: 'QA account',
         createdAt: '2026-06-07T10:00:00.000Z',
         updatedAt: '2026-06-07T10:00:00.000Z',
     };

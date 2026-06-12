@@ -1,7 +1,11 @@
-import type { AgentEvent } from '@mission-control/protocol';
+import { type AgentEvent, SIDECAR_PROTOCOL_VERSION } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { AgentRuntime } from '../agent-runtime.js';
 import { createAllowPermissionDecision } from '../permissions.js';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 describe('ProcessSidecarClient fallback', () => {
     it('falls back to mock and emits native.warning when spawn fails', async () => {
@@ -29,4 +33,102 @@ describe('ProcessSidecarClient fallback', () => {
             modelID: 'local-echo',
         });
     });
+
+    it('stops a native sidecar process when the runtime stops', async () => {
+        const fixture = await createPersistentSidecarFixture();
+        const runtime = new AgentRuntime({
+            useNative: true,
+            sidecarCommand: fixture.command,
+            permissionDecisionResolver: createAllowPermissionDecision,
+        });
+        let sidecarPid: number | undefined;
+
+        try {
+            await runtime.start();
+            await runtime.runDemoTask();
+            sidecarPid = Number.parseInt(await readFile(fixture.pidFile, 'utf8'), 10);
+
+            expect(isProcessRunning(sidecarPid)).toBe(true);
+            await runtime.stop();
+
+            expect(await waitForProcessExit(sidecarPid)).toBe(true);
+        } finally {
+            if (sidecarPid !== undefined) {
+                killIfRunning(sidecarPid);
+            }
+            await rm(fixture.root, { recursive: true, force: true });
+        }
+    });
 });
+
+type PersistentSidecarFixture = {
+    readonly root: string;
+    readonly command: string;
+    readonly pidFile: string;
+};
+
+async function createPersistentSidecarFixture(): Promise<PersistentSidecarFixture> {
+    const root = await mkdtemp(join(tmpdir(), 'mission-control-sidecar-fixture-'));
+    const command = join(root, 'sidecar.sh');
+    const pidFile = join(root, 'sidecar.pid');
+    await writeFile(
+        command,
+        [
+            '#!/usr/bin/env sh',
+            `echo "$$" > "${pidFile}"`,
+            'while IFS= read -r line; do',
+            '  case "$line" in',
+            '    *\\"type\\":\\"handshake\\"*)',
+            `      echo '{"type":"handshake_completed","id":"handshake_fixture","protocolVersion":${String(SIDECAR_PROTOCOL_VERSION)},"capabilities":["task.run"]}'`,
+            '      ;;',
+            '    *\\"type\\":\\"run_task\\"*)',
+            '      echo \'{"type":"task_completed","id":"task_1","result":{"message":"completed by fixture sidecar"}}\'',
+            '      ;;',
+            '  esac',
+            'done',
+            '',
+        ].join('\n'),
+    );
+    await chmod(command, 0o755);
+    return { root, command, pidFile };
+}
+
+async function waitForProcessExit(pid: number): Promise<boolean> {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+        if (!isProcessRunning(pid)) {
+            return true;
+        }
+        await delay(25);
+    }
+    return !isProcessRunning(pid);
+}
+
+function isProcessRunning(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (error: unknown) {
+        if (errorCode(error) === 'ESRCH') {
+            return false;
+        }
+        throw error;
+    }
+}
+
+function killIfRunning(pid: number): void {
+    try {
+        process.kill(pid, 'SIGTERM');
+    } catch (error: unknown) {
+        if (errorCode(error) !== 'ESRCH') {
+            throw error;
+        }
+    }
+}
+
+function errorCode(error: unknown): string | undefined {
+    if (typeof error !== 'object' || error === null || !('code' in error)) {
+        return undefined;
+    }
+    const code = error.code;
+    return typeof code === 'string' ? code : undefined;
+}

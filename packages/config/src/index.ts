@@ -1,6 +1,7 @@
 import type { ProviderExecutionCapability } from '@mission-control/protocol';
 import modelsDevCatalogSnapshot from './generated/models-dev-catalog.json' with { type: 'json' };
 import { variantsForGeneratedModel } from './model-variant-presets.js';
+import { generatedDefaultProviderCapability, generatedProviderCapabilities } from './provider-capabilities.js';
 
 export const appName = 'mission-control';
 export const cliCommandName = 'mctrl';
@@ -105,20 +106,6 @@ const githubCopilotAuthMethods = [
 const localProviderCapability = {
     status: 'executable',
     adapterFamily: 'local',
-} as const satisfies ProviderExecutionCapability;
-
-const generatedProviderCapabilities: Readonly<Record<string, ProviderExecutionCapability>> = {
-    openai: {
-        status: 'executable',
-        adapterFamily: 'openai-responses',
-    },
-    'github-copilot': {
-        status: 'auth-only',
-    },
-};
-
-const generatedDefaultProviderCapability = {
-    status: 'model-discovery-only',
 } as const satisfies ProviderExecutionCapability;
 
 export const defaultModelProviderSelection = {

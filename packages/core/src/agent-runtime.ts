@@ -92,6 +92,7 @@ export class AgentRuntime {
             nativeSidecarStatus: this.sidecarClient.status(),
             modelProviderSelection: this.modelProviderSelection,
         });
+        await this.sidecarClient.stop();
     }
 
     async runDemoTask(): Promise<void> {
@@ -255,6 +256,13 @@ export class AgentRuntime {
                 : {}),
             ...(this.options.providerTurnLoopLimit !== undefined
                 ? { providerTurnLoopLimit: this.options.providerTurnLoopLimit }
+                : {}),
+            ...(this.options.createToolRegistry !== undefined
+                ? {
+                      toolRegistry: await this.options.createToolRegistry((request) =>
+                          this.requestPermission(request, taskId),
+                      ),
+                  }
                 : {}),
             requestPermission: (request) => this.requestPermission(request, taskId),
             onEnvelope: (envelope) => {

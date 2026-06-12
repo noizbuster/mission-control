@@ -131,6 +131,12 @@ describe('config catalog constants', () => {
     it('classifies provider execution capability explicitly', () => {
         const localProvider = modelProviderCatalog.find((provider) => provider.id === 'local');
         const openAIProvider = opencodeProviderCatalog.find((provider) => provider.id === 'openai');
+        const anthropicProvider = opencodeProviderCatalog.find((provider) => provider.id === 'anthropic');
+        const googleProvider = opencodeProviderCatalog.find((provider) => provider.id === 'google');
+        const openRouterProvider = opencodeProviderCatalog.find((provider) => provider.id === 'openrouter');
+        const groqProvider = opencodeProviderCatalog.find((provider) => provider.id === 'groq');
+        const deepSeekProvider = opencodeProviderCatalog.find((provider) => provider.id === 'deepseek');
+        const mistralProvider = opencodeProviderCatalog.find((provider) => provider.id === 'mistral');
         const cloudflareProvider = opencodeProviderCatalog.find((provider) => provider.id === 'cloudflare-ai-gateway');
         const githubCopilotProvider = opencodeProviderCatalog.find((provider) => provider.id === 'github-copilot');
 
@@ -142,6 +148,20 @@ describe('config catalog constants', () => {
             status: 'executable',
             adapterFamily: 'openai-responses',
         });
+        expect(anthropicProvider?.capability).toEqual({
+            status: 'executable',
+            adapterFamily: 'anthropic-messages',
+        });
+        expect(googleProvider?.capability).toEqual({
+            status: 'executable',
+            adapterFamily: 'google-gemini',
+        });
+        for (const provider of [openRouterProvider, groqProvider, deepSeekProvider, mistralProvider]) {
+            expect(provider?.capability).toEqual({
+                status: 'executable',
+                adapterFamily: 'openai-compatible',
+            });
+        }
         expect(cloudflareProvider?.authFields.length).toBeGreaterThan(1);
         expect(cloudflareProvider?.capability).toEqual({
             status: 'model-discovery-only',
@@ -151,9 +171,9 @@ describe('config catalog constants', () => {
         });
 
         const capabilityCounts = capabilityStatusCounts(opencodeProviderCatalog);
-        expect(capabilityCounts.executable).toBe(1);
+        expect(capabilityCounts.executable).toBe(7);
         expect(capabilityCounts['auth-only']).toBe(1);
-        expect(capabilityCounts['model-discovery-only']).toBe(138);
+        expect(capabilityCounts['model-discovery-only']).toBe(132);
         expect(capabilityCounts.unsupported).toBe(0);
         expect(opencodeProviderCatalog.every((provider) => provider.capability.status.length > 0)).toBe(true);
     });

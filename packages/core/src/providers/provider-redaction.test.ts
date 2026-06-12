@@ -1,8 +1,10 @@
+import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
 import { projectSessionReplay } from '../session-replay.js';
 import { createDeterministicProvider } from './deterministic-provider.js';
 import { ProviderTurnRunner } from './provider-turn-runner.js';
+import type { ProviderAdapter } from './provider-turn-types.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -63,8 +65,66 @@ describe('provider output redaction', () => {
             await rm(dataDir, { recursive: true, force: true });
         }
     });
+
+    it('redacts token-like provider failures before returning failed results', async () => {
+        // Given
+        const sessionId = 'session_provider_failure_redaction';
+        const secret = ['sk', 'provider_failure_123'].join('-');
+        const runner = new ProviderTurnRunner({
+            provider: throwingProvider(`provider exploded ${secret}`),
+            now: fixedNow,
+            createEventId: (_event, sequence) => `event_${sequence}`,
+            retryLimit: 0,
+        });
+
+        // When
+        const result = await runner.runTurn({
+            sessionId,
+            turnId: 'turn_failure_redaction',
+            requestId: 'request_failure_redaction',
+            providerID: 'local',
+            modelID: 'deterministic',
+            messages: [{ role: 'user', content: 'redact provider failure' }],
+            startSequence: 0,
+        });
+
+        // Then
+        expect(result.status).toBe('failed');
+        if (result.status !== 'failed') {
+            throw new TypeError('provider redaction turn did not fail');
+        }
+        expect(result.error.message).toBe('provider exploded [REDACTED_CREDENTIAL]');
+        expect(result.error.redactions).toEqual([
+            {
+                classification: 'credential',
+                reason: 'token-like provider credential redacted',
+                replacement: '[REDACTED_CREDENTIAL]',
+            },
+        ]);
+        expect(JSON.stringify(result)).not.toContain(secret);
+    });
 });
 
 function fixedNow(): string {
     return '2026-06-09T00:00:00.000Z';
+}
+
+function throwingProvider(message: string): ProviderAdapter {
+    return {
+        streamTurn() {
+            return rejectingProviderStream(message);
+        },
+    };
+}
+
+function rejectingProviderStream(message: string): AsyncIterable<ProviderStreamChunk> {
+    return {
+        [Symbol.asyncIterator]() {
+            return {
+                next(): Promise<IteratorResult<ProviderStreamChunk>> {
+                    return Promise.reject(new Error(message));
+                },
+            };
+        },
+    };
 }

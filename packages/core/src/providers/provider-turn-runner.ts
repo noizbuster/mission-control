@@ -55,15 +55,16 @@ export class ProviderTurnRunner {
                 };
             }
             if (!result.error.retryable || attempt === maxAttempts) {
-                await this.emitEnvelope(
-                    input,
-                    state,
+                const failedChunk = redactProviderChunk(
                     responseFailedChunk(input, state.nextProviderSequence, result.error),
-                    'durable',
                 );
+                if (failedChunk.kind !== 'response_failed') {
+                    throw new TypeError(`Unexpected failed provider chunk kind: ${failedChunk.kind}`);
+                }
+                await this.emitEnvelope(input, state, failedChunk, 'durable');
                 return {
                     status: 'failed',
-                    error: result.error,
+                    error: failedChunk.error,
                     attempts: attempt,
                     envelopes: state.durableEnvelopes,
                 };

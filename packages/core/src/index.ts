@@ -84,6 +84,7 @@ export {
     GeminiGenerateContentTransportError,
     type GeminiGenerateContentTransportRequest,
 } from './providers/google/gemini-generate-content-provider.js';
+export { createLocalCodingProvider } from './providers/local-coding-provider.js';
 export {
     createNodeOpenAIResponsesTransport,
     createOpenAIResponsesProvider,
@@ -92,6 +93,34 @@ export {
     OpenAIResponsesTransportError,
     type OpenAIResponsesTransportRequest,
 } from './providers/openai/openai-responses-provider.js';
+export {
+    createNodeOpenAICompatibleTransport,
+    createOpenAICompatibleProvider,
+    OPENAI_COMPATIBLE_PROVIDER_SPECS,
+    type OpenAICompatibleProviderOptions,
+    type OpenAICompatibleProviderSpec,
+    type OpenAICompatibleTransport,
+    OpenAICompatibleTransportError,
+    type OpenAICompatibleTransportRequest,
+} from './providers/openai-compatible/openai-compatible-provider.js';
+export {
+    createProviderAuthStoreCredentialResolver,
+    type ProviderAuthStoreCredentialResolverAuthStore,
+    summarizeProviderCredential,
+} from './providers/provider-auth-resolver.js';
+export {
+    createProviderAuthStore,
+    type ProviderAuthStore,
+    type SaveProviderCredentialFieldInput,
+    type SaveProviderCredentialInput,
+    type SaveProviderOAuthCredentialInput,
+} from './providers/provider-auth-store.js';
+export {
+    createProviderForSelection,
+    createProviderRouter,
+    type ProviderFactoryOptions,
+    type ProviderFactoryTransports,
+} from './providers/provider-factory.js';
 export { ProviderTurnRunner } from './providers/provider-turn-runner.js';
 export type {
     ProviderAdapter,
@@ -137,6 +166,7 @@ export {
 export { SessionEventLog } from './session-log.js';
 export {
     type ApprovalProjection,
+    type CodingReplayStep,
     type JsonlSessionReplayPrefixProjection,
     projectJsonlSessionReplayPrefix,
     projectSessionReplay,
