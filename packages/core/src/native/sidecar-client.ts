@@ -1,46 +1,52 @@
 import {
-    type AgentEvent,
     type NativeSidecarStatus,
+    SIDECAR_PROTOCOL_V2_VERSION,
     SIDECAR_PROTOCOL_VERSION,
     type SidecarCapability,
+    type SidecarHandshakeResponse,
+    type SidecarProtocolVersion,
     type SidecarTaskInput,
     type SidecarTaskOutput,
     type SidecarWireResponse,
-    SidecarWireResponseSchema,
 } from '@mission-control/protocol';
+import { SidecarProtocolError } from './sidecar-errors.js';
+import { parseSidecarWireResponse, sidecarResponseToAgentEvent } from './sidecar-wire.js';
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
+
+export { SidecarProtocolError } from './sidecar-errors.js';
+export { normalizeSidecarLine, parseSidecarWireResponse } from './sidecar-wire.js';
+
+export type ProcessSidecarClientOptions = {
+    readonly enableProtocolV2?: boolean;
+};
+
+export type NegotiatedSidecarCapability = SidecarCapability | 'task.cancel';
 
 export interface SidecarClient {
     status(): NativeSidecarStatus;
-    capabilities(): readonly SidecarCapability[];
+    capabilities(): readonly NegotiatedSidecarCapability[];
     start(): Promise<void>;
     stop(): Promise<void>;
     runTask(input: SidecarTaskInput): Promise<SidecarTaskOutput>;
 }
 
-export class SidecarProtocolError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'SidecarProtocolError';
-    }
-}
-
 export class ProcessSidecarClient implements SidecarClient {
     private child: ChildProcessWithoutNullStreams | undefined;
     private nativeStatus: NativeSidecarStatus = 'unknown';
-    private negotiatedCapabilities: readonly SidecarCapability[] = [];
+    private negotiatedCapabilities: readonly NegotiatedSidecarCapability[] = [];
     private handshakeCompleted = false;
 
     constructor(
         private readonly command: string,
         private readonly timeoutMs = 5000,
+        private readonly options: ProcessSidecarClientOptions = {},
     ) {}
 
     status(): NativeSidecarStatus {
         return this.nativeStatus;
     }
 
-    capabilities(): readonly SidecarCapability[] {
+    capabilities(): readonly NegotiatedSidecarCapability[] {
         return this.negotiatedCapabilities;
     }
 
@@ -137,12 +143,21 @@ export class ProcessSidecarClient implements SidecarClient {
                     if (line.trim().length === 0) {
                         continue;
                     }
-                    const response = parseSidecarWireResponse(line);
+                    let response: SidecarWireResponse;
+                    try {
+                        response = parseSidecarWireResponse(line);
+                    } catch (error: unknown) {
+                        settleReject(toSidecarProtocolError(error));
+                        return;
+                    }
                     if (response.type === 'handshake_completed') {
-                        this.nativeStatus = 'native';
-                        this.negotiatedCapabilities = response.capabilities;
-                        this.handshakeCompleted = true;
-                        handshakeAccepted = true;
+                        try {
+                            this.acceptHandshake(response);
+                            handshakeAccepted = true;
+                        } catch (error: unknown) {
+                            settleReject(toSidecarProtocolError(error));
+                            return;
+                        }
                         continue;
                     }
                     if (!handshakeAccepted) {
@@ -156,6 +171,11 @@ export class ProcessSidecarClient implements SidecarClient {
                             message: event.message ?? 'completed by rust sidecar',
                             nativeSidecarStatus: 'native',
                         });
+                        return;
+                    }
+                    if (event.type === 'task.failed') {
+                        settleReject(new SidecarProtocolError(event.message ?? 'sidecar task failed'));
+                        return;
                     }
                 }
             };
@@ -176,8 +196,9 @@ export class ProcessSidecarClient implements SidecarClient {
                         type: 'handshake',
                         id: `handshake_${input.id}`,
                         payload: {
-                            protocolVersion: SIDECAR_PROTOCOL_VERSION,
+                            protocolVersion: this.requestedProtocolVersion(),
                             clientName: 'mission-control-core',
+                            ...this.handshakeCapabilities(),
                         },
                     })}\n`,
                 );
@@ -185,66 +206,44 @@ export class ProcessSidecarClient implements SidecarClient {
             child.stdin.write(`${JSON.stringify({ type: 'run_task', id: input.id, payload: input.payload })}\n`);
         });
     }
-}
 
-export function normalizeSidecarLine(line: string, sessionId?: string): AgentEvent {
-    return sidecarResponseToAgentEvent(parseSidecarWireResponse(line), sessionId);
-}
-
-export function parseSidecarWireResponse(line: string): SidecarWireResponse {
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(line);
-    } catch (error: unknown) {
-        if (error instanceof SyntaxError) {
-            throw new SidecarProtocolError(`sidecar response is not valid JSON: ${error.message}`);
-        }
-        throw error;
+    private requestedProtocolVersion(): SidecarProtocolVersion {
+        return this.options.enableProtocolV2 === true ? SIDECAR_PROTOCOL_V2_VERSION : SIDECAR_PROTOCOL_VERSION;
     }
 
-    const result = SidecarWireResponseSchema.safeParse(parsed);
-    if (!result.success) {
-        throw new SidecarProtocolError('sidecar response failed protocol validation');
+    private handshakeCapabilities(): { readonly requestedCapabilities?: readonly NegotiatedSidecarCapability[] } {
+        if (this.options.enableProtocolV2 !== true) {
+            return {};
+        }
+        return { requestedCapabilities: ['task.cancel'] };
     }
-    return result.data;
-}
 
-function sidecarResponseToAgentEvent(response: SidecarWireResponse, sessionId?: string): AgentEvent {
-    switch (response.type) {
-        case 'handshake_completed':
-            return {
-                type: 'native.status',
-                timestamp: new Date().toISOString(),
-                ...(sessionId ? { sessionId } : {}),
-                taskId: response.id,
-                message: `sidecar protocol v${String(response.protocolVersion)} capabilities: ${response.capabilities.join(', ')}`,
-                nativeSidecarStatus: 'native',
-            };
-        case 'task_progress': {
-            return {
-                type: 'task.progress',
-                timestamp: new Date().toISOString(),
-                ...(sessionId ? { sessionId } : {}),
-                taskId: response.id,
-                progress: response.progress,
-                nativeSidecarStatus: 'native',
-            };
+    private acceptHandshake(response: SidecarHandshakeResponse): void {
+        const requestedVersion = this.requestedProtocolVersion();
+        if (response.protocolVersion !== requestedVersion) {
+            throw new SidecarProtocolError(
+                `sidecar protocol version mismatch: requested v${String(requestedVersion)} but received v${String(response.protocolVersion)}`,
+            );
         }
-        case 'task_completed': {
-            return {
-                type: 'task.completed',
-                timestamp: new Date().toISOString(),
-                ...(sessionId ? { sessionId } : {}),
-                taskId: response.id,
-                message: response.result.message,
-                nativeSidecarStatus: 'native',
-            };
+        if (requestedVersion === SIDECAR_PROTOCOL_V2_VERSION && !hasCapability(response.capabilities, 'task.cancel')) {
+            throw new SidecarProtocolError('sidecar protocol v2 did not negotiate task.cancel');
         }
-        default:
-            return assertNever(response);
+        this.nativeStatus = 'native';
+        this.negotiatedCapabilities = response.capabilities;
+        this.handshakeCompleted = true;
     }
 }
 
-function assertNever(value: never): never {
-    throw new TypeError(`Unexpected sidecar response: ${JSON.stringify(value)}`);
+function hasCapability(capabilities: readonly string[], capability: string): boolean {
+    return capabilities.includes(capability);
+}
+
+function toSidecarProtocolError(error: unknown): SidecarProtocolError {
+    if (error instanceof SidecarProtocolError) {
+        return error;
+    }
+    if (error instanceof Error) {
+        return new SidecarProtocolError(error.message);
+    }
+    return new SidecarProtocolError(String(error));
 }

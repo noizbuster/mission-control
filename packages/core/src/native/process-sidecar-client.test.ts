@@ -2,6 +2,7 @@ import { type AgentEvent, SIDECAR_PROTOCOL_VERSION } from '@mission-control/prot
 import { describe, expect, it } from 'vitest';
 import { AgentRuntime } from '../agent-runtime.js';
 import { createAllowPermissionDecision } from '../permissions.js';
+import { ProcessSidecarClient } from './sidecar-client.js';
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -59,6 +60,29 @@ describe('ProcessSidecarClient fallback', () => {
             await rm(fixture.root, { recursive: true, force: true });
         }
     });
+
+    it('rejects a running task when the native process is stopped', async () => {
+        const fixture = await createRunningSidecarFixture();
+        const client = new ProcessSidecarClient(fixture.command, 1000);
+        let sidecarPid: number | undefined;
+
+        try {
+            const runningTask = client.runTask({ id: 'task_1', payload: { label: 'demo' } });
+            sidecarPid = await waitForProcessPid(fixture.pidFile);
+
+            expect(isProcessRunning(sidecarPid)).toBe(true);
+            await client.stop();
+
+            await expect(runningTask).rejects.toThrow('sidecar exited before completing task');
+            expect(await waitForProcessExit(sidecarPid)).toBe(true);
+        } finally {
+            if (sidecarPid !== undefined) {
+                killIfRunning(sidecarPid);
+            }
+            await client.stop();
+            await rm(fixture.root, { recursive: true, force: true });
+        }
+    });
 });
 
 type PersistentSidecarFixture = {
@@ -91,6 +115,49 @@ async function createPersistentSidecarFixture(): Promise<PersistentSidecarFixtur
     );
     await chmod(command, 0o755);
     return { root, command, pidFile };
+}
+
+async function createRunningSidecarFixture(): Promise<PersistentSidecarFixture> {
+    const root = await mkdtemp(join(tmpdir(), 'mission-control-sidecar-running-fixture-'));
+    const command = join(root, 'sidecar.sh');
+    const pidFile = join(root, 'sidecar.pid');
+    await writeFile(
+        command,
+        [
+            '#!/usr/bin/env sh',
+            `echo "$$" > "${pidFile}"`,
+            'while IFS= read -r line; do',
+            '  case "$line" in',
+            '    *\\"type\\":\\"handshake\\"*)',
+            `      echo '{"type":"handshake_completed","id":"handshake_fixture","protocolVersion":${String(SIDECAR_PROTOCOL_VERSION)},"capabilities":["task.run"]}'`,
+            '      ;;',
+            '    *\\"type\\":\\"run_task\\"*)',
+            '      sleep 5',
+            '      ;;',
+            '  esac',
+            'done',
+            '',
+        ].join('\n'),
+    );
+    await chmod(command, 0o755);
+    return { root, command, pidFile };
+}
+
+async function waitForProcessPid(pidFile: string): Promise<number> {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+        try {
+            const pid = Number.parseInt(await readFile(pidFile, 'utf8'), 10);
+            if (Number.isFinite(pid)) {
+                return pid;
+            }
+        } catch (error: unknown) {
+            if (errorCode(error) !== 'ENOENT') {
+                throw error;
+            }
+        }
+        await delay(25);
+    }
+    throw new Error('sidecar fixture did not write a pid file');
 }
 
 async function waitForProcessExit(pid: number): Promise<boolean> {

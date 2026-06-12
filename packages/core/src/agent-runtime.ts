@@ -41,7 +41,11 @@ export class AgentRuntime {
         this.options = options;
         this.modelProviderSelection = options.modelProviderSelection ?? defaultModelProviderSelection;
         this.sidecarClient = options.useNative
-            ? new ProcessSidecarClient(resolveSidecarCommand(options), options.sidecarTimeoutMs)
+            ? new ProcessSidecarClient(resolveSidecarCommand(options), options.sidecarTimeoutMs, {
+                  ...(options.enableSidecarProtocolV2 !== undefined
+                      ? { enableProtocolV2: options.enableSidecarProtocolV2 }
+                      : {}),
+              })
             : new MockSidecarClient();
         this.approvalGate = new PermissionGate({
             resolveDecision: options.permissionDecisionResolver ?? createDefaultPermissionDecision,

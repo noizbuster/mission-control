@@ -38,6 +38,9 @@ import {
     ProviderStreamChunkSchema,
     RedactionMetadataSchema,
     ReplayCursorSchema,
+    SidecarCancelTaskCommandSchema,
+    SidecarTaskCancelledResponseSchema,
+    SidecarTaskFailedResponseSchema,
     SidecarTaskInputSchema,
     SidecarTaskOutputSchema,
     ToolCallSchema,
@@ -62,8 +65,11 @@ describe('protocol public exports', () => {
         expect(ApprovalLifecycleStateSchema.parse('pending')).toBe('pending');
         expect(ApprovalSubjectSchema.shape.kind).toBeDefined();
         expect(ApprovalRecordSchema.shape.approvalId).toBeDefined();
+        expect(SidecarCancelTaskCommandSchema.shape.payload).toBeDefined();
         expect(SidecarTaskInputSchema.shape.payload).toBeDefined();
         expect(SidecarTaskOutputSchema.shape.message).toBeDefined();
+        expect(SidecarTaskFailedResponseSchema.shape.error).toBeDefined();
+        expect(SidecarTaskCancelledResponseSchema.shape.reason).toBeDefined();
         expect(ModelProviderSelectionSchema.shape.providerID).toBeDefined();
         expect(ModelVariantEntrySchema.shape.id).toBeDefined();
         expect(ProviderCapabilityStatusSchema.parse('model-discovery-only')).toBe('model-discovery-only');
