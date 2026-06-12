@@ -44,18 +44,18 @@ export function redactProviderChunk(chunk: ProviderStreamChunk): ProviderStreamC
             const redactions = redactionsForText(chunk.delta, chunk.redactions);
             return {
                 ...chunk,
-                delta: redactCredentialText(chunk.delta, []),
+                delta: redactCredentialText(chunk.delta),
                 ...redactionField(redactions),
             };
         }
         case 'tool_call_delta':
-            return { ...chunk, argumentsDelta: redactCredentialText(chunk.argumentsDelta, []) };
+            return { ...chunk, argumentsDelta: redactCredentialText(chunk.argumentsDelta) };
         case 'tool_call_completed':
             return {
                 ...chunk,
                 toolCall: {
                     ...chunk.toolCall,
-                    argumentsJson: redactCredentialText(chunk.toolCall.argumentsJson, []),
+                    argumentsJson: redactCredentialText(chunk.toolCall.argumentsJson),
                 },
             };
         case 'response_completed': {
@@ -64,7 +64,7 @@ export function redactProviderChunk(chunk: ProviderStreamChunk): ProviderStreamC
                 ...chunk,
                 message: {
                     ...chunk.message,
-                    content: redactCredentialText(chunk.message.content, []),
+                    content: redactCredentialText(chunk.message.content),
                     ...redactedProviderToolCalls(chunk.message.providerToolCalls),
                     ...redactionField(redactions),
                 },
@@ -76,7 +76,7 @@ export function redactProviderChunk(chunk: ProviderStreamChunk): ProviderStreamC
                 ...chunk,
                 error: {
                     ...chunk.error,
-                    message: redactCredentialText(chunk.error.message, []),
+                    message: redactCredentialText(chunk.error.message),
                     ...redactionField(redactions),
                 },
             };
@@ -147,7 +147,7 @@ function messageForChunk(chunk: ProviderStreamChunk): string {
 }
 
 function redactionsForText(text: string, existing: readonly RedactionMetadata[] | undefined): RedactionMetadata[] {
-    return [...(existing ?? []), ...credentialRedactionsForText(text, [])];
+    return [...(existing ?? []), ...credentialRedactionsForText(text)];
 }
 
 function redactionField(redactions: readonly RedactionMetadata[]): { readonly redactions?: RedactionMetadata[] } {
@@ -162,7 +162,7 @@ function redactedProviderToolCalls(providerToolCalls: readonly ProviderToolCallT
         : {
               providerToolCalls: providerToolCalls.map((toolCall) => ({
                   ...toolCall,
-                  argumentsJson: redactCredentialText(toolCall.argumentsJson, []),
+                  argumentsJson: redactCredentialText(toolCall.argumentsJson),
               })),
           };
 }

@@ -1,8 +1,11 @@
-const redactedCredential = '[REDACTED_CREDENTIAL]';
-const tokenLikeSecretPattern = /sk-[A-Za-z0-9_-]+/g;
+import { redactCredentialLines, redactCredentialText } from '@mission-control/core/redaction';
 
 export function redactDisplayText(text: string): string {
-    return text.replace(tokenLikeSecretPattern, redactedCredential);
+    return redactCredentialText(text, []);
+}
+
+export function redactDisplayLines(lines: readonly string[]): readonly string[] {
+    return redactCredentialLines(lines).map((line) => line.text);
 }
 
 export function redactMessageFields<Item extends { readonly message: string }>(

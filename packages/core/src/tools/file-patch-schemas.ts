@@ -1,9 +1,7 @@
 import type { DiffFile, DiffLine, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { DiffFileSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-
-const REDACTED_CREDENTIAL = '[REDACTED_CREDENTIAL]';
-const TOKEN_LIKE_SECRET_PATTERN = /sk-[A-Za-z0-9_-]+/g;
+import { redactCredentialLines } from '../providers/credential-resolver.js';
 
 export const filePatchInputSchema = z
     .object({
@@ -68,15 +66,25 @@ export function diffFileOutput(diffFiles: readonly DiffFile[]): DiffFile[] {
         ...diffFile,
         hunks: diffFile.hunks.map((hunk) => ({
             ...hunk,
-            lines: hunk.lines.map(redactDiffLine),
+            lines: redactDiffLines(hunk.lines),
         })),
     }));
 }
 
-function redactDiffLine(line: DiffLine): DiffLine {
-    const content = line.content.replace(TOKEN_LIKE_SECRET_PATTERN, REDACTED_CREDENTIAL);
-    if (content === line.content) {
+function redactDiffLines(lines: readonly DiffLine[]): DiffLine[] {
+    const redactedLines = redactCredentialLines(lines.map((line) => line.content));
+    return lines.map((line, index) => {
+        const redactedLine = redactedLines[index];
+        if (redactedLine === undefined) {
+            throw new TypeError(`Missing redacted diff line at index ${index}`);
+        }
+        return redactDiffLine(line, redactedLine);
+    });
+}
+
+function redactDiffLine(line: DiffLine, redactedLine: { readonly text: string; readonly redacted: boolean }): DiffLine {
+    if (!redactedLine.redacted) {
         return { ...line };
     }
-    return { ...line, content, redacted: true };
+    return { ...line, content: redactedLine.text, redacted: true };
 }

@@ -1,4 +1,14 @@
 import type { ProviderCredential, ProviderCredentialSummary, RedactionMetadata } from '@mission-control/protocol';
+import { credentialRedactionsForText, redactCredentialText } from './redaction-handler.js';
+
+export {
+    createCredentialRedactions,
+    credentialRedactionsForText,
+    REDACTED_CREDENTIAL,
+    type RedactedCredentialLine,
+    redactCredentialLines,
+    redactCredentialText,
+} from './redaction-handler.js';
 
 export type ProviderCredentialResolveInput = {
     readonly providerID: string;
@@ -24,10 +34,6 @@ export type ProviderCredentialResolutionErrorInput = {
     readonly secrets?: readonly string[];
 };
 
-const REDACTED_CREDENTIAL = '[REDACTED_CREDENTIAL]';
-const TOKEN_LIKE_SECRET_PATTERN = /sk-[A-Za-z0-9_-]+/g;
-const TOKEN_LIKE_SECRET_TEST_PATTERN = /sk-[A-Za-z0-9_-]+/;
-
 export class ProviderCredentialResolutionError extends Error {
     readonly name = 'ProviderCredentialResolutionError';
     readonly providerID: string;
@@ -39,7 +45,7 @@ export class ProviderCredentialResolutionError extends Error {
         super(message);
         this.providerID = input.providerID;
         this.code = input.code;
-        this.redactions = mergeCredentialRedactions(createCredentialRedactions(input.secrets ?? []), input.message);
+        this.redactions = credentialRedactionsForText(input.message, input.secrets ?? []);
     }
 
     toJSON(): {
@@ -94,28 +100,6 @@ export function createStaticProviderCredentialResolver(
     };
 }
 
-export function redactCredentialText(text: string, secrets: readonly string[]): string {
-    const exactRedacted = secrets
-        .filter((secret) => secret.length > 0)
-        .reduce((current, secret) => current.split(secret).join(REDACTED_CREDENTIAL), text);
-    return exactRedacted.replace(TOKEN_LIKE_SECRET_PATTERN, REDACTED_CREDENTIAL);
-}
-
-export function credentialRedactionsForText(text: string, secrets: readonly string[]): readonly RedactionMetadata[] {
-    const knownRedactions = createCredentialRedactions(secrets);
-    return mergeCredentialRedactions(knownRedactions, text);
-}
-
-export function createCredentialRedactions(secrets: readonly string[]): readonly RedactionMetadata[] {
-    return secrets
-        .filter((secret) => secret.length > 0)
-        .map(() => ({
-            classification: 'credential',
-            reason: 'provider credential redacted',
-            replacement: REDACTED_CREDENTIAL,
-        }));
-}
-
 export function summarizeResolvedProviderCredential(credential: ProviderCredential): ProviderCredentialSummary {
     switch (credential.type) {
         case 'apiKey':
@@ -167,25 +151,6 @@ function credentialSecretValues(credential: ProviderCredential): readonly string
         default:
             return assertNever(credential);
     }
-}
-
-function mergeCredentialRedactions(
-    knownRedactions: readonly RedactionMetadata[],
-    originalMessage: string,
-): readonly RedactionMetadata[] {
-    if (knownRedactions.length > 0) {
-        return knownRedactions;
-    }
-    if (!TOKEN_LIKE_SECRET_TEST_PATTERN.test(originalMessage)) {
-        return [];
-    }
-    return [
-        {
-            classification: 'credential',
-            reason: 'token-like provider credential redacted',
-            replacement: REDACTED_CREDENTIAL,
-        },
-    ];
 }
 
 function maskCredential(secret: string): string {

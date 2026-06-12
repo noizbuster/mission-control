@@ -81,13 +81,13 @@ export function commandRunOutput(
     maxOutputBytes: number,
 ): CommandRunOutput {
     const stdout = capText(
-        redactCredentialText(result.stdout, []),
+        redactCredentialText(result.stdout),
         maxOutputBytes,
         result.stdoutOriginalBytes,
         result.stdoutTruncated,
     );
     const stderr = capText(
-        redactCredentialText(result.stderr, []),
+        redactCredentialText(result.stderr),
         maxOutputBytes,
         result.stderrOriginalBytes,
         result.stderrTruncated,

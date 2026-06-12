@@ -4,11 +4,10 @@ import type {
     AgentEvent,
     DiffFile,
     DiffHunk,
-    DiffLine,
     ModelProviderSelection,
 } from '@mission-control/protocol';
 import type { DesktopSessionDiagnostic, DesktopSessionLog, DesktopSessionSummary } from './agent-client.js';
-import { redactDisplayText, redactMessageFields } from './redaction.js';
+import { redactDisplayLines, redactDisplayText, redactMessageFields } from './redaction.js';
 import {
     type ApprovalRow,
     type CodingStepRow,
@@ -162,10 +161,9 @@ function patchRows(event: AgentEvent, index: number): readonly PatchRow[] {
 }
 
 function patchText(hunks: readonly DiffHunk[]): string {
-    return hunks
-        .flatMap((hunk: DiffHunk) => hunk.lines)
-        .map((line: DiffLine) => `${prefixForDiffLine(line.kind)}${redactDisplayText(line.content)}`)
-        .join('\n');
+    const lines = hunks.flatMap((hunk: DiffHunk) => hunk.lines);
+    const redactedLines = redactDisplayLines(lines.map((line) => line.content));
+    return lines.map((line, index) => `${prefixForDiffLine(line.kind)}${redactedLines[index] ?? ''}`).join('\n');
 }
 
 function commandRows(event: AgentEvent, index: number): readonly CommandRow[] {

@@ -169,6 +169,36 @@ describe('command.run tool', () => {
         });
     });
 
+    it('redacts credential families from command output and model output', async () => {
+        // Given
+        const secrets = commandSecretFixtures();
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+            executor: async () =>
+                completedResult({
+                    stdout: commandSecretPayload(secrets),
+                    stderr: commandSecretPayload(secrets),
+                }),
+        });
+
+        // When
+        const result = await invokeCommand(registry, 'node', allowedHarnessArgs);
+
+        // Then
+        const structuredOutput = JSON.stringify(result.structuredOutput);
+        const modelOutput = result.modelOutput?.content ?? '';
+        const events = JSON.stringify(result.events);
+        expect(result.result.status).toBe('completed');
+        expect(structuredOutput).toContain('[REDACTED_CREDENTIAL]');
+        expect(modelOutput).toContain('[REDACTED_CREDENTIAL]');
+        expect(events).toContain('[REDACTED_CREDENTIAL]');
+        for (const secret of secrets) {
+            expect(structuredOutput).not.toContain(secret);
+            expect(modelOutput).not.toContain(secret);
+            expect(events).not.toContain(secret);
+        }
+    });
+
     it('marks nonzero command exits as failed tool settlements', async () => {
         // Given
         const registry = await createRegistry({
@@ -333,6 +363,29 @@ function completedResult(input: { readonly stdout?: string; readonly stderr?: st
         stderr: input.stderr ?? '',
         durationMs: 1,
     };
+}
+
+function commandSecretFixtures(): readonly string[] {
+    return [
+        ['eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9', 'eyJjb21tYW5kIjoibWlzc2lvbi1jb250cm9sIn0', 'signaturetest'].join('.'),
+        ['ghp', 'testCommandToken1234567890'].join('_'),
+        ['github', 'pat', 'test', 'command1234567890'].join('_'),
+        ['AKIA', 'TESTCOMMAND12345'].join(''),
+        ['Bearer', ['bearer', 'testCommandToken1234567890'].join('_')].join(' '),
+        [
+            ['-----BEGIN', 'PRIVATE KEY-----'].join(' '),
+            'command-secret-body',
+            ['-----END', 'PRIVATE KEY-----'].join(' '),
+        ].join('\n'),
+        ['sk', 'proj', 'testCommandOpenAI1234567890'].join('-'),
+        ['sk', 'ant', 'api03', 'testCommandAnthropic1234567890'].join('-'),
+        ['AIza', 'CommandGoogleToken1234567890'].join(''),
+        ['sk', 'or', 'v1', 'testCommandCompatible1234567890'].join('-'),
+    ];
+}
+
+function commandSecretPayload(secrets: readonly string[]): string {
+    return secrets.map((secret, index) => `secret ${index}: ${secret}`).join('\n');
 }
 
 function deferred<Value>() {

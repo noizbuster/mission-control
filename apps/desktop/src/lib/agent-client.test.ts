@@ -2,6 +2,7 @@ import { defaultModelProviderSelection } from '@mission-control/config';
 import { describe, expect, it } from 'vitest';
 import { createMockDesktopAgentClient } from './agent-client.js';
 import { DesktopCommandReceiptSchema } from './desktop-command-schemas.js';
+import { redactDisplayText } from './redaction.js';
 
 describe('desktop agent client', () => {
     it('mock desktop client emits demo event log', async () => {
@@ -121,4 +122,41 @@ describe('desktop agent client', () => {
         expect(blocked.status).toBe('blocked_on_approval');
         expect(DesktopCommandReceiptSchema.safeParse(unknownReceipt).success).toBe(false);
     });
+
+    it('redacts credential families from desktop display text', () => {
+        // Given
+        const secrets = desktopSecretFixtures();
+
+        // When
+        const redacted = redactDisplayText(desktopSecretPayload(secrets));
+
+        // Then
+        expect(redacted).toContain('[REDACTED_CREDENTIAL]');
+        for (const secret of secrets) {
+            expect(redacted).not.toContain(secret);
+        }
+    });
 });
+
+function desktopSecretFixtures(): readonly string[] {
+    return [
+        ['eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9', 'eyJkZXNrdG9wIjoibWlzc2lvbi1jb250cm9sIn0', 'signaturetest'].join('.'),
+        ['ghp', 'testDesktopToken1234567890'].join('_'),
+        ['github', 'pat', 'test', 'desktop1234567890'].join('_'),
+        ['AKIA', 'TESTDESKTOP12345'].join(''),
+        ['Bearer', ['bearer', 'testDesktopToken1234567890'].join('_')].join(' '),
+        [
+            ['-----BEGIN', 'PRIVATE KEY-----'].join(' '),
+            'desktop-secret-body',
+            ['-----END', 'PRIVATE KEY-----'].join(' '),
+        ].join('\n'),
+        ['sk', 'proj', 'testDesktopOpenAI1234567890'].join('-'),
+        ['sk', 'ant', 'api03', 'testDesktopAnthropic1234567890'].join('-'),
+        ['AIza', 'DesktopGoogleToken1234567890'].join(''),
+        ['sk', 'or', 'v1', 'testDesktopCompatible1234567890'].join('-'),
+    ];
+}
+
+function desktopSecretPayload(secrets: readonly string[]): string {
+    return secrets.map((secret, index) => `display ${index}: ${secret}`).join('\n');
+}

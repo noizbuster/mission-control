@@ -76,6 +76,27 @@ describe('file.patch tool', () => {
         });
     });
 
+    it('redacts credential families from real diff output without changing applied files', async () => {
+        // Given
+        const workspaceRoot = await createGitWorkspace();
+        const registry = await createRegistry(workspaceRoot, allowPermission);
+        const secrets = filePatchSecretFixtures();
+        const payload = filePatchSecretPayload(secrets);
+
+        // When
+        const result = await invokePatch(registry, addFilePatchLines('secrets.txt', payload.trimEnd().split('\n')));
+
+        // Then
+        expect(result.result.status).toBe('completed');
+        expect(await readText(workspaceRoot, 'secrets.txt')).toBe(payload);
+        expect(JSON.stringify(result.structuredOutput)).toContain('[REDACTED_CREDENTIAL]');
+        expect(JSON.stringify(result.events)).toContain('[REDACTED_CREDENTIAL]');
+        for (const secret of secretFragments(secrets)) {
+            expect(JSON.stringify(result.structuredOutput)).not.toContain(secret);
+            expect(JSON.stringify(result.events)).not.toContain(secret);
+        }
+    });
+
     it('refuses dirty tracked target paths even when model arguments request dirty writes', async () => {
         // Given
         const workspaceRoot = await createGitWorkspace();
@@ -289,6 +310,44 @@ function addFilePatch(path: string, content: string): string {
         `+${content}`,
         '',
     ].join('\n');
+}
+
+function addFilePatchLines(path: string, lines: readonly string[]): string {
+    return [
+        `diff --git a/${path} b/${path}`,
+        '--- /dev/null',
+        `+++ b/${path}`,
+        `@@ -0,0 +1,${lines.length} @@`,
+        ...lines.map((line) => `+${line}`),
+        '',
+    ].join('\n');
+}
+
+function filePatchSecretFixtures(): readonly string[] {
+    return [
+        ['eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9', 'eyJmaWxlIjoibWlzc2lvbi1jb250cm9sIn0', 'signaturetest'].join('.'),
+        ['ghp', 'testFilePatchToken1234567890'].join('_'),
+        ['github', 'pat', 'test', 'filepatch1234567890'].join('_'),
+        ['AKIA', 'TESTFILEPATCH123'].join(''),
+        ['Bearer', ['bearer', 'testFilePatchToken1234567890'].join('_')].join(' '),
+        [
+            ['-----BEGIN', 'PRIVATE KEY-----'].join(' '),
+            'file-patch-secret-body',
+            ['-----END', 'PRIVATE KEY-----'].join(' '),
+        ].join('\n'),
+        ['sk', 'proj', 'testFilePatchOpenAI1234567890'].join('-'),
+        ['sk', 'ant', 'api03', 'testFilePatchAnthropic1234567890'].join('-'),
+        ['AIza', 'FilePatchGoogleToken1234567890'].join(''),
+        ['sk', 'or', 'v1', 'testFilePatchCompatible1234567890'].join('-'),
+    ];
+}
+
+function filePatchSecretPayload(secrets: readonly string[]): string {
+    return `${secrets.join('\n')}\n`;
+}
+
+function secretFragments(secrets: readonly string[]): readonly string[] {
+    return secrets.flatMap((secret) => secret.split('\n')).filter((fragment) => fragment.length > 0);
 }
 
 async function readText(workspaceRoot: string, path: string): Promise<string> {

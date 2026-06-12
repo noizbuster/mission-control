@@ -11,6 +11,10 @@
     "./replay": {
       "types": "./dist/replay.d.ts",
       "import": "./dist/replay.js"
+    },
+    "./redaction": {
+      "types": "./dist/redaction.d.ts",
+      "import": "./dist/redaction.js"
     }
   },
   "scripts": {

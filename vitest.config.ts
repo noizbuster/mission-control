@@ -8,6 +8,10 @@ export default defineConfig({
                 replacement: new URL('./packages/core/src/replay.ts', import.meta.url).pathname,
             },
             {
+                find: '@mission-control/core/redaction',
+                replacement: new URL('./packages/core/src/redaction.ts', import.meta.url).pathname,
+            },
+            {
                 find: '@mission-control/config',
                 replacement: new URL('./packages/config/src/index.ts', import.meta.url).pathname,
             },
