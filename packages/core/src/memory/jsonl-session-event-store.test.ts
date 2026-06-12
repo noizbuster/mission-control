@@ -59,7 +59,12 @@ describe('JsonlSessionEventStore', () => {
         // Given
         const dataDir = await createTempDataDir();
         const sessionId = 'session_jsonl_lock';
-        const firstStore = await JsonlSessionEventStore.open({ sessionId, dataDir });
+        const firstStore = await JsonlSessionEventStore.open({
+            sessionId,
+            dataDir,
+            lockOwnerId: 'owner-jsonl-live',
+            lockStaleAfterMs: 60_000,
+        });
 
         try {
             // When
@@ -72,6 +77,79 @@ describe('JsonlSessionEventStore', () => {
             });
         } finally {
             await firstStore.close();
+        }
+    });
+
+    it('updates lock heartbeat metadata before appending a durable event', async () => {
+        // Given
+        const dataDir = await createTempDataDir();
+        const sessionId = 'session_jsonl_lock_heartbeat';
+        let currentTime = '2026-06-12T10:00:00.000Z';
+        const store = await JsonlSessionEventStore.open({
+            sessionId,
+            dataDir,
+            now: () => currentTime,
+            lockOwnerId: 'owner-heartbeat',
+            lockPid: 4004,
+            createEventId: (_event, sequence) => `event_${sequence}`,
+        });
+        const lockPath = join(dataDir, 'sessions', `${sessionId}.lock`);
+
+        // When
+        currentTime = '2026-06-12T10:00:15.000Z';
+        await store.append(sessionStartedEvent(sessionId));
+
+        // Then
+        expect(await readJsonRecord(lockPath)).toMatchObject({
+            ownerId: 'owner-heartbeat',
+            pid: 4004,
+            createdAt: '2026-06-12T10:00:00.000Z',
+            updatedAt: '2026-06-12T10:00:15.000Z',
+            heartbeatAt: '2026-06-12T10:00:15.000Z',
+        });
+        await store.close();
+    });
+
+    it('rejects stale owner appends after its session lock is reclaimed', async () => {
+        // Given
+        const dataDir = await createTempDataDir();
+        const sessionId = 'session_jsonl_stale_owner_append';
+        const staleOwner = await JsonlSessionEventStore.open({
+            sessionId,
+            dataDir,
+            now: () => '2026-06-12T09:00:00.000Z',
+            lockOwnerId: 'owner-stale-append',
+            lockStaleAfterMs: 30_000,
+            createEventId: (_event, sequence) => `stale_${sequence}`,
+        });
+        const reclaimer = await JsonlSessionEventStore.open({
+            sessionId,
+            dataDir,
+            now: () => '2026-06-12T10:00:00.000Z',
+            lockOwnerId: 'owner-reclaimer-append',
+            lockStaleAfterMs: 30_000,
+            createEventId: (_event, sequence) => `reclaimer_${sequence}`,
+        });
+
+        try {
+            // When
+            const staleAppend = staleOwner.append(sessionStartedEvent(sessionId));
+
+            // Then
+            await expect(staleAppend).rejects.toMatchObject({ code: 'lock_exists', sessionId });
+            await reclaimer.append(sessionStartedEvent(sessionId));
+            await reclaimer.close();
+            const records = await readJsonlRecords(join(dataDir, 'sessions', `${sessionId}.jsonl`));
+            expect(records.slice(1)).toHaveLength(1);
+            expect(records.at(1)).toMatchObject({
+                event: {
+                    eventId: 'reclaimer_0',
+                    sequence: 0,
+                },
+            });
+        } finally {
+            await staleOwner.close();
+            await reclaimer.close();
         }
     });
 
@@ -159,6 +237,10 @@ async function readJsonlRecords(filePath: string): Promise<readonly Record<strin
         .split('\n')
         .filter((line) => line.length > 0)
         .map(parseJsonRecord);
+}
+
+async function readJsonRecord(filePath: string): Promise<Record<string, unknown>> {
+    return parseJsonRecord(await readFile(filePath, 'utf8'));
 }
 
 function parseJsonRecord(line: string): Record<string, unknown> {

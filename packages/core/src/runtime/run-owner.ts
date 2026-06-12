@@ -11,6 +11,7 @@ import type {
     RunCoordinatorToolCallObserver,
     RunCoordinatorToolSettlementObserver,
 } from './run-coordinator-types.js';
+import { promptInput } from './run-owner-prompt-input.js';
 
 export type SessionRunOwnerReceipt = {
     readonly sessionId: string;
@@ -57,6 +58,8 @@ export type SessionRunOwnerRegistryOptions = {
     readonly retryLimit?: number;
     readonly toolCallLoopLimit?: number;
     readonly toolRegistry?: ToolRegistry;
+    readonly lockStaleAfterMs?: number;
+    readonly lockHeartbeatIntervalMs?: number;
     readonly createEventId?: JsonlSessionEventIdFactory;
     readonly createId?: (prefix: string, index: number) => string;
 } & RunOwnerObserverOptions;
@@ -228,6 +231,10 @@ export class SessionRunOwnerRegistry {
             ...(this.options.dataDir !== undefined ? { dataDir: this.options.dataDir } : {}),
             ...(this.options.now !== undefined ? { now: this.options.now } : {}),
             ...(this.options.createEventId !== undefined ? { createEventId: this.options.createEventId } : {}),
+            ...(this.options.lockStaleAfterMs !== undefined ? { lockStaleAfterMs: this.options.lockStaleAfterMs } : {}),
+            ...(this.options.lockHeartbeatIntervalMs !== undefined
+                ? { lockHeartbeatIntervalMs: this.options.lockHeartbeatIntervalMs }
+                : {}),
         });
         const modelProviderSelection =
             input.modelProviderSelection ??
@@ -270,18 +277,4 @@ export class SessionRunOwnerRegistry {
         }
         await entry.owner.close();
     }
-}
-
-function promptInput(input: RunCoordinatorPromptInput): RunCoordinatorPromptInput {
-    return {
-        prompt: input.prompt,
-        ...(input.inputId !== undefined ? { inputId: input.inputId } : {}),
-        ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
-        ...(input.parentMessageId !== undefined ? { parentMessageId: input.parentMessageId } : {}),
-        ...(input.resume !== undefined ? { resume: input.resume } : {}),
-        ...(input.providerTurnId !== undefined ? { providerTurnId: input.providerTurnId } : {}),
-        ...(input.toolCallId !== undefined ? { toolCallId: input.toolCallId } : {}),
-        ...(input.graphId !== undefined ? { graphId: input.graphId } : {}),
-        ...(input.nodeId !== undefined ? { nodeId: input.nodeId } : {}),
-    };
 }
