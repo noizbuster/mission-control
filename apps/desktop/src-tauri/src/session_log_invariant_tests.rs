@@ -163,6 +163,42 @@ fn corrupts_when_datetime_has_impossible_calendar_values() -> Result<(), Box<dyn
     Ok(())
 }
 
+#[test]
+fn parses_provider_failure_event_as_available() -> Result<(), Box<dyn Error>> {
+    // Given
+    let fixture = write_fixture(
+        "provider-failure",
+        "session_provider_failure",
+        &[event_record(provider_failure_envelope(
+            "session_provider_failure",
+        ))],
+    )?;
+
+    // When
+    let log = read_session_events_from_data_dir(&fixture.data_dir, "session_provider_failure")?;
+
+    // Then
+    assert_eq!(log.state, SessionLogState::Available);
+    assert_eq!(log.envelopes.len(), 1);
+    assert_eq!(
+        log.envelopes[0]
+            .get("event")
+            .and_then(|event| event.get("type"))
+            .and_then(serde_json::Value::as_str),
+        Some("model.call.failed"),
+    );
+    assert_eq!(
+        log.envelopes[0]
+            .get("event")
+            .and_then(|event| event.get("providerStreamChunk"))
+            .and_then(|chunk| chunk.get("kind"))
+            .and_then(serde_json::Value::as_str),
+        Some("response_failed"),
+    );
+    remove_dir_all(fixture.data_dir)?;
+    Ok(())
+}
+
 struct Fixture {
     data_dir: PathBuf,
 }
@@ -210,6 +246,13 @@ fn valid_envelope(event_id: &str, sequence: u64, session_id: &str, durability: &
     format!(
         "{{\"eventId\":\"{}\",\"sequence\":{},\"createdAt\":\"2026-06-09T00:00:00.000Z\",\"sessionId\":\"{}\",\"durability\":\"{}\",\"event\":{{\"type\":\"task.completed\",\"timestamp\":\"2026-06-09T00:00:00.000Z\",\"sessionId\":\"{}\",\"message\":\"done\"}}}}",
         event_id, sequence, session_id, durability, session_id,
+    )
+}
+
+fn provider_failure_envelope(session_id: &str) -> String {
+    format!(
+        "{{\"eventId\":\"provider_failed_1\",\"sequence\":0,\"createdAt\":\"2026-06-09T00:00:00.000Z\",\"sessionId\":\"{}\",\"durability\":\"durable\",\"correlationId\":\"request_provider_failed\",\"event\":{{\"type\":\"model.call.failed\",\"timestamp\":\"2026-06-09T00:00:00.000Z\",\"sessionId\":\"{}\",\"taskId\":\"turn_failed\",\"message\":\"provider timeout before completion\",\"providerStreamChunk\":{{\"kind\":\"response_failed\",\"requestId\":\"request_provider_failed\",\"sequence\":1,\"error\":{{\"code\":\"provider_timeout\",\"message\":\"provider timeout before completion\",\"retryable\":true}}}}}}}}",
+        session_id, session_id,
     )
 }
 

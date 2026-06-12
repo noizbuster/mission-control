@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { ProviderTurnRequest } from '../providers/provider-turn-types.js';
 import { projectSessionAdmission } from '../session-admission.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
+import { registerRunCoordinatorEnvelopeTests } from './run-coordinator-envelope-test-cases.js';
 import { registerRunCoordinatorLifecycleTests } from './run-coordinator-lifecycle-test-cases.js';
 import {
     cleanupCoordinatorContexts,
@@ -19,6 +20,7 @@ afterEach(async () => {
 });
 
 describe('SessionRunCoordinator', () => {
+    registerRunCoordinatorEnvelopeTests();
     registerRunCoordinatorLifecycleTests();
 
     it('queues follow-up input while a provider turn is running and promotes it after settlement', async () => {
@@ -156,41 +158,6 @@ describe('SessionRunCoordinator', () => {
 
         // Then
         expect(requests).toEqual([['first steer', 'second steer']]);
-        await context.store.close();
-    });
-
-    it('persists durable provider settlements through the coordinator drain', async () => {
-        // Given
-        const context = await openCoordinatorContext('session_run_provider_settlement');
-        const coordinator = context.createCoordinator({
-            async *streamTurn(request) {
-                yield {
-                    kind: 'tool_call_completed',
-                    requestId: request.requestId,
-                    sequence: 1,
-                    toolCall: {
-                        toolCallId: 'tool_call_1',
-                        toolName: 'repo.read',
-                        argumentsJson: '{}',
-                    },
-                };
-                yield {
-                    kind: 'response_completed',
-                    requestId: request.requestId,
-                    sequence: 2,
-                    message: { messageId: 'assistant_settlement', role: 'assistant', content: 'done' },
-                    finishReason: 'stop',
-                };
-            },
-        });
-
-        // When
-        await coordinator.run();
-        const events = await context.events();
-
-        // Then
-        expect(events.some((event) => event.providerStreamChunk?.kind === 'tool_call_completed')).toBe(true);
-        expect(events.some((event) => event.providerStreamChunk?.kind === 'response_completed')).toBe(true);
         await context.store.close();
     });
 

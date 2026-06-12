@@ -156,6 +156,7 @@ export class ProviderTurnRunner {
             createdAt,
             sessionId: input.sessionId,
             durability,
+            correlationId: input.requestId,
             event,
         };
         input.onEnvelope?.(envelope);

@@ -117,8 +117,9 @@ function eventTypeForChunk(chunk: ProviderStreamChunk): AgentEvent['type'] {
         case 'tool_call_completed':
             return 'task.progress';
         case 'response_completed':
-        case 'response_failed':
             return 'model.call.completed';
+        case 'response_failed':
+            return 'model.call.failed';
         case 'response_started':
             return 'model.call.started';
         default:

@@ -1,16 +1,13 @@
 import type {
     AgentEvent,
+    AgentEventEnvelope,
     AgentMessage,
-    ModelProviderSelection,
     RunCoordinatorCommand,
     RunCoordinatorEventMetadata,
     RunCoordinatorState,
 } from '@mission-control/protocol';
-import type { ProviderAdapter } from '../providers/provider-turn-types.js';
 import { projectSessionAdmission } from '../session-admission-projection.js';
 import { SessionAdmissionService } from '../session-admission-service.js';
-import type { AdmitPromptInput, PromptInputState, SessionAdmissionEventStore } from '../session-admission-types.js';
-import type { ToolRegistry } from '../tools/tool-registry.js';
 import * as runAdmission from './run-coordinator-admission.js';
 import { RunCoordinatorIdSequence } from './run-coordinator-ids.js';
 import {
@@ -20,32 +17,21 @@ import {
     type RunCoordinatorResult,
     type RunCoordinatorRunEventType,
 } from './run-coordinator-lifecycle.js';
+import { promoteSingleRunInput, promoteWakeBatch } from './run-coordinator-promotion.js';
 import { runCoordinatorProviderTurn } from './run-coordinator-provider-turn.js';
+import {
+    appendRunCoordinatorEnvelope,
+    type RunCoordinatorPromptInput,
+    type SessionRunCoordinatorOptions,
+} from './run-coordinator-types.js';
 
 export type { RunCoordinatorResult } from './run-coordinator-lifecycle.js';
-
-export type RunCoordinatorStore = SessionAdmissionEventStore;
-
-export type RunCoordinatorPromptInput = Omit<AdmitPromptInput, 'delivery' | 'inputId' | 'messageId'> & {
-    readonly inputId?: string;
-    readonly messageId?: string;
-};
-
-export type RunCoordinatorReadMessages = () => Promise<readonly AgentMessage[]>;
-
-export type SessionRunCoordinatorOptions = {
-    readonly sessionId: string;
-    readonly store: RunCoordinatorStore;
-    readonly provider: ProviderAdapter;
-    readonly modelProviderSelection: ModelProviderSelection;
-    readonly now?: () => string;
-    readonly timeoutMs?: number;
-    readonly retryLimit?: number;
-    readonly toolCallLoopLimit?: number;
-    readonly toolRegistry?: ToolRegistry;
-    readonly createId?: (prefix: string, index: number) => string;
-    readonly readMessages?: RunCoordinatorReadMessages;
-};
+export type {
+    RunCoordinatorPromptInput,
+    RunCoordinatorReadMessages,
+    RunCoordinatorStore,
+    SessionRunCoordinatorOptions,
+} from './run-coordinator-types.js';
 
 type DrainCommand = 'wake' | 'run' | 'resume';
 
@@ -157,8 +143,8 @@ export class SessionRunCoordinator {
         while (!controller.signal.aborted) {
             const promotion =
                 firstPromotion && command === 'wake'
-                    ? await this.promoteWakeBatch()
-                    : await this.promoteSingleRunInput();
+                    ? await promoteWakeBatch(this.promotionInput())
+                    : await promoteSingleRunInput(this.promotionInput());
             firstPromotion = false;
             if (promotion === 'idle' || (promotion === 'run_requested' && (turns > 0 || command === 'wake'))) {
                 break;
@@ -200,40 +186,9 @@ export class SessionRunCoordinator {
                 readMessages: () => this.modelVisibleMessages(),
                 nextId: (prefix) => this.ids.next(prefix),
                 appendDurableEvent: (event) => this.appendDurableEvent(event),
+                appendDurableEnvelope: (envelope) => this.appendDurableEnvelope(envelope),
             },
             signal,
-        );
-    }
-
-    private async promoteWakeBatch(): Promise<'promoted' | 'idle' | 'run_requested'> {
-        const projection = await this.projectAdmission();
-        if (projection.steeringInputs.length === 0) {
-            return 'idle';
-        }
-        for (const input of projection.steeringInputs) {
-            await this.promoteInput(input);
-        }
-        return 'promoted';
-    }
-
-    private async promoteSingleRunInput(): Promise<'promoted' | 'idle' | 'run_requested'> {
-        const projection = await this.projectAdmission();
-        const input = projection.steeringInputs.at(0) ?? projection.queuedInputs.at(0);
-        if (input === undefined) {
-            return 'run_requested';
-        }
-        await this.promoteInput(input);
-        return 'promoted';
-    }
-
-    private async promoteInput(input: PromptInputState): Promise<void> {
-        await this.appendDurableEvent(runAdmission.promptPromotionEvent(input, this.options.sessionId, this.now()));
-    }
-
-    private async projectAdmission(): Promise<ReturnType<typeof runAdmission.projectRunCoordinatorAdmission>> {
-        return runAdmission.projectRunCoordinatorAdmission(
-            await this.options.store.getEvents(this.options.sessionId),
-            this.options.sessionId,
         );
     }
 
@@ -268,8 +223,23 @@ export class SessionRunCoordinator {
         });
     }
 
+    private promotionInput() {
+        return {
+            sessionId: this.options.sessionId,
+            store: this.options.store,
+            now: this.now,
+            appendDurableEvent: (event: AgentEvent) => this.appendDurableEvent(event),
+        };
+    }
+
     private appendDurableEvent(event: AgentEvent): Promise<void> {
         const write = this.appendQueue.then(() => this.options.store.append(event));
+        this.appendQueue = write.catch(() => undefined);
+        return write;
+    }
+
+    private appendDurableEnvelope(envelope: AgentEventEnvelope): Promise<void> {
+        const write = this.appendQueue.then(() => appendRunCoordinatorEnvelope(this.options.store, envelope));
         this.appendQueue = write.catch(() => undefined);
         return write;
     }

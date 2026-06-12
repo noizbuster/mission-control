@@ -62,6 +62,20 @@ function stepForEnvelope(
             },
         ];
     }
+    if (chunk?.kind === 'response_failed') {
+        return [
+            {
+                kind: 'provider.failure',
+                eventId: envelope.eventId,
+                timestamp: event.timestamp,
+                ...(event.transcript?.providerTurnId !== undefined
+                    ? { providerTurnId: event.transcript.providerTurnId }
+                    : {}),
+                requestId: chunk.requestId,
+                error: chunk.error,
+            },
+        ];
+    }
     if (event.approvalRecord !== undefined) {
         return [
             {

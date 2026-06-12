@@ -64,6 +64,25 @@ describe('Desktop replay inspector parity', () => {
         expect(html).toContain('missing provider continuation for file.patch');
         expect(html).toContain('No graph snapshot');
     });
+
+    it('renders provider response failures as failed coding replay rows', () => {
+        const log = sessionLog('session_replay_provider_failed', [
+            providerFailure('session_replay_provider_failed', 'turn_failed', 'provider timeout before completion'),
+        ]);
+
+        const html = renderToStaticMarkup(
+            <App
+                initialSessionId="session_replay_provider_failed"
+                initialSessionSummaries={[summary('session_replay_provider_failed', 1, 'available')]}
+                initialSessionLog={log}
+            />,
+        );
+
+        expect(html).toContain('provider.failure');
+        expect(html).toContain('failed');
+        expect(html).toContain('turn_failed');
+        expect(html).toContain('provider timeout before completion');
+    });
 });
 
 type EventInput = DesktopSessionLog['envelopes'][number]['event'];
@@ -141,6 +160,30 @@ function providerMessage(sessionId: string, providerTurnId: string, content: str
         transcript: {
             providerTurnId,
             messageId: `message_${providerTurnId}`,
+            visibility: 'model_visible',
+        },
+    };
+}
+
+function providerFailure(sessionId: string, providerTurnId: string, message: string): EventInput {
+    return {
+        type: 'model.call.failed',
+        timestamp: '2026-06-12T00:00:01.000Z',
+        sessionId,
+        taskId: providerTurnId,
+        message,
+        providerStreamChunk: {
+            kind: 'response_failed',
+            requestId: `provider_request_${providerTurnId}`,
+            sequence: 2,
+            error: {
+                code: 'provider_timeout',
+                message,
+                retryable: true,
+            },
+        },
+        transcript: {
+            providerTurnId,
             visibility: 'model_visible',
         },
     };

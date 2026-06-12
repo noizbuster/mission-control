@@ -70,6 +70,14 @@ export type CodingReplayStep =
           readonly continuation: boolean;
       }
     | {
+          readonly kind: 'provider.failure';
+          readonly eventId: string;
+          readonly timestamp: string;
+          readonly providerTurnId?: string;
+          readonly requestId: string;
+          readonly error: ProtocolError;
+      }
+    | {
           readonly kind: 'approval';
           readonly eventId: string;
           readonly timestamp: string;

@@ -146,10 +146,14 @@ describe('ProviderTurnRunner', () => {
         expect(overflow).toMatchObject({ status: 'failed', error: { code: 'provider_context_overflow' } });
         expect(
             projectSessionReplay({ sessionId: abortStore.sessionId, envelopes: aborted.envelopes }).events.at(-1),
-        ).toMatchObject({ providerStreamChunk: { kind: 'response_failed', error: { code: 'provider_aborted' } } });
+        ).toMatchObject({
+            type: 'model.call.failed',
+            providerStreamChunk: { kind: 'response_failed', error: { code: 'provider_aborted' } },
+        });
         expect(
             projectSessionReplay({ sessionId: overflowStore.sessionId, envelopes: overflow.envelopes }).events.at(-1),
         ).toMatchObject({
+            type: 'model.call.failed',
             providerStreamChunk: { kind: 'response_failed', error: { code: 'provider_context_overflow' } },
         });
     });

@@ -100,6 +100,15 @@ function codingStepRow(step: CodingReplayStep): CodingStepRow {
                 status: step.continuation ? 'continuation' : 'initial',
                 detail: redactDisplayText(step.message),
             };
+        case 'provider.failure':
+            return {
+                key: step.eventId,
+                kind: step.kind,
+                timestamp: step.timestamp,
+                subject: step.providerTurnId ?? step.requestId,
+                status: 'failed',
+                detail: redactDisplayText(step.error.message),
+            };
         case 'approval':
             return {
                 key: step.eventId,

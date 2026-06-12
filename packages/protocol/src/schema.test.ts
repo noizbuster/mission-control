@@ -25,6 +25,7 @@ describe('protocol schemas', () => {
 
         expect(event.type).toBe('task.completed');
         expect(AgentEventTypeSchema.parse('native.warning')).toBe('native.warning');
+        expect(AgentEventTypeSchema.parse('model.call.failed')).toBe('model.call.failed');
     });
 
     it('keeps existing protocol event baseline before ABG protocol expansion', () => {

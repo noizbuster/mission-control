@@ -175,7 +175,7 @@ fn seeded_tool_call(
                 "sessionId": session_id,
                 "message": format!("tool call completed: {tool_name}"),
                 "nativeSidecarStatus": "mock",
-                "modelProviderSelection": { "providerID": "mock", "modelID": "mission-control-demo" },
+                "modelProviderSelection": { "providerID": "local", "modelID": "local-echo" },
                 "providerStreamChunk": {
                     "kind": "tool_call_completed",
                     "requestId": "request_seed",
@@ -212,7 +212,7 @@ fn seeded_approval(
                 "sessionId": session_id,
                 "message": format!("approval requested: {tool_name}"),
                 "nativeSidecarStatus": "mock",
-                "modelProviderSelection": { "providerID": "mock", "modelID": "mission-control-demo" },
+                "modelProviderSelection": { "providerID": "local", "modelID": "local-echo" },
                 "approvalRecord": {
                     "approvalId": approval_id,
                     "requestId": request_id,

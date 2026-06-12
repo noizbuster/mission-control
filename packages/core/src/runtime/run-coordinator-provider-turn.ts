@@ -1,5 +1,6 @@
 import type {
     AgentEvent,
+    AgentEventEnvelope,
     AgentMessage,
     ModelProviderSelection,
     ProtocolErrorCode,
@@ -31,6 +32,7 @@ export type RunCoordinatorProviderTurnInput = {
     readonly readMessages: () => Promise<readonly AgentMessage[]>;
     readonly nextId: (prefix: string) => Promise<string>;
     readonly appendDurableEvent: (event: AgentEvent) => Promise<void>;
+    readonly appendDurableEnvelope: (envelope: AgentEventEnvelope) => Promise<void>;
 };
 
 export async function runCoordinatorProviderTurn(
@@ -41,14 +43,17 @@ export async function runCoordinatorProviderTurn(
     let toolContinuationTurns = 0;
 
     while (!signal.aborted) {
+        const turnId = await input.nextId('turn');
+        const requestId = await input.nextId('request');
         const runner = new ProviderTurnRunner({
             provider: input.provider,
             ...providerRunnerOptions(input),
+            createEventId: (_event, sequence) => `${requestId}_provider_event_${sequence}`,
         });
         const result = await runner.runTurn({
             sessionId: input.sessionId,
-            turnId: await input.nextId('turn'),
-            requestId: await input.nextId('request'),
+            turnId,
+            requestId,
             ...providerTurnSelection(input.modelProviderSelection),
             messages,
             ...(input.toolRegistry !== undefined
@@ -58,7 +63,7 @@ export async function runCoordinatorProviderTurn(
             signal,
             writeEnvelope: async (envelope) => {
                 if (envelope.durability === 'durable') {
-                    await input.appendDurableEvent(envelope.event);
+                    await input.appendDurableEnvelope(envelope);
                 }
             },
         });

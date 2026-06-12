@@ -96,6 +96,21 @@ export class JsonlSessionEventStore implements MemoryStore {
         await this.enqueueAppend(() => this.appendParsedEnvelope(parsedEnvelope));
     }
 
+    async appendEnvelopeWithStoreSequence(envelope: AgentEventEnvelope): Promise<void> {
+        const parsedEnvelope = AgentEventEnvelopeSchema.parse(envelope);
+        if (parsedEnvelope.durability === 'ephemeral') {
+            return;
+        }
+        await this.enqueueAppend(() =>
+            this.appendParsedEnvelope(
+                AgentEventEnvelopeSchema.parse({
+                    ...parsedEnvelope,
+                    sequence: this.nextSequence,
+                }),
+            ),
+        );
+    }
+
     private async appendParsedEnvelope(envelope: AgentEventEnvelope): Promise<void> {
         this.ensureWritableEnvelope(envelope);
         await this.writeRecord(createJsonlSessionEventRecord(envelope));

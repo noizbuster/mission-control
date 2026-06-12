@@ -46,6 +46,31 @@ export function providerCompletedEvent(sessionId: string, providerTurnId: string
     };
 }
 
+export function providerFailedEvent(sessionId: string): AgentEvent {
+    return {
+        type: 'model.call.failed',
+        timestamp: '2026-06-05T10:00:01.000Z',
+        sessionId,
+        taskId: 'task_prompt_1',
+        message: 'provider exploded',
+        providerStreamChunk: {
+            kind: 'response_failed',
+            requestId: 'provider_request_task_prompt_1',
+            sequence: 2,
+            error: {
+                code: 'unknown',
+                message: 'provider exploded',
+                retryable: false,
+            },
+        },
+        transcript: {
+            providerTurnId: 'task_prompt_1',
+            messageId: 'message_task_prompt_1',
+            visibility: 'model_visible',
+        },
+    };
+}
+
 export function approvalEvent(
     sessionId: string,
     type: 'approval.requested' | 'approval.updated',

@@ -120,6 +120,7 @@ export const AGENT_EVENT_TYPES = [
     'policy.blocked',
     'model.call.started',
     'model.call.completed',
+    'model.call.failed',
     'tool.started',
     'tool.completed',
     'tool.failed',
