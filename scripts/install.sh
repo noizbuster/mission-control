@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-MISSION_CONTROL_REPO="${MISSION_CONTROL_REPO:-OWNER_PLACEHOLDER/mission-control}"
+MISSION_CONTROL_REPO="${MISSION_CONTROL_REPO:-noizbuster/mission-control}"
 os="${MISSION_CONTROL_TEST_OS:-$(uname -s | tr '[:upper:]' '[:lower:]')}"
 arch="${MISSION_CONTROL_TEST_ARCH:-$(uname -m)}"
 
@@ -42,6 +42,17 @@ else
 fi
 
 chmod +x "${install_dir}/mctrl"
+if [ -f "${tmp_dir}/mission-control-sidecar" ]; then
+  cp "${tmp_dir}/mission-control-sidecar" "${install_dir}/mission-control-sidecar"
+elif [ -f "${tmp_dir}/bin/mission-control-sidecar" ]; then
+  cp "${tmp_dir}/bin/mission-control-sidecar" "${install_dir}/mission-control-sidecar"
+else
+  echo "artifact did not contain mission-control-sidecar" >&2
+  exit 1
+fi
+
+chmod +x "${install_dir}/mission-control-sidecar"
 echo "installed mctrl to ${install_dir}/mctrl"
+echo "installed mission-control-sidecar to ${install_dir}/mission-control-sidecar"
 echo "ensure ${install_dir} is on PATH"
 echo "run: mctrl --version"

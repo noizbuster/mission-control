@@ -10,7 +10,7 @@ describe('README distribution contract', () => {
         const terms = [
             'npm install -g @mission-control/cli',
             'npm install -g mission-control',
-            'curl -fsSL https://raw.githubusercontent.com/<OWNER>/mission-control/main/scripts/install.sh | sh',
+            'curl -fsSL https://raw.githubusercontent.com/noizbuster/mission-control/main/scripts/install.sh | sh',
             'mctrl-linux-x64.tar.gz',
             'mctrl-darwin-arm64.tar.gz',
             'Desktop release',

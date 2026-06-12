@@ -32,7 +32,7 @@ describe('README extension points', () => {
             'pnpm dev:cli -- --json --graph examples/abg/research-answer.graph.json',
             'local provider/model variant',
             'visual graph editor remains out of scope',
-            'OpenAI provider calls, durable JSONL replay, safe tools, and approval gates are implemented for the coding-agent MVP',
+            'Provider adapter calls, durable JSONL replay, safe tools, and approval gates are implemented for the coding-agent MVP',
         ] as const;
 
         for (const term of terms) {

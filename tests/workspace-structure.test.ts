@@ -46,8 +46,8 @@ function isPackageManifest(value: unknown): value is PackageManifest {
     if (!isRecord(value)) {
         return false;
     }
-    const name = value['name'];
-    const scripts = value['scripts'];
+    const name = value.name;
+    const scripts = value.scripts;
     return (name === undefined || typeof name === 'string') && (scripts === undefined || isStringRecord(scripts));
 }
 

@@ -5,10 +5,10 @@ import { join } from 'node:path';
 const root = process.cwd();
 
 describe('curl install script contract', () => {
-    it('supports expected platform artifact names with OWNER_PLACEHOLDER default', () => {
+    it('supports expected platform artifact names with public release repo default', () => {
         const source = readFileSync(join(root, 'scripts/install.sh'), 'utf8');
 
-        expect(source).toContain('MISSION_CONTROL_REPO="${MISSION_CONTROL_REPO:-OWNER_PLACEHOLDER/mission-control}"');
+        expect(source).toContain('MISSION_CONTROL_REPO="${MISSION_CONTROL_REPO:-noizbuster/mission-control}"');
         expect(source).toContain('linux');
         expect(source).toContain('darwin');
         expect(source).toContain('x64');

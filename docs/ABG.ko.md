@@ -2132,14 +2132,18 @@ Async Behavior Graph는 이 모든 것을 묶는 mission runtime이다.
 
 - `MCTRL_DATA_DIR` 또는 플랫폼 application-data 디렉터리 아래의 durable JSONL session event storage.
 - chat, graph snapshot, transcript branch, approval state, file diff, command output을 재구성하는 replay projection.
-- deterministic local provider 실행과 저장된 credential 뒤의 OpenAI Responses adapter.
+- deterministic local provider 실행, 저장된 credential 뒤의 OpenAI Responses, Anthropic Messages, Google Gemini, 그리고 OpenRouter, Groq, DeepSeek, Mistral용 OpenAI-compatible adapter.
+- provider capability 문서는 executable adapter와 catalog/auth/model-discovery entry를 구분한다. provider가 runnable로 문서화되려면 executable adapter proof가 필요하다.
 - raw credential 저장을 피하는 provider-neutral streaming event, typed provider error, redaction metadata.
 - `approval.requested`, `approval.updated`, `approval.resumed`, `approval.blocked` approval lifecycle event.
 - `repo.read`, `repo.list`, `repo.search`, `file.patch`, `command.run` safe tool set과 permission gate.
+- `temp/ref-repos` 아래 reference repository는 planning evidence 전용이며 runtime repo tool은 기본적으로 해당 경로를 거부한다.
+- Runtime prompt와 tool instruction은 reference repo의 AGENTS.md 또는 다른 instruction을 로드하면 안 된다.
 - 기본 graph node concurrency 2, provider parallel tool call 4, shell/process concurrency 1, retry cap, loop limit을 가진 bounded graph coordination.
 - CLI JSONL 및 interactive coding-agent flow.
 - Desktop event inspection과 timeline/graph/session projection은 Tauri shell에 연결되어 있다.
-- core desktop command service는 prompt, queue follow-up, steer, interrupt, resume, approval decision을 처리한다. 현재 Tauri write command는 Rust shell이 그 service에 연결되기 전까지 placeholder receipt bridge다.
+- core desktop command service는 prompt, queue follow-up, steer, interrupt, resume, approval decision을 처리한다. Tauri write command는 Rust shell bridge를 통해 해당 service를 호출하고 저장된 session provider selection을 재사용하며 실제 `eventsWritten` count를 반환한다.
+- Desktop Tauri credential command는 CLI와 같은 shared auth file을 통해 API-key credential을 저장하고 나열한다.
 - `task.run` capability를 협상하는 Sidecar protocol v1 Rust handshake와 native/mock/unavailable status event.
 
 아직 연기된 범위:
@@ -2148,4 +2152,4 @@ Async Behavior Graph는 이 모든 것을 묶는 mission runtime이다.
 - visual graph editing.
 - vector memory, persistent memory store, JSONL을 넘어서는 database index.
 - unrestricted tool, automatic rollback, `file.patch` 또는 `command.run`의 기본 sidecar 실행.
-- deterministic local path와 OpenAI Responses path를 넘어서는 provider adapter.
+- deterministic local path, OpenAI Responses, Anthropic Messages, Google Gemini, OpenAI-compatible provider family를 넘어서는 provider adapter.

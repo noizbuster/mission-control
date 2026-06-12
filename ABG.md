@@ -2241,14 +2241,18 @@ Implemented runtime surfaces:
 
 - Durable JSONL session event storage under `MCTRL_DATA_DIR` or the platform application-data directory.
 - Replay projections for chat, graph snapshots, transcript branches, approval state, file diffs, and command output.
-- Deterministic local provider execution and an OpenAI Responses adapter behind stored credentials.
+- Deterministic local provider execution, OpenAI Responses, Anthropic Messages, Google Gemini, and OpenAI-compatible adapters for OpenRouter, Groq, DeepSeek, and Mistral behind stored credentials.
+- Provider capability docs distinguish executable adapters from catalog/auth/model-discovery entries; a provider needs executable adapter proof before it can be documented as runnable.
 - Provider-neutral streaming events, typed provider errors, and redaction metadata that avoids raw credential storage.
 - Approval lifecycle events: `approval.requested`, `approval.updated`, `approval.resumed`, and `approval.blocked`.
 - Permission-gated safe tools: `repo.read`, `repo.list`, `repo.search`, `file.patch`, and `command.run`.
+- Reference repositories under `temp/ref-repos` are planning evidence only; runtime repo tools deny those paths by default.
+- Runtime prompts and tool instructions must not load AGENTS.md or other instructions from reference repos.
 - Bounded graph coordination with default graph node concurrency 2, provider parallel tool calls 4, shell/process concurrency 1, retry caps, and loop limits.
 - CLI JSONL and interactive coding-agent flows.
 - Desktop event inspection and timeline/graph/session projections are wired in the Tauri shell.
-- Core desktop command services handle prompt, queue follow-up, steer, interrupt, resume, and approval decisions; the current Tauri write commands are placeholder receipt bridges until the Rust shell is wired to that service.
+- Core desktop command services handle prompt, queue follow-up, steer, interrupt, resume, and approval decisions; Tauri write commands call that service through the Rust shell bridge, reuse persisted session provider selections, and return real `eventsWritten` counts.
+- Desktop Tauri credential commands save and list API-key credentials through the shared auth file used by the CLI.
 - Sidecar protocol v1 uses a Rust handshake with `task.run` capability negotiation and native/mock/unavailable status events.
 
 Still deferred:
@@ -2257,4 +2261,4 @@ Still deferred:
 - Visual graph editing.
 - Vector memory, persistent memory stores, and database indexes beyond JSONL storage.
 - Unrestricted tools, automatic rollback, and default sidecar execution for `file.patch` or `command.run`.
-- Provider adapters beyond the deterministic local path and OpenAI Responses path.
+- Provider adapters beyond the deterministic local path, OpenAI Responses, Anthropic Messages, Google Gemini, and the OpenAI-compatible provider family.

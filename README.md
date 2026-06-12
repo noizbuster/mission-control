@@ -65,11 +65,11 @@ node apps/cli/dist/index.js --no-tui
 
 `$skill args records a scaffold agent skill invocation` inside Mission Control. It does not run actual Codex host skills, spawn agents, or make provider calls. Normal prompt text still sends a prompt, and Ctrl+C twice exits.
 
-The chat command surface is mixed: normal prompts can run through the deterministic local provider or the OpenAI Responses adapter when credentials are configured, while skill calls remain recorded scaffold events and real LLM calls are not implemented for those skill invocations.
+The chat command surface is mixed: normal prompts can run through the deterministic local provider, OpenAI Responses, Anthropic Messages, Google Gemini, or the OpenAI-compatible adapter family for OpenRouter, Groq, DeepSeek, and Mistral when credentials are configured. Skill calls remain recorded scaffold events and real LLM calls are not implemented for those skill invocations.
 
 ## Model Provider Selection
 
-The CLI accepts provider/model selection for demo and coding-agent runs. The catalog combines the scaffold `local` provider with the OpenCode/Models.dev provider credential catalog. Runtime execution is implemented for the deterministic local provider and OpenAI Responses adapter; other vendored providers can be configured for credentials and catalog selection but do not have execution adapters yet.
+The CLI accepts provider/model selection for demo and coding-agent runs. The catalog combines the scaffold `local` provider with the OpenCode/Models.dev provider credential catalog. Runtime execution is implemented for the deterministic local provider, OpenAI Responses, Anthropic Messages, Google Gemini, and the OpenAI-compatible adapter family for OpenRouter, Groq, DeepSeek, and Mistral. Other vendored providers can be configured for credentials and catalog selection but do not have execution adapters yet.
 
 ```bash
 pnpm dev:cli -- --no-tui --provider local --model local-echo
@@ -86,6 +86,14 @@ mctrl auth logout --provider local
 mctrl models local
 ```
 
+Installed `mctrl` provider-backed examples should use isolated data and auth paths for repeatable local tests:
+
+```bash
+MCTRL_DATA_DIR=/tmp/mctrl-demo-data MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-demo-auth.json mctrl auth login --provider local --api-key local_test_key
+MCTRL_DATA_DIR=/tmp/mctrl-demo-data MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-demo-auth.json mctrl run "summarize this repository" --session session_demo --jsonl --provider local --model local-echo
+MCTRL_DATA_DIR=/tmp/mctrl-demo-data MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-demo-auth.json mctrl session replay session_demo --jsonl
+```
+
 The vendored Models.dev snapshot is generated from `https://models.dev/api.json` and is stored under `packages/config/src/generated/`. Refresh it with `node --experimental-strip-types scripts/sync-models-dev-catalog.ts`. Normal CLI commands use the vendored file only; there is no runtime fetch to Models.dev.
 
 `mctrl auth login` supports credential setup for every vendored OpenCode provider. Single-secret providers can use `--api-key <key>` as an alias for their primary secret. Multi-field providers use repeatable `--credential FIELD=VALUE` flags. OAuth-capable providers expose OpenCode-style `--method` choices: OpenAI supports browser and headless ChatGPT OAuth plus API key login, and GitHub Copilot supports OAuth device login plus API key login. Missing credential fields are resolved from explicit CLI values, matching environment variables, existing stored values, and interactive prompts, in that order.
@@ -100,11 +108,13 @@ API keys, OAuth tokens, and multi-field provider credentials are stored as plain
 
 Interactive `/model` choices are narrower than `mctrl models`: they first require a logged-in provider, and API-key credentials for supported providers can call the provider's model-list API at chat startup. When discovery succeeds, `/model` intersects the live provider model IDs with the vendored catalog before showing, searching, or accepting a model selection. OAuth credentials, unsupported providers, failed requests, and malformed responses fall back to the vendored models for that logged-in provider.
 
-The desktop demo control surface exposes provider/model controls, an API key credential field, credential configured/missing state, and the active selection in the status area and event log.
+The desktop demo control surface exposes provider/model controls, an API key credential field, credential configured/missing state, and the active selection in the status area and event log. The Tauri desktop client saves and lists API-key credentials through the same auth file used by the CLI, and desktop prompt/resume/approval commands route through the core provider factory.
+
+Provider capability statuses separate executable adapters from catalog-only entries. `local`, `openai`, `anthropic`, `google`, `openrouter`, `groq`, `deepseek`, and `mistral` can run coding-agent prompts through implemented adapters. Other catalog entries can be `model-discovery-only`, `auth-only`, or unsupported for prompt execution until they have adapter tests and an executable integration proof. Provider-backed coding commands require an executable adapter proof before a provider can run.
 
 provider/model selection is scaffold metadata for observable control surfaces only in demo-only commands, and a demo command does not call real LLM providers yet.
 
-credentials are used by implemented provider adapters only. For providers without execution adapters, credentials are used for scaffold configuration only. The OpenAI Responses adapter is implemented behind stored provider credentials, defaults requests to `store: false`, and keeps raw secrets out of protocol events, JSONL logs, CLI output, desktop props/state snapshots, and error messages. Mission Control does not implement real LLM provider execution for providers without an adapter.
+credentials are used by implemented provider adapters only. For providers without execution adapters, credentials are used for scaffold configuration only. The OpenAI Responses adapter is implemented behind stored provider credentials, defaults requests to `store: false`, and the Anthropic, Google Gemini, and OpenAI-compatible adapters use the same provider-neutral streaming and redaction boundary. Raw secrets stay out of protocol events, JSONL logs, CLI output, desktop props/state snapshots, and error messages. Mission Control does not implement real LLM provider execution for providers without an adapter.
 
 The catalog also exposes the local provider/model variant `local/local-echo/default`. These variants are metadata for graph and event observability only.
 
@@ -118,21 +128,27 @@ Session storage:
 - Without `MCTRL_DATA_DIR`, session logs use the platform application-data directory.
 - Session event logs live at `sessions/<session-id>.jsonl`.
 - JSONL logs contain durable event envelopes with stable event ids, sequence numbers, causation/correlation ids, and replay cursors.
+- Use --json for transient JSON Lines rendering and --jsonl for JSON Lines rendering plus replayable session persistence.
 
 Provider path:
 
 - The deterministic `local/local-echo` provider is available for offline tests and demos.
 - The OpenAI Responses adapter is implemented for real provider turns when OpenAI credentials are configured.
-- Live OpenAI smoke tests are opt-in only and are not required for CI.
+- Anthropic Messages, Google Gemini, and OpenAI-compatible adapters are implemented for `anthropic`, `google`, `openrouter`, `groq`, `deepseek`, and `mistral` when credentials are configured.
+- Live provider smoke tests are opt-in only and are not required for CI.
 - Unsupported providers remain catalog/auth entries until an execution adapter is added.
+- Providers without execution adapters remain catalog/auth entries and must not be documented as executable.
 
 Approval lifecycle and safe tools:
 
 - Approval events use `approval.requested`, `approval.updated`, `approval.resumed`, and `approval.blocked`.
 - Effectful tools do not execute until approval state is `approved`.
 - The safe tool set is `repo.read`, `repo.list`, `repo.search`, `file.patch`, and `command.run`.
+- Reference repositories under `temp/ref-repos` are planning evidence only.
+- `repo.read`, `repo.list`, and `repo.search` deny `temp/ref-repos` by default, along with generated and cache directories.
+- Runtime prompts and tool instructions must not load AGENTS.md or other instructions from reference repos.
 - `file.patch` enforces workspace containment, symlink escape rejection, patch bounds, dirty tracked-file checks, and before/after diff events.
-- `command.run` uses an allowlist, non-interactive execution, timeouts, output caps, and command lifecycle events.
+- `command.run` uses a fixed verification-harness allowlist, non-interactive execution, timeouts, output caps, and command lifecycle events.
 
 Graph limits:
 
@@ -145,7 +161,8 @@ Desktop scope:
 
 - The desktop reads durable JSONL logs, renders timeline/graph/session projections, and shows patch/test output.
 - `packages/core` contains desktop command services for prompt, queue follow-up, steer, interrupt, resume, and approval decisions.
-- desktop Tauri write commands are placeholder receipt bridges until the Rust shell is wired to the core command service.
+- desktop Tauri write commands call the core desktop session command service through the Rust shell bridge and return real `eventsWritten` counts.
+- desktop Tauri credential commands save and list API-key credentials through the shared auth file, and restarted prompt/resume/approval commands reuse the session's persisted provider selection.
 - The desktop shell never mutates files directly; permission enforcement and file/command effects stay in `packages/core`.
 
 Sidecar status:
@@ -175,7 +192,7 @@ Authorable graph files live in `examples/abg`:
 
 The JSON shape is `id`, `entryNodeId`, `nodes`, `edges`, `rules`, and `policies`. Nodes can specify `kind`, `children`, `capabilities`, `config`, and optional model metadata with `providerID`, `modelID`, `variantID`, and fallback model options. Rules use declarative predicates only; arbitrary JavaScript expressions are rejected.
 
-The full production ABG engine remains TODO. OpenAI provider calls, durable JSONL replay, safe tools, and approval gates are implemented for the coding-agent MVP. The visual graph editor remains out of scope for this MVP.
+The full production ABG engine remains TODO. Provider adapter calls, durable JSONL replay, safe tools, and approval gates are implemented for the coding-agent MVP. The visual graph editor remains out of scope for this MVP.
 
 ## Distribution
 
@@ -196,7 +213,7 @@ mctrl
 curl install:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<OWNER>/mission-control/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/noizbuster/mission-control/main/scripts/install.sh | sh
 mctrl
 ```
 
@@ -328,7 +345,7 @@ ABG runtime TODOs:
 
 - TODO: ABG full engine is not implemented.
 - TODO: full production ABG engine is not implemented.
-- TODO: provider adapters beyond local deterministic and OpenAI Responses are not implemented.
+- TODO: additional provider adapters beyond local, OpenAI Responses, Anthropic Messages, Google Gemini, and the OpenAI-compatible family are not implemented.
 - TODO: unrestricted file-editing tools are not implemented.
 - TODO: visual graph editor remains out of scope.
 - TODO: persistent memory store, vector index, and database storage are not implemented.
@@ -340,4 +357,4 @@ ABG runtime TODOs:
 - Add SQLite indexing for JSONL session logs.
 - Add sidecar feature flags for long-running native command/file execution after parity tests.
 - Add distribution packaging for npm, GitHub Releases, and Tauri artifacts.
-- Keep CI free of live provider credentials; live OpenAI smoke tests stay opt-in.
+- Keep CI free of live provider credentials; live provider smoke tests stay opt-in.

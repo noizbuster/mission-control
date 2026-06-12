@@ -49,6 +49,7 @@ describe('workspace build integration', () => {
         expectWorkspaceDependency(cliManifest, '@mission-control/core');
         expectWorkspaceDependency(cliManifest, '@mission-control/protocol');
         expectWorkspaceDependency(desktopManifest, '@mission-control/config');
+        expectWorkspaceDependency(desktopManifest, '@mission-control/core');
         expectWorkspaceDependency(desktopManifest, '@mission-control/protocol');
     });
 });

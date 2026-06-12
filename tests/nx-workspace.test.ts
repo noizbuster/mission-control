@@ -182,6 +182,10 @@ describe('Nx workspace', () => {
 
         expect(readProjectConfig('packages/core/project.json').implicitDependencies).toContain('protocol');
         expect(readProjectConfig('apps/cli/project.json').implicitDependencies).toEqual(['config', 'core', 'protocol']);
-        expect(readProjectConfig('apps/desktop/project.json').implicitDependencies).toEqual(['config', 'protocol']);
+        expect(readProjectConfig('apps/desktop/project.json').implicitDependencies).toEqual([
+            'config',
+            'core',
+            'protocol',
+        ]);
     });
 });

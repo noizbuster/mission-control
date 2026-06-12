@@ -22,7 +22,7 @@ describe('README ABG alignment', () => {
             'behavior/action graph engine',
             'Authorable ABG MVP',
             'full production ABG engine',
-            'OpenAI provider calls, durable JSONL replay, safe tools, and approval gates are implemented for the coding-agent MVP',
+            'Provider adapter calls, durable JSONL replay, safe tools, and approval gates are implemented for the coding-agent MVP',
             'visual graph editor remains out of scope',
             'Durable replay',
             'Approval-gated tools',

@@ -70,6 +70,9 @@ describe('README stage-01 contract', () => {
             'pnpm dev:cli -- --no-tui --provider local --model local-echo',
             'pnpm dev:cli -- --json --model local/local-echo',
             'provider/model controls',
+            'Provider capability statuses',
+            'model-discovery-only',
+            'Provider-backed coding commands require an executable adapter proof before a provider can run',
             'provider/model selection is scaffold metadata',
             'does not call real LLM providers yet',
         ] as const;
@@ -106,6 +109,9 @@ describe('README stage-01 contract', () => {
             'mctrl auth login --provider github-copilot --method oauth',
             'mctrl auth login --provider cloudflare-ai-gateway --credential apiToken=<token> --credential accountId=<account> --credential gatewayId=<gateway>',
             'mctrl auth login --provider amazon-bedrock --credential region=<region> --credential accessKeyId=<key-id> --credential secretAccessKey=<secret>',
+            'MCTRL_DATA_DIR=/tmp/mctrl-demo-data MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-demo-auth.json mctrl auth login --provider local --api-key local_test_key',
+            'MCTRL_DATA_DIR=/tmp/mctrl-demo-data MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-demo-auth.json mctrl run "summarize this repository" --session session_demo --jsonl --provider local --model local-echo',
+            'MCTRL_DATA_DIR=/tmp/mctrl-demo-data MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-demo-auth.json mctrl session replay session_demo --jsonl',
             '--credential FIELD=VALUE',
             'OAuth-capable providers expose OpenCode-style `--method` choices',
             'OpenAI supports browser and headless ChatGPT OAuth plus API key login',
@@ -144,6 +150,7 @@ describe('README stage-01 contract', () => {
             'OpenAI Responses adapter is implemented behind stored provider credentials',
             'MCTRL_DATA_DIR',
             'sessions/<session-id>.jsonl',
+            'Use --json for transient JSON Lines rendering and --jsonl for JSON Lines rendering plus replayable session persistence',
             'approval.requested',
             'approval.updated',
             'approval.resumed',
@@ -153,10 +160,14 @@ describe('README stage-01 contract', () => {
             'repo.search',
             'file.patch',
             'command.run',
+            'Reference repositories under `temp/ref-repos` are planning evidence only',
+            '`repo.read`, `repo.list`, and `repo.search` deny `temp/ref-repos` by default',
+            'Runtime prompts and tool instructions must not load AGENTS.md or other instructions from reference repos',
+            'Providers without execution adapters remain catalog/auth entries and must not be documented as executable',
             'graph node concurrency defaults to 2',
             'provider parallel tool calls default to 4',
             'shell/process concurrency defaults to 1',
-            'desktop Tauri write commands are placeholder receipt bridges until the Rust shell is wired to the core command service',
+            'desktop Tauri write commands call the core desktop session command service through the Rust shell bridge and return real `eventsWritten` counts',
             'The desktop shell never mutates files directly',
             'Sidecar protocol v1 negotiates task.run only',
             'file.patch and command.run stay on the TypeScript core path by default',
@@ -171,5 +182,19 @@ describe('README stage-01 contract', () => {
         expect(content).not.toContain(
             'Mission Control does not implement real LLM provider execution in this scaffold',
         );
+        const forbiddenExecutionClaims = [
+            'all catalog providers execute',
+            'all catalog providers can execute',
+            'every catalog provider executes',
+            'every catalog provider can execute',
+            'every vendored provider can run coding prompts',
+            'all vendored providers can run coding prompts',
+        ] as const;
+
+        for (const forbiddenClaim of forbiddenExecutionClaims) {
+            expect(content, `README must not overstate provider execution: ${forbiddenClaim}`).not.toContain(
+                forbiddenClaim,
+            );
+        }
     });
 });
