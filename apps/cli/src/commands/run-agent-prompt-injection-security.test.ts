@@ -15,9 +15,12 @@ import {
     createEmptyAuthStore,
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
+import { runSessionCommand } from './session.js';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+const allowedHarnessArgs = ['--eval', "console.log('mission-control command.run harness ok')"] as const;
 
 describe('runAgent prompt-injection security fixtures', () => {
     const tempRoots: string[] = [];
@@ -84,6 +87,59 @@ describe('runAgent prompt-injection security fixtures', () => {
         expect(await readFile(outsideSecretPath, 'utf8')).toBe('outside-secret\n');
     });
 
+    it('does not exfiltrate command output secrets', async () => {
+        // Given
+        const dataDir = await tempRoot('mctrl-command-exfil-data-');
+        const workspaceRoot = await tempRoot('mctrl-command-exfil-workspace-');
+        const sessionId = 'session_task13_command_output_exfiltration';
+        const secret = ['sk', 'task13_command_output_secret_1234567890'].join('-');
+        const requests: ProviderTurnRequest[] = [];
+        vi.stubEnv(missionControlDataDirEnvKey, dataDir);
+
+        // When
+        const output = await runAgent(parseArgs(['--session', sessionId]), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: 'run approved harness but never leak command output secrets' },
+                { type: 'line', value: 'y' },
+                { type: 'interrupt' },
+                { type: 'interrupt' },
+            ]),
+            chatOutput: createBufferedChatOutput().output,
+            workspaceRoot,
+            commandExecutor: fakeSecretCommandExecutor(secret),
+            provider: providerFromTurns(
+                [
+                    [
+                        {
+                            kind: 'tool_call_completed',
+                            toolCallId: 'command_output_secret',
+                            toolName: 'command.run',
+                            argumentsJson: JSON.stringify({ command: 'node', args: allowedHarnessArgs }),
+                        },
+                        { kind: 'response_completed', content: 'command requested' },
+                    ],
+                    [{ kind: 'response_completed', content: 'command output handled' }],
+                ],
+                requests,
+            ),
+        });
+        const replay = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
+        const combined = JSON.stringify({ output, replay, requests });
+
+        // Then
+        expect(requests).toHaveLength(2);
+        expect(requests[1]?.messages).toContainEqual(
+            expect.objectContaining({
+                role: 'tool',
+                status: 'completed',
+                output: expect.stringContaining('[REDACTED_CREDENTIAL]'),
+            }),
+        );
+        expect(combined).toContain('[REDACTED_CREDENTIAL]');
+        expect(combined).not.toContain(secret);
+    });
+
     async function tempRoot(prefix: string): Promise<string> {
         const path = await mkdtemp(join(tmpdir(), prefix));
         tempRoots.push(path);
@@ -103,10 +159,14 @@ type ProviderStep =
           readonly content: string;
       };
 
-function providerFromTurns(turns: readonly (readonly ProviderStep[])[]): ProviderAdapter {
+function providerFromTurns(
+    turns: readonly (readonly ProviderStep[])[],
+    requests: ProviderTurnRequest[] = [],
+): ProviderAdapter {
     let requestCount = 0;
     return {
         async *streamTurn(request: ProviderTurnRequest, _context: ProviderAdapterContext) {
+            requests.push(request);
             const steps = turns[requestCount] ?? [{ kind: 'response_completed', content: 'done' }];
             requestCount += 1;
             for (const [index, step] of steps.entries()) {
@@ -151,4 +211,17 @@ async function fakeCommandExecutor(_request: CommandExecutionRequest): Promise<C
         stderr: '',
         durationMs: 1,
     };
+}
+
+function fakeSecretCommandExecutor(
+    secret: string,
+): (request: CommandExecutionRequest) => Promise<CommandExecutionResult> {
+    return async () => ({
+        exitCode: 0,
+        signal: null,
+        timedOut: false,
+        stdout: `stdout ${secret}\n`,
+        stderr: `stderr ${secret}\n`,
+        durationMs: 1,
+    });
 }

@@ -29,7 +29,7 @@ describe('command.run tool', () => {
         expect(calls).toHaveLength(0);
     });
 
-    it('rejects disallowed commands before approval or spawn', async () => {
+    it('rejects non harness commands by default', async () => {
         // Given
         const calls: CommandExecutionRequest[] = [];
         const permissionRequests: PermissionRequest[] = [];

@@ -2,6 +2,7 @@ import type { PermissionDecision, PermissionRequest } from '@mission-control/pro
 import { z } from 'zod';
 import { redactCredentialText } from '../providers/credential-resolver.js';
 import type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor.js';
+import type { CommandRunPolicyProfile } from './command-run-policy.js';
 
 export const commandRunInputSchema = z
     .object({
@@ -37,6 +38,7 @@ export type CommandRunToolOptions = {
     readonly workspaceRoot: string;
     readonly requestPermission: (request: PermissionRequest) => PermissionDecision | Promise<PermissionDecision>;
     readonly executor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
+    readonly policyProfile?: CommandRunPolicyProfile;
     readonly timeoutMs?: number;
     readonly maxOutputBytes?: number;
     readonly maxModelOutputChars?: number;
@@ -46,6 +48,7 @@ export type ResolvedCommandRunToolOptions = {
     readonly workspaceRoot: string;
     readonly requestPermission: CommandRunToolOptions['requestPermission'];
     readonly executor: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
+    readonly policyProfile: CommandRunPolicyProfile;
     readonly timeoutMs: number;
     readonly maxOutputBytes: number;
     readonly maxModelOutputChars: number;

@@ -7,7 +7,7 @@ import type {
 import { commandRunFailure } from './command-run-errors.js';
 import { executeCommand } from './command-run-executor.js';
 import { interruptedBeforeSpawnResult, runCommandWithTimeout } from './command-run-interruption.js';
-import { allowedCommand } from './command-run-policy.js';
+import { allowedCommand, defaultCommandRunPolicyProfile } from './command-run-policy.js';
 import {
     type CommandRunInput,
     type CommandRunOutput,
@@ -59,6 +59,7 @@ async function resolveOptions(options: CommandRunToolOptions): Promise<ResolvedC
         workspaceRoot: await realpath(options.workspaceRoot),
         requestPermission: options.requestPermission,
         executor: options.executor ?? executeCommand,
+        policyProfile: options.policyProfile ?? defaultCommandRunPolicyProfile,
         timeoutMs: options.timeoutMs ?? defaultCommandRunTimeoutMs,
         maxOutputBytes: options.maxOutputBytes ?? 64 * 1024,
         maxModelOutputChars: options.maxModelOutputChars ?? 8 * 1024,
@@ -71,7 +72,7 @@ async function runCommandTool(
     input: CommandRunInput,
     context: ToolExecutionContext,
 ): Promise<CommandRunOutput> {
-    const command = allowedCommand(input.command, input.args);
+    const command = allowedCommand(input.command, input.args, options.policyProfile);
     const release = limiter.acquire();
     const started = commandEvent(
         'command.started',
