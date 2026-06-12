@@ -83,11 +83,7 @@ describe('PermissionGate', () => {
             emit: (event) => {
                 events.push(event);
             },
-            now: sequenceNow([
-                '2026-06-11T00:00:00.000Z',
-                '2026-06-11T00:00:01.000Z',
-                '2026-06-11T00:00:02.000Z',
-            ]),
+            now: sequenceNow(['2026-06-11T00:00:00.000Z', '2026-06-11T00:00:01.000Z', '2026-06-11T00:00:02.000Z']),
         });
 
         const pending = requestApproval(gate, 'permission_duplicate');
@@ -118,11 +114,7 @@ describe('PermissionGate', () => {
         const gate = new PermissionGate({
             resolveDecision: requiresApproval,
             emit: () => {},
-            now: sequenceNow([
-                '2026-06-11T00:00:00.000Z',
-                '2026-06-11T00:00:01.000Z',
-                '2026-06-11T00:00:02.000Z',
-            ]),
+            now: sequenceNow(['2026-06-11T00:00:00.000Z', '2026-06-11T00:00:01.000Z', '2026-06-11T00:00:02.000Z']),
         });
 
         const pending = requestApproval(gate, 'permission_denied_resume').catch((error: unknown) => error);

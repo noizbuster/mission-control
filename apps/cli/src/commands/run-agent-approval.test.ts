@@ -97,7 +97,9 @@ describe('runAgent approval hardening', () => {
         expect(output).toContain('Denied file.patch');
         expect(output).toContain('Run blocked: approval_denied: interrupted by user');
         expect(events.map((event) => event.type)).not.toContain('file.diff.applied');
-        await expect(readFile(join(workspaceRoot, '.mission-control-cli-blocked-interrupt.txt'), 'utf8')).rejects.toThrow();
+        await expect(
+            readFile(join(workspaceRoot, '.mission-control-cli-blocked-interrupt.txt'), 'utf8'),
+        ).rejects.toThrow();
     });
 
     async function tempRoot(prefix: string): Promise<string> {

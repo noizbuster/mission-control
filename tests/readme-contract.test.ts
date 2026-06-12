@@ -56,7 +56,7 @@ describe('README stage-01 contract', () => {
             'behavior/action graph execution',
             'Next Stage TODO',
             'cancellation propagation',
-            'distribution packaging',
+            'release provenance',
         ] as const;
 
         for (const term of requiredTerms) {
@@ -169,7 +169,8 @@ describe('README stage-01 contract', () => {
             'shell/process concurrency defaults to 1',
             'desktop Tauri write commands call the core desktop session command service through the Rust shell bridge and return real `eventsWritten` counts',
             'The desktop shell never mutates files directly',
-            'Sidecar protocol v1 negotiates task.run only',
+            'Sidecar protocol v1 negotiates `task.run` by default',
+            'Feature-flagged sidecar protocol v2 negotiates `task.cancel`',
             'file.patch and command.run stay on the TypeScript core path by default',
         ] as const;
 

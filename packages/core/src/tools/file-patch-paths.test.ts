@@ -86,7 +86,9 @@ describe('file.patch workspace path boundaries', () => {
         expect(referenceRepo.result.error?.message).toContain('workspace_denied');
         expect(generated.result.error?.message).toContain('workspace_denied');
         expect(permissionRequests).toHaveLength(0);
-        await expect(readFile(join(workspaceRoot, 'temp', 'ref-repos', 'opencode', 'AGENTS.md'), 'utf8')).rejects.toThrow();
+        await expect(
+            readFile(join(workspaceRoot, 'temp', 'ref-repos', 'opencode', 'AGENTS.md'), 'utf8'),
+        ).rejects.toThrow();
         expect(await readText(workspaceRoot, 'dist/bundle.txt')).toBe('before\n');
     });
 

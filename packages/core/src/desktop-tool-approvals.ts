@@ -11,8 +11,8 @@ import type { ApprovalTerminalState } from './approval-gate.js';
 import { withDesktopApprovalSettlementLock } from './desktop-approval-settlement-lock.js';
 import {
     approvalEvent,
-    approvalIdFromEvent,
     approvalIdForToolCall,
+    approvalIdFromEvent,
     decidedRecord,
     hasTerminalRunAfterApproval,
     latestApprovalRecord,

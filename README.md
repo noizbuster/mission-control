@@ -23,7 +23,7 @@ Package responsibilities:
 - `@mission-control/config`: shared configuration constants.
 - `@mission-control/cli`: Ink/plain/JSON command-line surface for `mctrl`.
 - `@mission-control/desktop`: Tauri + React desktop surface for `mission-control`.
-- `native/sidecar`: Rust JSON Lines sidecar with protocol v1 handshake and `task.run` capability negotiation.
+- `native/sidecar`: Rust JSON Lines sidecar with protocol v1 `task.run` negotiation and opt-in protocol v2 compatibility tests.
 
 Confirmed names:
 
@@ -167,7 +167,8 @@ Desktop scope:
 
 Sidecar status:
 
-- Sidecar protocol v1 negotiates task.run only.
+- Sidecar protocol v1 negotiates `task.run` by default.
+- Feature-flagged sidecar protocol v2 negotiates `task.cancel` plus `task_failed` and `task_cancelled` wire responses only when core enables `enableSidecarProtocolV2` and the sidecar runs with `MCTRL_SIDECAR_V2=1`.
 - The runtime emits `native.status` and `native.warning` to distinguish `unknown`, `native`, `unavailable`, and `mock` sidecar states.
 - file.patch and command.run stay on the TypeScript core path by default.
 
@@ -254,7 +255,7 @@ The CLI should try the configured native sidecar when `--native` is used. If the
 
 Native sidecar calls use a 5000ms timeout. On timeout, the runtime emits `native.warning`, stops the sidecar process group when possible, and falls back to the mock sidecar result.
 
-The native sidecar speaks JSON Lines protocol v1. Core sends a `handshake` command before task work, and the sidecar responds with `handshake_completed`, protocol version, and capabilities. The current sidecar capability list is `task.run`; it is not the default executor for `file.patch` or `command.run`.
+The native sidecar speaks JSON Lines protocol v1 by default. Core sends a `handshake` command before task work, and the sidecar responds with `handshake_completed`, protocol version, and capabilities. The default sidecar capability list is `task.run`; protocol v2 is opt-in and limited to `task.cancel`, `task_failed`, and `task_cancelled` wire compatibility. It is not the default executor for `file.patch` or `command.run`.
 
 ## Runtime Extension
 
@@ -303,7 +304,8 @@ Memory/event model:
 Native sidecar future role:
 
 - The Rust sidecar remains a JSON Lines execution boundary.
-- Protocol v1 negotiates the `task.run` capability.
+- Protocol v1 negotiates the `task.run` capability by default.
+- Protocol v2 is feature-flagged and currently limited to `task.cancel`, `task_failed`, and `task_cancelled` compatibility.
 - Future scheduler, executor, memory, and tool-running work can attach behind that boundary after feature flags and tests.
 - Default `file.patch` and `command.run` execution is intentionally not routed through the sidecar.
 
@@ -358,6 +360,6 @@ ABG runtime TODOs:
 
 - Add cancellation propagation and resume semantics to the runtime.
 - Add SQLite indexing for JSONL session logs.
-- Add sidecar feature flags for long-running native command/file execution after parity tests.
-- Add distribution packaging for npm, GitHub Releases, and Tauri artifacts.
+- Expand feature-flagged sidecar v2 beyond task status/failure/cancellation only after command/file parity tests.
+- Add release provenance, cross-compile coverage, and signing/notarization for npm, GitHub Releases, and Tauri artifacts.
 - Keep CI free of live provider credentials; live provider smoke tests stay opt-in.

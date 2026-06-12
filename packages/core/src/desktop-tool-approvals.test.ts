@@ -1,8 +1,8 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type { AgentEvent, ApprovalRecord, ToolCall } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { settleDesktopApproval, type DesktopApprovalStore } from './desktop-tool-approvals.js';
 import { fixedNow } from './desktop-session-commands-test-support.js';
+import { type DesktopApprovalStore, settleDesktopApproval } from './desktop-tool-approvals.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -60,7 +60,11 @@ describe('desktop tool approvals', () => {
     it('refuses approval decisions after run failure', async () => {
         const workspaceRoot = await mkdtemp(join(tmpdir(), 'mctrl-desktop-approval-failed-workspace-'));
         const sessionId = 'session_desktop_approval_failed';
-        const toolCall = filePatchToolCall('call_after_failure', '.mission-control-after-failure.txt', 'must not write');
+        const toolCall = filePatchToolCall(
+            'call_after_failure',
+            '.mission-control-after-failure.txt',
+            'must not write',
+        );
         const store = createMemoryApprovalStore([
             providerToolCallEvent(sessionId, toolCall),
             approvalRequestedEvent(sessionId, toolCall),

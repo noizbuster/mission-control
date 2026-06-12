@@ -1,8 +1,8 @@
-import { constants } from 'node:fs';
-import { open } from 'node:fs/promises';
 import { filePatchFailure } from './file-patch-errors.js';
 import type { PatchTarget } from './file-patch-paths.js';
 import { isBinarySample } from './read-tools-paths.js';
+import { constants } from 'node:fs';
+import { open } from 'node:fs/promises';
 
 const binarySampleBytes = 4096;
 

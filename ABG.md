@@ -2254,6 +2254,7 @@ Implemented runtime surfaces:
 - Core desktop command services handle prompt, queue follow-up, steer, interrupt, resume, and approval decisions; Tauri write commands call that service through the Rust shell bridge, reuse persisted session provider selections, and return real `eventsWritten` counts.
 - Desktop Tauri credential commands save and list API-key credentials through the shared auth file used by the CLI.
 - Sidecar protocol v1 uses a Rust handshake with `task.run` capability negotiation and native/mock/unavailable status events.
+- Sidecar protocol v2 is feature-flagged and currently limited to `task.cancel`, `task_failed`, and `task_cancelled` wire compatibility.
 
 Still deferred:
 

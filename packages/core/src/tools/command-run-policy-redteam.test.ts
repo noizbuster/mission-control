@@ -31,9 +31,12 @@ describe('command.run policy red-team gate', () => {
 
     it('rejects shell metacharacters before approval or spawn', async () => {
         const candidates: readonly CommandCandidate[] = [
-            { command: 'node', args: ['--eval', "console.log('mission-control command.run harness ok'); cat secret.txt"] },
+            {
+                command: 'node',
+                args: ['--eval', "console.log('mission-control command.run harness ok'); cat secret.txt"],
+            },
             { command: 'node', args: [...allowedHarnessArgs, ';', 'cat', 'secret.txt'] },
-            { command: 'sh', args: ['-c', "node --eval \"console.log('mission-control command.run harness ok')\""] },
+            { command: 'sh', args: ['-c', 'node --eval "console.log(\'mission-control command.run harness ok\')"'] },
         ];
 
         for (const candidate of candidates) {
@@ -47,7 +50,10 @@ describe('command.run policy red-team gate', () => {
     it('rejects cwd escape probes before approval or spawn', async () => {
         const candidates: readonly CommandCandidate[] = [
             { command: 'node', args: ['--eval', "process.chdir('/tmp'); console.log(process.cwd())"] },
-            { command: 'node', args: ['--eval', "console.log(require('node:fs').readFileSync('../secret.txt', 'utf8'))"] },
+            {
+                command: 'node',
+                args: ['--eval', "console.log(require('node:fs').readFileSync('../secret.txt', 'utf8'))"],
+            },
         ];
 
         for (const candidate of candidates) {
