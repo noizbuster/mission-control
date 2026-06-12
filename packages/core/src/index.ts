@@ -44,6 +44,22 @@ export type {
 } from './memory/jsonl-session-event-store.js';
 export { JsonlSessionEventStore, JsonlSessionEventStoreError } from './memory/jsonl-session-event-store.js';
 export type { MemoryStore } from './memory/memory-store.js';
+export {
+    createFileSessionIndexStore,
+    rebuildSessionIndexFromJsonl,
+} from './memory/session-index-file-store.js';
+export { deriveSessionIndexRecords } from './memory/session-index-projection.js';
+export type {
+    SessionIndexApprovalRecord,
+    SessionIndexDiagnostic,
+    SessionIndexProviderFailureRecord,
+    SessionIndexRebuildResult,
+    SessionIndexRecord,
+    SessionIndexRunRecord,
+    SessionIndexSessionRecord,
+    SessionIndexStore,
+    SessionIndexToolRecord,
+} from './memory/session-index-types.js';
 export { createAllowPermissionDecision, createDefaultPermissionDecision } from './permissions.js';
 export {
     appendProviderToolResultMessages,
