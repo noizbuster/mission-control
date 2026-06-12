@@ -78,6 +78,12 @@ export class SessionRunCoordinator {
         return this.startDrain('resume');
     }
 
+    status(): RunCoordinatorResult {
+        return this.activeRun === undefined
+            ? { status: 'idle', turns: 0 }
+            : { status: 'running', runId: this.activeRun.runId, turns: 0 };
+    }
+
     async interrupt(reason = 'run interrupted'): Promise<RunCoordinatorResult> {
         const active = this.activeRun;
         const commandRecorded = this.appendRunEvent(

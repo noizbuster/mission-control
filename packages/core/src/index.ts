@@ -143,6 +143,14 @@ export {
     SessionRunCoordinator,
     type SessionRunCoordinatorOptions,
 } from './runtime/run-coordinator.js';
+export {
+    SessionRunOwner,
+    type SessionRunOwnerLeaseInput,
+    type SessionRunOwnerOptions,
+    type SessionRunOwnerReceipt,
+    SessionRunOwnerRegistry,
+    type SessionRunOwnerRegistryOptions,
+} from './runtime/run-owner.js';
 export type { AgentScheduler } from './runtime/scheduler.js';
 export { MockAgentScheduler } from './runtime/scheduler.js';
 export {

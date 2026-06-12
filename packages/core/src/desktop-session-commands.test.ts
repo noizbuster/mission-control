@@ -2,6 +2,11 @@ import { defaultModelProviderSelection } from '@mission-control/config';
 import { describe, expect, it } from 'vitest';
 import { createDesktopSessionCommandService } from './desktop-session-commands.js';
 import { commandRunCall, filePatchCall, fixedNow, readReplay } from './desktop-session-commands-test-support.js';
+import {
+    assertAttachesToExistingRunOwner,
+    assertDoesNotStartSecondActiveRun,
+    assertResumesBlockedWorkAfterReopeningStore,
+} from './desktop-session-run-owner-scenarios.test-support.js';
 import { createDeterministicProvider } from './providers/deterministic-provider.js';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -186,5 +191,17 @@ describe('desktop session command service', () => {
             await rm(dataDir, { recursive: true, force: true });
             await rm(workspaceRoot, { recursive: true, force: true });
         }
+    });
+
+    it('attaches to existing run owner', async () => {
+        await assertAttachesToExistingRunOwner();
+    });
+
+    it('does not start a second active run', async () => {
+        await assertDoesNotStartSecondActiveRun();
+    });
+
+    it('resumes blocked work after reopening the store', async () => {
+        await assertResumesBlockedWorkAfterReopeningStore();
     });
 });

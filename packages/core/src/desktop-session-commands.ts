@@ -14,12 +14,8 @@ import { createProviderAuthStoreCredentialResolver } from './providers/provider-
 import { createProviderAuthStore } from './providers/provider-auth-store.js';
 import { createProviderRouter } from './providers/provider-factory.js';
 import type { ProviderAdapter } from './providers/provider-turn-types.js';
-import {
-    type RunCoordinatorPromptInput,
-    type RunCoordinatorReadMessages,
-    type RunCoordinatorResult,
-    SessionRunCoordinator,
-} from './runtime/run-coordinator.js';
+import type { RunCoordinatorPromptInput, RunCoordinatorReadMessages } from './runtime/run-coordinator.js';
+import { type SessionRunOwner, type SessionRunOwnerReceipt, SessionRunOwnerRegistry } from './runtime/run-owner.js';
 import type { CommandExecutionRequest, CommandExecutionResult } from './tools/command-run.js';
 
 export type DesktopPromptCommandInput = {
@@ -37,7 +33,7 @@ export type DesktopRunCommandInput = {
 
 export type DesktopCommandReceipt = {
     readonly sessionId: string;
-    readonly status: 'queued' | 'blocked' | RunCoordinatorResult['status'];
+    readonly status: 'blocked' | SessionRunOwnerReceipt['status'];
     readonly eventsWritten: number;
 };
 
@@ -70,23 +66,32 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
     private readonly options: DesktopSessionCommandServiceOptions;
     private readonly now: () => string;
     private readonly provider: ProviderAdapter;
+    private readonly runOwners: SessionRunOwnerRegistry;
 
     constructor(options: DesktopSessionCommandServiceOptions) {
         this.options = options;
         this.now = options.now ?? (() => new Date().toISOString());
         this.provider = options.provider ?? createDefaultDesktopProvider();
+        this.runOwners = new SessionRunOwnerRegistry({
+            ...(options.dataDir !== undefined ? { dataDir: options.dataDir } : {}),
+            provider: this.provider,
+            modelProviderSelection: this.selection(),
+            now: this.now,
+            ...(options.createEventId !== undefined ? { createEventId: options.createEventId } : {}),
+            resolveModelProviderSelection: async (store, sessionId, fallback) =>
+                latestModelProviderSelection(await store.getEvents(sessionId)) ?? fallback,
+        });
     }
 
     async submitPrompt(input: DesktopPromptCommandInput): Promise<DesktopCommandReceipt> {
-        return this.withStore(input.sessionId, async (store) => {
-            await ensureSessionStarted(store, input.sessionId, this.selection(input), this.now);
-            const coordinator = this.coordinator(store, input.sessionId, this.selection(input));
-            await coordinator.steer(promptInput(input));
-            const result = await coordinator.run();
+        const selection = this.selection(input);
+        return this.withOwner(input.sessionId, { modelProviderSelection: selection }, async (owner, store) => {
+            await ensureSessionStarted(store, input.sessionId, selection, this.now);
+            const result = await owner.submit(promptInput(input));
             await appendPendingToolApprovals({
                 store,
                 sessionId: input.sessionId,
-                modelProviderSelection: this.selection(input),
+                modelProviderSelection: selection,
                 now: this.now,
             });
             return result.status;
@@ -94,23 +99,22 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
     }
 
     async queueFollowUp(input: DesktopPromptCommandInput): Promise<DesktopCommandReceipt> {
-        return this.withStore(input.sessionId, async (store) => {
-            await ensureSessionStarted(store, input.sessionId, this.selection(input), this.now);
-            await this.coordinator(store, input.sessionId, this.selection(input)).queue(promptInput(input));
-            return 'queued';
+        const selection = this.selection(input);
+        return this.withOwner(input.sessionId, { modelProviderSelection: selection }, async (owner, store) => {
+            await ensureSessionStarted(store, input.sessionId, selection, this.now);
+            return (await owner.queue(promptInput(input))).status;
         });
     }
 
     async steerRun(input: DesktopPromptCommandInput): Promise<DesktopCommandReceipt> {
-        return this.withStore(input.sessionId, async (store) => {
-            await ensureSessionStarted(store, input.sessionId, this.selection(input), this.now);
-            const coordinator = this.coordinator(store, input.sessionId, this.selection(input));
-            await coordinator.steer(promptInput(input));
-            const result = await coordinator.wake();
+        const selection = this.selection(input);
+        return this.withOwner(input.sessionId, { modelProviderSelection: selection }, async (owner, store) => {
+            await ensureSessionStarted(store, input.sessionId, selection, this.now);
+            const result = await owner.steer(promptInput(input));
             await appendPendingToolApprovals({
                 store,
                 sessionId: input.sessionId,
-                modelProviderSelection: this.selection(input),
+                modelProviderSelection: selection,
                 now: this.now,
             });
             return result.status;
@@ -118,14 +122,13 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
     }
 
     async resumeRun(input: DesktopRunCommandInput): Promise<DesktopCommandReceipt> {
-        return this.withStore(input.sessionId, async (store) => {
-            const selection = await this.selectionForSession(store, input.sessionId);
-            await ensureSessionStarted(store, input.sessionId, selection, this.now);
-            const result = await this.coordinator(store, input.sessionId, selection).resume();
+        return this.withOwner(input.sessionId, {}, async (owner, store) => {
+            await ensureSessionStarted(store, input.sessionId, owner.modelProviderSelection, this.now);
+            const result = await owner.resume();
             await appendPendingToolApprovals({
                 store,
                 sessionId: input.sessionId,
-                modelProviderSelection: selection,
+                modelProviderSelection: owner.modelProviderSelection,
                 now: this.now,
             });
             return result.status;
@@ -133,97 +136,86 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
     }
 
     async interruptRun(input: DesktopRunCommandInput): Promise<DesktopCommandReceipt> {
-        return this.withStore(input.sessionId, async (store) => {
-            const selection = await this.selectionForSession(store, input.sessionId);
-            await ensureSessionStarted(store, input.sessionId, selection, this.now);
-            const result = await this.coordinator(store, input.sessionId, selection).interrupt(input.reason);
+        return this.withOwner(input.sessionId, {}, async (owner, store) => {
+            await ensureSessionStarted(store, input.sessionId, owner.modelProviderSelection, this.now);
+            const result = await owner.interrupt(input.reason);
             return result.status;
         });
     }
 
     async decideApproval(input: DesktopApprovalDecisionInput): Promise<DesktopCommandReceipt> {
-        return this.withStore(input.sessionId, async (store) => {
-            const selection = await this.selectionForSession(store, input.sessionId);
-            const status = await settleDesktopApproval(input, {
-                store,
-                sessionId: input.sessionId,
-                workspaceRoot: this.options.workspaceRoot,
-                modelProviderSelection: selection,
-                now: this.now,
-                ...(this.options.commandExecutor !== undefined
-                    ? { commandExecutor: this.options.commandExecutor }
-                    : {}),
-            });
-            if (status !== 'completed') {
-                return status;
-            }
-            if (hasPendingDesktopApprovals(await store.getEvents(input.sessionId), input.sessionId)) {
-                return status;
-            }
-            const result = await this.coordinator(store, input.sessionId, selection, {
-                readMessages: async () =>
-                    projectDesktopApprovalContinuationMessages(await store.getEvents(input.sessionId), input.sessionId),
-            }).resume();
-            await appendPendingToolApprovals({
-                store,
-                sessionId: input.sessionId,
-                modelProviderSelection: selection,
-                now: this.now,
-            });
-            return result.status;
-        });
-    }
-
-    private coordinator(
-        store: JsonlSessionEventStore,
-        sessionId: string,
-        modelProviderSelection: ModelProviderSelection,
-        options: { readonly readMessages?: RunCoordinatorReadMessages } = {},
-    ): SessionRunCoordinator {
-        return new SessionRunCoordinator({
-            sessionId,
-            store,
-            provider: this.provider,
-            modelProviderSelection,
-            now: this.now,
-            ...(options.readMessages !== undefined ? { readMessages: options.readMessages } : {}),
-        });
+        let activeStore: JsonlSessionEventStore | undefined;
+        return this.withOwner(
+            input.sessionId,
+            {
+                readMessages: async () => {
+                    if (activeStore === undefined) {
+                        throw new TypeError('approval continuation requested before the session store was attached');
+                    }
+                    return projectDesktopApprovalContinuationMessages(
+                        await activeStore.getEvents(input.sessionId),
+                        input.sessionId,
+                    );
+                },
+            },
+            async (owner, store) => {
+                activeStore = store;
+                const selection = owner.modelProviderSelection;
+                const status = await settleDesktopApproval(input, {
+                    store,
+                    sessionId: input.sessionId,
+                    workspaceRoot: this.options.workspaceRoot,
+                    modelProviderSelection: selection,
+                    now: this.now,
+                    ...(this.options.commandExecutor !== undefined
+                        ? { commandExecutor: this.options.commandExecutor }
+                        : {}),
+                });
+                if (status !== 'completed') {
+                    return status;
+                }
+                if (hasPendingDesktopApprovals(await store.getEvents(input.sessionId), input.sessionId)) {
+                    return status;
+                }
+                const result = await owner.resume();
+                await appendPendingToolApprovals({
+                    store,
+                    sessionId: input.sessionId,
+                    modelProviderSelection: selection,
+                    now: this.now,
+                });
+                return result.status;
+            },
+        );
     }
 
     private selection(input?: { readonly modelProviderSelection?: ModelProviderSelection }): ModelProviderSelection {
         return input?.modelProviderSelection ?? this.options.modelProviderSelection ?? defaultModelProviderSelection;
     }
 
-    private async selectionForSession(
-        store: JsonlSessionEventStore,
+    private async withOwner(
         sessionId: string,
-        input?: { readonly modelProviderSelection?: ModelProviderSelection },
-    ): Promise<ModelProviderSelection> {
-        if (input?.modelProviderSelection !== undefined) {
-            return input.modelProviderSelection;
-        }
-        const events = await store.getEvents(sessionId);
-        return latestModelProviderSelection(events) ?? this.selection();
-    }
-
-    private async withStore(
-        sessionId: string,
-        action: (store: JsonlSessionEventStore) => Promise<DesktopCommandReceipt['status']>,
+        options: {
+            readonly modelProviderSelection?: ModelProviderSelection;
+            readonly readMessages?: RunCoordinatorReadMessages;
+        },
+        action: (owner: SessionRunOwner, store: JsonlSessionEventStore) => Promise<DesktopCommandReceipt['status']>,
     ): Promise<DesktopCommandReceipt> {
-        const store = await JsonlSessionEventStore.open({
-            sessionId,
-            ...(this.options.dataDir !== undefined ? { dataDir: this.options.dataDir } : {}),
-            now: this.now,
-            ...(this.options.createEventId !== undefined ? { createEventId: this.options.createEventId } : {}),
-        });
-        try {
-            const before = (await store.getEvents(sessionId)).length;
-            const status = await action(store);
-            const after = (await store.getEvents(sessionId)).length;
-            return { sessionId, status, eventsWritten: after - before };
-        } finally {
-            await store.close();
-        }
+        return this.runOwners.withOwner(
+            {
+                sessionId,
+                ...(options.modelProviderSelection !== undefined
+                    ? { modelProviderSelection: options.modelProviderSelection }
+                    : {}),
+                ...(options.readMessages !== undefined ? { readMessages: options.readMessages } : {}),
+            },
+            async (owner, store) => {
+                const before = (await store.getEvents(sessionId)).length;
+                const status = await action(owner, store);
+                const after = (await store.getEvents(sessionId)).length;
+                return { sessionId, status, eventsWritten: after - before };
+            },
+        );
     }
 }
 
