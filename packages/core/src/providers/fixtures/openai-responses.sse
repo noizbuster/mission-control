@@ -1,0 +1,15 @@
+data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_fixture_1"}}
+
+data: {"type":"response.output_text.delta","sequence_number":1,"response_id":"resp_fixture_1","delta":"need README"}
+
+data: {"type":"response.output_item.added","sequence_number":2,"response_id":"resp_fixture_1","output_index":0,"item":{"type":"function_call","id":"fc_fixture_1","call_id":"call_read_fixture","name":"repo_read","arguments":""}}
+
+data: {"type":"response.function_call_arguments.delta","sequence_number":3,"response_id":"resp_fixture_1","item_id":"fc_fixture_1","output_index":0,"delta":"{\"path\""}
+
+data: {"type":"response.function_call_arguments.done","sequence_number":4,"response_id":"resp_fixture_1","item_id":"fc_fixture_1","output_index":0,"arguments":"{\"path\":\"README.md\"}","name":"repo_read"}
+
+data: {"type":"response.output_item.done","sequence_number":5,"response_id":"resp_fixture_1","output_index":0,"item":{"type":"function_call","id":"fc_fixture_1","call_id":"call_read_fixture","name":"repo_read","arguments":"{\"path\":\"README.md\"}"}}
+
+data: {"type":"response.completed","sequence_number":6,"response":{"id":"resp_fixture_1","status":"completed","output":[{"id":"msg_fixture_1","type":"message","role":"assistant","content":[{"type":"output_text","text":"need README"}]}],"usage":{"input_tokens":7,"output_tokens":4,"total_tokens":11}}}
+
+data: [DONE]

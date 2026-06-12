@@ -2,31 +2,31 @@ import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
 import type { ProviderTurnRequest } from '../provider-turn-types.js';
-import { createNodeOpenAIResponsesTransport } from './openai-responses-http-transport.js';
-import { createOpenAIResponsesProvider } from './openai-responses-provider.js';
+import { createNodeOpenAICompatibleTransport } from './openai-compatible-http-transport.js';
+import { createOpenAICompatibleProvider } from './openai-compatible-provider.js';
 
-const { MCTRL_OPENAI_LIVE, MCTRL_OPENAI_LIVE_MODEL, OPENAI_API_KEY } = process.env;
-const liveEnabled = MCTRL_OPENAI_LIVE === '1' && OPENAI_API_KEY !== undefined;
-const requiredEnvMessage = 'requires MCTRL_OPENAI_LIVE=1 and OPENAI_API_KEY';
+const { MCTRL_OPENAI_COMPATIBLE_LIVE, MCTRL_OPENAI_COMPATIBLE_LIVE_MODEL, OPENROUTER_API_KEY } = process.env;
+const liveEnabled = MCTRL_OPENAI_COMPATIBLE_LIVE === '1' && OPENROUTER_API_KEY !== undefined;
+const requiredEnvMessage = 'requires MCTRL_OPENAI_COMPATIBLE_LIVE=1 and OPENROUTER_API_KEY';
 
-describe.skipIf(!liveEnabled)(`OpenAI Responses live smoke (${requiredEnvMessage})`, () => {
+describe.skipIf(!liveEnabled)(`OpenAI-compatible OpenRouter live smoke (${requiredEnvMessage})`, () => {
     it(`streams a live response only when explicitly enabled (${requiredEnvMessage})`, async () => {
         // Given
-        const apiKey = OPENAI_API_KEY;
+        const apiKey = OPENROUTER_API_KEY;
         if (apiKey === undefined) {
-            throw new TypeError(`OpenAI live smoke ${requiredEnvMessage}`);
+            throw new TypeError(`OpenAI-compatible live smoke ${requiredEnvMessage}`);
         }
-        const provider = createOpenAIResponsesProvider({
+        const provider = createOpenAICompatibleProvider({
             credentialResolver: createStaticProviderCredentialResolver([
                 {
-                    providerID: 'openai',
+                    providerID: 'openrouter',
                     type: 'apiKey',
                     apiKey,
-                    createdAt: '2026-06-09T10:00:00.000Z',
-                    updatedAt: '2026-06-09T10:00:00.000Z',
+                    createdAt: '2026-06-13T00:00:00.000Z',
+                    updatedAt: '2026-06-13T00:00:00.000Z',
                 },
             ]),
-            transport: createNodeOpenAIResponsesTransport(),
+            transport: createNodeOpenAICompatibleTransport(),
         });
 
         // When
@@ -46,11 +46,11 @@ describe.skipIf(!liveEnabled)(`OpenAI Responses live smoke (${requiredEnvMessage
 
 function turnRequest(): ProviderTurnRequest {
     return {
-        requestId: 'request_openai_live',
-        sessionId: 'session_openai_live',
-        turnId: 'turn_openai_live',
-        providerID: 'openai',
-        modelID: MCTRL_OPENAI_LIVE_MODEL ?? 'gpt-5.5',
+        requestId: 'request_openrouter_live',
+        sessionId: 'session_openrouter_live',
+        turnId: 'turn_openrouter_live',
+        providerID: 'openrouter',
+        modelID: MCTRL_OPENAI_COMPATIBLE_LIVE_MODEL ?? 'anthropic/claude-3.5-haiku',
         messages: [{ role: 'user', content: 'Reply with exactly: mission-control live smoke' }],
     };
 }
