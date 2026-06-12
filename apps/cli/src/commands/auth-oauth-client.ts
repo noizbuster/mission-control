@@ -150,7 +150,8 @@ async function loginOpenAIBrowser(
 }
 
 function resolveOpenAIIssuer(): string {
-    return (process.env['MISSION_CONTROL_OPENAI_OAUTH_ISSUER'] ?? 'https://auth.openai.com').replace(/\/+$/, '');
+    const { MISSION_CONTROL_OPENAI_OAUTH_ISSUER } = process.env;
+    return (MISSION_CONTROL_OPENAI_OAUTH_ISSUER ?? 'https://auth.openai.com').replace(/\/+$/, '');
 }
 
 async function postJson(url: string, body: Readonly<Record<string, string>>): Promise<unknown> {

@@ -52,8 +52,8 @@ describe('runAgent interactive command interruption', () => {
                     toolCallId: 'command_call',
                     toolName: 'command.run',
                     argumentsJson: JSON.stringify({
-                        command: 'pnpm',
-                        args: ['exec', 'vitest', 'run', 'packages/core/src/tools/command-run.fixture.test.ts'],
+                        command: 'node',
+                        args: ['--eval', "console.log('mission-control command.run harness ok')"],
                     }),
                 },
                 { kind: 'response_completed', content: 'command started' },

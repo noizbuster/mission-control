@@ -1,6 +1,7 @@
 import { modelProviderCatalog } from '@mission-control/config';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
+import { formatProviderCapabilityStatus } from './model-capability.js';
 
 export type ModelsCommandOptions = {
     readonly store?: ProviderAuthStore;
@@ -14,7 +15,7 @@ export async function runModelsCommand(args: CliArgs, options: ModelsCommandOpti
     const lines = providers.flatMap((provider) =>
         provider.models.map((model) => {
             const status = authenticatedProviderIDs.has(provider.id) ? 'authenticated' : 'missing credential';
-            return `${provider.id}/${model.id} ${status}`;
+            return `${provider.id}/${model.id} ${status} ${formatProviderCapabilityStatus(provider)}`;
         }),
     );
     return ['Models', ...lines, ''].join('\n');

@@ -5,7 +5,7 @@ import {
     type ProviderAdapter,
     type ProviderTurnRequest,
 } from '@mission-control/core';
-import { type AgentEvent, AgentEventEnvelopeSchema, type ProviderStreamChunk } from '@mission-control/protocol';
+import { type AgentEvent, type ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
@@ -14,7 +14,7 @@ import {
     createEmptyAuthStore,
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
-import { runSessionCommand } from './session.js';
+import { replayedMessages, replayedTypes } from './session-replay-test-support.js';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -295,34 +295,6 @@ describe('runAgent interactive coding agent UX', () => {
     }
 });
 
-async function replayedMessages(sessionId: string): Promise<readonly string[]> {
-    return replayedEvents(sessionId).then((events) =>
-        events.map((event) => event.message).filter((message): message is string => message !== undefined),
-    );
-}
-
-async function replayedTypes(sessionId: string): Promise<readonly string[]> {
-    return replayedEvents(sessionId).then((events) => events.map((event) => event.type));
-}
-
-async function replayedEvents(sessionId: string): Promise<readonly AgentEvent[]> {
-    const output = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
-    return output
-        .split(/\r?\n/)
-        .filter((line) => line.trim().length > 0)
-        .map(
-            (line) =>
-                AgentEventEnvelopeSchema.parse({
-                    eventId: 'ignored',
-                    sequence: 0,
-                    createdAt: new Date(0).toISOString(),
-                    sessionId,
-                    durability: 'durable',
-                    event: JSON.parse(line),
-                }).event,
-        );
-}
-
 function addFilePatch(path: string, content: string): string {
     return [
         `diff --git a/${path} b/${path}`,
@@ -372,8 +344,8 @@ function providerFromApprovedToolRequests(requests: ProviderTurnRequest[]): Prov
                         toolCallId: 'command_call',
                         toolName: 'command.run',
                         argumentsJson: JSON.stringify({
-                            command: 'pnpm',
-                            args: ['exec', 'vitest', 'run', 'packages/core/src/tools/command-run.fixture.test.ts'],
+                            command: 'node',
+                            args: ['--eval', "console.log('mission-control command.run harness ok')"],
                         }),
                     },
                 };

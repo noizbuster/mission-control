@@ -1,3 +1,4 @@
+import type { ProviderAdapter, ProviderTurnRequest } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { parseArgs } from '../args.js';
@@ -28,6 +29,7 @@ describe('runAgent /model chat command', () => {
             onRuntimeEvent: (event) => {
                 events.push(event);
             },
+            createProvider: () => createEchoProvider(),
         });
 
         expect(output).toContain('provider: local');
@@ -100,7 +102,10 @@ describe('runAgent /model chat command', () => {
             },
         });
 
-        expect(pickerChoices).toEqual([['local/local-echo'], expect.arrayContaining(['local/local-echo#fast'])]);
+        expect(pickerChoices).toEqual([
+            ['local/local-echo [executable]'],
+            expect.arrayContaining(['local/local-echo#fast [executable]']),
+        ]);
         expect(output).toContain('provider: local');
         expect(output).toContain('model: local-echo');
         expect(output).toContain('variant: fast');
@@ -125,6 +130,7 @@ describe('runAgent /model chat command', () => {
                 pickerChoices = choices.map((choice) => choice.label);
                 return choices[0]?.selection;
             },
+            createProvider: () => createEchoProvider(),
         });
 
         expect(pickerChoices.length).toBeGreaterThan(0);
@@ -238,4 +244,27 @@ function sliceModelListOutput(output: string, marker: string): string {
     }
     const nextPromptIndex = output.indexOf('> ', startIndex);
     return output.slice(startIndex, nextPromptIndex === -1 ? undefined : nextPromptIndex);
+}
+
+function createEchoProvider(): ProviderAdapter {
+    return {
+        async *streamTurn(request) {
+            const content = `received prompt: ${lastUserPrompt(request)}`;
+            yield {
+                kind: 'response_completed',
+                requestId: request.requestId,
+                sequence: 1,
+                message: {
+                    messageId: `message_${request.turnId}`,
+                    role: 'assistant',
+                    content,
+                },
+                finishReason: 'stop',
+            };
+        },
+    };
+}
+
+function lastUserPrompt(request: ProviderTurnRequest): string {
+    return [...request.messages].reverse().find((message) => message.role === 'user')?.content ?? '';
 }

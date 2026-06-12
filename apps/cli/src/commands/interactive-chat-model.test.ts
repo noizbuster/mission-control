@@ -54,16 +54,11 @@ describe('interactive chat model command', () => {
     });
 
     it('parses provider slash model ids at the first slash', () => {
-        expect(
-            resolveModelCommand(
-                'cloudflare-ai-gateway/workers-ai/@cf/ai4bharat/indictrans2-en-indic-1B',
-                currentSelection,
-            ),
-        ).toEqual({
+        expect(resolveModelCommand('openrouter/anthropic/claude-3-haiku', currentSelection)).toEqual({
             type: 'select',
             selection: {
-                providerID: 'cloudflare-ai-gateway',
-                modelID: 'workers-ai/@cf/ai4bharat/indictrans2-en-indic-1B',
+                providerID: 'openrouter',
+                modelID: 'anthropic/claude-3-haiku',
             },
         });
     });
@@ -79,7 +74,7 @@ describe('interactive chat model command', () => {
         }
         expect(list.totalCount).toBeGreaterThan(20);
         expect(list.visibleChoices).toHaveLength(20);
-        expect(list.visibleChoices[0]?.label).toBe('local/local-echo');
+        expect(list.visibleChoices[0]?.label).toBe('local/local-echo [executable]');
         expect(JSON.stringify(list)).not.toContain('apiKey');
     });
 
@@ -99,6 +94,15 @@ describe('interactive chat model command', () => {
             message: 'Variant missing is not available for model openai/gpt-4o-mini',
             currentSelection,
         });
+        expect(
+            resolveModelCommand('perplexity/sonar', currentSelection, {
+                choices: createModelChoices({ providerIDs: ['perplexity'] }),
+            }),
+        ).toEqual({
+            type: 'invalid',
+            message: 'Provider perplexity is model-discovery-only and cannot run coding agent prompts',
+            currentSelection,
+        });
     });
 
     it('formats model selections', () => {
@@ -108,8 +112,9 @@ describe('interactive chat model command', () => {
         expect(formatModelSelection({ ...currentSelection, variantID: 'fast' })).toBe('local/local-echo#fast');
         expect(choices[0]).toMatchObject({
             id: 'local/local-echo',
-            label: 'local/local-echo',
+            label: 'local/local-echo [executable]',
             selection: currentSelection,
+            availableForCoding: true,
         });
     });
 
@@ -118,8 +123,19 @@ describe('interactive chat model command', () => {
 
         expect(variants[0]).toMatchObject({
             id: 'local/local-echo#default',
-            label: 'local/local-echo#default',
+            label: 'local/local-echo#default [executable]',
             selection: { ...currentSelection, variantID: 'default' },
+        });
+    });
+
+    it('labels discovery-only choices as unavailable for coding', () => {
+        const choices = createModelChoices({ providerIDs: ['perplexity'] });
+
+        expect(choices[0]).toMatchObject({
+            id: 'perplexity/sonar',
+            label: 'perplexity/sonar [model-discovery-only: cannot run coding agent prompts]',
+            availableForCoding: false,
+            unavailableReason: 'Provider perplexity is model-discovery-only and cannot run coding agent prompts',
         });
     });
 });

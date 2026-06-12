@@ -5,7 +5,7 @@ import type {
     ProviderAdapterContext,
     ProviderTurnRequest,
 } from '@mission-control/core';
-import { type AgentEvent, AgentEventEnvelopeSchema, type ProviderStreamChunk } from '@mission-control/protocol';
+import { type AgentEvent, type ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
@@ -14,7 +14,7 @@ import {
     createEmptyAuthStore,
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
-import { runSessionCommand } from './session.js';
+import { replayedTypes } from './session-replay-test-support.js';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -28,7 +28,7 @@ describe('runAgent interactive coding tool registry', () => {
         tempRoots.length = 0;
     });
 
-    it('advertises repo tools and executes repo.list before approved file.patch', async () => {
+    it('advertises repo tools and executes repo.list plus repo.read before approved file.patch', async () => {
         const dataDir = await tempRoot('mctrl-tools-data-');
         const workspaceRoot = await tempRoot('mctrl-tools-workspace-');
         await mkdir(join(workspaceRoot, 'src'));
@@ -57,7 +57,13 @@ describe('runAgent interactive coding tool registry', () => {
                         toolName: 'repo.list',
                         argumentsJson: JSON.stringify({ path: '.' }),
                     },
-                    { kind: 'response_completed', content: 'listed workspace' },
+                    {
+                        kind: 'tool_call_completed',
+                        toolCallId: 'read_call',
+                        toolName: 'repo.read',
+                        argumentsJson: JSON.stringify({ path: 'src/index.ts' }),
+                    },
+                    { kind: 'response_completed', content: 'inspected workspace' },
                 ],
                 [
                     {
@@ -83,9 +89,16 @@ describe('runAgent interactive coding tool registry', () => {
             'command.run',
         ]);
         expect(output).not.toContain('Approve repo.list?');
+        expect(output).not.toContain('Approve repo.read?');
         expect(output).toContain('Approve file.patch? [y/N]:');
         expect(output).toContain('Applied patch: .mctrl-task4.txt');
         expect(await readFile(join(workspaceRoot, '.mctrl-task4.txt'), 'utf8')).toBe('approved\n');
+        expect(events).toContainEqual(
+            expect.objectContaining({
+                type: 'tool.completed',
+                taskId: 'read_call',
+            }),
+        );
         expect(events.map((event) => event.type)).toEqual(
             expect.arrayContaining(['tool.completed', 'file.diff.applied']),
         );
@@ -164,24 +177,6 @@ function providerFromTurns(
             }
         },
     };
-}
-
-async function replayedTypes(sessionId: string): Promise<readonly string[]> {
-    const output = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
-    return output
-        .split(/\r?\n/)
-        .filter((line) => line.trim().length > 0)
-        .map(
-            (line) =>
-                AgentEventEnvelopeSchema.parse({
-                    eventId: 'ignored',
-                    sequence: 0,
-                    createdAt: new Date(0).toISOString(),
-                    sessionId,
-                    durability: 'durable',
-                    event: JSON.parse(line),
-                }).event.type,
-        );
 }
 
 function chunkForStep(request: ProviderTurnRequest, step: ProviderStep, sequence: number): ProviderStreamChunk {

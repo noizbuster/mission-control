@@ -8,7 +8,7 @@ import type { AgentEvent, ModelProviderSelection } from '@mission-control/protoc
 import type { ChatLineAction } from './chat-commands.js';
 import type { ModelSelector } from './interactive-chat.js';
 import type { ChatOutput } from './interactive-chat-io.js';
-import { createVariantChoices, type ModelChoice } from './interactive-chat-model.js';
+import { createVariantChoices, getModelChoiceUnavailableReason, type ModelChoice } from './interactive-chat-model.js';
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { type ActiveCodingAgentTurn, startCodingAgentTurn } from './interactive-coding-agent.js';
 
@@ -139,6 +139,12 @@ async function runModelPickAction(
     }
     const selection = await selectModel(modelChoices, currentSelection, { title: 'Select model' });
     if (selection === undefined) {
+        chatOutput.write(formatModelProviderStatus(currentSelection, { nodeMode: 'none' }));
+        return actionResult(currentSelection, coding.activeTurn);
+    }
+    const unavailableReason = getModelChoiceUnavailableReason(modelChoices, selection);
+    if (unavailableReason !== undefined) {
+        chatOutput.write(`${unavailableReason}\n`);
         chatOutput.write(formatModelProviderStatus(currentSelection, { nodeMode: 'none' }));
         return actionResult(currentSelection, coding.activeTurn);
     }

@@ -138,12 +138,12 @@ async function runCodingAgentTurn(
                 return;
             }
             if (approvals.hasPending()) {
-                emitTaskEvent(options, 'task.failed', 'tool approval already pending');
+                emitBlocked(options, 'tool approval already pending');
                 return;
             }
             const settlement = await settleInteractiveToolCall(registry, toolCall, options, approvals, signal);
             if (settlement === undefined) {
-                emitTaskEvent(options, 'task.failed', `tool not settled: ${toolCall.toolName}`);
+                emitBlocked(options, `tool not settled: ${toolCall.toolName}`);
                 return;
             }
             settlements.push(settlement);
@@ -171,6 +171,12 @@ type TurnState = {
 function emitInterrupted(options: CodingAgentTurnOptions, message: string): void {
     options.output.write('Interrupted active run\n');
     emitRunEvent(options, 'run.interrupted', 'run interrupted');
+    emitTaskEvent(options, 'task.failed', message);
+}
+
+function emitBlocked(options: CodingAgentTurnOptions, message: string): void {
+    options.output.write(`Run blocked: ${message}\n`);
+    emitRunEvent(options, 'run.interrupted', `run blocked: ${message}`);
     emitTaskEvent(options, 'task.failed', message);
 }
 

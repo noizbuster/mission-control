@@ -3,23 +3,23 @@ import {
     AgentRuntime,
     type CommandExecutionRequest,
     type CommandExecutionResult,
-    createNodeOpenAIResponsesTransport,
-    createOpenAIResponsesProvider,
     PermissionGateError,
     type ProviderAdapter,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
-import { createCliProviderCredentialResolver } from '../provider-credential-resolver.js';
 import { type AgentUIRenderer, InkRenderer, JsonRenderer, PlainRenderer } from '../ui/renderers.js';
+import type { NonInteractiveAutomationPolicy } from './cli-runtime-options.js';
 import { createCliRuntimeOptions } from './cli-runtime-options.js';
 import { type ChatInput, type ChatOutput, type ModelSelector, runInteractiveChatSession } from './interactive-chat.js';
 import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
-import { createLocalCodingProvider } from './local-coding-provider.js';
 import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
+import { createCliProviderForSelection } from './provider-factory.js';
 import { readGraphFile, validateGraphModelOptions, validateModelProviderSelection } from './run-agent-graph.js';
 import { createRunEventRecorder } from './run-agent-session.js';
+
+export { createCliProviderForSelection } from './provider-factory.js';
 
 export type RunAgentOptions = {
     readonly authStore?: ProviderAuthStore;
@@ -32,6 +32,7 @@ export type RunAgentOptions = {
     readonly createProvider?: (selection: ModelProviderSelection) => ProviderAdapter;
     readonly workspaceRoot?: string;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
+    readonly nonInteractiveAutomationPolicy?: NonInteractiveAutomationPolicy;
 };
 
 export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Promise<string> {
@@ -44,13 +45,18 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     const selectedModelProvider = modelProviderSelection ?? defaultModelProviderSelection;
     const shouldRunChat = shouldRunInteractiveChat(args, graph, options);
     const createProvider = options.createProvider ?? ((selection) => createProviderForSelection(selection, authStore));
-    const provider =
-        options.provider ?? (shouldRunChat ? createProvider(selectedModelProvider) : createLocalCodingProvider());
+    const provider = options.provider ?? createProvider(selectedModelProvider);
+    const workspaceRoot = options.workspaceRoot ?? process.cwd();
     const runtime = new AgentRuntime(
         createCliRuntimeOptions({
             ...(args.useNative !== undefined ? { useNative: args.useNative } : {}),
             ...(modelProviderSelection !== undefined ? { modelProviderSelection } : {}),
             provider,
+            workspaceRoot,
+            ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
+            ...(options.nonInteractiveAutomationPolicy !== undefined
+                ? { nonInteractiveAutomationPolicy: options.nonInteractiveAutomationPolicy }
+                : {}),
         }),
     );
     if (shouldRunChat) {
@@ -68,7 +74,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                 modelProviderSelection: selectedModelProvider,
                 provider,
                 sessionId: args.sessionId ?? session.id,
-                workspaceRoot: options.workspaceRoot ?? process.cwd(),
+                workspaceRoot,
                 modelChoices: await listAuthenticatedModelChoices(
                     authStore,
                     options.modelDiscovery ?? createDefaultModelDiscovery(),
@@ -185,13 +191,7 @@ async function listAuthenticatedModelChoices(
 }
 
 function createProviderForSelection(selection: ModelProviderSelection, authStore: ProviderAuthStore): ProviderAdapter {
-    if (selection.providerID === 'openai') {
-        return createOpenAIResponsesProvider({
-            credentialResolver: createCliProviderCredentialResolver(authStore),
-            transport: createNodeOpenAIResponsesTransport(),
-        });
-    }
-    return createLocalCodingProvider();
+    return createCliProviderForSelection(selection, authStore);
 }
 
 function createRenderer(mode: CliArgs['mode']): AgentUIRenderer {

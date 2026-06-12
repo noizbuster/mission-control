@@ -1,3 +1,4 @@
+import { redactCredentialText } from '@mission-control/core';
 import type { ToolCall } from '@mission-control/protocol';
 import type { ChatOutput } from './interactive-chat-io.js';
 
@@ -5,15 +6,15 @@ export function renderToolPreview(toolCall: ToolCall, output: ChatOutput): void 
     if (toolCall.toolName === 'file.patch') {
         const parsed = parseFilePatchPreview(parseJson(toolCall.argumentsJson));
         output.write('Patch preview for file.patch\n');
-        output.write(`${parsed?.patch ?? toolCall.argumentsJson}\n`);
+        output.write(`${redactPreviewText(parsed?.patch ?? toolCall.argumentsJson)}\n`);
         return;
     }
     if (toolCall.toolName === 'command.run') {
         const parsed = parseCommandRunPreview(parseJson(toolCall.argumentsJson));
         output.write('Command preview for command.run\n');
-        output.write(
-            parsed !== undefined ? `$ ${[parsed.command, ...parsed.args].join(' ')}\n` : `${toolCall.argumentsJson}\n`,
-        );
+        const preview =
+            parsed !== undefined ? `$ ${[parsed.command, ...parsed.args].join(' ')}` : toolCall.argumentsJson;
+        output.write(`${redactPreviewText(preview)}\n`);
     }
 }
 
@@ -64,6 +65,10 @@ function parseCommandRunPreview(
 
 function isRecord(value: unknown): value is PreviewRecord {
     return typeof value === 'object' && value !== null;
+}
+
+function redactPreviewText(text: string): string {
+    return redactCredentialText(text, []);
 }
 
 type PreviewRecord = {

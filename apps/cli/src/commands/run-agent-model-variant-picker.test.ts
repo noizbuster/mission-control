@@ -48,9 +48,9 @@ describe('runAgent /model provider variant picker', () => {
 
         expect(pickerLabels).toHaveLength(2);
         expect(pickerTitles).toEqual(['Select model', 'Select variant']);
-        expect(pickerLabels[0]).toContain('openai/gpt-5');
-        expect(pickerLabels[0]).not.toContain('openai/gpt-5#reasoning-high');
-        expect(pickerLabels[1]).toContain('openai/gpt-5#reasoning-high');
+        expect(pickerLabels[0]).toContain('openai/gpt-5 [executable]');
+        expect(pickerLabels[0]).not.toContain('openai/gpt-5#reasoning-high [executable]');
+        expect(pickerLabels[1]).toContain('openai/gpt-5#reasoning-high [executable]');
         expect(output).toContain('selection: openai/gpt-5#reasoning-high');
         expect(output).toContain('openai adapter handled openai/gpt-5#reasoning-high');
         expect(resolvedProviders).toContain('local/local-echo');
@@ -122,10 +122,10 @@ describe('runAgent /model provider variant picker', () => {
     });
 });
 
-function requiredChoice(choices: readonly ModelChoice[], label: string): ModelChoice {
-    const choice = choices.find((candidate) => candidate.label === label);
+function requiredChoice(choices: readonly ModelChoice[], id: string): ModelChoice {
+    const choice = choices.find((candidate) => candidate.id === id);
     if (choice === undefined) {
-        throw new Error(`Expected model choice ${label}`);
+        throw new Error(`Expected model choice ${id}`);
     }
     return choice;
 }

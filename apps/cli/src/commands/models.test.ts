@@ -19,7 +19,7 @@ describe('runModelsCommand', () => {
         vi.unstubAllEnvs();
     });
 
-    it('lists models with authentication status', async () => {
+    it('lists models with authentication and execution capability status', async () => {
         const authFilePath = await useTempAuthFile();
         const store = createProviderAuthStore();
         await store.saveCredential({
@@ -33,6 +33,7 @@ describe('runModelsCommand', () => {
 
         expect(output).toContain('local/local-echo');
         expect(output).toContain('authenticated');
+        expect(output).toContain('executable');
         expect(output).not.toContain('local_key');
         await rm(authFilePath, { force: true });
     });
@@ -40,7 +41,7 @@ describe('runModelsCommand', () => {
     it('keeps existing provider model listing baseline before model variants', async () => {
         const output = await runModelsCommand(parseArgs(['models']));
 
-        expect(output).toContain('local/local-echo missing credential');
+        expect(output).toContain('local/local-echo missing credential executable');
         expect(output).not.toContain('mock/');
     });
 
@@ -66,7 +67,7 @@ describe('runModelsCommand', () => {
         const output = await runModelsCommand(parseArgs(['models', 'anthropic']));
 
         expect(output).toContain('Models');
-        expect(output).toContain('anthropic/claude-3-5-haiku-20241022 missing credential');
+        expect(output).toContain('anthropic/claude-3-5-haiku-20241022 missing credential executable');
         expect(output).not.toContain('mock/');
     });
 
@@ -82,8 +83,26 @@ describe('runModelsCommand', () => {
 
         const output = await runModelsCommand(parseArgs(['models', 'anthropic']), { store });
 
-        expect(output).toContain('anthropic/claude-3-5-haiku-20241022 authenticated');
+        expect(output).toContain('anthropic/claude-3-5-haiku-20241022 authenticated executable');
         expect(output).not.toContain('anthropic_secret_key');
+        await rm(authFilePath, { force: true });
+    });
+
+    it('shows why authenticated discovery-only providers cannot run coding prompts', async () => {
+        const authFilePath = await useTempAuthFile();
+        const store = createProviderAuthStore();
+        await store.saveCredential({
+            providerID: 'perplexity',
+            modelID: 'sonar',
+            fields: [{ id: 'apiKey', value: 'perplexity_secret_key', secret: true }],
+            now: '2026-06-03T10:00:00.000Z',
+        });
+
+        const output = await runModelsCommand(parseArgs(['models', 'perplexity']), { store });
+
+        expect(output).toContain('perplexity/sonar authenticated model-discovery-only');
+        expect(output).toContain('cannot run coding agent prompts');
+        expect(output).not.toContain('perplexity_secret_key');
         await rm(authFilePath, { force: true });
     });
 });

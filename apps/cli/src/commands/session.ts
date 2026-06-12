@@ -1,4 +1,9 @@
-import { projectJsonlSessionReplayPrefix, resolveMissionControlDataDir } from '@mission-control/core';
+import {
+    type CodingReplayStep,
+    projectJsonlSessionReplayPrefix,
+    type ReplayDiagnostic,
+    resolveMissionControlDataDir,
+} from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { readdir, readFile } from 'node:fs/promises';
@@ -31,7 +36,7 @@ export async function runSessionCommand(args: CliArgs): Promise<string> {
         case 'session-show':
             return `${JSON.stringify(await showSession(requireSessionId(args)), null, 2)}\n`;
         case 'session-replay':
-            return `${(await replaySession(requireSessionId(args))).map((event) => JSON.stringify(event)).join('\n')}\n`;
+            return `${(await replaySession(requireSessionId(args))).map((record) => JSON.stringify(record)).join('\n')}\n`;
         default:
             throw new CliSessionCommandError({
                 code: 'unsupported_session_command',
@@ -70,15 +75,37 @@ async function showSession(sessionId: string) {
         graphSnapshots: projection.projection.graphSnapshots,
         approvals: projection.projection.approvals,
         toolOutcomes: projection.projection.toolOutcomes,
+        codingSteps: projection.projection.codingSteps,
         diagnostics: projection.diagnostics,
     };
 }
 
-async function replaySession(sessionId: string): Promise<readonly AgentEvent[]> {
-    return projectJsonlSessionReplayPrefix({
+type ReplayJsonlRecord =
+    | { readonly kind: 'event'; readonly event: AgentEvent }
+    | { readonly kind: 'coding.step'; readonly step: CodingReplayStep }
+    | { readonly kind: 'diagnostic'; readonly diagnostic: ReplayDiagnostic };
+
+async function replaySession(sessionId: string): Promise<readonly ReplayJsonlRecord[]> {
+    const replay = projectJsonlSessionReplayPrefix({
         sessionId,
         contents: await readSessionLog(sessionId),
-    }).projection.events;
+    });
+    const stepsByEventId = codingStepsByEventId(replay.projection.codingSteps);
+    return [
+        ...replay.projection.envelopes.flatMap((envelope) => [
+            { kind: 'event' as const, event: envelope.event },
+            ...(stepsByEventId.get(envelope.eventId) ?? []).map((step) => ({ kind: 'coding.step' as const, step })),
+        ]),
+        ...replay.diagnostics.map((diagnostic) => ({ kind: 'diagnostic' as const, diagnostic })),
+    ];
+}
+
+function codingStepsByEventId(steps: readonly CodingReplayStep[]): ReadonlyMap<string, readonly CodingReplayStep[]> {
+    const byEventId = new Map<string, CodingReplayStep[]>();
+    for (const step of steps) {
+        byEventId.set(step.eventId, [...(byEventId.get(step.eventId) ?? []), step]);
+    }
+    return byEventId;
 }
 
 async function readSessionLog(sessionId: string): Promise<string> {

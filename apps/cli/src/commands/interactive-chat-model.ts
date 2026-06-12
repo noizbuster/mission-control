@@ -1,10 +1,14 @@
 import { type ModelProviderCatalogEntry, modelProviderCatalog } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import { formatProviderCapabilityBadge, getProviderCodingUnavailableReason } from './model-capability.js';
 
 export type ModelChoice = {
     readonly id: string;
     readonly label: string;
     readonly selection: ModelProviderSelection;
+    readonly capabilityStatus: ModelProviderCatalogEntry['capability']['status'];
+    readonly availableForCoding: boolean;
+    readonly unavailableReason?: string;
 };
 
 export type ModelChoiceOptions = {
@@ -42,7 +46,9 @@ export function createModelChoices(options: ModelChoiceOptions = {}): readonly M
         if (providerIDs !== undefined && !providerIDs.includes(provider.id)) {
             return [];
         }
-        return provider.models.map((model) => createModelChoice({ providerID: provider.id, modelID: model.id }));
+        return provider.models.map((model) =>
+            createModelChoice({ providerID: provider.id, modelID: model.id }, provider),
+        );
     });
 }
 
@@ -53,9 +59,22 @@ export function createVariantChoices(
     const catalog = options.catalog ?? modelProviderCatalog;
     const provider = catalog.find((entry) => entry.id === selection.providerID);
     const model = provider?.models.find((entry) => entry.id === selection.modelID);
+    if (provider === undefined) {
+        return [];
+    }
     return (model?.variants ?? []).map((variant) =>
-        createModelChoice({ providerID: selection.providerID, modelID: selection.modelID, variantID: variant.id }),
+        createModelChoice(
+            { providerID: selection.providerID, modelID: selection.modelID, variantID: variant.id },
+            provider,
+        ),
     );
+}
+
+export function getModelChoiceUnavailableReason(
+    choices: readonly ModelChoice[],
+    selection: ModelProviderSelection,
+): string | undefined {
+    return choices.find((choice) => isSameProviderModel(choice.selection, selection))?.unavailableReason;
 }
 
 export function resolveModelCommand(
@@ -118,10 +137,18 @@ export function resolveModelCommand(
             };
         }
     }
-    if (!choices.some((choice) => isSelectionAvailable(choice.selection, selection))) {
+    const matchingChoice = choices.find((choice) => isSelectionAvailable(choice.selection, selection));
+    if (matchingChoice === undefined) {
         return {
             type: 'invalid',
             message: `Unknown model: ${trimmed}`,
+            currentSelection,
+        };
+    }
+    if (matchingChoice.unavailableReason !== undefined) {
+        return {
+            type: 'invalid',
+            message: matchingChoice.unavailableReason,
             currentSelection,
         };
     }
@@ -194,12 +221,16 @@ function splitModelVariant(modelInput: string): { readonly modelID: string; read
     };
 }
 
-function createModelChoice(selection: ModelProviderSelection): ModelChoice {
+function createModelChoice(selection: ModelProviderSelection, provider: ModelProviderCatalogEntry): ModelChoice {
     const label = formatModelSelection(selection);
+    const unavailableReason = getProviderCodingUnavailableReason(provider);
     return {
         id: label,
-        label,
+        label: `${label} ${formatProviderCapabilityBadge(provider)}`,
         selection,
+        capabilityStatus: provider.capability.status,
+        availableForCoding: unavailableReason === undefined,
+        ...(unavailableReason !== undefined ? { unavailableReason } : {}),
     };
 }
 
@@ -214,6 +245,10 @@ function isSelectionAvailable(available: ModelProviderSelection, requested: Mode
         return true;
     }
     return available.variantID === requested.variantID;
+}
+
+function isSameProviderModel(left: ModelProviderSelection, right: ModelProviderSelection): boolean {
+    return left.providerID === right.providerID && left.modelID === right.modelID;
 }
 
 function hasVariantCatalog(

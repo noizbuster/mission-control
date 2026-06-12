@@ -9,8 +9,19 @@ const allowedCliActions = [
     'repo.search',
 ] as const;
 const approvalRequiredCliActions = ['file.patch', 'command.run'] as const;
+export type NonInteractiveAutomationPolicy = 'test-only-allow-known-safe-patch';
 
-export function createCliPermissionDecision(request: PermissionRequest): PermissionDecision {
+export function createCliPermissionDecision(
+    request: PermissionRequest,
+    automationPolicy?: NonInteractiveAutomationPolicy,
+): PermissionDecision {
+    if (automationPolicy === 'test-only-allow-known-safe-patch' && request.action === 'file.patch') {
+        return {
+            requestId: request.id,
+            status: 'allow',
+            reason: 'test-only automation allows known safe patch',
+        };
+    }
     if (includesAction(allowedCliActions, request.action)) {
         return {
             requestId: request.id,

@@ -1,12 +1,3 @@
-import {
-    type CommandExecutionRequest,
-    type CommandExecutionResult,
-    missionControlDataDirEnvKey,
-    type ProviderAdapter,
-    type ProviderTurnRequest,
-    projectJsonlSessionReplayPrefix,
-} from '@mission-control/core';
-import { type AgentEvent, AgentEventSchema, type ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../apps/cli/src/args.js';
 import { runAgent } from '../apps/cli/src/commands/run-agent.js';
@@ -16,9 +7,21 @@ import {
     createScriptedChatInput,
 } from '../apps/cli/src/commands/run-agent-chat-test-support.js';
 import { runSessionCommand } from '../apps/cli/src/commands/session.js';
+import {
+    type CommandExecutionRequest,
+    type CommandExecutionResult,
+    missionControlDataDirEnvKey,
+    type ProviderAdapter,
+    type ProviderTurnRequest,
+    projectJsonlSessionReplayPrefix,
+} from '../packages/core/src/index.js';
+import { type AgentEvent, type ProviderStreamChunk } from '../packages/protocol/src/index.js';
+import { parseCodingStepLines, parseEventLines } from './coding-agent-smoke-replay-support.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+const allowedHarnessArgs = ['--eval', "console.log('mission-control command.run harness ok')"] as const;
 
 describe('coding-agent end-to-end smoke', () => {
     const tempRoots: string[] = [];
@@ -69,16 +72,16 @@ describe('coding-agent end-to-end smoke', () => {
                         kind: 'tool_call_completed',
                         toolCallId: 'smoke_typecheck',
                         toolName: 'command.run',
-                        argumentsJson: JSON.stringify({ command: 'pnpm', args: ['typecheck'] }),
+                        argumentsJson: JSON.stringify({ command: 'node', args: allowedHarnessArgs }),
                     },
                     { kind: 'response_completed', content: 'typecheck requested' },
                 ],
                 [{ kind: 'response_completed', content: 'smoke complete' }],
             ]),
         });
-        const replayedChatEvents = parseEventLines(
-            await runSessionCommand(parseArgs(['session', 'replay', chatSessionId, '--jsonl'])),
-        );
+        const chatReplayJsonl = await runSessionCommand(parseArgs(['session', 'replay', chatSessionId, '--jsonl']));
+        const replayedChatEvents = parseEventLines(chatReplayJsonl);
+        const replayedCodingSteps = parseCodingStepLines(chatReplayJsonl);
         const graphJsonl = await runAgent(
             parseArgs([
                 'graph',
@@ -120,10 +123,19 @@ describe('coding-agent end-to-end smoke', () => {
         expect(replayedChatEvents.filter((event) => event.type === 'approval.requested')).toHaveLength(2);
         expect(replayedChatEvents.filter((event) => event.type === 'approval.updated')).toHaveLength(2);
         expect(commandCompleted(replayedChatEvents)?.command).toMatchObject({
-            command: ['pnpm', 'typecheck'],
+            command: ['node', ...allowedHarnessArgs],
             status: 'completed',
             exitCode: 0,
         });
+        expect(replayedCodingSteps).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ kind: 'provider.tool_call', toolCallId: 'smoke_patch' }),
+                expect.objectContaining({ kind: 'provider.tool_call', toolCallId: 'smoke_typecheck' }),
+                expect.objectContaining({ kind: 'tool.result', toolCallId: 'smoke_patch', status: 'completed' }),
+                expect.objectContaining({ kind: 'tool.result', toolCallId: 'smoke_typecheck', status: 'completed' }),
+                expect.objectContaining({ kind: 'provider.message', continuation: true, message: 'smoke complete' }),
+            ]),
+        );
         expect(graphEvents.map((event) => event.type)).toEqual(
             expect.arrayContaining(['graph.started', 'approval.requested', 'policy.blocked', 'graph.failed']),
         );
@@ -144,14 +156,6 @@ describe('coding-agent end-to-end smoke', () => {
         return path;
     }
 });
-
-function parseEventLines(output: string): readonly AgentEvent[] {
-    return output
-        .trim()
-        .split(/\r?\n/)
-        .filter((line) => line.length > 0)
-        .map((line) => AgentEventSchema.parse(JSON.parse(line)));
-}
 
 function addFilePatch(path: string, content: string): string {
     return [
@@ -223,7 +227,7 @@ function chunkForStep(request: ProviderTurnRequest, step: ProviderStep, sequence
 }
 
 async function fakeTypecheckExecutor(request: CommandExecutionRequest): Promise<CommandExecutionResult> {
-    expect([request.command, ...request.args]).toEqual(['pnpm', 'typecheck']);
+    expect([request.command, ...request.args]).toEqual(['node', ...allowedHarnessArgs]);
     return {
         exitCode: 0,
         signal: null,
