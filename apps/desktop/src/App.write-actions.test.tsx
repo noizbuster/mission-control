@@ -137,13 +137,21 @@ describe('Desktop composer and approval inspection', () => {
         );
 
         // Then
-        expect(html).toContain('approval_permission_call_patch');
-        expect(html).toContain('approved');
-        expect(html).not.toContain('pending');
-        expect(html).not.toContain('Approve');
-        expect(html).not.toContain('Deny');
+        const approvalQueueHtml = approvalQueueSection(html);
+        expect(approvalQueueHtml).toContain('approval_permission_call_patch');
+        expect(approvalQueueHtml).toContain('approved');
+        expect(approvalQueueHtml).not.toContain('pending');
+        expect(approvalQueueHtml).not.toContain('Approve');
+        expect(approvalQueueHtml).not.toContain('Deny');
     });
 });
+
+function approvalQueueSection(html: string): string {
+    const marker = '<h2>Approval queue</h2>';
+    const index = html.indexOf(marker);
+    expect(index).toBeGreaterThanOrEqual(0);
+    return html.slice(index);
+}
 
 function summary(): DesktopSessionSummary {
     return {

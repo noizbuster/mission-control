@@ -32,8 +32,8 @@ export function commandRunCall(toolCallId: string): DeterministicProviderStep {
         toolCallId,
         toolName: 'command.run',
         argumentsJson: JSON.stringify({
-            command: 'pnpm',
-            args: ['exec', 'vitest', 'run', 'packages/core/src/tools/command-run.fixture.test.ts'],
+            command: 'node',
+            args: ['--eval', "console.log('mission-control command.run harness ok')"],
         }),
     };
 }

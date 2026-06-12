@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createDesktopSessionCommandService } from './desktop-session-commands.js';
 import { fixedNow, readReplay } from './desktop-session-commands-test-support.js';
 import { createDeterministicProvider } from './providers/deterministic-provider.js';
+import type { ProviderAdapter, ProviderTurnRequest } from './providers/provider-turn-types.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -69,4 +70,67 @@ describe('desktop session run commands', () => {
             await rm(dataDir, { recursive: true, force: true });
         }
     });
+
+    it('resumes restarted desktop sessions with the persisted provider selection', async () => {
+        // Given
+        const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-desktop-run-provider-'));
+        const sessionId = 'session_desktop_run_provider';
+        const providerRequests: ProviderTurnRequest[] = [];
+        const provider = recordingProvider(providerRequests);
+        const originalSelection = {
+            providerID: 'openai',
+            modelID: 'gpt-4.1',
+        };
+        const firstProcess = createDesktopSessionCommandService({
+            dataDir,
+            workspaceRoot: dataDir,
+            now: fixedNow,
+            provider,
+            modelProviderSelection: defaultModelProviderSelection,
+        });
+
+        try {
+            await firstProcess.queueFollowUp({
+                sessionId,
+                prompt: 'queued under openai',
+                modelProviderSelection: originalSelection,
+            });
+            const restarted = createDesktopSessionCommandService({
+                dataDir,
+                workspaceRoot: dataDir,
+                now: fixedNow,
+                provider,
+                modelProviderSelection: defaultModelProviderSelection,
+            });
+
+            // When
+            const resumed = await restarted.resumeRun({ sessionId });
+
+            // Then
+            expect(resumed.status).toBe('completed');
+            expect(providerRequests).toHaveLength(1);
+            expect(providerRequests[0]).toMatchObject(originalSelection);
+        } finally {
+            await rm(dataDir, { recursive: true, force: true });
+        }
+    });
 });
+
+function recordingProvider(requests: ProviderTurnRequest[]): ProviderAdapter {
+    return {
+        async *streamTurn(request) {
+            requests.push(request);
+            yield {
+                kind: 'response_completed',
+                requestId: request.requestId,
+                sequence: 1,
+                message: {
+                    messageId: `message_${request.turnId}`,
+                    role: 'assistant',
+                    content: 'desktop turn done',
+                },
+                finishReason: 'stop',
+            };
+        },
+    };
+}

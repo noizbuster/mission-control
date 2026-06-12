@@ -9,7 +9,12 @@ import type {
 } from '@mission-control/protocol';
 import type { DesktopSessionDiagnostic, DesktopSessionLog, DesktopSessionSummary } from './agent-client.js';
 import { redactDisplayText, redactMessageFields } from './redaction.js';
-import { approvalPreviewForRecord, type ToolCallPreview } from './tool-call-preview.js';
+import {
+    type ApprovalRow,
+    type CodingStepRow,
+    projectReplayInspectorRows,
+    type ToolOutcomeRow,
+} from './session-inspector-replay.js';
 
 export type TimelineRow = {
     readonly key: string;
@@ -38,15 +43,6 @@ export type BranchRow = {
     readonly message: string;
 };
 
-export type ApprovalRow = {
-    readonly key: string;
-    readonly approvalId: string;
-    readonly state: string;
-    readonly subject: string;
-    readonly reason: string;
-    readonly preview: ToolCallPreview | undefined;
-};
-
 export type PatchRow = {
     readonly key: string;
     readonly filePath: string;
@@ -72,6 +68,8 @@ export type SessionInspectorProjection = {
     readonly approvals: readonly ApprovalRow[];
     readonly patches: readonly PatchRow[];
     readonly commands: readonly CommandRow[];
+    readonly codingSteps: readonly CodingStepRow[];
+    readonly toolOutcomes: readonly ToolOutcomeRow[];
 };
 
 export function projectSessionInspector(input: {
@@ -79,16 +77,19 @@ export function projectSessionInspector(input: {
     readonly selectedLog: DesktopSessionLog | undefined;
 }): SessionInspectorProjection {
     const events = input.selectedLog?.envelopes.map((envelope) => envelope.event) ?? [];
+    const replayRows = projectReplayInspectorRows(input.selectedLog);
     return {
         sessions: input.sessions,
         selectedLog: input.selectedLog,
-        diagnostics: redactMessageFields(input.selectedLog?.diagnostics ?? []),
+        diagnostics: redactMessageFields([...(input.selectedLog?.diagnostics ?? []), ...replayRows.diagnostics]),
         timeline: events.map((event, index) => timelineRow(event, index)),
         graphs: graphPanels(events),
         branches: events.flatMap((event, index) => branchRows(event, index)),
-        approvals: approvalRows(events),
+        approvals: replayRows.approvals,
         patches: events.flatMap((event, index) => patchRows(event, index)),
         commands: events.flatMap((event, index) => commandRows(event, index)),
+        codingSteps: replayRows.codingSteps,
+        toolOutcomes: replayRows.toolOutcomes,
     };
 }
 
@@ -148,25 +149,6 @@ function branchRows(event: AgentEvent, index: number): readonly BranchRow[] {
             message: redactDisplayText(event.message ?? ''),
         },
     ];
-}
-
-function approvalRows(events: readonly AgentEvent[]): readonly ApprovalRow[] {
-    const rows = new Map<string, ApprovalRow>();
-    for (const [index, event] of events.entries()) {
-        const record = event.approvalRecord;
-        if (record === undefined) {
-            continue;
-        }
-        rows.set(record.approvalId, {
-            key: `${record.approvalId}-${index}`,
-            approvalId: record.approvalId,
-            state: record.state,
-            subject: `${record.subject.kind}:${record.subject.id}`,
-            reason: redactDisplayText(record.reason ?? event.message ?? ''),
-            preview: approvalPreviewForRecord(record, events),
-        });
-    }
-    return [...rows.values()];
 }
 
 function patchRows(event: AgentEvent, index: number): readonly PatchRow[] {

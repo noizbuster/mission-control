@@ -1,3 +1,4 @@
+mod desktop_command_bridge;
 mod desktop_commands;
 mod session_datetime;
 mod session_log_scan;
@@ -7,8 +8,9 @@ mod sessions;
 
 pub use desktop_commands::{
     DesktopApprovalDecisionInput, DesktopCommandReceipt, DesktopPromptCommandInput,
-    DesktopRunCommandInput, decide_approval, interrupt_run, queue_follow_up, resume_run, steer_run,
-    submit_prompt,
+    DesktopProviderCredentialSummary, DesktopRunCommandInput, SaveDesktopProviderCredentialInput,
+    decide_approval, interrupt_run, list_provider_credentials, queue_follow_up, resume_run,
+    save_provider_credential, steer_run, submit_prompt,
 };
 pub use sessions::{
     DesktopSessionLog, DesktopSessionSnapshot, DesktopSessionSummary, SessionLogState,
@@ -54,7 +56,9 @@ pub fn run() {
             steer_run,
             interrupt_run,
             resume_run,
-            decide_approval
+            decide_approval,
+            list_provider_credentials,
+            save_provider_credential
         ])
         .run(tauri::generate_context!());
     if let Err(error) = result {
@@ -67,6 +71,12 @@ pub fn run() {
 pub fn run() {}
 
 #[cfg(test)]
+mod desktop_command_approval_tests;
+
+#[cfg(test)]
+mod desktop_command_tests;
+
+#[cfg(test)]
 mod session_log_invariant_tests;
 
 #[cfg(test)]
@@ -76,6 +86,7 @@ mod tests {
         SessionLogState, decide_approval, greet, interrupt_run, list_sessions_in_data_dir,
         queue_follow_up, read_session_events_from_data_dir, resume_run, steer_run, submit_prompt,
     };
+    use crate::sessions::override_data_dir_for_test;
     use std::error::Error;
     use std::fs::{create_dir_all, remove_dir_all, write};
     use std::path::PathBuf;
@@ -88,6 +99,8 @@ mod tests {
 
     #[test]
     fn write_command_handlers_return_typed_receipts() -> Result<(), Box<dyn Error>> {
+        let data_dir = temp_data_dir("public-command-handlers")?;
+        let _override_dir = override_data_dir_for_test(data_dir.clone())?;
         let prompt = DesktopPromptCommandInput {
             session_id: "session_write".to_owned(),
             prompt: "desktop prompt".to_owned(),
@@ -106,12 +119,29 @@ mod tests {
             reason: Some("approved".to_owned()),
         };
 
-        assert_eq!(submit_prompt(prompt.clone())?.status, "failed");
-        assert_eq!(queue_follow_up(prompt.clone())?.status, "failed");
-        assert_eq!(steer_run(prompt)?.status, "failed");
-        assert_eq!(resume_run(run.clone())?.status, "failed");
-        assert_eq!(interrupt_run(run)?.status, "interrupted");
-        assert_eq!(decide_approval(decision)?.status, "completed");
+        let queued = queue_follow_up(prompt.clone())?;
+        let resumed = resume_run(run.clone())?;
+        let submitted = submit_prompt(prompt.clone())?;
+        let steered = steer_run(prompt)?;
+        let interrupted = interrupt_run(run)?;
+        let decided = decide_approval(decision)?;
+        let log = read_session_events_from_data_dir(&data_dir, "session_write")?;
+
+        assert_eq!(submitted.status, "completed");
+        assert_eq!(queued.status, "queued");
+        assert_eq!(steered.status, "completed");
+        assert_eq!(resumed.status, "completed");
+        assert_eq!(interrupted.status, "idle");
+        assert_eq!(decided.status, "idle");
+        assert!(submitted.events_written > 0);
+        assert!(queued.events_written > 0);
+        assert!(steered.events_written > 0);
+        assert!(resumed.events_written > 0);
+        assert!(interrupted.events_written > 0);
+        assert_eq!(decided.events_written, 0);
+        assert_eq!(log.state, SessionLogState::Available);
+        assert!(!log.envelopes.is_empty());
+        remove_dir_all(data_dir)?;
         Ok(())
     }
 

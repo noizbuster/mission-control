@@ -41,6 +41,9 @@ importers:
       '@mission-control/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@mission-control/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@mission-control/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

@@ -53,6 +53,13 @@ button:hover {
     background: var(--accent-hover);
 }
 
+button:disabled {
+    background: #d9dee3;
+    border-color: var(--border-strong);
+    color: var(--muted);
+    cursor: not-allowed;
+}
+
 .shell {
     display: grid;
     gap: 16px;
@@ -87,6 +94,9 @@ h1 {
     border: 1px solid var(--ok-border);
     border-radius: 6px;
     font-weight: 700;
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
     padding: 8px 10px;
 }
 
@@ -96,11 +106,14 @@ h1 {
     flex-wrap: wrap;
     gap: 8px;
     justify-content: flex-end;
+    max-width: min(760px, 100%);
+    min-width: 0;
 }
 
 .model-status {
     background: var(--rail);
     border-color: var(--border-strong);
+    max-width: min(640px, 100%);
 }
 
 .controls {
@@ -146,7 +159,8 @@ select {
     min-width: 220px;
 }
 
-.credential-status {
+.credential-status,
+.provider-execution-status {
     align-items: center;
     border: 1px solid var(--border-strong);
     border-radius: 6px;
@@ -158,6 +172,13 @@ select {
     padding: 0 10px;
 }
 
+.credential-status {
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .credential-status[data-state="credential configured"] {
     background: var(--ok);
     border-color: var(--ok-border);
@@ -166,6 +187,22 @@ select {
 .credential-status[data-state="credential missing"] {
     background: var(--warn);
     border-color: var(--warn-border);
+}
+
+.provider-execution-status[data-state="executable"] {
+    background: var(--ok);
+    border-color: var(--ok-border);
+}
+
+.provider-execution-status[data-state="model-discovery-only"],
+.provider-execution-status[data-state="auth-only"] {
+    background: var(--warn);
+    border-color: var(--warn-border);
+}
+
+.provider-execution-status[data-state="unsupported"] {
+    background: var(--danger);
+    border-color: var(--danger-border);
 }
 
 .chat-composer {
@@ -209,7 +246,7 @@ textarea {
     font-size: 13px;
     font-weight: 700;
     gap: 8px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .composer-meta > span {
@@ -505,6 +542,11 @@ pre {
     .topbar {
         align-items: start;
         flex-direction: column;
+    }
+
+    .status-group {
+        justify-content: flex-start;
+        width: 100%;
     }
 
     .controls {

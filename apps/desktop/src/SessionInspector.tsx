@@ -137,6 +137,34 @@ export function SessionInspector({
                             ))}
                         </div>
                         <div>
+                            <h2>Coding replay</h2>
+                            {projection.codingSteps.length === 0 ? (
+                                <p className="empty-state">No coding replay</p>
+                            ) : null}
+                            {projection.codingSteps.map((step) => (
+                                <div className="compact-row" key={step.key}>
+                                    <strong>{step.kind}</strong>
+                                    <span>{step.status}</span>
+                                    <span>{step.subject}</span>
+                                    <span>{step.detail}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <div>
+                            <h2>Tool outcomes</h2>
+                            {projection.toolOutcomes.length === 0 ? (
+                                <p className="empty-state">No tool outcomes</p>
+                            ) : null}
+                            {projection.toolOutcomes.map((tool) => (
+                                <div className="compact-row" key={tool.key}>
+                                    <strong>{tool.toolId}</strong>
+                                    <span>{tool.status}</span>
+                                    <span>{tool.timestamps}</span>
+                                    <span>{tool.detail}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <div>
                             <h2>Diagnostics</h2>
                             {projection.diagnostics.length === 0 ? <p className="empty-state">No diagnostics</p> : null}
                             {projection.diagnostics.map((diagnostic) => (

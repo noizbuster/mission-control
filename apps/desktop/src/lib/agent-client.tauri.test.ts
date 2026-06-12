@@ -183,7 +183,7 @@ describe('tauri desktop agent client', () => {
         ]);
     });
 
-    it('sends placeholder chat and approval command receipts through the Tauri boundary', async () => {
+    it('sends chat and approval command receipts through the Tauri boundary', async () => {
         // Given / When
         const calls: { readonly command: string; readonly args: Record<string, unknown> | undefined }[] = [];
         const client = createTauriDesktopAgentClient(async (command, args) => {
@@ -244,6 +244,54 @@ describe('tauri desktop agent client', () => {
                 reason: 'looks good',
             },
         });
+    });
+
+    it('lists and saves provider credentials through the Tauri boundary', async () => {
+        // Given
+        const calls: { readonly command: string; readonly args: Record<string, unknown> | undefined }[] = [];
+        const client = createTauriDesktopAgentClient(async (command, args) => {
+            calls.push({ command, args });
+            if (command === 'list_provider_credentials') {
+                return [];
+            }
+            if (command === 'save_provider_credential') {
+                return {
+                    providerID: 'openai',
+                    authenticated: true,
+                    maskedCredential: 'sk-d...1234',
+                };
+            }
+            throw new Error(`unexpected command ${command}`);
+        });
+
+        // When
+        const before = await client.listProviderCredentials();
+        const saved = await client.saveProviderCredential({
+            providerID: 'openai',
+            modelID: 'gpt-4.1',
+            apiKey: 'sk-desktop-secret-1234',
+        });
+
+        // Then
+        expect(before).toEqual([]);
+        expect(saved).toEqual({
+            providerID: 'openai',
+            authenticated: true,
+            maskedCredential: 'sk-d...1234',
+        });
+        expect(calls).toEqual([
+            { command: 'list_provider_credentials', args: undefined },
+            {
+                command: 'save_provider_credential',
+                args: {
+                    input: {
+                        providerID: 'openai',
+                        modelID: 'gpt-4.1',
+                        apiKey: 'sk-desktop-secret-1234',
+                    },
+                },
+            },
+        ]);
     });
 
     it('exposes session credential and write action methods on the Tauri client boundary', () => {

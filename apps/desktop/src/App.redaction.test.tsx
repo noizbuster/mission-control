@@ -29,8 +29,8 @@ function summary(): DesktopSessionSummary {
         sessionId: 'session_desktop_redaction',
         fileName: 'session_desktop_redaction.jsonl',
         state: 'available',
-        eventCount: 2,
-        diagnostics: [],
+        eventCount: 3,
+        diagnostics: [{ code: 'corrupt_line', message: 'bad json', lineNumber: 3 }],
     };
 }
 
@@ -39,7 +39,7 @@ function sessionLog(secret: string): DesktopSessionLog {
         sessionId: 'session_desktop_redaction',
         state: 'available',
         contents: 'jsonl',
-        diagnostics: [],
+        diagnostics: [{ code: 'corrupt_line', message: `bad json ${secret}`, lineNumber: 3 }],
         envelopes: [
             envelope(0, {
                 type: 'task.progress',
@@ -73,8 +73,25 @@ function sessionLog(secret: string): DesktopSessionLog {
                 },
             }),
             envelope(1, {
-                type: 'approval.requested',
+                type: 'command.completed',
                 timestamp: '2026-06-09T00:00:01.000Z',
+                sessionId: 'session_desktop_redaction',
+                message: `command ${secret}`,
+                command: {
+                    command: ['pnpm', secret],
+                    cwd: `/tmp/${secret}`,
+                    status: 'completed',
+                    exitCode: 0,
+                    signal: null,
+                    timedOut: false,
+                    stdoutTruncated: false,
+                    stderrTruncated: false,
+                    durationMs: 1,
+                },
+            }),
+            envelope(2, {
+                type: 'approval.requested',
+                timestamp: '2026-06-09T00:00:02.000Z',
                 sessionId: 'session_desktop_redaction',
                 message: 'approval requested',
                 approvalRecord: {

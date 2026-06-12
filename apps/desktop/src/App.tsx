@@ -9,15 +9,14 @@ import {
     type DesktopSessionSummary,
 } from './lib/agent-client.js';
 import { projectSessionInspector } from './lib/session-inspector.js';
-import { ProviderControls } from './ProviderControls.js';
+import { getProviderExecutionGate, ProviderControls } from './ProviderControls.js';
 import { SessionInspector } from './SessionInspector.js';
 import { useDesktopWriteActions } from './useDesktopWriteActions.js';
-
-export { getCredentialStatus, getModelsForProvider, resolveSelectionForProviderChange } from './ProviderControls.js';
 
 export type AppProps = {
     readonly initialSessionId?: string;
     readonly initialCredentialSummaries?: readonly ProviderCredentialSummary[];
+    readonly initialModelProviderSelection?: ModelProviderSelection;
     readonly initialSessionSummaries?: readonly DesktopSessionSummary[];
     readonly initialSessionLog?: DesktopSessionLog;
     readonly client?: DesktopAgentClient;
@@ -28,6 +27,7 @@ type SessionSourceState = 'loading' | 'ready' | 'error';
 export function App({
     initialSessionId,
     initialCredentialSummaries = [],
+    initialModelProviderSelection = defaultModelProviderSelection,
     initialSessionSummaries = [],
     initialSessionLog,
     client: providedClient,
@@ -45,8 +45,8 @@ export function App({
     const [credentialSummaries, setCredentialSummaries] =
         useState<readonly ProviderCredentialSummary[]>(initialCredentialSummaries);
     const [credentialValue, setCredentialValue] = useState<string>('');
-    const [selectedProviderID, setSelectedProviderID] = useState<string>(defaultModelProviderSelection.providerID);
-    const [selectedModelID, setSelectedModelID] = useState<string>(defaultModelProviderSelection.modelID);
+    const [selectedProviderID, setSelectedProviderID] = useState<string>(initialModelProviderSelection.providerID);
+    const [selectedModelID, setSelectedModelID] = useState<string>(initialModelProviderSelection.modelID);
     const selectedSessionLog = sessionLog?.sessionId === sessionId ? sessionLog : undefined;
     const displayedSourceStatus = sessionSourceStatus(sourceState, sourceMessage, selectedSessionLog);
     const events = selectedSessionLog?.envelopes.map((envelope) => envelope.event) ?? [];
@@ -55,6 +55,7 @@ export function App({
         providerID: selectedProviderID,
         modelID: selectedModelID,
     };
+    const providerRunGate = getProviderExecutionGate(selectedProviderID);
     const inspectorProjection = projectSessionInspector({
         sessions: sessionSummaries,
         selectedLog: selectedSessionLog,
@@ -68,6 +69,7 @@ export function App({
         setSessionLog,
         setSourceState,
         setSourceMessage,
+        providerRunGate,
     });
 
     useEffect(() => {
@@ -116,6 +118,7 @@ export function App({
         }
         const summary = await client.saveProviderCredential({
             providerID: selectedProviderID,
+            modelID: selectedModelID,
             apiKey,
         });
         setCredentialSummaries((current) => replaceCredentialSummary(current, summary));
@@ -190,6 +193,8 @@ export function App({
             <ChatComposer
                 actionMessage={writeActions.actionMessage}
                 modelProviderSelection={modelProviderSelection}
+                providerRunDisabled={!providerRunGate.canStart}
+                providerRunDisabledReason={providerRunGate.message}
                 prompt={writeActions.promptValue}
                 sessionId={sessionId}
                 onInterruptRun={() => {

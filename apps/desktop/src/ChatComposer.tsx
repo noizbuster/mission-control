@@ -6,6 +6,8 @@ export type ChatComposerProps = {
     readonly sessionId: string;
     readonly modelProviderSelection: ModelProviderSelection;
     readonly actionMessage: string;
+    readonly providerRunDisabled: boolean;
+    readonly providerRunDisabledReason: string;
     readonly onPromptChange: (prompt: string) => void;
     readonly onSubmitPrompt: () => void;
     readonly onQueueFollowUp: () => void;
@@ -19,6 +21,8 @@ export function ChatComposer({
     sessionId,
     modelProviderSelection,
     actionMessage,
+    providerRunDisabled,
+    providerRunDisabledReason,
     onPromptChange,
     onSubmitPrompt,
     onQueueFollowUp,
@@ -44,25 +48,28 @@ export function ChatComposer({
                 </div>
             </label>
             <div className="composer-actions">
-                <button type="button" onClick={onSubmitPrompt}>
+                <button type="button" disabled={providerRunDisabled} onClick={onSubmitPrompt}>
                     Submit prompt
                 </button>
-                <button type="button" onClick={onQueueFollowUp}>
+                <button type="button" disabled={providerRunDisabled} onClick={onQueueFollowUp}>
                     Queue follow-up
                 </button>
-                <button type="button" onClick={onSteerRun}>
+                <button type="button" disabled={providerRunDisabled} onClick={onSteerRun}>
                     Steer
                 </button>
                 <button type="button" onClick={onInterruptRun}>
                     Interrupt
                 </button>
-                <button type="button" onClick={onResumeRun}>
+                <button type="button" disabled={providerRunDisabled} onClick={onResumeRun}>
                     Resume
                 </button>
             </div>
             <div className="composer-meta">
                 <span>{sessionId.length > 0 ? sessionId : 'session required'}</span>
                 <span>{actionMessage}</span>
+                {providerRunDisabled ? (
+                    <span data-testid="composer-provider-run-state">{providerRunDisabledReason}</span>
+                ) : null}
             </div>
         </section>
     );

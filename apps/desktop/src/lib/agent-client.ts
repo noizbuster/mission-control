@@ -4,6 +4,7 @@ import type {
     ModelProviderSelection,
     ProviderCredentialSummary,
 } from '@mission-control/protocol';
+import { ProviderCredentialSummarySchema } from '@mission-control/protocol';
 import { isTauri, invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { credentialSummary, demoEvents, demoSession, mockReceipt } from './agent-client-demo.js';
 import {
@@ -52,6 +53,8 @@ export type TauriInvoke = (command: string, args?: Record<string, unknown>) => P
 
 export type SaveDesktopProviderCredentialInput = {
     readonly providerID: string;
+    readonly modelID: string;
+    readonly variantID?: string;
     readonly apiKey: string;
 };
 
@@ -75,7 +78,6 @@ export interface MockDesktopAgentClient extends DesktopAgentClient {
 }
 
 export function createTauriDesktopAgentClient(invokeCommand: TauriInvoke = defaultTauriInvoke): DesktopAgentClient {
-    let credentialSummaries: readonly ProviderCredentialSummary[] = [];
     return {
         async listSessions(): Promise<readonly DesktopSessionSummary[]> {
             return DesktopSessionSummaryListSchema.parse(await invokeCommand('list_sessions'));
@@ -105,15 +107,10 @@ export function createTauriDesktopAgentClient(invokeCommand: TauriInvoke = defau
             return DesktopCommandReceiptSchema.parse(await invokeCommand('decide_approval', { input }));
         },
         async listProviderCredentials(): Promise<readonly ProviderCredentialSummary[]> {
-            return credentialSummaries;
+            return ProviderCredentialSummarySchema.array().parse(await invokeCommand('list_provider_credentials'));
         },
         async saveProviderCredential(input: SaveDesktopProviderCredentialInput): Promise<ProviderCredentialSummary> {
-            const summary = credentialSummary(input);
-            credentialSummaries = [
-                ...credentialSummaries.filter((credential) => credential.providerID !== input.providerID),
-                summary,
-            ];
-            return summary;
+            return ProviderCredentialSummarySchema.parse(await invokeCommand('save_provider_credential', { input }));
         },
     };
 }

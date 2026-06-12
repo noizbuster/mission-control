@@ -78,6 +78,7 @@ describe('desktop agent client', () => {
         const beforeSave = await client.listProviderCredentials();
         const saved = await client.saveProviderCredential({
             providerID: 'openai',
+            modelID: 'gpt-4.1',
             apiKey: 'sk-test-secret',
         });
         const afterSave = await client.listProviderCredentials();

@@ -1,7 +1,16 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { App, getCredentialStatus, getModelsForProvider, resolveSelectionForProviderChange } from './App.js';
+import { App } from './App.js';
 import type { DesktopSessionLog } from './lib/agent-client.js';
+import {
+    formatProviderCapabilityStatus,
+    getCredentialStatus,
+    getModelsForProvider,
+    getProviderExecutionGate,
+    ProviderExecutionStatus,
+    resolveSelectionForProviderChange,
+} from './ProviderControls.js';
+import { providerRunBlockMessage } from './useDesktopWriteActions.js';
 
 describe('Desktop App', () => {
     it('renders mission-control title, controls, and read-only session timeline', () => {
@@ -94,6 +103,83 @@ describe('Desktop App', () => {
 
         expect(html).toContain('credential configured');
         expect(html).not.toContain('mc_test_key');
+    });
+
+    it('renders provider execution capability and redacted credential details', () => {
+        const openAISelection = resolveSelectionForProviderChange('openai', 'removed-model');
+        const unredactedCredential = ['fixture', 'token', 'value'].join('-');
+        const html = renderToStaticMarkup(
+            <App
+                initialCredentialSummaries={[
+                    {
+                        providerID: 'openai',
+                        authenticated: true,
+                        credentialType: 'apiKey',
+                        maskedCredential: 'sk-l...cret',
+                    },
+                ]}
+                initialModelProviderSelection={openAISelection}
+            />,
+        );
+
+        expect(html).toContain('data-testid="provider-execution-status"');
+        expect(html).toContain('execution ready');
+        expect(html).toContain('credential configured');
+        expect(html).toContain('sk-l...cret');
+        expect(html).not.toContain(unredactedCredential);
+    });
+
+    it('disables write-capable composer actions for non-executable providers', () => {
+        const cloudflareSelection = resolveSelectionForProviderChange('cloudflare-ai-gateway', 'removed-model');
+        const html = renderToStaticMarkup(
+            <App initialSessionId="session_write" initialModelProviderSelection={cloudflareSelection} />,
+        );
+
+        expect(html).toContain('model discovery only');
+        expect(html).toContain('run disabled: model discovery only');
+        expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Submit prompt<\/button>/);
+        expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Queue follow-up<\/button>/);
+        expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Steer<\/button>/);
+        expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Resume<\/button>/);
+        expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Interrupt<\/button>/);
+    });
+
+    it('classifies desktop provider execution gates from the shared catalog', () => {
+        const executableGate = getProviderExecutionGate('openai');
+        const discoveryOnlyGate = getProviderExecutionGate('cloudflare-ai-gateway');
+        const authOnlyGate = getProviderExecutionGate('github-copilot');
+
+        expect(executableGate).toMatchObject({
+            canStart: true,
+            label: 'execution ready',
+            status: 'executable',
+        });
+        expect(discoveryOnlyGate).toMatchObject({
+            canStart: false,
+            label: 'model discovery only',
+            status: 'model-discovery-only',
+        });
+        expect(authOnlyGate).toMatchObject({
+            canStart: false,
+            label: 'auth only',
+            status: 'auth-only',
+        });
+        expect(providerRunBlockMessage(executableGate)).toBeUndefined();
+        expect(providerRunBlockMessage(discoveryOnlyGate)).toBe('run disabled: model discovery only');
+        expect(providerRunBlockMessage(authOnlyGate)).toBe('run disabled: auth only');
+        expect(formatProviderCapabilityStatus({ status: 'unsupported' })).toBe('unsupported');
+        expect(
+            renderToStaticMarkup(
+                <ProviderExecutionStatus
+                    gate={{
+                        canStart: false,
+                        label: 'unsupported',
+                        message: 'run disabled: unsupported',
+                        status: 'unsupported',
+                    }}
+                />,
+            ),
+        ).toContain('data-state="unsupported"');
     });
 
     it('marks configured providers as authenticated', () => {

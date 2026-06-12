@@ -178,7 +178,7 @@ describe('desktop session command service', () => {
                 ]),
             );
             expect(replay.events.find((event) => event.type === 'command.completed')?.command).toMatchObject({
-                command: ['pnpm', 'exec', 'vitest', 'run', 'packages/core/src/tools/command-run.fixture.test.ts'],
+                command: ['node', '--eval', "console.log('mission-control command.run harness ok')"],
                 status: 'completed',
                 exitCode: 0,
             });

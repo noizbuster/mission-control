@@ -1,14 +1,24 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
-import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import {
+    hasPendingDesktopApprovals,
+    projectDesktopApprovalContinuationMessages,
+} from './desktop-approval-transcript.js';
 import {
     appendPendingToolApprovals,
     type DesktopApprovalDecisionInput,
     settleDesktopApproval,
 } from './desktop-tool-approvals.js';
 import { type JsonlSessionEventIdFactory, JsonlSessionEventStore } from './memory/jsonl-session-event-store.js';
-import { createDeterministicProvider } from './providers/deterministic-provider.js';
+import { createProviderAuthStoreCredentialResolver } from './providers/provider-auth-resolver.js';
+import { createProviderAuthStore } from './providers/provider-auth-store.js';
+import { createProviderRouter } from './providers/provider-factory.js';
 import type { ProviderAdapter } from './providers/provider-turn-types.js';
-import { type RunCoordinatorPromptInput, SessionRunCoordinator } from './runtime/run-coordinator.js';
+import {
+    type RunCoordinatorPromptInput,
+    type RunCoordinatorReadMessages,
+    SessionRunCoordinator,
+} from './runtime/run-coordinator.js';
 import type { CommandExecutionRequest, CommandExecutionResult } from './tools/command-run.js';
 
 export type DesktopPromptCommandInput = {
@@ -58,10 +68,12 @@ export function createDesktopSessionCommandService(
 class DefaultDesktopSessionCommandService implements DesktopSessionCommandService {
     private readonly options: DesktopSessionCommandServiceOptions;
     private readonly now: () => string;
+    private readonly provider: ProviderAdapter;
 
     constructor(options: DesktopSessionCommandServiceOptions) {
         this.options = options;
         this.now = options.now ?? (() => new Date().toISOString());
+        this.provider = options.provider ?? createDefaultDesktopProvider();
     }
 
     async submitPrompt(input: DesktopPromptCommandInput): Promise<DesktopCommandReceipt> {
@@ -106,7 +118,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
 
     async resumeRun(input: DesktopRunCommandInput): Promise<DesktopCommandReceipt> {
         return this.withStore(input.sessionId, async (store) => {
-            const selection = this.selection();
+            const selection = await this.selectionForSession(store, input.sessionId);
             await ensureSessionStarted(store, input.sessionId, selection, this.now);
             const result = await this.coordinator(store, input.sessionId, selection).resume();
             await appendPendingToolApprovals({
@@ -121,7 +133,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
 
     async interruptRun(input: DesktopRunCommandInput): Promise<DesktopCommandReceipt> {
         return this.withStore(input.sessionId, async (store) => {
-            const selection = this.selection();
+            const selection = await this.selectionForSession(store, input.sessionId);
             await ensureSessionStarted(store, input.sessionId, selection, this.now);
             const result = await this.coordinator(store, input.sessionId, selection).interrupt(input.reason);
             return result.status;
@@ -129,36 +141,68 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
     }
 
     async decideApproval(input: DesktopApprovalDecisionInput): Promise<DesktopCommandReceipt> {
-        return this.withStore(input.sessionId, async (store) =>
-            settleDesktopApproval(input, {
+        return this.withStore(input.sessionId, async (store) => {
+            const selection = await this.selectionForSession(store, input.sessionId);
+            const status = await settleDesktopApproval(input, {
                 store,
                 sessionId: input.sessionId,
                 workspaceRoot: this.options.workspaceRoot,
-                modelProviderSelection: this.selection(),
+                modelProviderSelection: selection,
                 now: this.now,
                 ...(this.options.commandExecutor !== undefined
                     ? { commandExecutor: this.options.commandExecutor }
                     : {}),
-            }),
-        );
+            });
+            if (status !== 'completed') {
+                return status;
+            }
+            if (hasPendingDesktopApprovals(await store.getEvents(input.sessionId), input.sessionId)) {
+                return status;
+            }
+            const result = await this.coordinator(store, input.sessionId, selection, {
+                readMessages: async () =>
+                    projectDesktopApprovalContinuationMessages(await store.getEvents(input.sessionId), input.sessionId),
+            }).resume();
+            await appendPendingToolApprovals({
+                store,
+                sessionId: input.sessionId,
+                modelProviderSelection: selection,
+                now: this.now,
+            });
+            return result.status;
+        });
     }
 
     private coordinator(
         store: JsonlSessionEventStore,
         sessionId: string,
         modelProviderSelection: ModelProviderSelection,
+        options: { readonly readMessages?: RunCoordinatorReadMessages } = {},
     ): SessionRunCoordinator {
         return new SessionRunCoordinator({
             sessionId,
             store,
-            provider: this.options.provider ?? echoProvider(),
+            provider: this.provider,
             modelProviderSelection,
             now: this.now,
+            ...(options.readMessages !== undefined ? { readMessages: options.readMessages } : {}),
         });
     }
 
     private selection(input?: { readonly modelProviderSelection?: ModelProviderSelection }): ModelProviderSelection {
         return input?.modelProviderSelection ?? this.options.modelProviderSelection ?? defaultModelProviderSelection;
+    }
+
+    private async selectionForSession(
+        store: JsonlSessionEventStore,
+        sessionId: string,
+        input?: { readonly modelProviderSelection?: ModelProviderSelection },
+    ): Promise<ModelProviderSelection> {
+        if (input?.modelProviderSelection !== undefined) {
+            return input.modelProviderSelection;
+        }
+        const events = await store.getEvents(sessionId);
+        return latestModelProviderSelection(events) ?? this.selection();
     }
 
     private async withStore(
@@ -209,6 +253,10 @@ function promptInput(input: DesktopPromptCommandInput): RunCoordinatorPromptInpu
     };
 }
 
-function echoProvider(): ProviderAdapter {
-    return createDeterministicProvider([{ kind: 'response_completed', content: 'desktop prompt received' }]);
+function latestModelProviderSelection(events: readonly AgentEvent[]): ModelProviderSelection | undefined {
+    return [...events].reverse().find((event) => event.modelProviderSelection !== undefined)?.modelProviderSelection;
+}
+
+function createDefaultDesktopProvider(): ProviderAdapter {
+    return createProviderRouter(createProviderAuthStoreCredentialResolver(createProviderAuthStore()));
 }

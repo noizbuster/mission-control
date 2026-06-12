@@ -5,8 +5,13 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fs::{metadata, read_dir, read_to_string};
 use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::sync::Mutex;
 
 const DATA_DIR_ENV: &str = "MCTRL_DATA_DIR";
+
+#[cfg(test)]
+static TEST_DATA_DIR_OVERRIDE: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -71,6 +76,10 @@ impl Error for DesktopSessionError {}
 type DesktopResult<T> = Result<T, DesktopSessionError>;
 
 pub fn resolve_data_dir() -> DesktopResult<PathBuf> {
+    #[cfg(test)]
+    if let Some(data_dir) = test_data_dir_override() {
+        return Ok(data_dir);
+    }
     if let Some(value) = std::env::var_os(DATA_DIR_ENV) {
         if !value.is_empty() {
             return Ok(PathBuf::from(value));
@@ -176,7 +185,7 @@ fn parse_session_id(session_id: &str) -> DesktopResult<String> {
     Err(session_error(format!("invalid session id {session_id}")))
 }
 
-fn session_path(data_dir: &Path, session_id: &str) -> PathBuf {
+pub(crate) fn session_path(data_dir: &Path, session_id: &str) -> PathBuf {
     data_dir
         .join("sessions")
         .join(format!("{session_id}.jsonl"))
@@ -186,4 +195,35 @@ fn session_error(message: impl Into<String>) -> DesktopSessionError {
     DesktopSessionError {
         message: message.into(),
     }
+}
+
+#[cfg(test)]
+pub(crate) struct TestDataDirOverride {
+    previous: Option<PathBuf>,
+}
+
+#[cfg(test)]
+impl Drop for TestDataDirOverride {
+    fn drop(&mut self) {
+        if let Ok(mut override_dir) = TEST_DATA_DIR_OVERRIDE.lock() {
+            *override_dir = self.previous.take();
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn override_data_dir_for_test(data_dir: PathBuf) -> DesktopResult<TestDataDirOverride> {
+    let mut override_dir = TEST_DATA_DIR_OVERRIDE
+        .lock()
+        .map_err(|_| session_error("test data directory override lock is poisoned"))?;
+    let previous = override_dir.replace(data_dir);
+    Ok(TestDataDirOverride { previous })
+}
+
+#[cfg(test)]
+fn test_data_dir_override() -> Option<PathBuf> {
+    TEST_DATA_DIR_OVERRIDE
+        .lock()
+        .map(|override_dir| override_dir.clone())
+        .unwrap_or(None)
 }

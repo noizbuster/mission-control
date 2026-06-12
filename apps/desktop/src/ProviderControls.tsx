@@ -1,9 +1,21 @@
 import { defaultModelProviderSelection, modelProviderCatalog } from '@mission-control/config';
-import type { ModelProviderSelection, ProviderCredentialSummary } from '@mission-control/protocol';
+import type {
+    ModelProviderSelection,
+    ProviderCapabilityStatus,
+    ProviderCredentialSummary,
+    ProviderExecutionCapability,
+} from '@mission-control/protocol';
 import type { ChangeEvent } from 'react';
 
 type ProviderEntry = (typeof modelProviderCatalog)[number];
 type ModelEntry = ProviderEntry['models'][number];
+
+export type ProviderExecutionGate = {
+    readonly canStart: boolean;
+    readonly label: string;
+    readonly message: string;
+    readonly status: ProviderCapabilityStatus;
+};
 
 export type ProviderControlsProps = {
     readonly credentialSummaries: readonly ProviderCredentialSummary[];
@@ -51,6 +63,50 @@ export function getCredentialStatus(
     return summary?.authenticated === true ? 'credential configured' : 'credential missing';
 }
 
+export function getCredentialStatusLabel(
+    providerID: string,
+    credentialSummaries: readonly ProviderCredentialSummary[],
+): string {
+    const status = getCredentialStatus(providerID, credentialSummaries);
+    const summary = credentialSummaries.find((entry) => entry.providerID === providerID);
+    if (summary?.authenticated !== true || summary.maskedCredential === undefined) {
+        return status;
+    }
+    return `${status} ${summary.maskedCredential}`;
+}
+
+export function getProviderExecutionGate(providerID: string): ProviderExecutionGate {
+    const capability = getProvider(providerID).capability;
+    const label = formatProviderCapabilityStatus(capability);
+    return {
+        canStart: capability.status === 'executable',
+        label,
+        message: capability.status === 'executable' ? 'run enabled' : `run disabled: ${label}`,
+        status: capability.status,
+    };
+}
+
+export function formatProviderCapabilityStatus(capability: ProviderExecutionCapability): string {
+    switch (capability.status) {
+        case 'executable':
+            return 'execution ready';
+        case 'model-discovery-only':
+            return 'model discovery only';
+        case 'auth-only':
+            return 'auth only';
+        case 'unsupported':
+            return 'unsupported';
+    }
+}
+
+export function ProviderExecutionStatus({ gate }: { readonly gate: ProviderExecutionGate }): React.JSX.Element {
+    return (
+        <div className="provider-execution-status" data-state={gate.status} data-testid="provider-execution-status">
+            {gate.label}
+        </div>
+    );
+}
+
 export function ProviderControls({
     credentialSummaries,
     credentialValue,
@@ -64,6 +120,8 @@ export function ProviderControls({
     const selectedProvider = getProvider(selectedProviderID);
     const models = getModelsForProvider(selectedProviderID);
     const credentialStatus = getCredentialStatus(selectedProviderID, credentialSummaries);
+    const credentialStatusLabel = getCredentialStatusLabel(selectedProviderID, credentialSummaries);
+    const executionGate = getProviderExecutionGate(selectedProviderID);
 
     function handleProviderChange(event: ChangeEvent<HTMLSelectElement>): void {
         onProviderSelectionChange(resolveSelectionForProviderChange(event.currentTarget.value, selectedModelID));
@@ -110,8 +168,9 @@ export function ProviderControls({
                 />
             </label>
             <div className="credential-status" data-state={credentialStatus} data-testid="provider-credential-status">
-                {credentialStatus}
+                {credentialStatusLabel}
             </div>
+            <ProviderExecutionStatus gate={executionGate} />
             <button type="button" onClick={onSaveCredential}>
                 Save credential
             </button>
