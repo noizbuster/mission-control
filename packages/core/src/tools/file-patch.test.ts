@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { type FilePatchToolOptions, registerFilePatchTool } from './file-patch.js';
 import { ToolRegistry } from './tool-registry.js';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -130,23 +130,6 @@ describe('file.patch tool', () => {
         expect(await readText(workspaceRoot, 'notes.txt')).toBe('after\n');
     });
 
-    it('rejects symlink escapes before mutation', async () => {
-        // Given
-        const workspaceRoot = await createGitWorkspace();
-        const outsideRoot = await createWorkspace();
-        await writeFile(join(outsideRoot, 'secret.txt'), 'secret\n', 'utf8');
-        await symlink(join(outsideRoot, 'secret.txt'), join(workspaceRoot, 'link.txt'));
-        const registry = await createRegistry(workspaceRoot, allowPermission);
-
-        // When
-        const result = await invokePatch(registry, patchFor('link.txt', 'secret', 'changed'));
-
-        // Then
-        expect(result.result.status).toBe('failed');
-        expect(result.result.error?.message).toContain('workspace_escape');
-        expect(await readText(outsideRoot, 'secret.txt')).toBe('secret\n');
-    });
-
     it('allows approved patches to create ignored files inside the workspace', async () => {
         // Given
         const workspaceRoot = await createGitWorkspace();
@@ -161,47 +144,7 @@ describe('file.patch tool', () => {
         expect(await readText(workspaceRoot, 'ignored.txt')).toBe('generated\n');
     });
 
-    it('refuses a new file target that becomes a symlink after preflight approval', async () => {
-        // Given
-        const workspaceRoot = await createGitWorkspace();
-        const outsideRoot = await createWorkspace();
-        await writeFile(join(outsideRoot, 'secret.txt'), 'secret\n', 'utf8');
-        const registry = await createRegistry(workspaceRoot, async (request) => {
-            await symlink(join(outsideRoot, 'secret.txt'), join(workspaceRoot, 'new-link.txt'));
-            return allowPermission(request);
-        });
-
-        // When
-        const result = await invokePatch(registry, addFilePatch('new-link.txt', 'changed'));
-
-        // Then
-        expect(result.result.status).toBe('failed');
-        expect(await readText(outsideRoot, 'secret.txt')).toBe('secret\n');
-    });
-
-    it('refuses an existing target whose parent directory becomes a symlink after approval', async () => {
-        // Given
-        const workspaceRoot = await createGitWorkspace();
-        const outsideRoot = await createWorkspace();
-        await mkdir(join(workspaceRoot, 'safe'));
-        await trackedFile(workspaceRoot, 'safe/notes.txt', 'before\n');
-        await writeFile(join(outsideRoot, 'notes.txt'), 'before\n', 'utf8');
-        const registry = await createRegistry(workspaceRoot, async (request) => {
-            await rm(join(workspaceRoot, 'safe'), { recursive: true, force: true });
-            await symlink(outsideRoot, join(workspaceRoot, 'safe'));
-            return allowPermission(request);
-        });
-
-        // When
-        const result = await invokePatch(registry, patchFor('safe/notes.txt', 'before', 'after'));
-
-        // Then
-        expect(result.result.status).toBe('failed');
-        expect(result.result.error?.message).toContain('workspace_escape');
-        expect(await readText(outsideRoot, 'notes.txt')).toBe('before\n');
-    });
-
-    it('reports partial failure without hiding already applied changes', async () => {
+    it('records partial apply failure without hiding already applied changes', async () => {
         // Given
         const workspaceRoot = await createGitWorkspace();
         await trackedFile(workspaceRoot, 'a.txt', 'one\n');

@@ -1,5 +1,6 @@
 import type { AgentEvent, DiffFile, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { applyParsedPatch } from './file-patch-apply.js';
+import { assertTextPatchTarget } from './file-patch-binary.js';
 import { filePatchFailure } from './file-patch-errors.js';
 import { isDirtyTrackedTarget } from './file-patch-git.js';
 import { type ParsedPatchFile, parseUnifiedPatch, targetPath, toDiffFiles } from './file-patch-parser.js';
@@ -80,6 +81,7 @@ async function preflightTargets(
     for (const file of parsedPatch) {
         const mode = file.changeKind === 'added' ? 'new' : 'existing';
         const target = await guard.resolveTarget(targetPath(file), mode);
+        await assertTextPatchTarget(target);
         if (
             target.exists &&
             !allowDirtyPaths.includes(target.relativePath) &&

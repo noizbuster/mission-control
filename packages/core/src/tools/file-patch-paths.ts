@@ -1,4 +1,5 @@
 import { filePatchFailure } from './file-patch-errors.js';
+import { defaultReadOnlyRepoToolDenylist, toPosixPath } from './read-tools-paths.js';
 import type { Stats } from 'node:fs';
 import { mkdir, realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
@@ -26,6 +27,7 @@ export async function createPatchWorkspaceGuard(workspaceRoot: string): Promise<
 async function resolveTarget(root: string, path: string, mode: 'existing' | 'new'): Promise<PatchTarget> {
     const lexicalPath = isAbsolute(path) ? resolve(path) : resolve(root, path);
     ensureInside(root, lexicalPath, path);
+    ensureNotDenied(root, lexicalPath, path);
     if (mode === 'new') {
         return resolveNewTarget(root, lexicalPath, path);
     }
@@ -42,6 +44,7 @@ async function resolveExistingTarget(root: string, lexicalPath: string, requeste
         throw filePatchFailure('not_file', errorMessage(error));
     }
     ensureInside(root, physicalPath, requestedPath);
+    ensureNotDenied(root, physicalPath, requestedPath);
     if (!stats.isFile()) {
         throw filePatchFailure('not_file', `target is not a file: ${requestedPath}`);
     }
@@ -60,6 +63,7 @@ async function resolveNewTarget(root: string, lexicalPath: string, requestedPath
     const parentPath = dirname(lexicalPath);
     const physicalParent = await realpath(parentPath);
     ensureInside(root, physicalParent, requestedPath);
+    ensureNotDenied(root, physicalParent, requestedPath);
     await mkdir(physicalParent, { recursive: true });
     return { absolutePath: lexicalPath, relativePath: toRelativePath(root, lexicalPath), exists: false };
 }
@@ -70,6 +74,31 @@ function ensureInside(root: string, path: string, requestedPath: string): void {
     }
 }
 
+function ensureNotDenied(root: string, path: string, requestedPath: string): void {
+    if (matchesDenylist(toRelativePath(root, path))) {
+        throw filePatchFailure('workspace_denied', `path is denied by workspace policy: ${requestedPath}`);
+    }
+}
+
+function matchesDenylist(relativePath: string): boolean {
+    return defaultReadOnlyRepoToolDenylist.some((entry) => matchesDenylistEntry(entry, relativePath));
+}
+
+function matchesDenylistEntry(entry: string, relativePath: string): boolean {
+    if (entry.includes('/')) {
+        return isSameOrDescendant(entry, relativePath);
+    }
+    return pathSegments(relativePath).includes(entry);
+}
+
+function isSameOrDescendant(parent: string, child: string): boolean {
+    return parent === '.' || child === parent || child.startsWith(`${parent}/`);
+}
+
+function pathSegments(path: string): readonly string[] {
+    return path === '.' ? [] : path.split('/');
+}
+
 function containsPath(root: string, path: string): boolean {
     const child = relative(root, path);
     return child === '' || (!child.startsWith('..') && !isAbsolute(child));
@@ -77,7 +106,7 @@ function containsPath(root: string, path: string): boolean {
 
 function toRelativePath(root: string, path: string): string {
     const relativePath = relative(root, path);
-    return relativePath === '' ? '.' : relativePath.split('\\').join('/');
+    return relativePath === '' ? '.' : toPosixPath(relativePath);
 }
 
 function isNodeError(error: unknown, code: string): error is { readonly code: string } {
