@@ -53,6 +53,26 @@ export type ToolOutcomeProjection = {
 
 export type CodingReplayStep =
     | {
+          readonly kind: 'run.state';
+          readonly eventId: string;
+          readonly timestamp: string;
+          readonly eventType: AgentEvent['type'];
+          readonly command?: NonNullable<AgentEvent['run']>['command'];
+          readonly state?: NonNullable<AgentEvent['run']>['state'];
+          readonly runId?: string;
+          readonly inputId?: string;
+          readonly messageId?: string;
+          readonly parentMessageId?: string;
+          readonly delivery?: NonNullable<AgentEvent['run']>['delivery'];
+          readonly providerTurnId?: string;
+          readonly toolCallId?: string;
+          readonly graphId?: string;
+          readonly nodeId?: string;
+          readonly reason?: string;
+          readonly errorCode?: ProtocolError['code'];
+          readonly message?: string;
+      }
+    | {
           readonly kind: 'provider.tool_call';
           readonly eventId: string;
           readonly timestamp: string;

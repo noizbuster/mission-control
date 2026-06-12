@@ -1,9 +1,20 @@
 import type { AgentEvent, AgentEventEnvelope, ToolResult } from '@mission-control/protocol';
 import type { CodingReplayStep, ReplayDiagnostic } from './session-replay-types.js';
 
+const RUN_REPLAY_EVENT_TYPES: ReadonlySet<AgentEvent['type']> = new Set([
+    'run.command.received',
+    'run.started',
+    'run.completed',
+    'run.interrupted',
+    'run.idle',
+    'run.failed',
+    'run.blocked',
+]);
+
 export function projectCodingSteps(envelopes: readonly AgentEventEnvelope[]): readonly CodingReplayStep[] {
     const appliedFiles = appliedFilesByToolCallId(envelopes.map((envelope) => envelope.event));
-    return envelopes.flatMap((envelope) => stepForEnvelope(envelope, appliedFiles));
+    const continuationSequences = new Set(continuationMessageSequences(envelopes));
+    return envelopes.flatMap((envelope) => stepForEnvelope(envelope, appliedFiles, continuationSequences));
 }
 
 export function projectReplayDiagnostics(envelopes: readonly AgentEventEnvelope[]): readonly ReplayDiagnostic[] {
@@ -33,8 +44,13 @@ export function projectReplayDiagnostics(envelopes: readonly AgentEventEnvelope[
 function stepForEnvelope(
     envelope: AgentEventEnvelope,
     appliedFiles: ReadonlyMap<string, readonly string[]>,
+    continuationSequences: ReadonlySet<number>,
 ): readonly CodingReplayStep[] {
     const event = envelope.event;
+    const runStep = runStateStep(envelope);
+    if (runStep !== undefined) {
+        return [runStep];
+    }
     const chunk = event.providerStreamChunk;
     if (chunk?.kind === 'tool_call_completed') {
         return [
@@ -58,7 +74,7 @@ function stepForEnvelope(
                 ...(providerTurnId !== undefined ? { providerTurnId } : {}),
                 messageId: event.transcript?.messageId ?? chunk.message.messageId,
                 message: chunk.message.content,
-                continuation: providerTurnId?.includes('_continue_') ?? false,
+                continuation: continuationSequences.has(envelope.sequence),
             },
         ];
     }
@@ -92,6 +108,34 @@ function stepForEnvelope(
         return [toolResultStep(envelope, event.toolResult, appliedFiles.get(event.toolResult.toolCallId))];
     }
     return [];
+}
+
+function runStateStep(envelope: AgentEventEnvelope): CodingReplayStep | undefined {
+    const event = envelope.event;
+    const run = event.run;
+    if (run === undefined || !RUN_REPLAY_EVENT_TYPES.has(event.type)) {
+        return undefined;
+    }
+    return {
+        kind: 'run.state',
+        eventId: envelope.eventId,
+        timestamp: event.timestamp,
+        eventType: event.type,
+        ...(run.command !== undefined ? { command: run.command } : {}),
+        ...(run.state !== undefined ? { state: run.state } : {}),
+        ...(run.runId !== undefined ? { runId: run.runId } : {}),
+        ...(run.inputId !== undefined ? { inputId: run.inputId } : {}),
+        ...(run.messageId !== undefined ? { messageId: run.messageId } : {}),
+        ...(run.parentMessageId !== undefined ? { parentMessageId: run.parentMessageId } : {}),
+        ...(run.delivery !== undefined ? { delivery: run.delivery } : {}),
+        ...(run.providerTurnId !== undefined ? { providerTurnId: run.providerTurnId } : {}),
+        ...(run.toolCallId !== undefined ? { toolCallId: run.toolCallId } : {}),
+        ...(run.graphId !== undefined ? { graphId: run.graphId } : {}),
+        ...(run.nodeId !== undefined ? { nodeId: run.nodeId } : {}),
+        ...(run.reason !== undefined ? { reason: run.reason } : {}),
+        ...(run.errorCode !== undefined ? { errorCode: run.errorCode } : {}),
+        ...(event.message !== undefined ? { message: event.message } : {}),
+    };
 }
 
 function toolResultStep(
@@ -147,10 +191,29 @@ function providerToolNamesByCallId(envelopes: readonly AgentEventEnvelope[]): Re
 }
 
 function continuationMessageSequences(envelopes: readonly AgentEventEnvelope[]): readonly number[] {
-    return envelopes.flatMap((envelope) => {
+    const sequences: number[] = [];
+    let awaitingToolContinuation = false;
+    for (const envelope of envelopes) {
+        if (startsNewProviderInput(envelope.event)) {
+            awaitingToolContinuation = false;
+        }
         const providerTurnId = envelope.event.transcript?.providerTurnId;
-        return providerTurnId?.includes('_continue_') === true ? [envelope.sequence] : [];
-    });
+        const chunk = envelope.event.providerStreamChunk;
+        if (chunk?.kind === 'response_completed') {
+            if (awaitingToolContinuation || providerTurnId?.includes('_continue_') === true) {
+                sequences.push(envelope.sequence);
+            }
+            awaitingToolContinuation = false;
+        }
+        if (envelope.event.toolResult !== undefined) {
+            awaitingToolContinuation = true;
+        }
+    }
+    return sequences;
+}
+
+function startsNewProviderInput(event: AgentEvent): boolean {
+    return event.type === 'run.started' || event.type === 'prompt.promoted';
 }
 
 function lastStoppedSequence(envelopes: readonly AgentEventEnvelope[]): number | undefined {

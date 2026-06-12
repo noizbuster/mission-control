@@ -10,6 +10,7 @@ import {
     toolCompletedEvent,
     toolFailedEvent,
 } from './session-replay-coding-test-support.js';
+import { expectBlockedApprovalAndResumedRunProjection } from './session-replay-run-state-test-support.js';
 
 describe('session replay coding projections', () => {
     it('reconstructs provider tool calls, approvals, tool results, and continuation messages', () => {
@@ -154,5 +155,9 @@ describe('session replay coding projections', () => {
                 appliedFiles: ['a.txt'],
             },
         ]);
+    });
+
+    it('projects blocked approval and resumed run', () => {
+        expectBlockedApprovalAndResumedRunProjection();
     });
 });

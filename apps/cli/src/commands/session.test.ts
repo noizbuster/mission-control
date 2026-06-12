@@ -1,9 +1,17 @@
-import { missionControlDataDirEnvKey, type ProviderAdapter, type ProviderTurnRequest } from '@mission-control/core';
-import { type AgentEvent, AgentEventSchema, type ProviderStreamChunk } from '@mission-control/protocol';
+import { missionControlDataDirEnvKey } from '@mission-control/core';
+import { type AgentEvent, AgentEventSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
 import { runSessionCommand } from './session.js';
+import {
+    codingStepRecords,
+    diagnosticRecords,
+    eventRecords,
+    parseReplayRecords,
+    providerFromPatchRequests,
+    writeSessionEvents,
+} from './session-test-support.js';
 import { appendFile, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -114,6 +122,95 @@ describe('session commands', () => {
         await rm(dataDir, { recursive: true, force: true });
     });
 
+    it('renders failed run state', async () => {
+        // Given
+        const dataDir = await useTempDataDir();
+        const sessionId = 'session_cli_run_failed';
+        await writeSessionEvents({
+            dataDir,
+            sessionId,
+            events: [
+                runEvent(sessionId, 'run.started', 'run started', {
+                    command: 'run',
+                    state: 'running',
+                    runId: 'run_failed',
+                }),
+                runEvent(sessionId, 'run.failed', 'provider exploded', {
+                    command: 'run',
+                    state: 'failed',
+                    runId: 'run_failed',
+                    reason: 'provider exploded',
+                    errorCode: 'unknown',
+                }),
+            ],
+        });
+
+        // When
+        const showOutput = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', sessionId])));
+        const replayRecords = parseReplayRecords(
+            await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl'])),
+        );
+
+        // Then
+        expect(showOutput.codingSteps).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ kind: 'run.state', state: 'failed', reason: 'provider exploded' }),
+            ]),
+        );
+        expect(codingStepRecords(replayRecords)).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ kind: 'run.state', state: 'failed', errorCode: 'unknown' }),
+            ]),
+        );
+        await rm(dataDir, { recursive: true, force: true });
+    });
+
+    it('renders blocked run state distinctly', async () => {
+        // Given
+        const dataDir = await useTempDataDir();
+        const sessionId = 'session_cli_run_blocked';
+        await writeSessionEvents({
+            dataDir,
+            sessionId,
+            events: [
+                runEvent(sessionId, 'run.started', 'run started', {
+                    command: 'run',
+                    state: 'running',
+                    runId: 'run_blocked',
+                }),
+                runEvent(sessionId, 'run.blocked', 'waiting for approval: file.patch', {
+                    command: 'run',
+                    state: 'blocked_on_approval',
+                    runId: 'run_blocked',
+                    reason: 'waiting for approval: file.patch',
+                    errorCode: 'tool_failed',
+                    toolCallId: 'patch_call',
+                }),
+            ],
+        });
+
+        // When
+        const showOutput = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', sessionId])));
+        const replayRecords = parseReplayRecords(
+            await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl'])),
+        );
+
+        // Then
+        expect(showOutput.codingSteps).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    kind: 'run.state',
+                    state: 'blocked_on_approval',
+                    toolCallId: 'patch_call',
+                }),
+            ]),
+        );
+        expect(codingStepRecords(replayRecords)).toEqual(
+            expect.arrayContaining([expect.objectContaining({ kind: 'run.state', state: 'blocked_on_approval' })]),
+        );
+        await rm(dataDir, { recursive: true, force: true });
+    });
+
     it('throws typed errors for invalid session ids and missing logs', async () => {
         const dataDir = await useTempDataDir();
 
@@ -133,126 +230,19 @@ async function useTempDataDir(): Promise<string> {
     return dataDir;
 }
 
+function runEvent(sessionId: string, type: AgentEvent['type'], message: string, run: NonNullable<AgentEvent['run']>) {
+    return {
+        type,
+        timestamp: '2026-06-05T10:00:00.000Z',
+        sessionId,
+        message,
+        run,
+    };
+}
+
 function parseEventLines(output: string) {
     return output
         .trim()
         .split('\n')
         .map((line) => AgentEventSchema.parse(JSON.parse(line)));
-}
-
-type ReplayRecord =
-    | { readonly kind: 'event'; readonly event: AgentEvent }
-    | { readonly kind: 'coding.step'; readonly step: unknown }
-    | { readonly kind: 'diagnostic'; readonly diagnostic: unknown };
-
-type ReplayRecordCandidate = {
-    readonly kind?: unknown;
-    readonly event?: unknown;
-    readonly step?: unknown;
-    readonly diagnostic?: unknown;
-};
-
-function parseReplayRecords(output: string): readonly ReplayRecord[] {
-    return output
-        .trim()
-        .split('\n')
-        .filter((line) => line.trim().length > 0)
-        .map((line) => replayRecordFromUnknown(JSON.parse(line)));
-}
-
-function replayRecordFromUnknown(value: unknown): ReplayRecord {
-    if (!isRecord(value)) {
-        throw new TypeError('replay record must be an object');
-    }
-    switch (value.kind) {
-        case 'event':
-            return { kind: 'event', event: AgentEventSchema.parse(value.event) };
-        case 'coding.step':
-            return { kind: 'coding.step', step: value.step };
-        case 'diagnostic':
-            return { kind: 'diagnostic', diagnostic: value.diagnostic };
-        default:
-            throw new TypeError(`unsupported replay record kind: ${String(value.kind)}`);
-    }
-}
-
-function eventRecords(records: readonly ReplayRecord[]): readonly AgentEvent[] {
-    return records.flatMap((record) => (record.kind === 'event' ? [record.event] : []));
-}
-
-function codingStepRecords(records: readonly ReplayRecord[]): readonly unknown[] {
-    return records.flatMap((record) => (record.kind === 'coding.step' ? [record.step] : []));
-}
-
-function diagnosticRecords(records: readonly ReplayRecord[]): readonly unknown[] {
-    return records.flatMap((record) => (record.kind === 'diagnostic' ? [record.diagnostic] : []));
-}
-
-function providerFromPatchRequests(): ProviderAdapter {
-    let turns = 0;
-    return {
-        async *streamTurn(request) {
-            turns += 1;
-            if (turns === 1) {
-                yield toolCallChunk(request, 'session_patch_call', 'file.patch', {
-                    patch: addFilePatch('.mctrl-session-replay.txt', 'replayed'),
-                });
-                yield completedChunk(request, 'patch requested', ['session_patch_call']);
-                return;
-            }
-            yield completedChunk(request, 'patch applied after replay');
-        },
-    };
-}
-
-function toolCallChunk(
-    request: ProviderTurnRequest,
-    toolCallId: string,
-    toolName: string,
-    argumentsValue: Readonly<Record<string, unknown>>,
-): ProviderStreamChunk {
-    return {
-        kind: 'tool_call_completed',
-        requestId: request.requestId,
-        sequence: 1,
-        toolCall: {
-            toolCallId,
-            toolName,
-            argumentsJson: JSON.stringify(argumentsValue),
-        },
-    };
-}
-
-function completedChunk(
-    request: ProviderTurnRequest,
-    content: string,
-    toolCallIds?: readonly string[],
-): ProviderStreamChunk {
-    return {
-        kind: 'response_completed',
-        requestId: request.requestId,
-        sequence: 2,
-        message: {
-            messageId: `message_${request.turnId}`,
-            role: 'assistant',
-            content,
-            ...(toolCallIds !== undefined ? { toolCallIds: [...toolCallIds] } : {}),
-        },
-        finishReason: toolCallIds === undefined ? 'stop' : 'tool_calls',
-    };
-}
-
-function addFilePatch(path: string, content: string): string {
-    return [
-        `diff --git a/${path} b/${path}`,
-        '--- /dev/null',
-        `+++ b/${path}`,
-        '@@ -0,0 +1 @@',
-        `+${content}`,
-        '',
-    ].join('\n');
-}
-
-function isRecord(value: unknown): value is ReplayRecordCandidate {
-    return typeof value === 'object' && value !== null;
 }

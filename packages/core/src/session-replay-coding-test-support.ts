@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
+import type { AgentEvent, AgentEventEnvelope, RunCoordinatorEventMetadata } from '@mission-control/protocol';
 
 export function providerToolCallEvent(sessionId: string): AgentEvent {
     return {
@@ -158,6 +158,21 @@ export function sessionStoppedEvent(sessionId: string): AgentEvent {
         timestamp: '2026-06-05T10:00:05.000Z',
         sessionId,
         message: 'mission-control session stopped',
+    };
+}
+
+export function runEvent(
+    sessionId: string,
+    type: AgentEvent['type'],
+    message: string,
+    run: RunCoordinatorEventMetadata,
+): AgentEvent {
+    return {
+        type,
+        timestamp: '2026-06-05T10:00:06.000Z',
+        sessionId,
+        message,
+        run,
     };
 }
 

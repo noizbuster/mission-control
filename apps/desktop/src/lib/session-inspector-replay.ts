@@ -82,6 +82,17 @@ function approvalRows(approvals: readonly ApprovalProjection[], events: readonly
 
 function codingStepRow(step: CodingReplayStep): CodingStepRow {
     switch (step.kind) {
+        case 'run.state':
+            return {
+                key: step.eventId,
+                kind: step.kind,
+                timestamp: step.timestamp,
+                subject: joinParts([step.command, step.runId, step.inputId]) || step.eventType,
+                status: step.state ?? step.command ?? 'observed',
+                detail: redactDisplayText(
+                    joinParts([step.message, step.reason, step.errorCode, step.toolCallId, step.providerTurnId]),
+                ),
+            };
         case 'provider.tool_call':
             return {
                 key: step.eventId,
