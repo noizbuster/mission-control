@@ -17,6 +17,7 @@ import type { ProviderAdapter } from './providers/provider-turn-types.js';
 import {
     type RunCoordinatorPromptInput,
     type RunCoordinatorReadMessages,
+    type RunCoordinatorResult,
     SessionRunCoordinator,
 } from './runtime/run-coordinator.js';
 import type { CommandExecutionRequest, CommandExecutionResult } from './tools/command-run.js';
@@ -36,7 +37,7 @@ export type DesktopRunCommandInput = {
 
 export type DesktopCommandReceipt = {
     readonly sessionId: string;
-    readonly status: 'queued' | 'idle' | 'running' | 'completed' | 'interrupted' | 'blocked' | 'failed';
+    readonly status: 'queued' | 'blocked' | RunCoordinatorResult['status'];
     readonly eventsWritten: number;
 };
 

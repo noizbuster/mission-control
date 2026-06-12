@@ -1,4 +1,4 @@
-import type { ApprovalRecord, ModelProviderSelection } from '@mission-control/protocol';
+import { type ApprovalRecord, type ModelProviderSelection, RUN_COORDINATOR_STATES } from '@mission-control/protocol';
 import { z } from 'zod';
 
 export type DesktopApprovalDecisionState = Extract<
@@ -26,10 +26,12 @@ export type DesktopApprovalDecisionInput = {
     readonly reason?: string;
 };
 
+export const DESKTOP_COMMAND_RECEIPT_STATUSES = ['queued', 'blocked', ...RUN_COORDINATOR_STATES] as const;
+
 export const DesktopCommandReceiptSchema = z
     .object({
         sessionId: z.string().min(1),
-        status: z.enum(['queued', 'idle', 'running', 'completed', 'interrupted', 'blocked', 'failed']),
+        status: z.enum(DESKTOP_COMMAND_RECEIPT_STATUSES),
         eventsWritten: z.number().int().nonnegative(),
     })
     .strict();

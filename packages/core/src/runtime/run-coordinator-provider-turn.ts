@@ -1,4 +1,10 @@
-import type { AgentEvent, AgentMessage, ModelProviderSelection, ToolCall } from '@mission-control/protocol';
+import type {
+    AgentEvent,
+    AgentMessage,
+    ModelProviderSelection,
+    ProtocolErrorCode,
+    ToolCall,
+} from '@mission-control/protocol';
 import {
     appendProviderToolResultMessages,
     DEFAULT_PROVIDER_TOOL_CONTINUATION_LIMIT,
@@ -10,6 +16,7 @@ import {
 import { ProviderTurnRunner } from '../providers/provider-turn-runner.js';
 import { type ProviderAdapter, ProviderTurnError } from '../providers/provider-turn-types.js';
 import type { ToolInvocationSettlement, ToolRegistry } from '../tools/tool-registry.js';
+import type { RunCoordinatorProviderTurnResult } from './run-coordinator-lifecycle.js';
 import { providerRunnerOptions } from './run-coordinator-provider-options.js';
 import { providerTurnSelection } from './run-coordinator-provider-selection.js';
 
@@ -24,10 +31,6 @@ export type RunCoordinatorProviderTurnInput = {
     readonly readMessages: () => Promise<readonly AgentMessage[]>;
     readonly nextId: (prefix: string) => Promise<string>;
     readonly appendDurableEvent: (event: AgentEvent) => Promise<void>;
-};
-
-export type RunCoordinatorProviderTurnResult = {
-    readonly status: 'completed' | 'interrupted';
 };
 
 export async function runCoordinatorProviderTurn(
@@ -63,25 +66,74 @@ export async function runCoordinatorProviderTurn(
             return { status: 'interrupted' };
         }
         if (result.status === 'failed') {
-            return { status: 'completed' };
+            return {
+                status: 'failed',
+                reason: result.error.message,
+                errorCode: result.error.code,
+            };
         }
 
         const toolCalls = toolCallsFromProviderEnvelopes(result.envelopes);
-        if (toolCalls.length === 0 || input.toolRegistry === undefined) {
+        const firstToolCall = toolCalls.at(0);
+        if (firstToolCall === undefined) {
             return { status: 'completed' };
+        }
+        if (input.toolRegistry === undefined) {
+            return approvalBlockedResult(firstToolCall);
         }
         const loopLimit = input.toolCallLoopLimit ?? DEFAULT_PROVIDER_TOOL_CONTINUATION_LIMIT;
         if (toolContinuationTurns >= loopLimit) {
             throw new ProviderTurnError(providerToolLoopLimitError(loopLimit));
         }
+        const settlements = await settleToolCalls(input, toolCalls, signal);
+        const blockedSettlement = approvalRequiredSettlement(settlements);
+        if (blockedSettlement !== undefined) {
+            return {
+                status: 'blocked_on_approval',
+                reason: blockedSettlement.reason,
+                errorCode: blockedSettlement.errorCode,
+                toolCallId: blockedSettlement.toolCallId,
+            };
+        }
         messages = appendProviderToolResultMessages({
             messages,
             assistantMessage: result.message,
-            settlements: await settleToolCalls(input, toolCalls, signal),
+            settlements,
         });
         toolContinuationTurns += 1;
     }
     return { status: 'interrupted' };
+}
+
+function approvalBlockedResult(toolCall: ToolCall): RunCoordinatorProviderTurnResult {
+    return {
+        status: 'blocked_on_approval',
+        reason: `waiting for approval: ${toolCall.toolName}`,
+        errorCode: 'tool_failed',
+        toolCallId: toolCall.toolCallId,
+    };
+}
+
+type ApprovalRequiredSettlement = {
+    readonly toolCallId: string;
+    readonly reason: string;
+    readonly errorCode: ProtocolErrorCode;
+};
+
+function approvalRequiredSettlement(
+    settlements: readonly ToolInvocationSettlement[],
+): ApprovalRequiredSettlement | undefined {
+    for (const settlement of settlements) {
+        const error = settlement.result.error;
+        if (error?.message.startsWith('approval_required:') === true) {
+            return {
+                toolCallId: settlement.toolCallId,
+                reason: error.message,
+                errorCode: error.code,
+            };
+        }
+    }
+    return undefined;
 }
 
 async function settleToolCalls(

@@ -1,6 +1,7 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import { describe, expect, it } from 'vitest';
 import { createMockDesktopAgentClient } from './agent-client.js';
+import { DesktopCommandReceiptSchema } from './desktop-command-schemas.js';
 
 describe('desktop agent client', () => {
     it('mock desktop client emits demo event log', async () => {
@@ -91,5 +92,33 @@ describe('desktop agent client', () => {
         });
         expect(afterSave).toEqual([saved]);
         expect(JSON.stringify(afterSave)).not.toContain('sk-test-secret');
+    });
+
+    it('parses explicit failed and approval-blocked desktop command receipt states', () => {
+        // Given
+        const failedReceipt = {
+            sessionId: 'session_failed',
+            status: 'failed',
+            eventsWritten: 1,
+        };
+        const blockedReceipt = {
+            sessionId: 'session_blocked',
+            status: 'blocked_on_approval',
+            eventsWritten: 2,
+        };
+        const unknownReceipt = {
+            sessionId: 'session_unknown',
+            status: 'unknown_state',
+            eventsWritten: 0,
+        };
+
+        // When
+        const failed = DesktopCommandReceiptSchema.parse(failedReceipt);
+        const blocked = DesktopCommandReceiptSchema.parse(blockedReceipt);
+
+        // Then
+        expect(failed.status).toBe('failed');
+        expect(blocked.status).toBe('blocked_on_approval');
+        expect(DesktopCommandReceiptSchema.safeParse(unknownReceipt).success).toBe(false);
     });
 });

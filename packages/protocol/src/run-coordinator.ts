@@ -1,8 +1,16 @@
 import { z } from 'zod';
+import { ProtocolErrorCodeSchema } from './tool-result-primitives.js';
 import { TRANSCRIPT_DELIVERY_MODES } from './transcript.js';
 
 export const RUN_COORDINATOR_COMMANDS = ['wake', 'run', 'resume', 'interrupt', 'steer', 'queue'] as const;
-export const RUN_COORDINATOR_STATES = ['idle', 'running', 'interrupted', 'completed'] as const;
+export const RUN_COORDINATOR_STATES = [
+    'idle',
+    'running',
+    'interrupted',
+    'completed',
+    'failed',
+    'blocked_on_approval',
+] as const;
 
 export const RunCoordinatorCommandSchema = z.enum(RUN_COORDINATOR_COMMANDS);
 export type RunCoordinatorCommand = z.infer<typeof RunCoordinatorCommandSchema>;
@@ -23,5 +31,6 @@ export const RunCoordinatorEventMetadataSchema = z.object({
     graphId: z.string().min(1).optional(),
     nodeId: z.string().min(1).optional(),
     reason: z.string().min(1).optional(),
+    errorCode: ProtocolErrorCodeSchema.optional(),
 });
 export type RunCoordinatorEventMetadata = z.infer<typeof RunCoordinatorEventMetadataSchema>;

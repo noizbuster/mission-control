@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { ProviderTurnRequest } from '../providers/provider-turn-types.js';
 import { projectSessionAdmission } from '../session-admission.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
+import { registerRunCoordinatorLifecycleTests } from './run-coordinator-lifecycle-test-cases.js';
 import {
     cleanupCoordinatorContexts,
     deferred,
@@ -18,6 +19,8 @@ afterEach(async () => {
 });
 
 describe('SessionRunCoordinator', () => {
+    registerRunCoordinatorLifecycleTests();
+
     it('queues follow-up input while a provider turn is running and promotes it after settlement', async () => {
         // Given
         const context = await openCoordinatorContext('session_run_queue');

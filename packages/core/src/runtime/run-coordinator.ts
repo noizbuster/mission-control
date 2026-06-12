@@ -13,19 +13,22 @@ import type { AdmitPromptInput, PromptInputState, SessionAdmissionEventStore } f
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import * as runAdmission from './run-coordinator-admission.js';
 import { RunCoordinatorIdSequence } from './run-coordinator-ids.js';
+import {
+    finalizeProviderTurnResult,
+    type RunCoordinatorActiveRun,
+    type RunCoordinatorProviderTurnResult,
+    type RunCoordinatorResult,
+    type RunCoordinatorRunEventType,
+} from './run-coordinator-lifecycle.js';
 import { runCoordinatorProviderTurn } from './run-coordinator-provider-turn.js';
+
+export type { RunCoordinatorResult } from './run-coordinator-lifecycle.js';
 
 export type RunCoordinatorStore = SessionAdmissionEventStore;
 
 export type RunCoordinatorPromptInput = Omit<AdmitPromptInput, 'delivery' | 'inputId' | 'messageId'> & {
     readonly inputId?: string;
     readonly messageId?: string;
-};
-
-export type RunCoordinatorResult = {
-    readonly status: 'idle' | 'running' | 'completed' | 'interrupted';
-    readonly runId?: string;
-    readonly turns: number;
 };
 
 export type RunCoordinatorReadMessages = () => Promise<readonly AgentMessage[]>;
@@ -45,20 +48,13 @@ export type SessionRunCoordinatorOptions = {
 };
 
 type DrainCommand = 'wake' | 'run' | 'resume';
-type RunEventType = 'run.command.received' | 'run.started' | 'run.completed' | 'run.interrupted' | 'run.idle';
-type ActiveRun = {
-    readonly runId: string;
-    readonly controller: AbortController;
-    readonly promise: Promise<RunCoordinatorResult>;
-    readonly settled: Promise<RunCoordinatorResult>;
-};
 
 export class SessionRunCoordinator {
     private readonly options: SessionRunCoordinatorOptions;
     private readonly admission: SessionAdmissionService;
     private readonly now: () => string;
     private readonly ids: RunCoordinatorIdSequence;
-    private activeRun: ActiveRun | undefined;
+    private activeRun: RunCoordinatorActiveRun | undefined;
     private appendQueue: Promise<void> = Promise.resolve();
 
     constructor(options: SessionRunCoordinatorOptions) {
@@ -169,9 +165,15 @@ export class SessionRunCoordinator {
             }
             const result = await this.runProviderTurn(controller.signal);
             turns += 1;
-            if (result.status === 'interrupted') {
-                await this.appendRunEvent('run.interrupted', command, 'interrupted', 'run interrupted', { runId });
-                return { status: 'interrupted', runId, turns };
+            const finalized = await finalizeProviderTurnResult({
+                result,
+                command,
+                runId,
+                turns,
+                appendRunEvent: (...event) => this.appendRunEvent(...event),
+            });
+            if (finalized !== undefined) {
+                return finalized;
             }
         }
 
@@ -183,7 +185,7 @@ export class SessionRunCoordinator {
         return { status, runId, turns };
     }
 
-    private async runProviderTurn(signal: AbortSignal): Promise<{ readonly status: 'completed' | 'interrupted' }> {
+    private async runProviderTurn(signal: AbortSignal): Promise<RunCoordinatorProviderTurnResult> {
         return runCoordinatorProviderTurn(
             {
                 sessionId: this.options.sessionId,
@@ -247,7 +249,7 @@ export class SessionRunCoordinator {
     }
 
     private async appendRunEvent(
-        type: RunEventType,
+        type: RunCoordinatorRunEventType,
         command: RunCoordinatorCommand,
         state: RunCoordinatorState,
         message: string,

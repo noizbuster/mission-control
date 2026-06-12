@@ -98,6 +98,8 @@ export const AGENT_EVENT_TYPES = [
     'run.completed',
     'run.interrupted',
     'run.idle',
+    'run.failed',
+    'run.blocked',
     'native.status',
     'native.warning',
     'log',
