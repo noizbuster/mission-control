@@ -8,6 +8,20 @@ import type {
     ToolCall,
 } from '@mission-control/protocol';
 import type { ApprovalTerminalState } from './approval-gate.js';
+import { withDesktopApprovalSettlementLock } from './desktop-approval-settlement-lock.js';
+import {
+    approvalEvent,
+    approvalIdFromEvent,
+    approvalIdForToolCall,
+    decidedRecord,
+    hasTerminalRunAfterApproval,
+    latestApprovalRecord,
+    pendingRecord,
+    sessionEvent,
+    toolCallForApproval,
+    toolCallsFromEvents,
+    toolFailed,
+} from './desktop-tool-approval-events.js';
 import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
@@ -70,9 +84,19 @@ export async function settleDesktopApproval(
     input: DesktopApprovalDecisionInput,
     options: DesktopApprovalSettlementOptions,
 ): Promise<DesktopApprovalSettlementStatus> {
+    return withDesktopApprovalSettlementLock(options.store, input, () => settleDesktopApprovalUnlocked(input, options));
+}
+
+async function settleDesktopApprovalUnlocked(
+    input: DesktopApprovalDecisionInput,
+    options: DesktopApprovalSettlementOptions,
+): Promise<DesktopApprovalSettlementStatus> {
     const events = await options.store.getEvents(input.sessionId);
     const pending = latestApprovalRecord(events, input.approvalId);
     if (pending === undefined || pending.state !== 'pending') {
+        return 'idle';
+    }
+    if (hasTerminalRunAfterApproval(events, pending.approvalId)) {
         return 'idle';
     }
     const modelProviderSelection = options.modelProviderSelection ?? defaultModelProviderSelection;
@@ -164,102 +188,4 @@ function permissionResolver(record: ApprovalRecord): (request: PermissionRequest
         }
         return { requestId: request.id, status: 'deny', reason: 'desktop approval did not authorize this request' };
     };
-}
-
-function approvalEvent(input: {
-    readonly type: 'approval.requested' | 'approval.updated' | 'approval.blocked' | 'approval.resumed';
-    readonly sessionId: string;
-    readonly modelProviderSelection: ModelProviderSelection;
-    readonly record: ApprovalRecord;
-    readonly message: string;
-    readonly now: () => string;
-}): AgentEvent {
-    return {
-        type: input.type,
-        timestamp: input.now(),
-        sessionId: input.sessionId,
-        message: input.message,
-        nativeSidecarStatus: 'mock',
-        modelProviderSelection: input.modelProviderSelection,
-        approvalRecord: input.record,
-    };
-}
-
-function pendingRecord(toolCall: ToolCall, requestedAt: string): ApprovalRecord {
-    const requestId = requestIdForToolCall(toolCall.toolCallId);
-    return {
-        approvalId: approvalIdForToolCall(toolCall.toolCallId),
-        requestId,
-        policyDecision: 'requires_approval',
-        state: 'pending',
-        subject: { kind: 'tool', id: toolCall.toolName },
-        requestedAt,
-        reason: `approve ${toolCall.toolName}`,
-    };
-}
-
-function decidedRecord(
-    record: ApprovalRecord,
-    state: ApprovalTerminalState,
-    decidedAt: string,
-    reason: string | undefined,
-): ApprovalRecord {
-    return {
-        ...record,
-        state,
-        decidedAt,
-        reason: reason ?? record.reason,
-    };
-}
-
-function sessionEvent(
-    event: AgentEvent,
-    sessionId: string,
-    modelProviderSelection: ModelProviderSelection,
-): AgentEvent {
-    return {
-        ...event,
-        sessionId,
-        modelProviderSelection: event.modelProviderSelection ?? modelProviderSelection,
-    };
-}
-
-function toolFailed(sessionId: string, toolCallId: string, message: string): AgentEvent {
-    return {
-        type: 'tool.failed',
-        timestamp: new Date().toISOString(),
-        sessionId,
-        taskId: toolCallId,
-        message,
-        nativeSidecarStatus: 'mock',
-    };
-}
-
-function toolCallsFromEvents(events: readonly AgentEvent[]): readonly ToolCall[] {
-    return events.flatMap((event) => {
-        const chunk = event.providerStreamChunk;
-        return chunk?.kind === 'tool_call_completed' ? [chunk.toolCall] : [];
-    });
-}
-
-function toolCallForApproval(events: readonly AgentEvent[], approvalId: string): ToolCall | undefined {
-    return [...toolCallsFromEvents(events)]
-        .reverse()
-        .find((toolCall) => approvalIdForToolCall(toolCall.toolCallId) === approvalId);
-}
-
-function latestApprovalRecord(events: readonly AgentEvent[], approvalId: string): ApprovalRecord | undefined {
-    return [...events].reverse().find((event) => event.approvalRecord?.approvalId === approvalId)?.approvalRecord;
-}
-
-function approvalIdFromEvent(event: AgentEvent): readonly string[] {
-    return event.approvalRecord === undefined ? [] : [event.approvalRecord.approvalId];
-}
-
-function approvalIdForToolCall(toolCallId: string): string {
-    return `approval_${requestIdForToolCall(toolCallId)}`;
-}
-
-function requestIdForToolCall(toolCallId: string): string {
-    return `permission_${toolCallId}`;
 }
