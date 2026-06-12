@@ -17,6 +17,7 @@ import { createModelChoices, type ModelChoice } from './interactive-chat-model.j
 import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
 import { createCliProviderForSelection } from './provider-factory.js';
 import { readGraphFile, validateGraphModelOptions, validateModelProviderSelection } from './run-agent-graph.js';
+import { runOwnerPrompt } from './run-agent-owner-prompt.js';
 import { createRunEventRecorder } from './run-agent-session.js';
 
 export { createCliProviderForSelection } from './provider-factory.js';
@@ -65,6 +66,9 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             const recorded = recorder.record(event);
             options.onRuntimeEvent?.(recorded);
         };
+        const observeStoredEvent = (event: AgentEvent) => {
+            options.onRuntimeEvent?.(event);
+        };
         const unsubscribeRuntimeEvents = runtime.onEvent(emitRuntimeEvent);
         let didStart = false;
         try {
@@ -80,6 +84,8 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     options.modelDiscovery ?? createDefaultModelDiscovery(),
                 ),
                 emitEvent: emitRuntimeEvent,
+                observeStoredEvent,
+                ...(recorder.store !== undefined ? { sessionStore: recorder.store } : {}),
                 ...(options.provider === undefined ? { resolveProviderForSelection: createProvider } : {}),
                 persistModelProviderSelection: async (selection) => {
                     await authStore.setDefaultSelection(selection);
@@ -103,6 +109,12 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     const unsubscribe = runtime.onEvent((event) => {
         renderer.render(recorder.record(event));
     });
+    const emitRuntimeEvent = (event: AgentEvent) => {
+        renderer.render(recorder.record(event));
+    };
+    const observeStoredEvent = (event: AgentEvent) => {
+        renderer.render(event);
+    };
     let didStart = false;
     try {
         await renderer.start(runtime);
@@ -111,6 +123,21 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         try {
             if (graph !== undefined) {
                 await runtime.runGraph(graph);
+            } else if (args.prompt !== undefined && recorder.store !== undefined && recorder.sessionId !== undefined) {
+                await runOwnerPrompt({
+                    sessionId: recorder.sessionId,
+                    store: recorder.store,
+                    provider,
+                    modelProviderSelection: selectedModelProvider,
+                    workspaceRoot,
+                    prompt: args.prompt,
+                    emitEvent: emitRuntimeEvent,
+                    observeStoredEvent,
+                    ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
+                    ...(options.nonInteractiveAutomationPolicy !== undefined
+                        ? { nonInteractiveAutomationPolicy: options.nonInteractiveAutomationPolicy }
+                        : {}),
+                });
             } else if (args.prompt !== undefined) {
                 await runtime.runPromptTask(args.prompt);
             } else {

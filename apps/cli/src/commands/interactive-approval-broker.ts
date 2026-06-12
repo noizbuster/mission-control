@@ -32,9 +32,6 @@ export function createInteractiveApprovalBroker(options: InteractiveToolOptions)
                 cachedDecisions.delete(request.action);
                 return Promise.resolve({ ...cached, requestId: request.id });
             }
-            if (cancelledReason !== undefined) {
-                return Promise.resolve({ requestId: request.id, status: 'deny', reason: cancelledReason });
-            }
             if (pending !== undefined) {
                 return Promise.resolve({
                     requestId: request.id,
@@ -44,6 +41,19 @@ export function createInteractiveApprovalBroker(options: InteractiveToolOptions)
             }
             options.emitEvent(eventWithPermission(options, request));
             options.output.write(`Approve ${request.action}? [y/N]:`);
+            const queuedAnswer = queuedAnswers.shift();
+            if (queuedAnswer !== undefined) {
+                const decision = decisionForLine(request, queuedAnswer);
+                options.output.write('\n');
+                options.output.write(
+                    decision.status === 'allow' ? `Approved ${request.action}\n` : `Denied ${request.action}\n`,
+                );
+                options.emitEvent(eventWithDecision(options, decision));
+                return Promise.resolve(decision);
+            }
+            if (cancelledReason !== undefined) {
+                return Promise.resolve({ requestId: request.id, status: 'deny', reason: cancelledReason });
+            }
             return new Promise((resolve) => {
                 pending = { request, resolve };
             });

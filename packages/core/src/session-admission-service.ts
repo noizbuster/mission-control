@@ -13,6 +13,7 @@ export type SessionAdmissionServiceOptions = {
     readonly sessionId: string;
     readonly store: SessionAdmissionEventStore;
     readonly now?: () => string;
+    readonly appendEvent?: (event: AgentEvent) => Promise<void>;
 };
 
 export class SessionAdmissionError extends Error {
@@ -29,11 +30,13 @@ export class SessionAdmissionService {
     private readonly sessionId: string;
     private readonly store: SessionAdmissionEventStore;
     private readonly now: () => string;
+    private readonly appendEvent: (event: AgentEvent) => Promise<void>;
 
     constructor(options: SessionAdmissionServiceOptions) {
         this.sessionId = options.sessionId;
         this.store = options.store;
         this.now = options.now ?? (() => new Date().toISOString());
+        this.appendEvent = options.appendEvent ?? ((event) => this.store.append(event));
     }
 
     async assertCanAdmitPrompt(input: AdmitPromptInput): Promise<void> {
@@ -51,7 +54,7 @@ export class SessionAdmissionService {
             return exactRetryReceipt(existing.input, input);
         }
 
-        await this.store.append({
+        await this.appendEvent({
             type: 'prompt.admitted',
             timestamp: this.now(),
             sessionId: this.sessionId,
@@ -113,7 +116,7 @@ export class SessionAdmissionService {
         input: PromptInputState,
         trigger: PromptPromotionTrigger,
     ): Promise<PromptPromotionResult> {
-        await this.store.append({
+        await this.appendEvent({
             type: 'prompt.promoted',
             timestamp: this.now(),
             sessionId: this.sessionId,

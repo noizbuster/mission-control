@@ -5,6 +5,8 @@ import type { CliArgs } from '../args.js';
 export type RunEventRecorder = {
     readonly record: (event: AgentEvent) => AgentEvent;
     readonly close: () => Promise<void>;
+    readonly sessionId?: string;
+    readonly store?: JsonlSessionEventStore;
 };
 
 export async function createRunEventRecorder(args: CliArgs): Promise<RunEventRecorder> {
@@ -31,6 +33,8 @@ export async function createRunEventRecorder(args: CliArgs): Promise<RunEventRec
                 await store.close();
             }
         },
+        sessionId,
+        store,
     };
 }
 

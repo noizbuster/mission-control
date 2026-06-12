@@ -12,6 +12,7 @@ import {
     createEmptyAuthStore,
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
+import { replayedTypes } from './session-replay-test-support.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -72,6 +73,9 @@ describe('runAgent interactive command interruption', () => {
                 type: 'run.interrupted',
             }),
         );
+        const replayTypes = await replayedTypes('session_task20_command_interrupt');
+        expect(replayTypes).toEqual(expect.arrayContaining(['run.interrupted']));
+        expect(replayTypes).not.toContain('run.completed');
     });
 
     async function tempRoot(prefix: string): Promise<string> {
@@ -86,7 +90,7 @@ function interruptibleCommandExecutor(request: CommandExecutionRequest): Promise
         return Promise.resolve(interruptedResult());
     }
     return new Promise<CommandExecutionResult>((resolve) => {
-        const timeout = setTimeout(() => resolve(completedResult()), 20);
+        const timeout = setTimeout(() => resolve(completedResult()), 30_000);
         request.signal.addEventListener(
             'abort',
             () => {
@@ -102,7 +106,7 @@ function interruptedResult(): CommandExecutionResult {
     return {
         exitCode: null,
         signal: 'SIGTERM',
-        timedOut: true,
+        timedOut: false,
         stdout: 'partial command output\n',
         stderr: '',
         durationMs: 1,

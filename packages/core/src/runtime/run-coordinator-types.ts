@@ -1,7 +1,13 @@
-import type { AgentEventEnvelope, AgentMessage, ModelProviderSelection } from '@mission-control/protocol';
+import type {
+    AgentEvent,
+    AgentEventEnvelope,
+    AgentMessage,
+    ModelProviderSelection,
+    ToolCall,
+} from '@mission-control/protocol';
 import type { ProviderAdapter } from '../providers/provider-turn-types.js';
 import type { AdmitPromptInput, SessionAdmissionEventStore } from '../session-admission-types.js';
-import type { ToolRegistry } from '../tools/tool-registry.js';
+import type { ToolInvocationSettlement, ToolRegistry } from '../tools/tool-registry.js';
 
 export type RunCoordinatorStore = SessionAdmissionEventStore & {
     readonly appendEnvelopeWithStoreSequence?: (envelope: AgentEventEnvelope) => Promise<void>;
@@ -13,6 +19,13 @@ export type RunCoordinatorPromptInput = Omit<AdmitPromptInput, 'delivery' | 'inp
 };
 
 export type RunCoordinatorReadMessages = () => Promise<readonly AgentMessage[]>;
+export type RunCoordinatorEventObserver = (event: AgentEvent) => Promise<void> | void;
+export type RunCoordinatorEnvelopeObserver = (envelope: AgentEventEnvelope) => Promise<void> | void;
+export type RunCoordinatorToolCallResult = ToolInvocationSettlement | undefined;
+export type RunCoordinatorToolCallObserver = (
+    toolCall: ToolCall,
+) => Promise<RunCoordinatorToolCallResult> | RunCoordinatorToolCallResult;
+export type RunCoordinatorToolSettlementObserver = (settlement: ToolInvocationSettlement) => Promise<void> | void;
 
 export type SessionRunCoordinatorOptions = {
     readonly sessionId: string;
@@ -26,6 +39,10 @@ export type SessionRunCoordinatorOptions = {
     readonly toolRegistry?: ToolRegistry;
     readonly createId?: (prefix: string, index: number) => string;
     readonly readMessages?: RunCoordinatorReadMessages;
+    readonly onDurableEvent?: RunCoordinatorEventObserver;
+    readonly onProviderEnvelope?: RunCoordinatorEnvelopeObserver;
+    readonly onToolCall?: RunCoordinatorToolCallObserver;
+    readonly onToolSettlement?: RunCoordinatorToolSettlementObserver;
 };
 
 export function appendRunCoordinatorEnvelope(store: RunCoordinatorStore, envelope: AgentEventEnvelope): Promise<void> {

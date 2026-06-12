@@ -75,6 +75,7 @@ describe('runAgent interactive coding agent UX', () => {
         const workspaceRoot = await tempRoot('mctrl-chat-workspace-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const chatOutput = createBufferedChatOutput();
+        const events: AgentEvent[] = [];
 
         // When
         const output = await runAgent(parseArgs(['--session', 'session_task20_deny']), {
@@ -97,12 +98,21 @@ describe('runAgent interactive coding agent UX', () => {
                 },
                 { kind: 'response_completed', content: 'patch proposed' },
             ]),
+            onRuntimeEvent: (event) => {
+                events.push(event);
+            },
         });
 
         // Then
         expect(output).toContain('Patch preview for file.patch');
         expect(output).toContain('Approve file.patch? [y/N]:');
         expect(output).toContain('Denied file.patch');
+        expect(events).toContainEqual(
+            expect.objectContaining({
+                type: 'run.blocked',
+                run: expect.objectContaining({ state: 'blocked_on_approval' }),
+            }),
+        );
         await expect(readFile(join(workspaceRoot, '.mctrl-task20.txt'), 'utf8')).rejects.toThrow();
     });
 
@@ -113,6 +123,7 @@ describe('runAgent interactive coding agent UX', () => {
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const chatOutput = createBufferedChatOutput();
         const requests: ProviderTurnRequest[] = [];
+        const events: AgentEvent[] = [];
 
         // When
         const output = await runAgent(parseArgs(['--session', 'session_task20_allow']), {
@@ -128,6 +139,9 @@ describe('runAgent interactive coding agent UX', () => {
             workspaceRoot,
             commandExecutor: fakeCommandExecutor,
             provider: providerFromApprovedToolRequests(requests),
+            onRuntimeEvent: (event) => {
+                events.push(event);
+            },
         });
 
         // Then
@@ -136,6 +150,8 @@ describe('runAgent interactive coding agent UX', () => {
         expect(output).toContain('Command output for command.run');
         expect(output).toContain('stdout:\ntask20 ok');
         expect(output).toContain('Assistant: patch and test complete');
+        expect(events.map((event) => event.type)).toEqual(expect.arrayContaining(['run.completed']));
+        expect(events.some((event) => event.type === 'run.blocked')).toBe(false);
         expect(await readFile(join(workspaceRoot, '.mctrl-task20.txt'), 'utf8')).toBe('approved\n');
     });
 
@@ -229,7 +245,9 @@ describe('runAgent interactive coding agent UX', () => {
                 }),
             }),
         );
-        expect(await replayedTypes('session_task20_control')).toEqual(expect.arrayContaining(['run.interrupted']));
+        const replayTypes = await replayedTypes('session_task20_control');
+        expect(replayTypes).toEqual(expect.arrayContaining(['run.interrupted']));
+        expect(replayTypes).not.toContain('run.completed');
     });
 
     it('requires two idle Ctrl+C interrupts after stopping an active provider turn', async () => {
@@ -259,6 +277,9 @@ describe('runAgent interactive coding agent UX', () => {
         expect(output).toContain('Press Ctrl+C twice to exit');
         expect(output.match(/Press Ctrl\+C again to exit/g)).toHaveLength(1);
         expect(output).not.toContain('too late');
+        const replayTypes = await replayedTypes('session_task20_interrupt_then_exit');
+        expect(replayTypes).toEqual(expect.arrayContaining(['run.interrupted']));
+        expect(replayTypes).not.toContain('run.completed');
     });
 
     it('exits and force-stops an active provider turn with /exit', async () => {

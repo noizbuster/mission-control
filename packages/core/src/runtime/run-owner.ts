@@ -3,7 +3,14 @@ import { type JsonlSessionEventIdFactory, JsonlSessionEventStore } from '../memo
 import type { ProviderAdapter } from '../providers/provider-turn-types.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import { type RunCoordinatorResult, SessionRunCoordinator } from './run-coordinator.js';
-import type { RunCoordinatorPromptInput, RunCoordinatorReadMessages } from './run-coordinator-types.js';
+import type {
+    RunCoordinatorEnvelopeObserver,
+    RunCoordinatorEventObserver,
+    RunCoordinatorPromptInput,
+    RunCoordinatorReadMessages,
+    RunCoordinatorToolCallObserver,
+    RunCoordinatorToolSettlementObserver,
+} from './run-coordinator-types.js';
 
 export type SessionRunOwnerReceipt = {
     readonly sessionId: string;
@@ -13,6 +20,13 @@ export type SessionRunOwnerReceipt = {
     readonly reason?: string;
     readonly errorCode?: RunCoordinatorResult['errorCode'];
     readonly toolCallId?: string;
+};
+
+type RunOwnerObserverOptions = {
+    readonly onDurableEvent?: RunCoordinatorEventObserver;
+    readonly onProviderEnvelope?: RunCoordinatorEnvelopeObserver;
+    readonly onToolCall?: RunCoordinatorToolCallObserver;
+    readonly onToolSettlement?: RunCoordinatorToolSettlementObserver;
 };
 
 export type SessionRunOwnerOptions = {
@@ -27,7 +41,7 @@ export type SessionRunOwnerOptions = {
     readonly toolRegistry?: ToolRegistry;
     readonly createId?: (prefix: string, index: number) => string;
     readonly readMessages?: RunCoordinatorReadMessages;
-};
+} & RunOwnerObserverOptions;
 
 export type SessionRunOwnerRegistryOptions = {
     readonly dataDir?: string;
@@ -45,7 +59,7 @@ export type SessionRunOwnerRegistryOptions = {
     readonly toolRegistry?: ToolRegistry;
     readonly createEventId?: JsonlSessionEventIdFactory;
     readonly createId?: (prefix: string, index: number) => string;
-};
+} & RunOwnerObserverOptions;
 
 export type SessionRunOwnerLeaseInput = {
     readonly sessionId: string;
@@ -87,6 +101,10 @@ export class SessionRunOwner {
             ...(options.toolRegistry !== undefined ? { toolRegistry: options.toolRegistry } : {}),
             ...(options.createId !== undefined ? { createId: options.createId } : {}),
             ...(options.readMessages !== undefined ? { readMessages: options.readMessages } : {}),
+            ...(options.onDurableEvent !== undefined ? { onDurableEvent: options.onDurableEvent } : {}),
+            ...(options.onProviderEnvelope !== undefined ? { onProviderEnvelope: options.onProviderEnvelope } : {}),
+            ...(options.onToolCall !== undefined ? { onToolCall: options.onToolCall } : {}),
+            ...(options.onToolSettlement !== undefined ? { onToolSettlement: options.onToolSettlement } : {}),
         });
     }
 
@@ -233,6 +251,12 @@ export class SessionRunOwnerRegistry {
             ...(this.options.toolRegistry !== undefined ? { toolRegistry: this.options.toolRegistry } : {}),
             ...(this.options.createId !== undefined ? { createId: this.options.createId } : {}),
             ...(input.readMessages !== undefined ? { readMessages: input.readMessages } : {}),
+            ...(this.options.onDurableEvent !== undefined ? { onDurableEvent: this.options.onDurableEvent } : {}),
+            ...(this.options.onProviderEnvelope !== undefined
+                ? { onProviderEnvelope: this.options.onProviderEnvelope }
+                : {}),
+            ...(this.options.onToolCall !== undefined ? { onToolCall: this.options.onToolCall } : {}),
+            ...(this.options.onToolSettlement !== undefined ? { onToolSettlement: this.options.onToolSettlement } : {}),
         });
         return { owner, store, refCount: 0 };
     }

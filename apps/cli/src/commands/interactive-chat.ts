@@ -2,6 +2,7 @@ import type {
     AgentRuntime,
     CommandExecutionRequest,
     CommandExecutionResult,
+    JsonlSessionEventStore,
     ProviderAdapter,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
@@ -40,6 +41,8 @@ export type InteractiveChatOptions = {
     readonly resolveProviderForSelection?: (selection: ModelProviderSelection) => ProviderAdapter;
     readonly workspaceRoot?: string;
     readonly emitEvent?: (event: AgentEvent) => void;
+    readonly observeStoredEvent?: (event: AgentEvent) => void;
+    readonly sessionStore?: JsonlSessionEventStore;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly persistModelProviderSelection?: (selection: ModelProviderSelection) => Promise<void>;
 };
@@ -142,12 +145,14 @@ export async function runInteractiveChatSession(
                     activeTurn,
                     commandExecutor: options.commandExecutor,
                     emitEvent: options.emitEvent,
+                    observeStoredEvent: options.observeStoredEvent,
                     nextTurnId: () => {
                         turnCounter += 1;
                         return `turn_interactive_${turnCounter}`;
                     },
                     provider: currentProvider,
                     sessionId,
+                    sessionStore: options.sessionStore,
                     workspaceRoot: options.workspaceRoot,
                 },
             );
@@ -220,7 +225,7 @@ async function nextChatLoopEvent(
 
 async function readAfterActiveYield(inputPump: ChatInputPump): Promise<ChatLoopEvent> {
     await new Promise((resolve) => {
-        setImmediate(resolve);
+        setTimeout(resolve, 25);
     });
     return { type: 'input', event: await inputPump.read() };
 }

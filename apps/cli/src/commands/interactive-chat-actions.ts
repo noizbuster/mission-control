@@ -1,30 +1,20 @@
-import type {
-    AgentRuntime,
-    CommandExecutionRequest,
-    CommandExecutionResult,
-    ProviderAdapter,
-} from '@mission-control/core';
-import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import type { AgentRuntime } from '@mission-control/core';
+import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ChatLineAction } from './chat-commands.js';
 import type { ModelSelector } from './interactive-chat.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { createVariantChoices, getModelChoiceUnavailableReason, type ModelChoice } from './interactive-chat-model.js';
+import { type PromptTurnContext, startPromptTurn } from './interactive-chat-prompt-turn.js';
 import { formatModelProviderStatus } from './interactive-chat-status.js';
-import { type ActiveCodingAgentTurn, startCodingAgentTurn } from './interactive-coding-agent.js';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 
 export type ChatActionResult = {
     readonly modelProviderSelection: ModelProviderSelection;
     readonly activeTurn?: ActiveCodingAgentTurn;
 };
 
-export type CodingActionContext = {
+export type CodingActionContext = PromptTurnContext & {
     readonly activeTurn: ActiveCodingAgentTurn | undefined;
-    readonly provider: ProviderAdapter | undefined;
-    readonly sessionId: string | undefined;
-    readonly workspaceRoot: string | undefined;
-    readonly commandExecutor: ((request: CommandExecutionRequest) => Promise<CommandExecutionResult>) | undefined;
-    readonly emitEvent: ((event: AgentEvent) => void) | undefined;
-    readonly nextTurnId: () => string;
 };
 
 export async function runChatAction(
@@ -178,31 +168,6 @@ function runModelListAction(
         chatOutput.write(`${choice.label}\n`);
     }
     return actionResult(currentSelection, activeTurn);
-}
-
-async function startPromptTurn(
-    runtime: AgentRuntime,
-    chatOutput: ChatOutput,
-    prompt: string,
-    modelProviderSelection: ModelProviderSelection,
-    coding: CodingActionContext,
-): Promise<ActiveCodingAgentTurn | undefined> {
-    if (coding.provider === undefined || coding.sessionId === undefined || coding.workspaceRoot === undefined) {
-        const response = await runtime.runPromptTask(prompt);
-        chatOutput.write(`Assistant: ${response}\n`);
-        return undefined;
-    }
-    return startCodingAgentTurn({
-        prompt,
-        sessionId: coding.sessionId,
-        turnId: coding.nextTurnId(),
-        provider: coding.provider,
-        modelProviderSelection,
-        workspaceRoot: coding.workspaceRoot,
-        output: chatOutput,
-        emitEvent: coding.emitEvent ?? (() => undefined),
-        ...(coding.commandExecutor !== undefined ? { commandExecutor: coding.commandExecutor } : {}),
-    });
 }
 
 function emitPromptAdmission(

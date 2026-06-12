@@ -101,11 +101,11 @@ describe('runAgent interactive coding agent flow', () => {
 
         // Then
         expect(output).toContain('Denied file.patch');
-        expect(output).toContain('Run blocked: tool not settled: file.patch');
+        expect(output).toContain('Run blocked: approval_denied: interactive CLI approval');
         expect(events).toContainEqual(
             expect.objectContaining({
-                type: 'run.interrupted',
-                message: 'run blocked: tool not settled: file.patch',
+                type: 'run.blocked',
+                run: expect.objectContaining({ state: 'blocked_on_approval' }),
             }),
         );
         await expect(readFile(join(workspaceRoot, '.mctrl-task17-denied.txt'), 'utf8')).rejects.toThrow();

@@ -55,6 +55,7 @@ export class SessionRunCoordinator {
             sessionId: options.sessionId,
             store: options.store,
             now: this.now,
+            appendEvent: (event) => this.appendDurableEvent(event),
         });
     }
 
@@ -193,6 +194,13 @@ export class SessionRunCoordinator {
                 nextId: (prefix) => this.ids.next(prefix),
                 appendDurableEvent: (event) => this.appendDurableEvent(event),
                 appendDurableEnvelope: (envelope) => this.appendDurableEnvelope(envelope),
+                ...(this.options.onProviderEnvelope !== undefined
+                    ? { onProviderEnvelope: this.options.onProviderEnvelope }
+                    : {}),
+                ...(this.options.onToolCall !== undefined ? { onToolCall: this.options.onToolCall } : {}),
+                ...(this.options.onToolSettlement !== undefined
+                    ? { onToolSettlement: this.options.onToolSettlement }
+                    : {}),
             },
             signal,
         );
@@ -239,13 +247,19 @@ export class SessionRunCoordinator {
     }
 
     private appendDurableEvent(event: AgentEvent): Promise<void> {
-        const write = this.appendQueue.then(() => this.options.store.append(event));
+        const write = this.appendQueue.then(async () => {
+            await this.options.store.append(event);
+            await this.options.onDurableEvent?.(event);
+        });
         this.appendQueue = write.catch(() => undefined);
         return write;
     }
 
     private appendDurableEnvelope(envelope: AgentEventEnvelope): Promise<void> {
-        const write = this.appendQueue.then(() => appendRunCoordinatorEnvelope(this.options.store, envelope));
+        const write = this.appendQueue.then(async () => {
+            await appendRunCoordinatorEnvelope(this.options.store, envelope);
+            await this.options.onDurableEvent?.(envelope.event);
+        });
         this.appendQueue = write.catch(() => undefined);
         return write;
     }

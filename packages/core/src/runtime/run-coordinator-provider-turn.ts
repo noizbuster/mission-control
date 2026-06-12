@@ -20,6 +20,11 @@ import type { ToolInvocationSettlement, ToolRegistry } from '../tools/tool-regis
 import type { RunCoordinatorProviderTurnResult } from './run-coordinator-lifecycle.js';
 import { providerRunnerOptions } from './run-coordinator-provider-options.js';
 import { providerTurnSelection } from './run-coordinator-provider-selection.js';
+import type {
+    RunCoordinatorEnvelopeObserver,
+    RunCoordinatorToolCallObserver,
+    RunCoordinatorToolSettlementObserver,
+} from './run-coordinator-types.js';
 
 export type RunCoordinatorProviderTurnInput = {
     readonly sessionId: string;
@@ -33,6 +38,9 @@ export type RunCoordinatorProviderTurnInput = {
     readonly nextId: (prefix: string) => Promise<string>;
     readonly appendDurableEvent: (event: AgentEvent) => Promise<void>;
     readonly appendDurableEnvelope: (envelope: AgentEventEnvelope) => Promise<void>;
+    readonly onProviderEnvelope?: RunCoordinatorEnvelopeObserver;
+    readonly onToolCall?: RunCoordinatorToolCallObserver;
+    readonly onToolSettlement?: RunCoordinatorToolSettlementObserver;
 };
 
 export async function runCoordinatorProviderTurn(
@@ -60,6 +68,7 @@ export async function runCoordinatorProviderTurn(
                 ? { tools: input.toolRegistry.advertise().map((tool) => tool.providerTool) }
                 : {}),
             startSequence: 0,
+            ...(input.onProviderEnvelope !== undefined ? { onEnvelope: input.onProviderEnvelope } : {}),
             signal,
             writeEnvelope: async (envelope) => {
                 if (envelope.durability === 'durable') {
@@ -91,7 +100,7 @@ export async function runCoordinatorProviderTurn(
             throw new ProviderTurnError(providerToolLoopLimitError(loopLimit));
         }
         const settlements = await settleToolCalls(input, toolCalls, signal);
-        const blockedSettlement = approvalRequiredSettlement(settlements);
+        const blockedSettlement = approvalBlockedSettlement(settlements);
         if (blockedSettlement !== undefined) {
             return {
                 status: 'blocked_on_approval',
@@ -125,12 +134,12 @@ type ApprovalRequiredSettlement = {
     readonly errorCode: ProtocolErrorCode;
 };
 
-function approvalRequiredSettlement(
+function approvalBlockedSettlement(
     settlements: readonly ToolInvocationSettlement[],
 ): ApprovalRequiredSettlement | undefined {
     for (const settlement of settlements) {
         const error = settlement.result.error;
-        if (error?.message.startsWith('approval_required:') === true) {
+        if (error !== undefined && isApprovalBlockedMessage(error.message)) {
             return {
                 toolCallId: settlement.toolCallId,
                 reason: error.message,
@@ -139,6 +148,10 @@ function approvalRequiredSettlement(
         }
     }
     return undefined;
+}
+
+function isApprovalBlockedMessage(message: string | undefined): boolean {
+    return message?.startsWith('approval_required:') === true || message?.startsWith('approval_denied:') === true;
 }
 
 async function settleToolCalls(
@@ -152,7 +165,9 @@ async function settleToolCalls(
     }
     const settlements: ToolInvocationSettlement[] = [];
     for (const toolCall of toolCalls) {
-        const settlement = await settleToolCallWithRegistry(registry, toolCall, signal);
+        const preflightSettlement = await input.onToolCall?.(toolCall);
+        const settlement = preflightSettlement ?? (await settleToolCallWithRegistry(registry, toolCall, signal));
+        await input.onToolSettlement?.(settlement);
         settlements.push(settlement);
         for (const event of settlement.events) {
             await input.appendDurableEvent(
