@@ -60,7 +60,14 @@ async function applyPatchTool(
     const parsedPatch = parseUnifiedPatch(input.patch);
     const targets = await preflightTargets(options.workspaceRoot, guard, parsedPatch, options.allowDirtyPaths);
     await requireApproval(options, toolCallId, parsedPatch);
-    return applyTargets(parsedPatch, targets, toolCallId);
+    const revalidatedTargets = await preflightTargets(
+        options.workspaceRoot,
+        guard,
+        parsedPatch,
+        options.allowDirtyPaths,
+    );
+    assertStableTargets(targets, revalidatedTargets);
+    return applyTargets(parsedPatch, revalidatedTargets, toolCallId);
 }
 
 async function preflightTargets(
@@ -83,6 +90,31 @@ async function preflightTargets(
         targets.push(target);
     }
     return targets;
+}
+
+function assertStableTargets(
+    approvedTargets: readonly PatchTarget[],
+    revalidatedTargets: readonly PatchTarget[],
+): void {
+    if (approvedTargets.length !== revalidatedTargets.length) {
+        throw filePatchFailure('patch_apply_failed', 'patch target count changed after approval');
+    }
+    for (const [index, approvedTarget] of approvedTargets.entries()) {
+        const revalidatedTarget = revalidatedTargets[index];
+        if (revalidatedTarget === undefined) {
+            throw filePatchFailure(
+                'patch_apply_failed',
+                `missing revalidated target for ${approvedTarget.relativePath}`,
+            );
+        }
+        if (
+            approvedTarget.absolutePath !== revalidatedTarget.absolutePath ||
+            approvedTarget.relativePath !== revalidatedTarget.relativePath ||
+            approvedTarget.exists !== revalidatedTarget.exists
+        ) {
+            throw filePatchFailure('workspace_escape', `target changed after approval: ${approvedTarget.relativePath}`);
+        }
+    }
 }
 
 async function requireApproval(

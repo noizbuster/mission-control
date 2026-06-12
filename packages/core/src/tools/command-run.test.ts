@@ -6,6 +6,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+const allowedHarnessArgs = ['--eval', "console.log('mission-control command.run harness ok')"] as const;
+
 describe('command.run tool', () => {
     it('does not spawn a process when approval is denied', async () => {
         // Given
@@ -19,7 +21,7 @@ describe('command.run tool', () => {
         });
 
         // When
-        const result = await invokeCommand(registry, 'pnpm', ['test']);
+        const result = await invokeCommand(registry, 'node', allowedHarnessArgs);
 
         // Then
         expect(result.result.status).toBe('failed');
@@ -52,6 +54,61 @@ describe('command.run tool', () => {
         expect(calls).toHaveLength(0);
     });
 
+    it('rejects provider-created vitest targets before approval or spawn', async () => {
+        // Given
+        const calls: CommandExecutionRequest[] = [];
+        const permissionRequests: PermissionRequest[] = [];
+        const registry = await createRegistry({
+            requestPermission: (request) => {
+                permissionRequests.push(request);
+                return allowPermission(request);
+            },
+            executor: async (request) => {
+                calls.push(request);
+                return completedResult({ stdout: 'exfiltrated workspace data' });
+            },
+        });
+
+        // When
+        const result = await invokeCommand(registry, 'pnpm', [
+            'exec',
+            'vitest',
+            'run',
+            'tmp/provider-created-exfil.test.ts',
+        ]);
+
+        // Then
+        expect(result.result.status).toBe('failed');
+        expect(result.result.error?.message).toContain('command_not_allowed');
+        expect(permissionRequests).toHaveLength(0);
+        expect(calls).toHaveLength(0);
+    });
+
+    it('rejects mutable package scripts before approval or spawn', async () => {
+        // Given
+        const calls: CommandExecutionRequest[] = [];
+        const permissionRequests: PermissionRequest[] = [];
+        const registry = await createRegistry({
+            requestPermission: (request) => {
+                permissionRequests.push(request);
+                return allowPermission(request);
+            },
+            executor: async (request) => {
+                calls.push(request);
+                return completedResult({ stdout: 'script-controlled output' });
+            },
+        });
+
+        // When
+        const result = await invokeCommand(registry, 'pnpm', ['typecheck']);
+
+        // Then
+        expect(result.result.status).toBe('failed');
+        expect(result.result.error?.message).toContain('command_not_allowed');
+        expect(permissionRequests).toHaveLength(0);
+        expect(calls).toHaveLength(0);
+    });
+
     it('aborts timed out commands and records a typed timeout event', async () => {
         // Given
         const registry = await createRegistry({
@@ -76,7 +133,7 @@ describe('command.run tool', () => {
         });
 
         // When
-        const result = await invokeCommand(registry, 'pnpm', ['test']);
+        const result = await invokeCommand(registry, 'node', allowedHarnessArgs);
 
         // Then
         expect(result.result.status).toBe('failed');
@@ -96,7 +153,7 @@ describe('command.run tool', () => {
         });
 
         // When
-        const result = await invokeCommand(registry, 'pnpm', ['typecheck']);
+        const result = await invokeCommand(registry, 'node', allowedHarnessArgs);
 
         // Then
         expect(result.result.status).toBe('completed');
@@ -127,7 +184,7 @@ describe('command.run tool', () => {
         });
 
         // When
-        const result = await invokeCommand(registry, 'pnpm', ['test']);
+        const result = await invokeCommand(registry, 'node', allowedHarnessArgs);
 
         // Then
         expect(result.result.status).toBe('failed');
@@ -147,9 +204,9 @@ describe('command.run tool', () => {
         });
 
         // When
-        const first = invokeCommand(registry, 'pnpm', ['lint']);
+        const first = invokeCommand(registry, 'node', allowedHarnessArgs);
         await Promise.resolve();
-        const second = await invokeCommand(registry, 'pnpm', ['build']);
+        const second = await invokeCommand(registry, 'node', allowedHarnessArgs);
         release.resolve(completedResult());
         const firstResult = await first;
 
@@ -174,13 +231,13 @@ describe('command.run tool', () => {
 
         // When
         let firstSettled = false;
-        const first = invokeCommand(registry, 'pnpm', ['test']).finally(() => {
+        const first = invokeCommand(registry, 'node', allowedHarnessArgs).finally(() => {
             firstSettled = true;
         });
         await aborted.promise;
         await nextEventLoopTurn();
         expect(firstSettled).toBe(false);
-        const second = await invokeCommand(registry, 'pnpm', ['typecheck']);
+        const second = await invokeCommand(registry, 'node', allowedHarnessArgs);
         release.resolve({
             exitCode: null,
             signal: 'SIGTERM',
@@ -198,7 +255,7 @@ describe('command.run tool', () => {
         expect(firstResult.result.error?.message).toContain('command_timed_out');
     });
 
-    it('runs an allowed real safe command fixture inside the workspace', async () => {
+    it('runs an allowed static node harness without workspace executable code', async () => {
         // Given
         const registry = await createRegistry({
             workspaceRoot: process.cwd(),
@@ -208,19 +265,14 @@ describe('command.run tool', () => {
         });
 
         // When
-        const result = await invokeCommand(registry, 'pnpm', [
-            'exec',
-            'vitest',
-            'run',
-            'packages/core/src/tools/command-run.fixture.test.ts',
-        ]);
+        const result = await invokeCommand(registry, 'node', allowedHarnessArgs);
 
         // Then
         expect(result.result.status).toBe('completed');
         expect(result.structuredOutput).toMatchObject({
             status: 'completed',
             exitCode: 0,
-            command: ['pnpm', 'exec', 'vitest', 'run', 'packages/core/src/tools/command-run.fixture.test.ts'],
+            command: ['node', ...allowedHarnessArgs],
         });
     });
 });

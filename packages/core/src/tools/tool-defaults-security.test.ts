@@ -7,6 +7,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+const allowedHarnessArgs = ['--eval', "console.log('mission-control command.run harness ok')"] as const;
+
 describe('tool safety defaults', () => {
     const tempRoots: string[] = [];
 
@@ -94,7 +96,7 @@ async function invokeCommand(registry: ToolRegistry) {
         toolCallId: 'command_default_call',
         toolName: 'command.run',
         advertisedVersion: advertisement.version,
-        argumentsJson: JSON.stringify({ command: 'pnpm', args: ['typecheck'] }),
+        argumentsJson: JSON.stringify({ command: 'node', args: allowedHarnessArgs }),
     });
 }
 

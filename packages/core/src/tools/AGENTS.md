@@ -27,7 +27,7 @@
 
 - Registry behavior: `tool-registry.test.ts`.
 - File patch safety: `file-patch.test.ts`, parser/path/apply tests.
-- Command execution: `command-run.test.ts`, `command-run-interrupt.test.ts`, `command-run.fixture.test.ts`.
+- Command execution: `command-run.test.ts`, `command-run-interrupt.test.ts`.
 - Read tools: `read-tools.test.ts`.
 - Security defaults: `tool-defaults-security.test.ts`.
 

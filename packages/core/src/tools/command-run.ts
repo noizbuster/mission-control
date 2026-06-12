@@ -42,7 +42,7 @@ export async function createCommandRunToolRegistration(
     const limiter = new CommandRunLimiter();
     return {
         name: 'command.run',
-        description: 'Run an approved non-interactive test or typecheck command in the workspace.',
+        description: 'Run an approved fixed non-interactive static verification command.',
         capabilityClasses: ['command.run'],
         parametersJsonSchema: commandRunParametersJsonSchema(),
         inputSchema: commandRunInputSchema,

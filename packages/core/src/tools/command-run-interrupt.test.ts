@@ -6,6 +6,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+const allowedHarnessArgs = ['--eval', "console.log('mission-control command.run harness ok')"] as const;
+
 describe('command.run interruption', () => {
     it('aborts the running executor when the tool invocation signal is aborted', async () => {
         // Given
@@ -83,7 +85,7 @@ async function invokeCommand(registry: ToolRegistry, signal: AbortSignal): Promi
         toolCallId: 'command_call',
         toolName: 'command.run',
         advertisedVersion: advertisement.version,
-        argumentsJson: JSON.stringify({ command: 'pnpm', args: ['test'] }),
+        argumentsJson: JSON.stringify({ command: 'node', args: allowedHarnessArgs }),
         signal,
     });
 }

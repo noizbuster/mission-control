@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { type FilePatchToolOptions, registerFilePatchTool } from './file-patch.js';
 import { ToolRegistry } from './tool-registry.js';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -156,6 +156,28 @@ describe('file.patch tool', () => {
         // Then
         expect(result.result.status).toBe('failed');
         expect(await readText(outsideRoot, 'secret.txt')).toBe('secret\n');
+    });
+
+    it('refuses an existing target whose parent directory becomes a symlink after approval', async () => {
+        // Given
+        const workspaceRoot = await createGitWorkspace();
+        const outsideRoot = await createWorkspace();
+        await mkdir(join(workspaceRoot, 'safe'));
+        await trackedFile(workspaceRoot, 'safe/notes.txt', 'before\n');
+        await writeFile(join(outsideRoot, 'notes.txt'), 'before\n', 'utf8');
+        const registry = await createRegistry(workspaceRoot, async (request) => {
+            await rm(join(workspaceRoot, 'safe'), { recursive: true, force: true });
+            await symlink(outsideRoot, join(workspaceRoot, 'safe'));
+            return allowPermission(request);
+        });
+
+        // When
+        const result = await invokePatch(registry, patchFor('safe/notes.txt', 'before', 'after'));
+
+        // Then
+        expect(result.result.status).toBe('failed');
+        expect(result.result.error?.message).toContain('workspace_escape');
+        expect(await readText(outsideRoot, 'notes.txt')).toBe('before\n');
     });
 
     it('reports partial failure without hiding already applied changes', async () => {
