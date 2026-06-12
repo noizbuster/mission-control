@@ -217,6 +217,8 @@ curl -fsSL https://raw.githubusercontent.com/noizbuster/mission-control/main/scr
 mctrl
 ```
 
+For forks or pre-release repositories, pass `MISSION_CONTROL_REPO=owner/repo` to the `sh` process that runs `scripts/install.sh`.
+
 GitHub Release artifact naming:
 
 - `mctrl-linux-x64.tar.gz`
@@ -225,6 +227,7 @@ GitHub Release artifact naming:
 - `mctrl-darwin-arm64.tar.gz`
 
 The package helper creates the current-platform CLI artifact in `dist/release`. Each archive contains `mctrl` and `mission-control-sidecar`.
+It also writes a sibling `.sha256` file for GitHub Release uploads.
 
 Desktop release:
 
@@ -241,9 +244,9 @@ CI/CD with GitHub Actions:
 
 release TODO:
 
-- Add real repository owner in install examples before public release.
+- Add release provenance before public release.
 - Add cross-compile coverage for every artifact name.
-- Add signing, notarization, checksums, and provenance.
+- Add signing and notarization.
 
 ## Native Fallback
 

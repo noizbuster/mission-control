@@ -34,10 +34,14 @@ jobs:
       - run: pnpm dev:package-cli
       - name: artifact name
         run: echo "mctrl-${{ matrix.os }}-${{ matrix.arch }}.tar.gz"
+      - name: checksum artifact
+        run: cat "dist/release/mctrl-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.sha256"
       - name: upload release artifact
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/release/mctrl-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
+          files: |
+            dist/release/mctrl-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
+            dist/release/mctrl-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.sha256
       - name: publish npm
         if: ${{ secrets.NPM_TOKEN != '' }}
         env:

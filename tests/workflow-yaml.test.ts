@@ -32,8 +32,15 @@ describe('GitHub workflow distribution contract', () => {
         expect(releaseCli).toContain('v*');
         expect(releaseCli).toContain('pnpm dev:package-cli');
         expect(releaseCli).toContain('NPM_TOKEN');
+        expect(releaseCli).toContain('os: linux');
+        expect(releaseCli).toContain('arch: x64');
+        expect(releaseCli).toContain('os: darwin');
+        expect(releaseCli).toContain('arch: arm64');
         expect(releaseCli).toContain(
             `mctrl-${githubExpressionPrefix}{{ matrix.os }}-${githubExpressionPrefix}{{ matrix.arch }}.tar.gz`,
+        );
+        expect(releaseCli).toContain(
+            `mctrl-${githubExpressionPrefix}{{ matrix.os }}-${githubExpressionPrefix}{{ matrix.arch }}.tar.gz.sha256`,
         );
         expect(releaseDesktop).toContain('release-desktop');
         expect(releaseDesktop).toContain('tauri');

@@ -11,8 +11,10 @@ describe('README distribution contract', () => {
             'npm install -g @mission-control/cli',
             'npm install -g mission-control',
             'curl -fsSL https://raw.githubusercontent.com/noizbuster/mission-control/main/scripts/install.sh | sh',
+            'MISSION_CONTROL_REPO=owner/repo',
             'mctrl-linux-x64.tar.gz',
             'mctrl-darwin-arm64.tar.gz',
+            '.sha256',
             'Desktop release',
             'GitHub Actions',
             'release TODO',
@@ -22,5 +24,6 @@ describe('README distribution contract', () => {
         for (const term of terms) {
             expect(readme, `README missing ${term}`).toContain(term);
         }
+        expect(readme).not.toContain('OWNER_PLACEHOLDER');
     });
 });

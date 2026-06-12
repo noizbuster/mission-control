@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import process from 'node:process';
 
@@ -75,8 +76,14 @@ export function createCurrentPlatformPackage(root = process.cwd()): string {
     if (tar.status !== 0) {
         throw new Error(`tar failed: ${tar.stderr}`);
     }
+    writeArtifactChecksum(artifactPath, artifactName);
 
     return artifactPath;
+}
+
+function writeArtifactChecksum(artifactPath: string, artifactName: string): void {
+    const digest = createHash('sha256').update(readFileSync(artifactPath)).digest('hex');
+    writeFileSync(`${artifactPath}.sha256`, `${digest}  ${artifactName}\n`);
 }
 
 function writeStagePackageManifest(stageDir: string): void {
