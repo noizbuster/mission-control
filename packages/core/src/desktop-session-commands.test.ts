@@ -5,6 +5,7 @@ import { commandRunCall, filePatchCall, fixedNow, readReplay } from './desktop-s
 import {
     assertAttachesToExistingRunOwner,
     assertDoesNotStartSecondActiveRun,
+    assertInterruptPreservesApprovalDiagnostics,
     assertResumesBlockedWorkAfterReopeningStore,
 } from './desktop-session-run-owner-scenarios.test-support.js';
 import { createDeterministicProvider } from './providers/deterministic-provider.js';
@@ -203,5 +204,9 @@ describe('desktop session command service', () => {
 
     it('resumes blocked work after reopening the store', async () => {
         await assertResumesBlockedWorkAfterReopeningStore();
+    });
+
+    it('keeps approval diagnostics when an approval wait is interrupted', async () => {
+        await assertInterruptPreservesApprovalDiagnostics();
     });
 });

@@ -17,36 +17,87 @@ const ACTION_METHODS = new Map([
 ]);
 
 try {
+    if (process.argv.includes('--stream')) {
+        await runStreamBridge();
+    } else {
+        await runOneShotBridge();
+    }
+} catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`${message}\n`);
+    process.exitCode = 1;
+}
+
+async function runOneShotBridge() {
+    const context = createBridgeContext();
     const request = parseRequest(JSON.parse(await readStdin()));
-    const authStore = createProviderAuthStore();
+    process.stdout.write(JSON.stringify(await executeRequest(request, context)));
+}
+
+async function runStreamBridge() {
+    const context = createBridgeContext();
+    for await (const line of readLines(process.stdin)) {
+        void handleStreamLine(line, context);
+    }
+}
+
+async function handleStreamLine(line, context) {
+    let request;
+    try {
+        request = parseStreamRequest(JSON.parse(line));
+        const result = await executeRequest(request, context);
+        writeStreamResponse(request.id, result);
+    } catch (error) {
+        if (request === undefined) {
+            const message = error instanceof Error ? error.message : String(error);
+            process.stderr.write(`${message}\n`);
+            return;
+        }
+        writeStreamError(request.id, error);
+    }
+}
+
+async function executeRequest(request, context) {
     if (request.method === 'listProviderCredentials') {
-        process.stdout.write(JSON.stringify(await authStore.listCredentialSummaries()));
-    } else if (request.method === 'saveProviderCredential') {
-        await authStore.saveCredential({
+        return context.authStore.listCredentialSummaries();
+    }
+    if (request.method === 'saveProviderCredential') {
+        await context.authStore.saveCredential({
             providerID: readString(request.input, 'providerID'),
             modelID: readString(request.input, 'modelID'),
             ...readOptionalStringField(request.input, 'variantID'),
             apiKey: readString(request.input, 'apiKey'),
             now: new Date().toISOString(),
         });
-        process.stdout.write(
-            JSON.stringify(await savedCredentialSummary(authStore, readString(request.input, 'providerID'))),
-        );
-    } else {
-        const credentialResolver = createProviderAuthStoreCredentialResolver(authStore);
-        const provider = createProviderRouter(credentialResolver);
-        const service = createDesktopSessionCommandService({
-            dataDir: request.dataDir,
-            workspaceRoot: request.workspaceRoot,
-            provider,
-        });
-        const receipt = await service[request.method](request.input);
-        process.stdout.write(JSON.stringify(receipt));
+        return savedCredentialSummary(context.authStore, readString(request.input, 'providerID'));
     }
-} catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
+    const service = commandService(request, context);
+    return service[request.method](request.input);
+}
+
+function createBridgeContext() {
+    const authStore = createProviderAuthStore();
+    const credentialResolver = createProviderAuthStoreCredentialResolver(authStore);
+    return {
+        authStore,
+        provider: createProviderRouter(credentialResolver),
+        services: new Map(),
+    };
+}
+
+function commandService(request, context) {
+    const cacheKey = [request.dataDir, request.workspaceRoot].join('\0');
+    const cached = context.services.get(cacheKey);
+    if (cached !== undefined) {
+        return cached;
+    }
+    const service = createDesktopSessionCommandService({
+        dataDir: request.dataDir,
+        workspaceRoot: request.workspaceRoot,
+        provider: context.provider,
+    });
+    context.services.set(cacheKey, service);
+    return service;
 }
 
 async function readStdin() {
@@ -55,6 +106,23 @@ async function readStdin() {
         chunks.push(chunk);
     }
     return Buffer.concat(chunks).toString('utf8');
+}
+
+async function* readLines(stream) {
+    let buffer = '';
+    for await (const chunk of stream) {
+        buffer += chunk.toString('utf8');
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+            if (line.length > 0) {
+                yield line;
+            }
+        }
+    }
+    if (buffer.length > 0) {
+        yield buffer;
+    }
 }
 
 function parseRequest(value) {
@@ -75,6 +143,13 @@ function parseRequest(value) {
     };
 }
 
+function parseStreamRequest(value) {
+    return {
+        id: readNumber(value, 'id'),
+        ...parseRequest(value),
+    };
+}
+
 function readRecord(value, key) {
     const field = value[key];
     if (!isRecord(field)) {
@@ -87,6 +162,14 @@ function readString(value, key) {
     const field = value[key];
     if (typeof field !== 'string' || field.length === 0) {
         throw new Error(`desktop command field ${key} must be a non-empty string`);
+    }
+    return field;
+}
+
+function readNumber(value, key) {
+    const field = value[key];
+    if (typeof field !== 'number' || !Number.isSafeInteger(field)) {
+        throw new Error(`desktop command field ${key} must be a safe integer`);
     }
     return field;
 }
@@ -114,4 +197,13 @@ async function savedCredentialSummary(authStore, providerID) {
 
 function isRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function writeStreamResponse(id, result) {
+    process.stdout.write(`${JSON.stringify({ id, result })}\n`);
+}
+
+function writeStreamError(id, error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stdout.write(`${JSON.stringify({ id, error: message })}\n`);
 }

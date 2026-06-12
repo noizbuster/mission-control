@@ -2,7 +2,7 @@ import { defaultModelProviderSelection } from '@mission-control/config';
 import type { AgentEvent } from '@mission-control/protocol';
 import { expect } from 'vitest';
 import { createDesktopSessionCommandService } from './desktop-session-commands.js';
-import { fixedNow, readReplay } from './desktop-session-commands-test-support.js';
+import { filePatchCall, fixedNow, readReplay } from './desktop-session-commands-test-support.js';
 import {
     createAbortableProvider,
     createBlockedThenContinuationProvider,
@@ -10,6 +10,7 @@ import {
     deferred,
     requestMessageContents,
 } from './desktop-session-run-owner-provider.test-support.js';
+import { createDeterministicProvider } from './providers/deterministic-provider.js';
 import type { ProviderTurnRequest } from './providers/provider-turn-types.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -114,6 +115,7 @@ export async function assertResumesBlockedWorkAfterReopeningStore(): Promise<voi
     const sessionId = 'session_desktop_owner_restart';
     const requests: ProviderTurnRequest[] = [];
     const provider = createBlockedThenContinuationProvider(requests);
+    const selection = { ...defaultModelProviderSelection, variantID: 'desktop-owner-restart' };
     const firstProcess = createDesktopSessionCommandService({
         dataDir,
         workspaceRoot,
@@ -125,7 +127,7 @@ export async function assertResumesBlockedWorkAfterReopeningStore(): Promise<voi
         await firstProcess.submitPrompt({
             sessionId,
             prompt: 'patch after durable restart',
-            modelProviderSelection: defaultModelProviderSelection,
+            modelProviderSelection: selection,
         });
         const restartedProcess = createDesktopSessionCommandService({
             dataDir,
@@ -148,9 +150,60 @@ export async function assertResumesBlockedWorkAfterReopeningStore(): Promise<voi
         expect(receipt.status).toBe('completed');
         expect(written).toBe('owner restart approved\n');
         expect(requests).toHaveLength(2);
+        expect(requests[1]).toMatchObject({
+            providerID: selection.providerID,
+            modelID: selection.modelID,
+            variantID: selection.variantID,
+        });
         expect(requests[1]?.messages.map((message) => message.role)).toEqual(['user', 'assistant', 'tool']);
         expect(replay.events.map((event) => event.type)).toEqual(
             expect.arrayContaining(['approval.resumed', 'tool.completed', 'run.completed']),
+        );
+    } finally {
+        await rm(dataDir, { recursive: true, force: true });
+        await rm(workspaceRoot, { recursive: true, force: true });
+    }
+}
+
+export async function assertInterruptPreservesApprovalDiagnostics(): Promise<void> {
+    // Given
+    const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-desktop-owner-approval-interrupt-'));
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'mctrl-desktop-owner-approval-workspace-'));
+    const sessionId = 'session_desktop_owner_approval_interrupt';
+    const service = createDesktopSessionCommandService({
+        dataDir,
+        workspaceRoot,
+        now: fixedNow,
+        provider: createDeterministicProvider([
+            filePatchCall('call_patch_approval_interrupt', '.mission-control-approval-interrupt.txt', 'pending write'),
+            { kind: 'response_completed', content: 'approval required' },
+        ]),
+    });
+
+    try {
+        await service.submitPrompt({
+            sessionId,
+            prompt: 'patch should remain pending after interrupt',
+            modelProviderSelection: defaultModelProviderSelection,
+        });
+
+        // When
+        const receipt = await service.interruptRun({ sessionId, reason: 'desktop stop while approval is pending' });
+        const replay = await readReplay(dataDir, sessionId);
+
+        // Then
+        expect(receipt.status).not.toBe('failed');
+        expect(receipt.eventsWritten).toBeGreaterThan(0);
+        expect(replay.approvals).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    approvalId: 'approval_permission_call_patch_approval_interrupt',
+                    state: 'pending',
+                }),
+            ]),
+        );
+        expect(replay.events.map((event) => event.type)).toEqual(
+            expect.arrayContaining(['approval.requested', 'run.blocked', 'run.command.received']),
         );
     } finally {
         await rm(dataDir, { recursive: true, force: true });

@@ -123,7 +123,11 @@ pub fn decide_approval(
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub fn list_provider_credentials() -> Result<Vec<DesktopProviderCredentialSummary>, String> {
     let data_dir = sessions::resolve_data_dir().map_err(|error| error.to_string())?;
-    invoke_default_bridge_json("listProviderCredentials", &EmptyDesktopCommandInput {}, &data_dir)
+    invoke_default_bridge_json(
+        "listProviderCredentials",
+        &EmptyDesktopCommandInput {},
+        &data_dir,
+    )
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]

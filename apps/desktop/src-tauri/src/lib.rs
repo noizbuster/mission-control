@@ -1,4 +1,5 @@
 mod desktop_command_bridge;
+mod desktop_command_bridge_stream;
 mod desktop_commands;
 mod session_datetime;
 mod session_log_scan;
@@ -75,6 +76,9 @@ mod desktop_command_approval_tests;
 
 #[cfg(test)]
 mod desktop_command_tests;
+
+#[cfg(test)]
+mod desktop_command_run_owner_tests;
 
 #[cfg(test)]
 mod session_log_invariant_tests;
