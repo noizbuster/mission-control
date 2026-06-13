@@ -52,6 +52,26 @@ describe('terminal chat input stream handling', () => {
         chatInput.close();
     });
 
+    it('detaches the normal chat stdin listener after each submitted line', async () => {
+        const input = new FakeTerminalInput();
+        const output = new FakeTerminalOutput();
+        const chatInput = createTerminalChatInputFromStreams({ input, output });
+
+        const firstRead = chatInput.read();
+        input.send('hello\r');
+
+        await expect(firstRead).resolves.toEqual({ type: 'line', value: 'hello' });
+        expect(input.listenerCount('data')).toBe(0);
+
+        const secondRead = chatInput.read();
+        input.send('world\r');
+
+        await expect(secondRead).resolves.toEqual({ type: 'line', value: 'world' });
+        expect(input.listenerCount('data')).toBe(0);
+
+        chatInput.close();
+    });
+
     it('suspends a pending terminal read while another prompt owns stdin', async () => {
         const input = new FakeTerminalInput();
         const output = new FakeTerminalOutput();
