@@ -5,6 +5,7 @@ import {
     diffAppliedEvent,
     envelope,
     providerCompletedEvent,
+    providerFailedEvent,
     providerToolCallEvent,
     runEvent,
     sessionStoppedEvent,
@@ -325,5 +326,43 @@ describe('session replay coding projections', () => {
                 }),
             ]),
         );
+    });
+
+    it('projects provider failure as failure, not misleading success output', () => {
+        const sessionId = 'session_replay_provider_failure';
+        const replay = projectSessionReplay({
+            sessionId,
+            envelopes: [
+                envelope(providerToolCallEvent(sessionId), 0, 'event_tool_call'),
+                envelope(providerFailedEvent(sessionId), 1, 'event_provider_failed'),
+                envelope(
+                    runEvent(sessionId, 'run.failed', 'provider exploded', {
+                        command: 'run',
+                        state: 'failed',
+                        runId: 'run_1',
+                        reason: 'provider exploded',
+                        errorCode: 'unknown',
+                    }),
+                    2,
+                    'event_run_failed',
+                ),
+            ],
+        });
+
+        const failureSteps = replay.codingSteps.filter((step) => step.kind === 'provider.failure');
+        const messageSteps = replay.codingSteps.filter((step) => step.kind === 'provider.message');
+        expect(failureSteps).toHaveLength(1);
+        expect(failureSteps[0]).toMatchObject({
+            kind: 'provider.failure',
+            requestId: 'provider_request_task_prompt_1',
+            error: { code: 'unknown', message: 'provider exploded' },
+        });
+        expect(messageSteps).toHaveLength(0);
+
+        const runStateSteps = replay.codingSteps.filter((step) => step.kind === 'run.state');
+        expect(runStateSteps).toEqual(
+            expect.arrayContaining([expect.objectContaining({ state: 'failed', errorCode: 'unknown' })]),
+        );
+        expect(runStateSteps.some((step) => 'state' in step && step.state === 'completed')).toBe(false);
     });
 });

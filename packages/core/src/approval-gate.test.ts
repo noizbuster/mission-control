@@ -242,9 +242,9 @@ describe('PermissionGate', () => {
             now: sequenceNow(['2026-06-11T00:00:00.000Z', '2026-06-11T00:00:01.000Z']),
         });
 
-        expect(() =>
-            gate.updateApproval({ approvalId: 'approval_never_pending', state: 'approved' }),
-        ).toThrowError(expect.objectContaining({ code: 'approval_not_found' }));
+        expect(() => gate.updateApproval({ approvalId: 'approval_never_pending', state: 'approved' })).toThrowError(
+            expect.objectContaining({ code: 'approval_not_found' }),
+        );
         expect(gate.listPendingApprovals()).toHaveLength(0);
     });
 
@@ -263,9 +263,7 @@ describe('PermissionGate', () => {
             ]),
         });
 
-        const pending = requestApproval(gate, 'permission_repeat_interrupt').catch(
-            (error: unknown) => error,
-        );
+        const pending = requestApproval(gate, 'permission_repeat_interrupt').catch((error: unknown) => error);
         await Promise.resolve();
 
         gate.updateApproval({
@@ -298,16 +296,10 @@ describe('PermissionGate', () => {
         const gate = new PermissionGate({
             resolveDecision: requiresApproval,
             emit: () => {},
-            now: sequenceNow([
-                '2026-06-11T00:00:00.000Z',
-                '2026-06-11T00:00:01.000Z',
-                '2026-06-11T00:00:02.000Z',
-            ]),
+            now: sequenceNow(['2026-06-11T00:00:00.000Z', '2026-06-11T00:00:01.000Z', '2026-06-11T00:00:02.000Z']),
         });
 
-        const pending = requestApproval(gate, 'permission_fail_then_approve').catch(
-            (error: unknown) => error,
-        );
+        const pending = requestApproval(gate, 'permission_fail_then_approve').catch((error: unknown) => error);
         await Promise.resolve();
 
         gate.updateApproval({

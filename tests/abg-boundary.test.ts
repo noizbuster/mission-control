@@ -91,6 +91,53 @@ describe('ABG runtime boundaries', () => {
         expect(deniedScopedSearch.result.status).toBe('failed');
         expect(deniedScopedSearch.result.error?.message).toContain('workspace_denied');
     });
+
+    it('stale generated payloads cannot influence runtime repo tools', async () => {
+        const sentinel = 'STALE_GENERATED_PAYLOAD_SENTINEL';
+        const workspaceRoot = await createWorkspace();
+        await mkdir(join(workspaceRoot, 'dist'), { recursive: true });
+        await mkdir(join(workspaceRoot, 'coverage'), { recursive: true });
+        await mkdir(join(workspaceRoot, '.nx'), { recursive: true });
+        await mkdir(join(workspaceRoot, 'node_modules', 'evil-pkg'), { recursive: true });
+        await mkdir(join(workspaceRoot, 'build'), { recursive: true });
+        await mkdir(join(workspaceRoot, 'target'), { recursive: true });
+        await writeFile(join(workspaceRoot, 'dist', 'bundle.js'), `// ${sentinel} from dist`, 'utf8');
+        await writeFile(join(workspaceRoot, 'coverage', 'lcov.info'), `${sentinel} from coverage`, 'utf8');
+        await writeFile(join(workspaceRoot, '.nx', 'cache'), `${sentinel} from nx`, 'utf8');
+        await writeFile(
+            join(workspaceRoot, 'node_modules', 'evil-pkg', 'inject.js'),
+            `// ${sentinel} from node_modules`,
+            'utf8',
+        );
+        await writeFile(join(workspaceRoot, 'build', 'output.js'), `// ${sentinel} from build`, 'utf8');
+        await writeFile(join(workspaceRoot, 'target', 'debug'), `${sentinel} from target`, 'utf8');
+        await writeFile(join(workspaceRoot, 'safe.txt'), 'ordinary workspace file', 'utf8');
+
+        const registry = new ToolRegistry();
+        await registerReadOnlyRepoTools(registry, { workspaceRoot });
+        const readTool = findAdvertisement(registry, 'repo.read');
+        const searchTool = findAdvertisement(registry, 'repo.search');
+
+        for (const stalePath of [
+            'dist/bundle.js',
+            'coverage/lcov.info',
+            '.nx/cache',
+            'node_modules/evil-pkg/inject.js',
+            'build/output.js',
+            'target/debug',
+        ]) {
+            const read = await invokeTool(registry, 'repo.read', readTool.version, { path: stalePath });
+            expect(read.result.status).toBe('failed');
+            expect(read.result.error?.message).toContain('workspace_denied');
+        }
+
+        const rootSearch = await invokeTool(registry, 'repo.search', searchTool.version, {
+            pattern: sentinel,
+            path: '.',
+        });
+        expect(rootSearch.result.status).toBe('completed');
+        expect(rootSearch.structuredOutput).toMatchObject({ totalMatches: 0, matches: [] });
+    });
 });
 
 async function createWorkspace(): Promise<string> {
