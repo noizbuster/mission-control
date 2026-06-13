@@ -60,12 +60,16 @@ describe('terminal text display offsets', () => {
 
             for (const boundary of [prev, next]) {
                 const segments = segmentTerminalText(text.slice(0, boundary));
-                const segmentEnds = new Set(segments.reduce((acc, { index, segment }) => {
-                    acc.push(index + segment.length);
-                    return acc;
-                }, [] as number[]));
+                const segmentEnds = new Set(
+                    segments.reduce((acc, { index, segment }) => {
+                        acc.push(index + segment.length);
+                        return acc;
+                    }, [] as number[]),
+                );
                 segmentEnds.add(0);
-                expect(segmentEnds.has(boundary), `offset ${boundary} is not a grapheme boundary in "${text}"`).toBe(true);
+                expect(segmentEnds.has(boundary), `offset ${boundary} is not a grapheme boundary in "${text}"`).toBe(
+                    true,
+                );
             }
         }
 
