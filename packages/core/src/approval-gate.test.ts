@@ -234,6 +234,100 @@ describe('PermissionGate', () => {
             }),
         ).rejects.toMatchObject({ code: 'approval_required' });
     });
+
+    it('refuses resume decision when no approval is pending at all', () => {
+        const gate = new PermissionGate({
+            resolveDecision: requiresApproval,
+            emit: () => {},
+            now: sequenceNow(['2026-06-11T00:00:00.000Z', '2026-06-11T00:00:01.000Z']),
+        });
+
+        expect(() =>
+            gate.updateApproval({ approvalId: 'approval_never_pending', state: 'approved' }),
+        ).toThrowError(expect.objectContaining({ code: 'approval_not_found' }));
+        expect(gate.listPendingApprovals()).toHaveLength(0);
+    });
+
+    it('handles repeated deny decisions while blocked without corrupting state', async () => {
+        const events: AgentEvent[] = [];
+        const gate = new PermissionGate({
+            resolveDecision: requiresApproval,
+            emit: (event: AgentEvent) => {
+                events.push(event);
+            },
+            now: sequenceNow([
+                '2026-06-11T00:00:00.000Z',
+                '2026-06-11T00:00:01.000Z',
+                '2026-06-11T00:00:02.000Z',
+                '2026-06-11T00:00:03.000Z',
+            ]),
+        });
+
+        const pending = requestApproval(gate, 'permission_repeat_interrupt').catch(
+            (error: unknown) => error,
+        );
+        await Promise.resolve();
+
+        gate.updateApproval({
+            approvalId: 'approval_permission_repeat_interrupt',
+            state: 'denied',
+            reason: 'first deny',
+        });
+
+        expect(() =>
+            gate.updateApproval({
+                approvalId: 'approval_permission_repeat_interrupt',
+                state: 'denied',
+                reason: 'second deny',
+            }),
+        ).toThrowError(expect.objectContaining({ code: 'approval_not_found' }));
+
+        const error = await pending;
+        expect(error).toMatchObject({
+            code: 'approval_denied',
+            requestId: 'permission_repeat_interrupt',
+        });
+        expect(gate.listPendingApprovals()).toHaveLength(0);
+        const deniedRecords = events.filter(
+            (event) => event.type === 'approval.blocked' && event.approvalRecord?.state === 'denied',
+        );
+        expect(deniedRecords).toHaveLength(1);
+    });
+
+    it('handles approve after run failure as approval_not_found when pending was consumed', async () => {
+        const gate = new PermissionGate({
+            resolveDecision: requiresApproval,
+            emit: () => {},
+            now: sequenceNow([
+                '2026-06-11T00:00:00.000Z',
+                '2026-06-11T00:00:01.000Z',
+                '2026-06-11T00:00:02.000Z',
+            ]),
+        });
+
+        const pending = requestApproval(gate, 'permission_fail_then_approve').catch(
+            (error: unknown) => error,
+        );
+        await Promise.resolve();
+
+        gate.updateApproval({
+            approvalId: 'approval_permission_fail_then_approve',
+            state: 'denied',
+            reason: 'run failed before approval',
+        });
+
+        expect(() =>
+            gate.updateApproval({
+                approvalId: 'approval_permission_fail_then_approve',
+                state: 'approved',
+                reason: 'late approval after failure',
+            }),
+        ).toThrowError(expect.objectContaining({ code: 'approval_not_found' }));
+
+        await expect(pending).resolves.toMatchObject({
+            code: 'approval_denied',
+        });
+    });
 });
 
 function requiresApproval(request: PermissionRequest): PermissionDecision {

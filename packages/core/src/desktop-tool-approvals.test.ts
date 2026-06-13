@@ -9,6 +9,7 @@ import {
     permissionRequestedEvent,
     providerToolCallEvent,
     runBlockedEvent,
+    runFailedEvent,
 } from './desktop-tool-approval-test-support.js';
 import { ensurePendingToolApprovalForCurrentBlockedRun, settleDesktopApproval } from './desktop-tool-approvals.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -98,6 +99,90 @@ describe('desktop tool approval provenance', () => {
             expect(countEvents(store.events, 'approval.updated')).toBe(0);
             expect(countEvents(store.events, 'file.diff.applied')).toBe(0);
             await expect(readFile(join(workspaceRoot, '.forged.txt'), 'utf8')).rejects.toThrow();
+        } finally {
+            await rm(workspaceRoot, { recursive: true, force: true });
+        }
+    });
+
+    it('does not execute duplicate approval twice after the first decision settles', async () => {
+        const workspaceRoot = await mkdtemp(join(tmpdir(), 'mctrl-desktop-duplicate-approval-'));
+        const sessionId = 'session_duplicate_approval';
+        const toolCall = filePatchToolCall('call_duplicate', '.duplicate.txt', 'approved once');
+        const store = createMemoryApprovalStore([
+            providerToolCallEvent(sessionId, toolCall),
+            permissionRequestedEvent(sessionId, toolCall),
+            approvalRequestedEvent(sessionId, toolCall),
+            runBlockedEvent(sessionId, toolCall.toolCallId),
+        ]);
+
+        try {
+            const first = await settleDesktopApproval(
+                approvalDecision(sessionId, 'approval_permission_call_duplicate', 'first approve'),
+                approvalOptions({ store, sessionId, workspaceRoot }),
+            );
+
+            expect(first).toBe('completed');
+
+            const second = await settleDesktopApproval(
+                approvalDecision(sessionId, 'approval_permission_call_duplicate', 'duplicate approve'),
+                approvalOptions({ store, sessionId, workspaceRoot }),
+            );
+
+            expect(second).toBe('idle');
+            expect(countEvents(store.events, 'file.diff.applied')).toBe(1);
+            expect(countEvents(store.events, 'approval.resumed')).toBe(1);
+            expect(await readFile(join(workspaceRoot, '.duplicate.txt'), 'utf8')).toBe('approved once\n');
+        } finally {
+            await rm(workspaceRoot, { recursive: true, force: true });
+        }
+    });
+
+    it('returns idle for approval decision after run failure', async () => {
+        const workspaceRoot = await mkdtemp(join(tmpdir(), 'mctrl-desktop-approval-after-failure-'));
+        const sessionId = 'session_approval_after_failure';
+        const toolCall = filePatchToolCall('call_after_failure', '.after-failure.txt', 'must not write');
+        const store = createMemoryApprovalStore([
+            providerToolCallEvent(sessionId, toolCall),
+            permissionRequestedEvent(sessionId, toolCall),
+            approvalRequestedEvent(sessionId, toolCall),
+            runBlockedEvent(sessionId, toolCall.toolCallId),
+            runFailedEvent(sessionId),
+        ]);
+
+        try {
+            const status = await settleDesktopApproval(
+                approvalDecision(sessionId, 'approval_permission_call_after_failure', 'late approve after failure'),
+                approvalOptions({ store, sessionId, workspaceRoot }),
+            );
+
+            expect(status).toBe('idle');
+            expect(countEvents(store.events, 'approval.updated')).toBe(0);
+            expect(countEvents(store.events, 'file.diff.applied')).toBe(0);
+            await expect(readFile(join(workspaceRoot, '.after-failure.txt'), 'utf8')).rejects.toThrow();
+        } finally {
+            await rm(workspaceRoot, { recursive: true, force: true });
+        }
+    });
+
+    it('returns idle for approval decision when no blocked run exists', async () => {
+        const workspaceRoot = await mkdtemp(join(tmpdir(), 'mctrl-desktop-no-blocked-run-'));
+        const sessionId = 'session_no_blocked_run';
+        const toolCall = filePatchToolCall('call_no_blocked', '.no-blocked.txt', 'must not write');
+        const store = createMemoryApprovalStore([
+            providerToolCallEvent(sessionId, toolCall),
+            permissionRequestedEvent(sessionId, toolCall),
+            approvalRequestedEvent(sessionId, toolCall),
+        ]);
+
+        try {
+            const status = await settleDesktopApproval(
+                approvalDecision(sessionId, 'approval_permission_call_no_blocked', 'approve without blocked run'),
+                approvalOptions({ store, sessionId, workspaceRoot }),
+            );
+
+            expect(status).toBe('idle');
+            expect(countEvents(store.events, 'approval.updated')).toBe(0);
+            expect(countEvents(store.events, 'file.diff.applied')).toBe(0);
         } finally {
             await rm(workspaceRoot, { recursive: true, force: true });
         }
