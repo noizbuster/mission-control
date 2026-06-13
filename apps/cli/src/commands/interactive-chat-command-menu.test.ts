@@ -228,6 +228,28 @@ describe('interactive chat command menu', () => {
         expect(isTerminalShiftEnterSequence('\r', mode)).toBe(false);
     });
 
+    it('deletes wrapped Korean graphemes without moving the cursor into a fullwidth cell', () => {
+        const input = insertTerminalChatInputText({ value: '', cursorOffset: 0 }, '\ud55c\uad6d\uc5b4');
+        const movedLeft = moveTerminalChatInputCursor(input, 'left');
+        const deleted = deleteTerminalChatInputCharacterBeforeCursor(movedLeft);
+        const block = renderTerminalChatInputBlock(deleted, createSlashCommandMenuState(), 12);
+
+        expect(deleted.value).toBe('\ud55c\uc5b4');
+        expect(deleted.cursorOffset).toBe(1);
+        expect(block.text).toContain('\u001b[4C');
+    });
+
+    it('renders cursor after deleting CJK text at a wrap boundary', () => {
+        const input = insertTerminalChatInputText({ value: '', cursorOffset: 0 }, '\ud55c\uad6d\uc5b4\n\uc548\ub155');
+        const atSecondLineStart = moveTerminalChatInputCursor(input, 'line-start');
+        const deleted = deleteTerminalChatInputCharacterBeforeCursor(atSecondLineStart);
+        const block = renderTerminalChatInputBlock(deleted, createSlashCommandMenuState(), 20);
+
+        expect(deleted.value).toBe('\ud55c\uad6d\uc5b4\uc548\ub155');
+        expect(deleted.cursorOffset).toBe(3);
+        expect(block.text).toContain('\u001b[8C');
+    });
+
     it('emits terminal modified-key protocol toggles for distinguishing Shift+Enter from Enter', () => {
         expect(terminalModifiedKeyEnableSequence).toContain('\u001b[>7u');
         expect(terminalModifiedKeyEnableSequence).toContain('\u001b[>4;2m');
