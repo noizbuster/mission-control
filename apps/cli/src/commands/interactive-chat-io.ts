@@ -123,6 +123,7 @@ export function createTerminalChatInputFromStreams(streams: TerminalChatInputStr
             return;
         }
         suspended = true;
+        streams.output.write(terminalModifiedKeyDisableSequence);
         for (const listener of activeDataListeners) {
             streams.input.off('data', listener);
         }
@@ -133,6 +134,9 @@ export function createTerminalChatInputFromStreams(streams: TerminalChatInputStr
             return;
         }
         suspended = false;
+        streams.input.setRawMode(true);
+        streams.input.resume();
+        streams.output.write(terminalModifiedKeyEnableSequence);
         for (const listener of activeDataListeners) {
             streams.input.on('data', listener);
         }
