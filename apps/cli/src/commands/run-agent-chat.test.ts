@@ -77,6 +77,24 @@ describe('runAgent interactive chat', () => {
         expect(output.match(/Press Ctrl\+C again to exit/g)).toHaveLength(3);
     });
 
+    it('preserves Ctrl+C after a submitted terminal line as the next interrupt', async () => {
+        const chatOutput = createBufferedChatOutput();
+
+        const output = await runAgent(parseArgs([]), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: 'buffered ctrl-c test' },
+                { type: 'interrupt' },
+                { type: 'interrupt' },
+            ]),
+            chatOutput: chatOutput.output,
+        });
+
+        expect(output).toContain('Assistant: received prompt: buffered ctrl-c test');
+        expect(output).toContain('Press Ctrl+C again to exit');
+        expect(output.match(/Press Ctrl\+C again to exit/g)).toHaveLength(1);
+    });
+
     it('exits with /exit without submitting a prompt task', async () => {
         const chatOutput = createBufferedChatOutput();
         const events: AgentEvent[] = [];
