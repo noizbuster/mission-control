@@ -246,6 +246,30 @@ describe('terminal chat input stream handling', () => {
         chatInput.close();
     });
 
+    it('waits a macrotask pair before submitting a composed Korean character', async () => {
+        const input = new FakeTerminalInput();
+        const output = new FakeTerminalOutput();
+        const chatInput = createTerminalChatInputFromStreams({ input, output });
+        const firstRead = chatInput.read();
+
+        input.send('\ud55c\uae00\r');
+
+        let resolved = false;
+        void firstRead.then(() => {
+            resolved = true;
+        });
+        await Promise.resolve();
+        expect(resolved).toBe(false);
+
+        input.send('!');
+
+        await expect(firstRead).resolves.toEqual({ type: 'line', value: '\ud55c\uae00' });
+        const secondRead = chatInput.read();
+        input.send('\r');
+        await expect(secondRead).resolves.toEqual({ type: 'line', value: '!' });
+        chatInput.close();
+    });
+
     it('reads Kitty CSI-u Ctrl+C as an interrupt', async () => {
         const input = new FakeTerminalInput();
         const output = new FakeTerminalOutput();
