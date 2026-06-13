@@ -149,6 +149,36 @@ describe('file.patch workspace path boundaries', () => {
         expect(await readFile(join(workspaceRoot, 'image.bin'))).toEqual(Buffer.from([0, 1, 2, 3]));
     });
 
+    it('rejects symlink chains that escape the workspace', async () => {
+        const workspaceRoot = await createGitWorkspace();
+        const outsideRoot = await createWorkspace();
+        await writeFile(join(outsideRoot, 'secret.txt'), 'secret\n', 'utf8');
+        await symlink(join(outsideRoot, 'secret.txt'), join(workspaceRoot, 'link2.txt'));
+        await symlink(join(workspaceRoot, 'link2.txt'), join(workspaceRoot, 'link1.txt'));
+        const registry = await createRegistry(workspaceRoot, allowPermission);
+
+        const result = await invokePatch(registry, patchFor('link1.txt', 'secret', 'changed'));
+
+        expect(result.result.status).toBe('failed');
+        expect(result.result.error?.message).toContain('workspace_escape');
+        expect(await readText(outsideRoot, 'secret.txt')).toBe('secret\n');
+    });
+
+    it('rejects a symlink chain through parent directories', async () => {
+        const workspaceRoot = await createGitWorkspace();
+        await mkdir(join(workspaceRoot, 'real'));
+        await trackedFile(workspaceRoot, 'real/notes.txt', 'before\n');
+        await symlink(join(workspaceRoot, 'real'), join(workspaceRoot, 'level2'));
+        await symlink(join(workspaceRoot, 'level2'), join(workspaceRoot, 'level1'));
+        const registry = await createRegistry(workspaceRoot, allowPermission);
+
+        const result = await invokePatch(registry, patchFor('level1/notes.txt', 'before', 'after'));
+
+        expect(result.result.status).toBe('failed');
+        expect(result.result.error?.message).toContain('workspace_escape');
+        expect(await readText(workspaceRoot, 'real/notes.txt')).toBe('before\n');
+    });
+
     async function createWorkspace(): Promise<string> {
         const workspace = await mkdtemp(join(tmpdir(), 'mctrl-file-patch-paths-'));
         workspaces.push(workspace);

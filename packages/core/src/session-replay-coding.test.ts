@@ -208,6 +208,84 @@ describe('session replay coding projections', () => {
         ]);
     });
 
+    it('replays partial failure diff events showing applied context without implying rollback', () => {
+        const sessionId = 'session_replay_partial_boundary';
+        const replay = projectSessionReplay({
+            sessionId,
+            envelopes: [
+                envelope(diffAppliedEvent(sessionId), 0, 'event_partial_diff'),
+                envelope(toolFailedEvent(sessionId), 1, 'event_tool_failed'),
+            ],
+        });
+
+        const appliedSteps = replay.codingSteps.filter((step) => step.kind === 'tool.result');
+        expect(appliedSteps).toHaveLength(1);
+        expect(appliedSteps[0]).toMatchObject({
+            kind: 'tool.result',
+            toolCallId: 'patch_call',
+            status: 'failed',
+            appliedFiles: ['a.txt'],
+        });
+
+        expect(replay.diagnostics).toEqual([]);
+        expect(replay.toolOutcomes[0]?.appliedFiles).toEqual(['a.txt']);
+    });
+
+    it('replays denied patches without diff applied events or rollback implication', () => {
+        const sessionId = 'session_replay_denied_patch';
+        const replay = projectSessionReplay({
+            sessionId,
+            envelopes: [
+                envelope(providerToolCallEvent(sessionId), 0, 'event_tool_call'),
+                envelope(
+                    providerCompletedEvent(sessionId, 'task_prompt_1', 'approval requested'),
+                    1,
+                    'event_requested',
+                ),
+                envelope(
+                    {
+                        type: 'tool.failed',
+                        timestamp: '2026-06-05T10:00:03.000Z',
+                        sessionId,
+                        taskId: 'patch_call',
+                        message: 'tool failed: file.patch',
+                        toolResult: {
+                            toolCallId: 'patch_call',
+                            status: 'failed',
+                            error: {
+                                code: 'tool_failed',
+                                message: 'approval_denied: interactive CLI approval',
+                                retryable: false,
+                            },
+                        },
+                    },
+                    2,
+                    'event_tool_denied',
+                ),
+                envelope(sessionStoppedEvent(sessionId), 3, 'event_session_stopped'),
+            ],
+        });
+
+        expect(replay.toolOutcomes).toEqual([
+            {
+                toolId: 'patch_call',
+                status: 'failed',
+                failedAt: '2026-06-05T10:00:03.000Z',
+                lastMessage: 'tool failed: file.patch',
+                result: {
+                    toolCallId: 'patch_call',
+                    status: 'failed',
+                    error: {
+                        code: 'tool_failed',
+                        message: 'approval_denied: interactive CLI approval',
+                        retryable: false,
+                    },
+                },
+            },
+        ]);
+        expect(replay.codingSteps.filter((step) => step.kind === 'tool.result')).toHaveLength(1);
+    });
+
     it('projects blocked approval and resumed run', () => {
         expectBlockedApprovalAndResumedRunProjection();
     });
