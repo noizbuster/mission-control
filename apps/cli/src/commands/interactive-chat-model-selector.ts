@@ -4,10 +4,11 @@ import {
     createProviderPromptView,
     reduceProviderPromptKeypress,
 } from './auth-provider-keypress.js';
+import type { TerminalInputStream, TerminalOutputStream } from './interactive-chat-terminal-read.js';
 import type { ChatOutput, ModelSelector } from './interactive-chat.js';
 import type { ModelChoice } from './interactive-chat-model.js';
 import { truncateTerminalText } from './terminal-text.js';
-import { stdin as input, stdout as output } from 'node:process';
+import { stdin, stdout } from 'node:process';
 
 export type ModelSelectorRenderInput = {
     readonly title: string;
@@ -15,12 +16,29 @@ export type ModelSelectorRenderInput = {
     readonly columns: number;
 };
 
+export type ModelSelectorOutputStream = TerminalOutputStream & {
+    readonly rows?: number;
+    readonly columns?: number;
+};
+
+export type ModelSelectorStreams = {
+    readonly input: TerminalInputStream;
+    readonly output: ModelSelectorOutputStream;
+};
+
 export function createTerminalModelSelector(chatOutput: ChatOutput): ModelSelector {
+    return createTerminalModelSelectorFromStreams(chatOutput, { input: stdin, output: stdout });
+}
+
+export function createTerminalModelSelectorFromStreams(
+    chatOutput: ChatOutput,
+    streams: ModelSelectorStreams,
+): ModelSelector {
     return async (choices, _currentSelection, options) => {
         if (choices.length === 0) {
             return undefined;
         }
-        return questionModelLine(chatOutput, choices, options?.title ?? 'Select model');
+        return questionModelLine(chatOutput, choices, options?.title ?? 'Select model', streams);
     };
 }
 
@@ -28,15 +46,21 @@ function questionModelLine(
     chatOutput: ChatOutput,
     choices: readonly ModelChoice[],
     title: string,
+    streams: ModelSelectorStreams,
 ): Promise<ModelProviderSelection | undefined> {
     const promptChoices = choices.map((choice) => ({
         id: choice.id,
         name: choice.label,
     }));
 
+    const wasRaw = streams.input.isRaw === true;
+    streams.input.setRawMode(true);
+    streams.input.resume();
+
     return new Promise((resolve) => {
         let keypressState = createProviderPromptKeypressState();
         let renderedLines = 0;
+        let cleaned = false;
 
         function clearPreviousRender(): void {
             if (renderedLines > 0) {
@@ -58,8 +82,18 @@ function questionModelLine(
             renderedLines = lines.length;
         }
 
+        function cleanup(): void {
+            if (cleaned) {
+                return;
+            }
+            cleaned = true;
+            streams.input.off('data', onData);
+            streams.input.setRawMode(wasRaw);
+            streams.input.pause();
+        }
+
         function finish(selection: ModelProviderSelection | undefined): void {
-            input.off('data', onData);
+            cleanup();
             chatOutput.write('\n');
             resolve(selection);
         }
@@ -85,21 +119,21 @@ function questionModelLine(
             }
         }
 
+        function getVisibleModelChoiceCount(): number {
+            const terminalRows = streams.output.rows;
+            if (terminalRows === undefined) {
+                return 12;
+            }
+            return Math.min(12, Math.max(5, terminalRows - 5));
+        }
+
+        function getTerminalColumns(): number {
+            return streams.output.columns ?? 80;
+        }
+
         render();
-        input.on('data', onData);
+        streams.input.on('data', onData);
     });
-}
-
-function getVisibleModelChoiceCount(): number {
-    const terminalRows = output.rows;
-    if (terminalRows === undefined) {
-        return 12;
-    }
-    return Math.min(12, Math.max(5, terminalRows - 5));
-}
-
-function getTerminalColumns(): number {
-    return output.columns ?? 80;
 }
 
 export function renderModelSelectorLines(input: ModelSelectorRenderInput): readonly string[] {
