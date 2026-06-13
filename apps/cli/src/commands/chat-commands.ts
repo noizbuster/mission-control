@@ -1,5 +1,7 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import { splitCommandParts } from './chat-command-parts.js';
+import { parseSessionSlashCommand } from './chat-session-commands.js';
 import { formatModelSelection, type ModelChoice, resolveModelCommand } from './interactive-chat-model.js';
 
 export type ChatLineAction =
@@ -22,9 +24,37 @@ export type ChatLineAction =
           readonly kind: 'resume';
       }
     | {
+          readonly kind: 'new-session';
+          readonly sessionId?: string;
+      }
+    | {
+          readonly kind: 'session';
+          readonly sessionId?: string;
+      }
+    | {
+          readonly kind: 'sessions';
+      }
+    | {
+          readonly kind: 'tree';
+          readonly sessionId?: string;
+      }
+    | {
           readonly kind: 'branch';
-          readonly parentMessageId: string;
-          readonly prompt: string;
+          readonly mode: 'continue' | 'select';
+          readonly entryId: string;
+          readonly prompt?: string;
+      }
+    | {
+          readonly kind: 'fork';
+          readonly entryId: string;
+          readonly sessionId?: string;
+      }
+    | {
+          readonly kind: 'clone';
+          readonly sessionId?: string;
+      }
+    | {
+          readonly kind: 'compact';
       }
     | {
           readonly kind: 'interrupt';
@@ -45,6 +75,10 @@ export type ChatLineAction =
           readonly selection: ModelProviderSelection;
       }
     | {
+          readonly kind: 'trust';
+          readonly action: TrustCommandAction;
+      }
+    | {
           readonly kind: 'skill';
           readonly name: string;
           readonly instruction: string;
@@ -60,10 +94,7 @@ export type ChatLineAction =
 
 export type SkillInvocationAction = Extract<ChatLineAction, { readonly kind: 'skill' }>;
 
-type CommandParts = {
-    readonly head: string;
-    readonly tail: string;
-};
+export type TrustCommandAction = 'trust' | 'status' | 'deny' | 'reset';
 
 export type ChatLineOptions = {
     readonly modelChoices?: readonly ModelChoice[];
@@ -112,10 +143,12 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
             return parseNoArgumentCommand('interrupt', parts.tail);
         case 'exit':
             return parseNoArgumentCommand('exit', parts.tail);
-        case 'branch':
-            return parseBranchCommand(parts.tail);
+        case 'trust':
+            return parseTrustCommand(parts.tail);
+        case 'compact':
+            return parseNoArgumentCommand('compact', parts.tail);
         default:
-            return { kind: 'unknown-slash', command: parts.head };
+            return parseSessionSlashCommand(parts.head, parts.tail) ?? { kind: 'unknown-slash', command: parts.head };
     }
 }
 
@@ -126,22 +159,38 @@ function parsePromptCommand(kind: 'queue' | 'steer', prompt: string): ChatLineAc
     return { kind, prompt };
 }
 
-function parseNoArgumentCommand(kind: 'resume' | 'interrupt' | 'exit', input: string): ChatLineAction {
+function parseNoArgumentCommand(
+    kind: 'resume' | 'sessions' | 'compact' | 'interrupt' | 'exit',
+    input: string,
+): ChatLineAction {
     if (input.length > 0) {
         return { kind: 'invalid', message: `/${kind} does not accept arguments` };
     }
     return { kind };
 }
 
-function parseBranchCommand(input: string): ChatLineAction {
+function parseTrustCommand(input: string): ChatLineAction {
     const parts = splitCommandParts(input);
-    if (parts.head.length === 0 || parts.tail.length === 0) {
-        return { kind: 'invalid', message: '/branch requires parent message id and prompt text' };
+    if (parts.head.length === 0) {
+        return { kind: 'trust', action: 'trust' };
     }
+    if (parts.tail.length > 0) {
+        return invalidTrustCommand();
+    }
+    switch (parts.head) {
+        case 'status':
+        case 'deny':
+        case 'reset':
+            return { kind: 'trust', action: parts.head };
+        default:
+            return invalidTrustCommand();
+    }
+}
+
+function invalidTrustCommand(): ChatLineAction {
     return {
-        kind: 'branch',
-        parentMessageId: parts.head,
-        prompt: parts.tail,
+        kind: 'invalid',
+        message: '/trust supports: status, deny, reset',
     };
 }
 
@@ -175,21 +224,6 @@ function parseSkillInvocation(line: string): ChatLineAction {
         kind: 'skill',
         name: parts.head,
         instruction: parts.tail,
-    };
-}
-
-function splitCommandParts(input: string): CommandParts {
-    const trimmed = input.trim();
-    if (trimmed.length === 0) {
-        return { head: '', tail: '' };
-    }
-    const firstWhitespace = trimmed.search(/\s/);
-    if (firstWhitespace < 0) {
-        return { head: trimmed, tail: '' };
-    }
-    return {
-        head: trimmed.slice(0, firstWhitespace),
-        tail: trimmed.slice(firstWhitespace + 1).trim(),
     };
 }
 

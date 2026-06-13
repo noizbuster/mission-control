@@ -32,6 +32,27 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
             }
             return { ...createSessionArgs('session-replay'), mode: 'jsonl', sessionId };
         }
+        case 'export': {
+            const sessionId = argv[1];
+            const filePath = argv[2];
+            if (sessionId === undefined || filePath === undefined) {
+                throw new Error('session export requires a session id and archive path');
+            }
+            if (argv[3] !== undefined) {
+                throw new Error(`Unsupported session export argument: ${argv[3]}`);
+            }
+            return { ...createSessionArgs('session-export'), sessionId, filePath };
+        }
+        case 'import': {
+            const filePath = argv[1];
+            if (filePath === undefined) {
+                throw new Error('session import requires an archive path');
+            }
+            if (argv[2] !== undefined) {
+                throw new Error(`Unsupported session import argument: ${argv[2]}`);
+            }
+            return { ...createSessionArgs('session-import'), filePath };
+        }
         default:
             throw new Error(`Unsupported session command: ${command ?? ''}`);
     }

@@ -11,6 +11,7 @@
     "dev:package-cli": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run workspace:package-cli",
     "dev:sidecar": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run sidecar:dev --",
     "lint": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run workspace:lint",
+    "smoke:coding-agent-built-dist": "node --experimental-strip-types scripts/coding-agent-built-dist-smoke.ts",
     "test": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run-many -t test",
     "typecheck": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run-many -t typecheck"
   },

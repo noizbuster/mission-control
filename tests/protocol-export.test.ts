@@ -21,7 +21,10 @@ import {
     ModelProviderSelectionSchema,
     ModelVariantEntrySchema,
     PermissionDecisionSchema,
+    PermissionReplySchema,
     PermissionRequestSchema,
+    PermissionRuleDecisionSchema,
+    PermissionRuleSchema,
     PermissionStatusSchema,
     ProtocolErrorSchema,
     ProviderApiKeyCredentialSchema,
@@ -38,6 +41,14 @@ import {
     ProviderStreamChunkSchema,
     RedactionMetadataSchema,
     ReplayCursorSchema,
+    SESSION_ARCHIVE_FILE_KIND,
+    SESSION_ARCHIVE_FILE_VERSION,
+    SESSION_ARCHIVE_SCHEMA_VERSION,
+    SessionArchiveChecksumSchema,
+    SessionArchiveFileSchema,
+    SessionArchiveManifestSchema,
+    SessionTreeEventMetadataSchema,
+    SessionTreeEventTypeSchema,
     SidecarCancelTaskCommandSchema,
     SidecarTaskCancelledResponseSchema,
     SidecarTaskFailedResponseSchema,
@@ -57,9 +68,32 @@ describe('protocol public exports', () => {
         expect(AgentEventLogSchema.parse([])).toEqual([]);
         expect(EventDurabilitySchema.parse('durable')).toBe('durable');
         expect(ReplayCursorSchema.shape.sequence).toBeDefined();
+        expect(SESSION_ARCHIVE_SCHEMA_VERSION).toBe(1);
+        expect(SESSION_ARCHIVE_FILE_KIND).toBe('mission-control.session-archive');
+        expect(SESSION_ARCHIVE_FILE_VERSION).toBe(1);
+        expect(SessionTreeEventTypeSchema.parse('session.tree.entry')).toBe('session.tree.entry');
+        expect(
+            SessionTreeEventMetadataSchema.parse({
+                kind: 'metadata',
+                cwd: '/workspace/mission-control',
+                trustedRoot: '/workspace/mission-control',
+                workspaceTrust: 'trusted',
+            }),
+        ).toEqual({
+            kind: 'metadata',
+            cwd: '/workspace/mission-control',
+            trustedRoot: '/workspace/mission-control',
+            workspaceTrust: 'trusted',
+        });
+        expect(SessionArchiveManifestSchema.shape.trustedRoot).toBeDefined();
+        expect(SessionArchiveChecksumSchema.shape.value).toBeDefined();
+        expect(SessionArchiveFileSchema.shape.eventsJsonl).toBeDefined();
         expect(AgentSnapshotSchema.shape.sessionId).toBeDefined();
         expect(PermissionRequestSchema.shape.action).toBeDefined();
         expect(PermissionDecisionSchema.shape.status).toBeDefined();
+        expect(PermissionReplySchema.shape.reply).toBeDefined();
+        expect(PermissionRuleSchema.shape.pattern).toBeDefined();
+        expect(PermissionRuleDecisionSchema.parse('once')).toBe('once');
         expect(PermissionStatusSchema.parse('deny')).toBe('deny');
         expect(ApprovalPolicyDecisionSchema.parse('requires_approval')).toBe('requires_approval');
         expect(ApprovalLifecycleStateSchema.parse('pending')).toBe('pending');

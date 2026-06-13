@@ -32,7 +32,16 @@ describe('runAgent JSONL session automation', () => {
         expect(events.find((event) => event.type === 'task.started')?.message).toBe(
             'user prompt: summarize this repository',
         );
-        expect(replay.events.map((event) => event.type)).toEqual(events.map((event) => event.type));
+        const records = parseJsonRecords(output);
+        expect(lastRecord(records)).toMatchObject({
+            type: 'session.stopped',
+            sessionId,
+            status: 'completed',
+            runId: expect.any(String),
+        });
+        expect(replay.events.map((event) => event.type)).toEqual(
+            expect.arrayContaining(events.map((event) => event.type)),
+        );
         expect(replay.snapshot.sessionId).toBe(sessionId);
         await rm(dataDir, { recursive: true, force: true });
     });
@@ -83,4 +92,20 @@ function parseEventLines(output: string) {
         .trim()
         .split('\n')
         .map((line) => AgentEventSchema.parse(JSON.parse(line)));
+}
+
+function parseJsonRecords(output: string): readonly Record<string, unknown>[] {
+    return output
+        .trim()
+        .split('\n')
+        .filter((line) => line.trim().startsWith('{'))
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+function lastRecord(records: readonly Record<string, unknown>[]): Record<string, unknown> {
+    const record = records.at(-1);
+    if (record === undefined) {
+        throw new Error('expected at least one JSON record');
+    }
+    return record;
 }

@@ -38,12 +38,22 @@ describe('CLI entrypoint', () => {
             'mctrl graph run examples/abg/research-answer.graph.json --session session_graph --jsonl',
         );
         expect(help).toContain('mctrl session list');
+        expect(help).toContain('mctrl session export session_demo /tmp/session_demo.mctrl-session.json');
+        expect(help).toContain('mctrl session import /tmp/session_demo.mctrl-session.json');
         expect(help).toContain('mctrl session replay session_demo --jsonl');
         expect(help).toContain('--version');
         expect(help).toContain('--help');
         expect(help).toContain('mctrl --no-tui --provider local --model local-echo');
         expect(help).toContain('mctrl --json --graph examples/abg/research-answer.graph.json');
         expect(help).toContain('/model <provider>/<model>[#variant]');
+        expect(help).toContain('/new [session-id]');
+        expect(help).toContain('/session <session-id>');
+        expect(help).toContain('/sessions');
+        expect(help).toContain('/tree');
+        expect(help).toContain('/branch <entry-id>');
+        expect(help).toContain('/branch <message-id> <prompt>');
+        expect(help).toContain('/fork <entry-id> [session-id]');
+        expect(help).toContain('/clone [session-id]');
         expect(help).toContain('local/local-echo#fast');
         expect(help).toContain('$<skill> [args]');
         expect(help).toContain('$ skill invocations are scaffolded inside Mission Control');

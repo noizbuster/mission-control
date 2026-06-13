@@ -61,7 +61,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         }),
     );
     if (shouldRunChat) {
-        const recorder = await createRunEventRecorder(args);
+        const recorder = await createRunEventRecorder(args, { workspaceRoot });
         const emitRuntimeEvent = (event: AgentEvent) => {
             const recorded = recorder.record(event);
             options.onRuntimeEvent?.(recorded);
@@ -74,6 +74,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         try {
             const session = await runtime.start();
             didStart = true;
+            const sessionStore = recorder.currentStore();
             return await runInteractiveChatSession(runtime, {
                 modelProviderSelection: selectedModelProvider,
                 provider,
@@ -85,7 +86,8 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                 ),
                 emitEvent: emitRuntimeEvent,
                 observeStoredEvent,
-                ...(recorder.store !== undefined ? { sessionStore: recorder.store } : {}),
+                switchSessionStore: recorder.switchSession,
+                ...(sessionStore !== undefined ? { sessionStore } : {}),
                 ...(options.provider === undefined ? { resolveProviderForSelection: createProvider } : {}),
                 persistModelProviderSelection: async (selection) => {
                     await authStore.setDefaultSelection(selection);
@@ -104,7 +106,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         }
     }
 
-    const recorder = await createRunEventRecorder(args);
+    const recorder = await createRunEventRecorder(args, { workspaceRoot });
     const renderer = createRenderer(args.mode);
     const unsubscribe = runtime.onEvent((event) => {
         renderer.render(recorder.record(event));
@@ -123,10 +125,19 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         try {
             if (graph !== undefined) {
                 await runtime.runGraph(graph);
-            } else if (args.prompt !== undefined && recorder.store !== undefined && recorder.sessionId !== undefined) {
+            } else if (
+                args.prompt !== undefined &&
+                recorder.currentStore() !== undefined &&
+                recorder.currentSessionId() !== undefined
+            ) {
+                const sessionStore = recorder.currentStore();
+                const sessionId = recorder.currentSessionId();
+                if (sessionStore === undefined || sessionId === undefined) {
+                    throw new TypeError('durable session recorder became unavailable while running a prompt');
+                }
                 await runOwnerPrompt({
-                    sessionId: recorder.sessionId,
-                    store: recorder.store,
+                    sessionId,
+                    store: sessionStore,
                     provider,
                     modelProviderSelection: selectedModelProvider,
                     workspaceRoot,
@@ -137,6 +148,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     ...(options.nonInteractiveAutomationPolicy !== undefined
                         ? { nonInteractiveAutomationPolicy: options.nonInteractiveAutomationPolicy }
                         : {}),
+                    throwOnTerminalFailure: args.mode === 'plain',
                 });
             } else if (args.prompt !== undefined) {
                 await runtime.runPromptTask(args.prompt);

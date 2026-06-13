@@ -69,4 +69,61 @@ describe('CLI renderers', () => {
 
         expect(renderer.getOutput()).toContain('node.started graph=research-answer node=draft-answer mode=llm');
     });
+
+    it('json renderer includes machine-readable run state metadata', async () => {
+        const renderer = new JsonRenderer();
+
+        renderer.render({
+            type: 'run.started',
+            timestamp: '2026-06-13T00:00:00.000Z',
+            sessionId: 'session_json_machine',
+            message: 'run started',
+            run: {
+                command: 'run',
+                state: 'running',
+                runId: 'run_json_machine',
+            },
+        });
+        renderer.render({
+            type: 'run.completed',
+            timestamp: '2026-06-13T00:00:01.000Z',
+            sessionId: 'session_json_machine',
+            message: 'run completed',
+            run: {
+                command: 'run',
+                state: 'completed',
+                runId: 'run_json_machine',
+            },
+        });
+        renderer.render({
+            type: 'session.stopped',
+            timestamp: '2026-06-13T00:00:02.000Z',
+            sessionId: 'session_json_machine',
+            message: 'mission-control session stopped',
+            nativeSidecarStatus: 'mock',
+        });
+
+        const records = renderer
+            .getOutput()
+            .trim()
+            .split('\n')
+            .map((line) => JSON.parse(line) as Record<string, unknown>);
+        const finalRecord = records.at(-1);
+
+        expect(finalRecord).toMatchObject({
+            type: 'session.stopped',
+            sessionId: 'session_json_machine',
+            status: 'completed',
+            runId: 'run_json_machine',
+            machine: {
+                session: {
+                    sessionId: 'session_json_machine',
+                },
+                run: {
+                    runId: 'run_json_machine',
+                    status: 'completed',
+                },
+            },
+        });
+    });
 });

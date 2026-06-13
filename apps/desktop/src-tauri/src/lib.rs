@@ -1,6 +1,8 @@
 mod desktop_command_bridge;
 mod desktop_command_bridge_stream;
 mod desktop_commands;
+#[cfg(test)]
+mod desktop_command_test_support;
 mod session_catalog;
 mod session_datetime;
 mod session_index;
@@ -9,6 +11,7 @@ mod session_index_format_fields;
 mod session_index_format_records;
 mod session_log_scan;
 mod session_parse;
+mod session_projection;
 mod session_protocol;
 mod sessions;
 
@@ -99,6 +102,12 @@ mod session_index_shape_tests;
 
 #[cfg(test)]
 mod session_list_tests;
+
+#[cfg(test)]
+mod session_catalog_projection_tests;
+
+#[cfg(test)]
+mod session_catalog_projection_repair_tests;
 
 #[cfg(test)]
 mod session_read_validation_tests;

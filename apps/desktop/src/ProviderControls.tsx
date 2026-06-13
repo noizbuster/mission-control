@@ -89,7 +89,7 @@ export function getProviderExecutionGate(providerID: string): ProviderExecutionG
 export function formatProviderCapabilityStatus(capability: ProviderExecutionCapability): string {
     switch (capability.status) {
         case 'executable':
-            return 'execution ready';
+            return 'can start runs';
         case 'model-discovery-only':
             return 'model discovery only';
         case 'auth-only':
@@ -100,8 +100,20 @@ export function formatProviderCapabilityStatus(capability: ProviderExecutionCapa
 }
 
 export function ProviderExecutionStatus({ gate }: { readonly gate: ProviderExecutionGate }): React.JSX.Element {
+    const executableStyle =
+        gate.status === 'executable'
+            ? {
+                  background: 'var(--rail)',
+                  borderColor: 'var(--border-strong)',
+              }
+            : undefined;
     return (
-        <div className="provider-execution-status" data-state={gate.status} data-testid="provider-execution-status">
+        <div
+            className="provider-execution-status"
+            data-state={gate.status}
+            data-testid="provider-execution-status"
+            style={executableStyle}
+        >
             {gate.label}
         </div>
     );

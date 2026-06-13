@@ -2,19 +2,25 @@ import type { AgentRuntime } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ChatLineAction } from './chat-commands.js';
 import type { ModelSelector } from './interactive-chat.js';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
+import { runCompactAction } from './interactive-chat-compaction-action.js';
 import type { ChatOutput } from './interactive-chat-io.js';
-import { createVariantChoices, getModelChoiceUnavailableReason, type ModelChoice } from './interactive-chat-model.js';
+import type { ModelChoice } from './interactive-chat-model.js';
+import { runModelListAction, runModelPickAction } from './interactive-chat-model-actions.js';
+import {
+    emitPromptAdmission,
+    runBranchContinueAction,
+    runSessionNavigationAction,
+} from './interactive-chat-navigation-actions.js';
 import { type PromptTurnContext, startPromptTurn } from './interactive-chat-prompt-turn.js';
+import type { SessionNavigationController } from './interactive-chat-session-navigation.js';
 import { formatModelProviderStatus } from './interactive-chat-status.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
-
-export type ChatActionResult = {
-    readonly modelProviderSelection: ModelProviderSelection;
-    readonly activeTurn?: ActiveCodingAgentTurn;
-};
+import { runTrustAction } from './interactive-chat-trust.js';
+import { type ActiveCodingAgentTurn, resumeCodingAgentTurn } from './interactive-coding-agent.js';
 
 export type CodingActionContext = PromptTurnContext & {
     readonly activeTurn: ActiveCodingAgentTurn | undefined;
+    readonly sessionNavigation?: SessionNavigationController;
 };
 
 export async function runChatAction(
@@ -38,12 +44,78 @@ export async function runChatAction(
             emitPromptAdmission(chatOutput, coding, 'steer', action.prompt);
             return actionResult(currentModelProviderSelection, coding.activeTurn);
         case 'branch':
-            emitPromptAdmission(chatOutput, coding, 'steer', action.prompt, action.parentMessageId);
-            chatOutput.write(`Branch continue from ${action.parentMessageId}: ${action.prompt}\n`);
-            return actionResult(currentModelProviderSelection, coding.activeTurn);
+            return action.mode === 'continue' && action.prompt !== undefined
+                ? runBranchContinueAction(
+                      chatOutput,
+                      coding,
+                      currentModelProviderSelection,
+                      action.entryId,
+                      action.prompt,
+                  )
+                : runSessionNavigationAction(chatOutput, coding, currentModelProviderSelection, () =>
+                      coding.sessionNavigation === undefined
+                          ? Promise.resolve(undefined)
+                          : coding.sessionNavigation.selectBranch({
+                                entryId: action.entryId,
+                                modelProviderSelection: currentModelProviderSelection,
+                            }),
+                  );
         case 'resume':
-            emitResumeRequest(chatOutput, coding, coding.activeTurn === undefined ? 'idle' : 'running');
-            return actionResult(currentModelProviderSelection, coding.activeTurn);
+            return runResumeAction(chatOutput, currentModelProviderSelection, coding);
+        case 'new-session':
+            return runSessionNavigationAction(chatOutput, coding, currentModelProviderSelection, () =>
+                coding.sessionNavigation === undefined
+                    ? Promise.resolve(undefined)
+                    : coding.sessionNavigation.startNewSession({
+                          modelProviderSelection: currentModelProviderSelection,
+                          ...(action.sessionId !== undefined ? { sessionId: action.sessionId } : {}),
+                      }),
+            );
+        case 'session':
+            return runSessionNavigationAction(chatOutput, coding, currentModelProviderSelection, () =>
+                action.sessionId === undefined
+                    ? coding.sessionNavigation === undefined
+                        ? Promise.resolve(undefined)
+                        : coding.sessionNavigation.showSession({})
+                    : coding.sessionNavigation === undefined
+                      ? Promise.resolve(undefined)
+                      : coding.sessionNavigation.switchSession({ sessionId: action.sessionId }),
+            );
+        case 'sessions':
+            return runSessionNavigationAction(chatOutput, coding, currentModelProviderSelection, () =>
+                coding.sessionNavigation === undefined
+                    ? Promise.resolve(undefined)
+                    : coding.sessionNavigation.listSessions(),
+            );
+        case 'tree':
+            return runSessionNavigationAction(chatOutput, coding, currentModelProviderSelection, () =>
+                coding.sessionNavigation === undefined
+                    ? Promise.resolve(undefined)
+                    : coding.sessionNavigation.showTree({
+                          ...(action.sessionId !== undefined ? { sessionId: action.sessionId } : {}),
+                      }),
+            );
+        case 'fork':
+            return runSessionNavigationAction(chatOutput, coding, currentModelProviderSelection, () =>
+                coding.sessionNavigation === undefined
+                    ? Promise.resolve(undefined)
+                    : coding.sessionNavigation.forkSession({
+                          entryId: action.entryId,
+                          modelProviderSelection: currentModelProviderSelection,
+                          ...(action.sessionId !== undefined ? { sessionId: action.sessionId } : {}),
+                      }),
+            );
+        case 'clone':
+            return runSessionNavigationAction(chatOutput, coding, currentModelProviderSelection, () =>
+                coding.sessionNavigation === undefined
+                    ? Promise.resolve(undefined)
+                    : coding.sessionNavigation.cloneSession({
+                          modelProviderSelection: currentModelProviderSelection,
+                          ...(action.sessionId !== undefined ? { sessionId: action.sessionId } : {}),
+                      }),
+            );
+        case 'compact':
+            return runCompactAction(runtime, chatOutput, currentModelProviderSelection, coding);
         case 'interrupt':
             return runInterruptAction(chatOutput, currentModelProviderSelection, coding.activeTurn);
         case 'exit':
@@ -58,17 +130,18 @@ export async function runChatAction(
                 coding,
             );
         case 'model-list':
-            return runModelListAction(
-                chatOutput,
-                currentModelProviderSelection,
-                modelChoices,
-                action,
-                coding.activeTurn,
-            );
+            return runModelListAction(chatOutput, currentModelProviderSelection, action, coding.activeTurn);
         case 'model':
             runtime.setModelProviderSelection(action.selection);
             chatOutput.write(formatModelProviderStatus(action.selection, { nodeMode: 'none' }));
-            return actionResult(action.selection, coding.activeTurn);
+            return actionResult(action.selection, coding.activeTurn, { persistModelProviderSelection: true });
+        case 'trust':
+            if (coding.workspaceRoot === undefined) {
+                chatOutput.write('Trust command unavailable: workspace root is unavailable\n');
+                return actionResult(currentModelProviderSelection, coding.activeTurn);
+            }
+            await runTrustAction(chatOutput, action.action, coding.workspaceRoot);
+            return actionResult(currentModelProviderSelection, coding.activeTurn);
         case 'skill':
             await runtime.runSkillInvocationTask({ skillID: action.name, argumentsText: action.instruction });
             chatOutput.write(
@@ -97,8 +170,10 @@ async function runPromptAction(
         emitPromptAdmission(chatOutput, coding, 'queue', prompt);
         return actionResult(modelProviderSelection, coding.activeTurn);
     }
-    const activeTurn = await startPromptTurn(runtime, chatOutput, prompt, modelProviderSelection, coding);
-    return actionResult(modelProviderSelection, activeTurn);
+    return actionResult(
+        modelProviderSelection,
+        await startPromptTurn(runtime, chatOutput, prompt, modelProviderSelection, coding),
+    );
 }
 
 async function runInterruptAction(
@@ -115,88 +190,6 @@ async function runInterruptAction(
     return actionResult(modelProviderSelection);
 }
 
-async function runModelPickAction(
-    runtime: AgentRuntime,
-    chatOutput: ChatOutput,
-    currentSelection: ModelProviderSelection,
-    selectModel: ModelSelector,
-    modelChoices: readonly ModelChoice[],
-    coding: CodingActionContext,
-): Promise<ChatActionResult> {
-    if (modelChoices.length === 0) {
-        chatOutput.write('No models are available for logged-in providers\n');
-        return actionResult(currentSelection, coding.activeTurn);
-    }
-    const selection = await selectModel(modelChoices, currentSelection, { title: 'Select model' });
-    if (selection === undefined) {
-        chatOutput.write(formatModelProviderStatus(currentSelection, { nodeMode: 'none' }));
-        return actionResult(currentSelection, coding.activeTurn);
-    }
-    const unavailableReason = getModelChoiceUnavailableReason(modelChoices, selection);
-    if (unavailableReason !== undefined) {
-        chatOutput.write(`${unavailableReason}\n`);
-        chatOutput.write(formatModelProviderStatus(currentSelection, { nodeMode: 'none' }));
-        return actionResult(currentSelection, coding.activeTurn);
-    }
-    const variantChoices = createVariantChoices(selection);
-    const selectedVariant =
-        variantChoices.length === 0
-            ? selection
-            : await selectModel(variantChoices, selection, { title: 'Select variant' });
-    if (selectedVariant === undefined) {
-        chatOutput.write(formatModelProviderStatus(currentSelection, { nodeMode: 'none' }));
-        return actionResult(currentSelection, coding.activeTurn);
-    }
-    runtime.setModelProviderSelection(selectedVariant);
-    chatOutput.write(formatModelProviderStatus(selectedVariant, { nodeMode: 'none' }));
-    return actionResult(selectedVariant, coding.activeTurn);
-}
-
-function runModelListAction(
-    chatOutput: ChatOutput,
-    currentSelection: ModelProviderSelection,
-    _modelChoices: readonly ModelChoice[],
-    action: Extract<ChatLineAction, { readonly kind: 'model-list' }>,
-    activeTurn: ActiveCodingAgentTurn | undefined,
-): ChatActionResult {
-    if (action.totalCount === 0) {
-        chatOutput.write('No models are available for logged-in providers\n');
-        return actionResult(currentSelection, activeTurn);
-    }
-    chatOutput.write(`Showing 1-${action.visibleChoices.length} of ${action.totalCount}\n`);
-    for (const choice of action.visibleChoices) {
-        chatOutput.write(`${choice.label}\n`);
-    }
-    return actionResult(currentSelection, activeTurn);
-}
-
-function emitPromptAdmission(
-    chatOutput: ChatOutput,
-    coding: CodingActionContext,
-    delivery: 'queue' | 'steer',
-    prompt: string,
-    parentMessageId?: string,
-): void {
-    const sessionId = coding.sessionId ?? 'interactive_session';
-    const timestamp = new Date().toISOString();
-    coding.emitEvent?.({
-        type: 'prompt.admitted',
-        timestamp,
-        sessionId,
-        message: prompt,
-        transcript: {
-            inputId: `${delivery}_${timestamp}`,
-            messageId: `message_${timestamp}`,
-            delivery,
-            visibility: 'pending',
-            ...(parentMessageId !== undefined ? { parentMessageId } : {}),
-        },
-    });
-    if (parentMessageId === undefined) {
-        chatOutput.write(`${delivery === 'queue' ? 'Queued follow-up' : 'Steering current run'}: ${prompt}\n`);
-    }
-}
-
 function emitResumeRequest(chatOutput: ChatOutput, coding: CodingActionContext, state: 'idle' | 'running'): void {
     const sessionId = coding.sessionId ?? 'interactive_session';
     coding.emitEvent?.({
@@ -209,11 +202,40 @@ function emitResumeRequest(chatOutput: ChatOutput, coding: CodingActionContext, 
     chatOutput.write(`Resume requested for ${sessionId}\n`);
 }
 
-function actionResult(
+async function runResumeAction(
+    chatOutput: ChatOutput,
     modelProviderSelection: ModelProviderSelection,
-    activeTurn?: ActiveCodingAgentTurn,
-): ChatActionResult {
-    return activeTurn === undefined ? { modelProviderSelection } : { modelProviderSelection, activeTurn };
+    coding: CodingActionContext,
+): Promise<ChatActionResult> {
+    if (coding.activeTurn !== undefined) {
+        emitResumeRequest(chatOutput, coding, 'running');
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    if (
+        coding.provider === undefined ||
+        coding.sessionId === undefined ||
+        coding.workspaceRoot === undefined ||
+        coding.sessionStore === undefined
+    ) {
+        emitResumeRequest(chatOutput, coding, 'idle');
+        return actionResult(modelProviderSelection);
+    }
+    chatOutput.write(`Resuming blocked run for ${coding.sessionId}\n`);
+    return actionResult(
+        modelProviderSelection,
+        await resumeCodingAgentTurn({
+            sessionId: coding.sessionId,
+            turnId: coding.nextTurnId(),
+            store: coding.sessionStore,
+            provider: coding.provider,
+            modelProviderSelection,
+            workspaceRoot: coding.workspaceRoot,
+            output: chatOutput,
+            emitEvent: coding.emitEvent ?? (() => undefined),
+            ...(coding.observeStoredEvent !== undefined ? { observeStoredEvent: coding.observeStoredEvent } : {}),
+            ...(coding.commandExecutor !== undefined ? { commandExecutor: coding.commandExecutor } : {}),
+        }),
+    );
 }
 
 function assertNever(value: never): never {

@@ -12,6 +12,7 @@ import {
     JSONL_SESSION_LOG_HEADER_KIND,
     JSONL_SESSION_LOG_RECORD_VERSION,
 } from './memory/jsonl-session-records.js';
+import { projectSessionTree } from './memory/session-tree-projection.js';
 import { projectBranchSummaries, projectSessionBranchTree } from './session-branch-projection.js';
 import { SessionEventLog } from './session-log.js';
 import { projectCodingSteps, projectReplayDiagnostics } from './session-replay-coding.js';
@@ -31,6 +32,12 @@ export type {
     SessionBranchSummary,
     SessionBranchTree,
     SessionReplayProjection,
+    SessionTreeArchiveExport,
+    SessionTreeArchiveImport,
+    SessionTreeCompactionBoundary,
+    SessionTreeNode,
+    SessionTreeProjection,
+    SessionTreeProjectionDiagnostic,
     ToolOutcomeProjection,
     ToolOutcomeStatus,
 } from './session-replay-types.js';
@@ -51,6 +58,7 @@ export function projectSessionReplay(input: {
         log.append(event);
     }
     const branchTree = projectSessionBranchTree({ sessionId: input.sessionId, envelopes });
+    const sessionTree = projectSessionTree({ sessionId: input.sessionId, envelopes });
 
     return {
         sessionId: input.sessionId,
@@ -61,6 +69,7 @@ export function projectSessionReplay(input: {
         graphSnapshots: graphIdsFor(events).map((graphId) => deriveAbgGraphSnapshot(events, graphId)),
         branchTree,
         branchSummaries: projectBranchSummaries(branchTree),
+        sessionTree,
         approvals: projectApprovals(envelopes),
         toolOutcomes: projectToolOutcomes(events),
         codingSteps: projectCodingSteps(envelopes),

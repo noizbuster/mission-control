@@ -2,9 +2,10 @@ import type { AgentEvent, ModelProviderSelection, ProviderStreamChunk } from '@m
 import { afterEach, describe, expect, it } from 'vitest';
 import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
 import type { ProviderAdapter, ProviderTurnRequest } from '../providers/provider-turn-types.js';
+import { ProjectTrustStore } from '../trust/project-trust-store.js';
 import { deferred, messageContents, providerFromRequests } from './run-coordinator-test-support.js';
 import { SessionRunOwnerRegistry } from './run-owner.js';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -68,6 +69,53 @@ describe('SessionRunOwnerRegistry', () => {
         expect(requests).toHaveLength(1);
         expect(countEvents(events, 'run.started')).toBe(1);
         expect(commands(events)).toEqual(expect.arrayContaining(['steer', 'run', 'resume', 'interrupt']));
+    });
+
+    it('keeps trusted project context on the active run while resume and interrupt attach', async () => {
+        // Given
+        const dataDir = await makeDataDir('mission-control-run-owner-context-');
+        const workspaceRoot = await makeDataDir('mission-control-run-owner-workspace-');
+        const trustStore = new ProjectTrustStore({ dataDir, now: fixedNow });
+        await writeFile(join(workspaceRoot, 'AGENTS.md'), 'TRUSTED_OWNER_CONTEXT', 'utf8');
+        await trustStore.setDecision(workspaceRoot, 'trusted');
+        const sessionId = 'session_owner_context_interrupt';
+        const started = deferred<void>();
+        const cleanupFinished = deferred<void>();
+        const requests: ProviderTurnRequest[] = [];
+        const registry = createRegistry(
+            dataDir,
+            abortableProvider({
+                requests,
+                started,
+                cleanupFinished,
+                markClosed: () => undefined,
+                captureSignal: () => undefined,
+            }),
+            { workspaceRoot, trustStore },
+        );
+
+        // When
+        const submitted = registry.submit({
+            sessionId,
+            inputId: 'input_context',
+            messageId: 'message_context',
+            prompt: 'run context until interrupted',
+        });
+        await started.promise;
+        const resumed = registry.resume({ sessionId });
+        const interrupted = registry.interrupt({ sessionId, reason: 'operator interrupt' });
+        cleanupFinished.resolve();
+        const [submitReceipt, resumeReceipt, interruptReceipt] = await Promise.all([submitted, resumed, interrupted]);
+
+        // Then
+        expect(submitReceipt).toMatchObject({ sessionId, status: 'interrupted', runId: 'run_1' });
+        expect(resumeReceipt).toMatchObject({ sessionId, status: 'interrupted', runId: 'run_1' });
+        expect(interruptReceipt).toMatchObject({ sessionId, status: 'interrupted', runId: 'run_1' });
+        expect(requests).toHaveLength(1);
+        expect(requests[0] === undefined ? [] : messageContents(requests[0].messages)).toEqual([
+            expect.stringContaining('TRUSTED_OWNER_CONTEXT'),
+            'run context until interrupted',
+        ]);
     });
 
     it('returns the same active run state to a second attach instead of creating a duplicate owner', async () => {
@@ -147,7 +195,11 @@ describe('SessionRunOwnerRegistry', () => {
     });
 });
 
-function createRegistry(dataDir: string, provider: ProviderAdapter): SessionRunOwnerRegistry {
+function createRegistry(
+    dataDir: string,
+    provider: ProviderAdapter,
+    projectContext?: { readonly workspaceRoot: string; readonly trustStore: ProjectTrustStore },
+): SessionRunOwnerRegistry {
     return new SessionRunOwnerRegistry({
         dataDir,
         provider,
@@ -156,6 +208,7 @@ function createRegistry(dataDir: string, provider: ProviderAdapter): SessionRunO
         timeoutMs: 50,
         createEventId: (_event, sequence) => `event_${sequence}`,
         createId: (prefix, index) => `${prefix}_${index}`,
+        ...(projectContext !== undefined ? { projectContext } : {}),
     });
 }
 

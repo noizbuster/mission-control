@@ -1,4 +1,5 @@
 pub use crate::session_catalog::{list_sessions_in_data_dir, read_session_snapshot_from_data_dir};
+use crate::session_projection::{DesktopSessionStats, DesktopSessionTreeSummary};
 use crate::session_parse::{empty_log, parse_session_contents};
 use serde::Serialize;
 use serde_json::Value;
@@ -52,6 +53,10 @@ pub struct DesktopSessionSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<String>,
     pub diagnostics: Vec<SessionDiagnostic>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_tree: Option<DesktopSessionTreeSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stats: Option<DesktopSessionStats>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -76,6 +81,10 @@ pub struct DesktopSessionSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<String>,
     pub diagnostics: Vec<SessionDiagnostic>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_tree: Option<DesktopSessionTreeSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stats: Option<DesktopSessionStats>,
 }
 
 #[derive(Debug)]

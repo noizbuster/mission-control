@@ -1,5 +1,6 @@
 use crate::session_index::{SessionIndexCatalog, read_session_lock_state};
 use crate::session_index_format::SessionIndexSessionRecord;
+use crate::session_projection::{project_session_stats, project_session_tree_summary};
 use crate::sessions::{
     DesktopResult, DesktopSessionLog, DesktopSessionSnapshot, DesktopSessionSummary,
     SessionDiagnostic, SessionLogState, parse_session_id, read_session_events_from_data_dir,
@@ -48,6 +49,8 @@ pub fn list_sessions_in_data_dir(data_dir: &Path) -> DesktopResult<Vec<DesktopSe
     let mut summaries = Vec::new();
     for session_id in session_ids {
         let log = read_session_events_from_data_dir(data_dir, &session_id)?;
+        let session_tree = project_session_tree_summary(&log);
+        let stats = project_session_stats(&log);
         let index_record = index.get(&session_id);
         let log_updated_at = session_log_updated_at(&log);
         let fresh_index = index_record
@@ -65,6 +68,8 @@ pub fn list_sessions_in_data_dir(data_dir: &Path) -> DesktopResult<Vec<DesktopSe
                 index.global_diagnostics(),
                 index.diagnostics_for(&session_id),
             ),
+            session_tree,
+            stats: Some(stats),
             session_id,
         });
     }
@@ -96,6 +101,8 @@ pub fn read_session_snapshot_from_data_dir(
             }
         }
     }
+    let session_tree = project_session_tree_summary(&log);
+    let stats = project_session_stats(&log);
     let snapshot_session_id = log.session_id;
     let diagnostics = diagnostics_with_index(
         log.diagnostics,
@@ -111,6 +118,8 @@ pub fn read_session_snapshot_from_data_dir(
         indexed: fresh_index.is_some(),
         updated_at,
         diagnostics,
+        session_tree,
+        stats: Some(stats),
     })
 }
 

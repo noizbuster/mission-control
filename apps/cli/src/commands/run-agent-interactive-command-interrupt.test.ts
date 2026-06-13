@@ -65,7 +65,7 @@ describe('runAgent interactive command interruption', () => {
         });
 
         // Then
-        expect(output).toContain('Approve command.run? [y/N]:');
+        expect(output).toContain('Approve command.run? [once/always/deny]:');
         expect(output).toContain('command.run failed: command_failed');
         expect(output).toContain('Interrupted active run');
         expect(events).toContainEqual(

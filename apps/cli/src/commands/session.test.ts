@@ -40,13 +40,17 @@ describe('session commands', () => {
         );
         expect(JSON.parse(showOutput)).toMatchObject({
             sessionId,
-            eventCount: runEvents.length,
+            eventCount: replayEvents.length,
             snapshot: {
                 sessionId,
                 status: 'stopped',
             },
         });
-        expect(replayEvents.map((event) => event.type)).toEqual(runEvents.map((event) => event.type));
+        expect(replayEvents.map((event) => event.type)).toEqual([
+            'session.started',
+            'session.metadata.updated',
+            ...runEvents.filter((event) => event.type !== 'session.started').map((event) => event.type),
+        ]);
         await rm(dataDir, { recursive: true, force: true });
     });
 
@@ -109,11 +113,15 @@ describe('session commands', () => {
         const replayRecords = parseReplayRecords(replayOutput);
 
         // Then
-        expect(eventRecords(replayRecords).map((event) => event.type)).toEqual(runEvents.map((event) => event.type));
+        expect(eventRecords(replayRecords).map((event) => event.type)).toEqual([
+            'session.started',
+            'session.metadata.updated',
+            ...runEvents.filter((event) => event.type !== 'session.started').map((event) => event.type),
+        ]);
         expect(diagnosticRecords(replayRecords)).toEqual([
             {
                 code: 'corrupt_trailing_record',
-                lineNumber: runEvents.length + 2,
+                lineNumber: runEvents.length + 3,
                 sessionId,
             },
         ]);
@@ -206,6 +214,112 @@ describe('session commands', () => {
         expect(codingStepRecords(replayRecords)).toEqual(
             expect.arrayContaining([expect.objectContaining({ kind: 'run.state', state: 'blocked_on_approval' })]),
         );
+        await rm(dataDir, { recursive: true, force: true });
+    });
+
+    it('renders interrupted run state distinctly', async () => {
+        // Given
+        const dataDir = await useTempDataDir();
+        const sessionId = 'session_cli_run_interrupted';
+        await writeSessionEvents({
+            dataDir,
+            sessionId,
+            events: [
+                runEvent(sessionId, 'run.started', 'run started', {
+                    command: 'run',
+                    state: 'running',
+                    runId: 'run_interrupted',
+                }),
+                runEvent(sessionId, 'run.interrupted', 'run interrupted', {
+                    command: 'run',
+                    state: 'interrupted',
+                    runId: 'run_interrupted',
+                }),
+            ],
+        });
+
+        // When
+        const replayRecords = parseReplayRecords(
+            await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl'])),
+        );
+
+        // Then
+        expect(codingStepRecords(replayRecords)).toEqual(
+            expect.arrayContaining([expect.objectContaining({ kind: 'run.state', state: 'interrupted' })]),
+        );
+        expect(eventRecords(replayRecords).map((event) => event.type)).toEqual(
+            expect.arrayContaining(['run.started', 'run.interrupted']),
+        );
+        await rm(dataDir, { recursive: true, force: true });
+    });
+
+    it('replay preserves completed, failed, interrupted, and blocked terminal run events distinctly', async () => {
+        // Given
+        const dataDir = await useTempDataDir();
+        const scenarios = [
+            {
+                sessionId: 'session_cli_run_completed',
+                eventType: 'run.completed',
+                state: 'completed',
+                message: 'run completed',
+            },
+            {
+                sessionId: 'session_cli_run_failed_replay',
+                eventType: 'run.failed',
+                state: 'failed',
+                message: 'run failed',
+            },
+            {
+                sessionId: 'session_cli_run_interrupted_replay',
+                eventType: 'run.interrupted',
+                state: 'interrupted',
+                message: 'run interrupted',
+            },
+            {
+                sessionId: 'session_cli_run_blocked_replay',
+                eventType: 'run.blocked',
+                state: 'blocked_on_approval',
+                message: 'waiting for approval: file.patch',
+            },
+        ] as const;
+
+        for (const scenario of scenarios) {
+            await writeSessionEvents({
+                dataDir,
+                sessionId: scenario.sessionId,
+                events: [
+                    runEvent(scenario.sessionId, 'run.started', 'run started', {
+                        command: 'run',
+                        state: 'running',
+                        runId: `${scenario.sessionId}_run`,
+                    }),
+                    runEvent(scenario.sessionId, scenario.eventType, scenario.message, {
+                        command: 'run',
+                        state: scenario.state,
+                        runId: `${scenario.sessionId}_run`,
+                        ...(scenario.state === 'failed'
+                            ? { reason: scenario.message, errorCode: 'unknown' as const }
+                            : {}),
+                        ...(scenario.state === 'blocked_on_approval'
+                            ? { reason: scenario.message, errorCode: 'tool_failed' as const, toolCallId: 'patch_call' }
+                            : {}),
+                    }),
+                ],
+            });
+        }
+
+        for (const scenario of scenarios) {
+            const replayRecords = parseReplayRecords(
+                await runSessionCommand(parseArgs(['session', 'replay', scenario.sessionId, '--jsonl'])),
+            );
+            expect(eventRecords(replayRecords).map((event) => event.type)).toEqual(
+                expect.arrayContaining(['run.started', scenario.eventType]),
+            );
+            expect(codingStepRecords(replayRecords)).toEqual(
+                expect.arrayContaining([expect.objectContaining({ kind: 'run.state', state: scenario.state })]),
+            );
+        }
+
         await rm(dataDir, { recursive: true, force: true });
     });
 

@@ -1,12 +1,13 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
-import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import type { AgentEvent, AgentMessage, ModelProviderSelection } from '@mission-control/protocol';
 import {
     hasPendingDesktopApprovals,
     projectDesktopApprovalContinuationMessages,
 } from './desktop-approval-transcript.js';
 import {
-    appendPendingToolApprovals,
     type DesktopApprovalDecisionInput,
+    ensurePendingToolApprovalForCurrentBlockedRun,
+    ensureRuntimeOwnedPermissionRequestForBlockedToolCall,
     settleDesktopApproval,
 } from './desktop-tool-approvals.js';
 import { type JsonlSessionEventIdFactory, JsonlSessionEventStore } from './memory/jsonl-session-event-store.js';
@@ -88,12 +89,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
         return this.withOwner(input.sessionId, { modelProviderSelection: selection }, async (owner, store) => {
             await ensureSessionStarted(store, input.sessionId, selection, this.now);
             const result = await owner.submit(promptInput(input));
-            await appendPendingToolApprovals({
-                store,
-                sessionId: input.sessionId,
-                modelProviderSelection: selection,
-                now: this.now,
-            });
+            await backfillCurrentBlockedDesktopApproval(store, input.sessionId, selection, this.now, result);
             return result.status;
         });
     }
@@ -111,12 +107,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
         return this.withOwner(input.sessionId, { modelProviderSelection: selection }, async (owner, store) => {
             await ensureSessionStarted(store, input.sessionId, selection, this.now);
             const result = await owner.steer(promptInput(input));
-            await appendPendingToolApprovals({
-                store,
-                sessionId: input.sessionId,
-                modelProviderSelection: selection,
-                now: this.now,
-            });
+            await backfillCurrentBlockedDesktopApproval(store, input.sessionId, selection, this.now, result);
             return result.status;
         });
     }
@@ -125,12 +116,13 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
         return this.withOwner(input.sessionId, {}, async (owner, store) => {
             await ensureSessionStarted(store, input.sessionId, owner.modelProviderSelection, this.now);
             const result = await owner.resume();
-            await appendPendingToolApprovals({
+            await backfillCurrentBlockedDesktopApproval(
                 store,
-                sessionId: input.sessionId,
-                modelProviderSelection: owner.modelProviderSelection,
-                now: this.now,
-            });
+                input.sessionId,
+                owner.modelProviderSelection,
+                this.now,
+                result,
+            );
             return result.status;
         });
     }
@@ -174,16 +166,16 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
                 if (status !== 'completed') {
                     return status;
                 }
-                if (hasPendingDesktopApprovals(await store.getEvents(input.sessionId), input.sessionId)) {
+                const events = await store.getEvents(input.sessionId);
+                if (hasPendingDesktopApprovals(events, input.sessionId)) {
+                    return status;
+                }
+                const continuationMessages = projectDesktopApprovalContinuationMessages(events, input.sessionId);
+                if (!hasSettledToolContinuation(continuationMessages)) {
                     return status;
                 }
                 const result = await owner.resume();
-                await appendPendingToolApprovals({
-                    store,
-                    sessionId: input.sessionId,
-                    modelProviderSelection: selection,
-                    now: this.now,
-                });
+                await backfillCurrentBlockedDesktopApproval(store, input.sessionId, selection, this.now, result);
                 return result.status;
             },
         );
@@ -250,6 +242,60 @@ function latestModelProviderSelection(events: readonly AgentEvent[]): ModelProvi
     return [...events].reverse().find((event) => event.modelProviderSelection !== undefined)?.modelProviderSelection;
 }
 
+function hasSettledToolContinuation(messages: readonly AgentMessage[]): boolean {
+    const assistantToolCallIds = new Set<string>();
+    for (const message of messages) {
+        switch (message.role) {
+            case 'assistant':
+                for (const toolCall of message.providerToolCalls ?? []) {
+                    assistantToolCallIds.add(toolCall.toolCallId);
+                }
+                break;
+            case 'tool':
+                if (assistantToolCallIds.has(message.toolCallId)) {
+                    return true;
+                }
+                break;
+            case 'system':
+            case 'user':
+                break;
+            default:
+                return assertNeverAgentMessage(message);
+        }
+    }
+    return false;
+}
+
+function assertNeverAgentMessage(message: never): never {
+    throw new TypeError(`Unexpected agent message role: ${JSON.stringify(message)}`);
+}
+
 function createDefaultDesktopProvider(): ProviderAdapter {
     return createProviderRouter(createProviderAuthStoreCredentialResolver(createProviderAuthStore()));
+}
+
+async function backfillCurrentBlockedDesktopApproval(
+    store: JsonlSessionEventStore,
+    sessionId: string,
+    modelProviderSelection: ModelProviderSelection,
+    now: () => string,
+    result: { readonly status: DesktopCommandReceipt['status']; readonly toolCallId?: string },
+): Promise<void> {
+    if (result.status !== 'blocked_on_approval' || result.toolCallId === undefined) {
+        return;
+    }
+    await ensureRuntimeOwnedPermissionRequestForBlockedToolCall({
+        store,
+        sessionId,
+        modelProviderSelection,
+        now,
+        blockedToolCallId: result.toolCallId,
+    });
+    await ensurePendingToolApprovalForCurrentBlockedRun({
+        store,
+        sessionId,
+        modelProviderSelection,
+        now,
+        blockedToolCallId: result.toolCallId,
+    });
 }

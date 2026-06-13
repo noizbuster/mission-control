@@ -12,8 +12,12 @@ describe('command.run tool', () => {
     it('does not spawn a process when approval is denied', async () => {
         // Given
         const calls: CommandExecutionRequest[] = [];
+        const permissionRequests: PermissionRequest[] = [];
         const registry = await createRegistry({
-            requestPermission: denyPermission,
+            requestPermission: (request) => {
+                permissionRequests.push(request);
+                return denyPermission(request);
+            },
             executor: async (request) => {
                 calls.push(request);
                 return completedResult();
@@ -27,6 +31,15 @@ describe('command.run tool', () => {
         expect(result.result.status).toBe('failed');
         expect(result.result.error?.message).toContain('approval_denied');
         expect(calls).toHaveLength(0);
+        expect(permissionRequests).toMatchObject([
+            {
+                action: 'command.run',
+                permission: {
+                    kind: 'bash',
+                    patterns: ["node --eval console.log('mission-control command.run harness ok')"],
+                },
+            },
+        ]);
     });
 
     it('rejects non harness commands by default', async () => {

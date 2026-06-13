@@ -8,20 +8,25 @@ import {
 } from '../apps/cli/src/commands/run-agent-chat-test-support.js';
 import { runSessionCommand } from '../apps/cli/src/commands/session.js';
 import {
-    type CommandExecutionRequest,
-    type CommandExecutionResult,
+    JsonlSessionEventStore,
     missionControlDataDirEnvKey,
-    type ProviderAdapter,
     type ProviderTurnRequest,
-    projectJsonlSessionReplayPrefix,
 } from '../packages/core/src/index.js';
-import { type AgentEvent, type ProviderStreamChunk } from '../packages/protocol/src/index.js';
-import { parseCodingStepLines, parseEventLines } from './coding-agent-smoke-replay-support.js';
+import {
+    approvePendingSmokePatch,
+    expectBlockedSmokeRunArtifacts,
+    expectResumedSmokeRunArtifacts,
+    fakeBashExecutor,
+    initializeTrustedSmokeWorkspace,
+    permissionRequestedEvent,
+    providerToolCallEvent,
+    runBlockedEvent,
+    scriptedCodingSmokeProvider,
+    sessionStartedEvent,
+} from './coding-agent-smoke-test-support.ts';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
-const allowedHarnessArgs = ['--eval', "console.log('mission-control command.run harness ok')"] as const;
 
 describe('coding-agent end-to-end smoke', () => {
     const tempRoots: string[] = [];
@@ -32,122 +37,100 @@ describe('coding-agent end-to-end smoke', () => {
         tempRoots.length = 0;
     });
 
-    it('replays deterministic chat patch command and graph JSONL output from one temp workspace', async () => {
-        // Given
+    it('proves trusted read edit write bash block resume and durable replay from a temp workspace', async () => {
         const dataDir = await tempRoot('mctrl-smoke-data-');
         const workspaceRoot = await tempRoot('mctrl-smoke-workspace-');
-        vi.stubEnv(missionControlDataDirEnvKey, dataDir);
-        const chatSessionId = 'session_smoke_coding_agent';
-        const graphSessionId = 'session_smoke_graph';
-        const chatOutput = createBufferedChatOutput();
+        const sessionId = 'session_smoke_coding_agent';
+        const workspaceNestedRoot = join(workspaceRoot, 'nested');
+        const sessionJsonlPath = join(dataDir, 'sessions', `${sessionId}.jsonl`);
+        const providerRequests: ProviderTurnRequest[] = [];
 
-        // When
-        const chat = await runAgent(parseArgs(['--session', chatSessionId, '--model', 'local/local-echo']), {
+        vi.stubEnv(missionControlDataDirEnvKey, dataDir);
+        await initializeTrustedSmokeWorkspace(dataDir, workspaceRoot);
+
+        const provider = scriptedCodingSmokeProvider(providerRequests);
+        const firstOutput = await runAgent(parseArgs(['--session', sessionId, '--model', 'local/local-echo']), {
             authStore: createEmptyAuthStore(),
             chatInput: createScriptedChatInput([
-                { type: 'line', value: 'make an approved smoke patch and run typecheck' },
-                { type: 'line', value: 'y' },
-                { type: 'line', value: 'y' },
+                { type: 'line', value: 'inspect, edit, write, verify, then queue one blocked approval' },
+                { type: 'line', value: 'always' },
+                { type: 'line', value: 'always' },
+                { type: 'line', value: 'once' },
+                { type: 'line', value: 'deny' },
                 { type: 'interrupt' },
                 { type: 'interrupt' },
             ]),
-            chatOutput: chatOutput.output,
+            chatOutput: createBufferedChatOutput().output,
             workspaceRoot,
-            commandExecutor: fakeTypecheckExecutor,
-            provider: providerFromTurns([
-                [
-                    { kind: 'text_delta', delta: 'Preparing smoke patch.' },
-                    {
-                        kind: 'tool_call_completed',
-                        toolCallId: 'smoke_patch',
-                        toolName: 'file.patch',
-                        argumentsJson: JSON.stringify({
-                            patch: addFilePatch('.mission-control-smoke.txt', 'smoke complete'),
-                        }),
-                    },
-                    { kind: 'response_completed', content: 'patch requested' },
-                ],
-                [
-                    {
-                        kind: 'tool_call_completed',
-                        toolCallId: 'smoke_typecheck',
-                        toolName: 'command.run',
-                        argumentsJson: JSON.stringify({ command: 'node', args: allowedHarnessArgs }),
-                    },
-                    { kind: 'response_completed', content: 'typecheck requested' },
-                ],
-                [{ kind: 'response_completed', content: 'smoke complete' }],
-            ]),
+            commandExecutor: async (request) => fakeBashExecutor(request, workspaceNestedRoot),
+            provider,
         });
-        const chatReplayJsonl = await runSessionCommand(parseArgs(['session', 'replay', chatSessionId, '--jsonl']));
-        const replayedChatEvents = parseEventLines(chatReplayJsonl);
-        const replayedCodingSteps = parseCodingStepLines(chatReplayJsonl);
-        const graphJsonl = await runAgent(
-            parseArgs([
-                'graph',
-                'run',
-                'examples/abg/coding-agent.graph.json',
-                '--session',
-                graphSessionId,
-                '--jsonl',
-                '--model',
-                'local/local-echo',
-            ]),
-        );
-        const graphEvents = parseEventLines(graphJsonl);
-        const graphReplay = projectJsonlSessionReplayPrefix({
-            sessionId: graphSessionId,
-            contents: await readFile(join(dataDir, 'sessions', `${graphSessionId}.jsonl`), 'utf8'),
-        }).projection;
 
-        // Then
-        expect(chat).toContain('Patch preview for file.patch');
-        expect(chat).toContain('Applied patch: .mission-control-smoke.txt');
-        expect(chat).toContain('Command output for command.run');
-        expect(chat).toContain('stdout:\ntypecheck ok');
-        await expect(readFile(join(workspaceRoot, '.mission-control-smoke.txt'), 'utf8')).resolves.toBe(
-            'smoke complete\n',
-        );
-        expect(replayedChatEvents.map((event) => event.type)).toEqual(
-            expect.arrayContaining([
-                'task.started',
-                'run.started',
-                'approval.requested',
-                'approval.updated',
-                'file.diff.applied',
-                'command.completed',
-                'model.call.completed',
-                'tool.completed',
+        const blockedReplayOutput = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
+        const blockedJsonlContents = await readFile(sessionJsonlPath, 'utf8');
+
+        await approvePendingSmokePatch(dataDir, sessionId, workspaceRoot, 'smoke_patch_call');
+
+        const resumedOutput = await runAgent(parseArgs(['--session', sessionId, '--model', 'local/local-echo']), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: '/resume' },
+                { type: 'interrupt' },
+                { type: 'interrupt' },
             ]),
-        );
-        expect(replayedChatEvents.filter((event) => event.type === 'approval.requested')).toHaveLength(2);
-        expect(replayedChatEvents.filter((event) => event.type === 'approval.updated')).toHaveLength(2);
-        expect(commandCompleted(replayedChatEvents)?.command).toMatchObject({
-            command: ['node', ...allowedHarnessArgs],
-            status: 'completed',
-            exitCode: 0,
+            chatOutput: createBufferedChatOutput().output,
+            workspaceRoot,
+            commandExecutor: async (request) => fakeBashExecutor(request, workspaceNestedRoot),
+            provider,
         });
-        expect(replayedCodingSteps).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({ kind: 'provider.tool_call', toolCallId: 'smoke_patch' }),
-                expect.objectContaining({ kind: 'provider.tool_call', toolCallId: 'smoke_typecheck' }),
-                expect.objectContaining({ kind: 'tool.result', toolCallId: 'smoke_patch', status: 'completed' }),
-                expect.objectContaining({ kind: 'tool.result', toolCallId: 'smoke_typecheck', status: 'completed' }),
-                expect.objectContaining({ kind: 'provider.message', continuation: true, message: 'smoke complete' }),
-            ]),
+
+        const replayOutput = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
+        const resumedJsonlContents = await readFile(sessionJsonlPath, 'utf8');
+
+        expectBlockedSmokeRunArtifacts({
+            firstOutput,
+            workspaceNestedRoot,
+            providerRequests,
+            blockedReplayOutput,
+            blockedJsonlContents,
+        });
+        await expectResumedSmokeRunArtifacts({
+            blockedJsonlContents,
+            resumedOutput,
+            sessionId,
+            workspaceRoot,
+            replayOutput,
+            resumedJsonlContents,
+        });
+    });
+
+    it('fails clearly when the blocked smoke patch tool call is missing', async () => {
+        const dataDir = await tempRoot('mctrl-smoke-malformed-data-');
+        const workspaceRoot = await tempRoot('mctrl-smoke-malformed-workspace-');
+
+        await expect(
+            approvePendingSmokePatch(dataDir, 'session_smoke_missing_patch', workspaceRoot, 'missing_patch_call'),
+        ).rejects.toThrow('missing tool call for approval_permission_missing_patch_call');
+    });
+
+    it('fails when blocked replay lacks the runtime-owned approval.requested event', async () => {
+        const dataDir = await tempRoot('mctrl-smoke-missing-approval-data-');
+        const workspaceRoot = await tempRoot('mctrl-smoke-missing-approval-workspace-');
+        const sessionId = 'session_smoke_missing_runtime_approval';
+        const store = await JsonlSessionEventStore.open({ dataDir, sessionId });
+
+        try {
+            await store.append(sessionStartedEvent(sessionId));
+            await store.append(providerToolCallEvent(sessionId, 'smoke_patch_call'));
+            await store.append(permissionRequestedEvent(sessionId, 'smoke_patch_call'));
+            await store.append(runBlockedEvent(sessionId, 'smoke_patch_call'));
+        } finally {
+            await store.close();
+        }
+
+        await expect(approvePendingSmokePatch(dataDir, sessionId, workspaceRoot, 'smoke_patch_call')).rejects.toThrow(
+            'missing runtime-owned approval.requested for approval_permission_smoke_patch_call',
         );
-        expect(graphEvents.map((event) => event.type)).toEqual(
-            expect.arrayContaining(['graph.started', 'approval.requested', 'policy.blocked', 'graph.failed']),
-        );
-        expect(graphReplay.graphSnapshots).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({
-                    graphId: 'coding-agent',
-                    status: 'blocked',
-                }),
-            ]),
-        );
-        expect(graphJsonl).not.toContain('OPENAI_API_KEY');
     });
 
     async function tempRoot(prefix: string): Promise<string> {
@@ -156,88 +139,3 @@ describe('coding-agent end-to-end smoke', () => {
         return path;
     }
 });
-
-function addFilePatch(path: string, content: string): string {
-    return [
-        `diff --git a/${path} b/${path}`,
-        '--- /dev/null',
-        `+++ b/${path}`,
-        '@@ -0,0 +1 @@',
-        `+${content}`,
-        '',
-    ].join('\n');
-}
-
-type ProviderStep =
-    | {
-          readonly kind: 'text_delta';
-          readonly delta: string;
-      }
-    | {
-          readonly kind: 'tool_call_completed';
-          readonly toolCallId: string;
-          readonly toolName: string;
-          readonly argumentsJson: string;
-      }
-    | {
-          readonly kind: 'response_completed';
-          readonly content: string;
-      };
-
-function providerFromTurns(turns: readonly (readonly ProviderStep[])[]): ProviderAdapter {
-    const requests: ProviderTurnRequest[] = [];
-    return {
-        async *streamTurn(request) {
-            requests.push(request);
-            const steps = turns[requests.length - 1] ?? [{ kind: 'response_completed', content: 'done' }];
-            for (const [index, step] of steps.entries()) {
-                yield chunkForStep(request, step, index + 1);
-            }
-        },
-    };
-}
-
-function chunkForStep(request: ProviderTurnRequest, step: ProviderStep, sequence: number): ProviderStreamChunk {
-    if (step.kind === 'text_delta') {
-        return { kind: 'text_delta', requestId: request.requestId, sequence, delta: step.delta };
-    }
-    if (step.kind === 'tool_call_completed') {
-        return {
-            kind: 'tool_call_completed',
-            requestId: request.requestId,
-            sequence,
-            toolCall: {
-                toolCallId: step.toolCallId,
-                toolName: step.toolName,
-                argumentsJson: step.argumentsJson,
-            },
-        };
-    }
-    return {
-        kind: 'response_completed',
-        requestId: request.requestId,
-        sequence,
-        message: {
-            messageId: `message_${request.turnId}`,
-            role: 'assistant',
-            content: step.content,
-        },
-        finishReason: 'stop',
-    };
-}
-
-async function fakeTypecheckExecutor(request: CommandExecutionRequest): Promise<CommandExecutionResult> {
-    expect([request.command, ...request.args]).toEqual(['node', ...allowedHarnessArgs]);
-    return {
-        exitCode: 0,
-        signal: null,
-        timedOut: false,
-        stdout: 'typecheck ok\n',
-        stderr: '',
-        durationMs: 1,
-    };
-}
-
-function commandCompleted(events: readonly AgentEvent[]): AgentEvent | undefined {
-    return events.find((event) => event.type === 'command.completed');
-}

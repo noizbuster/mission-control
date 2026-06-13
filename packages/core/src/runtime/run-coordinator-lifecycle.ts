@@ -14,12 +14,24 @@ export type RunCoordinatorResult = {
     readonly toolCallId?: string;
 };
 
-export type RunCoordinatorActiveRun = {
+type RunningActiveRun = {
+    readonly kind: 'running';
     readonly runId: string;
     readonly controller: AbortController;
     readonly promise: Promise<RunCoordinatorResult>;
     readonly settled: Promise<RunCoordinatorResult>;
 };
+
+type BlockedActiveRun = {
+    readonly kind: 'blocked_on_approval';
+    readonly runId: string;
+    readonly settled: Promise<RunCoordinatorResult>;
+    readonly reason?: string;
+    readonly errorCode?: ProtocolErrorCode;
+    readonly toolCallId?: string;
+};
+
+export type RunCoordinatorActiveRun = RunningActiveRun | BlockedActiveRun;
 
 export type RunCoordinatorProviderTurnResult =
     | { readonly status: 'completed' }

@@ -2,7 +2,9 @@ import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
     type JsonlSessionEventStore,
+    ProjectTrustStore,
     type ProviderAdapter,
+    projectApprovalContinuationMessages,
     SessionRunOwner,
     type SessionRunOwnerReceipt,
     type ToolInvocationSettlement,
@@ -10,8 +12,9 @@ import {
 import type { AgentEvent, AgentEventEnvelope, ModelProviderSelection, ToolCall } from '@mission-control/protocol';
 import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';
-import { parseFilePatchOutput, renderToolPreview } from './interactive-coding-tool-preview.js';
-import { createInteractiveToolRegistry } from './interactive-coding-tools.js';
+import { parseFileWriteOutput } from './interactive-coding-file-write-preview.js';
+import { parseFileEditOutput, parseFilePatchOutput } from './interactive-coding-tool-preview.js';
+import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools.js';
 
 export type ActiveCodingAgentTurn = {
     readonly done: Promise<void>;
@@ -37,23 +40,38 @@ export type CodingAgentTurnOptions = {
 };
 
 export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Promise<ActiveCodingAgentTurn> {
+    return startOwnedCodingAgentTurn(options, {
+        taskStartedMessage: `user prompt: ${options.prompt}`,
+        execute: (owner) =>
+            owner.submit({
+                prompt: options.prompt,
+                inputId: `input_${options.turnId}`,
+                messageId: `message_${options.turnId}`,
+            }),
+    });
+}
+
+export async function resumeCodingAgentTurn(
+    options: Omit<CodingAgentTurnOptions, 'prompt'>,
+): Promise<ActiveCodingAgentTurn> {
+    return startOwnedCodingAgentTurn(options, {
+        taskStartedMessage: 'resume blocked run',
+        execute: (owner) => owner.resume(),
+    });
+}
+
+async function startOwnedCodingAgentTurn(
+    options: Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string },
+    action: {
+        readonly taskStartedMessage: string;
+        readonly execute: (owner: SessionRunOwner) => Promise<SessionRunOwnerReceipt>;
+    },
+): Promise<ActiveCodingAgentTurn> {
     const approvals = createInteractiveApprovalBroker(options);
     const renderState: ProviderRenderState = { streamingText: false };
-    const owner = new SessionRunOwner({
-        sessionId: options.sessionId,
-        store: options.store,
-        provider: options.provider,
-        modelProviderSelection: options.modelProviderSelection,
-        toolRegistry: await createInteractiveToolRegistry(options, approvals),
-        ...(options.observeStoredEvent !== undefined ? { onDurableEvent: options.observeStoredEvent } : {}),
-        onProviderEnvelope: (envelope: AgentEventEnvelope) =>
-            renderProviderEnvelope(options.output, renderState, envelope),
-        onToolCall: (toolCall: ToolCall) => preapproveInteractiveToolCall(options.output, toolCall, approvals),
-        onToolSettlement: (settlement: ToolInvocationSettlement) =>
-            renderInteractiveToolSettlement(options.output, settlement),
-    });
+    const owner = await createInteractiveRunOwner(options, approvals, renderState);
     let settled = false;
-    const done = runOwnedCodingAgentTurn(options, owner, renderState).finally(() => {
+    const done = runOwnedCodingAgentTurn(options, owner, renderState, action).finally(() => {
         settled = true;
     });
 
@@ -66,6 +84,44 @@ export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Pro
         answerApproval: approvals.answer,
         hasPendingApproval: approvals.hasPending,
     };
+}
+
+async function createInteractiveRunOwner(
+    options: Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string },
+    approvals: ReturnType<typeof createInteractiveApprovalBroker>,
+    renderState: ProviderRenderState,
+): Promise<SessionRunOwner> {
+    const toolOptions = {
+        workspaceRoot: options.workspaceRoot,
+        sessionId: options.sessionId,
+        modelProviderSelection: options.modelProviderSelection,
+        output: options.output,
+        emitEvent: options.emitEvent,
+        enableTrustedBash: await workspaceHasTrustedBash(options.workspaceRoot),
+        ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
+    };
+    const toolRegistry = await createInteractiveToolRegistry(toolOptions, approvals);
+    return new SessionRunOwner({
+        sessionId: options.sessionId,
+        store: options.store,
+        provider: options.provider,
+        modelProviderSelection: options.modelProviderSelection,
+        projectContext: { workspaceRoot: options.workspaceRoot },
+        readMessages: async () =>
+            projectApprovalContinuationMessages(await options.store.getEvents(options.sessionId), options.sessionId),
+        toolRegistry,
+        ...(options.observeStoredEvent !== undefined ? { onDurableEvent: options.observeStoredEvent } : {}),
+        onProviderEnvelope: (envelope: AgentEventEnvelope) =>
+            renderProviderEnvelope(options.output, renderState, envelope),
+        onToolCall: (toolCall: ToolCall) => preflightInteractiveToolCall(toolCall, toolOptions, approvals),
+        onToolSettlement: (settlement: ToolInvocationSettlement) =>
+            renderInteractiveToolSettlement(options.output, settlement),
+    });
+}
+
+async function workspaceHasTrustedBash(workspaceRoot: string): Promise<boolean> {
+    const trust = await new ProjectTrustStore().getDecision(workspaceRoot);
+    return trust.decision === 'trusted';
 }
 
 function interruptOwnerUntilSettled(owner: SessionRunOwner, isSettled: () => boolean): void {
@@ -81,21 +137,21 @@ function interruptOwnerUntilSettled(owner: SessionRunOwner, isSettled: () => boo
 }
 
 async function runOwnedCodingAgentTurn(
-    options: CodingAgentTurnOptions,
+    options: Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string },
     owner: SessionRunOwner,
     renderState: ProviderRenderState,
+    action: {
+        readonly taskStartedMessage: string;
+        readonly execute: (owner: SessionRunOwner) => Promise<SessionRunOwnerReceipt>;
+    },
 ): Promise<void> {
-    emitTaskEvent(options, 'task.started', `user prompt: ${options.prompt}`);
-    const receipt = await owner.submit({
-        prompt: options.prompt,
-        inputId: `input_${options.turnId}`,
-        messageId: `message_${options.turnId}`,
-    });
+    emitTaskEvent(options, 'task.started', action.taskStartedMessage);
+    const receipt = await action.execute(owner);
     settleReceipt(options, receipt, renderState);
 }
 
 function settleReceipt(
-    options: CodingAgentTurnOptions,
+    options: Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string },
     receipt: SessionRunOwnerReceipt,
     renderState: ProviderRenderState,
 ): void {
@@ -108,8 +164,7 @@ function settleReceipt(
             emitTaskEvent(options, 'task.failed', 'provider turn interrupted');
             return;
         case 'blocked_on_approval':
-            options.output.write(`Run blocked: ${receipt.reason ?? 'approval required'}\n`);
-            emitTaskEvent(options, 'task.failed', receipt.reason ?? 'approval required');
+            options.output.write(formatBlockedRunMessage(receipt.reason ?? 'approval required', receipt.toolCallId));
             return;
         case 'failed':
             emitTaskEvent(options, 'task.failed', receipt.reason ?? 'run failed');
@@ -152,26 +207,6 @@ function renderProviderEnvelope(output: ChatOutput, state: ProviderRenderState, 
     }
 }
 
-async function preapproveInteractiveToolCall(
-    output: ChatOutput,
-    toolCall: ToolCall,
-    approvals: ReturnType<typeof createInteractiveApprovalBroker>,
-): Promise<ToolInvocationSettlement | undefined> {
-    renderToolPreview(toolCall, output);
-    if (toolCall.toolName !== 'file.patch' && toolCall.toolName !== 'command.run') {
-        return undefined;
-    }
-    const decision = await approvals.requestApproval({
-        id: `approval_${toolCall.toolCallId}`,
-        action: toolCall.toolName,
-        reason: `approve ${toolCall.toolName}`,
-    });
-    if (decision.status === 'allow') {
-        return undefined;
-    }
-    return approvalDeniedSettlement(toolCall, decision.reason ?? 'denied');
-}
-
 function renderInteractiveToolSettlement(output: ChatOutput, settlement: ToolInvocationSettlement): void {
     if (settlement.result.status === 'failed') {
         output.write(`${settlement.toolName} failed: ${settlement.result.error?.message ?? 'unknown error'}\n`);
@@ -184,12 +219,28 @@ function renderInteractiveToolSettlement(output: ChatOutput, settlement: ToolInv
         }
         return;
     }
-    if (settlement.toolName === 'command.run') {
+    if (settlement.toolName === 'file.edit') {
+        const parsed = parseFileEditOutput(settlement.structuredOutput);
+        if (parsed !== undefined) {
+            const noun = parsed.occurrencesReplaced === 1 ? 'occurrence' : 'occurrences';
+            output.write(`Applied edit: ${parsed.appliedFiles.join(', ')} (${parsed.occurrencesReplaced} ${noun})\n`);
+        }
+        return;
+    }
+    if (settlement.toolName === 'file.write') {
+        const parsed = parseFileWriteOutput(settlement.structuredOutput);
+        if (parsed !== undefined) {
+            const verb = parsed.operation === 'created' ? 'Created' : 'Replaced';
+            output.write(`${verb} file: ${parsed.appliedFiles.join(', ')}\n`);
+        }
+        return;
+    }
+    if (settlement.toolName === 'command.run' || settlement.toolName === 'bash.run') {
         if (parseCommandRunStatus(settlement.structuredOutput) === 'failed') {
-            output.write('command.run failed: command_failed\n');
+            output.write(`${settlement.toolName} failed: command_failed\n`);
             return;
         }
-        output.write(`Command output for command.run\n${settlement.modelOutput?.content ?? ''}\n`);
+        output.write(`Command output for ${settlement.toolName}\n${settlement.modelOutput?.content ?? ''}\n`);
     }
 }
 
@@ -200,25 +251,8 @@ function parseCommandRunStatus(value: unknown): 'completed' | 'failed' | undefin
     return value.status === 'completed' || value.status === 'failed' ? value.status : undefined;
 }
 
-function approvalDeniedSettlement(toolCall: ToolCall, reason: string): ToolInvocationSettlement {
-    return {
-        toolCallId: toolCall.toolCallId,
-        toolName: toolCall.toolName,
-        result: {
-            toolCallId: toolCall.toolCallId,
-            status: 'failed',
-            error: {
-                code: 'tool_failed',
-                message: `approval_denied: ${reason}`,
-                retryable: false,
-            },
-        },
-        events: [],
-    };
-}
-
 function emitTaskEvent(
-    options: CodingAgentTurnOptions,
+    options: Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string },
     type: 'task.started' | 'task.completed' | 'task.failed',
     message: string,
 ): void {
@@ -231,6 +265,11 @@ function emitTaskEvent(
         nativeSidecarStatus: 'mock',
         modelProviderSelection: options.modelProviderSelection,
     });
+}
+
+function formatBlockedRunMessage(reason: string, toolCallId?: string): string {
+    const details = toolCallId === undefined ? '' : ` Pending tool call: ${toolCallId}.`;
+    return `Run blocked (resumable): ${reason}. Resume with /resume.${details}\n`;
 }
 
 function assertNeverReceipt(value: never): never {

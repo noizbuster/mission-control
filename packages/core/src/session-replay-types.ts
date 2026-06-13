@@ -6,6 +6,8 @@ import type {
     ApprovalRecord,
     ApprovalSubject,
     ProtocolError,
+    SessionArchiveManifest,
+    SessionTreeSource,
     ToolResult,
 } from '@mission-control/protocol';
 import type { AbgTimelineEntry } from './behavior/timeline.js';
@@ -31,6 +33,74 @@ export type SessionBranchSummary = {
     readonly eventIds: readonly string[];
     readonly eventCount: number;
     readonly lastMessage?: string;
+};
+
+export type SessionTreeNode = {
+    readonly entryId: string;
+    readonly eventId: string;
+    readonly sequence: number;
+    readonly parentEntryId?: string;
+    readonly childEntryIds: readonly string[];
+    readonly eventType: AgentEvent['type'];
+    readonly timestamp: string;
+    readonly message?: string;
+};
+
+export type SessionTreeCompactionBoundary = {
+    readonly eventId: string;
+    readonly sequence: number;
+    readonly timestamp: string;
+    readonly boundaryEntryId: string;
+    readonly firstKeptEntryId: string;
+    readonly boundarySequence?: number;
+    readonly firstKeptSequence?: number;
+    readonly summary?: string;
+};
+
+export type SessionTreeArchiveExport = {
+    readonly eventId: string;
+    readonly sequence: number;
+    readonly timestamp: string;
+    readonly manifest: SessionArchiveManifest;
+};
+
+export type SessionTreeArchiveImport = {
+    readonly eventId: string;
+    readonly sequence: number;
+    readonly timestamp: string;
+    readonly manifest: SessionArchiveManifest;
+    readonly sourceSessionId?: string;
+};
+
+export type SessionTreeProjectionDiagnostic =
+    | {
+          readonly code: 'duplicate_entry_id';
+          readonly sessionId: string;
+          readonly entryId: string;
+          readonly eventId: string;
+      }
+    | {
+          readonly code: 'missing_parent_entry';
+          readonly sessionId: string;
+          readonly entryId: string;
+          readonly parentEntryId: string;
+      };
+
+export type SessionTreeProjection = {
+    readonly sessionId: string;
+    readonly sessionName?: string;
+    readonly cwd?: string;
+    readonly trustedRoot?: string;
+    readonly workspaceTrust?: 'trusted' | 'denied' | 'unknown';
+    readonly parentSessionId?: string;
+    readonly activeLeafId?: string;
+    readonly forkSource?: SessionTreeSource;
+    readonly cloneSource?: SessionTreeSource;
+    readonly nodes: readonly SessionTreeNode[];
+    readonly compactionBoundaries: readonly SessionTreeCompactionBoundary[];
+    readonly exports: readonly SessionTreeArchiveExport[];
+    readonly imports: readonly SessionTreeArchiveImport[];
+    readonly diagnostics: readonly SessionTreeProjectionDiagnostic[];
 };
 
 export type ApprovalProjection = ApprovalRecord & {
@@ -126,6 +196,7 @@ export type SessionReplayProjection = {
     readonly graphSnapshots: readonly AbgGraphSnapshot[];
     readonly branchTree: SessionBranchTree;
     readonly branchSummaries: readonly SessionBranchSummary[];
+    readonly sessionTree: SessionTreeProjection;
     readonly approvals: readonly ApprovalProjection[];
     readonly toolOutcomes: readonly ToolOutcomeProjection[];
     readonly codingSteps: readonly CodingReplayStep[];

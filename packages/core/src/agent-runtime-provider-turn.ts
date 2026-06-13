@@ -7,6 +7,10 @@ import type {
     ToolCall,
 } from '@mission-control/protocol';
 import {
+    type ProjectContextMessageOptions,
+    prependProjectContextMessages,
+} from './context/project-context-messages.js';
+import {
     appendProviderToolResultMessages,
     DEFAULT_PROVIDER_TOOL_CONTINUATION_LIMIT,
     providerToolLoopLimitError,
@@ -18,6 +22,22 @@ import { ProviderTurnRunner } from './providers/provider-turn-runner.js';
 import { type ProviderAdapter, ProviderTurnError } from './providers/provider-turn-types.js';
 import type { ToolInvocationSettlement, ToolRegistry } from './tools/tool-registry.js';
 
+export class RuntimeApprovalBlockedError extends Error {
+    readonly errorCode: 'tool_failed';
+    readonly toolCallId: string | undefined;
+
+    constructor(input: {
+        readonly message: string;
+        readonly errorCode: 'tool_failed';
+        readonly toolCallId?: string;
+    }) {
+        super(input.message);
+        this.name = 'RuntimeApprovalBlockedError';
+        this.errorCode = input.errorCode;
+        this.toolCallId = input.toolCallId;
+    }
+}
+
 export type RuntimeProviderPromptInput = {
     readonly provider: ProviderAdapter;
     readonly sessionId: string;
@@ -27,13 +47,17 @@ export type RuntimeProviderPromptInput = {
     readonly providerTimeoutMs?: number;
     readonly providerRetryLimit?: number;
     readonly providerTurnLoopLimit?: number;
+    readonly projectContext?: ProjectContextMessageOptions;
     readonly toolRegistry?: ToolRegistry;
     readonly requestPermission: (request: PermissionRequest) => Promise<PermissionDecision>;
     readonly onEnvelope: (envelope: AgentEventEnvelope) => void;
 };
 
 export async function runRuntimeProviderPromptTask(input: RuntimeProviderPromptInput): Promise<string> {
-    let messages: readonly AgentMessage[] = [{ role: 'user', content: input.prompt }];
+    let messages: readonly AgentMessage[] = await prependProjectContextMessages(
+        [{ role: 'user', content: input.prompt }],
+        input.projectContext,
+    );
     let toolContinuationTurns = 0;
 
     while (true) {
@@ -75,13 +99,47 @@ export async function runRuntimeProviderPromptTask(input: RuntimeProviderPromptI
         if (toolContinuationTurns >= loopLimit) {
             throw new ProviderTurnError(providerToolLoopLimitError(loopLimit));
         }
+        const settlements = await settleRuntimeToolCalls(input, toolCalls);
+        const blockedSettlement = approvalBlockedSettlement(settlements);
+        if (blockedSettlement !== undefined) {
+            throw new RuntimeApprovalBlockedError(blockedSettlement);
+        }
         messages = appendProviderToolResultMessages({
             messages,
             assistantMessage: result.message,
-            settlements: await settleRuntimeToolCalls(input, toolCalls),
+            settlements,
         });
         toolContinuationTurns += 1;
     }
+}
+
+type ApprovalBlockedSettlement = {
+    readonly message: string;
+    readonly errorCode: 'tool_failed';
+    readonly toolCallId?: string;
+};
+
+function approvalBlockedSettlement(
+    settlements: readonly ToolInvocationSettlement[],
+): ApprovalBlockedSettlement | undefined {
+    for (const settlement of settlements) {
+        const error = settlement.result.error;
+        if (error?.message.startsWith('approval_required:') === true) {
+            return {
+                message: error.message,
+                errorCode: 'tool_failed',
+                toolCallId: settlement.toolCallId,
+            };
+        }
+        if (error?.message.startsWith('approval_denied:') === true) {
+            return {
+                message: error.message,
+                errorCode: 'tool_failed',
+                toolCallId: settlement.toolCallId,
+            };
+        }
+    }
+    return undefined;
 }
 
 async function requireProviderToolPermissions(
@@ -122,6 +180,9 @@ async function settleRuntimeToolCalls(
                 durability: 'durable',
                 event: sessionScopedToolEvent(event, input.sessionId, input.modelProviderSelection),
             });
+        }
+        if (approvalBlockedSettlement([settlement]) !== undefined) {
+            break;
         }
     }
     return settlements;

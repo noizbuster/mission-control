@@ -128,7 +128,7 @@ function createDenylistPolicy(root: string, options: WorkspaceGuardOptions): Wor
 
 function normalizeAllowedDenylistedPath(root: string, path: string): string {
     const relativePath = normalizeRelativePath(root, path);
-    if (!matchesDenylist(relativePath)) {
+    if (!matchesWorkspaceDenylist(relativePath)) {
         throw repoToolFailure('workspace_denied', `allow path is not denylisted: ${path}`);
     }
     return relativePath;
@@ -158,18 +158,21 @@ function isDeniedAbsolutePath(root: string, denylistPolicy: WorkspaceDenylistPol
 function shouldTraverseAbsolutePath(root: string, denylistPolicy: WorkspaceDenylistPolicy, path: string): boolean {
     const relativePath = toRelativePath(root, path);
     return (
-        !matchesDenylist(relativePath) ||
+        !matchesWorkspaceDenylist(relativePath) ||
         isAllowedDenylistedPath(denylistPolicy, relativePath) ||
         hasAllowedDenylistedDescendant(denylistPolicy, relativePath)
     );
 }
 
 function isDeniedRelativePath(denylistPolicy: WorkspaceDenylistPolicy, relativePath: string): boolean {
-    return matchesDenylist(relativePath) && !isAllowedDenylistedPath(denylistPolicy, relativePath);
+    return matchesWorkspaceDenylist(relativePath) && !isAllowedDenylistedPath(denylistPolicy, relativePath);
 }
 
-function matchesDenylist(relativePath: string): boolean {
-    return defaultReadOnlyRepoToolDenylist.some((entry) => matchesDenylistEntry(entry, relativePath));
+export function matchesWorkspaceDenylist(relativePath: string): boolean {
+    const canonicalPath = canonicalPolicyPath(relativePath);
+    return defaultReadOnlyRepoToolDenylist.some((entry) =>
+        matchesDenylistEntry(canonicalPolicyPath(entry), canonicalPath),
+    );
 }
 
 function matchesDenylistEntry(entry: string, relativePath: string): boolean {
@@ -180,11 +183,17 @@ function matchesDenylistEntry(entry: string, relativePath: string): boolean {
 }
 
 function isAllowedDenylistedPath(denylistPolicy: WorkspaceDenylistPolicy, relativePath: string): boolean {
-    return denylistPolicy.allowedPaths.some((allowedPath) => isSameOrDescendant(allowedPath, relativePath));
+    const canonicalPath = canonicalPolicyPath(relativePath);
+    return denylistPolicy.allowedPaths.some((allowedPath) =>
+        isSameOrDescendant(canonicalPolicyPath(allowedPath), canonicalPath),
+    );
 }
 
 function hasAllowedDenylistedDescendant(denylistPolicy: WorkspaceDenylistPolicy, relativePath: string): boolean {
-    return denylistPolicy.allowedPaths.some((allowedPath) => isSameOrDescendant(relativePath, allowedPath));
+    const canonicalPath = canonicalPolicyPath(relativePath);
+    return denylistPolicy.allowedPaths.some((allowedPath) =>
+        isSameOrDescendant(canonicalPath, canonicalPolicyPath(allowedPath)),
+    );
 }
 
 function isSameOrDescendant(parent: string, child: string): boolean {
@@ -193,6 +202,15 @@ function isSameOrDescendant(parent: string, child: string): boolean {
 
 function pathSegments(path: string): readonly string[] {
     return path === '.' ? [] : path.split('/');
+}
+
+function canonicalPolicyPath(path: string): string {
+    const normalized = toPosixPath(path)
+        .split('/')
+        .filter((segment) => segment.length > 0)
+        .join('/')
+        .toLowerCase();
+    return normalized.length === 0 ? '.' : normalized;
 }
 
 function normalizeRelativePath(root: string, path: string): string {

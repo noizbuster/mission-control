@@ -60,7 +60,7 @@ export function ChatComposer({
                 <button type="button" onClick={onInterruptRun}>
                     Interrupt
                 </button>
-                <button type="button" disabled={providerRunDisabled} onClick={onResumeRun}>
+                <button type="button" onClick={onResumeRun}>
                     Resume
                 </button>
             </div>

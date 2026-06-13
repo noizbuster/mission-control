@@ -61,6 +61,17 @@ describe('interactive chat command menu', () => {
         expect(resolveSlashCommandMenuSubmission('/zz', state)).toBe('/zz');
     });
 
+    it('includes session navigation commands in the slash menu', () => {
+        const view = createSlashCommandMenuView('/s', createSlashCommandMenuState(), 20);
+
+        expect(view.visibleChoices.map((choice) => choice.id)).toEqual(
+            expect.arrayContaining(['/session', '/sessions']),
+        );
+        expect(createSlashCommandMenuView('/tr', createSlashCommandMenuState(), 20).visibleChoices).toEqual(
+            expect.arrayContaining([expect.objectContaining({ id: '/tree' })]),
+        );
+    });
+
     it('formats a terminal input block with a menu above a styled prompt', () => {
         const block = formatTerminalChatInputBlock('/mo', createSlashCommandMenuState(), 100);
 

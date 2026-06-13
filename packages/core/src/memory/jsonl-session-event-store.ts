@@ -23,7 +23,8 @@ import {
 } from './jsonl-session-lock.js';
 import { defaultSession, deriveSession } from './jsonl-session-projection.js';
 import { createJsonlSessionEventRecord, serializeJsonlRecord } from './jsonl-session-records.js';
-import type { MemoryStore } from './memory-store.js';
+import type { MemoryStore, SessionCompactionRecordInput } from './memory-store.js';
+import { createSessionCompactionEvent } from './session-compaction-event.js';
 import { randomUUID } from 'node:crypto';
 
 export { JsonlSessionEventStoreError } from './jsonl-errors.js';
@@ -177,7 +178,11 @@ export class JsonlSessionEventStore implements MemoryStore {
         return this.log.getTimeline();
     }
 
-    async compact(_sessionId: string): Promise<void> {}
+    async compact(input: SessionCompactionRecordInput): Promise<AgentEvent> {
+        const event = createSessionCompactionEvent(input);
+        await this.append(event);
+        return event;
+    }
 
     async close(): Promise<void> {
         if (this.closed) {

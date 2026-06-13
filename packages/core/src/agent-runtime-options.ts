@@ -1,5 +1,6 @@
 import type { ModelProviderSelection, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import type { PendingApprovalBehavior, PermissionDecisionResolver } from './approval-gate.js';
+import type { ProjectContextMessageOptions } from './context/project-context-messages.js';
 import type { ProviderAdapter } from './providers/provider-turn-types.js';
 import type { ToolRegistry } from './tools/tool-registry.js';
 
@@ -17,6 +18,8 @@ export type AgentRuntimeOptions = {
     readonly providerTimeoutMs?: number;
     readonly providerRetryLimit?: number;
     readonly providerTurnLoopLimit?: number;
+    readonly projectContext?: ProjectContextMessageOptions;
+    readonly workspaceRoot?: string;
     readonly createToolRegistry?: RuntimeToolRegistryFactory;
     readonly permissionDecisionResolver?: PermissionDecisionResolver;
     readonly pendingApprovalBehavior?: PendingApprovalBehavior;

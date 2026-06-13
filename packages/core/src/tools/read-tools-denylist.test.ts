@@ -113,6 +113,59 @@ describe('read-only repo tool denylist', () => {
         );
     });
 
+    it('characterizes baseline denial for project instructions in reference repos', async () => {
+        const workspaceRoot = await createWorkspace();
+        await createDenylistFixture(workspaceRoot);
+        const guard = await createWorkspaceGuard(workspaceRoot);
+
+        await expect(guard.resolveExisting('temp/ref-repos/opencode/AGENTS.md')).rejects.toThrow('workspace_denied');
+    });
+
+    it('denies mixed-case generated and reference paths', async () => {
+        const workspaceRoot = await createWorkspace();
+        await mkdir(join(workspaceRoot, 'Temp', 'ref-repos', 'opencode'), { recursive: true });
+        await mkdir(join(workspaceRoot, 'Dist'), { recursive: true });
+        await writeFile(join(workspaceRoot, 'Temp', 'ref-repos', 'opencode', 'AGENTS.md'), 'MIXED_CASE_AGENT', 'utf8');
+        await writeFile(join(workspaceRoot, 'Dist', 'bundle.txt'), 'MIXED_CASE_BUNDLE', 'utf8');
+        const registry = await createRegistry(workspaceRoot);
+        const readTool = findAdvertisement(registry, 'repo.read');
+
+        const deniedInstruction = await invokeRead(registry, readTool.version, 'Temp/ref-repos/opencode/AGENTS.md');
+        const deniedBundle = await invokeRead(registry, readTool.version, 'Dist/bundle.txt');
+
+        expect(deniedInstruction.result.error?.message).toContain('workspace_denied');
+        expect(deniedBundle.result.error?.message).toContain('workspace_denied');
+        expect(JSON.stringify([deniedInstruction, deniedBundle])).not.toContain('MIXED_CASE');
+    });
+
+    it('applies the denylist to coding-agent aliases', async () => {
+        const workspaceRoot = await createWorkspace();
+        await createDenylistFixture(workspaceRoot);
+        const registry = await createRegistry(workspaceRoot);
+        const readTool = findAdvertisement(registry, 'read');
+        const listTool = findAdvertisement(registry, 'ls');
+        const searchTool = findAdvertisement(registry, 'grep');
+        const findTool = findAdvertisement(registry, 'find');
+
+        const deniedRead = await invokeNamedTool(registry, 'read', readTool.version, {
+            path: 'temp/ref-repos/opencode/README.md',
+        });
+        const deniedList = await invokeNamedTool(registry, 'ls', listTool.version, { path: 'dist' });
+        const deniedGrep = await invokeNamedTool(registry, 'grep', searchTool.version, {
+            pattern: 'hidden needle',
+            path: '.nx',
+        });
+        const deniedFind = await invokeNamedTool(registry, 'find', findTool.version, {
+            pattern: 'OPENCODE_REFERENCE_AGENT_DIRECTIVE',
+            path: '.',
+        });
+
+        expect(deniedRead.result.error?.message).toContain('workspace_denied');
+        expect(deniedList.result.error?.message).toContain('workspace_denied');
+        expect(deniedGrep.result.error?.message).toContain('workspace_denied');
+        expect(deniedFind.structuredOutput).toMatchObject({ totalMatches: 0, matches: [] });
+    });
+
     async function createWorkspace(): Promise<string> {
         const workspace = await mkdtemp(join(tmpdir(), 'mctrl-read-tools-'));
         workspaces.push(workspace);
@@ -152,11 +205,20 @@ function findAdvertisement(registry: ToolRegistry, name: string) {
 }
 
 async function invokeRead(registry: ToolRegistry, advertisedVersion: string, path: string) {
+    return invokeNamedTool(registry, 'repo.read', advertisedVersion, { path });
+}
+
+async function invokeNamedTool(
+    registry: ToolRegistry,
+    toolName: string,
+    advertisedVersion: string,
+    input: Record<string, unknown>,
+) {
     return registry.invoke({
-        toolCallId: `read_${path.replaceAll(/[^a-z0-9]+/gi, '_')}`,
-        toolName: 'repo.read',
+        toolCallId: `${toolName.replaceAll(/[^a-z0-9]+/gi, '_')}_call`,
+        toolName,
         advertisedVersion,
-        argumentsJson: JSON.stringify({ path }),
+        argumentsJson: JSON.stringify(input),
     });
 }
 
@@ -170,12 +232,7 @@ async function invokeList(registry: ToolRegistry, advertisedVersion: string, pat
 }
 
 async function invokeSearch(registry: ToolRegistry, advertisedVersion: string, pattern: string, path: string) {
-    return registry.invoke({
-        toolCallId: `search_${path.replaceAll(/[^a-z0-9]+/gi, '_')}`,
-        toolName: 'repo.search',
-        advertisedVersion,
-        argumentsJson: JSON.stringify({ pattern, path }),
-    });
+    return invokeNamedTool(registry, 'repo.search', advertisedVersion, { pattern, path });
 }
 
 function runRipgrep(

@@ -1,41 +1,159 @@
 import type { PermissionRequest } from '@mission-control/protocol';
-import { describe, expect, it } from 'vitest';
-import { createCliPermissionDecision } from './cli-permission-policy.js';
+import { describe, expect, it, vi } from 'vitest';
+import { cliAllowsAction, createCliPermissionDecision } from './cli-permission-policy.js';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-describe('createCliPermissionDecision', () => {
-    it('allows named read and scaffold admission actions without allowing effectful tools', () => {
-        expect(decisionFor('repo.read').status).toBe('allow');
-        expect(decisionFor('repo.list').status).toBe('allow');
-        expect(decisionFor('repo.search').status).toBe('allow');
-        expect(decisionFor('prompt.submit').status).toBe('allow');
-        expect(decisionFor('task.run').status).toBe('allow');
-        expect(decisionFor('skill.invoke').status).toBe('allow');
+const knownSafePatchPath = '.mctrl-known-safe-automation-patch.txt';
+
+describe('cli permission policy', () => {
+    it('scopes bash.run through the CLI permission policy', async () => {
+        const request = bashRunRequest();
+
+        expect(cliAllowsAction('bash.run')).toBe(true);
+
+        const decision = await createCliPermissionDecision(request);
+
+        expect(decision.status).toBe('requires_approval');
+        expect(decision.reason).toContain('bash.run');
     });
 
-    it('requires approval for effectful coding tools and denies unknown actions', () => {
-        expect(decisionFor('file.patch')).toMatchObject({
-            status: 'requires_approval',
-            reason: 'CLI approval required for file.patch',
+    it('denies unknown CLI actions', async () => {
+        const request: PermissionRequest = {
+            id: 'permission_unknown',
+            action: 'bash.unknown',
+            reason: 'unknown action',
+            permission: {
+                kind: 'bash',
+                patterns: ['printf ok'],
+                workspaceRoot: '/tmp/workspace',
+            },
+        };
+
+        expect(cliAllowsAction(request.action)).toBe(false);
+
+        const decision = await createCliPermissionDecision(request);
+
+        expect(decision.status).toBe('deny');
+    });
+
+    it('does not auto-approve persisted always rules for headless effectful tools', async () => {
+        const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-cli-permission-policy-'));
+        const workspaceRoot = join(dataDir, 'workspace');
+        await mkdir(join(dataDir, 'trust'), { recursive: true });
+        await mkdir(workspaceRoot, { recursive: true });
+        await writeFile(
+            join(dataDir, 'trust', 'permission-rules.json'),
+            JSON.stringify(
+                {
+                    version: 1,
+                    rules: [
+                        { permission: 'patch', pattern: '.blocked.txt', decision: 'always', workspaceRoot },
+                        { permission: 'write', pattern: '.blocked.txt', decision: 'always', workspaceRoot },
+                        {
+                            permission: 'bash',
+                            pattern: 'node --eval console.log(1)',
+                            decision: 'always',
+                            workspaceRoot,
+                        },
+                    ],
+                },
+                null,
+                2,
+            ),
+            'utf8',
+        );
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+
+        const patchDecision = await createCliPermissionDecision({
+            id: 'permission_patch_always',
+            action: 'file.patch',
+            reason: 'apply patch to .blocked.txt',
+            permission: {
+                kind: 'patch',
+                patterns: ['.blocked.txt'],
+                workspaceRoot,
+            },
         });
-        expect(decisionFor('command.run')).toMatchObject({
-            status: 'requires_approval',
-            reason: 'CLI approval required for command.run',
+        const writeDecision = await createCliPermissionDecision({
+            id: 'permission_write_always',
+            action: 'file.write',
+            reason: 'write .blocked.txt',
+            permission: {
+                kind: 'write',
+                patterns: ['.blocked.txt'],
+                workspaceRoot,
+            },
         });
-        expect(decisionFor('filesystem.write')).toMatchObject({
-            status: 'deny',
-            reason: 'CLI permission policy denies filesystem.write',
+        const commandDecision = await createCliPermissionDecision({
+            id: 'permission_command_always',
+            action: 'command.run',
+            reason: 'run node --eval console.log(1)',
+            permission: {
+                kind: 'bash',
+                patterns: ['node --eval console.log(1)'],
+                workspaceRoot,
+            },
         });
+
+        expect(patchDecision.status).toBe('requires_approval');
+        expect(writeDecision.status).toBe('requires_approval');
+        expect(commandDecision.status).toBe('requires_approval');
+    });
+
+    it('does not auto-approve arbitrary file.patch under the test-only safe patch automation policy', async () => {
+        const decision = await createCliPermissionDecision(
+            {
+                id: 'permission_patch_arbitrary_automation',
+                action: 'file.patch',
+                reason: 'apply patch to .mctrl-arbitrary.txt',
+                permission: {
+                    kind: 'patch',
+                    patterns: ['.mctrl-arbitrary.txt'],
+                    workspaceRoot: '/tmp/workspace',
+                },
+            },
+            {
+                automationPolicy: 'test-only-allow-known-safe-patch',
+            },
+        );
+
+        expect(decision.status).toBe('requires_approval');
+        expect(decision.reason).toContain('file.patch');
+    });
+
+    it('allows the explicit known-safe file.patch fixture under the test-only automation policy', async () => {
+        const decision = await createCliPermissionDecision(
+            {
+                id: 'permission_patch_known_safe_automation',
+                action: 'file.patch',
+                reason: `apply patch to ${knownSafePatchPath}`,
+                permission: {
+                    kind: 'patch',
+                    patterns: [knownSafePatchPath],
+                    workspaceRoot: '/tmp/workspace',
+                },
+            },
+            {
+                automationPolicy: 'test-only-allow-known-safe-patch',
+            },
+        );
+
+        expect(decision.status).toBe('allow');
+        expect(decision.reason).toBe('test-only automation allows known safe patch');
     });
 });
 
-function decisionFor(action: string) {
-    return createCliPermissionDecision(requestFor(action));
-}
-
-function requestFor(action: string): PermissionRequest {
+function bashRunRequest(): PermissionRequest {
     return {
-        id: `permission_${action.replace('.', '_')}`,
-        action,
-        reason: `test ${action}`,
+        id: 'permission_bash_run',
+        action: 'bash.run',
+        reason: 'run trusted bash',
+        permission: {
+            kind: 'bash',
+            patterns: ['printf ok'],
+            workspaceRoot: '/tmp/workspace',
+        },
     };
 }

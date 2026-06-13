@@ -4,6 +4,7 @@ import {
     createDeterministicProvider,
     type ProviderAdapter,
     type ProviderTurnRequest,
+    projectJsonlSessionReplayPrefix,
 } from '@mission-control/core';
 import { type AgentEvent, type ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -15,6 +16,7 @@ import {
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
 import { replayedMessages, replayedTypes } from './session-replay-test-support.js';
+import { writeSessionEvents } from './session-test-support.js';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -105,7 +107,7 @@ describe('runAgent interactive coding agent UX', () => {
 
         // Then
         expect(output).toContain('Patch preview for file.patch');
-        expect(output).toContain('Approve file.patch? [y/N]:');
+        expect(output).toContain('Approve file.patch? [once/always/deny]:');
         expect(output).toContain('Denied file.patch');
         expect(events).toContainEqual(
             expect.objectContaining({
@@ -180,7 +182,7 @@ describe('runAgent interactive coding agent UX', () => {
         // Then
         expect(requests).toHaveLength(2);
         expect(requests[0]?.tools?.map((tool) => tool.name)).toEqual(
-            expect.arrayContaining(['repo.read', 'repo.list', 'repo.search', 'file.patch', 'command.run']),
+            expect.arrayContaining(['read', 'ls', 'grep', 'find', 'file.edit', 'file.patch', 'command.run']),
         );
         expect(requests[1]?.messages).toEqual([
             { role: 'user', content: 'read the readme and summarize it' },
@@ -282,6 +284,81 @@ describe('runAgent interactive coding agent UX', () => {
         expect(replayTypes).not.toContain('run.completed');
     });
 
+    it('navigates durable sessions with tree, branch, fork, clone, and list commands', async () => {
+        // Given
+        const dataDir = await tempRoot('mctrl-chat-data-');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await writeSessionEvents({
+            dataDir,
+            sessionId: 'session_navigation_source',
+            events: [
+                sessionEvent('session_navigation_source', 'session.started', 'seeded navigation source'),
+                sessionEvent('session_navigation_source', 'task.completed', 'root prompt', {
+                    kind: 'entry',
+                    entryId: 'entry_root',
+                }),
+                sessionEvent('session_navigation_source', 'task.completed', 'branch reply', {
+                    kind: 'entry',
+                    entryId: 'entry_branch',
+                    parentEntryId: 'entry_root',
+                    active: true,
+                }),
+            ],
+        });
+        const chatOutput = createBufferedChatOutput();
+
+        // When
+        const output = await runAgent(parseArgs(['--session', 'session_navigation_source']), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: '/tree' },
+                { type: 'line', value: '/branch entry_root' },
+                { type: 'line', value: '/fork entry_root session_navigation_fork' },
+                { type: 'line', value: '/clone session_navigation_clone' },
+                { type: 'line', value: '/sessions' },
+                { type: 'line', value: '/session session_navigation_source' },
+                { type: 'line', value: '/exit' },
+            ]),
+            chatOutput: chatOutput.output,
+            provider: createDeterministicProvider([]),
+        });
+        const forkReplay = projectJsonlSessionReplayPrefix({
+            sessionId: 'session_navigation_fork',
+            contents: await readFile(join(dataDir, 'sessions', 'session_navigation_fork.jsonl'), 'utf8'),
+        }).projection;
+        const cloneReplay = projectJsonlSessionReplayPrefix({
+            sessionId: 'session_navigation_clone',
+            contents: await readFile(join(dataDir, 'sessions', 'session_navigation_clone.jsonl'), 'utf8'),
+        }).projection;
+        const sourceReplay = projectJsonlSessionReplayPrefix({
+            sessionId: 'session_navigation_source',
+            contents: await readFile(join(dataDir, 'sessions', 'session_navigation_source.jsonl'), 'utf8'),
+        }).projection;
+
+        // Then
+        expect(output).toContain('Session tree: session_navigation_source');
+        expect(output).toContain('*     entry_branch branch reply');
+        expect(output).toContain('Active branch: entry_root');
+        expect(output).toContain('Forked session: session_navigation_fork from entry_root');
+        expect(output).toContain('Cloned session: session_navigation_clone');
+        expect(output).toContain('* session_navigation_clone');
+        expect(output).toContain('Switched to session: session_navigation_source');
+        expect(forkReplay.snapshot.sessionId).toBe('session_navigation_fork');
+        expect(forkReplay.snapshot.status).toBe('running');
+        expect(forkReplay.sessionTree.forkSource).toEqual({
+            sessionId: 'session_navigation_source',
+            entryId: 'entry_root',
+        });
+        expect(forkReplay.sessionTree.activeLeafId).toBe('entry_root');
+        expect(cloneReplay.sessionTree.cloneSource).toEqual({
+            sessionId: 'session_navigation_fork',
+            entryId: 'entry_root',
+        });
+        expect(cloneReplay.snapshot.status).toBe('running');
+        expect(sourceReplay.snapshot.sessionId).toBe('session_navigation_source');
+        expect(sourceReplay.sessionTree.activeLeafId).toBe('entry_root');
+    });
+
     it('exits and force-stops an active provider turn with /exit', async () => {
         // Given
         const dataDir = await tempRoot('mctrl-chat-data-');
@@ -325,6 +402,26 @@ function addFilePatch(path: string, content: string): string {
         `+${content}`,
         '',
     ].join('\n');
+}
+
+function sessionEvent(
+    sessionId: string,
+    type: AgentEvent['type'],
+    message: string,
+    sessionTree?: AgentEvent['sessionTree'],
+): AgentEvent {
+    return {
+        type,
+        timestamp: '2026-06-13T01:00:00.000Z',
+        sessionId,
+        message,
+        nativeSidecarStatus: 'mock',
+        modelProviderSelection: {
+            providerID: 'local',
+            modelID: 'local-echo',
+        },
+        ...(sessionTree !== undefined ? { sessionTree } : {}),
+    };
 }
 
 async function fakeCommandExecutor(_request: CommandExecutionRequest): Promise<CommandExecutionResult> {
@@ -408,7 +505,7 @@ function cliToolCallChunk(request: ProviderTurnRequest): ProviderStreamChunk {
         sequence: 1,
         toolCall: {
             toolCallId: 'read_call_cli',
-            toolName: 'repo.read',
+            toolName: 'read',
             argumentsJson: JSON.stringify({ path: 'README.md' }),
         },
     };

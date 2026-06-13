@@ -88,6 +88,14 @@ describe('README stage-01 contract', () => {
             'Interactive chat commands',
             '/model opens a searchable model picker',
             '/model provider/model selects the model for the current chat only',
+            '`/new [session-id]` starts a new durable session',
+            '`/session <session-id>` switches to an existing durable session',
+            '`/sessions` lists durable sessions',
+            '`/tree` shows the durable session tree and active leaf',
+            '`/branch <entry-id>` selects an existing branch leaf',
+            '`/branch <message-id> <prompt>` continues from a parent message in a new branch',
+            '`/fork <entry-id> [session-id]` forks from a tree entry into a new durable session',
+            '`/clone [session-id]` clones the current durable session into a fresh one',
             '$skill args records a scaffold agent skill invocation',
             'Normal prompt text still sends a prompt',
             'Ctrl+C twice exits',
@@ -196,6 +204,20 @@ describe('README stage-01 contract', () => {
             expect(content, `README must not overstate provider execution: ${forbiddenClaim}`).not.toContain(
                 forbiddenClaim,
             );
+        }
+    });
+
+    it('documents the built-dist coding-agent smoke command honestly', () => {
+        const content = readme();
+        const requiredTerms = [
+            'pnpm smoke:coding-agent-built-dist',
+            'built-dist coding-agent smoke',
+            'Todo 18',
+            'tarball artifact smoke',
+        ] as const;
+
+        for (const term of requiredTerms) {
+            expect(content, `README missing ${term}`).toContain(term);
         }
     });
 });

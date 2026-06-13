@@ -1,8 +1,18 @@
 import type { AgentEvent, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { AgentRuntime } from './agent-runtime.js';
 import { createDeterministicProvider } from './providers/deterministic-provider.js';
 import type { ProviderAdapter, ProviderTurnRequest } from './providers/provider-turn-types.js';
+import { ProjectTrustStore } from './trust/project-trust-store.js';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
 
 describe('AgentRuntime provider turns', () => {
     it('can route prompt tasks through a deterministic provider runner', async () => {
@@ -31,6 +41,47 @@ describe('AgentRuntime provider turns', () => {
         expect(liveChunks).toEqual(['hel', 'lo']);
         expect(runtime.getEvents().some((event) => event.providerStreamChunk?.kind === 'text_delta')).toBe(false);
         expect(runtime.getSnapshot().lastMessage).toBe('hello');
+    });
+
+    it('loads trusted project context into provider messages', async () => {
+        const dataDir = await tempRoot('mctrl-runtime-context-data-');
+        const workspaceRoot = await tempRoot('mctrl-runtime-context-workspace-');
+        await writeFile(join(workspaceRoot, 'AGENTS.md'), 'TRUSTED_RUNTIME_CONTEXT', 'utf8');
+        const trustStore = new ProjectTrustStore({ dataDir, now: fixedNow });
+        const requests: ProviderTurnRequest[] = [];
+
+        const unknownRuntime = new AgentRuntime({
+            useNative: false,
+            permissionDecisionResolver: allowAllPermissions,
+            provider: captureProviderRequests(requests),
+            projectContext: { workspaceRoot, trustStore },
+        });
+        await unknownRuntime.start();
+        await unknownRuntime.runPromptTask('before trust');
+        await trustStore.setDecision(workspaceRoot, 'trusted');
+        const trustedRuntime = new AgentRuntime({
+            useNative: false,
+            permissionDecisionResolver: allowAllPermissions,
+            provider: captureProviderRequests(requests),
+            projectContext: { workspaceRoot, trustStore },
+        });
+        await trustedRuntime.start();
+        await trustedRuntime.runPromptTask('after trust');
+
+        expect(requests).toHaveLength(2);
+        const [unknownRequest, trustedRequest] = requests;
+        if (unknownRequest === undefined || trustedRequest === undefined) {
+            throw new Error('expected provider requests');
+        }
+        expect(JSON.stringify(unknownRequest.messages)).not.toContain('TRUSTED_RUNTIME_CONTEXT');
+        expect(trustedRequest.messages).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    role: 'system',
+                    content: expect.stringContaining('TRUSTED_RUNTIME_CONTEXT'),
+                }),
+            ]),
+        );
     });
 
     it('blocks provider effects until a pending approval is approved', async () => {
@@ -143,6 +194,31 @@ function requiresApproval(request: PermissionRequest): PermissionDecision {
         status: 'requires_approval',
         reason: 'test requires approval',
     };
+}
+
+function captureProviderRequests(requests: ProviderTurnRequest[]): ProviderAdapter {
+    return {
+        async *streamTurn(request: ProviderTurnRequest) {
+            requests.push(request);
+            yield {
+                kind: 'response_completed',
+                requestId: request.requestId,
+                sequence: 1,
+                message: { messageId: `message_${request.turnId}`, role: 'assistant', content: 'captured' },
+                finishReason: 'stop',
+            };
+        },
+    };
+}
+
+async function tempRoot(prefix: string): Promise<string> {
+    const root = await mkdtemp(join(tmpdir(), prefix));
+    tempDirs.push(root);
+    return root;
+}
+
+function fixedNow(): string {
+    return '2026-06-13T00:00:00.000Z';
 }
 
 function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {

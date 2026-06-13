@@ -82,15 +82,16 @@ export function commandRunOutput(
     cwd: string,
     result: CommandExecutionResult,
     maxOutputBytes: number,
+    redactionSecrets: readonly string[] = [],
 ): CommandRunOutput {
     const stdout = capText(
-        redactCredentialText(result.stdout),
+        redactCredentialText(result.stdout, redactionSecrets),
         maxOutputBytes,
         result.stdoutOriginalBytes,
         result.stdoutTruncated,
     );
     const stderr = capText(
-        redactCredentialText(result.stderr),
+        redactCredentialText(result.stderr, redactionSecrets),
         maxOutputBytes,
         result.stderrOriginalBytes,
         result.stderrTruncated,
@@ -98,7 +99,7 @@ export function commandRunOutput(
     return {
         kind: 'command_run',
         status: result.exitCode === 0 && !result.timedOut ? 'completed' : 'failed',
-        command: [...command],
+        command: command.map((part) => redactCredentialText(part, redactionSecrets)),
         cwd,
         exitCode: result.exitCode,
         signal: result.signal,

@@ -8,6 +8,12 @@ import { AgentEventSchema, type AgentMessage, type ProviderStreamChunk } from '@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
+import {
+    knownSafePatchPath,
+    lastRecord,
+    parseJsonRecords,
+    providerWithWrite,
+} from './run-agent-json-approval-test-support.js';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -40,8 +46,17 @@ describe('runAgent JSON non-interactive approvals', () => {
         const events = parseJsonEvents(output);
 
         // Then
-        expect(requestAt(requests, 0).tools?.map((tool) => tool.name)).toEqual(
-            expect.arrayContaining(['repo.read', 'repo.list', 'repo.search', 'file.patch', 'command.run']),
+        expect(requestAt(requests, 0).tools?.map((tool) => tool.name)).toEqual([
+            'repo.read',
+            'repo.list',
+            'repo.search',
+            'file.edit',
+            'file.write',
+            'file.patch',
+            'command.run',
+        ]);
+        expect(requestAt(requests, 0).tools?.map((tool) => tool.name)).not.toEqual(
+            expect.arrayContaining(['read', 'ls', 'grep', 'find']),
         );
         expect(requestAt(requests, 1).messages).toEqual([
             { role: 'user', content: 'read README' },
@@ -103,18 +118,42 @@ describe('runAgent JSON non-interactive approvals', () => {
         const events = parseJsonEvents(output);
 
         // Then
-        expect(await readFile(join(workspaceRoot, '.mctrl-task18-allowed.txt'), 'utf8')).toBe('allowed\n');
+        expect(await readFile(join(workspaceRoot, knownSafePatchPath), 'utf8')).toBe('allowed\n');
         expect(requestAt(requests, 1).messages).toContainEqual({
             role: 'tool',
             toolCallId: 'task18_patch_call',
             status: 'completed',
-            output: 'applied patch to .mctrl-task18-allowed.txt',
+            output: `applied patch to ${knownSafePatchPath}`,
         });
         expect(events.map((event) => event.type)).toEqual(
             expect.arrayContaining(['file.diff.applied', 'tool.completed', 'task.completed']),
         );
         expect(events.some((event) => event.type === 'approval.blocked')).toBe(false);
         expect(events.find((event) => event.type === 'task.completed')?.message).toBe('patch applied after automation');
+    });
+
+    it('does not auto-approve file.write under the test-only safe patch automation policy', async () => {
+        const dataDir = await tempRoot('mctrl-task18-write-data-');
+        const workspaceRoot = await tempRoot('mctrl-task18-write-workspace-');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+
+        const output = await runAgent(
+            parseArgs(['run', 'write file', '--jsonl', '--session', 'session_task18_write_blocked']),
+            {
+                workspaceRoot,
+                provider: providerWithWrite('.mctrl-task18-write.txt', 'write blocked\n'),
+                nonInteractiveAutomationPolicy: 'test-only-allow-known-safe-patch',
+            },
+        );
+        const records = parseJsonRecords(output);
+
+        expect(lastRecord(records)).toMatchObject({
+            type: 'session.stopped',
+            sessionId: 'session_task18_write_blocked',
+            status: 'blocked_on_approval',
+            approvalId: expect.any(String),
+        });
+        await expect(readFile(join(workspaceRoot, '.mctrl-task18-write.txt'), 'utf8')).rejects.toThrow();
     });
 
     async function tempRoot(prefix: string): Promise<string> {
@@ -155,7 +194,7 @@ function providerFromPatchRequests(requests: ProviderTurnRequest[]): ProviderAda
             requests.push(request);
             if (requests.length === 1) {
                 yield toolCallChunk(request, 'task18_patch_call', 'file.patch', {
-                    patch: addFilePatch('.mctrl-task18-allowed.txt', 'allowed'),
+                    patch: addFilePatch(knownSafePatchPath, 'allowed'),
                 });
                 yield completedChunk(request, 'patch requested', ['task18_patch_call']);
                 return;

@@ -1,7 +1,8 @@
 import type { AbgGraphSnapshot, AgentEvent, AgentSession, AgentSnapshot } from '@mission-control/protocol';
 import type { AbgTimelineEntry } from '../behavior/timeline.js';
 import { SessionEventLog } from '../session-log.js';
-import type { MemoryStore } from './memory-store.js';
+import type { MemoryStore, SessionCompactionRecordInput } from './memory-store.js';
+import { createSessionCompactionEvent } from './session-compaction-event.js';
 
 export class InMemoryEventStore implements MemoryStore {
     private readonly logs = new Map<string, SessionEventLog>();
@@ -46,7 +47,11 @@ export class InMemoryEventStore implements MemoryStore {
         return this.getOrCreateLog(sessionId).getTimeline();
     }
 
-    async compact(_sessionId: string): Promise<void> {}
+    async compact(input: SessionCompactionRecordInput): Promise<AgentEvent> {
+        const event = createSessionCompactionEvent(input);
+        await this.append(event);
+        return event;
+    }
 
     private getOrCreateLog(sessionId: string): SessionEventLog {
         const existing = this.logs.get(sessionId);

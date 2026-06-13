@@ -6,6 +6,7 @@ import {
     type ProviderAdapter,
     ProviderTurnError,
     ProviderTurnRunner,
+    prependProjectContextMessages,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { ChatOutput } from './interactive-chat-io.js';
@@ -57,6 +58,9 @@ export async function startPromptTurn(
             const runner = new ProviderTurnRunner({
                 provider: coding.provider,
             });
+            const projectContext =
+                coding.workspaceRoot !== undefined ? { workspaceRoot: coding.workspaceRoot } : undefined;
+            const messages = await prependProjectContextMessages([{ role: 'user', content: prompt }], projectContext);
             const result = await runner.runTurn({
                 sessionId,
                 turnId: taskId,
@@ -66,7 +70,7 @@ export async function startPromptTurn(
                 ...(modelProviderSelection.variantID !== undefined
                     ? { variantID: modelProviderSelection.variantID }
                     : {}),
-                messages: [{ role: 'user', content: prompt }],
+                messages,
                 startSequence: 0,
                 onEnvelope: (envelope) => {
                     if (envelope.durability === 'durable') {

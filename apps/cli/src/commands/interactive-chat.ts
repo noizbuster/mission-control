@@ -16,8 +16,17 @@ import {
     createTerminalChatOutput,
     maxChatPromptLength,
 } from './interactive-chat-io.js';
+import {
+    areModelProviderSelectionsEqual,
+    ChatInputPump,
+    nextChatLoopEvent,
+    registerProcessTerminalCleanup,
+    stopActiveTurn,
+    suspendChatInputWhileSelectingModel,
+} from './interactive-chat-loop-support.js';
 import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
 import { createTerminalModelSelector } from './interactive-chat-model-selector.js';
+import { createSessionNavigationController } from './interactive-chat-session-navigation.js';
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 
@@ -43,6 +52,7 @@ export type InteractiveChatOptions = {
     readonly emitEvent?: (event: AgentEvent) => void;
     readonly observeStoredEvent?: (event: AgentEvent) => void;
     readonly sessionStore?: JsonlSessionEventStore;
+    readonly switchSessionStore?: (sessionId: string) => Promise<JsonlSessionEventStore>;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly persistModelProviderSelection?: (selection: ModelProviderSelection) => Promise<void>;
 };
@@ -67,15 +77,34 @@ export async function runInteractiveChatSession(
     let activeTurn: ActiveCodingAgentTurn | undefined;
     let turnCounter = 0;
     const inputPump = new ChatInputPump(chatInput);
-    const sessionId = options.sessionId;
+    let currentSessionId = options.sessionId;
     let currentProvider = options.resolveProviderForSelection?.(currentModelProviderSelection) ?? options.provider;
+    let currentSessionStore = options.sessionStore;
+    const switchSessionStore = options.switchSessionStore;
+    const sessionNavigation =
+        switchSessionStore === undefined
+            ? undefined
+            : createSessionNavigationController({
+                  getCurrentSessionId: () => (currentSessionStore === undefined ? undefined : currentSessionId),
+                  getCurrentStore: () => currentSessionStore,
+                  switchSessionStore: async (sessionId) => {
+                      const store = await switchSessionStore(sessionId);
+                      currentSessionId = sessionId;
+                      currentSessionStore = store;
+                      return store;
+                  },
+                  ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
+                  ...(options.observeStoredEvent !== undefined
+                      ? { observeStoredEvent: options.observeStoredEvent }
+                      : {}),
+              });
     const unregisterProcessCleanup = registerProcessTerminalCleanup(chatInput);
 
     try {
         chatOutput.write('mission-control chat\n');
         chatOutput.write(formatModelProviderStatus(currentModelProviderSelection, { nodeMode: 'none' }));
-        if (sessionId !== undefined) {
-            chatOutput.write(`resumed session: ${sessionId}\n`);
+        if (currentSessionId !== undefined && currentSessionStore !== undefined) {
+            chatOutput.write(`resumed session: ${currentSessionId}\n`);
         }
         chatOutput.write('Press Ctrl+C twice or /exit to exit\n\n');
 
@@ -151,18 +180,23 @@ export async function runInteractiveChatSession(
                         return `turn_interactive_${turnCounter}`;
                     },
                     provider: currentProvider,
-                    sessionId,
-                    sessionStore: options.sessionStore,
+                    sessionId: currentSessionId,
+                    sessionStore: currentSessionStore,
                     workspaceRoot: options.workspaceRoot,
+                    ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
                 },
             );
             if (!areModelProviderSelectionsEqual(currentModelProviderSelection, result.modelProviderSelection)) {
                 currentProvider =
                     options.resolveProviderForSelection?.(result.modelProviderSelection) ?? currentProvider;
-                await options.persistModelProviderSelection?.(result.modelProviderSelection);
+                if (result.persistModelProviderSelection === true) {
+                    await options.persistModelProviderSelection?.(result.modelProviderSelection);
+                }
             }
             currentModelProviderSelection = result.modelProviderSelection;
             activeTurn = result.activeTurn;
+            currentSessionId = result.sessionId ?? currentSessionId;
+            currentSessionStore = result.sessionStore ?? currentSessionStore;
         }
     } finally {
         unregisterProcessCleanup();
@@ -171,99 +205,4 @@ export async function runInteractiveChatSession(
     }
 
     return chatOutput.getOutput?.() ?? '';
-}
-
-async function stopActiveTurn(activeTurn: ActiveCodingAgentTurn | undefined): Promise<undefined> {
-    if (activeTurn === undefined) {
-        return undefined;
-    }
-    activeTurn.interrupt('force');
-    await activeTurn.done;
-    return undefined;
-}
-
-function areModelProviderSelectionsEqual(left: ModelProviderSelection, right: ModelProviderSelection): boolean {
-    return left.providerID === right.providerID && left.modelID === right.modelID && left.variantID === right.variantID;
-}
-
-type ChatLoopEvent =
-    | {
-          readonly type: 'input';
-          readonly event: ChatInputEvent;
-      }
-    | {
-          readonly type: 'active-completed';
-      };
-
-class ChatInputPump {
-    private pending: Promise<ChatInputEvent> | undefined;
-
-    constructor(private readonly input: ChatInput) {}
-
-    read(): Promise<ChatInputEvent> {
-        if (this.pending === undefined) {
-            this.pending = this.input.read().finally(() => {
-                this.pending = undefined;
-            });
-        }
-        return this.pending;
-    }
-}
-
-async function nextChatLoopEvent(
-    inputPump: ChatInputPump,
-    activeTurn: ActiveCodingAgentTurn | undefined,
-): Promise<ChatLoopEvent> {
-    if (activeTurn === undefined) {
-        return { type: 'input', event: await inputPump.read() };
-    }
-    return Promise.race([
-        activeTurn.done.then((): ChatLoopEvent => ({ type: 'active-completed' })),
-        readAfterActiveYield(inputPump),
-    ]);
-}
-
-async function readAfterActiveYield(inputPump: ChatInputPump): Promise<ChatLoopEvent> {
-    await new Promise((resolve) => {
-        setTimeout(resolve, 25);
-    });
-    return { type: 'input', event: await inputPump.read() };
-}
-
-function suspendChatInputWhileSelectingModel(selectModel: ModelSelector, input: ChatInput): ModelSelector {
-    return async (choices, currentSelection, options) => {
-        input.suspend?.();
-        try {
-            return await selectModel(choices, currentSelection, options);
-        } finally {
-            input.resume?.();
-        }
-    };
-}
-
-function registerProcessTerminalCleanup(input: ChatInput): () => void {
-    let cleaned = false;
-    const cleanup = () => {
-        if (cleaned) {
-            return;
-        }
-        cleaned = true;
-        input.close();
-    };
-    const onSignal = () => {
-        cleanup();
-    };
-    const onExit = () => {
-        cleanup();
-    };
-
-    process.once('SIGINT', onSignal);
-    process.once('SIGTERM', onSignal);
-    process.once('exit', onExit);
-
-    return () => {
-        process.off('SIGINT', onSignal);
-        process.off('SIGTERM', onSignal);
-        process.off('exit', onExit);
-    };
 }

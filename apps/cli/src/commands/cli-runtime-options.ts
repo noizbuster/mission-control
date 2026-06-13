@@ -1,8 +1,9 @@
-import type {
-    AgentRuntimeOptions,
-    CommandExecutionRequest,
-    CommandExecutionResult,
-    ProviderAdapter,
+import {
+    type AgentRuntimeOptions,
+    type CommandExecutionRequest,
+    type CommandExecutionResult,
+    ProjectTrustStore,
+    type ProviderAdapter,
 } from '@mission-control/core';
 import type { ModelProviderSelection, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { createCliPermissionDecision, type NonInteractiveAutomationPolicy } from './cli-permission-policy.js';
@@ -21,16 +22,32 @@ export function createCliRuntimeOptions(input: CliRuntimeOptionsInput): AgentRun
     return {
         ...(input.useNative !== undefined ? { useNative: input.useNative } : {}),
         ...(input.modelProviderSelection !== undefined ? { modelProviderSelection: input.modelProviderSelection } : {}),
+        ...(input.workspaceRoot !== undefined
+            ? { projectContext: { workspaceRoot: input.workspaceRoot }, workspaceRoot: input.workspaceRoot }
+            : {}),
         provider: input.provider,
         createToolRegistry: (requestPermission: (request: PermissionRequest) => Promise<PermissionDecision>) =>
-            createNonInteractiveToolRegistry({
-                workspaceRoot: input.workspaceRoot ?? process.cwd(),
-                requestPermission,
-                ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
-            }),
+            workspaceHasTrustedBash(input.workspaceRoot ?? process.cwd()).then((enableTrustedBash) =>
+                createNonInteractiveToolRegistry({
+                    workspaceRoot: input.workspaceRoot ?? process.cwd(),
+                    requestPermission,
+                    enableTrustedBash,
+                    ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
+                }),
+            ),
         permissionDecisionResolver: (request) =>
-            createCliPermissionDecision(request, input.nonInteractiveAutomationPolicy),
+            createCliPermissionDecision(request, {
+                ...(input.nonInteractiveAutomationPolicy !== undefined
+                    ? { automationPolicy: input.nonInteractiveAutomationPolicy }
+                    : {}),
+                workspaceRoot: input.workspaceRoot ?? process.cwd(),
+            }),
         pendingApprovalBehavior: 'block',
     };
 }
 export type { NonInteractiveAutomationPolicy };
+
+async function workspaceHasTrustedBash(workspaceRoot: string): Promise<boolean> {
+    const trust = await new ProjectTrustStore().getDecision(workspaceRoot);
+    return trust.decision === 'trusted';
+}

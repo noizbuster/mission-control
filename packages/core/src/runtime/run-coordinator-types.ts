@@ -5,6 +5,7 @@ import type {
     ModelProviderSelection,
     ToolCall,
 } from '@mission-control/protocol';
+import type { ProjectContextMessageOptions } from '../context/project-context-messages.js';
 import type { ProviderAdapter } from '../providers/provider-turn-types.js';
 import type { AdmitPromptInput, SessionAdmissionEventStore } from '../session-admission-types.js';
 import type { ToolInvocationSettlement, ToolRegistry } from '../tools/tool-registry.js';
@@ -36,6 +37,8 @@ export type SessionRunCoordinatorOptions = {
     readonly timeoutMs?: number;
     readonly retryLimit?: number;
     readonly toolCallLoopLimit?: number;
+    readonly haltOnFailedToolSettlement?: boolean;
+    readonly projectContext?: ProjectContextMessageOptions;
     readonly toolRegistry?: ToolRegistry;
     readonly createId?: (prefix: string, index: number) => string;
     readonly readMessages?: RunCoordinatorReadMessages;

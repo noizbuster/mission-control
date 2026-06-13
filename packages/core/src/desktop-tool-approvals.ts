@@ -5,29 +5,36 @@ import type {
     ModelProviderSelection,
     PermissionDecision,
     PermissionRequest,
-    ToolCall,
 } from '@mission-control/protocol';
 import type { ApprovalTerminalState } from './approval-gate.js';
 import { withDesktopApprovalSettlementLock } from './desktop-approval-settlement-lock.js';
 import {
     approvalEvent,
     approvalIdForToolCall,
-    approvalIdFromEvent,
     decidedRecord,
     hasTerminalRunAfterApproval,
     latestApprovalRecord,
-    pendingRecord,
+    type PendingApprovalContext,
+    pendingApprovalContextForCurrentRun,
+    requestIdForToolCall,
     sessionEvent,
-    toolCallForApproval,
-    toolCallsFromEvents,
     toolFailed,
 } from './desktop-tool-approval-events.js';
+import {
+    hasRuntimeOwnedPermissionRequest,
+    latestBlockedToolCallId,
+    pendingApprovalRecord,
+    permissionRequestedEvent,
+    toolCallById,
+} from './desktop-tool-approval-provenance.js';
 import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
     registerCommandRunTool,
 } from './tools/command-run.js';
+import { registerFileEditTool } from './tools/file-edit.js';
 import { registerFilePatchTool } from './tools/file-patch.js';
+import { registerFileWriteTool } from './tools/file-write.js';
 import { ToolRegistry } from './tools/tool-registry.js';
 
 export type DesktopApprovalStore = {
@@ -53,31 +60,65 @@ export type DesktopApprovalSettlementOptions = {
 
 export type DesktopApprovalSettlementStatus = 'completed' | 'blocked' | 'failed' | 'idle';
 
-export async function appendPendingToolApprovals(input: {
+export async function ensurePendingToolApprovalForCurrentBlockedRun(input: {
     readonly store: DesktopApprovalStore;
     readonly sessionId: string;
     readonly modelProviderSelection: ModelProviderSelection;
     readonly now: () => string;
+    readonly blockedToolCallId: string;
 }): Promise<void> {
     const events = await input.store.getEvents(input.sessionId);
-    const approvalIds = new Set(events.flatMap((event) => approvalIdFromEvent(event)));
-    for (const toolCall of toolCallsFromEvents(events)) {
-        const approvalId = approvalIdForToolCall(toolCall.toolCallId);
-        if (approvalIds.has(approvalId)) {
-            continue;
-        }
-        await input.store.append(
-            approvalEvent({
-                type: 'approval.requested',
-                sessionId: input.sessionId,
-                modelProviderSelection: input.modelProviderSelection,
-                record: pendingRecord(toolCall, input.now()),
-                message: `approval requested: ${toolCall.toolName}`,
-                now: input.now,
-            }),
-        );
-        approvalIds.add(approvalId);
+    const currentBlockedToolCallId = latestBlockedToolCallId(events);
+    if (currentBlockedToolCallId === undefined || currentBlockedToolCallId !== input.blockedToolCallId) {
+        return;
     }
+    const approvalId = approvalIdForToolCall(currentBlockedToolCallId);
+    if (latestApprovalRecord(events, approvalId) !== undefined) {
+        return;
+    }
+    const requestId = requestIdForToolCall(currentBlockedToolCallId);
+    if (!hasRuntimeOwnedPermissionRequest(events, requestId)) {
+        return;
+    }
+    const toolCall = toolCallById(events, currentBlockedToolCallId);
+    if (toolCall === undefined) {
+        return;
+    }
+    await input.store.append(
+        approvalEvent({
+            type: 'approval.requested',
+            sessionId: input.sessionId,
+            modelProviderSelection: input.modelProviderSelection,
+            record: pendingApprovalRecord(toolCall, input.now()),
+            message: `approval requested: ${toolCall.toolName}`,
+            now: input.now,
+        }),
+    );
+}
+
+export async function ensureRuntimeOwnedPermissionRequestForBlockedToolCall(input: {
+    readonly store: DesktopApprovalStore;
+    readonly sessionId: string;
+    readonly modelProviderSelection: ModelProviderSelection;
+    readonly now: () => string;
+    readonly blockedToolCallId: string;
+}): Promise<void> {
+    const events = await input.store.getEvents(input.sessionId);
+    const currentBlockedToolCallId = latestBlockedToolCallId(events);
+    if (currentBlockedToolCallId === undefined || currentBlockedToolCallId !== input.blockedToolCallId) {
+        return;
+    }
+    const requestId = requestIdForToolCall(currentBlockedToolCallId);
+    if (hasRuntimeOwnedPermissionRequest(events, requestId)) {
+        return;
+    }
+    const toolCall = toolCallById(events, currentBlockedToolCallId);
+    if (toolCall === undefined) {
+        return;
+    }
+    await input.store.append(
+        permissionRequestedEvent(input.sessionId, input.modelProviderSelection, toolCall, input.now),
+    );
 }
 
 export async function settleDesktopApproval(
@@ -92,10 +133,11 @@ async function settleDesktopApprovalUnlocked(
     options: DesktopApprovalSettlementOptions,
 ): Promise<DesktopApprovalSettlementStatus> {
     const events = await options.store.getEvents(input.sessionId);
-    const pending = latestApprovalRecord(events, input.approvalId);
-    if (pending === undefined || pending.state !== 'pending') {
+    const pendingApproval = pendingApprovalContextForCurrentRun(events, input.approvalId);
+    if (pendingApproval === undefined) {
         return 'idle';
     }
+    const pending = pendingApproval.record;
     if (hasTerminalRunAfterApproval(events, pending.approvalId)) {
         return 'idle';
     }
@@ -134,21 +176,24 @@ async function settleDesktopApprovalUnlocked(
             now: options.now,
         }),
     );
-    const toolCall = toolCallForApproval(events, input.approvalId);
-    if (toolCall === undefined) {
-        await options.store.append(toolFailed(input.sessionId, input.approvalId, 'approved tool call was not found'));
-        return 'failed';
-    }
-    return invokeApprovedTool(toolCall, decided, options, modelProviderSelection);
+    return invokeApprovedTool(pendingApproval.toolCall, decided, options, modelProviderSelection);
 }
 
 async function invokeApprovedTool(
-    toolCall: ToolCall,
-    record: ApprovalRecord,
+    toolCall: PendingApprovalContext['toolCall'],
+    record: PendingApprovalContext['record'],
     options: DesktopApprovalSettlementOptions,
     modelProviderSelection: ModelProviderSelection,
 ): Promise<DesktopApprovalSettlementStatus> {
     const registry = new ToolRegistry();
+    await registerFileEditTool(registry, {
+        workspaceRoot: options.workspaceRoot,
+        requestPermission: permissionResolver(record),
+    });
+    await registerFileWriteTool(registry, {
+        workspaceRoot: options.workspaceRoot,
+        requestPermission: permissionResolver(record),
+    });
     await registerFilePatchTool(registry, {
         workspaceRoot: options.workspaceRoot,
         requestPermission: permissionResolver(record),

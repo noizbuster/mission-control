@@ -119,6 +119,54 @@ describe('SessionRunCoordinator', () => {
         await restarted.store.close();
     });
 
+    it('preserves blocked metadata when resuming an in-process blocked run', async () => {
+        const context = await openCoordinatorContext('session_run_blocked_resume_metadata');
+        const requests: ProviderTurnRequest[] = [];
+        const coordinator = context.createCoordinator({
+            async *streamTurn(request) {
+                requests.push(request);
+                if (requests.length === 1) {
+                    yield toolCallChunk(request, 'blocked_patch_call', 'file.patch', {
+                        patch: addFilePatch('.blocked.txt', 'approved'),
+                    });
+                    yield completedChunk(request, 'approval required', ['blocked_patch_call']);
+                    return;
+                }
+                yield completedChunk(request, 'continued after resume');
+            },
+        });
+        await coordinator.steer({
+            inputId: 'input_blocked_resume',
+            messageId: 'message_blocked_resume',
+            prompt: 'apply blocked patch',
+        });
+
+        const blocked = await coordinator.wake();
+        const resumed = await coordinator.resume();
+        const events = await context.events();
+        const resumeCommand = events.find(
+            (event) => event.type === 'run.command.received' && event.run?.command === 'resume',
+        );
+
+        expect(blocked).toMatchObject({
+            status: 'blocked_on_approval',
+            runId: 'run_1',
+            reason: 'waiting for approval: file.patch',
+            errorCode: 'tool_failed',
+            toolCallId: 'blocked_patch_call',
+        });
+        expect(resumed).toMatchObject({ status: 'completed', runId: 'run_1' });
+        expect(resumeCommand?.run).toMatchObject({
+            command: 'resume',
+            state: 'blocked_on_approval',
+            runId: 'run_1',
+            reason: 'waiting for approval: file.patch',
+            errorCode: 'tool_failed',
+            toolCallId: 'blocked_patch_call',
+        });
+        await context.store.close();
+    });
+
     it('runs an explicit provider attempt even when no input is eligible', async () => {
         // Given
         const context = await openCoordinatorContext('session_run_explicit');
@@ -299,9 +347,10 @@ describe('SessionRunCoordinator', () => {
                                 started.resolve();
                                 return new Promise<IteratorResult<ProviderStreamChunk>>(() => {});
                             },
-                            return() {
+                            async return() {
                                 iteratorClosed = true;
-                                return cleanupFinished.promise.then(() => ({ done: true, value: undefined }));
+                                await cleanupFinished.promise;
+                                return { done: true, value: undefined };
                             },
                         };
                     },
@@ -392,4 +441,15 @@ function completedChunk(
         },
         finishReason: toolCallIds === undefined ? 'stop' : 'tool_calls',
     };
+}
+
+function addFilePatch(path: string, content: string): string {
+    return [
+        `diff --git a/${path} b/${path}`,
+        '--- /dev/null',
+        `+++ b/${path}`,
+        '@@ -0,0 +1 @@',
+        `+${content}`,
+        '',
+    ].join('\n');
 }

@@ -1,4 +1,9 @@
 export {
+    SessionArchiveValidationError,
+    type SessionArchiveValidationErrorCode,
+    validateSessionArchiveManifestForImport,
+} from './memory/session-archive-validation.js';
+export {
     type ApprovalProjection,
     type CodingReplayStep,
     type JsonlSessionReplayPrefixProjection,
@@ -9,6 +14,12 @@ export {
     type SessionBranchSummary,
     type SessionBranchTree,
     type SessionReplayProjection,
+    type SessionTreeArchiveExport,
+    type SessionTreeArchiveImport,
+    type SessionTreeCompactionBoundary,
+    type SessionTreeNode,
+    type SessionTreeProjection,
+    type SessionTreeProjectionDiagnostic,
     type ToolOutcomeProjection,
     type ToolOutcomeStatus,
 } from './session-replay.js';

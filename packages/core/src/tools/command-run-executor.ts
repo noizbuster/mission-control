@@ -8,6 +8,7 @@ export type CommandExecutionRequest = {
     readonly cwd: string;
     readonly signal: AbortSignal;
     readonly maxOutputBytes: number;
+    readonly env?: NodeJS.ProcessEnv;
 };
 
 export type CommandExecutionResult = {
@@ -30,7 +31,7 @@ export function executeCommand(request: CommandExecutionRequest): Promise<Comman
             cwd: request.cwd,
             shell: false,
             stdio: ['ignore', 'pipe', 'pipe'],
-            env: nonInteractiveEnv(),
+            env: request.env ?? nonInteractiveEnv(),
         });
         const stdout = createOutputCollector(request.maxOutputBytes);
         const stderr = createOutputCollector(request.maxOutputBytes);

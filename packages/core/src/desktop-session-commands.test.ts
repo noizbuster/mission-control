@@ -8,6 +8,7 @@ import {
     assertInterruptPreservesApprovalDiagnostics,
     assertResumesBlockedWorkAfterReopeningStore,
 } from './desktop-session-run-owner-scenarios.test-support.js';
+import { JsonlSessionEventStore } from './memory/jsonl-session-event-store.js';
 import { createDeterministicProvider } from './providers/deterministic-provider.js';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -89,7 +90,12 @@ describe('desktop session command service', () => {
             });
             expect(receipt.status).toBe('blocked');
             expect(replay.events.map((event) => event.type)).toEqual(
-                expect.arrayContaining(['approval.requested', 'approval.updated', 'approval.blocked']),
+                expect.arrayContaining([
+                    'permission.requested',
+                    'approval.requested',
+                    'approval.updated',
+                    'approval.blocked',
+                ]),
             );
             expect(replay.events.map((event) => event.type)).not.toContain('file.diff.applied');
             expect(replay.events.map((event) => event.type)).not.toContain('command.completed');
@@ -99,7 +105,7 @@ describe('desktop session command service', () => {
         }
     });
 
-    it('replays approved desktop approvals with patch diff and command metadata after restart', async () => {
+    it('replays stepwise desktop approvals after restart without minting ahead', async () => {
         // Given
         const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-desktop-allow-'));
         const workspaceRoot = await mkdtemp(join(tmpdir(), 'mctrl-desktop-allow-workspace-'));
@@ -146,13 +152,13 @@ describe('desktop session command service', () => {
             });
 
             // When
-            await restartedProcess.decideApproval({
+            const patchReceipt = await restartedProcess.decideApproval({
                 sessionId: 'session_desktop_allowed',
                 approvalId: 'approval_permission_call_patch_allowed',
                 state: 'approved',
                 reason: 'desktop approved patch',
             });
-            await restartedProcess.decideApproval({
+            const historicalCommandReceipt = await restartedProcess.decideApproval({
                 sessionId: 'session_desktop_allowed',
                 approvalId: 'approval_permission_call_test_allowed',
                 state: 'approved',
@@ -163,31 +169,20 @@ describe('desktop session command service', () => {
             const written = await readFile(join(workspaceRoot, '.mission-control-allowed.txt'), 'utf8');
             const replay = await readReplay(dataDir, 'session_desktop_allowed');
             expect(written).toBe('approved write\n');
+            expect(patchReceipt.status).toBe('blocked_on_approval');
+            expect(historicalCommandReceipt.status).toBe('idle');
             expect(replay.approvals).toEqual(
                 expect.arrayContaining([
                     expect.objectContaining({
                         approvalId: 'approval_permission_call_patch_allowed',
                         state: 'approved',
                     }),
-                    expect.objectContaining({
-                        approvalId: 'approval_permission_call_test_allowed',
-                        state: 'approved',
-                    }),
                 ]),
             );
             expect(replay.events.map((event) => event.type)).toEqual(
-                expect.arrayContaining([
-                    'approval.resumed',
-                    'file.diff.applied',
-                    'command.completed',
-                    'tool.completed',
-                ]),
+                expect.arrayContaining(['approval.resumed', 'file.diff.applied', 'tool.completed']),
             );
-            expect(replay.events.find((event) => event.type === 'command.completed')?.command).toMatchObject({
-                command: ['node', '--eval', "console.log('mission-control command.run harness ok')"],
-                status: 'completed',
-                exitCode: 0,
-            });
+            expect(replay.events.map((event) => event.type)).not.toContain('command.completed');
         } finally {
             await rm(dataDir, { recursive: true, force: true });
             await rm(workspaceRoot, { recursive: true, force: true });
@@ -208,5 +203,72 @@ describe('desktop session command service', () => {
 
     it('keeps approval diagnostics when an approval wait is interrupted', async () => {
         await assertInterruptPreservesApprovalDiagnostics();
+    });
+
+    it('does not mint approval.requested from historical tool calls during resume', async () => {
+        const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-desktop-no-backfill-'));
+        const sessionId = 'session_desktop_no_backfill';
+        const store = await JsonlSessionEventStore.open({ dataDir, sessionId, now: fixedNow });
+        const service = createDesktopSessionCommandService({
+            dataDir,
+            workspaceRoot: dataDir,
+            now: fixedNow,
+            provider: createDeterministicProvider([{ kind: 'response_completed', content: 'resume noop' }]),
+        });
+
+        try {
+            await store.append({
+                type: 'session.started',
+                timestamp: fixedNow(),
+                sessionId,
+                message: 'desktop session started',
+                nativeSidecarStatus: 'mock',
+                modelProviderSelection: defaultModelProviderSelection,
+            });
+            await store.append({
+                type: 'model.call.completed',
+                timestamp: fixedNow(),
+                sessionId,
+                message: 'tool call completed: file.patch',
+                nativeSidecarStatus: 'mock',
+                modelProviderSelection: defaultModelProviderSelection,
+                providerStreamChunk: {
+                    kind: 'tool_call_completed',
+                    requestId: 'request_no_backfill',
+                    sequence: 1,
+                    toolCall: {
+                        toolCallId: 'call_no_backfill',
+                        toolName: 'file.patch',
+                        argumentsJson: '{"patch":"diff --git a/a b/a"}',
+                    },
+                },
+            });
+            await store.append({
+                type: 'run.blocked',
+                timestamp: fixedNow(),
+                sessionId,
+                message: 'waiting for approval: file.patch',
+                nativeSidecarStatus: 'mock',
+                modelProviderSelection: defaultModelProviderSelection,
+                run: {
+                    command: 'run',
+                    state: 'blocked_on_approval',
+                    runId: 'run_no_backfill',
+                    reason: 'waiting for approval: file.patch',
+                    toolCallId: 'call_no_backfill',
+                },
+            });
+        } finally {
+            await store.close();
+        }
+
+        try {
+            await service.resumeRun({ sessionId });
+
+            const replay = await readReplay(dataDir, sessionId);
+            expect(replay.events.map((event) => event.type)).not.toContain('approval.requested');
+        } finally {
+            await rm(dataDir, { recursive: true, force: true });
+        }
     });
 });

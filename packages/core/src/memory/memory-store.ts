@@ -1,5 +1,18 @@
-import type { AbgGraphSnapshot, AgentEvent, AgentSnapshot } from '@mission-control/protocol';
+import type { AbgGraphSnapshot, AgentEvent, AgentSnapshot, ModelProviderSelection } from '@mission-control/protocol';
 import type { AbgTimelineEntry } from '../behavior/timeline.js';
+
+export type SessionCompactionRecordInput = {
+    readonly sessionId: string;
+    readonly timestamp: string;
+    readonly message: string;
+    readonly summary: string;
+    readonly boundaryEntryId: string;
+    readonly firstKeptEntryId: string;
+    readonly boundarySequence?: number;
+    readonly firstKeptSequence?: number;
+    readonly modelProviderSelection?: ModelProviderSelection;
+    readonly nativeSidecarStatus?: AgentEvent['nativeSidecarStatus'];
+};
 
 export interface MemoryStore {
     append(event: AgentEvent): Promise<void>;
@@ -7,5 +20,5 @@ export interface MemoryStore {
     getSnapshot(sessionId: string): Promise<AgentSnapshot>;
     getGraphSnapshot(sessionId: string, graphId: string): Promise<AbgGraphSnapshot>;
     getTimeline(sessionId: string): Promise<readonly AbgTimelineEntry[]>;
-    compact(sessionId: string): Promise<void>;
+    compact(input: SessionCompactionRecordInput): Promise<AgentEvent>;
 }

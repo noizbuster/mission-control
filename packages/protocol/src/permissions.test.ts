@@ -5,23 +5,38 @@ import {
     ApprovalPolicyDecisionSchema,
     ApprovalRecordSchema,
     PermissionDecisionSchema,
+    PermissionReplySchema,
     PermissionRequestSchema,
+    PermissionRuleDecisionSchema,
+    PermissionRuleSchema,
     PermissionStatusSchema,
 } from './schema.js';
 
 describe('permission protocol schemas', () => {
     it('validates permission request, decision, and status', () => {
         expect(PermissionStatusSchema.parse('deny')).toBe('deny');
+        expect(PermissionRuleDecisionSchema.parse('always')).toBe('always');
 
         const request = PermissionRequestSchema.parse({
             id: 'permission_1',
             action: 'file.write',
             reason: 'demo permission gate',
+            permission: {
+                kind: 'write',
+                patterns: ['src/file.ts'],
+                workspaceRoot: '/workspace',
+            },
         });
         const decision = PermissionDecisionSchema.parse({
             requestId: request.id,
             status: 'deny',
             reason: 'default JSON permission decision',
+            matchedRule: {
+                permission: 'write',
+                pattern: 'src/*',
+                decision: 'deny',
+                workspaceRoot: '/workspace',
+            },
         });
 
         const event = AgentEventSchema.parse({
@@ -36,6 +51,32 @@ describe('permission protocol schemas', () => {
 
         expect(event.permissionRequest?.action).toBe('file.write');
         expect(event.permissionDecision?.status).toBe('deny');
+        expect(event.permissionDecision?.matchedRule).toEqual(
+            PermissionRuleSchema.parse({
+                permission: 'write',
+                pattern: 'src/*',
+                decision: 'deny',
+                workspaceRoot: '/workspace',
+            }),
+        );
+    });
+
+    it('parses permission reply events for once always and deny replies', () => {
+        const reply = PermissionReplySchema.parse({
+            approvalId: 'approval_1',
+            reply: 'always',
+            reason: 'allow within workspace',
+            persist: true,
+        });
+        const event = AgentEventSchema.parse({
+            type: 'permission.replied',
+            timestamp: '2026-06-09T00:00:00.000Z',
+            sessionId: 'session_test',
+            permissionReply: reply,
+        });
+
+        expect(reply.reply).toBe('always');
+        expect(event.permissionReply?.persist).toBe(true);
     });
 
     it('parses unified approval lifecycle records for permission-gated effects', () => {

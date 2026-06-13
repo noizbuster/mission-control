@@ -22,7 +22,11 @@ describe('file.patch tool', () => {
         // Given
         const workspaceRoot = await createGitWorkspace();
         await trackedFile(workspaceRoot, 'notes.txt', 'before\n');
-        const registry = await createRegistry(workspaceRoot, denyPermission);
+        const requests: PermissionRequest[] = [];
+        const registry = await createRegistry(workspaceRoot, (request) => {
+            requests.push(request);
+            return denyPermission(request);
+        });
 
         // When
         const result = await invokePatch(registry, patchFor('notes.txt', 'before', 'after'));
@@ -30,6 +34,16 @@ describe('file.patch tool', () => {
         // Then
         expect(result.result.status).toBe('failed');
         expect(await readText(workspaceRoot, 'notes.txt')).toBe('before\n');
+        expect(requests).toMatchObject([
+            {
+                action: 'file.patch',
+                permission: {
+                    kind: 'patch',
+                    patterns: ['notes.txt'],
+                    workspaceRoot,
+                },
+            },
+        ]);
     });
 
     it('applies approved patches and records replayable diff events', async () => {

@@ -1,5 +1,10 @@
 import type { AgentEvent, ApprovalRecord, ModelProviderSelection, ToolCall } from '@mission-control/protocol';
 
+export type PendingApprovalContext = {
+    readonly record: ApprovalRecord;
+    readonly toolCall: ToolCall;
+};
+
 export function approvalEvent(input: {
     readonly type: 'approval.requested' | 'approval.updated' | 'approval.blocked' | 'approval.resumed';
     readonly sessionId: string;
@@ -16,19 +21,6 @@ export function approvalEvent(input: {
         nativeSidecarStatus: 'mock',
         modelProviderSelection: input.modelProviderSelection,
         approvalRecord: input.record,
-    };
-}
-
-export function pendingRecord(toolCall: ToolCall, requestedAt: string): ApprovalRecord {
-    const requestId = requestIdForToolCall(toolCall.toolCallId);
-    return {
-        approvalId: approvalIdForToolCall(toolCall.toolCallId),
-        requestId,
-        policyDecision: 'requires_approval',
-        state: 'pending',
-        subject: { kind: 'tool', id: toolCall.toolName },
-        requestedAt,
-        reason: `approve ${toolCall.toolName}`,
     };
 }
 
@@ -76,10 +68,33 @@ export function toolCallsFromEvents(events: readonly AgentEvent[]): readonly Too
     });
 }
 
-export function toolCallForApproval(events: readonly AgentEvent[], approvalId: string): ToolCall | undefined {
-    return [...toolCallsFromEvents(events)]
-        .reverse()
-        .find((toolCall) => approvalIdForToolCall(toolCall.toolCallId) === approvalId);
+export function pendingApprovalContextForCurrentRun(
+    events: readonly AgentEvent[],
+    approvalId: string,
+): PendingApprovalContext | undefined {
+    const record = latestApprovalRecord(events, approvalId);
+    if (record?.state !== 'pending') {
+        return undefined;
+    }
+    const currentBlockedToolCallId = latestBlockedToolCallId(events);
+    if (currentBlockedToolCallId === undefined) {
+        return undefined;
+    }
+    const toolCallId = toolCallIdForRequestId(record.requestId);
+    if (toolCallId === undefined || toolCallId !== currentBlockedToolCallId) {
+        return undefined;
+    }
+    if (!hasRuntimeOwnedPermissionRequest(events, record.requestId)) {
+        return undefined;
+    }
+    if (!hasRuntimeOwnedApprovalRequest(events, record.approvalId, record.requestId)) {
+        return undefined;
+    }
+    const toolCall = toolCallById(events, toolCallId);
+    if (toolCall === undefined) {
+        return undefined;
+    }
+    return { record, toolCall };
 }
 
 export function latestApprovalRecord(events: readonly AgentEvent[], approvalId: string): ApprovalRecord | undefined {
@@ -108,8 +123,45 @@ export function approvalIdForToolCall(toolCallId: string): string {
     return `approval_${requestIdForToolCall(toolCallId)}`;
 }
 
-function requestIdForToolCall(toolCallId: string): string {
+export function requestIdForToolCall(toolCallId: string): string {
     return `permission_${toolCallId}`;
+}
+
+function toolCallById(events: readonly AgentEvent[], toolCallId: string): ToolCall | undefined {
+    return [...toolCallsFromEvents(events)].reverse().find((toolCall) => toolCall.toolCallId === toolCallId);
+}
+
+function latestBlockedToolCallId(events: readonly AgentEvent[]): string | undefined {
+    const latestRunEvent = [...events]
+        .reverse()
+        .find((event) => event.run?.state !== undefined && isRunStateEvent(event.type));
+    if (latestRunEvent?.type !== 'run.blocked' || latestRunEvent.run?.state !== 'blocked_on_approval') {
+        return undefined;
+    }
+    return latestRunEvent.run.toolCallId;
+}
+
+function hasRuntimeOwnedPermissionRequest(events: readonly AgentEvent[], requestId: string): boolean {
+    return events.some(
+        (event) =>
+            event.type === 'permission.requested' &&
+            event.permissionRequest?.id === requestId &&
+            event.permissionDecision?.requestId === requestId,
+    );
+}
+
+function hasRuntimeOwnedApprovalRequest(events: readonly AgentEvent[], approvalId: string, requestId: string): boolean {
+    return events.some((event) => {
+        return (
+            event.type === 'approval.requested' &&
+            event.approvalRecord?.approvalId === approvalId &&
+            event.approvalRecord.requestId === requestId
+        );
+    });
+}
+
+function toolCallIdForRequestId(requestId: string): string | undefined {
+    return requestId.startsWith('permission_') ? requestId.slice('permission_'.length) : undefined;
 }
 
 function isTerminalRunEvent(type: AgentEvent['type']): boolean {
@@ -117,6 +169,20 @@ function isTerminalRunEvent(type: AgentEvent['type']): boolean {
         case 'run.completed':
         case 'run.failed':
         case 'run.interrupted':
+            return true;
+        default:
+            return false;
+    }
+}
+
+function isRunStateEvent(type: AgentEvent['type']): boolean {
+    switch (type) {
+        case 'run.started':
+        case 'run.completed':
+        case 'run.interrupted':
+        case 'run.failed':
+        case 'run.blocked':
+        case 'run.idle':
             return true;
         default:
             return false;

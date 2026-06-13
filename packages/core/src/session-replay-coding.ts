@@ -20,13 +20,18 @@ export function projectCodingSteps(envelopes: readonly AgentEventEnvelope[]): re
 export function projectReplayDiagnostics(envelopes: readonly AgentEventEnvelope[]): readonly ReplayDiagnostic[] {
     const toolNames = providerToolNamesByCallId(envelopes);
     const continuationSequences = continuationMessageSequences(envelopes);
+    const blockedApprovalToolCallIds = blockedApprovalToolCallIdsSet(envelopes);
     const stoppedAfter = lastStoppedSequence(envelopes);
     if (stoppedAfter === undefined) {
         return [];
     }
     return envelopes.flatMap((envelope) => {
         const result = envelope.event.toolResult;
-        if (result === undefined || hasContinuationAfter(continuationSequences, envelope.sequence)) {
+        if (
+            result === undefined ||
+            blockedApprovalToolCallIds.has(result.toolCallId) ||
+            hasContinuationAfter(continuationSequences, envelope.sequence)
+        ) {
             return [];
         }
         return [
@@ -190,11 +195,25 @@ function providerToolNamesByCallId(envelopes: readonly AgentEventEnvelope[]): Re
     return toolNames;
 }
 
+function blockedApprovalToolCallIdsSet(envelopes: readonly AgentEventEnvelope[]): ReadonlySet<string> {
+    const toolCallIds = new Set<string>();
+    for (const envelope of envelopes) {
+        if (envelope.event.type !== 'run.blocked' || envelope.event.run?.state !== 'blocked_on_approval') {
+            continue;
+        }
+        const toolCallId = envelope.event.run.toolCallId;
+        if (toolCallId !== undefined) {
+            toolCallIds.add(toolCallId);
+        }
+    }
+    return toolCallIds;
+}
+
 function continuationMessageSequences(envelopes: readonly AgentEventEnvelope[]): readonly number[] {
     const sequences: number[] = [];
     let awaitingToolContinuation = false;
     for (const envelope of envelopes) {
-        if (startsNewProviderInput(envelope.event)) {
+        if (resetsContinuationTracking(envelope.event, awaitingToolContinuation)) {
             awaitingToolContinuation = false;
         }
         const providerTurnId = envelope.event.transcript?.providerTurnId;
@@ -212,8 +231,14 @@ function continuationMessageSequences(envelopes: readonly AgentEventEnvelope[]):
     return sequences;
 }
 
-function startsNewProviderInput(event: AgentEvent): boolean {
-    return event.type === 'run.started' || event.type === 'prompt.promoted';
+function resetsContinuationTracking(event: AgentEvent, awaitingToolContinuation: boolean): boolean {
+    if (event.type === 'prompt.promoted') {
+        return true;
+    }
+    if (event.type !== 'run.started') {
+        return false;
+    }
+    return !(awaitingToolContinuation && event.run?.command === 'resume');
 }
 
 function lastStoppedSequence(envelopes: readonly AgentEventEnvelope[]): number | undefined {

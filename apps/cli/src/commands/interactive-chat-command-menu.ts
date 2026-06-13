@@ -41,6 +41,26 @@ const slashCommandChoices = [
         description: 'List available models',
     },
     {
+        id: '/new',
+        insertText: '/new ',
+        description: 'Start a new durable session',
+    },
+    {
+        id: '/session',
+        insertText: '/session ',
+        description: 'Show or switch the active session',
+    },
+    {
+        id: '/sessions',
+        insertText: '/sessions',
+        description: 'List durable sessions',
+    },
+    {
+        id: '/tree',
+        insertText: '/tree',
+        description: 'Show the current session tree',
+    },
+    {
         id: '/queue',
         insertText: '/queue ',
         description: 'Queue a follow-up prompt',
@@ -56,6 +76,31 @@ const slashCommandChoices = [
         description: 'Resume pending work',
     },
     {
+        id: '/compact',
+        insertText: '/compact',
+        description: 'Summarize older session history',
+    },
+    {
+        id: '/trust',
+        insertText: '/trust',
+        description: 'Trust this workspace',
+    },
+    {
+        id: '/trust status',
+        insertText: '/trust status',
+        description: 'Show workspace trust',
+    },
+    {
+        id: '/trust deny',
+        insertText: '/trust deny',
+        description: 'Deny workspace trust',
+    },
+    {
+        id: '/trust reset',
+        insertText: '/trust reset',
+        description: 'Reset workspace trust',
+    },
+    {
         id: '/interrupt',
         insertText: '/interrupt',
         description: 'Interrupt the active run',
@@ -68,7 +113,17 @@ const slashCommandChoices = [
     {
         id: '/branch',
         insertText: '/branch ',
-        description: 'Continue from a message id',
+        description: 'Select a branch entry or continue from a parent message id',
+    },
+    {
+        id: '/fork',
+        insertText: '/fork ',
+        description: 'Fork a durable session from a tree entry',
+    },
+    {
+        id: '/clone',
+        insertText: '/clone ',
+        description: 'Clone the current durable session',
     },
 ] as const satisfies readonly SlashCommandMenuChoice[];
 

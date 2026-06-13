@@ -1,8 +1,12 @@
-import type { AgentEvent, DiffFile, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
+import type { AgentEvent } from '@mission-control/protocol';
+import {
+    executeFileMutation,
+    fileMutationDiffEvents,
+    partialFileMutationAppliedEvents,
+    preflightTextFileMutationTargets,
+} from './file-mutation.js';
 import { applyParsedPatch } from './file-patch-apply.js';
-import { assertTextPatchTarget } from './file-patch-binary.js';
 import { filePatchFailure } from './file-patch-errors.js';
-import { isDirtyTrackedTarget } from './file-patch-git.js';
 import { type ParsedPatchFile, parseUnifiedPatch, targetPath, toDiffFiles } from './file-patch-parser.js';
 import { createPatchWorkspaceGuard, type PatchTarget } from './file-patch-paths.js';
 import {
@@ -19,7 +23,8 @@ import {
 } from './file-patch-schemas.js';
 import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
 import { constants } from 'node:fs';
-import { open, rm } from 'node:fs/promises';
+import { mkdir, open, rm } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
 export type { FilePatchToolOptions } from './file-patch-schemas.js';
 
@@ -59,81 +64,29 @@ async function applyPatchTool(
         throw filePatchFailure('patch_too_large', `patch exceeds ${options.maxPatchBytes} bytes`);
     }
     const parsedPatch = parseUnifiedPatch(input.patch);
-    const targets = await preflightTargets(options.workspaceRoot, guard, parsedPatch, options.allowDirtyPaths);
-    await requireApproval(options, toolCallId, parsedPatch);
-    const revalidatedTargets = await preflightTargets(
-        options.workspaceRoot,
-        guard,
-        parsedPatch,
-        options.allowDirtyPaths,
-    );
-    assertStableTargets(targets, revalidatedTargets);
-    return applyTargets(parsedPatch, revalidatedTargets, toolCallId);
-}
-
-async function preflightTargets(
-    workspaceRoot: string,
-    guard: Awaited<ReturnType<typeof createPatchWorkspaceGuard>>,
-    parsedPatch: readonly ParsedPatchFile[],
-    allowDirtyPaths: readonly string[],
-): Promise<readonly PatchTarget[]> {
-    const targets: PatchTarget[] = [];
-    for (const file of parsedPatch) {
-        const mode = file.changeKind === 'added' ? 'new' : 'existing';
-        const target = await guard.resolveTarget(targetPath(file), mode);
-        await assertTextPatchTarget(target);
-        if (
-            target.exists &&
-            !allowDirtyPaths.includes(target.relativePath) &&
-            (await isDirtyTrackedTarget(workspaceRoot, target.relativePath))
-        ) {
-            throw filePatchFailure('dirty_target', `dirty tracked target refused: ${target.relativePath}`);
-        }
-        targets.push(target);
-    }
-    return targets;
-}
-
-function assertStableTargets(
-    approvedTargets: readonly PatchTarget[],
-    revalidatedTargets: readonly PatchTarget[],
-): void {
-    if (approvedTargets.length !== revalidatedTargets.length) {
-        throw filePatchFailure('patch_apply_failed', 'patch target count changed after approval');
-    }
-    for (const [index, approvedTarget] of approvedTargets.entries()) {
-        const revalidatedTarget = revalidatedTargets[index];
-        if (revalidatedTarget === undefined) {
-            throw filePatchFailure(
-                'patch_apply_failed',
-                `missing revalidated target for ${approvedTarget.relativePath}`,
-            );
-        }
-        if (
-            approvedTarget.absolutePath !== revalidatedTarget.absolutePath ||
-            approvedTarget.relativePath !== revalidatedTarget.relativePath ||
-            approvedTarget.exists !== revalidatedTarget.exists
-        ) {
-            throw filePatchFailure('workspace_escape', `target changed after approval: ${approvedTarget.relativePath}`);
-        }
-    }
-}
-
-async function requireApproval(
-    options: ResolvedFilePatchToolOptions,
-    toolCallId: string,
-    parsedPatch: readonly ParsedPatchFile[],
-): Promise<void> {
-    const request: PermissionRequest = {
-        id: `permission_${toolCallId}`,
-        action: 'file.patch',
-        reason: `apply patch to ${parsedPatch.map(targetPath).join(', ')}`,
-    };
-    const decision = await options.requestPermission(request);
-    if (decision.status === 'allow') {
-        return;
-    }
-    throw filePatchFailure(errorCodeForDecision(decision), decision.reason ?? `approval refused: ${decision.status}`);
+    return executeFileMutation({
+        queueKey: guard.root,
+        approval: {
+            workspaceRoot: options.workspaceRoot,
+            toolCallId,
+            action: 'file.patch',
+            reason: `apply patch to ${parsedPatch.map(targetPath).join(', ')}`,
+            permission: 'patch',
+            patterns: parsedPatch.map(targetPath),
+            requestPermission: options.requestPermission,
+        },
+        preflight: () =>
+            preflightTextFileMutationTargets({
+                workspaceRoot: options.workspaceRoot,
+                guard,
+                targets: parsedPatch.map((file) => ({
+                    path: targetPath(file),
+                    mode: file.changeKind === 'added' ? 'new' : 'existing',
+                })),
+                allowDirtyPaths: options.allowDirtyPaths,
+            }),
+        apply: (targets) => applyTargets(parsedPatch, targets, toolCallId),
+    });
 }
 
 async function applyTargets(
@@ -176,15 +129,11 @@ function partialAppliedEvents(
     toolCallId: string,
     appliedPatchFiles: readonly ParsedPatchFile[],
 ): readonly AgentEvent[] {
-    return [
-        diffEvent(
-            'file.diff.applied',
-            new Date().toISOString(),
-            toolCallId,
-            'patch partially applied',
-            diffFileOutput(toDiffFiles(appliedPatchFiles)),
-        ),
-    ];
+    return partialFileMutationAppliedEvents(
+        diffFileOutput(toDiffFiles(appliedPatchFiles)),
+        toolCallId,
+        'patch partially applied',
+    );
 }
 
 async function applyOneFile(file: ParsedPatchFile, target: PatchTarget): Promise<void> {
@@ -207,6 +156,9 @@ async function readExistingFile(target: PatchTarget): Promise<string> {
 }
 
 async function writePatchedFile(target: PatchTarget, content: string): Promise<void> {
+    if ((target.createdParentDirectories?.length ?? 0) > 0) {
+        await mkdir(dirname(target.absolutePath), { recursive: true });
+    }
     const flags = target.exists
         ? constants.O_WRONLY | constants.O_TRUNC | constants.O_NOFOLLOW
         : constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW;
@@ -219,32 +171,10 @@ async function writePatchedFile(target: PatchTarget, content: string): Promise<v
 }
 
 function patchDiffEvents(output: FilePatchOutput, context: { readonly toolCallId: string }): readonly AgentEvent[] {
-    const timestamp = new Date().toISOString();
-    return [
-        diffEvent('file.diff.proposed', timestamp, context.toolCallId, 'patch proposed', output.diffFiles),
-        diffEvent('file.diff.applied', timestamp, context.toolCallId, 'patch applied', output.diffFiles),
-    ];
-}
-
-function diffEvent(
-    type: 'file.diff.proposed' | 'file.diff.applied',
-    timestamp: string,
-    toolCallId: string,
-    message: string,
-    diffFiles: readonly DiffFile[],
-): AgentEvent {
-    return {
-        type,
-        timestamp,
-        taskId: toolCallId,
-        message,
-        nativeSidecarStatus: 'mock',
-        diffFiles: [...diffFiles],
-    };
-}
-
-function errorCodeForDecision(decision: PermissionDecision): 'approval_denied' | 'approval_required' {
-    return decision.status === 'deny' ? 'approval_denied' : 'approval_required';
+    return fileMutationDiffEvents(output.diffFiles, context.toolCallId, {
+        proposed: 'patch proposed',
+        applied: 'patch applied',
+    });
 }
 
 function errorMessage(error: unknown): string {

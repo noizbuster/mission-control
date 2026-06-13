@@ -21,13 +21,20 @@ export type RunOwnerPromptInput = {
     readonly observeStoredEvent: (event: AgentEvent) => void;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly nonInteractiveAutomationPolicy?: NonInteractiveAutomationPolicy;
+    readonly throwOnTerminalFailure?: boolean;
 };
 
 export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> {
     const taskId = 'task_prompt_1';
     let finalMessage: string | undefined;
     const gate = new PermissionGate({
-        resolveDecision: (request) => createCliPermissionDecision(request, input.nonInteractiveAutomationPolicy),
+        resolveDecision: (request) =>
+            createCliPermissionDecision(request, {
+                ...(input.nonInteractiveAutomationPolicy !== undefined
+                    ? { automationPolicy: input.nonInteractiveAutomationPolicy }
+                    : {}),
+                workspaceRoot: input.workspaceRoot,
+            }),
         emit: input.emitEvent,
         now: () => new Date().toISOString(),
         pendingApprovalBehavior: 'block',
@@ -37,6 +44,8 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
         store: input.store,
         provider: input.provider,
         modelProviderSelection: input.modelProviderSelection,
+        haltOnFailedToolSettlement: true,
+        projectContext: { workspaceRoot: input.workspaceRoot },
         toolRegistry: await createNonInteractiveToolRegistry({
             workspaceRoot: input.workspaceRoot,
             requestPermission: (request) =>
@@ -66,12 +75,13 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
         return;
     }
     if (receipt.status === 'blocked_on_approval') {
-        emitTaskEvent(input, taskId, 'task.failed', receipt.reason ?? 'approval required');
         return;
     }
     if (receipt.status === 'failed' || receipt.status === 'interrupted') {
         emitTaskEvent(input, taskId, 'task.failed', receipt.reason ?? `run ${receipt.status}`);
-        throw new Error(receipt.reason ?? `run ${receipt.status}`);
+        if (input.throwOnTerminalFailure ?? true) {
+            throw new Error(receipt.reason ?? `run ${receipt.status}`);
+        }
     }
 }
 

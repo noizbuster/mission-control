@@ -56,12 +56,15 @@ pnpm dev:cli -- models local
 pnpm dev:sidecar
 pnpm dev:desktop
 pnpm --filter @mission-control/cli build
+pnpm smoke:coding-agent-built-dist
 node apps/cli/dist/index.js --no-tui
 ```
 
 ## Interactive chat commands
 
 `mctrl` opens a chat prompt by default. `/model opens a searchable model picker`, and `/model provider/model selects the model for the current chat only`. The selection updates the active chat model and does not persist credentials or auth defaults.
+
+Session navigation stays on the durable JSONL session surface: `/new [session-id]` starts a new durable session, `/session <session-id>` switches to an existing durable session, `/sessions` lists durable sessions, `/tree` shows the durable session tree and active leaf, `/branch <entry-id>` selects an existing branch leaf, `/branch <message-id> <prompt>` continues from a parent message in a new branch, `/fork <entry-id> [session-id]` forks from a tree entry into a new durable session, and `/clone [session-id]` clones the current durable session into a fresh one.
 
 `$skill args records a scaffold agent skill invocation` inside Mission Control. It does not run actual Codex host skills, spawn agents, or make provider calls. Normal prompt text still sends a prompt, and Ctrl+C twice exits.
 
@@ -121,6 +124,8 @@ The catalog also exposes the local provider/model variant `local/local-echo/defa
 ## Coding Agent Runtime
 
 The coding-agent MVP now includes durable chat sessions, provider streaming, approval-gated local tools, replay projections, bounded graph orchestration, CLI chat, and core desktop approval services.
+
+For release-adjacent local verification, `pnpm smoke:coding-agent-built-dist` runs the built-dist coding-agent smoke against a temporary trusted workspace and temporary auth/data paths, prints the captured command output plus the temp `sessions/<session-id>.jsonl` path, and fails if either the blocked replay preview or the resumed replay emits diagnostics. This is intentionally a built-dist coding-agent smoke, not a tarball artifact smoke; Todo 18 owns the tarball artifact smoke.
 
 Session storage:
 

@@ -23,6 +23,7 @@ import {
     searchParametersJsonSchema,
 } from './read-tools-schemas.js';
 import { searchRepoText } from './read-tools-search.js';
+import { permissionRequest, requestToolPermission } from './tool-permissions.js';
 import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
 import { open, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -33,14 +34,26 @@ type ReadOnlyRepoToolRegistrations = readonly [
     ToolRegistration<ReadInput, ReadOutput>,
     ToolRegistration<ListInput, ListOutput>,
     ToolRegistration<SearchInput, SearchOutput>,
+    ToolRegistration<ReadInput, ReadOutput>,
+    ToolRegistration<ListInput, ListOutput>,
+    ToolRegistration<SearchInput, SearchOutput>,
+    ToolRegistration<SearchInput, SearchOutput>,
 ];
 
 export async function registerReadOnlyRepoTools(
     registry: ToolRegistry,
     options: ReadOnlyRepoToolOptions,
 ): Promise<readonly ToolAdvertisement[]> {
-    const [readTool, listTool, searchTool] = await createReadOnlyRepoToolRegistrations(options);
-    return [registry.register(readTool), registry.register(listTool), registry.register(searchTool)];
+    const registrations = await createReadOnlyRepoToolRegistrations(options);
+    return [
+        registry.register(registrations[0]),
+        registry.register(registrations[1]),
+        registry.register(registrations[2]),
+        registry.register(registrations[3]),
+        registry.register(registrations[4]),
+        registry.register(registrations[5]),
+        registry.register(registrations[6]),
+    ];
 }
 
 export async function createReadOnlyRepoToolRegistrations(
@@ -50,7 +63,16 @@ export async function createReadOnlyRepoToolRegistrations(
     const guard = await createWorkspaceGuard(options.workspaceRoot, {
         allowDenylistedPaths: resolved.allowDenylistedPaths,
     });
-    return [createReadTool(guard, resolved), createListTool(guard, resolved), createSearchTool(guard, resolved)];
+    const registrations: ReadOnlyRepoToolRegistrations = [
+        createReadTool(guard, resolved),
+        createListTool(guard, resolved),
+        createSearchTool(guard, resolved),
+        createReadAliasTool(guard, resolved),
+        createListAliasTool(guard, resolved),
+        createSearchAliasTool(guard, resolved, 'grep', 'Search text files inside the workspace.'),
+        createSearchAliasTool(guard, resolved, 'find', 'Find matching text inside workspace files.'),
+    ];
+    return registrations;
 }
 
 function createReadTool(
@@ -65,7 +87,7 @@ function createReadTool(
         inputSchema: readInputSchema,
         outputSchema: readOutputSchema,
         outputLimit: { maxModelOutputChars: options.maxModelOutputChars },
-        execute: (input) => readWorkspaceFile(guard, options, input),
+        execute: (input, context) => readWorkspaceFile(guard, options, input, context.toolName, context.toolCallId),
         toModelOutput: readModelOutput,
     };
 }
@@ -82,7 +104,8 @@ function createListTool(
         inputSchema: listInputSchema,
         outputSchema: listOutputSchema,
         outputLimit: { maxModelOutputChars: options.maxModelOutputChars },
-        execute: (input) => listWorkspaceDirectory(guard, options, input),
+        execute: (input, context) =>
+            listWorkspaceDirectory(guard, options, input, context.toolName, context.toolCallId),
         toModelOutput: (output) =>
             output.entries.map((entry) => `${entry.name}${entry.kind === 'directory' ? '/' : ''}`).join('\n'),
     };
@@ -100,7 +123,83 @@ function createSearchTool(
         inputSchema: searchInputSchema,
         outputSchema: searchOutputSchema,
         outputLimit: { maxModelOutputChars: options.maxModelOutputChars },
-        execute: async (input) => {
+        execute: async (input, context) => {
+            await requireReadPermission(options, context.toolCallId, context.toolName, [
+                input.path ?? '.',
+                input.include ?? '.',
+            ]);
+            const result = await searchRepoText(guard, searchInputForExecution(input), {
+                maxMatches: options.maxSearchMatches,
+                maxLineChars: options.maxSearchLineChars,
+            });
+            return {
+                kind: 'search',
+                pattern: input.pattern,
+                path: input.path ?? '.',
+                matches: [...result.matches],
+                truncated: result.totalMatches > result.matches.length,
+                totalMatches: result.totalMatches,
+            };
+        },
+        toModelOutput: searchModelOutput,
+    };
+}
+
+function createReadAliasTool(
+    guard: WorkspaceGuard,
+    options: ResolvedReadOnlyRepoToolOptions,
+): ToolRegistration<ReadInput, ReadOutput> {
+    return {
+        name: 'read',
+        description: 'Read a text file inside the workspace.',
+        capabilityClasses: ['repo.read'],
+        parametersJsonSchema: readParametersJsonSchema(),
+        inputSchema: readInputSchema,
+        outputSchema: readOutputSchema,
+        outputLimit: { maxModelOutputChars: options.maxModelOutputChars },
+        execute: (input, context) => readWorkspaceFile(guard, options, input, context.toolName, context.toolCallId),
+        toModelOutput: readModelOutput,
+    };
+}
+
+function createListAliasTool(
+    guard: WorkspaceGuard,
+    options: ResolvedReadOnlyRepoToolOptions,
+): ToolRegistration<ListInput, ListOutput> {
+    return {
+        name: 'ls',
+        description: 'List directory entries inside the workspace.',
+        capabilityClasses: ['repo.read'],
+        parametersJsonSchema: listParametersJsonSchema(),
+        inputSchema: listInputSchema,
+        outputSchema: listOutputSchema,
+        outputLimit: { maxModelOutputChars: options.maxModelOutputChars },
+        execute: (input, context) =>
+            listWorkspaceDirectory(guard, options, input, context.toolName, context.toolCallId),
+        toModelOutput: (output) =>
+            output.entries.map((entry) => `${entry.name}${entry.kind === 'directory' ? '/' : ''}`).join('\n'),
+    };
+}
+
+function createSearchAliasTool(
+    guard: WorkspaceGuard,
+    options: ResolvedReadOnlyRepoToolOptions,
+    name: 'grep' | 'find',
+    description: string,
+): ToolRegistration<SearchInput, SearchOutput> {
+    return {
+        name,
+        description,
+        capabilityClasses: ['repo.read'],
+        parametersJsonSchema: searchParametersJsonSchema(),
+        inputSchema: searchInputSchema,
+        outputSchema: searchOutputSchema,
+        outputLimit: { maxModelOutputChars: options.maxModelOutputChars },
+        execute: async (input, context) => {
+            await requireReadPermission(options, context.toolCallId, context.toolName, [
+                input.path ?? '.',
+                input.include ?? '.',
+            ]);
             const result = await searchRepoText(guard, searchInputForExecution(input), {
                 maxMatches: options.maxSearchMatches,
                 maxLineChars: options.maxSearchLineChars,
@@ -130,7 +229,10 @@ async function readWorkspaceFile(
     guard: WorkspaceGuard,
     options: ResolvedReadOnlyRepoToolOptions,
     input: ReadInput,
+    action: string,
+    toolCallId: string,
 ): Promise<ReadOutput> {
+    await requireReadPermission(options, toolCallId, action, [input.path]);
     const target = await guard.resolveExisting(input.path);
     if (!target.stats.isFile()) {
         throw repoToolFailure('not_file', `path is not a file: ${input.path}`);
@@ -156,7 +258,10 @@ async function listWorkspaceDirectory(
     guard: WorkspaceGuard,
     options: ResolvedReadOnlyRepoToolOptions,
     input: ListInput,
+    action: string,
+    toolCallId: string,
 ): Promise<ListOutput> {
+    await requireReadPermission(options, toolCallId, action, [input.path ?? '.']);
     const target = await guard.resolveExisting(input.path ?? '.');
     if (!target.stats.isDirectory()) {
         throw repoToolFailure('not_directory', `path is not a directory: ${input.path ?? '.'}`);
@@ -204,4 +309,35 @@ function entryKind(entry: { isFile: () => boolean; isDirectory: () => boolean; i
     if (entry.isFile()) return 'file' as const;
     if (entry.isSymbolicLink()) return 'symlink' as const;
     return 'other' as const;
+}
+
+async function requireReadPermission(
+    options: ReadOnlyRepoToolOptions,
+    toolCallId: string,
+    action: string,
+    patterns: readonly string[],
+): Promise<void> {
+    if (options.requestPermission === undefined) {
+        return;
+    }
+    const decision = await requestToolPermission(
+        options.requestPermission,
+        permissionRequest({
+            toolCallId,
+            action,
+            reason: `${action} within workspace`,
+            permission: 'read',
+            patterns,
+            workspaceRoot: options.workspaceRoot,
+        }),
+    );
+    if (decision.status === 'allow') {
+        return;
+    }
+    throw repoToolFailure(
+        'read_failed',
+        `${decision.status === 'deny' ? 'permission_denied' : 'approval_required'}: ${
+            decision.reason ?? `${action} denied`
+        }`,
+    );
 }

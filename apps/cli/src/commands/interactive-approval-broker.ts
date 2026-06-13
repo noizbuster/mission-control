@@ -1,62 +1,62 @@
-import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
+import { PermissionRuleStore, PermissionSession } from '@mission-control/core';
+import type { ApprovalRecord, PermissionDecision, PermissionReply, PermissionRequest } from '@mission-control/protocol';
+import { cliPermissionRules } from './cli-permission-policy.js';
 import type { InteractiveToolOptions } from './interactive-coding-tools.js';
 
 export type InteractiveApprovalBroker = {
     readonly requestApproval: (request: PermissionRequest) => Promise<PermissionDecision>;
     readonly requestPermission: (request: PermissionRequest) => Promise<PermissionDecision>;
+    readonly primeApproval: (requestId: string, reason?: string) => void;
     readonly answer: (line: string) => boolean;
     readonly cancel: (reason: string) => void;
     readonly hasPending: () => boolean;
 };
 
+type PendingApproval = {
+    readonly request: PermissionRequest;
+    readonly record: ApprovalRecord;
+    readonly resolve: (decision: PermissionDecision) => void;
+};
+
 export function createInteractiveApprovalBroker(options: InteractiveToolOptions): InteractiveApprovalBroker {
+    const permissionSession = new PermissionSession({
+        builtInRules: cliPermissionRules(),
+        persistedRuleStore: new PermissionRuleStore(),
+    });
     let pending: PendingApproval | undefined;
     let cancelledReason: string | undefined;
     const queuedAnswers: string[] = [];
-    const cachedDecisions = new Map<string, PermissionDecision>();
+    const primedApprovals = new Map<string, string | undefined>();
 
     return {
         requestApproval: (request) =>
-            requestApproval(
+            requestPermission(
                 options,
+                permissionSession,
                 request,
+                queuedAnswers,
+                primedApprovals,
+                () => pending,
+                () => cancelledReason,
                 (next) => {
                     pending = next;
                 },
-                queuedAnswers,
-                cachedDecisions,
             ),
-        requestPermission: (request) => {
-            const cached = cachedDecisions.get(request.action);
-            if (cached !== undefined) {
-                cachedDecisions.delete(request.action);
-                return Promise.resolve({ ...cached, requestId: request.id });
-            }
-            if (pending !== undefined) {
-                return Promise.resolve({
-                    requestId: request.id,
-                    status: 'deny',
-                    reason: 'another approval is already pending',
-                });
-            }
-            options.emitEvent(eventWithPermission(options, request));
-            options.output.write(`Approve ${request.action}? [y/N]:`);
-            const queuedAnswer = queuedAnswers.shift();
-            if (queuedAnswer !== undefined) {
-                const decision = decisionForLine(request, queuedAnswer);
-                options.output.write('\n');
-                options.output.write(
-                    decision.status === 'allow' ? `Approved ${request.action}\n` : `Denied ${request.action}\n`,
-                );
-                options.emitEvent(eventWithDecision(options, decision));
-                return Promise.resolve(decision);
-            }
-            if (cancelledReason !== undefined) {
-                return Promise.resolve({ requestId: request.id, status: 'deny', reason: cancelledReason });
-            }
-            return new Promise((resolve) => {
-                pending = { request, resolve };
-            });
+        requestPermission: (request) =>
+            requestPermission(
+                options,
+                permissionSession,
+                request,
+                queuedAnswers,
+                primedApprovals,
+                () => pending,
+                () => cancelledReason,
+                (next) => {
+                    pending = next;
+                },
+            ),
+        primeApproval: (requestId, reason) => {
+            primedApprovals.set(requestId, reason);
         },
         answer: (line) => {
             if (pending === undefined) {
@@ -68,18 +68,7 @@ export function createInteractiveApprovalBroker(options: InteractiveToolOptions)
             }
             const current = pending;
             pending = undefined;
-            const decision = decisionForLine(current.request, line);
-            options.output.write('\n');
-            options.output.write(
-                decision.status === 'allow'
-                    ? `Approved ${current.request.action}\n`
-                    : `Denied ${current.request.action}\n`,
-            );
-            options.emitEvent(eventWithDecision(options, decision));
-            if (current.cacheAction !== undefined) {
-                cachedDecisions.set(current.cacheAction, decision);
-            }
-            current.resolve(decision);
+            void resolvePendingApproval(options, permissionSession, current, parseReply(line));
             return true;
         },
         cancel: (reason) => {
@@ -89,85 +78,205 @@ export function createInteractiveApprovalBroker(options: InteractiveToolOptions)
             }
             const current = pending;
             pending = undefined;
-            const decision: PermissionDecision = { requestId: current.request.id, status: 'deny', reason };
-            options.output.write(`\nDenied ${current.request.action}\n`);
-            options.emitEvent(eventWithDecision(options, decision));
-            current.resolve(decision);
+            void resolvePendingApproval(options, permissionSession, current, {
+                approvalId: approvalIdFor(current.request),
+                reply: 'deny',
+                reason,
+            });
         },
         hasPending: () => pending !== undefined,
     };
 }
 
-type PendingApproval = {
-    readonly request: PermissionRequest;
-    readonly resolve: (decision: PermissionDecision) => void;
-    readonly cacheAction?: string;
-};
-
-function requestApproval(
+async function requestPermission(
     options: InteractiveToolOptions,
+    permissionSession: PermissionSession,
     request: PermissionRequest,
-    setPending: (approval: PendingApproval) => void,
     queuedAnswers: string[],
-    cachedDecisions: Map<string, PermissionDecision>,
+    primedApprovals: Map<string, string | undefined>,
+    getPending: () => PendingApproval | undefined,
+    getCancelledReason: () => string | undefined,
+    setPending?: (approval: PendingApproval) => void,
 ): Promise<PermissionDecision> {
-    options.emitEvent(eventWithPermission(options, request));
-    options.output.write(`Approve ${request.action}? [y/N]:`);
+    if (primedApprovals.has(request.id)) {
+        const reason = primedApprovals.get(request.id);
+        primedApprovals.delete(request.id);
+        return {
+            requestId: request.id,
+            status: 'allow',
+            ...(reason !== undefined ? { reason } : {}),
+        };
+    }
+    const evaluated = await permissionSession.evaluate(request, options.sessionId);
+    permissionSession.consumeOnceRules(options.sessionId, evaluated.consumeOnceRules);
+    if (evaluated.decision.status !== 'requires_approval') {
+        return evaluated.decision;
+    }
+    if (getPending() !== undefined) {
+        return {
+            requestId: request.id,
+            status: 'deny',
+            reason: 'another approval is already pending',
+        };
+    }
+    options.emitEvent(eventWithPermission(options, request, evaluated.decision));
+    const approval = approvalRecordForRequest(request, evaluated.decision);
+    options.emitEvent(
+        eventWithApproval(options, 'approval.requested', approval, `approval requested: ${request.action}`),
+    );
+    options.output.write(`Approve ${request.action}? [once/always/deny]:`);
     const queuedAnswer = queuedAnswers.shift();
     if (queuedAnswer !== undefined) {
-        const decision = decisionForLine(request, queuedAnswer);
-        options.output.write('\n');
-        options.output.write(
-            decision.status === 'allow' ? `Approved ${request.action}\n` : `Denied ${request.action}\n`,
-        );
-        options.emitEvent(eventWithDecision(options, decision));
-        cachedDecisions.set(request.action, decision);
-        return Promise.resolve(decision);
+        return resolveQueuedApproval(options, permissionSession, request, approval, parseReply(queuedAnswer));
+    }
+    const cancelledReason = getCancelledReason();
+    if (cancelledReason !== undefined) {
+        return resolveQueuedApproval(options, permissionSession, request, approval, {
+            approvalId: approvalIdFor(request),
+            reply: 'deny',
+            reason: cancelledReason,
+        });
     }
     return new Promise((resolve) => {
-        setPending({ request, resolve, cacheAction: request.action });
+        setPending?.({ request, record: approval, resolve });
     });
 }
 
-function decisionForLine(request: PermissionRequest, line: string): PermissionDecision {
-    const answer = line.trim().toLowerCase();
+async function resolvePendingApproval(
+    options: InteractiveToolOptions,
+    permissionSession: PermissionSession,
+    pending: PendingApproval,
+    reply: PermissionReply,
+): Promise<void> {
+    const decision = await resolveQueuedApproval(options, permissionSession, pending.request, pending.record, reply);
+    pending.resolve(decision);
+}
+
+async function resolveQueuedApproval(
+    options: InteractiveToolOptions,
+    permissionSession: PermissionSession,
+    request: PermissionRequest,
+    record: ApprovalRecord,
+    reply: PermissionReply,
+): Promise<PermissionDecision> {
+    const normalizedReply = {
+        ...reply,
+        approvalId: reply.approvalId.length > 0 ? reply.approvalId : approvalIdFor(request),
+    } satisfies PermissionReply;
+    await permissionSession.rememberReply(request, options.sessionId, normalizedReply);
+    options.output.write('\n');
+    options.output.write(renderApprovalResult(request.action, normalizedReply.reply));
+    options.emitEvent(eventWithReply(options, normalizedReply));
+    const decidedRecord = approvalDecisionRecord(record, normalizedReply);
+    options.emitEvent(
+        eventWithApproval(options, 'approval.updated', decidedRecord, `approval updated: ${decidedRecord.state}`),
+    );
+    options.emitEvent(
+        eventWithApproval(
+            options,
+            normalizedReply.reply === 'deny' ? 'approval.blocked' : 'approval.resumed',
+            decidedRecord,
+            normalizedReply.reply === 'deny' ? `approval blocked: ${decidedRecord.state}` : 'approval resumed',
+        ),
+    );
     return {
         requestId: request.id,
-        status: answer === 'y' || answer === 'yes' || answer === 'allow' ? 'allow' : 'deny',
-        reason: 'interactive CLI approval',
+        status: normalizedReply.reply === 'deny' ? 'deny' : 'allow',
+        reason: normalizedReply.reason ?? 'interactive CLI approval',
     };
 }
 
-function eventWithPermission(options: InteractiveToolOptions, request: PermissionRequest) {
+function parseReply(line: string): PermissionReply {
+    const answer = line.trim().toLowerCase();
+    if (answer === 'a' || answer === 'always') {
+        return { approvalId: '', reply: 'always', reason: 'interactive CLI approval' };
+    }
+    if (answer === 'y' || answer === 'yes' || answer === 'allow' || answer === 'o' || answer === 'once') {
+        return { approvalId: '', reply: 'once', reason: 'interactive CLI approval' };
+    }
+    return { approvalId: '', reply: 'deny', reason: 'interactive CLI approval' };
+}
+
+function renderApprovalResult(action: string, reply: PermissionReply['reply']): string {
+    switch (reply) {
+        case 'always':
+            return `Always allow ${action}\n`;
+        case 'once':
+            return `Approved once ${action}\n`;
+        case 'deny':
+            return `Denied ${action}\n`;
+    }
+}
+
+function eventWithPermission(
+    options: InteractiveToolOptions,
+    request: PermissionRequest,
+    decision: PermissionDecision,
+) {
     return {
-        type: 'approval.requested' as const,
+        type: 'permission.requested' as const,
         timestamp: new Date().toISOString(),
         sessionId: options.sessionId,
-        message: `approval requested: ${request.action}`,
+        message: `permission requested: ${request.action}`,
         permissionRequest: request,
+        permissionDecision: decision,
         modelProviderSelection: options.modelProviderSelection,
     };
 }
 
-function eventWithDecision(options: InteractiveToolOptions, decision: PermissionDecision) {
+function eventWithReply(options: InteractiveToolOptions, reply: PermissionReply) {
     return {
-        type: 'approval.updated' as const,
+        type: 'permission.replied' as const,
         timestamp: new Date().toISOString(),
         sessionId: options.sessionId,
-        message: `approval ${decision.status}: ${decision.requestId}`,
-        permissionDecision: decision,
+        message: `permission replied: ${reply.reply}`,
+        permissionReply: reply,
+        modelProviderSelection: options.modelProviderSelection,
+    };
+}
+
+function eventWithApproval(
+    options: InteractiveToolOptions,
+    type: 'approval.requested' | 'approval.updated' | 'approval.blocked' | 'approval.resumed',
+    record: ApprovalRecord,
+    message: string,
+) {
+    return {
+        type,
+        timestamp: new Date().toISOString(),
+        sessionId: options.sessionId,
+        message,
+        approvalRecord: record,
         modelProviderSelection: options.modelProviderSelection,
     };
 }
 
 function isApprovalAnswer(line: string): boolean {
     const answer = line.trim().toLowerCase();
-    return (
-        answer === 'y' ||
-        answer === 'yes' ||
-        answer === 'n' ||
-        answer === 'no' ||
-        answer === 'allow' ||
-        answer === 'deny'
-    );
+    return ['a', 'always', 'd', 'deny', 'n', 'no', 'o', 'once', 'y', 'yes', 'allow'].includes(answer);
+}
+
+function approvalIdFor(request: PermissionRequest): string {
+    return `approval_${request.id}`;
+}
+
+function approvalRecordForRequest(request: PermissionRequest, decision: PermissionDecision): ApprovalRecord {
+    return {
+        approvalId: approvalIdFor(request),
+        requestId: request.id,
+        policyDecision: decision.status,
+        state: 'pending',
+        subject: { kind: 'tool', id: request.action },
+        requestedAt: new Date().toISOString(),
+        reason: decision.reason ?? request.reason,
+    };
+}
+
+function approvalDecisionRecord(record: ApprovalRecord, reply: PermissionReply): ApprovalRecord {
+    return {
+        ...record,
+        state: reply.reply === 'deny' ? 'denied' : 'approved',
+        decidedAt: new Date().toISOString(),
+        reason: reply.reason ?? record.reason,
+    };
 }

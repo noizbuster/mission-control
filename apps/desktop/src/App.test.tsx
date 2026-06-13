@@ -123,13 +123,13 @@ describe('Desktop App', () => {
         );
 
         expect(html).toContain('data-testid="provider-execution-status"');
-        expect(html).toContain('execution ready');
+        expect(html).toContain('can start runs');
         expect(html).toContain('credential configured');
         expect(html).toContain('sk-l...cret');
         expect(html).not.toContain(unredactedCredential);
     });
 
-    it('disables write-capable composer actions for non-executable providers', () => {
+    it('keeps resume and interrupt available when non-executable providers block new runs', () => {
         const cloudflareSelection = resolveSelectionForProviderChange('cloudflare-ai-gateway', 'removed-model');
         const html = renderToStaticMarkup(
             <App initialSessionId="session_write" initialModelProviderSelection={cloudflareSelection} />,
@@ -140,7 +140,7 @@ describe('Desktop App', () => {
         expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Submit prompt<\/button>/);
         expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Queue follow-up<\/button>/);
         expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Steer<\/button>/);
-        expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Resume<\/button>/);
+        expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Resume<\/button>/);
         expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Interrupt<\/button>/);
     });
 
@@ -151,7 +151,7 @@ describe('Desktop App', () => {
 
         expect(executableGate).toMatchObject({
             canStart: true,
-            label: 'execution ready',
+            label: 'can start runs',
             status: 'executable',
         });
         expect(discoveryOnlyGate).toMatchObject({

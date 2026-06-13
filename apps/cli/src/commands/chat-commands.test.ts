@@ -62,6 +62,60 @@ describe('chat command parser', () => {
         });
     });
 
+    it('parses session navigation commands with optional ids', () => {
+        expect(parseChatLine('/new')).toEqual({ kind: 'new-session' });
+        expect(parseChatLine('/new session_next')).toEqual({ kind: 'new-session', sessionId: 'session_next' });
+        expect(parseChatLine('/session')).toEqual({ kind: 'session' });
+        expect(parseChatLine('/session session_prev')).toEqual({ kind: 'session', sessionId: 'session_prev' });
+        expect(parseChatLine('/sessions')).toEqual({ kind: 'sessions' });
+        expect(parseChatLine('/tree')).toEqual({ kind: 'tree' });
+        expect(parseChatLine('/tree session_prev')).toEqual({ kind: 'tree', sessionId: 'session_prev' });
+        expect(parseChatLine('/clone')).toEqual({ kind: 'clone' });
+        expect(parseChatLine('/clone session_copy')).toEqual({ kind: 'clone', sessionId: 'session_copy' });
+    });
+
+    it('parses branch selection and fork commands', () => {
+        expect(parseChatLine('/branch entry_leaf')).toEqual({
+            kind: 'branch',
+            mode: 'select',
+            entryId: 'entry_leaf',
+        });
+        expect(parseChatLine('/branch message_parent continue from this branch')).toEqual({
+            kind: 'branch',
+            mode: 'continue',
+            entryId: 'message_parent',
+            prompt: 'continue from this branch',
+        });
+        expect(parseChatLine('/fork entry_leaf')).toEqual({
+            kind: 'fork',
+            entryId: 'entry_leaf',
+        });
+        expect(parseChatLine('/fork entry_leaf session_child')).toEqual({
+            kind: 'fork',
+            entryId: 'entry_leaf',
+            sessionId: 'session_child',
+        });
+    });
+
+    it('rejects invalid session navigation arguments', () => {
+        expect(parseChatLine('/new one two')).toEqual({
+            kind: 'invalid',
+            message: '/new accepts at most one session id',
+        });
+        expect(parseChatLine('/branch')).toEqual({
+            kind: 'invalid',
+            message: '/branch requires an entry id or parent message id',
+        });
+        expect(parseChatLine('/fork')).toEqual({
+            kind: 'invalid',
+            message: '/fork requires an entry id',
+        });
+        expect(parseChatLine('/fork entry_leaf session_child extra')).toEqual({
+            kind: 'invalid',
+            message: '/fork accepts at most an entry id and optional session id',
+        });
+    });
+
     it('rejects empty slash commands before routing', () => {
         expect(parseChatLine('/   ')).toEqual({
             kind: 'invalid',

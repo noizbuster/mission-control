@@ -4,9 +4,11 @@ import { APPROVAL_POLICY_DECISIONS, ApprovalPolicyDecisionSchema, ApprovalRecord
 import { CommandRunEventMetadataSchema } from './command-events.js';
 import { DiffFileSchema } from './diff-events.js';
 import { EventIdSchema, EventSequenceSchema } from './event-primitives.js';
+import { PermissionDecisionSchema, PermissionReplySchema, PermissionRequestSchema } from './permission-profile.js';
 import { ModelProviderSelectionSchema } from './provider-auth.js';
 import { ProviderStreamChunkSchema, ToolResultSchema } from './provider-events.js';
 import { RunCoordinatorEventMetadataSchema } from './run-coordinator.js';
+import { SESSION_TREE_EVENT_TYPES, SessionTreeEventMetadataSchema } from './session-tree.js';
 import { NativeSidecarStatusSchema } from './sidecar.js';
 import { TranscriptEventMetadataSchema } from './transcript.js';
 
@@ -22,6 +24,27 @@ export {
     type ApprovalSubject,
     ApprovalSubjectSchema,
 } from './approval.js';
+export {
+    PERMISSION_KINDS,
+    PERMISSION_REPLY_VALUES,
+    PERMISSION_RULE_DECISIONS,
+    type PermissionDecision,
+    PermissionDecisionSchema,
+    type PermissionKind,
+    PermissionKindSchema,
+    type PermissionReply,
+    PermissionReplySchema,
+    type PermissionReplyValue,
+    PermissionReplyValueSchema,
+    type PermissionRequest,
+    PermissionRequestSchema,
+    type PermissionRule,
+    type PermissionRuleDecision,
+    PermissionRuleDecisionSchema,
+    PermissionRuleSchema,
+    type PermissionScope,
+    PermissionScopeSchema,
+} from './permission-profile.js';
 export {
     MODEL_CATALOG_STATUSES,
     type ModelCatalogEntry,
@@ -93,11 +116,14 @@ export {
 export const AGENT_EVENT_TYPES = [
     'session.started',
     'session.stopped',
+    ...SESSION_TREE_EVENT_TYPES,
     'task.started',
     'task.progress',
     'task.completed',
     'task.failed',
     'permission.requested',
+    'permission.replied',
+    'permission.reply_not_found',
     'approval.requested',
     'approval.updated',
     'approval.blocked',
@@ -159,20 +185,6 @@ export type PermissionStatus = z.infer<typeof PermissionStatusSchema>;
 export const EventDurabilitySchema = z.enum(EVENT_DURABILITIES);
 export type EventDurability = z.infer<typeof EventDurabilitySchema>;
 
-export const PermissionRequestSchema = z.object({
-    id: z.string().min(1),
-    action: z.string().min(1),
-    reason: z.string().min(1),
-});
-export type PermissionRequest = z.infer<typeof PermissionRequestSchema>;
-
-export const PermissionDecisionSchema = z.object({
-    requestId: z.string().min(1),
-    status: PermissionStatusSchema,
-    reason: z.string().optional(),
-});
-export type PermissionDecision = z.infer<typeof PermissionDecisionSchema>;
-
 export const AgentEventSchema = z.object({
     type: AgentEventTypeSchema,
     timestamp: z.string().datetime(),
@@ -184,6 +196,7 @@ export const AgentEventSchema = z.object({
     nativeSidecarStatus: NativeSidecarStatusSchema.optional(),
     permissionRequest: PermissionRequestSchema.optional(),
     permissionDecision: PermissionDecisionSchema.optional(),
+    permissionReply: PermissionReplySchema.optional(),
     approvalRecord: ApprovalRecordSchema.optional(),
     modelProviderSelection: ModelProviderSelectionSchema.optional(),
     providerStreamChunk: z.lazy(() => ProviderStreamChunkSchema).optional(),
@@ -191,6 +204,7 @@ export const AgentEventSchema = z.object({
     diffFiles: z.array(DiffFileSchema).optional(),
     command: CommandRunEventMetadataSchema.optional(),
     run: RunCoordinatorEventMetadataSchema.optional(),
+    sessionTree: SessionTreeEventMetadataSchema.optional(),
     transcript: TranscriptEventMetadataSchema.optional(),
     abg: AbgEventMetadataSchema.optional(),
 });

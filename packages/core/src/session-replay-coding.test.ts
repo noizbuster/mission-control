@@ -6,6 +6,7 @@ import {
     envelope,
     providerCompletedEvent,
     providerToolCallEvent,
+    runEvent,
     sessionStoppedEvent,
     toolCompletedEvent,
     toolFailedEvent,
@@ -125,6 +126,56 @@ describe('session replay coding projections', () => {
         ]);
     });
 
+    it('does not diagnose approval-blocked tool failures as missing continuations', () => {
+        const sessionId = 'session_replay_approval_blocked_failure';
+        const replay = projectSessionReplay({
+            sessionId,
+            envelopes: [
+                envelope(providerToolCallEvent(sessionId), 0, 'event_tool_call'),
+                envelope(
+                    providerCompletedEvent(sessionId, 'task_prompt_1', 'approval required for patch'),
+                    1,
+                    'event_requested',
+                ),
+                envelope(
+                    {
+                        type: 'tool.failed',
+                        timestamp: '2026-06-05T10:00:03.000Z',
+                        sessionId,
+                        taskId: 'patch_call',
+                        message: 'tool failed: file.patch',
+                        toolResult: {
+                            toolCallId: 'patch_call',
+                            status: 'failed',
+                            error: {
+                                code: 'tool_failed',
+                                message: 'approval_denied: interactive CLI approval',
+                                retryable: false,
+                            },
+                        },
+                    },
+                    2,
+                    'event_tool_failed',
+                ),
+                envelope(
+                    runEvent(sessionId, 'run.blocked', 'waiting for approval: file.patch', {
+                        command: 'run',
+                        state: 'blocked_on_approval',
+                        runId: 'run_1',
+                        reason: 'waiting for approval: file.patch',
+                        errorCode: 'tool_failed',
+                        toolCallId: 'patch_call',
+                    }),
+                    3,
+                    'event_run_blocked',
+                ),
+                envelope(sessionStoppedEvent(sessionId), 4, 'event_session_stopped'),
+            ],
+        });
+
+        expect(replay.diagnostics).toEqual([]);
+    });
+
     it('keeps partial patch failures replayable with applied files', () => {
         // Given
         const sessionId = 'session_replay_coding_partial_failure';
@@ -159,5 +210,42 @@ describe('session replay coding projections', () => {
 
     it('projects blocked approval and resumed run', () => {
         expectBlockedApprovalAndResumedRunProjection();
+    });
+
+    it('treats provider output after a resume start as a tool continuation', () => {
+        const sessionId = 'session_replay_resume_continuation';
+        const replay = projectSessionReplay({
+            sessionId,
+            envelopes: [
+                envelope(providerToolCallEvent(sessionId), 0, 'event_tool_call'),
+                envelope(providerCompletedEvent(sessionId, 'task_prompt_1', 'patch requested'), 1, 'event_requested'),
+                envelope(toolCompletedEvent(sessionId), 2, 'event_tool_completed'),
+                envelope(
+                    runEvent(sessionId, 'run.started', 'run resumed', {
+                        command: 'resume',
+                        state: 'running',
+                        runId: 'run_1',
+                    }),
+                    3,
+                    'event_resume_started',
+                ),
+                envelope(
+                    providerCompletedEvent(sessionId, 'turn_2', 'continued after approved tool result'),
+                    4,
+                    'event_resume_response',
+                ),
+            ],
+        });
+
+        expect(replay.diagnostics).toEqual([]);
+        expect(replay.codingSteps).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    kind: 'provider.message',
+                    eventId: 'event_resume_response',
+                    continuation: true,
+                }),
+            ]),
+        );
     });
 });

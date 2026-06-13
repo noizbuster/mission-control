@@ -168,6 +168,15 @@ describe('parseArgs', () => {
         expect(() => parseArgs(['session', 'replay', 'session_cli'])).toThrow(
             'session replay requires --jsonl for event output',
         );
+        expect(parseArgs(['session', 'export', 'session_cli', '/tmp/session_cli.mctrl-session.json'])).toMatchObject({
+            command: 'session-export',
+            sessionId: 'session_cli',
+            filePath: '/tmp/session_cli.mctrl-session.json',
+        });
+        expect(parseArgs(['session', 'import', '/tmp/session_cli.mctrl-session.json'])).toMatchObject({
+            command: 'session-import',
+            filePath: '/tmp/session_cli.mctrl-session.json',
+        });
         expect(() => parseArgs(['graph', 'run'])).toThrow('graph run requires a graph file');
         expect(() => parseArgs(['--json', '--jsonl'])).toThrow('--json and --jsonl cannot be combined');
     });

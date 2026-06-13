@@ -13,7 +13,9 @@ export type CliCommand =
     | 'models'
     | 'session-list'
     | 'session-show'
-    | 'session-replay';
+    | 'session-replay'
+    | 'session-export'
+    | 'session-import';
 
 export type AuthCredentialArg = {
     readonly fieldID: string;
@@ -29,6 +31,7 @@ export type CliArgs = {
     readonly graphPath?: string;
     readonly prompt?: string;
     readonly sessionId?: string;
+    readonly filePath?: string;
     readonly modelProviderSelection?: ModelProviderSelection;
     readonly authProviderID?: string;
     readonly authModelID?: string;

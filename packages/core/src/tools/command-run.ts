@@ -19,6 +19,7 @@ import {
     commandRunParametersJsonSchema,
     type ResolvedCommandRunToolOptions,
 } from './command-run-schemas.js';
+import { permissionRequest, requestToolPermission } from './tool-permissions.js';
 import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
 import type { ToolExecutionContext } from './tool-registry-types.js';
 import { realpath } from 'node:fs/promises';
@@ -123,11 +124,16 @@ async function requireApproval(
     command: readonly string[],
 ): Promise<void> {
     const request: PermissionRequest = {
-        id: `permission_${toolCallId}`,
-        action: 'command.run',
-        reason: `run command: ${command.join(' ')}`,
+        ...permissionRequest({
+            toolCallId,
+            action: 'command.run',
+            reason: `run command: ${command.join(' ')}`,
+            permission: 'bash',
+            patterns: [command.join(' ')],
+            workspaceRoot: options.workspaceRoot,
+        }),
     };
-    const decision = await options.requestPermission(request);
+    const decision = await requestToolPermission(options.requestPermission, request);
     if (decision.status === 'allow') {
         return;
     }

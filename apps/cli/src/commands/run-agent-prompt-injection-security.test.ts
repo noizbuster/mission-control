@@ -63,7 +63,7 @@ describe('runAgent prompt-injection security fixtures', () => {
                     {
                         kind: 'tool_call_completed',
                         toolCallId: 'outside_read',
-                        toolName: 'repo.read',
+                        toolName: 'read',
                         argumentsJson: JSON.stringify({ path: outsideSecretPath }),
                     },
                     {
@@ -79,10 +79,10 @@ describe('runAgent prompt-injection security fixtures', () => {
         });
 
         // Then
-        expect(output).toContain('repo.read failed: workspace_escape');
-        expect(output).toContain('Approve command.run? [y/N]:');
+        expect(output).toContain('read failed: workspace_escape');
         expect(output).toContain('command.run failed: command_not_allowed');
         expect(output).not.toContain('outside-secret');
+        expect(output).not.toContain('unexpected command execution');
         expect(commandCalls).toBe(0);
         expect(await readFile(outsideSecretPath, 'utf8')).toBe('outside-secret\n');
     });

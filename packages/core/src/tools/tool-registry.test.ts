@@ -192,12 +192,13 @@ describe('ToolRegistry', () => {
 function echoTool(
     options: {
         readonly description?: string;
+        readonly name?: string;
         readonly maxModelOutputChars?: number;
         readonly onExecute?: () => void;
     } = {},
 ) {
     return {
-        name: 'repo.echo',
+        name: options.name ?? 'repo.echo',
         description: options.description ?? 'Echo text for registry tests',
         capabilityClasses: ['repo.read'],
         parametersJsonSchema: {

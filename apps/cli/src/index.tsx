@@ -36,6 +36,19 @@ export function createHelpText(): string {
         'Interactive chat commands:',
         '  /model                 Open the model and variant picker',
         '  /model <provider>/<model>[#variant]  Select the model for this chat session',
+        '  /new [session-id]      Start a new durable session and switch chat to it',
+        '  /session <session-id>  Switch chat to an existing durable session',
+        '  /sessions              List durable sessions and lock status',
+        '  /tree                  Show the durable session tree and active leaf',
+        '  /branch <entry-id>     Switch the active branch leaf to a tree entry',
+        '  /branch <message-id> <prompt>  Continue from a parent message in a new branch',
+        '  /fork <entry-id> [session-id]  Fork a durable session from a tree entry',
+        '  /clone [session-id]    Clone the current durable session into a new session',
+        '  /compact               Summarize older session history into a durable compaction event',
+        '  /trust                 Trust this workspace for project-local resources',
+        '  /trust status          Show this workspace trust decision',
+        '  /trust deny            Deny project-local resources for this workspace',
+        '  /trust reset           Reset this workspace trust decision',
         '  /exit                  Stop active runs and exit',
         '  $<skill> [args]        Record a scaffold skill invocation',
         '  $ skill invocations are scaffolded inside Mission Control',
@@ -48,6 +61,8 @@ export function createHelpText(): string {
         '  mctrl graph run examples/abg/research-answer.graph.json --session session_graph --jsonl',
         '  mctrl session list',
         '  mctrl session show session_demo',
+        '  mctrl session export session_demo /tmp/session_demo.mctrl-session.json',
+        '  mctrl session import /tmp/session_demo.mctrl-session.json',
         '  mctrl session replay session_demo --jsonl',
         '  mctrl auth login --provider local --api-key <key>',
         '  mctrl auth login --provider anthropic --api-key <key>',
@@ -83,6 +98,8 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
             return;
         case 'session-list':
         case 'session-show':
+        case 'session-export':
+        case 'session-import':
         case 'session-replay':
             process.stdout.write(await runSessionCommand(args));
             return;

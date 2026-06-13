@@ -19,6 +19,38 @@ export const DesktopSessionDiagnosticSchema = z
     .strict();
 export type DesktopSessionDiagnostic = z.infer<typeof DesktopSessionDiagnosticSchema>;
 
+export const DESKTOP_WORKSPACE_TRUST_STATES = ['trusted', 'denied', 'unknown'] as const;
+export const DesktopWorkspaceTrustStateSchema = z.enum(DESKTOP_WORKSPACE_TRUST_STATES);
+export type DesktopWorkspaceTrustState = z.infer<typeof DesktopWorkspaceTrustStateSchema>;
+
+export const DesktopSessionTreeSummarySchema = z
+    .object({
+        sessionName: z.string().min(1).optional(),
+        cwd: z.string().min(1).optional(),
+        trustedRoot: z.string().min(1).optional(),
+        workspaceTrust: DesktopWorkspaceTrustStateSchema.optional(),
+        parentSessionId: z.string().min(1).optional(),
+        activeLeafId: z.string().min(1).optional(),
+        entryCount: z.number().int().nonnegative(),
+        branchCount: z.number().int().nonnegative(),
+        forkSourceSessionId: z.string().min(1).optional(),
+        cloneSourceSessionId: z.string().min(1).optional(),
+    })
+    .strict();
+export type DesktopSessionTreeSummary = z.infer<typeof DesktopSessionTreeSummarySchema>;
+
+export const DesktopSessionStatsSchema = z
+    .object({
+        eventCount: z.number().int().nonnegative(),
+        pendingApprovalCount: z.number().int().nonnegative(),
+        blockedRunCount: z.number().int().nonnegative(),
+        commandEventCount: z.number().int().nonnegative(),
+        diffEventCount: z.number().int().nonnegative(),
+        toolOutcomeCount: z.number().int().nonnegative(),
+    })
+    .strict();
+export type DesktopSessionStats = z.infer<typeof DesktopSessionStatsSchema>;
+
 export const DesktopSessionSummarySchema = z
     .object({
         sessionId: z.string().min(1),
@@ -29,6 +61,8 @@ export const DesktopSessionSummarySchema = z
         indexed: z.boolean().optional(),
         updatedAt: z.string().min(1).optional(),
         diagnostics: z.array(DesktopSessionDiagnosticSchema),
+        sessionTree: DesktopSessionTreeSummarySchema.optional(),
+        stats: DesktopSessionStatsSchema.optional(),
     })
     .strict();
 export const DesktopSessionSummaryListSchema = z.array(DesktopSessionSummarySchema);
@@ -65,6 +99,8 @@ export const DesktopSessionSnapshotSchema = z
         indexed: z.boolean().optional(),
         updatedAt: z.string().min(1).optional(),
         diagnostics: z.array(DesktopSessionDiagnosticSchema),
+        sessionTree: DesktopSessionTreeSummarySchema.optional(),
+        stats: DesktopSessionStatsSchema.optional(),
     })
     .strict();
 export type DesktopSessionSnapshot = z.infer<typeof DesktopSessionSnapshotSchema>;

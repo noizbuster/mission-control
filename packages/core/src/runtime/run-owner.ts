@@ -1,4 +1,5 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { ProjectContextMessageOptions } from '../context/project-context-messages.js';
 import { type JsonlSessionEventIdFactory, JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
 import type { ProviderAdapter } from '../providers/provider-turn-types.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
@@ -39,6 +40,8 @@ export type SessionRunOwnerOptions = {
     readonly timeoutMs?: number;
     readonly retryLimit?: number;
     readonly toolCallLoopLimit?: number;
+    readonly haltOnFailedToolSettlement?: boolean;
+    readonly projectContext?: ProjectContextMessageOptions;
     readonly toolRegistry?: ToolRegistry;
     readonly createId?: (prefix: string, index: number) => string;
     readonly readMessages?: RunCoordinatorReadMessages;
@@ -57,6 +60,8 @@ export type SessionRunOwnerRegistryOptions = {
     readonly timeoutMs?: number;
     readonly retryLimit?: number;
     readonly toolCallLoopLimit?: number;
+    readonly haltOnFailedToolSettlement?: boolean;
+    readonly projectContext?: ProjectContextMessageOptions;
     readonly toolRegistry?: ToolRegistry;
     readonly lockStaleAfterMs?: number;
     readonly lockHeartbeatIntervalMs?: number;
@@ -70,15 +75,9 @@ export type SessionRunOwnerLeaseInput = {
     readonly readMessages?: RunCoordinatorReadMessages;
 };
 
-type OwnerEntry = {
-    readonly owner: SessionRunOwner;
-    readonly store: JsonlSessionEventStore;
-    refCount: number;
-};
+type OwnerEntry = { readonly owner: SessionRunOwner; readonly store: JsonlSessionEventStore; refCount: number };
 
-type OwnerEntryRecord = {
-    readonly promise: Promise<OwnerEntry>;
-};
+type OwnerEntryRecord = { readonly promise: Promise<OwnerEntry> };
 
 // Session-scoped facade over one `SessionRunCoordinator` and one JSONL store lease.
 // The owner is process-local; durable recovery comes from the JSONL session log.
@@ -101,6 +100,8 @@ export class SessionRunOwner {
             ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
             ...(options.retryLimit !== undefined ? { retryLimit: options.retryLimit } : {}),
             ...(options.toolCallLoopLimit !== undefined ? { toolCallLoopLimit: options.toolCallLoopLimit } : {}),
+            ...(options.haltOnFailedToolSettlement !== undefined ? { haltOnFailedToolSettlement: true } : {}),
+            ...(options.projectContext !== undefined ? { projectContext: options.projectContext } : {}),
             ...(options.toolRegistry !== undefined ? { toolRegistry: options.toolRegistry } : {}),
             ...(options.createId !== undefined ? { createId: options.createId } : {}),
             ...(options.readMessages !== undefined ? { readMessages: options.readMessages } : {}),
@@ -255,6 +256,8 @@ export class SessionRunOwnerRegistry {
             ...(this.options.toolCallLoopLimit !== undefined
                 ? { toolCallLoopLimit: this.options.toolCallLoopLimit }
                 : {}),
+            ...(this.options.haltOnFailedToolSettlement !== undefined ? { haltOnFailedToolSettlement: true } : {}),
+            ...(this.options.projectContext !== undefined ? { projectContext: this.options.projectContext } : {}),
             ...(this.options.toolRegistry !== undefined ? { toolRegistry: this.options.toolRegistry } : {}),
             ...(this.options.createId !== undefined ? { createId: this.options.createId } : {}),
             ...(input.readMessages !== undefined ? { readMessages: input.readMessages } : {}),

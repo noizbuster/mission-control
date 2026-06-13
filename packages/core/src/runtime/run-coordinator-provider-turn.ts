@@ -33,6 +33,7 @@ export type RunCoordinatorProviderTurnInput = {
     readonly timeoutMs?: number;
     readonly retryLimit?: number;
     readonly toolCallLoopLimit?: number;
+    readonly haltOnFailedToolSettlement?: boolean;
     readonly toolRegistry?: ToolRegistry;
     readonly readMessages: () => Promise<readonly AgentMessage[]>;
     readonly nextId: (prefix: string) => Promise<string>;
@@ -109,6 +110,12 @@ export async function runCoordinatorProviderTurn(
                 toolCallId: blockedSettlement.toolCallId,
             };
         }
+        if (input.haltOnFailedToolSettlement === true) {
+            const terminalFailure = terminalFailedSettlement(settlements);
+            if (terminalFailure !== undefined) {
+                return terminalFailure;
+            }
+        }
         messages = appendProviderToolResultMessages({
             messages,
             assistantMessage: result.message,
@@ -154,6 +161,34 @@ function isApprovalBlockedMessage(message: string | undefined): boolean {
     return message?.startsWith('approval_required:') === true || message?.startsWith('approval_denied:') === true;
 }
 
+function terminalFailedSettlement(
+    settlements: readonly ToolInvocationSettlement[],
+): RunCoordinatorProviderTurnResult | undefined {
+    for (const settlement of settlements) {
+        if (settlement.result.status !== 'failed') {
+            continue;
+        }
+        const error = settlement.result.error;
+        if (error === undefined) {
+            continue;
+        }
+        if (error.message.startsWith('approval_required:')) {
+            return {
+                status: 'blocked_on_approval',
+                reason: error.message,
+                errorCode: error.code,
+                toolCallId: settlement.toolCallId,
+            };
+        }
+        return {
+            status: 'failed',
+            reason: error.message,
+            errorCode: error.code,
+        };
+    }
+    return undefined;
+}
+
 async function settleToolCalls(
     input: RunCoordinatorProviderTurnInput,
     toolCalls: readonly ToolCall[],
@@ -173,6 +208,9 @@ async function settleToolCalls(
             await input.appendDurableEvent(
                 sessionScopedToolEvent(event, input.sessionId, input.modelProviderSelection),
             );
+        }
+        if (approvalBlockedSettlement([settlement]) !== undefined) {
+            break;
         }
     }
     return settlements;

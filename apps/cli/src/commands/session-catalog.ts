@@ -1,13 +1,18 @@
 import {
-    createFileSessionIndexStore,
-    projectJsonlSessionReplayPrefix,
+    ProjectTrustStore,
     type ReplayDiagnostic,
     resolveMissionControlDataDir,
-    type SessionIndexDiagnostic,
     type SessionIndexSessionRecord,
-    type SessionIndexStore,
 } from '@mission-control/core';
 import type { AgentSnapshot } from '@mission-control/protocol';
+import {
+    indexStateLabel,
+    readIndexDiagnosticsForSession,
+    readSessionIndexState,
+    type SessionIndexReadState,
+} from './session-catalog-index.js';
+import { deriveSessionCatalogProjection } from './session-catalog-projection.js';
+import { parseCliSessionId } from './session-id.js';
 import { type CliSessionLockState, readSessionLockState } from './session-lock-status.js';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -27,8 +32,16 @@ export type CliSessionCatalogEntry = {
     readonly sessionId: string;
     readonly status: CliSessionListStatus;
     readonly eventCount: number;
+    readonly messageCount: number;
     readonly lockState: CliSessionLockState;
+    readonly createdAt?: string | undefined;
     readonly updatedAt?: string | undefined;
+    readonly cwd?: string | undefined;
+    readonly trustedRoot?: string | undefined;
+    readonly name?: string | undefined;
+    readonly activeLeafId?: string | undefined;
+    readonly parentSessionId?: string | undefined;
+    readonly trustStatus: 'trusted' | 'denied' | 'unknown';
     readonly indexed: boolean;
     readonly indexState: CliSessionCatalogIndexState;
     readonly diagnostics: readonly CliSessionCatalogDiagnostic[];
@@ -38,7 +51,7 @@ export async function listSessionCatalogEntries(): Promise<readonly CliSessionCa
     const indexState = await readSessionIndexState();
     const ids = new Set<string>(await listJsonlSessionIds());
     for (const record of indexState.records.values()) {
-        if (parseSessionId(record.sessionId) !== undefined) {
+        if (parseCliSessionId(record.sessionId) !== undefined) {
             ids.add(record.sessionId);
         }
     }
@@ -66,8 +79,16 @@ export async function readSessionCatalogEntry(
             sessionId: parsedSessionId,
             status: 'missing',
             eventCount: 0,
+            messageCount: 0,
             lockState,
+            createdAt: undefined,
             updatedAt: undefined,
+            cwd: undefined,
+            trustedRoot: undefined,
+            name: undefined,
+            activeLeafId: undefined,
+            parentSessionId: undefined,
+            trustStatus: 'unknown',
             indexed: false,
             indexState: indexStateLabel(false, resolvedIndexState),
             diagnostics: [...resolvedIndexState.diagnostics, ...indexDiagnostics],
@@ -79,8 +100,16 @@ export async function readSessionCatalogEntry(
         sessionId: parsedSessionId,
         status: hasDiagnostics ? 'corrupt' : projection.snapshot.status,
         eventCount: projection.eventCount,
+        messageCount: projection.messageCount,
         lockState,
+        createdAt: projection.createdAt,
         updatedAt: canUseIndex ? indexRecord.updatedAt : projection.updatedAt,
+        cwd: projection.cwd,
+        trustedRoot: projection.trustedRoot,
+        name: projection.name,
+        activeLeafId: projection.activeLeafId,
+        parentSessionId: projection.parentSessionId,
+        trustStatus: await readTrustStatus(projection.workspaceTrust, projection.trustedRoot ?? projection.cwd),
         indexed: canUseIndex,
         indexState: indexStateLabel(canUseIndex, resolvedIndexState),
         diagnostics: [...projection.diagnostics, ...resolvedIndexState.diagnostics, ...indexDiagnostics],
@@ -92,8 +121,15 @@ export function formatSessionCatalogEntry(entry: CliSessionCatalogEntry): string
         entry.sessionId,
         `status=${entry.status}`,
         `events=${entry.eventCount}`,
+        `messages=${entry.messageCount}`,
         `lock=${entry.lockState}`,
+        entry.createdAt === undefined ? undefined : `created=${entry.createdAt}`,
         entry.updatedAt === undefined ? undefined : `updated=${entry.updatedAt}`,
+        entry.cwd === undefined ? undefined : `cwd=${entry.cwd}`,
+        entry.name === undefined ? undefined : `name=${entry.name}`,
+        entry.activeLeafId === undefined ? undefined : `active=${entry.activeLeafId}`,
+        `trust=${entry.trustStatus}`,
+        entry.parentSessionId === undefined ? undefined : `parent=${entry.parentSessionId}`,
         `index=${entry.indexState}`,
         entry.diagnostics.length === 0 ? undefined : `diagnostics=${entry.diagnostics.length}`,
     ]
@@ -107,29 +143,46 @@ type SessionProjectionResult =
           readonly kind: 'projection';
           readonly snapshot: AgentSnapshot;
           readonly eventCount: number;
+          readonly messageCount: number;
+          readonly createdAt?: string | undefined;
           readonly updatedAt?: string | undefined;
+          readonly cwd?: string | undefined;
+          readonly trustedRoot?: string | undefined;
+          readonly workspaceTrust?: 'trusted' | 'denied' | 'unknown';
+          readonly name?: string | undefined;
+          readonly activeLeafId?: string | undefined;
+          readonly parentSessionId?: string | undefined;
           readonly diagnostics: readonly ReplayDiagnostic[];
       };
 
-type SessionIndexReadState = {
-    readonly records: ReadonlyMap<string, SessionIndexSessionRecord>;
-    readonly diagnostics: readonly CliSessionCatalogDiagnostic[];
-    readonly store?: SessionIndexStore | undefined;
-};
-
 async function readSessionProjection(sessionId: string): Promise<SessionProjectionResult> {
     try {
-        const replay = projectJsonlSessionReplayPrefix({
+        const projection = deriveSessionCatalogProjection({
             sessionId,
             contents: await readFile(sessionLogPath(sessionId), 'utf8'),
         });
-        const lastEvent = replay.projection.events.at(-1);
         return {
             kind: 'projection',
-            snapshot: replay.projection.snapshot,
-            eventCount: replay.projection.events.length,
-            updatedAt: lastEvent?.timestamp,
-            diagnostics: replay.diagnostics,
+            snapshot: {
+                sessionId,
+                status: projection.status === 'corrupt' ? 'running' : projection.status,
+                startedAt: projection.createdAt ?? new Date(0).toISOString(),
+                runningTaskCount: 0,
+                completedTaskCount: 0,
+                failedTaskCount: 0,
+                nativeSidecarStatus: 'unknown',
+            },
+            eventCount: projection.eventCount,
+            messageCount: projection.messageCount,
+            createdAt: projection.createdAt,
+            updatedAt: projection.updatedAt,
+            cwd: projection.cwd,
+            trustedRoot: projection.trustedRoot,
+            ...(projection.workspaceTrust !== undefined ? { workspaceTrust: projection.workspaceTrust } : {}),
+            name: projection.name,
+            activeLeafId: projection.activeLeafId,
+            parentSessionId: projection.parentSessionId,
+            diagnostics: projection.diagnostics,
         };
     } catch (error: unknown) {
         if (isMissingFileError(error)) {
@@ -139,48 +192,17 @@ async function readSessionProjection(sessionId: string): Promise<SessionProjecti
     }
 }
 
-async function readSessionIndexState(): Promise<SessionIndexReadState> {
-    try {
-        const store = createFileSessionIndexStore({ indexPath: sessionIndexPath() });
-        const sessions = await store.listSessions();
-        return {
-            records: new Map(sessions.map((session) => [session.sessionId, session])),
-            diagnostics: [],
-            store,
-        };
-    } catch (error: unknown) {
-        if (isMissingFileError(error)) {
-            return { records: new Map(), diagnostics: [] };
-        }
-        if (error instanceof Error) {
-            return {
-                records: new Map(),
-                diagnostics: [corruptIndexDiagnostic()],
-            };
-        }
-        throw error;
+async function readTrustStatus(
+    durableTrust: 'trusted' | 'denied' | 'unknown' | undefined,
+    workspaceRoot: string | undefined,
+): Promise<'trusted' | 'denied' | 'unknown'> {
+    if (durableTrust !== undefined) {
+        return durableTrust;
     }
-}
-
-async function readIndexDiagnosticsForSession(
-    sessionId: string,
-    indexState: SessionIndexReadState,
-): Promise<readonly CliSessionCatalogDiagnostic[]> {
-    if (indexState.store === undefined) {
-        return [];
+    if (workspaceRoot === undefined) {
+        return 'unknown';
     }
-    try {
-        const diagnostics = await indexState.store.getDiagnostics(sessionId);
-        return diagnostics.map(sanitizeIndexDiagnostic);
-    } catch (error: unknown) {
-        if (isMissingFileError(error)) {
-            return [];
-        }
-        if (error instanceof Error) {
-            return [corruptIndexDiagnostic()];
-        }
-        throw error;
-    }
+    return new ProjectTrustStore().getDecision(workspaceRoot).then((trust) => trust.decision);
 }
 
 function isFreshIndexRecord(
@@ -191,30 +213,6 @@ function isFreshIndexRecord(
         return false;
     }
     return projection.updatedAt !== undefined && record.updatedAt >= projection.updatedAt;
-}
-
-function indexStateLabel(hasFreshIndex: boolean, indexState: SessionIndexReadState): CliSessionCatalogIndexState {
-    if (indexState.diagnostics.length > 0) {
-        return 'corrupt';
-    }
-    return hasFreshIndex ? 'derived' : 'jsonl';
-}
-
-function corruptIndexDiagnostic(): CliSessionCatalogDiagnostic {
-    return {
-        code: 'corrupt_index',
-        sessionId: 'session-index',
-        message: 'session index could not be read',
-    };
-}
-
-function sanitizeIndexDiagnostic(diagnostic: SessionIndexDiagnostic): CliSessionCatalogDiagnostic {
-    return {
-        code: 'index_diagnostic',
-        sessionId: diagnostic.sessionId,
-        message: 'session index contains a diagnostic record',
-        lineNumber: diagnostic.lineNumber,
-    };
 }
 
 async function listJsonlSessionIds(): Promise<readonly string[]> {
@@ -230,7 +228,7 @@ async function listJsonlSessionIds(): Promise<readonly string[]> {
     return entries
         .filter((entry) => entry.endsWith('.jsonl'))
         .map((entry) => entry.slice(0, -'.jsonl'.length))
-        .filter((sessionId) => parseSessionId(sessionId) !== undefined);
+        .filter((sessionId) => parseCliSessionId(sessionId) !== undefined);
 }
 
 function compareCatalogEntries(left: CliSessionCatalogEntry, right: CliSessionCatalogEntry): number {
@@ -239,19 +237,11 @@ function compareCatalogEntries(left: CliSessionCatalogEntry, right: CliSessionCa
 }
 
 function requireValidSessionId(sessionId: string): string {
-    const parsed = parseSessionId(sessionId);
+    const parsed = parseCliSessionId(sessionId);
     if (parsed === undefined) {
         throw new TypeError(`invalid session id: ${sessionId}`);
     }
     return parsed;
-}
-
-function parseSessionId(sessionId: string): string | undefined {
-    return /^[A-Za-z0-9._-]+$/.test(sessionId) ? sessionId : undefined;
-}
-
-function sessionIndexPath(): string {
-    return join(resolveMissionControlDataDir(), 'session-index.json');
 }
 
 function sessionLogsDir(): string {

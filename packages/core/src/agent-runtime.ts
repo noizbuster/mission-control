@@ -1,9 +1,7 @@
-import { defaultModelProviderSelection } from '@mission-control/config';
 import type {
     AbgGraphInput,
     AbgGraphSnapshot,
     AgentEvent,
-    AgentEventEnvelope,
     AgentSession,
     AgentSnapshot,
     ModelProviderSelection,
@@ -12,16 +10,30 @@ import type {
 } from '@mission-control/protocol';
 import { runRuntimeDemoTask } from './agent-runtime-demo.js';
 import type { AgentRuntimeOptions } from './agent-runtime-options.js';
-import { runRuntimeProviderPromptTask } from './agent-runtime-provider-turn.js';
-import { resolveSidecarCommand } from './agent-runtime-sidecar.js';
+import { RuntimeApprovalBlockedError } from './agent-runtime-provider-turn.js';
 import { runRuntimeSkillInvocationTask, type SkillInvocationTaskInput } from './agent-runtime-skill.js';
+import {
+    allocatePromptTaskId,
+    blockedRuntimePromptMessage,
+    createRuntimeApprovalGate,
+    createRuntimeSession,
+    createRuntimeSidecarClient,
+    emitRuntimeEnvelope,
+    ensureRuntimeSession,
+    runBlockedEvent,
+    runRuntimePromptTask,
+    runtimeModelProviderSelection,
+    sessionStartedEvent,
+    sessionStoppedEvent,
+    stopRuntimeSession,
+    taskCompletedEvent,
+    taskStartedEvent,
+} from './agent-runtime-support.js';
 import { type ApprovalUpdateInput, PermissionGate } from './approval-gate.js';
 import { type AbgGraphRunResult, runAbgGraph } from './behavior/graph-runner.js';
 import type { AbgTimelineEntry } from './behavior/timeline.js';
 import { EventBus } from './event-bus.js';
-import { MockSidecarClient } from './native/mock-sidecar-client.js';
-import { ProcessSidecarClient, type SidecarClient } from './native/sidecar-client.js';
-import { createDefaultPermissionDecision } from './permissions.js';
+import type { SidecarClient } from './native/sidecar-client.js';
 import { SessionEventLog } from './session-log.js';
 
 export type { AgentRuntimeOptions } from './agent-runtime-options.js';
@@ -39,68 +51,38 @@ export class AgentRuntime {
 
     constructor(options: AgentRuntimeOptions = {}) {
         this.options = options;
-        this.modelProviderSelection = options.modelProviderSelection ?? defaultModelProviderSelection;
-        this.sidecarClient = options.useNative
-            ? new ProcessSidecarClient(resolveSidecarCommand(options), options.sidecarTimeoutMs, {
-                  ...(options.enableSidecarProtocolV2 !== undefined
-                      ? { enableProtocolV2: options.enableSidecarProtocolV2 }
-                      : {}),
-              })
-            : new MockSidecarClient();
-        this.approvalGate = new PermissionGate({
-            resolveDecision: options.permissionDecisionResolver ?? createDefaultPermissionDecision,
-            emit: (event) => {
-                this.emit(event);
-            },
-            now: () => new Date().toISOString(),
-            ...(options.pendingApprovalBehavior !== undefined
-                ? { pendingApprovalBehavior: options.pendingApprovalBehavior }
-                : {}),
+        this.modelProviderSelection = runtimeModelProviderSelection(options);
+        this.sidecarClient = createRuntimeSidecarClient(options);
+        this.approvalGate = createRuntimeApprovalGate(options, (event) => {
+            this.emit(event);
         });
     }
 
     async start(): Promise<AgentSession> {
         const startedAt = new Date().toISOString();
-        const session: AgentSession = {
-            id: `session_${Date.now()}`,
-            status: 'running',
-            startedAt,
-        };
+        const session = createRuntimeSession(startedAt);
         this.session = session;
-        this.emit({
-            type: 'session.started',
-            timestamp: startedAt,
-            sessionId: session.id,
-            message: 'mission-control session started',
-            nativeSidecarStatus: this.sidecarClient.status(),
-            modelProviderSelection: this.modelProviderSelection,
-        });
+        this.emit(sessionStartedEvent(session, startedAt, this.sidecarClient.status(), this.modelProviderSelection));
         return session;
     }
 
     async stop(): Promise<void> {
         const timestamp = new Date().toISOString();
         const sessionId = this.session?.id;
-        this.session = this.session
-            ? {
-                  ...this.session,
-                  status: 'stopped',
-                  stoppedAt: timestamp,
-              }
-            : undefined;
-        this.emit({
-            type: 'session.stopped',
-            timestamp,
-            ...(sessionId ? { sessionId } : {}),
-            message: 'mission-control session stopped',
-            nativeSidecarStatus: this.sidecarClient.status(),
-            modelProviderSelection: this.modelProviderSelection,
-        });
+        this.session = stopRuntimeSession(this.session, timestamp);
+        this.emit(
+            sessionStoppedEvent({
+                timestamp,
+                ...(sessionId !== undefined ? { sessionId } : {}),
+                nativeSidecarStatus: this.sidecarClient.status(),
+                modelProviderSelection: this.modelProviderSelection,
+            }),
+        );
         await this.sidecarClient.stop();
     }
 
     async runDemoTask(): Promise<void> {
-        const session = this.ensureSession();
+        const session = ensureRuntimeSession(this.session);
         await runRuntimeDemoTask({
             sessionId: session.id,
             sidecarClient: this.sidecarClient,
@@ -113,7 +95,7 @@ export class AgentRuntime {
     }
 
     async runPromptTask(prompt: string): Promise<string> {
-        const session = this.ensureSession();
+        const session = ensureRuntimeSession(this.session);
         const taskId = this.createPromptTaskId();
         await this.requestPermission(
             {
@@ -123,30 +105,57 @@ export class AgentRuntime {
             },
             taskId,
         );
-        this.emit({
-            type: 'task.started',
-            timestamp: new Date().toISOString(),
-            sessionId: session.id,
-            taskId,
-            message: `user prompt: ${prompt}`,
-            nativeSidecarStatus: 'mock',
-            modelProviderSelection: this.modelProviderSelection,
-        });
-        const response = await this.runProviderPromptTask(taskId, prompt);
-        this.emit({
-            type: 'task.completed',
-            timestamp: new Date().toISOString(),
-            sessionId: session.id,
-            taskId,
-            message: response,
-            nativeSidecarStatus: 'mock',
-            modelProviderSelection: this.modelProviderSelection,
-        });
+        this.emit(
+            taskStartedEvent({
+                timestamp: new Date().toISOString(),
+                sessionId: session.id,
+                taskId,
+                prompt,
+                modelProviderSelection: this.modelProviderSelection,
+            }),
+        );
+        let response: string;
+        try {
+            response = await runRuntimePromptTask({
+                options: this.options,
+                sessionId: session.id,
+                taskId,
+                prompt,
+                modelProviderSelection: this.modelProviderSelection,
+                requestPermission: (request) => this.requestPermission(request, taskId),
+                onEnvelope: (envelope) => {
+                    emitRuntimeEnvelope(this.log, this.bus, envelope);
+                },
+            });
+        } catch (error: unknown) {
+            if (!(error instanceof RuntimeApprovalBlockedError)) {
+                throw error;
+            }
+            this.emit(
+                runBlockedEvent({
+                    timestamp: new Date().toISOString(),
+                    sessionId: session.id,
+                    taskId,
+                    modelProviderSelection: this.modelProviderSelection,
+                    ...blockedRuntimePromptMessage(error),
+                }),
+            );
+            return error.message;
+        }
+        this.emit(
+            taskCompletedEvent({
+                timestamp: new Date().toISOString(),
+                sessionId: session.id,
+                taskId,
+                response,
+                modelProviderSelection: this.modelProviderSelection,
+            }),
+        );
         return response;
     }
 
     async runSkillInvocationTask(input: SkillInvocationTaskInput): Promise<string> {
-        const session = this.ensureSession();
+        const session = ensureRuntimeSession(this.session);
         const taskId = this.createPromptTaskId();
         return runRuntimeSkillInvocationTask({
             task: input,
@@ -165,7 +174,7 @@ export class AgentRuntime {
     }
 
     async runGraph(graph: unknown, graphInput?: AbgGraphInput): Promise<AbgGraphRunResult> {
-        const session = this.ensureSession();
+        const session = ensureRuntimeSession(this.session);
         const result = await runAbgGraph({
             graph,
             sessionId: session.id,
@@ -180,7 +189,7 @@ export class AgentRuntime {
     }
 
     async requestPermission(request: PermissionRequest, taskId?: string): Promise<PermissionDecision> {
-        const session = this.ensureSession();
+        const session = ensureRuntimeSession(this.session);
         return this.approvalGate.requestPermission(request, {
             sessionId: session.id,
             ...(taskId !== undefined ? { taskId } : {}),
@@ -189,7 +198,7 @@ export class AgentRuntime {
     }
 
     updateApproval(input: ApprovalUpdateInput): void {
-        this.ensureSession();
+        ensureRuntimeSession(this.session);
         this.approvalGate.updateApproval(input);
     }
 
@@ -202,17 +211,17 @@ export class AgentRuntime {
     }
 
     getSnapshot(): AgentSnapshot {
-        const session = this.ensureSession();
+        const session = ensureRuntimeSession(this.session);
         return this.log.getSnapshot(session);
     }
 
     getGraphSnapshot(graphId: string): AbgGraphSnapshot {
-        this.ensureSession();
+        ensureRuntimeSession(this.session);
         return this.log.getGraphSnapshot(graphId);
     }
 
     getTimeline(): readonly AbgTimelineEntry[] {
-        this.ensureSession();
+        ensureRuntimeSession(this.session);
         return this.log.getTimeline();
     }
 
@@ -221,57 +230,9 @@ export class AgentRuntime {
         this.bus.emit(event);
     }
 
-    private emitProviderEnvelope(envelope: AgentEventEnvelope): void {
-        if (envelope.durability === 'durable') {
-            this.emit(envelope.event);
-            return;
-        }
-        this.bus.emit(envelope.event);
-    }
-
-    private ensureSession(): AgentSession {
-        if (this.session) {
-            return this.session;
-        }
-        throw new Error('AgentRuntime has not been started');
-    }
-
     private createPromptTaskId(): string {
-        this.promptTaskCounter += 1;
-        return `task_prompt_${this.promptTaskCounter}`;
-    }
-
-    private async runProviderPromptTask(taskId: string, prompt: string): Promise<string> {
-        const session = this.ensureSession();
-        if (this.options.provider === undefined) {
-            return `received prompt: ${prompt}`;
-        }
-        return runRuntimeProviderPromptTask({
-            provider: this.options.provider,
-            sessionId: session.id,
-            taskId,
-            prompt,
-            modelProviderSelection: this.modelProviderSelection,
-            ...(this.options.providerTimeoutMs !== undefined
-                ? { providerTimeoutMs: this.options.providerTimeoutMs }
-                : {}),
-            ...(this.options.providerRetryLimit !== undefined
-                ? { providerRetryLimit: this.options.providerRetryLimit }
-                : {}),
-            ...(this.options.providerTurnLoopLimit !== undefined
-                ? { providerTurnLoopLimit: this.options.providerTurnLoopLimit }
-                : {}),
-            ...(this.options.createToolRegistry !== undefined
-                ? {
-                      toolRegistry: await this.options.createToolRegistry((request) =>
-                          this.requestPermission(request, taskId),
-                      ),
-                  }
-                : {}),
-            requestPermission: (request) => this.requestPermission(request, taskId),
-            onEnvelope: (envelope) => {
-                this.emitProviderEnvelope(envelope);
-            },
-        });
+        const allocation = allocatePromptTaskId(this.promptTaskCounter);
+        this.promptTaskCounter = allocation.nextPromptTaskCounter;
+        return allocation.taskId;
     }
 }

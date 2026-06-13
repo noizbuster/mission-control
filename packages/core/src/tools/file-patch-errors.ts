@@ -4,6 +4,8 @@ import { ToolExecutionError } from './tool-registry-types.js';
 export type FilePatchFailureCode =
     | 'approval_denied'
     | 'approval_required'
+    | 'edit_not_found'
+    | 'edit_not_unique'
     | 'binary_file'
     | 'dirty_target'
     | 'git_status_failed'

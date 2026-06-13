@@ -1,3 +1,4 @@
+import type { PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { registerReadOnlyRepoTools } from './read-tools.js';
 import { ToolRegistry } from './tool-registry.js';
@@ -13,7 +14,7 @@ describe('read-only repo tools', () => {
         workspaces.length = 0;
     });
 
-    it('registers repo.read repo.list and repo.search advertisements', async () => {
+    it('registers compatibility tools and coding-agent aliases', async () => {
         // Given
         const workspaceRoot = await createWorkspace();
         const registry = new ToolRegistry();
@@ -22,19 +23,66 @@ describe('read-only repo tools', () => {
         const advertisements = await registerReadOnlyRepoTools(registry, { workspaceRoot });
 
         // Then
-        expect(advertisements.map((tool) => tool.name)).toEqual(['repo.read', 'repo.list', 'repo.search']);
+        expect(advertisements.map((tool) => tool.name)).toEqual([
+            'repo.read',
+            'repo.list',
+            'repo.search',
+            'read',
+            'ls',
+            'grep',
+            'find',
+        ]);
         expect(advertisements.map((tool) => tool.capabilityClasses)).toEqual([
+            ['repo.read'],
+            ['repo.read'],
+            ['repo.read'],
+            ['repo.read'],
             ['repo.read'],
             ['repo.read'],
             ['repo.read'],
         ]);
     });
 
+    it('keeps coding-agent aliases output-identical to compatibility tools on safe paths', async () => {
+        // Given
+        const workspaceRoot = await createWorkspace();
+        await mkdir(join(workspaceRoot, 'src'));
+        await writeFile(join(workspaceRoot, 'README.md'), 'alpha\nbeta\n', 'utf8');
+        await writeFile(join(workspaceRoot, 'src', 'index.ts'), 'const alpha = 1;\nconst beta = 2;\n', 'utf8');
+        const registry = await createRegistry(workspaceRoot);
+
+        // When
+        const repoRead = await invokeTool(registry, 'repo.read', { path: 'README.md' });
+        const aliasRead = await invokeTool(registry, 'read', { path: 'README.md' });
+        const repoList = await invokeTool(registry, 'repo.list', { path: '.' });
+        const aliasList = await invokeTool(registry, 'ls', { path: '.' });
+        const repoSearch = await invokeTool(registry, 'repo.search', { pattern: 'alpha', path: '.' });
+        const aliasGrep = await invokeTool(registry, 'grep', { pattern: 'alpha', path: '.' });
+        const aliasFind = await invokeTool(registry, 'find', { pattern: 'alpha', path: '.' });
+
+        // Then
+        expect(aliasRead.structuredOutput).toEqual(repoRead.structuredOutput);
+        expect(aliasRead.result.output).toBe(repoRead.result.output);
+        expect(aliasList.structuredOutput).toEqual(repoList.structuredOutput);
+        expect(aliasList.result.output).toBe(repoList.result.output);
+        expect(aliasGrep.structuredOutput).toEqual(repoSearch.structuredOutput);
+        expect(aliasGrep.result.output).toBe(repoSearch.result.output);
+        expect(aliasFind.structuredOutput).toEqual(repoSearch.structuredOutput);
+        expect(aliasFind.result.output).toBe(repoSearch.result.output);
+    });
+
     it('reads workspace files with truncation metadata', async () => {
         // Given
         const workspaceRoot = await createWorkspace();
         await writeFile(join(workspaceRoot, 'notes.txt'), '0123456789abcdef', 'utf8');
-        const registry = await createRegistry(workspaceRoot, { maxReadBytes: 8 });
+        const requests: PermissionRequest[] = [];
+        const registry = await createRegistry(workspaceRoot, {
+            maxReadBytes: 8,
+            requestPermission: async (request) => {
+                requests.push(request);
+                return { requestId: request.id, status: 'allow', reason: 'test allow read' };
+            },
+        });
         const advertised = findAdvertisement(registry, 'repo.read');
 
         // When
@@ -56,6 +104,16 @@ describe('read-only repo tools', () => {
             returnedBytes: 8,
         });
         expect(settlement.result.output).toContain('truncated');
+        expect(requests).toMatchObject([
+            {
+                action: 'repo.read',
+                permission: {
+                    kind: 'read',
+                    patterns: ['notes.txt'],
+                    workspaceRoot,
+                },
+            },
+        ]);
     });
 
     it('rejects parent traversal and symlink escapes before reading', async () => {
@@ -122,15 +180,49 @@ describe('read-only repo tools', () => {
         const workspaceRoot = await createWorkspace();
         await writeFile(join(workspaceRoot, 'image.bin'), Buffer.from([0, 1, 2, 3]));
         const registry = await createRegistry(workspaceRoot);
-        const advertised = findAdvertisement(registry, 'repo.read');
 
         // When
-        const missing = await invokeRead(registry, advertised.version, 'missing.txt');
-        const binary = await invokeRead(registry, advertised.version, 'image.bin');
+        const repoRead = findAdvertisement(registry, 'repo.read');
+        const missing = await invokeRead(registry, repoRead.version, 'missing.txt');
+        const binary = await invokeRead(registry, repoRead.version, 'image.bin');
+        const aliasBinary = await invokeTool(registry, 'read', { path: 'image.bin' });
 
         // Then
         expect(missing.result.error?.message).toContain('not_found');
         expect(binary.result.error?.message).toContain('binary_file');
+        expect(aliasBinary.result.error?.message).toContain('binary_file');
+    });
+
+    it('applies search caps and no-match behavior to grep and find aliases', async () => {
+        // Given
+        const workspaceRoot = await createWorkspace();
+        await mkdir(join(workspaceRoot, 'src'));
+        await writeFile(join(workspaceRoot, 'src', 'a.ts'), 'needle one\nneedle two is a long line', 'utf8');
+        await writeFile(join(workspaceRoot, 'src', 'b.ts'), 'needle three', 'utf8');
+        const registry = await createRegistry(workspaceRoot, { maxSearchLineChars: 10, maxSearchMatches: 2 });
+
+        // When
+        const grep = await invokeTool(registry, 'grep', { pattern: 'needle', path: 'src' });
+        const find = await invokeTool(registry, 'find', { pattern: 'needle', path: 'src' });
+        const grepNoMatch = await invokeTool(registry, 'grep', { pattern: 'absent', path: 'src' });
+        const findNoMatch = await invokeTool(registry, 'find', { pattern: 'absent', path: 'src' });
+
+        // Then
+        expect(grep.structuredOutput).toMatchObject({
+            kind: 'search',
+            pattern: 'needle',
+            truncated: true,
+            totalMatches: 3,
+            matches: [
+                { path: 'src/a.ts', line: 1, text: 'needle one', textTruncated: false },
+                { path: 'src/a.ts', line: 2, text: 'needle ...', textTruncated: true },
+            ],
+        });
+        expect(find.structuredOutput).toEqual(grep.structuredOutput);
+        expect(grep.result.output).toContain('[truncated: 2 of 3 matches returned]');
+        expect(find.result.output).toContain('[truncated: 2 of 3 matches returned]');
+        expect(grepNoMatch.result.output).toBe('No matches for absent');
+        expect(findNoMatch.result.output).toBe('No matches for absent');
     });
 
     it('lists workspace directories with entry bounds', async () => {
@@ -217,10 +309,24 @@ function findAdvertisement(registry: ToolRegistry, name: string) {
 }
 
 async function invokeRead(registry: ToolRegistry, advertisedVersion: string, path: string) {
+    return invokeToolWithVersion(registry, 'repo.read', advertisedVersion, { path });
+}
+
+async function invokeTool(registry: ToolRegistry, toolName: string, input: Record<string, unknown>) {
+    const advertised = findAdvertisement(registry, toolName);
+    return invokeToolWithVersion(registry, toolName, advertised.version, input);
+}
+
+async function invokeToolWithVersion(
+    registry: ToolRegistry,
+    toolName: string,
+    advertisedVersion: string,
+    input: Record<string, unknown>,
+) {
     return registry.invoke({
-        toolCallId: `read_${path.replaceAll(/[^a-z0-9]+/gi, '_')}`,
-        toolName: 'repo.read',
+        toolCallId: `${toolName.replaceAll(/[^a-z0-9]+/gi, '_')}_call`,
+        toolName,
         advertisedVersion,
-        argumentsJson: JSON.stringify({ path }),
+        argumentsJson: JSON.stringify(input),
     });
 }

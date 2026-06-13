@@ -6,7 +6,9 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
+import { exportSessionArchiveFile, importSessionArchiveFile } from './session-archive.js';
 import { formatSessionCatalogEntry, listSessionCatalogEntries, readSessionCatalogEntry } from './session-catalog.js';
+import { parseCliSessionId } from './session-id.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -38,6 +40,13 @@ export async function runSessionCommand(args: CliArgs): Promise<string> {
             return `${JSON.stringify(await showSession(requireSessionId(args)), null, 2)}\n`;
         case 'session-replay':
             return `${(await replaySession(requireSessionId(args))).map((record) => JSON.stringify(record)).join('\n')}\n`;
+        case 'session-export':
+            return exportSessionArchiveFile({
+                sessionId: requireSessionId(args),
+                filePath: requireFilePath(args),
+            });
+        case 'session-import':
+            return importSessionArchiveFile({ filePath: requireFilePath(args) });
         default:
             throw new CliSessionCommandError({
                 code: 'unsupported_session_command',
@@ -56,10 +65,18 @@ async function showSession(sessionId: string) {
         sessionId,
         status: summary.status,
         eventCount: summary.eventCount,
+        messageCount: summary.messageCount,
         lockState: summary.lockState,
+        createdAt: summary.createdAt,
         indexed: summary.indexed,
         indexState: summary.indexState,
         updatedAt: summary.updatedAt,
+        cwd: summary.cwd,
+        trustedRoot: summary.trustedRoot,
+        name: summary.name,
+        activeLeafId: summary.activeLeafId,
+        parentSessionId: summary.parentSessionId,
+        trustStatus: summary.trustStatus,
         snapshot: projection.projection.snapshot,
         graphSnapshots: projection.projection.graphSnapshots,
         approvals: projection.projection.approvals,
@@ -123,8 +140,18 @@ function requireSessionId(args: CliArgs): string {
     return requireValidSessionId(args.sessionId);
 }
 
+function requireFilePath(args: CliArgs): string {
+    if (args.filePath === undefined) {
+        throw new CliSessionCommandError({
+            code: 'invalid_session_id',
+            message: 'Session file path is required',
+        });
+    }
+    return args.filePath;
+}
+
 function requireValidSessionId(sessionId: string): string {
-    const parsed = parseSessionId(sessionId);
+    const parsed = parseCliSessionId(sessionId);
     if (parsed === undefined) {
         throw new CliSessionCommandError({
             code: 'invalid_session_id',
@@ -133,10 +160,6 @@ function requireValidSessionId(sessionId: string): string {
         });
     }
     return parsed;
-}
-
-function parseSessionId(sessionId: string): string | undefined {
-    return /^[A-Za-z0-9._-]+$/.test(sessionId) ? sessionId : undefined;
 }
 
 function sessionLogsDir(): string {

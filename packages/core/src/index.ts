@@ -27,6 +27,28 @@ export type { AbgTimelineEntry } from './behavior/timeline.js';
 export { projectAbgTimeline } from './behavior/timeline.js';
 export type { CancellationToken, TaskHandle, TaskStatus } from './cancellation.js';
 export {
+    loadProjectContextMessages,
+    type ProjectContextMessageOptions,
+    prependProjectContextMessages,
+} from './context/project-context-messages.js';
+export {
+    type DeniedProjectResource,
+    defaultProjectResourcePaths,
+    loadProjectResources,
+    type ProjectResource,
+    type ProjectResourceLoadInput,
+    type ProjectResourceLoadResult,
+} from './context/project-resource-loader.js';
+export {
+    hasPendingDesktopApprovals,
+    prepareSessionCompaction,
+    projectApprovalContinuationMessages,
+    projectApprovalContinuationTranscript,
+    projectDesktopApprovalContinuationMessages,
+    type SequencedAgentMessage,
+    type SessionCompactionPreparation,
+} from './desktop-approval-transcript.js';
+export {
     createDesktopSessionCommandService,
     type DesktopCommandReceipt,
     type DesktopPromptCommandInput,
@@ -34,32 +56,17 @@ export {
     type DesktopSessionCommandService,
     type DesktopSessionCommandServiceOptions,
 } from './desktop-session-commands.js';
-export { EventBus } from './event-bus.js';
-export type { DataDirResolutionOptions } from './memory/data-dir.js';
-export { missionControlDataDirEnvKey, resolveMissionControlDataDir } from './memory/data-dir.js';
-export { InMemoryEventStore } from './memory/in-memory-store.js';
-export type {
-    JsonlSessionEventIdFactory,
-    JsonlSessionEventStoreOpenOptions,
-} from './memory/jsonl-session-event-store.js';
-export { JsonlSessionEventStore, JsonlSessionEventStoreError } from './memory/jsonl-session-event-store.js';
-export type { MemoryStore } from './memory/memory-store.js';
 export {
-    createFileSessionIndexStore,
-    rebuildSessionIndexFromJsonl,
-} from './memory/session-index-file-store.js';
-export { deriveSessionIndexRecords } from './memory/session-index-projection.js';
-export type {
-    SessionIndexApprovalRecord,
-    SessionIndexDiagnostic,
-    SessionIndexProviderFailureRecord,
-    SessionIndexRebuildResult,
-    SessionIndexRecord,
-    SessionIndexRunRecord,
-    SessionIndexSessionRecord,
-    SessionIndexStore,
-    SessionIndexToolRecord,
-} from './memory/session-index-types.js';
+    type DesktopApprovalDecisionInput,
+    type DesktopApprovalSettlementOptions,
+    type DesktopApprovalSettlementStatus,
+    type DesktopApprovalStore,
+    settleDesktopApproval,
+} from './desktop-tool-approvals.js';
+export { EventBus } from './event-bus.js';
+export * from './memory/index.js';
+export { PermissionSession, type PermissionSessionOptions } from './permission/session.js';
+export { PermissionRuleStore, type PermissionRuleStoreOptions } from './permission/store.js';
 export { createAllowPermissionDecision, createDefaultPermissionDecision } from './permissions.js';
 export {
     appendProviderToolResultMessages,
@@ -199,34 +206,14 @@ export {
     type SessionBranchSummary,
     type SessionBranchTree,
     type SessionReplayProjection,
+    type SessionTreeArchiveExport,
+    type SessionTreeArchiveImport,
+    type SessionTreeCompactionBoundary,
+    type SessionTreeNode,
+    type SessionTreeProjection,
+    type SessionTreeProjectionDiagnostic,
     type ToolOutcomeProjection,
     type ToolOutcomeStatus,
 } from './session-replay.js';
-export {
-    type CommandExecutionRequest,
-    type CommandExecutionResult,
-    type CommandRunToolOptions,
-    createCommandRunToolRegistration,
-    registerCommandRunTool,
-} from './tools/command-run.js';
-export {
-    createFilePatchToolRegistration,
-    type FilePatchToolOptions,
-    registerFilePatchTool,
-} from './tools/file-patch.js';
-export {
-    createReadOnlyRepoToolRegistrations,
-    type ReadOnlyRepoToolOptions,
-    registerReadOnlyRepoTools,
-} from './tools/read-tools.js';
-export {
-    type ToolAdvertisement,
-    type ToolExecutionContext,
-    ToolExecutionError,
-    type ToolInvocationInput,
-    type ToolInvocationSettlement,
-    type ToolModelOutput,
-    type ToolOutputLimit,
-    type ToolRegistration,
-    ToolRegistry,
-} from './tools/tool-registry.js';
+export * from './tools/index.js';
+export * from './trust/index.js';

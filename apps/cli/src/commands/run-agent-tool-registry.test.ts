@@ -28,7 +28,7 @@ describe('runAgent interactive coding tool registry', () => {
         tempRoots.length = 0;
     });
 
-    it('advertises repo tools and executes repo.list plus repo.read before approved file.patch', async () => {
+    it('advertises coding-agent aliases and executes ls plus read before approved file.patch', async () => {
         const dataDir = await tempRoot('mctrl-tools-data-');
         const workspaceRoot = await tempRoot('mctrl-tools-workspace-');
         await mkdir(join(workspaceRoot, 'src'));
@@ -54,13 +54,13 @@ describe('runAgent interactive coding tool registry', () => {
                     {
                         kind: 'tool_call_completed',
                         toolCallId: 'list_call',
-                        toolName: 'repo.list',
+                        toolName: 'ls',
                         argumentsJson: JSON.stringify({ path: '.' }),
                     },
                     {
                         kind: 'tool_call_completed',
                         toolCallId: 'read_call',
-                        toolName: 'repo.read',
+                        toolName: 'read',
                         argumentsJson: JSON.stringify({ path: 'src/index.ts' }),
                     },
                     { kind: 'response_completed', content: 'inspected workspace' },
@@ -82,15 +82,18 @@ describe('runAgent interactive coding tool registry', () => {
         });
 
         expect(requests[0]?.tools?.map((tool) => tool.name)).toEqual([
-            'repo.read',
-            'repo.list',
-            'repo.search',
+            'read',
+            'ls',
+            'grep',
+            'find',
+            'file.edit',
+            'file.write',
             'file.patch',
             'command.run',
         ]);
-        expect(output).not.toContain('Approve repo.list?');
-        expect(output).not.toContain('Approve repo.read?');
-        expect(output).toContain('Approve file.patch? [y/N]:');
+        expect(output).not.toContain('Approve ls?');
+        expect(output).not.toContain('Approve read?');
+        expect(output).toContain('Approve file.patch? [once/always/deny]:');
         expect(output).toContain('Applied patch: .mctrl-task4.txt');
         expect(await readFile(join(workspaceRoot, '.mctrl-task4.txt'), 'utf8')).toBe('approved\n');
         expect(events).toContainEqual(
@@ -107,7 +110,7 @@ describe('runAgent interactive coding tool registry', () => {
         );
     });
 
-    it('denies repo.read of reference repos without an approval prompt', async () => {
+    it('denies read of reference repos without an approval prompt', async () => {
         const dataDir = await tempRoot('mctrl-tools-data-');
         const workspaceRoot = await tempRoot('mctrl-tools-workspace-');
         await mkdir(join(workspaceRoot, 'temp', 'ref-repos', 'opencode'), { recursive: true });
@@ -131,7 +134,7 @@ describe('runAgent interactive coding tool registry', () => {
                         {
                             kind: 'tool_call_completed',
                             toolCallId: 'read_denied',
-                            toolName: 'repo.read',
+                            toolName: 'read',
                             argumentsJson: JSON.stringify({ path: 'temp/ref-repos/opencode/README.md' }),
                         },
                         { kind: 'response_completed', content: 'read denied by registry' },
@@ -141,8 +144,8 @@ describe('runAgent interactive coding tool registry', () => {
             ),
         });
 
-        expect(output).not.toContain('Approve repo.read?');
-        expect(output).toContain('repo.read failed: workspace_denied');
+        expect(output).not.toContain('Approve read?');
+        expect(output).toContain('read failed: workspace_denied');
     });
 
     async function tempRoot(prefix: string): Promise<string> {

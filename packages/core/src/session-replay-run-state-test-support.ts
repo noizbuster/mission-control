@@ -55,8 +55,8 @@ export function expectBlockedApprovalAndResumedRunProjection(): void {
             envelope(
                 runEvent(sessionId, 'run.command.received', 'run command: resume', {
                     command: 'resume',
-                    state: 'idle',
-                    runId: 'run_2',
+                    state: 'blocked_on_approval',
+                    runId: 'run_1',
                 }),
                 6,
                 'event_resume_command',
@@ -65,7 +65,7 @@ export function expectBlockedApprovalAndResumedRunProjection(): void {
                 runEvent(sessionId, 'run.started', 'run resumed', {
                     command: 'resume',
                     state: 'running',
-                    runId: 'run_2',
+                    runId: 'run_1',
                 }),
                 7,
                 'event_resume_started',
@@ -74,7 +74,7 @@ export function expectBlockedApprovalAndResumedRunProjection(): void {
                 runEvent(sessionId, 'run.completed', 'run completed', {
                     command: 'resume',
                     state: 'completed',
-                    runId: 'run_2',
+                    runId: 'run_1',
                 }),
                 8,
                 'event_resume_completed',
@@ -92,9 +92,24 @@ export function expectBlockedApprovalAndResumedRunProjection(): void {
             state: 'blocked_on_approval',
             toolCallId: 'patch_call',
         }),
-        expect.objectContaining({ eventId: 'event_resume_command', command: 'resume', state: 'idle' }),
-        expect.objectContaining({ eventId: 'event_resume_started', command: 'resume', state: 'running' }),
-        expect.objectContaining({ eventId: 'event_resume_completed', command: 'resume', state: 'completed' }),
+        expect.objectContaining({
+            eventId: 'event_resume_command',
+            command: 'resume',
+            state: 'blocked_on_approval',
+            runId: 'run_1',
+        }),
+        expect.objectContaining({
+            eventId: 'event_resume_started',
+            command: 'resume',
+            state: 'running',
+            runId: 'run_1',
+        }),
+        expect.objectContaining({
+            eventId: 'event_resume_completed',
+            command: 'resume',
+            state: 'completed',
+            runId: 'run_1',
+        }),
     ]);
 }
 

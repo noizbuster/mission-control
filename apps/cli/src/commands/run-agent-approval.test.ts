@@ -56,7 +56,10 @@ describe('runAgent approval hardening', () => {
         });
 
         expect(output).toContain('Denied file.patch');
-        expect(output).toContain('Resume requested for session_cli_denied_resume');
+        expect(output).toContain('Resuming blocked run for session_cli_denied_resume');
+        expect(output).toContain(
+            'Run blocked (resumable): approval_denied: interactive CLI approval. Resume with /resume.',
+        );
         expect(events.map((event) => event.type)).not.toContain('file.diff.applied');
         await expect(readFile(join(workspaceRoot, '.mission-control-cli-denied-resume.txt'), 'utf8')).rejects.toThrow();
     });
@@ -95,7 +98,7 @@ describe('runAgent approval hardening', () => {
         });
 
         expect(output).toContain('Denied file.patch');
-        expect(output).toContain('Run blocked: approval_denied: interrupted by user');
+        expect(output).toContain('Run blocked (resumable): approval_denied: interrupted by user. Resume with /resume.');
         expect(events.map((event) => event.type)).not.toContain('file.diff.applied');
         await expect(
             readFile(join(workspaceRoot, '.mission-control-cli-blocked-interrupt.txt'), 'utf8'),

@@ -6,7 +6,7 @@ export type GeneratedAuthField = {
     readonly required: boolean;
 };
 
-const authFieldOverrides = {
+const authFieldOverrides: Readonly<Record<string, readonly GeneratedAuthField[]>> = {
     google: [
         {
             id: 'apiKey',
@@ -58,7 +58,7 @@ const authFieldOverrides = {
         field('account', 'Snowflake account', ['SNOWFLAKE_ACCOUNT'], false),
         field('pat', 'Snowflake Cortex PAT', ['SNOWFLAKE_CORTEX_PAT'], true),
     ],
-} satisfies Record<string, readonly GeneratedAuthField[]>;
+};
 
 export function resolveAuthFields(providerID: string, env: readonly string[]): readonly GeneratedAuthField[] {
     const override = authFieldOverrides[providerID];

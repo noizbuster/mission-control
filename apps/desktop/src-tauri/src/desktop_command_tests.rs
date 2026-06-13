@@ -1,15 +1,13 @@
 use crate::desktop_commands::{
     DesktopApprovalDecisionInput, DesktopPromptCommandInput, DesktopRunCommandInput,
-    decide_approval_in_data_dir, interrupt_run_in_data_dir, queue_follow_up_in_data_dir,
+    decide_approval_with_bridge, interrupt_run_in_data_dir, queue_follow_up_in_data_dir,
     resume_run_in_data_dir, steer_run_in_data_dir, submit_prompt_in_data_dir,
     submit_prompt_with_bridge,
 };
+use crate::desktop_command_test_support::{seed_pending_file_patch_approval, temp_data_dir};
 use crate::sessions::{SessionLogState, read_session_events_from_data_dir};
 use std::error::Error;
-use std::fs::{create_dir_all, remove_dir_all};
-use std::io::Write;
-use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::fs::remove_dir_all;
 
 #[test]
 fn prompt_commands_call_core_service_and_append_parseable_session_events()
@@ -60,7 +58,10 @@ fn run_and_approval_commands_append_parseable_session_events() -> Result<(), Box
         ".mission-control-denied.txt",
         "denied write",
     )?;
-    let decided = decide_approval_in_data_dir(approval, &data_dir)?;
+    let bridge = crate::desktop_command_bridge::DesktopCommandBridge::with_workspace_root(
+        std::env::current_dir()?,
+    )?;
+    let decided = decide_approval_with_bridge(approval, &data_dir, &bridge)?;
     let log = read_session_events_from_data_dir(&data_dir, "session_bridge_run")?;
 
     assert_eq!(queued.status, "queued");
@@ -134,119 +135,4 @@ fn run_commands(log: &crate::sessions::DesktopSessionLog) -> Vec<String> {
                 .map(str::to_owned)
         })
         .collect()
-}
-
-fn seed_pending_file_patch_approval(
-    data_dir: &std::path::Path,
-    session_id: &str,
-    approval_id: &str,
-    file_path: &str,
-    content: &str,
-) -> Result<(), Box<dyn Error>> {
-    create_dir_all(data_dir.join("sessions"))?;
-    let path = data_dir
-        .join("sessions")
-        .join(format!("{session_id}.jsonl"));
-    if !path.exists() {
-        std::fs::write(
-            &path,
-            format!(
-                "{{\"kind\":\"mission-control.session-log\",\"version\":1,\"sessionId\":\"{session_id}\",\"createdAt\":\"2026-06-09T00:00:00.000Z\"}}\n"
-            ),
-        )?;
-    }
-    let contents = std::fs::read_to_string(&path)?;
-    let sequence = contents.lines().count().saturating_sub(1);
-    let request_id = approval_id
-        .strip_prefix("approval_")
-        .map_or_else(|| approval_id.to_owned(), str::to_owned);
-    let tool_call_id = request_id
-        .strip_prefix("permission_")
-        .map_or_else(|| request_id.clone(), str::to_owned);
-    let patch = [
-        format!("diff --git a/{file_path} b/{file_path}"),
-        "--- /dev/null".to_owned(),
-        format!("+++ b/{file_path}"),
-        "@@ -0,0 +1 @@".to_owned(),
-        format!("+{content}"),
-        String::new(),
-    ]
-    .join("\n");
-    let arguments_json = serde_json::to_string(&serde_json::json!({ "patch": patch }))?;
-    let tool_call = serde_json::json!({
-        "kind": "mission-control.session-event",
-        "version": 1,
-        "event": {
-            "eventId": format!("seed_tool_call_{sequence}"),
-            "sequence": sequence,
-            "createdAt": "2026-06-09T00:00:00.000Z",
-            "sessionId": session_id,
-            "durability": "durable",
-            "event": {
-                "type": "task.progress",
-                "timestamp": "2026-06-09T00:00:00.000Z",
-                "sessionId": session_id,
-                "message": "tool call completed: file.patch",
-                "nativeSidecarStatus": "mock",
-                "modelProviderSelection": {
-                    "providerID": "mock",
-                    "modelID": "mission-control-demo"
-                },
-                "providerStreamChunk": {
-                    "kind": "tool_call_completed",
-                    "requestId": "request_seed",
-                    "sequence": 1,
-                    "toolCall": {
-                        "toolCallId": tool_call_id,
-                        "toolName": "file.patch",
-                        "argumentsJson": arguments_json
-                    }
-                }
-            }
-        }
-    });
-    let record = serde_json::json!({
-        "kind": "mission-control.session-event",
-        "version": 1,
-        "event": {
-            "eventId": format!("seed_approval_{}", sequence + 1),
-            "sequence": sequence + 1,
-            "createdAt": "2026-06-09T00:00:00.000Z",
-            "sessionId": session_id,
-            "durability": "durable",
-            "event": {
-                "type": "approval.requested",
-                "timestamp": "2026-06-09T00:00:00.000Z",
-                "sessionId": session_id,
-                "message": "approval requested: file.patch",
-                "nativeSidecarStatus": "mock",
-                "modelProviderSelection": {
-                    "providerID": "mock",
-                    "modelID": "mission-control-demo"
-                },
-                "approvalRecord": {
-                    "approvalId": approval_id,
-                    "requestId": request_id,
-                    "policyDecision": "requires_approval",
-                    "state": "pending",
-                    "subject": {
-                        "kind": "tool",
-                        "id": "file.patch"
-                    },
-                    "requestedAt": "2026-06-09T00:00:00.000Z",
-                    "reason": "approve file.patch"
-                }
-            }
-        }
-    });
-    std::fs::OpenOptions::new()
-        .append(true)
-        .open(path)?
-        .write_all(format!("{tool_call}\n{record}\n").as_bytes())?;
-    Ok(())
-}
-
-fn temp_data_dir(label: &str) -> Result<PathBuf, Box<dyn Error>> {
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    Ok(std::env::temp_dir().join(format!("mission-control-desktop-{label}-{nanos}")))
 }

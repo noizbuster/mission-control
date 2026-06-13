@@ -35,6 +35,21 @@ describe('tauri desktop agent client', () => {
                             state: 'available',
                             eventCount: 1,
                             diagnostics: [],
+                            sessionTree: {
+                                sessionName: 'Coding parity session',
+                                workspaceTrust: 'trusted',
+                                trustedRoot: '/workspace/mission-control',
+                                entryCount: 1,
+                                branchCount: 1,
+                            },
+                            stats: {
+                                eventCount: 1,
+                                pendingApprovalCount: 0,
+                                blockedRunCount: 0,
+                                commandEventCount: 0,
+                                diffEventCount: 0,
+                                toolOutcomeCount: 0,
+                            },
                         },
                     ];
                 case 'read_session_events':
@@ -54,6 +69,21 @@ describe('tauri desktop agent client', () => {
                         eventCount: 1,
                         graphIds: ['coding-agent'],
                         diagnostics: [],
+                        sessionTree: {
+                            sessionName: 'Coding parity session',
+                            workspaceTrust: 'trusted',
+                            trustedRoot: '/workspace/mission-control',
+                            entryCount: 1,
+                            branchCount: 1,
+                        },
+                        stats: {
+                            eventCount: 1,
+                            pendingApprovalCount: 0,
+                            blockedRunCount: 0,
+                            commandEventCount: 0,
+                            diffEventCount: 0,
+                            toolOutcomeCount: 0,
+                        },
                     };
                 default:
                     throw new Error(`unexpected command ${command}`);
@@ -74,10 +104,35 @@ describe('tauri desktop agent client', () => {
                 state: 'available',
                 eventCount: 1,
                 diagnostics: [],
+                sessionTree: {
+                    sessionName: 'Coding parity session',
+                    workspaceTrust: 'trusted',
+                    trustedRoot: '/workspace/mission-control',
+                    entryCount: 1,
+                    branchCount: 1,
+                },
+                stats: {
+                    eventCount: 1,
+                    pendingApprovalCount: 0,
+                    blockedRunCount: 0,
+                    commandEventCount: 0,
+                    diffEventCount: 0,
+                    toolOutcomeCount: 0,
+                },
             },
         ]);
         expect(log.envelopes).toEqual([envelope]);
-        expect(snapshot.graphIds).toEqual(['coding-agent']);
+        expect(snapshot).toMatchObject({
+            graphIds: ['coding-agent'],
+            sessionTree: {
+                workspaceTrust: 'trusted',
+                trustedRoot: '/workspace/mission-control',
+            },
+            stats: {
+                eventCount: 1,
+                pendingApprovalCount: 0,
+            },
+        });
     });
 
     it('rejects malformed Tauri payloads at the client boundary', async () => {

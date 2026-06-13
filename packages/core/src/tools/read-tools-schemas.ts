@@ -1,3 +1,4 @@
+import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { z } from 'zod';
 
 export const readInputSchema = z
@@ -74,6 +75,7 @@ export type SearchOutput = z.infer<typeof searchOutputSchema>;
 
 export type ReadOnlyRepoToolOptions = {
     readonly workspaceRoot: string;
+    readonly requestPermission?: (request: PermissionRequest) => Promise<PermissionDecision>;
     readonly maxReadBytes?: number;
     readonly maxListEntries?: number;
     readonly maxSearchMatches?: number;
@@ -83,6 +85,8 @@ export type ReadOnlyRepoToolOptions = {
 };
 
 export type ResolvedReadOnlyRepoToolOptions = {
+    readonly workspaceRoot: string;
+    readonly requestPermission?: (request: PermissionRequest) => Promise<PermissionDecision>;
     readonly maxReadBytes: number;
     readonly maxListEntries: number;
     readonly maxSearchMatches: number;
@@ -111,6 +115,8 @@ export function searchModelOutput(output: SearchOutput): string {
 
 export function resolveOptions(options: ReadOnlyRepoToolOptions): ResolvedReadOnlyRepoToolOptions {
     return {
+        workspaceRoot: options.workspaceRoot,
+        ...(options.requestPermission !== undefined ? { requestPermission: options.requestPermission } : {}),
         maxReadBytes: options.maxReadBytes ?? 50 * 1024,
         maxListEntries: options.maxListEntries ?? 500,
         maxSearchMatches: options.maxSearchMatches ?? 100,

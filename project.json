@@ -15,7 +15,7 @@
       "executor": "nx:run-commands",
       "outputs": [],
       "options": {
-        "command": "node -e \"console.log('workspace typecheck is covered by project typecheck targets')\""
+        "command": "tsc -p scripts/tsconfig.json --noEmit"
       }
     },
     "lint": {

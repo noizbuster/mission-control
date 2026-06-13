@@ -125,6 +125,14 @@ describe('interactive coding-agent redaction', () => {
         const previewOutput = `${commandPreview}\n${patchPreview}`;
         expect(previewOutput).toContain('[REDACTED_CREDENTIAL]');
         expect(previewOutput).not.toContain(secret);
+        expect(commandPreview).toContain(
+            'Run blocked (resumable): approval_denied: interactive CLI approval. Resume with /resume.',
+        );
+        expect(commandPreview).toContain('Pending tool call: command_preview_secret.');
+        expect(patchPreview).toContain(
+            'Run blocked (resumable): approval_denied: interactive CLI approval. Resume with /resume.',
+        );
+        expect(patchPreview).toContain('Pending tool call: patch_preview_secret.');
     });
 
     it('redacts raw provider failures in CLI errors persisted JSONL and replay JSONL', async () => {

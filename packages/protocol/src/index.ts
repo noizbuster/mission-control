@@ -65,13 +65,6 @@ export {
     ApprovalSubjectSchema,
 } from './approval.js';
 export {
-    COMMAND_EVENT_STATUSES,
-    type CommandEventStatus,
-    CommandEventStatusSchema,
-    type CommandRunEventMetadata,
-    CommandRunEventMetadataSchema,
-} from './command-events.js';
-export {
     DIFF_CHANGE_KINDS,
     DIFF_LINE_KINDS,
     type DiffChangeKind,
@@ -85,16 +78,7 @@ export {
     DiffLineKindSchema,
     DiffLineSchema,
 } from './diff-events.js';
-export {
-    PROVIDER_ADAPTER_FAMILIES,
-    PROVIDER_CAPABILITY_STATUSES,
-    type ProviderAdapterFamily,
-    ProviderAdapterFamilySchema,
-    type ProviderCapabilityStatus,
-    ProviderCapabilityStatusSchema,
-    type ProviderExecutionCapability,
-    ProviderExecutionCapabilitySchema,
-} from './provider-auth.js';
+export * from './misc-exports.js';
 export {
     PROTOCOL_ERROR_CODES,
     PROVIDER_FINISH_REASONS,
@@ -132,16 +116,6 @@ export {
     type ToolResultStatus,
     ToolResultStatusSchema,
 } from './provider-events.js';
-export {
-    RUN_COORDINATOR_COMMANDS,
-    RUN_COORDINATOR_STATES,
-    type RunCoordinatorCommand,
-    RunCoordinatorCommandSchema,
-    type RunCoordinatorEventMetadata,
-    RunCoordinatorEventMetadataSchema,
-    type RunCoordinatorState,
-    RunCoordinatorStateSchema,
-} from './run-coordinator.js';
 export {
     AGENT_EVENT_TYPES,
     type AgentEvent,
@@ -235,6 +209,7 @@ export {
     type ToolAgentMessage,
     ToolAgentMessageSchema,
 } from './schema.js';
+export * from './session-tree.js';
 export {
     TRANSCRIPT_DELIVERY_MODES,
     TRANSCRIPT_VISIBILITIES,

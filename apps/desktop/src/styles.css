@@ -377,7 +377,7 @@ h2 {
     background: var(--panel);
     display: grid;
     gap: 8px;
-    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     min-height: 34px;
     padding: 0 10px;
     text-align: left;
@@ -393,6 +393,15 @@ h2 {
 
 .session-item > span:last-child {
     white-space: nowrap;
+}
+
+.session-item-title {
+    font-weight: 800;
+}
+
+.session-item[data-selected="true"] {
+    border-color: var(--border-strong);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
 .session-item[data-state="corrupt"],
@@ -434,6 +443,10 @@ h2 {
 
 .utility-rail .compact-row {
     grid-template-columns: minmax(0, 1fr);
+}
+
+.utility-rail h2:first-child {
+    margin-top: 0;
 }
 
 .approval-item {
