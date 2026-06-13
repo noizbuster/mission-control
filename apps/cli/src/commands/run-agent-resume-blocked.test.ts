@@ -31,11 +31,14 @@ describe('runAgent interactive resume for blocked runs', () => {
 
         const output = await runAgent(parseArgs(['--session', sessionId]), {
             authStore: createEmptyAuthStore(),
-            chatInput: createScriptedChatInput([
-                { type: 'line', value: '/resume' },
-                { type: 'interrupt' },
-                { type: 'interrupt' },
-            ]),
+            chatInput: createScriptedChatInput(
+                [
+                    { type: 'line', value: '/resume' },
+                    { type: 'interrupt' },
+                    { type: 'interrupt' },
+                ],
+                50,
+            ),
             chatOutput: chatOutput.output,
             provider: createDeterministicProvider([
                 { kind: 'response_completed', content: 'final after applied patch' },

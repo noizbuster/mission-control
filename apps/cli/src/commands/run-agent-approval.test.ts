@@ -30,13 +30,16 @@ describe('runAgent approval hardening', () => {
 
         const output = await runAgent(parseArgs(['--session', 'session_cli_denied_resume']), {
             authStore: createEmptyAuthStore(),
-            chatInput: createScriptedChatInput([
-                { type: 'line', value: 'patch then deny and try to resume' },
-                { type: 'line', value: 'n' },
-                { type: 'line', value: '/resume' },
-                { type: 'interrupt' },
-                { type: 'interrupt' },
-            ]),
+            chatInput: createScriptedChatInput(
+                [
+                    { type: 'line', value: 'patch then deny and try to resume' },
+                    { type: 'line', value: 'n' },
+                    { type: 'line', value: '/resume' },
+                    { type: 'interrupt' },
+                    { type: 'interrupt' },
+                ],
+                50,
+            ),
             chatOutput: chatOutput.output,
             workspaceRoot,
             provider: createDeterministicProvider([

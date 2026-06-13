@@ -40,12 +40,15 @@ describe('runAgent interactive coding tool registry', () => {
 
         const output = await runAgent(parseArgs(['--session', 'session_task4_tools']), {
             authStore: createEmptyAuthStore(),
-            chatInput: createScriptedChatInput([
-                { type: 'line', value: 'inspect workspace then patch' },
-                { type: 'line', value: 'y' },
-                { type: 'interrupt' },
-                { type: 'interrupt' },
-            ]),
+            chatInput: createScriptedChatInput(
+                [
+                    { type: 'line', value: 'inspect workspace then patch' },
+                    { type: 'line', value: 'y' },
+                    { type: 'interrupt' },
+                    { type: 'interrupt' },
+                ],
+                50,
+            ),
             chatOutput: chatOutput.output,
             workspaceRoot,
             commandExecutor: fakeCommandExecutor,
