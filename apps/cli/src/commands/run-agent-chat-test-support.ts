@@ -12,7 +12,7 @@ type ScriptedChatEvent =
           readonly interruptedPartialInput?: boolean;
       };
 
-export function createScriptedChatInput(events: readonly ScriptedChatEvent[], delayMs = 0) {
+export function createScriptedChatInput(events: readonly ScriptedChatEvent[], delayMs = 50) {
     let index = 0;
     return {
         read: async () => {
