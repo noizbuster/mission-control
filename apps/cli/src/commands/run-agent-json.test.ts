@@ -62,10 +62,10 @@ describe('runAgent JSON reporter', () => {
             type: 'session.stopped',
             sessionId: 'session_json_completed_state',
             status: 'completed',
-            runId: expect.any(String),
+            runId: expect.stringMatching(/^run_.+/),
             machine: {
                 run: {
-                    runId: expect.any(String),
+                    runId: expect.stringMatching(/^run_.+/),
                     status: 'completed',
                 },
             },
@@ -265,10 +265,10 @@ describe('runAgent JSON reporter', () => {
             type: 'session.stopped',
             sessionId: 'session_json_failed',
             status: 'failed',
-            runId: expect.any(String),
+            runId: expect.stringMatching(/^run_.+/),
             machine: {
                 run: {
-                    runId: expect.any(String),
+                    runId: expect.stringMatching(/^run_.+/),
                     status: 'failed',
                 },
             },
@@ -301,10 +301,10 @@ describe('runAgent JSON reporter', () => {
             type: 'session.stopped',
             sessionId: 'session_json_interrupted',
             status: 'interrupted',
-            runId: expect.any(String),
+            runId: expect.stringMatching(/^run_.+/),
             machine: {
                 run: {
-                    runId: expect.any(String),
+                    runId: expect.stringMatching(/^run_.+/),
                     status: 'interrupted',
                 },
             },

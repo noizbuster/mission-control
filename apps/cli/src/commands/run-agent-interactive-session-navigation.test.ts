@@ -143,15 +143,18 @@ describe('runAgent interactive session navigation repairs', () => {
 
         await runAgent(parseArgs(['--session', sourceSessionId]), {
             authStore: createEmptyAuthStore(),
-            chatInput: createScriptedChatInput([
-                { type: 'line', value: '/fork entry_root session_navigation_trusted_fork' },
-                { type: 'line', value: 'prompt after fork' },
-                { type: 'line', value: '/clone session_navigation_trusted_clone' },
-                { type: 'line', value: 'prompt after clone' },
-                { type: 'line', value: `/session ${sourceSessionId}` },
-                { type: 'line', value: 'prompt after switch' },
-                { type: 'line', value: '/exit' },
-            ]),
+            chatInput: createScriptedChatInput(
+                [
+                    { type: 'line', value: '/fork entry_root session_navigation_trusted_fork' },
+                    { type: 'line', value: 'prompt after fork' },
+                    { type: 'line', value: '/clone session_navigation_trusted_clone' },
+                    { type: 'line', value: 'prompt after clone' },
+                    { type: 'line', value: `/session ${sourceSessionId}` },
+                    { type: 'line', value: 'prompt after switch' },
+                    { type: 'line', value: '/exit' },
+                ],
+                50,
+            ),
             chatOutput: chatOutput.output,
             provider: captureProvider(requests),
             workspaceRoot,

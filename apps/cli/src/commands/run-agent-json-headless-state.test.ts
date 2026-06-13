@@ -32,10 +32,10 @@ describe('runAgent JSON headless final state', () => {
         expect(finalRecord).toMatchObject({
             type: 'session.stopped',
             status: 'completed',
-            runId: expect.any(String),
+            runId: expect.stringMatching(/^run_.+/),
             machine: {
                 run: {
-                    runId: expect.any(String),
+                    runId: expect.stringMatching(/^run_.+/),
                     status: 'completed',
                 },
             },
@@ -64,7 +64,7 @@ describe('runAgent JSON headless final state', () => {
         expect(lastRecord(records)).toMatchObject({
             type: 'session.stopped',
             status: 'failed',
-            runId: expect.any(String),
+            runId: expect.stringMatching(/^run_.+/),
         });
     });
 
@@ -90,7 +90,7 @@ describe('runAgent JSON headless final state', () => {
         expect(lastRecord(records)).toMatchObject({
             type: 'session.stopped',
             status: 'interrupted',
-            runId: expect.any(String),
+            runId: expect.stringMatching(/^run_.+/),
         });
     });
 
@@ -125,9 +125,9 @@ describe('runAgent JSON headless final state', () => {
         expect(finalRecord).toMatchObject({
             type: 'session.stopped',
             status: 'blocked_on_approval',
-            runId: expect.any(String),
+            runId: expect.stringMatching(/^run_.+/),
             toolCallId: 'json_command_pending_call',
-            approvalId: expect.any(String),
+            approvalId: expect.stringMatching(/^approval_.+/),
         });
     });
 
@@ -159,7 +159,7 @@ describe('runAgent JSON headless final state', () => {
         expect(finalRecord).toMatchObject({
             type: 'session.stopped',
             status: 'failed',
-            runId: expect.any(String),
+            runId: expect.stringMatching(/^run_.+/),
             toolCallId: 'json_command_call',
         });
     });

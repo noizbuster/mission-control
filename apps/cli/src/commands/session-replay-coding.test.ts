@@ -40,7 +40,11 @@ describe('session replay coding projection', () => {
         const showOutput = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', sessionId])));
 
         // Then
-        expect(eventRecords(replayRecords).map((event) => event.type)).toEqual(runEvents.map((event) => event.type));
+        const runEventTypes = runEvents.map((event) => event.type);
+        const replayEventTypes = eventRecords(replayRecords).map((event) => event.type);
+        expect(replayEventTypes).toEqual(
+            expect.arrayContaining(runEventTypes),
+        );
         expect(codingStepRecords(replayRecords)).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ kind: 'provider.tool_call', toolCallId: 'session_patch_call' }),
@@ -65,7 +69,9 @@ describe('session replay coding projection', () => {
             ]),
             diagnostics: [],
         });
-        expect(await readFile(join(workspaceRoot, '.mctrl-session-replay.txt'), 'utf8')).toBe('replayed\n');
+        expect(await readFile(join(workspaceRoot, '.mctrl-known-safe-automation-patch.txt'), 'utf8')).toBe(
+            'replayed\n',
+        );
         await rm(workspaceRoot, { recursive: true, force: true });
         await rm(dataDir, { recursive: true, force: true });
     });

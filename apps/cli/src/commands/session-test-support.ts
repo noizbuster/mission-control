@@ -60,7 +60,7 @@ export function providerFromPatchRequests(): ProviderAdapter {
             turns += 1;
             if (turns === 1) {
                 yield toolCallChunk(request, 'session_patch_call', 'file.patch', {
-                    patch: addFilePatch('.mctrl-session-replay.txt', 'replayed'),
+                    patch: addFilePatch('.mctrl-known-safe-automation-patch.txt', 'replayed'),
                 });
                 yield completedChunk(request, 'patch requested', ['session_patch_call']);
                 return;

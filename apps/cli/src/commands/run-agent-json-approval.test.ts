@@ -151,7 +151,7 @@ describe('runAgent JSON non-interactive approvals', () => {
             type: 'session.stopped',
             sessionId: 'session_task18_write_blocked',
             status: 'blocked_on_approval',
-            approvalId: expect.any(String),
+            approvalId: expect.stringMatching(/^approval_.+/),
         });
         await expect(readFile(join(workspaceRoot, '.mctrl-task18-write.txt'), 'utf8')).rejects.toThrow();
     });

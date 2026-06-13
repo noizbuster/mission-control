@@ -18,7 +18,7 @@ describe('session archive security repairs', () => {
         vi.unstubAllEnvs();
     });
 
-    it('rejects invalid imported session ids before any session log path can escape the sessions directory', async () => {
+    it('rejects invalid imported session ids before a session log path can escape the sessions directory', async () => {
         const dataDir = await useTempDataDir();
         const workspaceRoot = await mkdtemp(join(tmpdir(), 'mission-control-session-traversal-workspace-'));
         const archivePath = join(tmpdir(), 'session-import-traversal.mctrl-session.json');
@@ -55,7 +55,7 @@ describe('session archive security repairs', () => {
         await rm(dataDir, { recursive: true, force: true });
     });
 
-    it('removes any partially written session log when import fails after admission starts', async () => {
+    it('removes partially written session log when import fails after admission starts', async () => {
         const dataDir = await useTempDataDir();
         const workspaceRoot = await mkdtemp(join(tmpdir(), 'mission-control-session-atomic-workspace-'));
         const archivePath = join(tmpdir(), 'session-import-atomic.mctrl-session.json');

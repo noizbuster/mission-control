@@ -37,7 +37,7 @@ describe('runAgent JSONL session automation', () => {
             type: 'session.stopped',
             sessionId,
             status: 'completed',
-            runId: expect.any(String),
+            runId: expect.stringMatching(/^run_.+/),
         });
         expect(replay.events.map((event) => event.type)).toEqual(
             expect.arrayContaining(events.map((event) => event.type)),

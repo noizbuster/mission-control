@@ -96,6 +96,11 @@ describe('README stage-01 contract', () => {
             '`/branch <message-id> <prompt>` continues from a parent message in a new branch',
             '`/fork <entry-id> [session-id]` forks from a tree entry into a new durable session',
             '`/clone [session-id]` clones the current durable session into a fresh one',
+            '`/compact` summarizes older session history into a durable compaction boundary event',
+            '`/resume` resumes a blocked run that is waiting on an approval decision',
+            'Workspace trust is controlled interactively with `/trust`',
+            '`/trust deny` (deny project-local resources for the workspace)',
+            '`/trust reset` (clear the trust decision)',
             '$skill args records a scaffold agent skill invocation',
             'Normal prompt text still sends a prompt',
             'Ctrl+C twice exits',
@@ -204,6 +209,78 @@ describe('README stage-01 contract', () => {
             expect(content, `README must not overstate provider execution: ${forbiddenClaim}`).not.toContain(
                 forbiddenClaim,
             );
+        }
+    });
+
+    it('documents workspace trust permission profiles and expanded coding-agent tool set', () => {
+        const content = readme();
+        const requiredTerms = [
+            'Workspace trust',
+            'project trust store',
+            'trust/projects.json',
+            '`bash.run`, `file.edit`, and `file.write` are only available when the workspace is trusted',
+            'Permission profiles',
+            'Built-in rules allow `read` always, and ask for `edit`, `write`, `patch`, and `bash` by default',
+            'Interactive replies support `once`',
+            '`always` replies can persist to the permission rule store',
+            'Noninteractive `--no-tui` and `--json` runs use the pending-approval-block behavior',
+            'Coding-agent tool set',
+            'Read-only: `repo.read`, `repo.list`, `repo.search`, plus aliases `read`, `ls`, `grep`, and `find`',
+            'Exact replacement: `file.edit` replaces exact text in an existing file',
+            'Full create/replace: `file.write` creates or replaces a file with full text content',
+            'Trusted bash: `bash.run` runs non-interactive bash with strict command-line parsing',
+            '`file.edit`, `file.write`, `file.patch`, `command.run`, and `bash.run` require approval before executing',
+            '`bash.run` additionally requires a trusted workspace',
+            'shared workspace mutation queue with pre-approval and post-approval target revalidation',
+        ] as const;
+
+        for (const term of requiredTerms) {
+            expect(content, `README missing ${term}`).toContain(term);
+        }
+    });
+
+    it('documents noninteractive JSON/JSONL run states and session management', () => {
+        const content = readme();
+        const requiredTerms = [
+            'Noninteractive JSON/JSONL run states',
+            'Run receipts settle as `completed`, `failed`, `interrupted`, or `blocked_on_approval`',
+            'blocked_on_approval',
+            'Session export, import, compaction, and stats',
+            'checksummed session archive file',
+            '`mctrl session export <id> <path>`',
+            '`mctrl session import <path>`',
+            '`mctrl session list` lists sessions with lock status',
+            '`mctrl session show <id>` shows the session snapshot',
+            'durable compaction boundary event',
+        ] as const;
+
+        for (const term of requiredTerms) {
+            expect(content, `README missing ${term}`).toContain(term);
+        }
+    });
+
+    it('does not overclaim deferred features like MCP ACP LSP subagents or web tools', () => {
+        const content = readme();
+        const deferredFeatureClauses = [
+            'MCP tools, ACP protocol, LSP integration, web tools, and subagent orchestration are not implemented',
+            'full desktop terminal parity is not implemented',
+        ] as const;
+
+        for (const clause of deferredFeatureClauses) {
+            expect(content, `README must document deferral: ${clause}`).toContain(clause);
+        }
+
+        const forbiddenOverclaims = [
+            'MCP tools are implemented',
+            'ACP protocol is implemented',
+            'LSP integration is implemented',
+            'web tools are implemented',
+            'subagent orchestration is implemented',
+            'all tools execute without approval',
+        ] as const;
+
+        for (const forbidden of forbiddenOverclaims) {
+            expect(content, `README must not overclaim: ${forbidden}`).not.toContain(forbidden);
         }
     });
 

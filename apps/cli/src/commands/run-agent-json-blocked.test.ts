@@ -56,17 +56,17 @@ describe('runAgent JSON blocked lifecycle', () => {
             type: 'session.stopped',
             sessionId: 'session_json_blocked',
             status: 'blocked_on_approval',
-            runId: expect.any(String),
+            runId: expect.stringMatching(/^run_.+/),
             toolCallId: 'blocked_patch_call',
-            approvalId: expect.any(String),
+            approvalId: expect.stringMatching(/^approval_.+/),
             machine: {
                 run: {
-                    runId: expect.any(String),
+                    runId: expect.stringMatching(/^run_.+/),
                     status: 'blocked_on_approval',
                     toolCallId: 'blocked_patch_call',
                 },
                 approval: {
-                    approvalId: expect.any(String),
+                    approvalId: expect.stringMatching(/^approval_.+/),
                     state: 'pending',
                     toolCallId: 'blocked_patch_call',
                     resumable: true,

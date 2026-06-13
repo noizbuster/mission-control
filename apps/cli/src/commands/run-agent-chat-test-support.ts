@@ -12,10 +12,15 @@ type ScriptedChatEvent =
           readonly interruptedPartialInput?: boolean;
       };
 
-export function createScriptedChatInput(events: readonly ScriptedChatEvent[]) {
+export function createScriptedChatInput(events: readonly ScriptedChatEvent[], delayMs = 0) {
     let index = 0;
     return {
         read: async () => {
+            if (delayMs > 0) {
+                await new Promise((resolve) => {
+                    setTimeout(resolve, delayMs);
+                });
+            }
             const event = events[index] ?? { type: 'interrupt' as const };
             index += 1;
             return event;

@@ -64,7 +64,9 @@ node apps/cli/dist/index.js --no-tui
 
 `mctrl` opens a chat prompt by default. `/model opens a searchable model picker`, and `/model provider/model selects the model for the current chat only`. The selection updates the active chat model and does not persist credentials or auth defaults.
 
-Session navigation stays on the durable JSONL session surface: `/new [session-id]` starts a new durable session, `/session <session-id>` switches to an existing durable session, `/sessions` lists durable sessions, `/tree` shows the durable session tree and active leaf, `/branch <entry-id>` selects an existing branch leaf, `/branch <message-id> <prompt>` continues from a parent message in a new branch, `/fork <entry-id> [session-id]` forks from a tree entry into a new durable session, and `/clone [session-id]` clones the current durable session into a fresh one.
+Session navigation stays on the durable JSONL session surface: `/new [session-id]` starts a new durable session, `/session <session-id>` switches to an existing durable session, `/sessions` lists durable sessions, `/tree` shows the durable session tree and active leaf, `/branch <entry-id>` selects an existing branch leaf, `/branch <message-id> <prompt>` continues from a parent message in a new branch, `/fork <entry-id> [session-id]` forks from a tree entry into a new durable session, and `/clone [session-id]` clones the current durable session into a fresh one. `/compact` summarizes older session history into a durable compaction boundary event, keeping the session durable while reducing replay context. `/resume` resumes a blocked run that is waiting on an approval decision, re-entering the approval-blocked lifecycle.
+
+Workspace trust is controlled interactively with `/trust` (trust the current workspace for project-local resources), `/trust status` (show the current trust decision), `/trust deny` (deny project-local resources for the workspace), and `/trust reset` (clear the trust decision). Trust decisions persist in the project trust store under the Mission Control data directory. `bash.run`, `file.edit`, and `file.write` are only available when the workspace is trusted; read-only tools work regardless of trust but still enforce workspace path guards.
 
 `$skill args records a scaffold agent skill invocation` inside Mission Control. It does not run actual Codex host skills, spawn agents, or make provider calls. Normal prompt text still sends a prompt, and Ctrl+C twice exits.
 
@@ -123,7 +125,7 @@ The catalog also exposes the local provider/model variant `local/local-echo/defa
 
 ## Coding Agent Runtime
 
-The coding-agent MVP now includes durable chat sessions, provider streaming, approval-gated local tools, replay projections, bounded graph orchestration, CLI chat, and core desktop approval services.
+The coding-agent MVP now includes durable chat sessions, provider streaming, approval-gated local tools, replay projections, bounded graph orchestration, CLI chat, core desktop approval services, project workspace trust, permission profiles, an expanded coding-agent tool set, session tree navigation, manual compaction, and session export/import.
 
 For release-adjacent local verification, `pnpm smoke:coding-agent-built-dist` runs the built-dist coding-agent smoke against a temporary trusted workspace and temporary auth/data paths, prints the captured command output plus the temp `sessions/<session-id>.jsonl` path, and fails if either the blocked replay preview or the resumed replay emits diagnostics. This is intentionally a built-dist coding-agent smoke, not a tarball artifact smoke; Todo 18 owns the tarball artifact smoke.
 
@@ -148,12 +150,42 @@ Approval lifecycle and safe tools:
 
 - Approval events use `approval.requested`, `approval.updated`, `approval.resumed`, and `approval.blocked`.
 - Effectful tools do not execute until approval state is `approved`.
-- The safe tool set is `repo.read`, `repo.list`, `repo.search`, `file.patch`, and `command.run`.
+- The read-only safe tool set is `repo.read`, `repo.list`, `repo.search`, `file.patch`, and `command.run`.
+- Read aliases `read`, `ls`, `grep`, and `find` mirror the read-only tools with the same workspace path guards and permission checks.
 - Reference repositories under `temp/ref-repos` are planning evidence only.
 - `repo.read`, `repo.list`, and `repo.search` deny `temp/ref-repos` by default, along with generated and cache directories.
 - Runtime prompts and tool instructions must not load AGENTS.md or other instructions from reference repos.
 - `file.patch` enforces workspace containment, symlink escape rejection, patch bounds, dirty tracked-file checks, and before/after diff events.
 - `command.run` uses a fixed verification-harness allowlist, non-interactive execution, timeouts, output caps, and command lifecycle events.
+
+Workspace trust:
+
+- The project trust store lives at `trust/projects.json` under the Mission Control data directory.
+- `/trust` marks the workspace as trusted; `/trust deny` denies project-local resources; `/trust reset` clears the decision.
+- `bash.run`, `file.edit`, and `file.write` require a trusted workspace before registration.
+- Read-only tools (`repo.read`, `repo.list`, `repo.search`, `read`, `ls`, `grep`, `find`) work regardless of trust but still enforce workspace path guards.
+- Trust decisions persist across sessions and are normalized by resolved workspace root path.
+
+Permission profiles:
+
+- Built-in rules allow `read` always, and ask for `edit`, `write`, `patch`, and `bash` by default.
+- Interactive replies support `once` (allow this request only), `always` (allow all future matching requests), and `deny` (block the request).
+- `always` replies can persist to the permission rule store scoped by permission kind, glob pattern, and workspace root.
+- Noninteractive `--no-tui` and `--json` runs use the pending-approval-block behavior: effectful tools emit `approval.blocked` and the run enters `blocked_on_approval` instead of executing without consent.
+- Permission rules use glob patterns scoped by permission kind (`read`, `edit`, `write`, `patch`, `bash`) and optional workspace root.
+
+Coding-agent tool set:
+
+- Read-only: `repo.read`, `repo.list`, `repo.search`, plus aliases `read`, `ls`, `grep`, and `find`.
+- Exact replacement: `file.edit` replaces exact text in an existing file, with occurrence counting and diff events.
+- Full create/replace: `file.write` creates or replaces a file with full text content, with optional parent-directory creation and binary-content refusal.
+- Unified diff: `file.patch` applies unified diffs with workspace containment and dirty-file checks.
+- Verification harness: `command.run` uses a fixed allowlist, non-interactive execution, timeouts, and output caps.
+- Trusted bash: `bash.run` runs non-interactive bash with strict command-line parsing, an environment variable allowlist, cwd containment within the workspace, a 30-second timeout, 64KB output cap, single-invocation concurrency, and secret redaction.
+- `file.edit`, `file.write`, `file.patch`, `command.run`, and `bash.run` require approval before executing.
+- `bash.run` additionally requires a trusted workspace.
+- File mutations serialize through a shared workspace mutation queue with pre-approval and post-approval target revalidation to prevent TOCTOU workspace escape.
+- MCP tools, ACP protocol, LSP integration, web tools, and subagent orchestration are not implemented.
 
 Graph limits:
 
@@ -161,6 +193,23 @@ Graph limits:
 - provider parallel tool calls default to 4.
 - shell/process concurrency defaults to 1.
 - node retries and graph loops are bounded by explicit runtime limits.
+
+Noninteractive JSON/JSONL run states:
+
+- `mctrl run "<prompt>" --no-tui` and `--json`/`--jsonl` modes run a single prompt through the coding-agent path with the full tool set.
+- Run receipts settle as `completed`, `failed`, `interrupted`, or `blocked_on_approval`.
+- `blocked_on_approval` means the run paused for an approval decision and can be resumed with `/resume` in interactive mode or by appending an approval decision to the session log.
+- `--jsonl` persists a replayable session log; `--json` emits transient JSON Lines without persistence.
+- Noninteractive runs do not auto-approve effectful tools; they block and wait for external approval.
+
+Session export, import, compaction, and stats:
+
+- `mctrl session export <id> <path>` writes a checksummed session archive file with manifest, events, and SHA-256 checksum.
+- `mctrl session import <path>` imports a session archive into a new durable session.
+- `mctrl session list` lists sessions with lock status, event counts, message counts, and trust status.
+- `mctrl session show <id>` shows the session snapshot, approvals, tool outcomes, coding steps, and diagnostics.
+- `mctrl session replay <id> --jsonl` replays durable events and coding steps as JSON Lines.
+- `/compact` in interactive chat summarizes older session history into a durable compaction boundary event, reducing replay context while preserving the session tree.
 
 Desktop scope:
 
@@ -356,10 +405,12 @@ ABG runtime TODOs:
 - TODO: ABG full engine is not implemented.
 - TODO: full production ABG engine is not implemented.
 - TODO: additional provider adapters beyond local, OpenAI Responses, Anthropic Messages, Google Gemini, and the OpenAI-compatible family are not implemented.
-- TODO: unrestricted file-editing tools are not implemented.
+- TODO: unrestricted file-editing tools are not implemented. `file.edit`, `file.write`, and `bash.run` are approval-gated and workspace-contained only.
+- TODO: MCP tools, ACP protocol, LSP integration, web tools, and subagent orchestration are not implemented.
 - TODO: visual graph editor remains out of scope.
 - TODO: persistent memory store, vector index, and database storage are not implemented.
 - TODO: advanced scheduler, executor, cancellation propagation, and behavior/action graph engine are not implemented.
+- TODO: full desktop terminal parity is not implemented; the desktop shell never mutates files directly.
 
 ## Next Stage TODO
 
