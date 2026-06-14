@@ -115,7 +115,7 @@ Interactive `/model` choices are narrower than `mctrl models`: they first requir
 
 The desktop demo control surface exposes provider/model controls, an API key credential field, credential configured/missing state, and the active selection in the status area and event log. The Tauri desktop client saves and lists API-key credentials through the same auth file used by the CLI, and desktop prompt/resume/approval commands route through the core provider factory.
 
-Provider capability statuses separate executable adapters from catalog-only entries. `local`, `openai`, `anthropic`, `google`, `openrouter`, `groq`, `deepseek`, and `mistral` can run coding-agent prompts through implemented adapters. Other catalog entries can be `model-discovery-only`, `auth-only`, or unsupported for prompt execution until they have adapter tests and an executable integration proof. Provider-backed coding commands require an executable adapter proof before a provider can run.
+Provider capability statuses separate executable adapters from catalog-only entries. `local`, `openai`, `anthropic`, `google`, `openrouter`, `groq`, `deepseek`, `mistral`, and `zai-coding-plan` can run coding-agent prompts through implemented adapters. Other catalog entries can be `model-discovery-only`, `auth-only`, or unsupported for prompt execution until they have adapter tests and an executable integration proof. Provider-backed coding commands require an executable adapter proof before a provider can run.
 
 provider/model selection is scaffold metadata for observable control surfaces only in demo-only commands, and a demo command does not call real LLM providers yet.
 
@@ -141,7 +141,7 @@ Provider path:
 
 - The deterministic `local/local-echo` provider is available for offline tests and demos.
 - The OpenAI Responses adapter is implemented for real provider turns when OpenAI credentials are configured.
-- Anthropic Messages, Google Gemini, and OpenAI-compatible adapters are implemented for `anthropic`, `google`, `openrouter`, `groq`, `deepseek`, and `mistral` when credentials are configured.
+- Anthropic Messages, Google Gemini, and OpenAI-compatible adapters are implemented for `anthropic`, `google`, `openrouter`, `groq`, `deepseek`, `mistral`, and `zai-coding-plan` when credentials are configured.
 - Live provider smoke tests are opt-in only and are not required for CI.
 - Unsupported providers remain catalog/auth entries until an execution adapter is added.
 - Providers without execution adapters remain catalog/auth entries and must not be documented as executable.
@@ -323,6 +323,8 @@ Renderer contract:
 - `getOutput()`: return the buffered output for CLI mode tests and process output.
 
 The built-in renderers are `InkRenderer`, `PlainRenderer`, and `JsonRenderer`. To add a renderer, implement `AgentUIRenderer`, render from protocol events instead of runtime internals, and add the renderer selection in `apps/cli/src/commands/run-agent.ts`.
+
+The `InkRenderer` drives the interactive chat surface: it mounts a React component tree under Ink, using `useInput` for keyboard handling and React components (TextInput, SlashCommandMenu, ModelSelector, MessageList, StatusBar, ApprovalPrompt) for rendering. The Ink React tree bridges to the imperative chat loop through `apps/cli/src/commands/ink-chat-bridge.tsx`. A hand-rolled terminal input system remains as the non-TTY fallback path.
 
 Permission flow is implemented for the coding-agent tool path. The runtime emits permission and approval lifecycle events, default policy remains conservative, CLI can prompt synchronously, and the core desktop command service can append approval decisions over the same event stream.
 

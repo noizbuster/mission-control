@@ -14,7 +14,10 @@
 | Auth args | `src/auth-args.ts` | Delegates into `src/commands/auth*.ts`. |
 | Session args | `src/session-args.ts` | Delegates into `src/commands/session.ts`. |
 | Runtime orchestration | `src/commands/run-agent.ts` | Chooses chat/non-interactive paths, provider setup, permissions, renderers. |
-| Interactive chat | `src/commands/interactive-chat*.ts` | Terminal input, slash commands, model picker, approval broker. |
+| Interactive chat | `src/commands/interactive-chat*.ts` | Terminal input, slash commands, model picker, approval broker. Non-TTY fallback path. |
+| Ink chat bridge | `src/commands/ink-chat-bridge.tsx` | Bridge between Ink React tree and imperative chat loop. |
+| Ink chat adapters | `src/commands/ink-chat-input.ts`, `src/commands/ink-chat-output.ts` | ChatInput/ChatOutput interface adapters for Ink. |
+| Ink components | `src/components/*.tsx` | TextInput, SlashCommandMenu, ModelSelector, MessageList, StatusBar, ApprovalPrompt. |
 | Output modes | `src/ui/renderers.ts` | Plain, Ink, and JSON renderer contracts. |
 | CLI package targets | `package.json`, `project.json` | `tsc` build, verbose Vitest, Nx `cli:*` targets. |
 

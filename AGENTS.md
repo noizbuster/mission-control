@@ -55,6 +55,7 @@ Scoped guidance:
 | CLI entry/help/version | `apps/cli/src/index.tsx` | `apps/cli/package.json` maps `mctrl` to `./dist/index.js`. |
 | CLI command flow | `apps/cli/src/commands/run-agent.ts` | Chat, JSON/JSONL, graph, provider, sidecar selection. |
 | CLI output | `apps/cli/src/ui/renderers.ts` | Plain, Ink, JSON renderer contracts. |
+| Interactive chat Ink bridge | `apps/cli/src/commands/ink-chat-bridge.tsx` | Ink React tree ↔ imperative chat loop bridge. |
 | Desktop entry/UI | `apps/desktop/src/main.tsx`, `apps/desktop/src/App.tsx` | Browser-facing shell. |
 | Desktop client boundary | `apps/desktop/src/lib/agent-client.ts` | Mock and Tauri clients, Zod response parsing. |
 | Tauri native shell | `apps/desktop/src-tauri` | Command bridge and Rust session-log parsing. |
