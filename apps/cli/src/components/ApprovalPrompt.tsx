@@ -1,5 +1,5 @@
-import type React from 'react';
 import { Box, Text } from 'ink';
+import type React from 'react';
 
 export type ApprovalOption = {
     readonly key: string;
@@ -23,17 +23,10 @@ function truncate(value: string, maxLength: number): string {
     return `${value.slice(0, maxLength - 3)}...`;
 }
 
-export function ApprovalPrompt({
-    toolName,
-    toolArguments,
-    options,
-    message,
-}: ApprovalPromptProps): React.ReactElement {
+export function ApprovalPrompt({ toolName, toolArguments, options, message }: ApprovalPromptProps): React.ReactElement {
     return (
         <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1}>
-            {message !== undefined ? (
-                <Text dimColor>{message}</Text>
-            ) : null}
+            {message !== undefined ? <Text dimColor>{message}</Text> : null}
             <Text>
                 <Text bold>Tool:</Text> {truncate(toolName, MAX_ARGS_LENGTH)}
             </Text>
@@ -45,8 +38,7 @@ export function ApprovalPrompt({
             <Box flexDirection="column" marginTop={1}>
                 {options.map((option) => (
                     <Text key={option.key}>
-                        <Text bold>[{option.key}]</Text>{' '}
-                        {option.label}
+                        <Text bold>[{option.key}]</Text> {option.label}
                         {' - '}
                         <Text dimColor>{option.description}</Text>
                     </Text>

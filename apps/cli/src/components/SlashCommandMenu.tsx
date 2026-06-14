@@ -1,8 +1,5 @@
 import { Box, Text } from 'ink';
-import {
-    createSlashCommandMenuView,
-    formatSlashCommandMenuLines,
-} from '../commands/interactive-chat-command-menu.js';
+import { createSlashCommandMenuView, formatSlashCommandMenuLines } from '../commands/interactive-chat-command-menu.js';
 
 export type SlashCommandMenuProps = {
     readonly input: string;
@@ -12,10 +9,7 @@ export type SlashCommandMenuProps = {
 
 const maxVisibleCommands = 5;
 
-export function SlashCommandMenu({
-    input,
-    selectedIndex,
-}: SlashCommandMenuProps): React.ReactElement | null {
+export function SlashCommandMenu({ input, selectedIndex }: SlashCommandMenuProps): React.ReactElement | null {
     const view = createSlashCommandMenuView(input, { selectedIndex }, maxVisibleCommands);
     if (!view.open) {
         return null;
@@ -24,8 +18,8 @@ export function SlashCommandMenu({
     const lines = formatSlashCommandMenuLines(view, columns);
     return (
         <Box flexDirection="column">
-            {lines.map((line, index) => (
-                <Text key={index}>{line}</Text>
+            {lines.map((line) => (
+                <Text key={line}>{line}</Text>
             ))}
         </Box>
     );

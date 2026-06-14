@@ -17,8 +17,8 @@ function messagePrefix(role: ChatMessage['role']): string {
 export function MessageList({ messages }: MessageListProps): React.JSX.Element {
     return (
         <Box flexDirection="column">
-            {messages.map((message, index) => (
-                <Text key={index}>
+            {messages.map((message) => (
+                <Text key={`${message.role}-${message.text.slice(0, 16)}`}>
                     {messagePrefix(message.role)}
                     {message.text}
                 </Text>

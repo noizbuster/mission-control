@@ -1,5 +1,5 @@
-import type { ChatInput, ChatInputEvent } from './interactive-chat-io.js';
 import type { InkChatBridge } from './ink-chat-bridge.js';
+import type { ChatInput, ChatInputEvent } from './interactive-chat-io.js';
 
 /**
  * Adapts an `InkChatBridge` to the `ChatInput` interface consumed by

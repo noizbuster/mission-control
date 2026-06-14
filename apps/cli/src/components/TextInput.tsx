@@ -10,11 +10,7 @@ export type TextInputProps = {
 
 const defaultPrefix = '> ';
 
-export function TextInput({
-    value,
-    placeholder,
-    prefix = defaultPrefix,
-}: TextInputProps): React.ReactElement {
+export function TextInput({ value, placeholder, prefix = defaultPrefix }: TextInputProps): React.ReactElement {
     const showPlaceholder = value.length === 0 && placeholder !== undefined;
     return (
         <Text>

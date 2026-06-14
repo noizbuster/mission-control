@@ -1,5 +1,5 @@
-import type { ChatOutput } from './interactive-chat-io.js';
 import type { InkChatBridge } from './ink-chat-bridge.js';
+import type { ChatOutput } from './interactive-chat-io.js';
 
 /**
  * Adapter that exposes an {@link InkChatBridge} as a {@link ChatOutput}.
