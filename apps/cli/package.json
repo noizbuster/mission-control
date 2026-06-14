@@ -22,6 +22,9 @@
   "dependencies": {
     "@mission-control/config": "workspace:*",
     "@mission-control/core": "workspace:*",
-    "@mission-control/protocol": "workspace:*"
+    "@mission-control/protocol": "workspace:*",
+    "@types/react": "^19.2.0",
+    "ink": "^7.0.0",
+    "react": "^19.2.0"
   }
 }
