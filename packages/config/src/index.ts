@@ -164,39 +164,53 @@ const scaffoldModelProviderCatalog = [
     },
 ] as const satisfies readonly ModelProviderCatalogEntry[];
 
-export const opencodeProviderCatalog: readonly ModelProviderCatalogEntry[] = modelsDevCatalogSnapshot.providers
-    .map(
-        (provider): ModelProviderCatalogEntry => ({
-            id: provider.id,
-            name: provider.name,
-            defaultModelID: provider.defaultModelID,
-            authLabel: provider.authLabel,
-            authFields: provider.authFields.map((field) => ({
-                id: field.id,
-                label: field.label,
-                env: field.env,
-                secret: field.secret,
-                required: field.required,
-            })),
-            authMethods: createProviderAuthMethods(provider.id, provider.authLabel),
-            capability: capabilityForGeneratedProvider(provider.id),
-            models: provider.models.map((model) => {
-                const variants = variantsForGeneratedModel(provider.id, model.id);
-                return {
-                    id: model.id,
-                    name: model.name,
-                    status: 'active',
-                    ...(variants !== undefined ? { variants } : {}),
-                };
-            }),
-        }),
-    )
-    .sort(compareProvidersByLoginPriority);
+export const opencodeProviderCatalog: readonly ModelProviderCatalogEntry[] =
+    transformRawCatalog(modelsDevCatalogSnapshot);
 
 export const modelProviderCatalog: readonly ModelProviderCatalogEntry[] = [
     ...scaffoldModelProviderCatalog,
     ...opencodeProviderCatalog,
 ];
+
+export async function getRuntimeModelProviderCatalog(): Promise<readonly ModelProviderCatalogEntry[]> {
+    const { loadModelsDevCatalog } = await import('./models-dev-runtime.js');
+    type RawModelsDevCatalog = import('./models-dev-runtime.js').RawModelsDevCatalog;
+    const rawCatalog: RawModelsDevCatalog = await loadModelsDevCatalog();
+    return [...scaffoldModelProviderCatalog, ...transformRawCatalog(rawCatalog)];
+}
+
+function transformRawCatalog(
+    rawCatalog: import('./models-dev-runtime.js').RawModelsDevCatalog,
+): readonly ModelProviderCatalogEntry[] {
+    return rawCatalog.providers
+        .map(
+            (provider): ModelProviderCatalogEntry => ({
+                id: provider.id,
+                name: provider.name,
+                defaultModelID: provider.defaultModelID,
+                authLabel: provider.authLabel,
+                authFields: provider.authFields.map((field) => ({
+                    id: field.id,
+                    label: field.label,
+                    env: field.env,
+                    secret: field.secret,
+                    required: field.required,
+                })),
+                authMethods: createProviderAuthMethods(provider.id, provider.authLabel),
+                capability: capabilityForGeneratedProvider(provider.id),
+                models: provider.models.map((model) => {
+                    const variants = variantsForGeneratedModel(provider.id, model.id);
+                    return {
+                        id: model.id,
+                        name: model.name,
+                        status: 'active',
+                        ...(variants !== undefined ? { variants } : {}),
+                    };
+                }),
+            }),
+        )
+        .sort(compareProvidersByLoginPriority);
+}
 
 function createProviderAuthMethods(providerID: string, authLabel: string): readonly ProviderAuthMethod[] {
     switch (providerID) {

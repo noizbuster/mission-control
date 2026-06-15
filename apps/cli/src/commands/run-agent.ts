@@ -1,4 +1,4 @@
-import { defaultModelProviderSelection, modelProviderCatalog } from '@mission-control/config';
+import { defaultModelProviderSelection, getRuntimeModelProviderCatalog } from '@mission-control/config';
 import {
     AgentRuntime,
     type CommandExecutionRequest,
@@ -205,11 +205,12 @@ async function listAuthenticatedModelChoices(
 ): Promise<readonly ModelChoice[]> {
     const authFile = await authStore.readAuthFile();
     const providerIDs = await listAuthenticatedProviderIDs(authStore);
-    const baseChoices = createModelChoices({ providerIDs });
+    const runtimeCatalog = await getRuntimeModelProviderCatalog();
+    const baseChoices = createModelChoices({ catalog: runtimeCatalog, providerIDs });
     const choices: ModelChoice[] = [];
 
     for (const providerID of providerIDs) {
-        const provider = modelProviderCatalog.find((entry) => entry.id === providerID);
+        const provider = runtimeCatalog.find((entry) => entry.id === providerID);
         const credential = authFile.credentials[providerID];
         const providerChoices = baseChoices.filter((choice) => choice.selection.providerID === providerID);
         if (provider === undefined || credential === undefined) {
