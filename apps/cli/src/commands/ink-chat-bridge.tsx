@@ -14,6 +14,9 @@
 
 import { Box, type Key, render, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
+import { SlashCommandMenu } from '../components/SlashCommandMenu.js';
+import { StatusBar } from '../components/StatusBar.js';
+import { TextInput } from '../components/TextInput.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
 
 type BridgeSnapshot = {
@@ -27,6 +30,14 @@ export type InkChatBridge = {
     readonly emitOutput: (text: string) => void;
     readonly getOutput: () => string;
     readonly unmount: () => void;
+};
+
+/** Provider/model/session info passed through to the StatusBar render surface. */
+export type InkChatBridgeOptions = {
+    readonly providerID: string;
+    readonly modelID: string;
+    readonly variantID?: string;
+    readonly sessionID?: string;
 };
 
 type InkChatBridgeCore = {
@@ -46,6 +57,7 @@ type ChatRootProps = {
         readonly getSnapshot: () => BridgeSnapshot;
         readonly handleInput: (input: string, key: Key) => void;
     };
+    readonly statusBarProps?: InkChatBridgeOptions;
 };
 
 function publishSnapshot(core: InkChatBridgeCore): void {
@@ -91,18 +103,21 @@ function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
     }
 }
 
-function ChatRoot({ bridge }: ChatRootProps) {
+function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     const snapshot = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
-    useInput((input, key) => {
-        bridge.handleInput(input, key);
-    });
+    useInput((input, key) => bridge.handleInput(input, key));
+
+    const showSlashMenu = snapshot.inputBuffer.startsWith('/');
+    const outputLines = snapshot.outputText.split('\n').filter((line) => line.length > 0);
+
     return (
         <Box flexDirection="column">
-            {snapshot.outputText.length > 0 ? <Text>{snapshot.outputText}</Text> : null}
-            <Text>
-                {'> '}
-                {snapshot.inputBuffer}
-            </Text>
+            {outputLines.map((line) => (
+                <Text key={`output-${line}`}>{line}</Text>
+            ))}
+            {showSlashMenu ? <SlashCommandMenu input={snapshot.inputBuffer} selectedIndex={0} commands={[]} /> : null}
+            <TextInput value={snapshot.inputBuffer} onChange={() => {}} onSubmit={() => {}} />
+            {statusBarProps !== undefined ? <StatusBar {...statusBarProps} /> : null}
         </Box>
     );
 }
@@ -112,7 +127,7 @@ function ChatRoot({ bridge }: ChatRootProps) {
  * `waitForEvent()` to consume `{ type: 'line' }` / `{ type: 'interrupt' }`
  * events, `emitOutput()` to append chat output, and `unmount()` to tear down.
  */
-export function createInkChatBridge(): InkChatBridge {
+export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBridge {
     const core: InkChatBridgeCore = {
         inputBuffer: '',
         outputText: '',
@@ -138,7 +153,10 @@ export function createInkChatBridge(): InkChatBridge {
         handleInput: (input, key) => handleInput(core, input, key),
     };
 
-    const instance = render(<ChatRoot bridge={internalBridge} />, { exitOnCtrlC: false });
+    const instance = render(
+        <ChatRoot bridge={internalBridge} {...(options !== undefined ? { statusBarProps: options } : {})} />,
+        { exitOnCtrlC: false },
+    );
     core.unmountFn = instance.unmount;
 
     const waitForEvent = (): Promise<ChatInputEvent> => {

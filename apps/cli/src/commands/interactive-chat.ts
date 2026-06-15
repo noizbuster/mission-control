@@ -7,6 +7,9 @@ import type {
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { parseChatLine } from './chat-commands.js';
+import { createInkChatBridge } from './ink-chat-bridge.js';
+import { createInkChatInput } from './ink-chat-input.js';
+import { createInkChatOutput } from './ink-chat-output.js';
 import { runChatAction } from './interactive-chat-actions.js';
 import {
     type ChatInput,
@@ -16,9 +19,6 @@ import {
     createTerminalChatOutput,
     maxChatPromptLength,
 } from './interactive-chat-io.js';
-import { createInkChatBridge } from './ink-chat-bridge.js';
-import { createInkChatInput } from './ink-chat-input.js';
-import { createInkChatOutput } from './ink-chat-output.js';
 import {
     areModelProviderSelectionsEqual,
     ChatInputPump,
@@ -65,7 +65,16 @@ export async function runInteractiveChatSession(
     options: InteractiveChatOptions,
 ): Promise<string> {
     const useInk = options.input === undefined && process.stdin.isTTY === true;
-    const inkBridge = useInk ? createInkChatBridge() : undefined;
+    const inkBridge = useInk
+        ? createInkChatBridge({
+              providerID: options.modelProviderSelection.providerID,
+              modelID: options.modelProviderSelection.modelID,
+              ...(options.modelProviderSelection.variantID !== undefined
+                  ? { variantID: options.modelProviderSelection.variantID }
+                  : {}),
+              ...(options.sessionId !== undefined ? { sessionID: options.sessionId } : {}),
+          })
+        : undefined;
     const chatInput =
         options.input ?? (inkBridge !== undefined ? createInkChatInput(inkBridge) : createTerminalChatInput());
     const chatOutput =
@@ -105,8 +114,7 @@ export async function runInteractiveChatSession(
                       ? { observeStoredEvent: options.observeStoredEvent }
                       : {}),
               });
-    const unregisterProcessCleanup =
-        inkBridge === undefined ? registerProcessTerminalCleanup(chatInput) : undefined;
+    const unregisterProcessCleanup = inkBridge === undefined ? registerProcessTerminalCleanup(chatInput) : undefined;
 
     try {
         chatOutput.write('mission-control chat\n');
