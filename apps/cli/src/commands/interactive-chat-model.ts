@@ -139,6 +139,12 @@ export function resolveModelCommand(
     }
     const matchingChoice = choices.find((choice) => isSelectionAvailable(choice.selection, selection));
     if (matchingChoice === undefined) {
+        if (provider !== undefined && provider.capability.status === 'executable') {
+            return {
+                type: 'select',
+                selection,
+            };
+        }
         return {
             type: 'invalid',
             message: `Unknown model: ${trimmed}`,

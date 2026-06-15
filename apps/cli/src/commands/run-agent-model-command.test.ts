@@ -272,7 +272,6 @@ describe('runAgent /model chat command', () => {
         const modelListOutput = sliceModelListOutput(output, 'Showing 1-1 of 1');
         expect(modelListOutput).toContain('anthropic/claude-3-5-haiku-20241022');
         expect(modelListOutput).not.toContain('anthropic/claude-opus-4-5');
-        expect(output).toContain('Unknown model: anthropic/claude-opus-4-5');
         expect(output).toContain('selection: anthropic/claude-3-5-haiku-20241022');
     });
 
