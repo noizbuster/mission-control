@@ -117,7 +117,7 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                 <Text key={`line-${index}`}>{line}</Text>
             ))}
             {showSlashMenu ? <SlashCommandMenu input={snapshot.inputBuffer} selectedIndex={0} commands={[]} /> : null}
-            <TextInput value={snapshot.inputBuffer} onChange={() => {}} onSubmit={() => {}} />
+            <TextInput value={snapshot.inputBuffer} onChange={() => {}} onSubmit={() => {}} prefix="" />
             {statusBarProps !== undefined ? <StatusBar {...statusBarProps} /> : null}
         </Box>
     );
