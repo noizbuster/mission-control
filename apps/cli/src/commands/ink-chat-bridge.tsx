@@ -159,6 +159,9 @@ function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
         enqueueEvent(core, { type: 'line', value });
         core.inputBuffer = '';
         core.menuState = createSlashCommandMenuState();
+        if (!value.startsWith('/')) {
+            core.outputText += `You: ${value}\n`;
+        }
         publishSnapshot(core);
         return;
     }
@@ -258,13 +261,13 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     const menuView = showSlashMenu
         ? createSlashCommandMenuView(snapshot.inputBuffer, snapshot.menuState, slashMenuMaxVisibleChoices)
         : null;
-    const outputLines = snapshot.outputText.split('\n').filter((line) => line.length > 0);
+    const messageBlocks = parseMessageBlocks(snapshot.outputText);
 
     return (
         <Box flexDirection="column">
-            {outputLines.map((line, index) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: terminal output is append-only, never reordered
-                <Text key={`line-${index}`}>{line}</Text>
+            {messageBlocks.map((block, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
+                <MessageBlock key={`msg-${block.kind}-${index}`} block={block} />
             ))}
             {menuView !== null && menuView.open ? (
                 <Box flexDirection="column" marginTop={1}>
@@ -385,4 +388,101 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
     };
 
     return { waitForEvent, emitOutput, getOutput, showModelPicker, unmount };
+}
+
+type ChatBlock = {
+    readonly kind: 'user' | 'assistant' | 'error' | 'system';
+    readonly lines: readonly string[];
+};
+
+function parseMessageBlocks(outputText: string): readonly ChatBlock[] {
+    const rawLines = outputText.split('\n').filter((line) => line.length > 0);
+    const blocks: ChatBlock[] = [];
+    let currentKind: ChatBlock['kind'] | undefined;
+    let currentLines: string[] = [];
+
+    const flush = (): void => {
+        if (currentKind !== undefined && currentLines.length > 0) {
+            blocks.push({ kind: currentKind, lines: currentLines });
+        }
+        currentKind = undefined;
+        currentLines = [];
+    };
+
+    for (const line of rawLines) {
+        let kind: ChatBlock['kind'];
+        if (line.startsWith('You: ')) {
+            kind = 'user';
+        } else if (line.startsWith('Assistant: ')) {
+            kind = 'assistant';
+        } else if (line.startsWith('Error: ')) {
+            kind = 'error';
+        } else {
+            kind = 'system';
+        }
+        if (kind !== currentKind) {
+            flush();
+            currentKind = kind;
+        }
+        currentLines.push(line);
+    }
+    flush();
+    return blocks;
+}
+
+const blockLeftColor: Record<ChatBlock['kind'], string | undefined> = {
+    user: 'cyan',
+    assistant: 'green',
+    error: 'red',
+    system: undefined,
+};
+
+const blockPrefix: Record<ChatBlock['kind'], string> = {
+    user: 'You: ',
+    assistant: 'Assistant: ',
+    error: 'Error: ',
+    system: '',
+};
+
+function MessageBlock({ block }: { readonly block: ChatBlock }): React.ReactElement {
+    const leftColor = blockLeftColor[block.kind];
+    const prefix = blockPrefix[block.kind];
+    const showBlock = block.kind !== 'system';
+
+    if (!showBlock) {
+        return (
+            <Box flexDirection="column">
+                {block.lines.map((line) => (
+                    <Text key={line.slice(0, 16)} dimColor>
+                        {line}
+                    </Text>
+                ))}
+            </Box>
+        );
+    }
+
+    return (
+        <Box flexDirection="row" marginTop={0}>
+            {leftColor !== undefined ? (
+                <Box width={1}>
+                    <Text backgroundColor={leftColor}> </Text>
+                </Box>
+            ) : null}
+            <Box flexDirection="column" flexGrow={1}>
+                {block.lines.map((line) => {
+                    const content = prefix.length > 0 && line.startsWith(prefix) ? line.slice(prefix.length) : line;
+                    const isError = block.kind === 'error';
+                    return (
+                        <Text
+                            key={content.slice(0, 16)}
+                            {...(isError ? { color: 'red' } : {})}
+                            {...(block.kind === 'assistant' ? { dimColor: true } : {})}
+                        >
+                            {content}
+                        </Text>
+                    );
+                })}
+            </Box>
+        </Box>
+    );
 }
