@@ -113,7 +113,12 @@ function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
         publishSnapshot(core);
         return;
     }
-    if (key.return) {
+    if (key.return || input.includes('\r') || input.includes('\n')) {
+        const textBeforeReturn = input.split(/[\r\n]/)[0] ?? '';
+        if (textBeforeReturn.length > 0 && !key.ctrl && !key.meta) {
+            core.inputBuffer += textBeforeReturn;
+            core.menuState = createSlashCommandMenuState();
+        }
         let value = core.inputBuffer;
         if (core.inputBuffer.startsWith('/')) {
             const resolved = resolveSlashCommandMenuSubmission(core.inputBuffer, core.menuState);
