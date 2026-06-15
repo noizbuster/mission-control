@@ -7,19 +7,33 @@
  * `runInteractiveChatSession` loop `await`s events from `bridge.waitForEvent()`.
  *
  * The bridge core is the single source of truth for mutable state (input buffer,
- * output text, event queue, event waiters, slash command menu state). `ChatRoot`
- * subscribes to it via `useSyncExternalStore` purely for rendering, so `useInput`
- * always reads fresh state from the core and never closes over a stale React
- * snapshot.
+ * output text, event queue, event waiters, slash command menu state, model picker
+ * state). `ChatRoot` subscribes to it via `useSyncExternalStore` purely for
+ * rendering, so `useInput` always reads fresh state from the core and never closes
+ * over a stale React snapshot.
  *
  * Slash command autocomplete: when the input buffer starts with `/`, a filtered
  * command menu renders above the input. Arrow up/down navigates the selection,
  * and Enter resolves a partial match (e.g. `/ex` -> `/exit`) before submitting.
+ *
+ * Model picker overlay: when `/model` opens the picker, the bridge core switches
+ * into `modelPickerActive` mode. `handleInput` routes all keystrokes to
+ * `handleModelPickerInput`, which drives the shared `ProviderPromptKeypress`
+ * reducer (the same state machine used by the terminal model selector and auth
+ * provider prompts). ChatRoot renders the picker as a full overlay, replacing the
+ * normal output/menu/input area until a selection is made or cancelled.
  */
 
+import type { ModelProviderSelection } from '@mission-control/protocol';
 import { Box, type Key, render, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
 import { StatusBar } from '../components/StatusBar.js';
+import {
+    createProviderPromptKeypressState,
+    createProviderPromptView,
+    type ProviderPromptKeypressState,
+    reduceProviderPromptKeypress,
+} from './auth-provider-keypress.js';
 import {
     createSlashCommandMenuState,
     createSlashCommandMenuView,
@@ -28,11 +42,15 @@ import {
     type SlashCommandMenuState,
 } from './interactive-chat-command-menu.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
+import type { ModelChoice } from './interactive-chat-model.js';
 
 type BridgeSnapshot = {
     readonly inputBuffer: string;
     readonly outputText: string;
     readonly menuState: SlashCommandMenuState;
+    readonly modelPickerActive: boolean;
+    readonly modelPickerChoices: readonly ModelChoice[];
+    readonly modelPickerKeypress: ProviderPromptKeypressState;
 };
 
 /** Public surface consumed by the imperative chat loop. */
@@ -40,6 +58,7 @@ export type InkChatBridge = {
     readonly waitForEvent: () => Promise<ChatInputEvent>;
     readonly emitOutput: (text: string) => void;
     readonly getOutput: () => string;
+    readonly showModelPicker: (choices: readonly ModelChoice[]) => Promise<ModelProviderSelection | undefined>;
     readonly unmount: () => void;
 };
 
@@ -60,6 +79,10 @@ type InkChatBridgeCore = {
     listeners: Set<() => void>;
     snapshot: BridgeSnapshot;
     unmountFn: (() => void) | undefined;
+    modelPickerChoices: readonly ModelChoice[];
+    modelPickerKeypress: ProviderPromptKeypressState;
+    modelPickerActive: boolean;
+    modelPickerResolve: ((selection: ModelProviderSelection | undefined) => void) | undefined;
 };
 
 /** Minimal props the React tree uses to talk to the bridge core. */
@@ -73,12 +96,16 @@ type ChatRootProps = {
 };
 
 const slashMenuMaxVisibleChoices = 5;
+const modelPickerMaxVisibleChoices = 10;
 
 function publishSnapshot(core: InkChatBridgeCore): void {
     core.snapshot = {
         inputBuffer: core.inputBuffer,
         outputText: core.outputText,
         menuState: core.menuState,
+        modelPickerActive: core.modelPickerActive,
+        modelPickerChoices: core.modelPickerChoices,
+        modelPickerKeypress: core.modelPickerKeypress,
     };
     for (const listener of core.listeners) {
         listener();
@@ -95,6 +122,10 @@ function enqueueEvent(core: InkChatBridgeCore, event: ChatInputEvent): void {
 }
 
 function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
+    if (core.modelPickerActive) {
+        handleModelPickerInput(core, input, key);
+        return;
+    }
     if (key.ctrl && input === 'c') {
         enqueueEvent(core, {
             type: 'interrupt',
@@ -146,9 +177,82 @@ function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
     }
 }
 
+function handleModelPickerInput(core: InkChatBridgeCore, input: string, key: Key): void {
+    if (key.ctrl && input === 'c') {
+        core.modelPickerActive = false;
+        core.modelPickerResolve?.(undefined);
+        core.modelPickerResolve = undefined;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.return || input.includes('\r') || input.includes('\n')) {
+        const promptChoices = core.modelPickerChoices.map((choice) => ({
+            id: choice.id,
+            name: choice.label,
+        }));
+        const view = createProviderPromptView(core.modelPickerKeypress, promptChoices, modelPickerMaxVisibleChoices);
+        const selected = core.modelPickerChoices.find(
+            (choice) => choice.id === view.filteredChoices[view.selectedIndex]?.id,
+        );
+        core.modelPickerActive = false;
+        core.modelPickerResolve?.(selected?.selection);
+        core.modelPickerResolve = undefined;
+        publishSnapshot(core);
+        return;
+    }
+    let rawInput = input;
+    if (key.upArrow) {
+        rawInput = '\u001b[A';
+    } else if (key.downArrow) {
+        rawInput = '\u001b[B';
+    }
+    const promptChoices = core.modelPickerChoices.map((choice) => ({
+        id: choice.id,
+        name: choice.label,
+    }));
+    core.modelPickerKeypress = reduceProviderPromptKeypress(core.modelPickerKeypress, rawInput, promptChoices);
+    publishSnapshot(core);
+}
+
 function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     const snapshot = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
     useInput((input, key) => bridge.handleInput(input, key));
+
+    if (snapshot.modelPickerActive) {
+        const promptChoices = snapshot.modelPickerChoices.map((choice) => ({
+            id: choice.id,
+            name: choice.label,
+        }));
+        const view = createProviderPromptView(
+            snapshot.modelPickerKeypress,
+            promptChoices,
+            modelPickerMaxVisibleChoices,
+        );
+        return (
+            <Box flexDirection="column">
+                <Text bold color="cyan">
+                    Select model
+                </Text>
+                <Text dimColor>{`Search: ${view.searchQuery}`}</Text>
+                {view.totalCount === 0 ? (
+                    <Text dimColor>No models match</Text>
+                ) : (
+                    <Text dimColor>{`Showing ${view.startIndex + 1}-${view.endIndex} of ${view.totalCount}`}</Text>
+                )}
+                {view.visibleChoices.map((choice, index) => {
+                    const globalIndex = view.startIndex + index;
+                    const isSelected = globalIndex === view.selectedIndex;
+                    return (
+                        <Text key={choice.id} {...(isSelected ? { backgroundColor: 'blue' } : {})}>
+                            {isSelected ? '> ' : '  '}
+                            {globalIndex + 1}. {choice.name}
+                        </Text>
+                    );
+                })}
+                <Text dimColor>Use Up/Down, type to search, Enter to select, Ctrl+C to cancel</Text>
+            </Box>
+        );
+    }
 
     const showSlashMenu = snapshot.inputBuffer.startsWith('/');
     const menuView = showSlashMenu
@@ -199,7 +303,8 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
 /**
  * Mount the Ink tree once and return the imperative bridge. Callers `await`
  * `waitForEvent()` to consume `{ type: 'line' }` / `{ type: 'interrupt' }`
- * events, `emitOutput()` to append chat output, and `unmount()` to tear down.
+ * events, `emitOutput()` to append chat output, `showModelPicker()` to open the
+ * `/model` selection overlay, and `unmount()` to tear down.
  */
 export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBridge {
     const core: InkChatBridgeCore = {
@@ -209,8 +314,19 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         eventQueue: [],
         eventWaiters: [],
         listeners: new Set(),
-        snapshot: { inputBuffer: '', outputText: '', menuState: createSlashCommandMenuState() },
+        snapshot: {
+            inputBuffer: '',
+            outputText: '',
+            menuState: createSlashCommandMenuState(),
+            modelPickerActive: false,
+            modelPickerChoices: [],
+            modelPickerKeypress: createProviderPromptKeypressState(),
+        },
         unmountFn: undefined,
+        modelPickerChoices: [],
+        modelPickerKeypress: createProviderPromptKeypressState(),
+        modelPickerActive: false,
+        modelPickerResolve: undefined,
     };
 
     const subscribe = (listener: () => void): (() => void) => {
@@ -251,9 +367,22 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
 
     const getOutput = (): string => core.outputText;
 
+    const showModelPicker = (choices: readonly ModelChoice[]): Promise<ModelProviderSelection | undefined> => {
+        if (choices.length === 0) {
+            return Promise.resolve(undefined);
+        }
+        core.modelPickerChoices = choices;
+        core.modelPickerKeypress = createProviderPromptKeypressState();
+        core.modelPickerActive = true;
+        publishSnapshot(core);
+        return new Promise<ModelProviderSelection | undefined>((resolve) => {
+            core.modelPickerResolve = resolve;
+        });
+    };
+
     const unmount = (): void => {
         core.unmountFn?.();
     };
 
-    return { waitForEvent, emitOutput, getOutput, unmount };
+    return { waitForEvent, emitOutput, getOutput, showModelPicker, unmount };
 }

@@ -10,6 +10,7 @@ import { parseChatLine } from './chat-commands.js';
 import { createInkChatBridge } from './ink-chat-bridge.js';
 import { createInkChatInput } from './ink-chat-input.js';
 import { createInkChatOutput } from './ink-chat-output.js';
+import { createInkModelSelector } from './ink-model-selector.js';
 import { runChatAction } from './interactive-chat-actions.js';
 import {
     type ChatInput,
@@ -79,10 +80,13 @@ export async function runInteractiveChatSession(
         options.input ?? (inkBridge !== undefined ? createInkChatInput(inkBridge) : createTerminalChatInput());
     const chatOutput =
         options.output ?? (inkBridge !== undefined ? createInkChatOutput(inkBridge) : createTerminalChatOutput());
-    const selectModel = suspendChatInputWhileSelectingModel(
-        options.selectModel ?? createTerminalModelSelector(chatOutput),
-        chatInput,
-    );
+    const selectModel =
+        inkBridge !== undefined
+            ? createInkModelSelector(inkBridge)
+            : suspendChatInputWhileSelectingModel(
+                  options.selectModel ?? createTerminalModelSelector(chatOutput),
+                  chatInput,
+              );
     const modelChoices =
         options.modelChoices ??
         createModelChoices(
