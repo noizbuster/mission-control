@@ -112,8 +112,9 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
 
     return (
         <Box flexDirection="column">
-            {outputLines.map((line) => (
-                <Text key={`output-${line}`}>{line}</Text>
+            {outputLines.map((line, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: terminal output is append-only, never reordered
+                <Text key={`line-${index}`}>{line}</Text>
             ))}
             {showSlashMenu ? <SlashCommandMenu input={snapshot.inputBuffer} selectedIndex={0} commands={[]} /> : null}
             <TextInput value={snapshot.inputBuffer} onChange={() => {}} onSubmit={() => {}} />
