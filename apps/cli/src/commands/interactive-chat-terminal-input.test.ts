@@ -235,7 +235,7 @@ describe('terminal chat input stream handling', () => {
         chatInput.close();
     });
 
-    it('preserves a second Ctrl+C after the duplicate coalescing window', async () => {
+    it('preserves a rapid same-encoding second Ctrl+C as a separate interrupt', async () => {
         const input = new FakeTerminalInput();
         const output = new FakeTerminalOutput();
         const chatInput = createTerminalChatInputFromStreams({ input, output });
@@ -244,9 +244,40 @@ describe('terminal chat input stream handling', () => {
         input.send('\u0003');
 
         await expect(firstRead).resolves.toEqual({ type: 'interrupt' });
-        await delay(duplicateInterruptCoalescingWindowMs + 20);
         const secondRead = chatInput.read();
         input.send('\u0003');
+
+        await expect(secondRead).resolves.toEqual({ type: 'interrupt' });
+        chatInput.close();
+    });
+
+    it('preserves a rapid Kitty second Ctrl+C as a separate interrupt', async () => {
+        const input = new FakeTerminalInput();
+        const output = new FakeTerminalOutput();
+        const chatInput = createTerminalChatInputFromStreams({ input, output });
+        const firstRead = chatInput.read();
+
+        input.send('\u001b[99;5u');
+
+        await expect(firstRead).resolves.toEqual({ type: 'interrupt' });
+        const secondRead = chatInput.read();
+        input.send('\u001b[99;5u');
+
+        await expect(secondRead).resolves.toEqual({ type: 'interrupt' });
+        chatInput.close();
+    });
+
+    it('preserves Kitty repeat as a separate interrupt after press', async () => {
+        const input = new FakeTerminalInput();
+        const output = new FakeTerminalOutput();
+        const chatInput = createTerminalChatInputFromStreams({ input, output });
+        const firstRead = chatInput.read();
+
+        input.send('\u001b[99;5u');
+
+        await expect(firstRead).resolves.toEqual({ type: 'interrupt' });
+        const secondRead = chatInput.read();
+        input.send('\u001b[99;5:2u');
 
         await expect(secondRead).resolves.toEqual({ type: 'interrupt' });
         chatInput.close();
@@ -337,11 +368,3 @@ function readWithTimeout(read: Promise<unknown>): Promise<unknown> {
         }),
     ]);
 }
-
-function delay(ms: number): Promise<void> {
-    return new Promise((resolve) => {
-        setTimeout(resolve, ms);
-    });
-}
-
-const duplicateInterruptCoalescingWindowMs = 120;

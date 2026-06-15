@@ -1,4 +1,4 @@
-export type OpenAICompatibleProviderID = 'openrouter' | 'groq' | 'deepseek' | 'mistral';
+export type OpenAICompatibleProviderID = 'openrouter' | 'groq' | 'deepseek' | 'mistral' | 'zai-coding-plan';
 
 export type OpenAICompatibleProviderSpec = {
     readonly providerID: OpenAICompatibleProviderID;
@@ -23,6 +23,10 @@ export const OPENAI_COMPATIBLE_PROVIDER_SPECS = [
     {
         providerID: 'mistral',
         endpoint: 'https://api.mistral.ai/v1/chat/completions',
+    },
+    {
+        providerID: 'zai-coding-plan',
+        endpoint: 'https://api.z.ai/api/paas/v4/chat/completions',
     },
 ] as const satisfies readonly OpenAICompatibleProviderSpec[];
 

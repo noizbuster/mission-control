@@ -48,6 +48,19 @@ export function isTerminalInterruptToken(token: string): boolean {
     return token === '\u0003' || isKittyCtrlCSequence(token) || isXtermModifiedCtrlCSequence(token);
 }
 
+export function interruptTokenEncodingFamily(token: string): string {
+    if (token === '\u0003') {
+        return 'legacy';
+    }
+    if (isKittyCtrlCSequence(token)) {
+        return 'kitty';
+    }
+    if (isXtermModifiedCtrlCSequence(token)) {
+        return 'xterm';
+    }
+    return token;
+}
+
 function isKittyCtrlCSequence(token: string): boolean {
     if (!token.startsWith(csiPrefix) || !token.endsWith('u')) {
         return false;

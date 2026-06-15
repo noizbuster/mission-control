@@ -171,9 +171,9 @@ describe('config catalog constants', () => {
         });
 
         const capabilityCounts = capabilityStatusCounts(opencodeProviderCatalog);
-        expect(capabilityCounts.executable).toBe(7);
+        expect(capabilityCounts.executable).toBe(8);
         expect(capabilityCounts['auth-only']).toBe(1);
-        expect(capabilityCounts['model-discovery-only']).toBe(132);
+        expect(capabilityCounts['model-discovery-only']).toBe(131);
         expect(capabilityCounts.unsupported).toBe(0);
         expect(opencodeProviderCatalog.every((provider) => provider.capability.status.length > 0)).toBe(true);
     });

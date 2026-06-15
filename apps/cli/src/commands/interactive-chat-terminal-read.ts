@@ -47,7 +47,7 @@ export type TerminalReadState = {
     readonly readBufferedTokens: () => readonly string[];
     readonly pushBufferedTokens: (tokens: readonly string[]) => void;
     readonly readTokens: (chunk: Buffer | string) => readonly string[];
-    readonly shouldCoalesceInterruptToken: () => boolean;
+    readonly shouldCoalesceInterruptToken: (token: string) => boolean;
     readonly input: TerminalInputStream;
     readonly output: TerminalOutputStream;
     readonly resetLineState: () => void;
@@ -104,7 +104,7 @@ export function readTerminalChatEvent(state: TerminalReadState): Promise<ChatInp
                 const remainingTokens = tokens.slice(index + 1);
                 if (isTerminalInterruptToken(character)) {
                     const nextTokens = dropLeadingInterruptTokens(remainingTokens);
-                    if (state.shouldCoalesceInterruptToken()) {
+                    if (state.shouldCoalesceInterruptToken(character)) {
                         processInputTokens(nextTokens);
                         return;
                     }

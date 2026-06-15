@@ -175,7 +175,7 @@ describe('runAuthCommand auth prompts', () => {
             process.stdin.emit('data', 'ab\u007fc\r');
 
             await expect(secret).resolves.toBe('ac');
-            expect(terminal.getOutput()).toBe('API key: \n');
+            expect(terminal.getOutput()).toBe('API key: **\b \b*\n');
             session.close();
         } finally {
             terminal.restore();

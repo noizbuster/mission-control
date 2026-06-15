@@ -6,6 +6,7 @@ import {
     terminalModifiedKeyEnableSequence,
 } from './interactive-chat-keyboard.js';
 import { createTerminalInputParser } from './interactive-chat-terminal-input-parser.js';
+import { interruptTokenEncodingFamily } from './interactive-chat-terminal-keys.js';
 import {
     readTerminalChatEvent,
     type TerminalInputStream,
@@ -74,7 +75,7 @@ export function createTerminalChatInputFromStreams(streams: TerminalChatInputStr
     let renderedBlock = emptyRenderedInputBlock;
     let promptRendered = false;
     let renderContext: ChatInputRenderContext | undefined;
-    let lastInterruptTokenAtMs: number | undefined;
+    let lastEmittedInterruptFamily: string | undefined;
     let suspended = false;
     const activeDataListeners = new Set<TerminalDataListener>();
     const activeReadCancellations = new Set<TerminalReadCancellation>();
@@ -180,13 +181,14 @@ export function createTerminalChatInputFromStreams(streams: TerminalChatInputStr
                 readBufferedTokens: inputParser.takeBufferedTokens,
                 pushBufferedTokens: inputParser.pushBufferedTokens,
                 readTokens: inputParser.readTokens,
-                shouldCoalesceInterruptToken: () => {
-                    const now = Date.now();
-                    const shouldCoalesce =
-                        lastInterruptTokenAtMs !== undefined &&
-                        now - lastInterruptTokenAtMs <= duplicateInterruptCoalescingWindowMs;
-                    lastInterruptTokenAtMs = now;
-                    return shouldCoalesce;
+                shouldCoalesceInterruptToken: (token: string) => {
+                    const family = interruptTokenEncodingFamily(token);
+                    if (lastEmittedInterruptFamily !== undefined && family !== lastEmittedInterruptFamily) {
+                        lastEmittedInterruptFamily = undefined;
+                        return true;
+                    }
+                    lastEmittedInterruptFamily = family;
+                    return false;
                 },
                 input,
                 output: streams.output,
@@ -220,5 +222,3 @@ export function createTerminalChatInputFromStreams(streams: TerminalChatInputStr
         },
     };
 }
-
-const duplicateInterruptCoalescingWindowMs = 120;

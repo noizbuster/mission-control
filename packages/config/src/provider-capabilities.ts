@@ -29,6 +29,10 @@ export const generatedProviderCapabilities: Readonly<Record<string, ProviderExec
         status: 'executable',
         adapterFamily: 'openai-compatible',
     },
+    'zai-coding-plan': {
+        status: 'executable',
+        adapterFamily: 'openai-compatible',
+    },
     'github-copilot': {
         status: 'auth-only',
     },

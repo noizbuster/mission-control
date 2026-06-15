@@ -148,10 +148,13 @@ async function questionSecretLine(message: string): Promise<string> {
                     return;
                 }
                 if (character === '\b' || character === '\u007f') {
-                    characters.pop();
+                    if (characters.pop() !== undefined) {
+                        output.write('\b \b');
+                    }
                     continue;
                 }
                 characters.push(character);
+                output.write('*');
             }
         }
 

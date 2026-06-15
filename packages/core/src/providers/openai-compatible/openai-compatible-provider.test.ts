@@ -26,6 +26,7 @@ describe('OpenAI-compatible provider adapter family', () => {
             ['groq', 'https://api.groq.com/openai/v1/chat/completions'],
             ['deepseek', 'https://api.deepseek.com/chat/completions'],
             ['mistral', 'https://api.mistral.ai/v1/chat/completions'],
+            ['zai-coding-plan', 'https://api.z.ai/api/paas/v4/chat/completions'],
         ]);
     });
 
