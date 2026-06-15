@@ -4,7 +4,6 @@ import {
     type CommandExecutionResult,
     type JsonlSessionEventStore,
     type ProviderAdapter,
-    ProviderTurnError,
     ProviderTurnRunner,
     prependProjectContextMessages,
 } from '@mission-control/core';
@@ -81,7 +80,17 @@ export async function startPromptTurn(
                 },
             });
             if (result.status === 'failed') {
-                throw new ProviderTurnError(result.error);
+                const errorMessage = result.error.message;
+                emitFallbackTaskEvent(
+                    coding,
+                    'task.failed',
+                    sessionId,
+                    taskId,
+                    errorMessage,
+                    modelProviderSelection,
+                );
+                chatOutput.write(`Error: ${errorMessage}\n`);
+                return undefined;
             }
             chatOutput.write(`Assistant: ${result.message.content}\n`);
             emitFallbackTaskEvent(
@@ -115,7 +124,7 @@ export async function startPromptTurn(
 
 function emitFallbackTaskEvent(
     coding: PromptTurnContext,
-    type: 'task.started' | 'task.completed',
+    type: 'task.started' | 'task.completed' | 'task.failed',
     sessionId: string,
     taskId: string,
     message: string,

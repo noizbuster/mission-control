@@ -12,6 +12,7 @@ import { createInkChatInput } from './ink-chat-input.js';
 import { createInkChatOutput } from './ink-chat-output.js';
 import { createInkModelSelector } from './ink-model-selector.js';
 import { runChatAction } from './interactive-chat-actions.js';
+import type { ChatActionResult } from './interactive-chat-action-result.js';
 import {
     type ChatInput,
     type ChatInputEvent,
@@ -183,29 +184,36 @@ export async function runInteractiveChatSession(
                 chatOutput.write('Exiting mission-control chat\n');
                 break;
             }
-            const result = await runChatAction(
-                runtime,
-                chatOutput,
-                action,
-                currentModelProviderSelection,
-                selectModel,
-                modelChoices,
-                {
-                    activeTurn,
-                    commandExecutor: options.commandExecutor,
-                    emitEvent: options.emitEvent,
-                    observeStoredEvent: options.observeStoredEvent,
-                    nextTurnId: () => {
-                        turnCounter += 1;
-                        return `turn_interactive_${turnCounter}`;
+            let result: ChatActionResult;
+            try {
+                result = await runChatAction(
+                    runtime,
+                    chatOutput,
+                    action,
+                    currentModelProviderSelection,
+                    selectModel,
+                    modelChoices,
+                    {
+                        activeTurn,
+                        commandExecutor: options.commandExecutor,
+                        emitEvent: options.emitEvent,
+                        observeStoredEvent: options.observeStoredEvent,
+                        nextTurnId: () => {
+                            turnCounter += 1;
+                            return `turn_interactive_${turnCounter}`;
+                        },
+                        provider: currentProvider,
+                        sessionId: currentSessionId,
+                        sessionStore: currentSessionStore,
+                        workspaceRoot: options.workspaceRoot,
+                        ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
                     },
-                    provider: currentProvider,
-                    sessionId: currentSessionId,
-                    sessionStore: currentSessionStore,
-                    workspaceRoot: options.workspaceRoot,
-                    ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
-                },
-            );
+                );
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                chatOutput.write(`Error: ${message}\n`);
+                continue;
+            }
             if (!areModelProviderSelectionsEqual(currentModelProviderSelection, result.modelProviderSelection)) {
                 currentProvider =
                     options.resolveProviderForSelection?.(result.modelProviderSelection) ?? currentProvider;

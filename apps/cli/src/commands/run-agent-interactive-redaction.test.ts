@@ -145,25 +145,21 @@ describe('interactive coding-agent redaction', () => {
         vi.stubEnv(missionControlDataDirEnvKey, dataDir);
 
         // When
-        const errorMessage = await rejectedMessage(() =>
-            runAgent(parseArgs(['--session', sessionId]), {
-                authStore: createEmptyAuthStore(),
-                chatInput: createScriptedChatInput([{ type: 'line', value: 'trigger provider failure' }]),
-                chatOutput: chatOutput.output,
-                workspaceRoot,
-                provider: throwingProvider(`provider exploded ${secret}`),
-            }),
-        );
+        await runAgent(parseArgs(['--session', sessionId]), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([{ type: 'line', value: 'trigger provider failure' }]),
+            chatOutput: chatOutput.output,
+            workspaceRoot,
+            provider: throwingProvider(`provider exploded ${secret}`),
+        });
         const replay = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
         const sessionLog = await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8');
 
         // Then
-        expect(JSON.stringify({ chat: chatOutput.getOutput(), errorMessage, replay, sessionLog })).toContain(
-            '[REDACTED_CREDENTIAL]',
-        );
-        expect(JSON.stringify({ chat: chatOutput.getOutput(), errorMessage, replay, sessionLog })).not.toContain(
-            secret,
-        );
+        const chat = chatOutput.getOutput();
+        expect(chat).toContain('Error:');
+        expect(JSON.stringify({ chat, replay, sessionLog })).toContain('[REDACTED_CREDENTIAL]');
+        expect(JSON.stringify({ chat, replay, sessionLog })).not.toContain(secret);
     });
 
     async function tempRoot(prefix: string): Promise<string> {
@@ -204,15 +200,6 @@ function rejectingProviderStream(message: string): AsyncIterable<ProviderStreamC
             };
         },
     };
-}
-
-async function rejectedMessage(run: () => Promise<string>): Promise<string> {
-    try {
-        await run();
-    } catch (error: unknown) {
-        return error instanceof Error ? error.message : String(error);
-    }
-    throw new Error('expected runAgent to reject');
 }
 
 function addFilePatch(path: string, content: string): string {

@@ -49,7 +49,8 @@ function protocolErrorFromTransportError(
     error: OpenAICompatibleTransportError,
     resolver: ProviderCredentialResolver,
 ): ProtocolError {
-    const message = resolver.redactForOutput(error.message);
+    const rawMessage = extractReadableErrorMessage(error.message);
+    const message = resolver.redactForOutput(rawMessage);
     if (error.kind === 'abort') {
         return { code: 'provider_aborted', message, retryable: false };
     }
@@ -66,4 +67,27 @@ function protocolErrorFromTransportError(
         return { code: 'provider_context_overflow', message, retryable: false };
     }
     return { code: 'unknown', message, retryable: false };
+}
+
+function extractReadableErrorMessage(raw: string): string {
+    const trimmed = raw.trim();
+    if (!trimmed.startsWith('{')) {
+        return raw;
+    }
+    try {
+        const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+        const errorField = parsed['error'];
+        if (typeof errorField === 'object' && errorField !== null) {
+            const msg = (errorField as Record<string, unknown>)['message'];
+            if (typeof msg === 'string' && msg.length > 0) {
+                return msg;
+            }
+        }
+        const directMessage = parsed['message'];
+        if (typeof directMessage === 'string') {
+            return directMessage;
+        }
+    } catch {
+    }
+    return raw;
 }

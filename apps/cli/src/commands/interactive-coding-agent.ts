@@ -71,9 +71,14 @@ async function startOwnedCodingAgentTurn(
     const renderState: ProviderRenderState = { streamingText: false };
     const owner = await createInteractiveRunOwner(options, approvals, renderState);
     let settled = false;
-    const done = runOwnedCodingAgentTurn(options, owner, renderState, action).finally(() => {
-        settled = true;
-    });
+    const done = runOwnedCodingAgentTurn(options, owner, renderState, action)
+        .catch((error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            options.output.write(`Error: ${message}\n`);
+        })
+        .finally(() => {
+            settled = true;
+        });
 
     return {
         done,
@@ -167,8 +172,9 @@ function settleReceipt(
             options.output.write(formatBlockedRunMessage(receipt.reason ?? 'approval required', receipt.toolCallId));
             return;
         case 'failed':
+            options.output.write(`Error: ${receipt.reason ?? 'run failed'}\n`);
             emitTaskEvent(options, 'task.failed', receipt.reason ?? 'run failed');
-            throw new Error(receipt.reason ?? 'run failed');
+            return;
         case 'idle':
         case 'running':
         case 'queued':
