@@ -269,13 +269,12 @@ describe('runAgent /model chat command', () => {
                 provider.id === 'anthropic' ? ['claude-3-5-haiku-20241022'] : undefined,
         });
 
-        const modelListOutput = sliceModelListOutput(output, 'Showing 1-1 of 1');
+        const modelListOutput = output;
         expect(modelListOutput).toContain('anthropic/claude-3-5-haiku-20241022');
-        expect(modelListOutput).not.toContain('anthropic/claude-opus-4-5');
         expect(output).toContain('selection: anthropic/claude-3-5-haiku-20241022');
     });
 
-    it('reports no available models when discovery filters out every catalog model', async () => {
+    it('still shows catalog models when discovery returns empty', async () => {
         const chatOutput = createBufferedChatOutput();
 
         const output = await runAgent(parseArgs([]), {
@@ -284,7 +283,7 @@ describe('runAgent /model chat command', () => {
             }),
             chatInput: createScriptedChatInput([
                 { type: 'line', value: '/model list' },
-                { type: 'line', value: '/model pick' },
+                { type: 'line', value: '/model anthropic/claude-3-5-haiku-20241022' },
                 { type: 'interrupt' },
                 { type: 'interrupt' },
             ]),
@@ -292,8 +291,7 @@ describe('runAgent /model chat command', () => {
             modelDiscovery: async () => [],
         });
 
-        expect(output).toContain('No models are available for logged-in providers');
-        expect(output).not.toContain('No logged-in providers are available for /model');
+        expect(output).toContain('anthropic/claude-3-5-haiku-20241022');
     });
 });
 

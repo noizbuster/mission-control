@@ -223,8 +223,6 @@ async function listAuthenticatedModelChoices(
             choices.push(...providerChoices);
             continue;
         }
-        const discoveredModelIDSet = new Set(discoveredModelIDs);
-        const confirmedChoices = providerChoices.filter((choice) => discoveredModelIDSet.has(choice.selection.modelID));
         const catalogModelIDs = new Set(providerChoices.map((choice) => choice.selection.modelID));
         const extraChoices: ModelChoice[] = discoveredModelIDs
             .filter((id) => !catalogModelIDs.has(id))
@@ -238,7 +236,7 @@ async function listAuthenticatedModelChoices(
                     availableForCoding: true,
                 };
             });
-        choices.push(...confirmedChoices, ...extraChoices);
+        choices.push(...providerChoices, ...extraChoices);
     }
 
     return choices;
