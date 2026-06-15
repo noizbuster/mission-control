@@ -51,6 +51,7 @@ type BridgeSnapshot = {
     readonly modelPickerActive: boolean;
     readonly modelPickerChoices: readonly ModelChoice[];
     readonly modelPickerKeypress: ProviderPromptKeypressState;
+    readonly generating: boolean;
 };
 
 /** Public surface consumed by the imperative chat loop. */
@@ -59,6 +60,7 @@ export type InkChatBridge = {
     readonly emitOutput: (text: string) => void;
     readonly getOutput: () => string;
     readonly showModelPicker: (choices: readonly ModelChoice[]) => Promise<ModelProviderSelection | undefined>;
+    readonly setGenerating: (value: boolean) => void;
     readonly unmount: () => void;
 };
 
@@ -83,6 +85,7 @@ type InkChatBridgeCore = {
     modelPickerKeypress: ProviderPromptKeypressState;
     modelPickerActive: boolean;
     modelPickerResolve: ((selection: ModelProviderSelection | undefined) => void) | undefined;
+    generating: boolean;
 };
 
 /** Minimal props the React tree uses to talk to the bridge core. */
@@ -106,6 +109,7 @@ function publishSnapshot(core: InkChatBridgeCore): void {
         modelPickerActive: core.modelPickerActive,
         modelPickerChoices: core.modelPickerChoices,
         modelPickerKeypress: core.modelPickerKeypress,
+        generating: core.generating,
     };
     for (const listener of core.listeners) {
         listener();
@@ -269,6 +273,11 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                 // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
                 <MessageBlock key={`msg-${block.kind}-${index}`} block={block} />
             ))}
+            {snapshot.generating ? (
+                <Box marginTop={1}>
+                    <Text color="yellow">{'\u25CF Thinking...'}</Text>
+                </Box>
+            ) : null}
             {menuView !== null && menuView.open ? (
                 <Box flexDirection="column" marginTop={1}>
                     {menuView.empty ? (
@@ -324,12 +333,14 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
             modelPickerActive: false,
             modelPickerChoices: [],
             modelPickerKeypress: createProviderPromptKeypressState(),
+            generating: false,
         },
         unmountFn: undefined,
         modelPickerChoices: [],
         modelPickerKeypress: createProviderPromptKeypressState(),
         modelPickerActive: false,
         modelPickerResolve: undefined,
+        generating: false,
     };
 
     const subscribe = (listener: () => void): (() => void) => {
@@ -383,11 +394,16 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         });
     };
 
+    const setGenerating = (value: boolean): void => {
+        core.generating = value;
+        publishSnapshot(core);
+    };
+
     const unmount = (): void => {
         core.unmountFn?.();
     };
 
-    return { waitForEvent, emitOutput, getOutput, showModelPicker, unmount };
+    return { waitForEvent, emitOutput, getOutput, showModelPicker, setGenerating, unmount };
 }
 
 type ChatBlock = {
@@ -462,10 +478,12 @@ function MessageBlock({ block }: { readonly block: ChatBlock }): React.ReactElem
     }
 
     return (
-        <Box flexDirection="row" marginTop={0}>
+        <Box flexDirection="row">
             {leftColor !== undefined ? (
-                <Box width={1}>
-                    <Text backgroundColor={leftColor}> </Text>
+                <Box width={1} flexDirection="column">
+                    {block.lines.map((line) => (
+                        <Text key={`${leftColor}-${line.slice(0, 8)}`} backgroundColor={leftColor}>{' '}</Text>
+                    ))}
                 </Box>
             ) : null}
             <Box flexDirection="column" flexGrow={1}>

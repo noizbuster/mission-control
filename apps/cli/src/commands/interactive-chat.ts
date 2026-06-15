@@ -185,6 +185,9 @@ export async function runInteractiveChatSession(
                 break;
             }
             let result: ChatActionResult;
+            if (inkBridge !== undefined) {
+                inkBridge.setGenerating(true);
+            }
             try {
                 result = await runChatAction(
                     runtime,
@@ -212,7 +215,13 @@ export async function runInteractiveChatSession(
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 chatOutput.write(`Error: ${message}\n`);
+                if (inkBridge !== undefined) {
+                    inkBridge.setGenerating(false);
+                }
                 continue;
+            }
+            if (inkBridge !== undefined) {
+                inkBridge.setGenerating(false);
             }
             if (!areModelProviderSelectionsEqual(currentModelProviderSelection, result.modelProviderSelection)) {
                 currentProvider =
