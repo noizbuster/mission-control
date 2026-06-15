@@ -15,7 +15,7 @@ export function createInkChatInput(bridge: InkChatBridge): ChatInput {
         close: () => bridge.unmount(),
         suspend: () => {},
         resume: () => {},
-        controlsPrompt: false,
+        controlsPrompt: true,
         renderPrompt: () => {},
     };
 }

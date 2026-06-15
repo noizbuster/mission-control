@@ -20,7 +20,6 @@
 import { Box, type Key, render, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
 import { StatusBar } from '../components/StatusBar.js';
-import { TextInput } from '../components/TextInput.js';
 import {
     createSlashCommandMenuState,
     createSlashCommandMenuView,
@@ -164,7 +163,7 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                 <Text key={`line-${index}`}>{line}</Text>
             ))}
             {menuView !== null && menuView.open ? (
-                <Box flexDirection="column">
+                <Box flexDirection="column" marginTop={1}>
                     {menuView.empty ? (
                         <Text dimColor> no commands match</Text>
                     ) : (
@@ -181,8 +180,18 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                     )}
                 </Box>
             ) : null}
-            <TextInput value={snapshot.inputBuffer} onChange={() => {}} onSubmit={() => {}} prefix="" />
-            {statusBarProps !== undefined ? <StatusBar {...statusBarProps} /> : null}
+            <Box flexDirection="column" marginTop={1}>
+                <Text dimColor>{'─'.repeat(process.stdout.columns ?? 80)}</Text>
+                <Text>
+                    <Text color="cyan">{'>'}</Text> {snapshot.inputBuffer}
+                    {snapshot.inputBuffer.length === 0 ? <Text dimColor> Type a message or / for commands</Text> : null}
+                </Text>
+            </Box>
+            {statusBarProps !== undefined ? (
+                <Box marginTop={1}>
+                    <StatusBar {...statusBarProps} />
+                </Box>
+            ) : null}
         </Box>
     );
 }
