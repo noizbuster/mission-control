@@ -19,7 +19,7 @@ describe('runModelsCommand', () => {
         vi.unstubAllEnvs();
     });
 
-    it('lists models with authentication and execution capability status', async () => {
+    it('lists models from catalog when authenticated without discovery', async () => {
         const authFilePath = await useTempAuthFile();
         const store = createProviderAuthStore();
         await store.saveCredential({
@@ -29,16 +29,17 @@ describe('runModelsCommand', () => {
             now: '2026-06-03T10:00:00.000Z',
         });
 
-        const output = await runModelsCommand(parseArgs(['models', 'local']), { store });
+        const output = await runModelsCommand(parseArgs(['models', 'local']), {
+            store,
+            modelDiscovery: async () => undefined,
+        });
 
         expect(output).toContain('local/local-echo');
-        expect(output).toContain('authenticated');
-        expect(output).toContain('executable');
         expect(output).not.toContain('local_key');
         await rm(authFilePath, { force: true });
     });
 
-    it('keeps existing provider model listing baseline before model variants', async () => {
+    it('shows only authenticated providers when no provider specified', async () => {
         const authFilePath = await useTempAuthFile();
         const store = createProviderAuthStore();
         await store.saveCredential({
@@ -48,57 +49,18 @@ describe('runModelsCommand', () => {
             now: '2026-06-03T10:00:00.000Z',
         });
 
-        const output = await runModelsCommand(parseArgs(['models']), { store });
-
-        expect(output).toContain('local/local-echo authenticated executable');
-        expect(output).not.toContain('mock/');
-        await rm(authFilePath, { force: true });
-    });
-
-    it('masks credentials when model variants are listed', async () => {
-        const authFilePath = await useTempAuthFile();
-        const store = createProviderAuthStore();
-        await store.saveCredential({
-            providerID: 'local',
-            modelID: 'local-echo',
-            apiKey: 'local_super_secret_key',
-            now: '2026-06-03T10:00:00.000Z',
+        const output = await runModelsCommand(parseArgs(['models']), {
+            store,
+            modelDiscovery: async () => undefined,
         });
-
-        const output = await runModelsCommand(parseArgs(['models', 'local']), { store });
 
         expect(output).toContain('local/local-echo');
-        expect(output).toContain('authenticated');
-        expect(output).not.toContain('local_super_secret_key');
+        expect(output).not.toContain('anthropic/');
+        expect(output).not.toContain('opencode/');
         await rm(authFilePath, { force: true });
     });
 
-    it('lists generated OpenCode provider models without requiring credentials', async () => {
-        const output = await runModelsCommand(parseArgs(['models', 'anthropic']));
-
-        expect(output).toContain('Models');
-        expect(output).toContain('anthropic/claude-3-5-haiku-20241022 missing credential executable');
-        expect(output).not.toContain('mock/');
-    });
-
-    it('shows authenticated status for generated provider credentials', async () => {
-        const authFilePath = await useTempAuthFile();
-        const store = createProviderAuthStore();
-        await store.saveCredential({
-            providerID: 'anthropic',
-            modelID: 'claude-3-5-haiku-20241022',
-            fields: [{ id: 'apiKey', value: 'anthropic_secret_key', secret: true }],
-            now: '2026-06-03T10:00:00.000Z',
-        });
-
-        const output = await runModelsCommand(parseArgs(['models', 'anthropic']), { store });
-
-        expect(output).toContain('anthropic/claude-3-5-haiku-20241022 authenticated executable');
-        expect(output).not.toContain('anthropic_secret_key');
-        await rm(authFilePath, { force: true });
-    });
-
-    it('shows why authenticated discovery-only providers cannot run coding prompts', async () => {
+    it('hides executable status suffix and shows non-executable in parentheses', async () => {
         const authFilePath = await useTempAuthFile();
         const store = createProviderAuthStore();
         await store.saveCredential({
@@ -108,11 +70,76 @@ describe('runModelsCommand', () => {
             now: '2026-06-03T10:00:00.000Z',
         });
 
-        const output = await runModelsCommand(parseArgs(['models', 'perplexity']), { store });
+        const output = await runModelsCommand(parseArgs(['models', 'perplexity']), {
+            store,
+            modelDiscovery: async () => undefined,
+        });
 
-        expect(output).toContain('perplexity/sonar authenticated model-discovery-only');
-        expect(output).toContain('cannot run coding agent prompts');
+        expect(output).toContain('perplexity/sonar');
+        expect(output).toContain('model-discovery-only');
         expect(output).not.toContain('perplexity_secret_key');
+        await rm(authFilePath, { force: true });
+    });
+
+    it('prefers API model list when discovery succeeds', async () => {
+        const authFilePath = await useTempAuthFile();
+        const store = createProviderAuthStore();
+        await store.saveCredential({
+            providerID: 'anthropic',
+            modelID: 'claude-3-5-haiku-20241022',
+            fields: [{ id: 'apiKey', value: 'anthropic_secret_key', secret: true }],
+            now: '2026-06-03T10:00:00.000Z',
+        });
+
+        const output = await runModelsCommand(parseArgs(['models', 'anthropic']), {
+            store,
+            modelDiscovery: async () => ['claude-3-5-haiku-20241022', 'claude-opus-4-8'],
+        });
+
+        expect(output).toContain('anthropic/claude-3-5-haiku-20241022');
+        expect(output).toContain('anthropic/claude-opus-4-8');
+        expect(output).not.toContain('anthropic_secret_key');
+        await rm(authFilePath, { force: true });
+    });
+
+    it('marks catalog-only models when discovery provides a different set', async () => {
+        const authFilePath = await useTempAuthFile();
+        const store = createProviderAuthStore();
+        await store.saveCredential({
+            providerID: 'anthropic',
+            modelID: 'claude-3-5-haiku-20241022',
+            fields: [{ id: 'apiKey', value: 'anthropic_secret_key', secret: true }],
+            now: '2026-06-03T10:00:00.000Z',
+        });
+
+        const output = await runModelsCommand(parseArgs(['models', 'anthropic']), {
+            store,
+            modelDiscovery: async () => ['claude-3-5-haiku-20241022'],
+        });
+
+        expect(output).toContain('anthropic/claude-3-5-haiku-20241022');
+        const catalogOnlyModels = output.split('\n').filter((line) => line.includes('(catalog only)'));
+        expect(catalogOnlyModels.length).toBeGreaterThan(0);
+        expect(catalogOnlyModels.every((line) => !line.includes('claude-3-5-haiku-20241022'))).toBe(true);
+        await rm(authFilePath, { force: true });
+    });
+
+    it('does not leak credentials in output', async () => {
+        const authFilePath = await useTempAuthFile();
+        const store = createProviderAuthStore();
+        await store.saveCredential({
+            providerID: 'local',
+            modelID: 'local-echo',
+            apiKey: 'local_super_secret_key',
+            now: '2026-06-03T10:00:00.000Z',
+        });
+
+        const output = await runModelsCommand(parseArgs(['models', 'local']), {
+            store,
+            modelDiscovery: async () => undefined,
+        });
+
+        expect(output).not.toContain('local_super_secret_key');
         await rm(authFilePath, { force: true });
     });
 });
