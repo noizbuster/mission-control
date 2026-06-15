@@ -26,7 +26,7 @@ export const OPENAI_COMPATIBLE_PROVIDER_SPECS = [
     },
     {
         providerID: 'zai-coding-plan',
-        endpoint: 'https://api.z.ai/api/paas/v4/chat/completions',
+        endpoint: 'https://api.z.ai/api/coding/paas/v4/chat/completions',
     },
 ] as const satisfies readonly OpenAICompatibleProviderSpec[];
 

@@ -80,7 +80,7 @@ function createDiscoveryRequest(providerID: string, apiKey: string): DiscoveryRe
         case 'xai':
             return createBearerDiscoveryRequest('https://api.x.ai/v1/models', apiKey);
         case 'zai-coding-plan':
-            return createBearerDiscoveryRequest('https://api.z.ai/api/paas/v4/models', apiKey);
+            return createBearerDiscoveryRequest('https://api.z.ai/api/coding/paas/v4/models', apiKey);
         default:
             return undefined;
     }
