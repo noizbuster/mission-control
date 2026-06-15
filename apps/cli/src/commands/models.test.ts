@@ -39,10 +39,20 @@ describe('runModelsCommand', () => {
     });
 
     it('keeps existing provider model listing baseline before model variants', async () => {
-        const output = await runModelsCommand(parseArgs(['models']));
+        const authFilePath = await useTempAuthFile();
+        const store = createProviderAuthStore();
+        await store.saveCredential({
+            providerID: 'local',
+            modelID: 'local-echo',
+            apiKey: 'local_key',
+            now: '2026-06-03T10:00:00.000Z',
+        });
 
-        expect(output).toContain('local/local-echo missing credential executable');
+        const output = await runModelsCommand(parseArgs(['models']), { store });
+
+        expect(output).toContain('local/local-echo authenticated executable');
         expect(output).not.toContain('mock/');
+        await rm(authFilePath, { force: true });
     });
 
     it('masks credentials when model variants are listed', async () => {

@@ -8,10 +8,10 @@ export type ModelsCommandOptions = {
 };
 
 export async function runModelsCommand(args: CliArgs, options: ModelsCommandOptions = {}): Promise<string> {
-    const providers = selectProviders(args.modelsProviderID);
     const store = options.store ?? createProviderAuthStore();
     const summaries = await store.listCredentialSummaries();
     const authenticatedProviderIDs = new Set(summaries.map((summary) => summary.providerID));
+    const providers = selectProviders(args.modelsProviderID, authenticatedProviderIDs);
     const lines = providers.flatMap((provider) =>
         provider.models.map((model) => {
             const status = authenticatedProviderIDs.has(provider.id) ? 'authenticated' : 'missing credential';
@@ -21,13 +21,16 @@ export async function runModelsCommand(args: CliArgs, options: ModelsCommandOpti
     return ['Models', ...lines, ''].join('\n');
 }
 
-function selectProviders(providerID: string | undefined): readonly (typeof modelProviderCatalog)[number][] {
-    if (providerID === undefined) {
-        return modelProviderCatalog;
+function selectProviders(
+    providerID: string | undefined,
+    authenticatedProviderIDs: Set<string>,
+): readonly (typeof modelProviderCatalog)[number][] {
+    if (providerID !== undefined) {
+        const provider = modelProviderCatalog.find((entry) => entry.id === providerID);
+        if (provider === undefined) {
+            throw new Error(`Unknown provider: ${providerID}`);
+        }
+        return [provider];
     }
-    const provider = modelProviderCatalog.find((entry) => entry.id === providerID);
-    if (provider === undefined) {
-        throw new Error(`Unknown provider: ${providerID}`);
-    }
-    return [provider];
+    return modelProviderCatalog.filter((entry) => authenticatedProviderIDs.has(entry.id));
 }
