@@ -7,21 +7,33 @@
  * `runInteractiveChatSession` loop `await`s events from `bridge.waitForEvent()`.
  *
  * The bridge core is the single source of truth for mutable state (input buffer,
- * output text, event queue, event waiters). `ChatRoot` subscribes to it via
- * `useSyncExternalStore` purely for rendering, so `useInput` always reads fresh
- * state from the core and never closes over a stale React snapshot.
+ * output text, event queue, event waiters, slash command menu state). `ChatRoot`
+ * subscribes to it via `useSyncExternalStore` purely for rendering, so `useInput`
+ * always reads fresh state from the core and never closes over a stale React
+ * snapshot.
+ *
+ * Slash command autocomplete: when the input buffer starts with `/`, a filtered
+ * command menu renders above the input. Arrow up/down navigates the selection,
+ * and Enter resolves a partial match (e.g. `/ex` -> `/exit`) before submitting.
  */
 
 import { Box, type Key, render, Text, useInput } from 'ink';
 import { useSyncExternalStore } from 'react';
-import { SlashCommandMenu } from '../components/SlashCommandMenu.js';
 import { StatusBar } from '../components/StatusBar.js';
 import { TextInput } from '../components/TextInput.js';
+import {
+    createSlashCommandMenuState,
+    createSlashCommandMenuView,
+    reduceSlashCommandMenuSelection,
+    resolveSlashCommandMenuSubmission,
+    type SlashCommandMenuState,
+} from './interactive-chat-command-menu.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
 
 type BridgeSnapshot = {
     readonly inputBuffer: string;
     readonly outputText: string;
+    readonly menuState: SlashCommandMenuState;
 };
 
 /** Public surface consumed by the imperative chat loop. */
@@ -43,6 +55,7 @@ export type InkChatBridgeOptions = {
 type InkChatBridgeCore = {
     inputBuffer: string;
     outputText: string;
+    menuState: SlashCommandMenuState;
     eventQueue: ChatInputEvent[];
     eventWaiters: Array<(event: ChatInputEvent) => void>;
     listeners: Set<() => void>;
@@ -60,8 +73,14 @@ type ChatRootProps = {
     readonly statusBarProps?: InkChatBridgeOptions;
 };
 
+const slashMenuMaxVisibleChoices = 5;
+
 function publishSnapshot(core: InkChatBridgeCore): void {
-    core.snapshot = { inputBuffer: core.inputBuffer, outputText: core.outputText };
+    core.snapshot = {
+        inputBuffer: core.inputBuffer,
+        outputText: core.outputText,
+        menuState: core.menuState,
+    };
     for (const listener of core.listeners) {
         listener();
     }
@@ -84,21 +103,41 @@ function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
         });
         return;
     }
+    if (key.upArrow && core.inputBuffer.startsWith('/')) {
+        core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[A', core.inputBuffer);
+        publishSnapshot(core);
+        return;
+    }
+    if (key.downArrow && core.inputBuffer.startsWith('/')) {
+        core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[B', core.inputBuffer);
+        publishSnapshot(core);
+        return;
+    }
     if (key.return) {
-        enqueueEvent(core, { type: 'line', value: core.inputBuffer });
+        let value = core.inputBuffer;
+        if (core.inputBuffer.startsWith('/')) {
+            const resolved = resolveSlashCommandMenuSubmission(core.inputBuffer, core.menuState);
+            if (resolved !== core.inputBuffer) {
+                value = resolved;
+            }
+        }
+        enqueueEvent(core, { type: 'line', value });
         core.inputBuffer = '';
+        core.menuState = createSlashCommandMenuState();
         publishSnapshot(core);
         return;
     }
     if (key.backspace) {
         if (core.inputBuffer.length > 0) {
             core.inputBuffer = core.inputBuffer.slice(0, -1);
+            core.menuState = createSlashCommandMenuState();
             publishSnapshot(core);
         }
         return;
     }
     if (input !== '' && !key.ctrl && !key.meta) {
         core.inputBuffer += input;
+        core.menuState = createSlashCommandMenuState();
         publishSnapshot(core);
     }
 }
@@ -108,6 +147,9 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     useInput((input, key) => bridge.handleInput(input, key));
 
     const showSlashMenu = snapshot.inputBuffer.startsWith('/');
+    const menuView = showSlashMenu
+        ? createSlashCommandMenuView(snapshot.inputBuffer, snapshot.menuState, slashMenuMaxVisibleChoices)
+        : null;
     const outputLines = snapshot.outputText.split('\n').filter((line) => line.length > 0);
 
     return (
@@ -116,7 +158,24 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                 // biome-ignore lint/suspicious/noArrayIndexKey: terminal output is append-only, never reordered
                 <Text key={`line-${index}`}>{line}</Text>
             ))}
-            {showSlashMenu ? <SlashCommandMenu input={snapshot.inputBuffer} selectedIndex={0} commands={[]} /> : null}
+            {menuView !== null && menuView.open ? (
+                <Box flexDirection="column">
+                    {menuView.empty ? (
+                        <Text dimColor> no commands match</Text>
+                    ) : (
+                        menuView.visibleChoices.map((choice, index) => {
+                            const globalIndex = menuView.startIndex + index;
+                            const isSelected = globalIndex === menuView.selectedIndex;
+                            return (
+                                <Text key={choice.id} {...(isSelected ? { backgroundColor: 'blue' } : {})}>
+                                    {isSelected ? '> ' : '  '}
+                                    {choice.id.padEnd(13)} {choice.description}
+                                </Text>
+                            );
+                        })
+                    )}
+                </Box>
+            ) : null}
             <TextInput value={snapshot.inputBuffer} onChange={() => {}} onSubmit={() => {}} prefix="" />
             {statusBarProps !== undefined ? <StatusBar {...statusBarProps} /> : null}
         </Box>
@@ -132,10 +191,11 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
     const core: InkChatBridgeCore = {
         inputBuffer: '',
         outputText: '',
+        menuState: createSlashCommandMenuState(),
         eventQueue: [],
         eventWaiters: [],
         listeners: new Set(),
-        snapshot: { inputBuffer: '', outputText: '' },
+        snapshot: { inputBuffer: '', outputText: '', menuState: createSlashCommandMenuState() },
         unmountFn: undefined,
     };
 
