@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-    createLspToolRegistration,
-    InProcessLspClient,
-    type LspDiagnostic,
-} from './lsp-tool.js';
+import { createLspToolRegistration, InProcessLspClient, type LspDiagnostic } from './lsp-tool.js';
 import { createMcpToolRegistration, InProcessMcpClient } from './mcp-tool.js';
 
 const ctx = { toolCallId: 'c1', toolName: 'mcp', signal: new AbortController().signal };
@@ -12,7 +8,11 @@ const lspCtx = { toolCallId: 'c1', toolName: 'lsp', signal: new AbortController(
 describe('mcp tool (seam + in-process client)', () => {
     it('delegates a call to the MCP client and returns its result', async () => {
         const client = new InProcessMcpClient([
-            { name: 'query_db', description: 'query the db', call: (args) => ({ rows: (args as { q?: string } | undefined)?.q ?? 'none' }) },
+            {
+                name: 'query_db',
+                description: 'query the db',
+                call: (args) => ({ rows: (args as { q?: string } | undefined)?.q ?? 'none' }),
+            },
         ]);
         const tool = createMcpToolRegistration({ client });
         const out = await tool.execute({ tool: 'query_db', arguments: { q: 'SELECT 1' } }, ctx);
@@ -21,7 +21,10 @@ describe('mcp tool (seam + in-process client)', () => {
     });
 
     it('lists the server tools', async () => {
-        const client = new InProcessMcpClient([{ name: 'a', call: () => 1 }, { name: 'b', description: 'bee', call: () => 2 }]);
+        const client = new InProcessMcpClient([
+            { name: 'a', call: () => 1 },
+            { name: 'b', description: 'bee', call: () => 2 },
+        ]);
         const tools = await client.listTools();
         expect(tools.map((t) => t.name)).toEqual(['a', 'b']);
     });

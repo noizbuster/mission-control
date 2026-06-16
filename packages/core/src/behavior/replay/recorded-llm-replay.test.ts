@@ -12,7 +12,7 @@ const recording: RecordedTurn = {
     usage: { inputTokens: 4, outputTokens: 6 },
 };
 
-async function drain(signals: AbgSignal[], rec: RecordedTurn): Promise<readonly AbgSignal[]> {
+async function drain(rec: RecordedTurn): Promise<readonly AbgSignal[]> {
     const out: AbgSignal[] = [];
     for await (const signal of replayRecordedTurn(rec, ctx)) {
         out.push(signal);
@@ -22,7 +22,7 @@ async function drain(signals: AbgSignal[], rec: RecordedTurn): Promise<readonly 
 
 describe('replayRecordedTurn (deterministic replay, ABG §7.5)', () => {
     it('emits the canonical llm.*/tool.* sequence without calling the model', async () => {
-        const signals = await drain([], recording);
+        const signals = await drain(recording);
         expect(signals[0]?.type).toBe('started');
         expect(signals.at(-1)?.type).toBe('success');
         expect([...recordedEventTypes(signals)]).toEqual([
@@ -35,13 +35,13 @@ describe('replayRecordedTurn (deterministic replay, ABG §7.5)', () => {
     });
 
     it('is byte-identical across replays of the same recording (determinism)', async () => {
-        const first = await drain([], recording);
-        const second = await drain([], recording);
+        const first = await drain(recording);
+        const second = await drain(recording);
         expect(JSON.stringify(first)).toBe(JSON.stringify(second));
     });
 
     it('omits the text delta for an empty-text turn', async () => {
-        const signals = await drain([], { ...recording, text: '' });
+        const signals = await drain({ ...recording, text: '' });
         expect([...recordedEventTypes(signals)]).not.toContain('llm.text.delta');
     });
 });

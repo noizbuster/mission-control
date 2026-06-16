@@ -5,8 +5,8 @@ import {
     entryMatchesQuery,
     isExpired,
     isSqliteAvailable,
-    serializeValue,
     SqlitePersistentStore,
+    serializeValue,
 } from './sqlite-persistent-store.js';
 
 const entry = (overrides: Partial<MemoryEntry> = {}): MemoryEntry => ({
@@ -74,7 +74,9 @@ describe('sqlite-persistent-store — DB round-trip (when binding present)', () 
     it('CRUD + list + query + TTL prune', async () => {
         available = await isSqliteAvailable();
         if (!available) {
-            console.warn('[sqlite-persistent-store] better-sqlite3 binding unavailable in this environment — skipping DB round-trip (pure helpers still tested above)');
+            console.warn(
+                '[sqlite-persistent-store] better-sqlite3 binding unavailable in this environment — skipping DB round-trip (pure helpers still tested above)',
+            );
             return;
         }
         store = await SqlitePersistentStore.open(':memory:');

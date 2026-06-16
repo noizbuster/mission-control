@@ -1,12 +1,12 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
+import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
 import {
+    type BranchOutcome,
     decideSpeculativeWinner,
     readBranchScore,
     runSpeculativeNode,
-    type BranchOutcome,
 } from './speculative-node.js';
-import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
 
 const NOW = '2026-06-16T00:00:00.000Z';
 
@@ -37,9 +37,7 @@ describe('decideSpeculativeWinner (pure policy)', () => {
     });
 
     it('returns undefined winner when no branch succeeded', () => {
-        const failed: readonly BranchOutcome[] = [
-            { childId: 'b0', score: 0, succeeded: false, result: undefined },
-        ];
+        const failed: readonly BranchOutcome[] = [{ childId: 'b0', score: 0, succeeded: false, result: undefined }];
         const d = decideSpeculativeWinner(failed, 'score', 10);
         expect(d.winnerId).toBeUndefined();
     });
@@ -68,7 +66,10 @@ function scriptedBranch(score: number, delay: number): AbgNodeRunner {
     };
 }
 
-function buildContext(runners: Readonly<Record<string, AbgNodeRunner>>, children: readonly string[]): {
+function buildContext(
+    runners: Readonly<Record<string, AbgNodeRunner>>,
+    children: readonly string[],
+): {
     node: AbgNodeSpec;
     context: AbgNodeRunContext;
 } {
@@ -119,10 +120,7 @@ describe('runSpeculativeNode (concurrent drain)', () => {
 
     it('early-stop: the first branch crossing the threshold wins and short-circuits', async () => {
         // b0 finishes immediately (score 3, below 10). b1 is slow but scores 15 (≥ 10) → winner.
-        const { node, context } = buildContext(
-            { b0: scriptedBranch(3, 0), b1: scriptedBranch(15, 15) },
-            ['b0', 'b1'],
-        );
+        const { node, context } = buildContext({ b0: scriptedBranch(3, 0), b1: scriptedBranch(15, 15) }, ['b0', 'b1']);
         node.config = { stopThreshold: 10 };
         const out = await run(node, context);
         expect(nodeSuccess(out)?.winnerId).toBe('b1');
@@ -130,10 +128,7 @@ describe('runSpeculativeNode (concurrent drain)', () => {
     });
 
     it('rankBy first: the first branch to succeed wins', async () => {
-        const { node, context } = buildContext(
-            { b0: scriptedBranch(1, 0), b1: scriptedBranch(99, 0) },
-            ['b0', 'b1'],
-        );
+        const { node, context } = buildContext({ b0: scriptedBranch(1, 0), b1: scriptedBranch(99, 0) }, ['b0', 'b1']);
         node.config = { rankBy: 'first' };
         const out = await run(node, context);
         expect(nodeSuccess(out)?.winnerId).toBe('b0');

@@ -2,13 +2,15 @@ import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { createBlackboard } from '../../memory/blackboard.js';
 import type { AbgNodeRunContext } from '../node-registry.js';
-import {
-    computeExponentialBackoffDelayMs,
-    decideSupervisorAction,
-    runSupervisorNode,
-} from './supervisor-node.js';
+import { computeExponentialBackoffDelayMs, decideSupervisorAction, runSupervisorNode } from './supervisor-node.js';
 
-const config = { target: 'llm-actor', maxAttempts: 4, baseDelayMs: 100, maxDelayMs: 1000, escalationTarget: 'human-approval' };
+const config = {
+    target: 'llm-actor',
+    maxAttempts: 4,
+    baseDelayMs: 100,
+    maxDelayMs: 1000,
+    escalationTarget: 'human-approval',
+};
 const NOW = '2026-06-16T00:00:00.000Z';
 
 describe('computeExponentialBackoffDelayMs', () => {
@@ -111,7 +113,12 @@ describe('runSupervisorNode', () => {
 
     it('fails fast when misconfigured (missing required config)', async () => {
         const blackboard = createBlackboard();
-        const node: AbgNodeSpec = { id: 'supervisor', kind: 'policy', implementation: 'supervisor', config: { target: 'x' } };
+        const node: AbgNodeSpec = {
+            id: 'supervisor',
+            kind: 'policy',
+            implementation: 'supervisor',
+            config: { target: 'x' },
+        };
         const context = { graphId: 'g', now: () => NOW, blackboard } as AbgNodeRunContext;
         const out = await collect(node, context);
         const failure = out.find((s) => s.type === 'failure');

@@ -10,9 +10,24 @@ describe('createAbgEmitSignal — node-level event ids (review #9)', () => {
     it('produces unique ids for repeated event types within a graph', () => {
         resetEmitSequence('graph-a');
         const ids = [
-            createAbgEmitSignal({ ...baseInput, graphId: 'graph-a', eventType: 'llm.text.delta', payload: { delta: 'a' } }),
-            createAbgEmitSignal({ ...baseInput, graphId: 'graph-a', eventType: 'llm.text.delta', payload: { delta: 'b' } }),
-            createAbgEmitSignal({ ...baseInput, graphId: 'graph-a', eventType: 'llm.text.delta', payload: { delta: 'c' } }),
+            createAbgEmitSignal({
+                ...baseInput,
+                graphId: 'graph-a',
+                eventType: 'llm.text.delta',
+                payload: { delta: 'a' },
+            }),
+            createAbgEmitSignal({
+                ...baseInput,
+                graphId: 'graph-a',
+                eventType: 'llm.text.delta',
+                payload: { delta: 'b' },
+            }),
+            createAbgEmitSignal({
+                ...baseInput,
+                graphId: 'graph-a',
+                eventType: 'llm.text.delta',
+                payload: { delta: 'c' },
+            }),
         ].map((signal) => (signal.type === 'emit' ? signal.event.id : ''));
         expect(new Set(ids).size).toBe(3);
         expect(ids).toEqual([

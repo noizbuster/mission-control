@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-    MissionSchema,
-    RUN_STATUSES,
-    RunSchema,
-    type Run,
-} from './mission-run.js';
+import { MissionSchema, RUN_STATUSES, type Run, RunSchema } from './mission-run.js';
 
 const minimalGraph = {
     id: 'graph-1',
@@ -79,14 +74,7 @@ describe('Run schema (Phase 7)', () => {
     });
 
     it('RUN_STATUSES covers the full lifecycle', () => {
-        expect(RUN_STATUSES).toEqual([
-            'pending',
-            'running',
-            'blocked',
-            'completed',
-            'failed',
-            'cancelled',
-        ]);
+        expect(RUN_STATUSES).toEqual(['pending', 'running', 'blocked', 'completed', 'failed', 'cancelled']);
     });
 
     it('rejects an unknown Run status', () => {
