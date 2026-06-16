@@ -1,6 +1,7 @@
 import type {
     AbgGraphInput,
     AbgGraphSnapshot,
+    AbgNodeModelOptions,
     AgentEvent,
     AgentSession,
     AgentSnapshot,
@@ -8,6 +9,7 @@ import type {
     PermissionDecision,
     PermissionRequest,
 } from '@mission-control/protocol';
+import type { ModelMessage } from 'ai';
 import { runRuntimeDemoTask } from './agent-runtime-demo.js';
 import type { AgentRuntimeOptions } from './agent-runtime-options.js';
 import { RuntimeApprovalBlockedError } from './agent-runtime-provider-turn.js';
@@ -31,13 +33,32 @@ import {
 } from './agent-runtime-support.js';
 import { type ApprovalUpdateInput, PermissionGate } from './approval-gate.js';
 import { type AbgGraphRunResult, runAbgGraph } from './behavior/graph-runner.js';
+import type { AbgNodeRegistry } from './behavior/node-registry.js';
+import type { LlmActorModel } from './behavior/nodes/llm-actor/llm-actor-node.js';
 import type { AbgTimelineEntry } from './behavior/timeline.js';
 import { EventBus } from './event-bus.js';
 import type { SidecarClient } from './native/sidecar-client.js';
 import { SessionEventLog } from './session-log.js';
+import type { ToolRegistry } from './tools/tool-registry.js';
 
 export type { AgentRuntimeOptions } from './agent-runtime-options.js';
 export type { SkillInvocationTaskInput };
+
+/**
+ * Extra inputs for `AgentRuntime.runGraph` that wire the real Phase 1/2 coding-agent path:
+ * the real node `registry`, an SDK-model resolver, the tool surface, and the seed
+ * conversation. When omitted, `runGraph` uses the default (mock) registry and no tools —
+ * the legacy behavior. The CLI supplies these once providers speak the AI-SDK model API
+ * (Phase 5); until then the flat loop remains the default execution authority (strangler
+ * fig, ABG pre-mortem #1).
+ */
+export type RunGraphOptions = {
+    readonly registry?: AbgNodeRegistry;
+    readonly resolveSdkModel?: (options: AbgNodeModelOptions) => LlmActorModel;
+    readonly toolRegistry?: ToolRegistry;
+    readonly initialMessages?: readonly ModelMessage[];
+    readonly abortSignal?: AbortSignal;
+};
 
 export class AgentRuntime {
     readonly options: AgentRuntimeOptions;
@@ -173,7 +194,7 @@ export class AgentRuntime {
         this.modelProviderSelection = modelProviderSelection;
     }
 
-    async runGraph(graph: unknown, graphInput?: AbgGraphInput): Promise<AbgGraphRunResult> {
+    async runGraph(graph: unknown, graphInput?: AbgGraphInput, options?: RunGraphOptions): Promise<AbgGraphRunResult> {
         const session = ensureRuntimeSession(this.session);
         const result = await runAbgGraph({
             graph,
@@ -181,6 +202,11 @@ export class AgentRuntime {
             now: () => new Date().toISOString(),
             modelProviderSelection: this.modelProviderSelection,
             ...(graphInput !== undefined ? { graphInput } : {}),
+            ...(options?.registry !== undefined ? { registry: options.registry } : {}),
+            ...(options?.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
+            ...(options?.toolRegistry !== undefined ? { toolRegistry: options.toolRegistry } : {}),
+            ...(options?.initialMessages !== undefined ? { initialMessages: options.initialMessages } : {}),
+            ...(options?.abortSignal !== undefined ? { abortSignal: options.abortSignal } : {}),
         });
         for (const event of result.events) {
             this.emit(event);

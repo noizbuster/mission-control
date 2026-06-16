@@ -1,6 +1,9 @@
 import type { AbgNodeModelOptions, AbgNodeSpec, AbgPolicySpec, AbgSignal } from '@mission-control/protocol';
+import type { Blackboard } from '../memory/blackboard.js';
+import type { ToolRegistry } from '../tools/tool-registry.js';
 import { createCompositeNodeRunners } from './nodes/composite-nodes.js';
 import { createLeafNodeRunners } from './nodes/leaf-nodes.js';
+import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node.js';
 
 export type AbgObservedGraphEvent = {
     readonly type: string;
@@ -13,8 +16,34 @@ export type AbgNodeRunContext = {
     readonly nodes?: Readonly<Record<string, AbgNodeSpec | undefined>>;
     readonly observedEvents?: readonly AbgObservedGraphEvent[];
     readonly model?: AbgNodeModelOptions;
+    /**
+     * The resolved Vercel AI SDK model for this run (`AbgNodeModelOptions` → SDK model).
+     * `LLMActor` calls `streamText` with this. Resolved by `resolveSdkModel` on the graph
+     * input (Phase 5 wires the real provider registry; Phase 1 injects a scripted/mock
+     * resolver in tests).
+     */
+    readonly sdkModel?: LlmActorModel;
     readonly policies?: readonly AbgPolicySpec[];
     readonly input?: Readonly<Record<string, unknown>>;
+    /**
+     * The live Blackboard (ABG §10.4 runtime memory). The SAME instance is handed to
+     * every node run, so writes persist across the Observe→Decide→Act loop. `LLMActor`
+     * reads/writes the running message list here; `MemoryNode` reads/writes key/value
+     * entries; rule-gated re-entry edges read entries via `blackboard.*` predicates.
+     */
+    readonly blackboard?: Blackboard;
+    /**
+     * The `ToolRegistry` exposing the real tools. `ToolActor` resolves + invokes tools
+     * through this (version check, JSON parse, schema validation, output bounding, events).
+     */
+    readonly toolRegistry?: ToolRegistry;
+    /**
+     * Abort/interrupt signal threaded from the run owner. Nodes that perform long or
+     * cancellable work (LLM stream, tool execution) should honor it so the graph agent
+     * is at least as interruptible as the flat loop it replaces (ABG: cancellation is
+     * normal control flow).
+     */
+    readonly abortSignal?: AbortSignal;
 };
 
 export type AbgNodeRunner = (node: AbgNodeSpec, context: AbgNodeRunContext) => AsyncIterable<AbgSignal>;

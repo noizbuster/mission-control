@@ -7,12 +7,16 @@ import type {
     AgentEvent,
     ModelProviderSelection,
 } from '@mission-control/protocol';
+import type { Blackboard } from '../memory/blackboard.js';
+import { createBlackboard } from '../memory/blackboard.js';
+import type { ToolRegistry } from '../tools/tool-registry.js';
 import type { AuthorableAbgGraph } from './authorable-graph.js';
 import type { AbgGraphRunnerInput } from './graph-runner.js';
 import type { AbgNodeRegistry, AbgObservedGraphEvent } from './node-registry.js';
+import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node.js';
 
 const defaultRetryLimit = 2;
-const defaultMaxNodeRuns = 32;
+const defaultMaxNodeRuns = 48;
 const defaultGraphNodeConcurrency = 2;
 const defaultProviderToolCallConcurrency = 4;
 const defaultShellConcurrency = 1;
@@ -28,9 +32,19 @@ export type CoordinatorState = {
     readonly providerToolCallConcurrency: number;
     readonly shellConcurrency: number;
     totalNodeRuns: number;
+    /**
+     * The live Blackboard. One instance per run, shared (by reference) with every node
+     * via `AbgNodeRunContext`. Seeded with `initialMessages`. Rule-gated re-entry edges
+     * read its entries via `blackboard.*` predicates (`toRecord()`).
+     */
+    readonly blackboard: Blackboard;
 };
 
 export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGraphRunnerInput): CoordinatorState {
+    const blackboard = createBlackboard();
+    if (input.initialMessages !== undefined) {
+        blackboard.setMessages(input.initialMessages);
+    }
     return {
         events: [],
         nodeStatuses: {},
@@ -42,18 +56,30 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         providerToolCallConcurrency: input.providerToolCallConcurrency ?? defaultProviderToolCallConcurrency,
         shellConcurrency: input.shellConcurrency ?? defaultShellConcurrency,
         totalNodeRuns: 0,
+        blackboard,
     };
 }
 
-export function runContext(graph: AuthorableAbgGraph, registry: AbgNodeRegistry, input: AbgGraphRunnerInput) {
+export function runContext(
+    graph: AuthorableAbgGraph,
+    registry: AbgNodeRegistry,
+    input: AbgGraphRunnerInput,
+    state: CoordinatorState,
+) {
     const nodes = Object.fromEntries(graph.nodes.map((node) => [node.id, node]));
+    const model = graph.defaults?.model ?? runtimeModel(input.modelProviderSelection);
+    const sdkModel = input.resolveSdkModel !== undefined ? input.resolveSdkModel(model) : undefined;
     return {
         graphId: graph.id,
         now: input.now,
         registry,
         nodes,
         policies: graph.policies,
-        model: graph.defaults?.model ?? runtimeModel(input.modelProviderSelection),
+        model,
+        ...(sdkModel !== undefined ? { sdkModel } : {}),
+        blackboard: state.blackboard,
+        ...(input.toolRegistry !== undefined ? { toolRegistry: input.toolRegistry } : {}),
+        ...(input.abortSignal !== undefined ? { abortSignal: input.abortSignal } : {}),
         ...(input.graphInput?.events !== undefined ? { observedEvents: input.graphInput.events } : {}),
         ...(input.graphInput?.input !== undefined ? { input: input.graphInput.input } : {}),
     } satisfies {
@@ -63,6 +89,10 @@ export function runContext(graph: AuthorableAbgGraph, registry: AbgNodeRegistry,
         readonly nodes: Readonly<Record<string, AbgNodeSpec | undefined>>;
         readonly policies: readonly AbgPolicySpec[];
         readonly model: AbgNodeModelOptions;
+        readonly sdkModel?: LlmActorModel;
+        readonly blackboard: Blackboard;
+        readonly toolRegistry?: ToolRegistry;
+        readonly abortSignal?: AbortSignal;
         readonly observedEvents?: readonly AbgObservedGraphEvent[];
         readonly input?: Readonly<Record<string, unknown>>;
     };
@@ -113,10 +143,12 @@ export function nodeStatusForSignal(signal: AbgSignal): AbgNodeStatus {
         case 'transition':
         case 'spawn':
         case 'cancel':
+        case 'fallback':
             return 'running';
         case 'success':
             return 'succeeded';
         case 'failure':
+        case 'escalate':
             return 'failed';
         case 'cancelled':
             return 'cancelled';

@@ -11,6 +11,8 @@ export const ABG_SIGNAL_TYPES = [
     'success',
     'failure',
     'cancelled',
+    'escalate',
+    'fallback',
 ] as const;
 
 export const AbgSignalTypeSchema = z.enum(ABG_SIGNAL_TYPES);
@@ -59,5 +61,14 @@ export const AbgSignalSchema = z.discriminatedUnion('type', [
     AbgSignalBaseSchema.extend({ type: z.literal('success'), result: z.unknown().optional() }),
     AbgSignalBaseSchema.extend({ type: z.literal('failure'), error: z.unknown() }),
     AbgSignalBaseSchema.extend({ type: z.literal('cancelled'), reason: z.string().optional() }),
+    AbgSignalBaseSchema.extend({
+        type: z.literal('escalate'),
+        target: z.string().min(1).optional(),
+        reason: z.string().min(1).optional(),
+    }),
+    AbgSignalBaseSchema.extend({
+        type: z.literal('fallback'),
+        reason: z.string().min(1).optional(),
+    }),
 ]);
 export type AbgSignal = z.infer<typeof AbgSignalSchema>;

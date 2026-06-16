@@ -40,7 +40,12 @@ export async function prependProjectContextMessages(
     return contextMessages.length === 0 ? messages : [...contextMessages, ...messages];
 }
 
-function formatProjectContext(resources: readonly { readonly path: string; readonly content: string }[]): string {
+export type ProjectInstructionResource = {
+    readonly path: string;
+    readonly content: string;
+};
+
+export function formatProjectContext(resources: readonly ProjectInstructionResource[]): string {
     return [
         'Project-local instructions from a trusted workspace:',
         ...resources.flatMap((resource) => [`--- ${resource.path} ---`, resource.content]),

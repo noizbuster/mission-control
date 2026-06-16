@@ -1,4 +1,11 @@
-import type { AbgNodeModelOptions, AbgNodeSpec, AbgRuntimeError, AbgSignal } from '@mission-control/protocol';
+import {
+    type AbgNodeModelOptions,
+    type AbgNodeSpec,
+    type AbgPolicyDecision,
+    AbgPolicyDecisionSchema,
+    type AbgRuntimeError,
+    type AbgSignal,
+} from '@mission-control/protocol';
 import type { AuthorableAbgGraph } from './authorable-graph.js';
 import { evaluateApprovalGate } from './graph-approval-gates.js';
 import {
@@ -20,6 +27,8 @@ export type QueuedNodeResult =
           readonly kind: 'completed';
           readonly node: AbgNodeSpec;
           readonly lastSignal?: AbgSignal;
+          readonly lastEventType?: string;
+          readonly lastPolicyDecision?: AbgPolicyDecision;
       }
     | {
           readonly kind: 'failed';
@@ -33,6 +42,8 @@ export type QueuedNodeResult =
 type NodeRunResult = {
     readonly status: 'completed' | 'failed';
     readonly lastSignal?: AbgSignal;
+    readonly lastEventType?: string;
+    readonly lastPolicyDecision?: AbgPolicyDecision;
 };
 
 export async function runQueuedNode(
@@ -75,6 +86,8 @@ export async function runQueuedNode(
         kind: 'completed',
         node,
         ...(runResult.lastSignal !== undefined ? { lastSignal: runResult.lastSignal } : {}),
+        ...(runResult.lastEventType !== undefined ? { lastEventType: runResult.lastEventType } : {}),
+        ...(runResult.lastPolicyDecision !== undefined ? { lastPolicyDecision: runResult.lastPolicyDecision } : {}),
     };
 }
 
@@ -156,10 +169,22 @@ async function runNode(
 ): Promise<NodeRunResult> {
     let lastSignal: AbgSignal | undefined;
     let failed = false;
-    for await (const signal of runAbgNode(registry, node, runContext(graph, registry, input))) {
+    // Per-node runtime edge inputs (NOT shared state — concurrent node runs each carry
+    // their own, so rule-gated edges evaluate against the node that just ran, not a
+    // sibling's clobbered value).
+    let lastEventType: string | undefined;
+    let lastPolicyDecision: AbgPolicyDecision | undefined;
+    for await (const signal of runAbgNode(registry, node, runContext(graph, registry, input, state))) {
         lastSignal = signal;
         state.nodeStatuses[signal.nodeId] = nodeStatusForSignal(signal);
         failed = failed || signal.type === 'failure';
+        if (signal.type === 'emit') {
+            lastEventType = signal.event.type;
+            const policyDecision = extractPolicyDecision(signal);
+            if (policyDecision !== undefined) {
+                lastPolicyDecision = policyDecision;
+            }
+        }
         state.events.push(
             projectAbgSignalToEvent({
                 graphId: graph.id,
@@ -176,7 +201,27 @@ async function runNode(
     return {
         status: failed ? 'failed' : 'completed',
         ...(lastSignal !== undefined ? { lastSignal } : {}),
+        ...(lastEventType !== undefined ? { lastEventType } : {}),
+        ...(lastPolicyDecision !== undefined ? { lastPolicyDecision } : {}),
     };
+}
+
+/**
+ * Pull a policy decision out of a `policy.evaluated` emit signal so rule-gated edges
+ * can match on it via `policy.decision.equals`. Validated with the schema (never trusts
+ * an arbitrary payload shape).
+ */
+function extractPolicyDecision(signal: AbgSignal): AbgPolicyDecision | undefined {
+    if (signal.type !== 'emit' || signal.event.type !== 'policy.evaluated') {
+        return undefined;
+    }
+    const payload = signal.event.payload;
+    if (payload === undefined || payload === null || typeof payload !== 'object' || !('decision' in payload)) {
+        return undefined;
+    }
+    const candidate = (payload as { decision: unknown }).decision;
+    const parsed = AbgPolicyDecisionSchema.safeParse(candidate);
+    return parsed.success ? parsed.data : undefined;
 }
 
 function attemptFailureError(node: AbgNodeSpec, attempt: number, maxAttempts: number): AbgRuntimeError {

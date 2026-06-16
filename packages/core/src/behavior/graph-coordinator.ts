@@ -1,4 +1,4 @@
-import type { AbgNodeSpec, AbgSignal, AgentEvent } from '@mission-control/protocol';
+import type { AbgNodeSpec, AbgPolicyDecision, AbgSignal, AgentEvent } from '@mission-control/protocol';
 import { type AuthorableAbgGraph, createAuthorableAbgGraph } from './authorable-graph.js';
 import {
     type CoordinatorState,
@@ -34,7 +34,35 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
         for (const result of results) {
             switch (result.kind) {
                 case 'completed':
-                    enqueueSelectedTargets(graph, result.node, result.lastSignal, state, input);
+                    if (result.lastSignal?.type === 'escalate') {
+                        // Escalation is a non-terminal redirect (ABG §9.6 supervision). Prefer
+                        // the escalate signal's own `target`; fall back to node config.
+                        const signalTarget = result.lastSignal.target;
+                        const target =
+                            (typeof signalTarget === 'string' && signalTarget.length > 0 ? signalTarget : undefined) ??
+                            readEscalationTarget(result.node);
+                        if (target !== undefined && hasNode(graph, target)) {
+                            state.queuedNodeIds.push(target);
+                        } else {
+                            return failGraph(
+                                graph.id,
+                                input,
+                                state.events,
+                                'node_escalated',
+                                `ABG node escalated without a reachable target: ${result.node.id}`,
+                            );
+                        }
+                        break;
+                    }
+                    enqueueSelectedTargets(
+                        graph,
+                        result.node,
+                        result.lastSignal,
+                        state,
+                        input,
+                        result.lastEventType,
+                        result.lastPolicyDecision,
+                    );
                     break;
                 case 'failed':
                     if (result.attempt < state.maxAttempts) {
@@ -66,6 +94,8 @@ function enqueueSelectedTargets(
     signal: AbgSignal | undefined,
     state: CoordinatorState,
     input: AbgGraphRunnerInput,
+    lastEventType: string | undefined,
+    lastPolicyDecision: AbgPolicyDecision | undefined,
 ): void {
     if (signal?.type === 'select' && hasNode(graph, signal.target)) {
         state.queuedNodeIds.push(signal.target);
@@ -75,9 +105,17 @@ function enqueueSelectedTargets(
             edge.condition === undefined
                 ? undefined
                 : graph.compiledRules.find((candidate) => candidate.id === edge.condition);
+        // Runtime-condition edges: feed THIS node's last emitted event type, the live
+        // Blackboard, and its last policy decision (carried per-result, so concurrent
+        // node runs don't clobber each other) so rule-gated re-entry edges
+        // (`event.type.equals` / `blackboard.*` / `policy.decision.equals`) can express
+        // the Observe→Decide→Act loop ("tool calls remain", "critic failed", "asked").
         const evaluationInput = {
             nodeStatuses: state.nodeStatuses,
             ...(signal !== undefined ? { signalType: signal.type } : {}),
+            ...(lastEventType !== undefined ? { eventType: lastEventType } : {}),
+            blackboard: state.blackboard.toRecord(),
+            ...(lastPolicyDecision !== undefined ? { policyDecision: lastPolicyDecision } : {}),
         };
         if (edge.condition !== undefined && rule?.matches(evaluationInput) !== true) {
             continue;
@@ -124,4 +162,9 @@ function graphFailureEvent(graphId: string, input: AbgGraphRunnerInput, code: st
 
 function assertNeverQueuedNodeResult(result: never): never {
     throw new Error(`Unhandled queued node result: ${String(result)}`);
+}
+
+function readEscalationTarget(node: AbgNodeSpec): string | undefined {
+    const value = node.config?.['escalationTarget'];
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
 }

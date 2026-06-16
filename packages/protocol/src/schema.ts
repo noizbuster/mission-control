@@ -153,6 +153,8 @@ export const AGENT_EVENT_TYPES = [
     'node.completed',
     'node.failed',
     'node.cancelled',
+    'node.escalated',
+    'node.fallback',
     'decision.selected',
     'policy.blocked',
     'model.call.started',

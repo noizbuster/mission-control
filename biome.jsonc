@@ -12,6 +12,7 @@
       "!**/.nx",
       "!**/.omx",
       "!**/.omo",
+      "!**/.omc",
       "!**/build",
       "!**/coverage",
       "!temp/ref-repos"

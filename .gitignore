@@ -46,6 +46,7 @@ temp/
 
 # Agent and QA run artifacts
 .omo/
+.omc/
 evidence/
 .debug-journal.md
 

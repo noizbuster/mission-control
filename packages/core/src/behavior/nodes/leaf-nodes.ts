@@ -1,4 +1,5 @@
-import type { AbgEmbeddedEvent, AbgNodeSpec, AbgPolicySpec, AbgSignal } from '@mission-control/protocol';
+import type { AbgNodeSpec, AbgPolicySpec, AbgSignal } from '@mission-control/protocol';
+import { createAbgEmitSignal } from '../abg-emit.js';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
 
 export function createLeafNodeRunners(): readonly (readonly [string, AbgNodeRunner])[] {
@@ -133,27 +134,13 @@ function failure(node: AbgNodeSpec, context: AbgNodeRunContext, error: unknown):
 }
 
 function emit(node: AbgNodeSpec, context: AbgNodeRunContext, eventType: string, payload: unknown): AbgSignal {
-    return {
-        type: 'emit',
+    return createAbgEmitSignal({
         graphId: context.graphId,
         nodeId: node.id,
-        event: createEmbeddedEvent(node, context, eventType, payload),
-    };
-}
-
-function createEmbeddedEvent(
-    node: AbgNodeSpec,
-    context: AbgNodeRunContext,
-    eventType: string,
-    payload: unknown,
-): AbgEmbeddedEvent {
-    return {
-        id: `${context.graphId}.${node.id}.${eventType}`,
-        type: eventType,
-        source: node.id,
+        eventType,
         timestamp: context.now(),
         payload,
-    };
+    });
 }
 
 function findBlockingPolicy(node: AbgNodeSpec, policies: readonly AbgPolicySpec[]): AbgPolicySpec | undefined {

@@ -41,6 +41,7 @@ function eventTypeForSignal(signal: AbgSignal): AgentEvent['type'] {
             return 'node.started';
         case 'progress':
         case 'spawn':
+        case 'fallback':
             return 'node.progress';
         case 'emit':
             return 'log';
@@ -54,6 +55,7 @@ function eventTypeForSignal(signal: AbgSignal): AgentEvent['type'] {
         case 'success':
             return 'node.completed';
         case 'failure':
+        case 'escalate':
             return 'node.failed';
         default:
             return assertNever(signal);
@@ -82,6 +84,10 @@ function messageForSignal(signal: AbgSignal): string {
             return `node failed: ${signal.nodeId}`;
         case 'cancelled':
             return signal.reason ?? `node cancelled: ${signal.nodeId}`;
+        case 'escalate':
+            return signal.reason ?? `node escalated: ${signal.nodeId}`;
+        case 'fallback':
+            return signal.reason ?? `node requested fallback: ${signal.nodeId}`;
         default:
             return assertNever(signal);
     }

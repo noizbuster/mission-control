@@ -1,4 +1,4 @@
-export type { AgentRuntimeOptions } from './agent-runtime.js';
+export type { AgentRuntimeOptions, RunGraphOptions } from './agent-runtime.js';
 export { AgentRuntime } from './agent-runtime.js';
 export { SubAgentRegistry } from './agents/registry.js';
 export type { SubAgent, SubAgentRunInput, SubAgentRunOutput } from './agents/sub-agent.js';
@@ -9,6 +9,12 @@ export { createActionGraph } from './behavior/action-graph.js';
 export type { AuthorableAbgGraph } from './behavior/authorable-graph.js';
 export { createAuthorableAbgGraph, resolveAbgNodeModel } from './behavior/authorable-graph.js';
 export type { BehaviorNode, BehaviorNodeType } from './behavior/behavior-node.js';
+export {
+    CODING_AGENT_GRAPH_ID,
+    type CodingAgentGraphOptions,
+    createCodingAgentGraph,
+} from './behavior/coding-agent-graph.js';
+export { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry.js';
 export type { AbgGraphRunnerInput, AbgGraphRunResult } from './behavior/graph-runner.js';
 export { runAbgGraph } from './behavior/graph-runner.js';
 export { deriveAbgGraphSnapshot } from './behavior/graph-state.js';
@@ -26,6 +32,13 @@ export { projectAbgSignalToEvent } from './behavior/signals.js';
 export type { AbgTimelineEntry } from './behavior/timeline.js';
 export { projectAbgTimeline } from './behavior/timeline.js';
 export type { CancellationToken, TaskHandle, TaskStatus } from './cancellation.js';
+export {
+    DEFAULT_CONTEXT_BUDGET_TOKENS,
+    DEFAULT_TAIL_RESERVE_TOKENS,
+    type PackContextInput,
+    type PackedContext,
+    packContext,
+} from './context/context-packer.js';
 export {
     loadProjectContextMessages,
     type ProjectContextMessageOptions,
@@ -76,6 +89,12 @@ export {
     settleToolCallWithRegistry,
     toolCallsFromProviderEnvelopes,
 } from './provider-tool-continuation.js';
+export {
+    type CreateSdkModelResolverInput,
+    createSdkModelResolver,
+    type SdkModelResolver,
+    SdkModelResolverError,
+} from './providers/ai-sdk/model-resolver.js';
 export {
     type AnthropicMessagesProviderOptions,
     type AnthropicMessagesTransport,
