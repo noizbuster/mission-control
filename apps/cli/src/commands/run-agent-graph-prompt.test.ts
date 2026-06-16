@@ -22,12 +22,13 @@ import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
 import {
     buildCodingAgentGraphForSelection,
     resolveGraphSdkModel,
     runCodingPromptOnGraph,
 } from './run-agent-graph-prompt.js';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -57,6 +58,19 @@ function toolCallChunks(): LanguageModelV3StreamPart[] {
         { type: 'tool-input-delta', id: 'call_1', delta: JSON.stringify({ text: 'hi' }) },
         { type: 'tool-input-end', id: 'call_1' },
         { type: 'tool-call', toolCallId: 'call_1', toolName: 'echo', input: JSON.stringify({ text: 'hi' }) },
+        { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: buildUsage() },
+    ];
+}
+
+/** A tool-call stream proposing the REAL `repo.read` tool against a workspace-relative path. */
+function repoReadCallChunks(path: string): LanguageModelV3StreamPart[] {
+    const input = JSON.stringify({ path });
+    return [
+        { type: 'stream-start', warnings: [] },
+        { type: 'tool-input-start', id: 'call_read', toolName: 'repo.read' },
+        { type: 'tool-input-delta', id: 'call_read', delta: input },
+        { type: 'tool-input-end', id: 'call_read' },
+        { type: 'tool-call', toolCallId: 'call_read', toolName: 'repo.read', input },
         { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: buildUsage() },
     ];
 }
@@ -149,6 +163,67 @@ describe('runCodingPromptOnGraph (--engine graph wiring)', () => {
             expect(messages).toContain('llm.tool_call.proposed');
             expect(messages).toContain('tool.completed');
             expect(messages.match(/llm\.turn\.completed/g)?.length).toBe(2);
+        } finally {
+            await runtime.stop();
+        }
+    });
+
+    it('drives the REAL repo.read tool through the multi-turn loop (not a hand-registered echo)', async () => {
+        // Strengthens the tool-loop proof beyond the scripted `echo` tool: the REAL production
+        // `repo.read` tool — registered via `createNonInteractiveToolRegistry`, the SAME factory the
+        // `--engine graph` path builds — is proposed by a scripted model, dispatched through the
+        // tool-bridge, executed against a real temp-workspace file (workspace guard + fs read), its
+        // settlement output flows back through the loop, and the run finalizes in exactly two model
+        // calls. This proves the real-tool plumbing (permission → guard → execute → settle → resume)
+        // end-to-end, not just a no-op echo.
+        const workspaceRoot = await mkdtemp(join(tmpdir(), 'mission-control-graph-realtool-'));
+        tempDirs.push(workspaceRoot);
+        const token = 'GRAPH_TOOL_TOKEN_77';
+        await writeFile(join(workspaceRoot, 'token.txt'), token);
+
+        const toolRegistry = await createNonInteractiveToolRegistry({
+            workspaceRoot,
+            // Reads are auto-allowed in production; mirror that here. The scripted model only ever
+            // proposes `repo.read`, so no workspace mutation occurs.
+            requestPermission: async (request) => ({ requestId: request.id, status: 'allow' as const }),
+        });
+
+        let callCount = 0;
+        const model = new MockLanguageModelV3({
+            provider: SELECTION.providerID,
+            modelId: SELECTION.modelID,
+            doStream: async () => {
+                callCount += 1;
+                const chunks = callCount === 1 ? repoReadCallChunks('token.txt') : finalTextChunks();
+                return { stream: convertArrayToReadableStream(chunks) };
+            },
+        });
+
+        const runtime = new AgentRuntime({ modelProviderSelection: SELECTION });
+        await runtime.start();
+        try {
+            const result = await runCodingPromptOnGraph({
+                runtime,
+                selection: SELECTION,
+                prompt: 'read token.txt then finish',
+                workspaceRoot,
+                resolveSdkModel: () => model,
+                toolRegistry,
+            });
+
+            expect(result.status).toBe('completed');
+            // Exactly two model calls: the tool proposal, then the finalize after the result fed back.
+            expect(model.doStreamCalls.length).toBe(2);
+            const events = runtime.getEvents();
+            const serialized = JSON.stringify(events);
+            const messages = events.map((event) => event.message ?? '').join('\n');
+            expect(messages).toContain('llm.tool_call.proposed');
+            expect(messages).toContain('tool.completed');
+            // The REAL `repo.read` tool was proposed + completed (not echo): the production tool name
+            // appears in the event stream, and its settlement carried the file's actual contents —
+            // proving the guard + fs read executed, not a stub.
+            expect(serialized).toContain('repo.read');
+            expect(serialized).toContain(token);
         } finally {
             await runtime.stop();
         }
