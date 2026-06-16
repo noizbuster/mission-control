@@ -22,7 +22,11 @@ import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { runCodingPromptOnGraph } from './run-agent-graph-prompt.js';
+import {
+    buildCodingAgentGraphForSelection,
+    resolveGraphSdkModel,
+    runCodingPromptOnGraph,
+} from './run-agent-graph-prompt.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -188,6 +192,40 @@ describe('runCodingPromptOnGraph (--engine graph wiring)', () => {
         } finally {
             await runtime.stop();
         }
+    });
+});
+
+describe('resolveGraphSdkModel (shared graph resolver + validation)', () => {
+    it('returns an injected resolver unchanged after validating it against the selection', async () => {
+        const model = new MockLanguageModelV3({
+            provider: SELECTION.providerID,
+            modelId: SELECTION.modelID,
+            doStream: async () => ({ stream: convertArrayToReadableStream(finalTextChunks()) }),
+        });
+        const resolver: SdkModelResolver = () => model;
+
+        // resolveGraphSdkModel calls the resolver once to validate it supports the selection.
+        // The injected scripted resolver returns the model without throwing, so validation passes
+        // and the resolver is returned verbatim (shared by the one-shot and session graph paths).
+        expect(await resolveGraphSdkModel({ selection: SELECTION, resolveSdkModel: resolver })).toBe(resolver);
+    });
+
+    it('rejects a provider with no AI-SDK mapping with the shared clear error', async () => {
+        const throwingResolver: SdkModelResolver = () => {
+            throw new SdkModelResolverError('no mapping');
+        };
+        await expect(
+            resolveGraphSdkModel({
+                selection: { providerID: 'local', modelID: 'local-echo' },
+                resolveSdkModel: throwingResolver,
+            }),
+        ).rejects.toThrow(/graph engine supports AI-SDK-backed providers/);
+    });
+
+    it('buildCodingAgentGraphForSelection binds the selection into a graph spec', () => {
+        // Smoke check that the shared graph builder produces a spec without throwing — the
+        // session path relies on the same bound graph the one-shot path uses.
+        expect(() => buildCodingAgentGraphForSelection(SELECTION)).not.toThrow();
     });
 });
 

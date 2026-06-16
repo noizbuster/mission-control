@@ -11,6 +11,7 @@ import type {
     RunCoordinatorReadMessages,
     RunCoordinatorToolCallObserver,
     RunCoordinatorToolSettlementObserver,
+    RunCoordinatorTurnRunner,
 } from './run-coordinator-types.js';
 import { promptInput } from './run-owner-prompt-input.js';
 
@@ -45,6 +46,12 @@ export type SessionRunOwnerOptions = {
     readonly toolRegistry?: ToolRegistry;
     readonly createId?: (prefix: string, index: number) => string;
     readonly readMessages?: RunCoordinatorReadMessages;
+    /**
+     * Engine selector. Omit (default) to drive the flat provider tool loop. Inject a turn runner
+     * (e.g. `createGraphTurnRunner`) to drive the ABG coding-agent graph instead — the owner then
+     * owns queue/steer/resume around graph runs. The flat path is byte-identical when omitted.
+     */
+    readonly runProviderTurn?: RunCoordinatorTurnRunner;
 } & RunOwnerObserverOptions;
 
 export type SessionRunOwnerRegistryOptions = {
@@ -67,6 +74,11 @@ export type SessionRunOwnerRegistryOptions = {
     readonly lockHeartbeatIntervalMs?: number;
     readonly createEventId?: JsonlSessionEventIdFactory;
     readonly createId?: (prefix: string, index: number) => string;
+    /**
+     * Engine selector forwarded to every owner built by this registry. Omit for the flat provider
+     * tool loop; inject a turn runner (e.g. `createGraphTurnRunner`) to drive the ABG graph.
+     */
+    readonly runProviderTurn?: RunCoordinatorTurnRunner;
 } & RunOwnerObserverOptions;
 
 export type SessionRunOwnerLeaseInput = {
@@ -105,6 +117,7 @@ export class SessionRunOwner {
             ...(options.toolRegistry !== undefined ? { toolRegistry: options.toolRegistry } : {}),
             ...(options.createId !== undefined ? { createId: options.createId } : {}),
             ...(options.readMessages !== undefined ? { readMessages: options.readMessages } : {}),
+            ...(options.runProviderTurn !== undefined ? { runProviderTurn: options.runProviderTurn } : {}),
             ...(options.onDurableEvent !== undefined ? { onDurableEvent: options.onDurableEvent } : {}),
             ...(options.onProviderEnvelope !== undefined ? { onProviderEnvelope: options.onProviderEnvelope } : {}),
             ...(options.onToolCall !== undefined ? { onToolCall: options.onToolCall } : {}),
@@ -261,6 +274,7 @@ export class SessionRunOwnerRegistry {
             ...(this.options.toolRegistry !== undefined ? { toolRegistry: this.options.toolRegistry } : {}),
             ...(this.options.createId !== undefined ? { createId: this.options.createId } : {}),
             ...(input.readMessages !== undefined ? { readMessages: input.readMessages } : {}),
+            ...(this.options.runProviderTurn !== undefined ? { runProviderTurn: this.options.runProviderTurn } : {}),
             ...(this.options.onDurableEvent !== undefined ? { onDurableEvent: this.options.onDurableEvent } : {}),
             ...(this.options.onProviderEnvelope !== undefined
                 ? { onProviderEnvelope: this.options.onProviderEnvelope }

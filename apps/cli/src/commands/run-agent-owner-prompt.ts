@@ -4,7 +4,9 @@ import {
     type JsonlSessionEventStore,
     PermissionGate,
     type ProviderAdapter,
+    type RunCoordinatorTurnRunner,
     SessionRunOwner,
+    type ToolRegistry,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { createCliPermissionDecision, type NonInteractiveAutomationPolicy } from './cli-permission-policy.js';
@@ -22,6 +24,14 @@ export type RunOwnerPromptInput = {
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly nonInteractiveAutomationPolicy?: NonInteractiveAutomationPolicy;
     readonly throwOnTerminalFailure?: boolean;
+    /**
+     * Inject a turn runner to drive an alternate engine (e.g. the ABG graph via
+     * `createGraphTurnRunner`) instead of the flat provider tool loop. Built AFTER the
+     * permission-gated tool surface so it reuses the same `ToolRegistry` (and gate) the flat
+     * path would — the graph's tool calls route through the same approval/blocking machinery.
+     * Omit to drive the flat provider loop (the default).
+     */
+    readonly createTurnRunner?: (deps: { readonly toolRegistry: ToolRegistry }) => RunCoordinatorTurnRunner;
 };
 
 export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> {
@@ -39,6 +49,20 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
         now: () => new Date().toISOString(),
         pendingApprovalBehavior: 'block',
     });
+    const toolRegistry = await createNonInteractiveToolRegistry({
+        workspaceRoot: input.workspaceRoot,
+        requestPermission: (request) =>
+            gate.requestPermission(request, {
+                sessionId: input.sessionId,
+                taskId,
+                modelProviderSelection: input.modelProviderSelection,
+            }),
+        ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
+    });
+    // When an alternate engine is requested, build its turn runner over the SAME permission-gated
+    // tool surface so the graph's tool calls honor the same approval/blocking behavior as the flat
+    // loop. The coordinator owns queue/steer/resume around whichever turn runner is installed.
+    const runProviderTurn = input.createTurnRunner?.({ toolRegistry });
     const owner = new SessionRunOwner({
         sessionId: input.sessionId,
         store: input.store,
@@ -46,16 +70,8 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
         modelProviderSelection: input.modelProviderSelection,
         haltOnFailedToolSettlement: true,
         projectContext: { workspaceRoot: input.workspaceRoot },
-        toolRegistry: await createNonInteractiveToolRegistry({
-            workspaceRoot: input.workspaceRoot,
-            requestPermission: (request) =>
-                gate.requestPermission(request, {
-                    sessionId: input.sessionId,
-                    taskId,
-                    modelProviderSelection: input.modelProviderSelection,
-                }),
-            ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
-        }),
+        toolRegistry,
+        ...(runProviderTurn !== undefined ? { runProviderTurn } : {}),
         onDurableEvent: (event: AgentEvent) => {
             if (event.type === 'model.call.completed') {
                 finalMessage = event.message;

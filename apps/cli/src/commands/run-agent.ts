@@ -3,6 +3,8 @@ import {
     AgentRuntime,
     type CommandExecutionRequest,
     type CommandExecutionResult,
+    createCodingAgentNodeRegistry,
+    createGraphTurnRunner,
     PermissionGateError,
     type ProviderAdapter,
     type SdkModelResolver,
@@ -18,7 +20,11 @@ import { createModelChoices, type ModelChoice } from './interactive-chat-model.j
 import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
 import { createCliProviderForSelection } from './provider-factory.js';
 import { readGraphFile, validateGraphModelOptions, validateModelProviderSelection } from './run-agent-graph.js';
-import { runCodingPromptOnGraph } from './run-agent-graph-prompt.js';
+import {
+    buildCodingAgentGraphForSelection,
+    resolveGraphSdkModel,
+    runCodingPromptOnGraph,
+} from './run-agent-graph-prompt.js';
 import { runOwnerPrompt } from './run-agent-owner-prompt.js';
 import { createRunEventRecorder } from './run-agent-session.js';
 
@@ -133,6 +139,51 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         try {
             if (graph !== undefined) {
                 await runtime.runGraph(graph);
+            } else if (
+                engine === 'graph' &&
+                args.prompt !== undefined &&
+                recorder.currentStore() !== undefined &&
+                recorder.currentSessionId() !== undefined
+            ) {
+                // `--engine graph --session <id>`: drive the ABG coding-agent graph through the SAME
+                // session owner that powers the flat path's queue/steer/resume. The graph turn runner
+                // is built over the owner's permission-gated tool surface so the two engines share
+                // approval/blocking behavior; the coordinator owns queue/steer/resume around graph runs.
+                const sessionStore = recorder.currentStore();
+                const sessionId = recorder.currentSessionId();
+                if (sessionStore === undefined || sessionId === undefined) {
+                    throw new TypeError('durable session recorder became unavailable while running a prompt');
+                }
+                const resolveSdkModel = await resolveGraphSdkModel({
+                    selection: selectedModelProvider,
+                    ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
+                    authStore,
+                });
+                await runOwnerPrompt({
+                    sessionId,
+                    store: sessionStore,
+                    provider,
+                    modelProviderSelection: selectedModelProvider,
+                    workspaceRoot,
+                    prompt: args.prompt,
+                    emitEvent: emitRuntimeEvent,
+                    observeStoredEvent,
+                    createTurnRunner: ({ toolRegistry }) =>
+                        createGraphTurnRunner({
+                            graph: buildCodingAgentGraphForSelection(selectedModelProvider),
+                            sessionId,
+                            now: () => new Date().toISOString(),
+                            modelProviderSelection: selectedModelProvider,
+                            registry: createCodingAgentNodeRegistry(),
+                            resolveSdkModel,
+                            toolRegistry,
+                        }),
+                    ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
+                    ...(options.nonInteractiveAutomationPolicy !== undefined
+                        ? { nonInteractiveAutomationPolicy: options.nonInteractiveAutomationPolicy }
+                        : {}),
+                    throwOnTerminalFailure: args.mode === 'plain',
+                });
             } else if (engine === 'graph' && args.prompt !== undefined) {
                 await runCodingPromptOnGraph({
                     runtime,

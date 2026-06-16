@@ -16,8 +16,8 @@
  *   loop's full session orchestration.
  */
 import {
-    type AgentRuntime,
     type AbgGraphRunResult,
+    type AgentRuntime,
     type CommandExecutionRequest,
     type CommandExecutionResult,
     createCodingAgentGraph,
@@ -27,7 +27,7 @@ import {
     SdkModelResolverError,
     type ToolRegistry,
 } from '@mission-control/core';
-import type { AbgNodeModelOptions, ModelProviderSelection } from '@mission-control/protocol';
+import type { AbgGraphSpec, AbgNodeModelOptions, ModelProviderSelection } from '@mission-control/protocol';
 import type { ProviderAuthStore } from '../auth-store.js';
 import { createCliProviderCredentialResolver } from '../provider-credential-resolver.js';
 import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
@@ -54,8 +54,11 @@ export type RunCodingPromptOnGraphInput = {
 
 /** Build the coding-agent graph wiring and drive it through the runtime. Non-destructive. */
 export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput): Promise<AbgGraphRunResult> {
-    const resolveSdkModel = input.resolveSdkModel ?? (await buildSdkModelResolver(input));
-    validateResolverForSelection(resolveSdkModel, input.selection);
+    const resolveSdkModel = await resolveGraphSdkModel({
+        selection: input.selection,
+        ...(input.resolveSdkModel !== undefined ? { resolveSdkModel: input.resolveSdkModel } : {}),
+        ...(input.authStore !== undefined ? { authStore: input.authStore } : {}),
+    });
 
     const toolRegistry =
         input.toolRegistry ??
@@ -65,9 +68,7 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
             ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
         }));
 
-    const graph = createCodingAgentGraph({ model: selectionToModelOptions(input.selection) });
-
-    return input.runtime.runGraph(graph, undefined, {
+    return input.runtime.runGraph(buildCodingAgentGraphForSelection(input.selection), undefined, {
         registry: createCodingAgentNodeRegistry(),
         resolveSdkModel,
         toolRegistry,
@@ -75,7 +76,34 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
     });
 }
 
-async function buildSdkModelResolver(input: RunCodingPromptOnGraphInput): Promise<SdkModelResolver> {
+/**
+ * Minimal input for resolving the AI-SDK model used by the graph engine. Shared by the one-shot
+ * `--engine graph` path and the `--engine graph --session` path so the resolver build + eager
+ * validation (clear error for providers with no AI-SDK mapping) is identical in both.
+ */
+export type GraphSdkModelResolverInput = {
+    readonly selection: ModelProviderSelection;
+    readonly resolveSdkModel?: SdkModelResolver;
+    readonly authStore?: ProviderAuthStore;
+};
+
+/**
+ * Resolve the SDK model for the graph engine, validating eagerly so an unsupported provider
+ * (e.g. `local`) fails with a clear error before the graph starts. Injected resolvers win;
+ * otherwise the resolver is built from `authStore`.
+ */
+export async function resolveGraphSdkModel(input: GraphSdkModelResolverInput): Promise<SdkModelResolver> {
+    const resolveSdkModel = input.resolveSdkModel ?? (await buildSdkModelResolver(input));
+    validateResolverForSelection(resolveSdkModel, input.selection);
+    return resolveSdkModel;
+}
+
+/** Build the default coding-agent graph bound to a model selection (shared by both graph paths). */
+export function buildCodingAgentGraphForSelection(selection: ModelProviderSelection): AbgGraphSpec {
+    return createCodingAgentGraph({ model: selectionToModelOptions(selection) });
+}
+
+async function buildSdkModelResolver(input: GraphSdkModelResolverInput): Promise<SdkModelResolver> {
     if (input.authStore === undefined) {
         throw new SdkModelResolverError(
             'graph engine requires either an injected resolver or an auth store to resolve credentials',
