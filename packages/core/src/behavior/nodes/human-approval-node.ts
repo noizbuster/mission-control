@@ -8,7 +8,7 @@
  * The coordinator's approval gate (packages/core/src/behavior/graph-approval-gates.ts,
  * evaluateApprovalGate, run in runQueuedNode) is the AUTHORITY that blocks the graph
  * and resumes on an observed `approval.updated` event (state approved/denied). This
- * node serves to emit the approval request event so the graph can react appropriately.
+ * node serves to emit the approval request event so the graph can respond appropriately.
  *
  * This node always yields a failure with code 'human_approval_required' because the
  * actual approval handling happens at the coordinator level via the approval gate mechanism.

@@ -51,7 +51,7 @@ export function getVendoredModelsDevCatalog(): RawModelsDevCatalog {
  * 3. Vendored snapshot (fallback)
  *
  * Triggers async background refresh when disk cache is stale or missing.
- * Never throws — falls back to vendored on any error.
+ * Never throws — falls back to the vendored snapshot if a refresh errors.
  */
 export async function loadModelsDevCatalog(): Promise<RawModelsDevCatalog> {
     if (cachedCatalog !== undefined) {

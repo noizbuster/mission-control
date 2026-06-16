@@ -137,7 +137,7 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
     const loopActive = turnResult !== undefined && proposedToolCalls > 0;
     blackboard.set('llm.loop_active', loopActive);
     if (turnResult !== undefined) {
-        // The SDK's response.messages already contains the assistant turn AND any executed
+        // The SDK's response.messages already contains the assistant turn AND every executed
         // tool-result message (per the AI-SDK contract), so appending it grows the
         // conversation for the next graph-driven step.
         blackboard.appendMessages(turnResult.responseMessages);

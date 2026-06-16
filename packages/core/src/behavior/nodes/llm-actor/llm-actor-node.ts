@@ -33,7 +33,7 @@ export type LlmActorModel = StreamTextParameters['model'];
 
 /**
  * The result of one `LLMActor` turn (one model call + one tool batch, per
- * `stopWhen: stepCountIs(1)`). `responseMessages` is the assistant turn INCLUDING any
+ * `stopWhen: stepCountIs(1)`). `responseMessages` is the assistant turn INCLUDING every
  * tool-result message (the SDK includes executed tool results in `response.messages`),
  * so the graph can append it to the Blackboard and re-enter with the full history —
  * the loop the SDK's own multi-step machinery would otherwise own.

@@ -36,7 +36,7 @@ describe('assembleSystemPrompt', () => {
         const prompt = assembleSystemPrompt({
             resources: [
                 { path: 'AGENTS.md', content: 'Always use pnpm.' },
-                { path: 'CLAUDE.md', content: 'No any casts.' },
+                { path: 'CLAUDE.md', content: 'No unsafe casts.' },
             ],
             append: 'Follow the commit protocol.',
         });
@@ -44,7 +44,7 @@ describe('assembleSystemPrompt', () => {
         expect(prompt).toContain('--- AGENTS.md ---');
         expect(prompt).toContain('Always use pnpm.');
         expect(prompt).toContain('--- CLAUDE.md ---');
-        expect(prompt).toContain('No any casts.');
+        expect(prompt).toContain('No unsafe casts.');
         expect(prompt.endsWith('Follow the commit protocol.')).toBe(true);
     });
 

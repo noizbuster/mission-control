@@ -155,7 +155,7 @@ export const runSpeculativeNode: AbgNodeRunner = async function* (
             }
         }
     } finally {
-        // Abandon (deterministically cancel) any branch not yet terminated so its generator
+        // Abandon (deterministically cancel) every branch not yet terminated so its generator
         // cleanup runs — whether we early-stopped or drained to completion.
         for (const branch of branches) {
             if (branch.outcome === undefined) {
