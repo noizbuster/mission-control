@@ -5,6 +5,7 @@ import {
     type CommandExecutionResult,
     PermissionGateError,
     type ProviderAdapter,
+    type SdkModelResolver,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
@@ -17,6 +18,7 @@ import { createModelChoices, type ModelChoice } from './interactive-chat-model.j
 import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
 import { createCliProviderForSelection } from './provider-factory.js';
 import { readGraphFile, validateGraphModelOptions, validateModelProviderSelection } from './run-agent-graph.js';
+import { runCodingPromptOnGraph } from './run-agent-graph-prompt.js';
 import { runOwnerPrompt } from './run-agent-owner-prompt.js';
 import { createRunEventRecorder } from './run-agent-session.js';
 
@@ -31,6 +33,11 @@ export type RunAgentOptions = {
     readonly onRuntimeEvent?: (event: AgentEvent) => void;
     readonly provider?: ProviderAdapter;
     readonly createProvider?: (selection: ModelProviderSelection) => ProviderAdapter;
+    /**
+     * Injected SDK model resolver for the `--engine graph` path (tests / scripted models).
+     * When unset, the graph path builds the resolver from the auth store for the selection.
+     */
+    readonly resolveSdkModel?: SdkModelResolver;
     readonly workspaceRoot?: string;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly nonInteractiveAutomationPolicy?: NonInteractiveAutomationPolicy;
@@ -48,6 +55,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     const createProvider = options.createProvider ?? ((selection) => createProviderForSelection(selection, authStore));
     const provider = options.provider ?? createProvider(selectedModelProvider);
     const workspaceRoot = options.workspaceRoot ?? process.cwd();
+    const engine = resolveEngine(args.engine);
     const runtime = new AgentRuntime(
         createCliRuntimeOptions({
             ...(args.useNative !== undefined ? { useNative: args.useNative } : {}),
@@ -125,6 +133,16 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         try {
             if (graph !== undefined) {
                 await runtime.runGraph(graph);
+            } else if (engine === 'graph' && args.prompt !== undefined) {
+                await runCodingPromptOnGraph({
+                    runtime,
+                    selection: selectedModelProvider,
+                    prompt: args.prompt,
+                    workspaceRoot,
+                    ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
+                    authStore,
+                    ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
+                });
             } else if (
                 args.prompt !== undefined &&
                 recorder.currentStore() !== undefined &&
@@ -182,6 +200,17 @@ function shouldRunInteractiveChat(args: CliArgs, graph: AbgGraphSpec | undefined
         args.mode === 'ink' &&
         (options.chatInput !== undefined || (process.stdin.isTTY === true && process.stdout.isTTY === true))
     );
+}
+
+/**
+ * Resolve the execution engine. `--engine` wins; otherwise `MC_USE_GRAPH=1` opts into the
+ * graph path; otherwise the flat loop (the default — strangler-fig keeps it serving traffic).
+ */
+function resolveEngine(engine: CliArgs['engine']): 'graph' | 'flat' {
+    if (engine !== undefined) {
+        return engine;
+    }
+    return process.env['MC_USE_GRAPH'] === '1' ? 'graph' : 'flat';
 }
 
 async function resolveModelProviderSelection(

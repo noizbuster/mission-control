@@ -25,6 +25,10 @@
     "@mission-control/protocol": "workspace:*",
     "@types/react": "^19.2.0",
     "ink": "^7.0.0",
-    "react": "^19.2.0"
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@ai-sdk/provider": "^3.0.10",
+    "ai": "^6.0.205"
   }
 }

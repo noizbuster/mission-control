@@ -13,6 +13,7 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
     let showVersion = false;
     let providerID: string | undefined;
     let modelID: string | undefined;
+    let engine: 'graph' | 'flat' | undefined;
     let graphPath = initial.graphPath;
     let sessionId: string | undefined;
     const promptParts: string[] = [];
@@ -64,6 +65,15 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
                 graphPath = readFlagValue(argv, index, '--graph');
                 index += 2;
                 break;
+            case '--engine': {
+                const value = readFlagValue(argv, index, '--engine');
+                if (value !== 'graph' && value !== 'flat') {
+                    throw new Error('--engine only supports graph or flat');
+                }
+                engine = value;
+                index += 2;
+                break;
+            }
             case '--session':
                 sessionId = readFlagValue(argv, index, '--session');
                 index += 2;
@@ -90,6 +100,7 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
         modelID,
         prompt: promptParts.length === 0 ? undefined : promptParts.join(' '),
         providerID,
+        engine,
         sessionId,
         showHelp,
         showVersion,
@@ -122,6 +133,7 @@ function buildRunArgs(input: {
     readonly modelID: string | undefined;
     readonly prompt: string | undefined;
     readonly providerID: string | undefined;
+    readonly engine: 'graph' | 'flat' | undefined;
     readonly sessionId: string | undefined;
     readonly showHelp: boolean;
     readonly showVersion: boolean;
@@ -129,6 +141,9 @@ function buildRunArgs(input: {
 }): CliArgs {
     if (input.graphPath !== undefined && input.prompt !== undefined) {
         throw new Error('prompt cannot be combined with --graph');
+    }
+    if (input.engine === 'graph' && input.prompt === undefined) {
+        throw new Error('--engine graph requires a prompt');
     }
     const baseArgs = {
         mode: input.mode,
@@ -138,6 +153,7 @@ function buildRunArgs(input: {
         showVersion: input.showVersion,
         ...(input.graphPath !== undefined ? { graphPath: input.graphPath } : {}),
         ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
+        ...(input.engine !== undefined ? { engine: input.engine } : {}),
         ...(input.sessionId !== undefined ? { sessionId: input.sessionId } : {}),
     } satisfies CliArgs;
     const modelProviderSelection = resolveModelProviderSelection(input.providerID, input.modelID);

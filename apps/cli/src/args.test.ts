@@ -39,6 +39,20 @@ describe('parseArgs', () => {
         });
     });
 
+    it('parses the --engine flag (graph engine cutover seam) and rejects invalid values', () => {
+        expect(parseArgs(['--engine', 'graph', 'do something'])).toMatchObject({
+            engine: 'graph',
+            prompt: 'do something',
+        });
+        expect(parseArgs(['--engine', 'flat'])).toMatchObject({ engine: 'flat' });
+        // The engine key is absent when the flag is not passed (flat is resolved at runtime).
+        expect(parseArgs([]).engine).toBeUndefined();
+        expect(() => parseArgs(['--engine', 'turbo'])).toThrow('--engine only supports graph or flat');
+        expect(() => parseArgs(['--engine'])).toThrow('--engine requires a value');
+        // --engine graph needs a prompt to seed the graph run.
+        expect(() => parseArgs(['--engine', 'graph'])).toThrow('--engine graph requires a prompt');
+    });
+
     it('parses opencode-style provider model shorthand', () => {
         expect(parseArgs(['--model', 'local/local-echo'])).toMatchObject({
             modelProviderSelection: {

@@ -31,6 +31,13 @@ export type CliArgs = {
     readonly graphPath?: string;
     readonly prompt?: string;
     readonly sessionId?: string;
+    /**
+     * Execution engine for non-interactive prompt runs. `'flat'` (default) keeps the incumbent
+     * provider-turn loop; `'graph'` routes through the ABG coding-agent graph + the AI-SDK
+     * `resolveSdkModel` bridge (the strangler-fig cutover seam). Falls back to `MC_USE_GRAPH=1`
+     * at runtime when unset. See `run-agent-graph-prompt.ts`.
+     */
+    readonly engine?: 'graph' | 'flat';
     readonly filePath?: string;
     readonly modelProviderSelection?: ModelProviderSelection;
     readonly authProviderID?: string;
@@ -51,6 +58,7 @@ export const supportedCliFlags = [
     '--provider',
     '--model',
     '--graph',
+    '--engine',
     '--session',
     '--api-key',
     '--credential',
