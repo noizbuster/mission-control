@@ -22,10 +22,11 @@ import {
     type RunCoordinatorRunEventType,
 } from './run-coordinator-lifecycle.js';
 import { readRunCoordinatorMessages } from './run-coordinator-messages.js';
-import { runCoordinatorProviderTurn } from './run-coordinator-provider-turn.js';
+import { type RunCoordinatorProviderTurnInput, runCoordinatorProviderTurn } from './run-coordinator-provider-turn.js';
 import {
     appendRunCoordinatorEnvelope,
     type RunCoordinatorPromptInput,
+    type RunCoordinatorTurnContext,
     type SessionRunCoordinatorOptions,
 } from './run-coordinator-types.js';
 
@@ -189,34 +190,47 @@ export class SessionRunCoordinator {
     }
 
     private async runProviderTurn(signal: AbortSignal): Promise<RunCoordinatorProviderTurnResult> {
-        return runCoordinatorProviderTurn(
-            {
-                sessionId: this.options.sessionId,
-                provider: this.options.provider,
-                modelProviderSelection: this.options.modelProviderSelection,
-                ...(this.options.timeoutMs !== undefined ? { timeoutMs: this.options.timeoutMs } : {}),
-                ...(this.options.retryLimit !== undefined ? { retryLimit: this.options.retryLimit } : {}),
-                ...(this.options.toolCallLoopLimit !== undefined
-                    ? { toolCallLoopLimit: this.options.toolCallLoopLimit }
-                    : {}),
-                ...(this.options.haltOnFailedToolSettlement !== undefined
-                    ? { haltOnFailedToolSettlement: this.options.haltOnFailedToolSettlement }
-                    : {}),
-                ...(this.options.toolRegistry !== undefined ? { toolRegistry: this.options.toolRegistry } : {}),
-                readMessages: () => this.modelVisibleMessages(),
-                nextId: (prefix) => this.ids.next(prefix),
-                appendDurableEvent: (event) => this.appendDurableEvent(event),
-                appendDurableEnvelope: (envelope) => this.appendDurableEnvelope(envelope),
-                ...(this.options.onProviderEnvelope !== undefined
-                    ? { onProviderEnvelope: this.options.onProviderEnvelope }
-                    : {}),
-                ...(this.options.onToolCall !== undefined ? { onToolCall: this.options.onToolCall } : {}),
-                ...(this.options.onToolSettlement !== undefined
-                    ? { onToolSettlement: this.options.onToolSettlement }
-                    : {}),
-            },
-            signal,
-        );
+        const injected = this.options.runProviderTurn;
+        if (injected !== undefined) {
+            return injected(this.turnContext(signal));
+        }
+        return runCoordinatorProviderTurn(this.flatTurnInput(), signal);
+    }
+
+    private turnContext(signal: AbortSignal): RunCoordinatorTurnContext {
+        return { signal, ...this.turnContextFields() };
+    }
+
+    private turnContextFields(): Omit<RunCoordinatorTurnContext, 'signal'> {
+        return {
+            readMessages: () => this.modelVisibleMessages(),
+            nextId: (prefix) => this.ids.next(prefix),
+            appendDurableEvent: (event) => this.appendDurableEvent(event),
+            appendDurableEnvelope: (envelope) => this.appendDurableEnvelope(envelope),
+            ...(this.options.onProviderEnvelope !== undefined
+                ? { onProviderEnvelope: this.options.onProviderEnvelope }
+                : {}),
+            ...(this.options.onToolCall !== undefined ? { onToolCall: this.options.onToolCall } : {}),
+            ...(this.options.onToolSettlement !== undefined ? { onToolSettlement: this.options.onToolSettlement } : {}),
+        };
+    }
+
+    private flatTurnInput(): RunCoordinatorProviderTurnInput {
+        return {
+            sessionId: this.options.sessionId,
+            provider: this.options.provider,
+            modelProviderSelection: this.options.modelProviderSelection,
+            ...(this.options.timeoutMs !== undefined ? { timeoutMs: this.options.timeoutMs } : {}),
+            ...(this.options.retryLimit !== undefined ? { retryLimit: this.options.retryLimit } : {}),
+            ...(this.options.toolCallLoopLimit !== undefined
+                ? { toolCallLoopLimit: this.options.toolCallLoopLimit }
+                : {}),
+            ...(this.options.haltOnFailedToolSettlement !== undefined
+                ? { haltOnFailedToolSettlement: this.options.haltOnFailedToolSettlement }
+                : {}),
+            ...(this.options.toolRegistry !== undefined ? { toolRegistry: this.options.toolRegistry } : {}),
+            ...this.turnContextFields(),
+        };
     }
 
     private async modelVisibleMessages() {
