@@ -15,11 +15,13 @@ import {
     projectSessionReplay,
     type SdkModelResolver,
     SdkModelResolverError,
+    type ToolRegistration,
     ToolRegistry,
 } from '@mission-control/core';
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { runCodingPromptOnGraph } from './run-agent-graph-prompt.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -43,6 +45,34 @@ function finalTextChunks(): LanguageModelV3StreamPart[] {
         { type: 'finish', finishReason: { unified: 'stop', raw: undefined }, usage: buildUsage() },
     ];
 }
+
+function toolCallChunks(): LanguageModelV3StreamPart[] {
+    return [
+        { type: 'stream-start', warnings: [] },
+        { type: 'tool-input-start', id: 'call_1', toolName: 'echo' },
+        { type: 'tool-input-delta', id: 'call_1', delta: JSON.stringify({ text: 'hi' }) },
+        { type: 'tool-input-end', id: 'call_1' },
+        { type: 'tool-call', toolCallId: 'call_1', toolName: 'echo', input: JSON.stringify({ text: 'hi' }) },
+        { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: buildUsage() },
+    ];
+}
+
+const echoRegistration: ToolRegistration<{ text: string }, { text: string }> = {
+    name: 'echo',
+    description: 'Echo a string back to the model.',
+    capabilityClasses: ['read'],
+    parametersJsonSchema: {
+        type: 'object',
+        properties: { text: { type: 'string' } },
+        required: ['text'],
+        additionalProperties: false,
+    },
+    inputSchema: z.object({ text: z.string() }),
+    outputSchema: z.object({ text: z.string() }),
+    outputLimit: { maxModelOutputChars: 2000 },
+    execute: async (input) => ({ text: input.text }),
+    toModelOutput: (output) => output.text,
+};
 
 describe('runCodingPromptOnGraph (--engine graph wiring)', () => {
     it('drives the coding-agent graph through the runtime with a scripted model', async () => {
@@ -72,6 +102,49 @@ describe('runCodingPromptOnGraph (--engine graph wiring)', () => {
                 .map((event) => event.message ?? '')
                 .join('\n');
             expect(messages).toContain('llm.turn.completed');
+        } finally {
+            await runtime.stop();
+        }
+    });
+
+    it('runs the full tool-then-finalize loop through the CLI wiring (graph owns the loop)', async () => {
+        // Step 1 proposes the `echo` tool; step 2 produces the final answer. Proves the graph's
+        // self-edge (llm.loop_active) drives multi-step tool use through the CLI helper — not just
+        // single-turn text — with tools resolving via the injected registry.
+        let callCount = 0;
+        const model = new MockLanguageModelV3({
+            provider: SELECTION.providerID,
+            modelId: SELECTION.modelID,
+            doStream: async () => {
+                callCount += 1;
+                const chunks = callCount === 1 ? toolCallChunks() : finalTextChunks();
+                return { stream: convertArrayToReadableStream(chunks) };
+            },
+        });
+        const toolRegistry = new ToolRegistry();
+        toolRegistry.register(echoRegistration);
+
+        const runtime = new AgentRuntime({ modelProviderSelection: SELECTION });
+        await runtime.start();
+        try {
+            const result = await runCodingPromptOnGraph({
+                runtime,
+                selection: SELECTION,
+                prompt: 'echo hi then finish',
+                workspaceRoot: process.cwd(),
+                resolveSdkModel: () => model,
+                toolRegistry,
+            });
+
+            expect(result.status).toBe('completed');
+            expect(model.doStreamCalls.length).toBe(2);
+            const messages = runtime
+                .getEvents()
+                .map((event) => event.message ?? '')
+                .join('\n');
+            expect(messages).toContain('llm.tool_call.proposed');
+            expect(messages).toContain('tool.completed');
+            expect(messages.match(/llm\.turn\.completed/g)?.length).toBe(2);
         } finally {
             await runtime.stop();
         }
