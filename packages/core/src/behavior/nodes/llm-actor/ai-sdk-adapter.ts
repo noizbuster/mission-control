@@ -16,11 +16,19 @@ import type { AbgSignal } from '@mission-control/protocol';
 import type { TextStreamPart, ToolSet } from 'ai';
 import { errorToString } from '../../../util/error-to-string.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
+import type { AbgToolSettlementLedger } from './abg-tool-bridge.js';
 
 export type StreamPartAdapterContext = {
     readonly graphId: string | undefined;
     readonly nodeId: string;
     readonly now: () => string;
+    /**
+     * The per-turn settlement ledger the tool bridge writes. When present, the `tool-result`
+     * case reads it to recover the settlement's true status + output/error (the SDK collapses a
+     * failed settlement to a `tool-result` carrying an error string). When absent (no registry,
+     * or a provider-executed tool), the emit falls back to the part's own `output`/`error`.
+     */
+    readonly settlementLedger?: AbgToolSettlementLedger;
 };
 
 function emit(ctx: StreamPartAdapterContext, eventType: string, payload?: unknown): AbgSignal {
@@ -55,10 +63,43 @@ export function abgSignalsFromStreamPart(
                     input: part.input,
                 }),
             ];
-        case 'tool-result':
-            return [emit(ctx, 'tool.completed', { toolCallId: part.toolCallId, toolName: part.toolName })];
-        case 'tool-error':
-            return [emit(ctx, 'tool.failed', { toolCallId: part.toolCallId, toolName: part.toolName })];
+        case 'tool-result': {
+            // Recover the settlement's TRUE status/output/error from the ledger the bridge
+            // wrote before this part fired. The SDK emits a `tool-result` for a failed
+            // settlement too (the bridge surfaces failures to the model as a string), so
+            // without the ledger a failed tool would be mislabeled `completed`.
+            const settlement = ctx.settlementLedger?.lookup(part.toolCallId);
+            if (settlement?.status === 'failed') {
+                return [
+                    emit(ctx, 'tool.failed', {
+                        toolCallId: part.toolCallId,
+                        toolName: part.toolName,
+                        ...(settlement.error !== undefined ? { error: settlement.error } : {}),
+                    }),
+                ];
+            }
+            const output = settlement?.output ?? part.output;
+            return [
+                emit(ctx, 'tool.completed', {
+                    toolCallId: part.toolCallId,
+                    toolName: part.toolName,
+                    ...(output !== undefined ? { output } : {}),
+                }),
+            ];
+        }
+        case 'tool-error': {
+            // `execute` threw (rare: the bridge catches settlement failures and returns a
+            // string, so this fires only for genuine bridge/registry errors or aborts). Coerce
+            // the SDK's `unknown` error into a ProtocolError so the emit carries detail.
+            const message = part.error !== undefined ? errorToString(part.error) : undefined;
+            return [
+                emit(ctx, 'tool.failed', {
+                    toolCallId: part.toolCallId,
+                    toolName: part.toolName,
+                    ...(message !== undefined ? { error: { code: 'unknown', message, retryable: false } } : {}),
+                }),
+            ];
+        }
         case 'tool-output-denied':
             return [emit(ctx, 'tool.denied', { toolCallId: part.toolCallId, toolName: part.toolName })];
         case 'error':

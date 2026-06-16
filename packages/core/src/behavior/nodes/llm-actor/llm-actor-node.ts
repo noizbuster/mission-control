@@ -23,6 +23,7 @@ import type { ModelMessage, ToolSet } from 'ai';
 import { stepCountIs, streamText } from 'ai';
 import { errorToString } from '../../../util/error-to-string.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
+import type { AbgToolSettlementLedger } from './abg-tool-bridge.js';
 import { abgSignalsFromStreamPart } from './ai-sdk-adapter.js';
 
 type StreamTextParameters = Parameters<typeof streamText>[0];
@@ -52,11 +53,17 @@ export type LlmActorRunInput = {
     readonly tools?: ToolSet;
     readonly signal?: AbortSignal;
     readonly now: () => string;
+    readonly settlementLedger?: AbgToolSettlementLedger;
 };
 
 export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSignal> {
     const { nodeId, now } = input;
-    const adapterContext = { graphId: input.graphId, nodeId, now };
+    const adapterContext = {
+        graphId: input.graphId,
+        nodeId,
+        now,
+        ...(input.settlementLedger !== undefined ? { settlementLedger: input.settlementLedger } : {}),
+    };
     const graphIdPart = input.graphId !== undefined ? { graphId: input.graphId } : {};
 
     yield { type: 'started', nodeId, ...graphIdPart };

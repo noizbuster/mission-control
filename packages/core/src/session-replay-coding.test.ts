@@ -380,7 +380,11 @@ describe('session replay coding projections', () => {
             sessionId,
             envelopes: [
                 envelope(graphToolCallProposedEvent(sessionId, 'call_1', 'file.patch'), 0, 'event_graph_tool_call'),
-                envelope(graphToolCompletedEvent(sessionId, 'call_1'), 1, 'event_graph_tool_completed'),
+                envelope(
+                    graphToolCompletedEvent(sessionId, 'call_1', 'applied patch to notes.txt'),
+                    1,
+                    'event_graph_tool_completed',
+                ),
                 envelope(graphLlmTurnCompletedEvent(sessionId, 'patch applied'), 2, 'event_graph_turn_completed'),
             ],
         });
@@ -399,6 +403,7 @@ describe('session replay coding projections', () => {
                 timestamp: '2026-06-05T10:00:00.500Z',
                 toolCallId: 'call_1',
                 status: 'completed',
+                output: 'applied patch to notes.txt',
             },
             {
                 kind: 'provider.message',
@@ -416,7 +421,15 @@ describe('session replay coding projections', () => {
         const replay = projectSessionReplay({
             sessionId,
             envelopes: [
-                envelope(graphToolFailedEvent(sessionId, 'call_1'), 0, 'event_graph_tool_failed'),
+                envelope(
+                    graphToolFailedEvent(sessionId, 'call_1', {
+                        code: 'tool_failed',
+                        message: 'patch rejected',
+                        retryable: false,
+                    }),
+                    0,
+                    'event_graph_tool_failed',
+                ),
                 envelope(graphLlmErrorEvent(sessionId, 'model exploded'), 1, 'event_graph_llm_error'),
             ],
         });
@@ -429,6 +442,7 @@ describe('session replay coding projections', () => {
                 timestamp: '2026-06-05T10:00:00.500Z',
                 toolCallId: 'call_1',
                 status: 'failed',
+                error: { code: 'tool_failed', message: 'patch rejected', retryable: false },
             },
         ]);
         const failureSteps = replay.codingSteps.filter((step) => step.kind === 'provider.failure');

@@ -1,4 +1,10 @@
-import type { AgentEvent, AgentEventEnvelope, ToolResult } from '@mission-control/protocol';
+import {
+    type AgentEvent,
+    type AgentEventEnvelope,
+    type ProtocolError,
+    ProtocolErrorSchema,
+    type ToolResult,
+} from '@mission-control/protocol';
 import type { CodingReplayStep, ReplayDiagnostic } from './session-replay-types.js';
 
 const RUN_REPLAY_EVENT_TYPES: ReadonlySet<AgentEvent['type']> = new Set([
@@ -154,9 +160,9 @@ function runStateStep(envelope: AgentEventEnvelope): CodingReplayStep | undefine
  * `abg.emit`) and for emit types with no coding-step analog, so the flat projection is byte-identical.
  *
  * Mappings: `llm.turn.completed` → the assistant message (final text); `llm.tool_call.proposed` →
- * the proposed tool call; `tool.completed`/`tool.failed` → the tool outcome; `llm.error` → a provider
- * failure. Graph tool emits carry ids only (no output/error detail), so the outcome steps omit those
- * fields — the headline parity is the turn text + the call/result lifecycle.
+ * the proposed tool call; `tool.completed`/`tool.failed` → the tool outcome (carrying the settlement's
+ * output/error, recorded by the tool bridge's settlement ledger); `llm.error` → a provider failure.
+ * The outcome steps therefore match the flat path's detail, not just the call/result lifecycle.
  */
 function graphEmitStep(envelope: AgentEventEnvelope): CodingReplayStep | undefined {
     const emit = envelope.event.abg?.emit;
@@ -213,12 +219,26 @@ function graphToolResultStep(
     payload: unknown,
     status: ToolResult['status'],
 ): CodingReplayStep {
+    const toolCallId = readStringField(payload, 'toolCallId') ?? envelope.eventId;
+    if (status === 'completed') {
+        const output = readStringField(payload, 'output');
+        return {
+            kind: 'tool.result',
+            eventId: envelope.eventId,
+            timestamp: envelope.event.timestamp,
+            toolCallId,
+            status,
+            ...(output !== undefined ? { output } : {}),
+        };
+    }
+    const error = readProtocolError(payload, 'error');
     return {
         kind: 'tool.result',
         eventId: envelope.eventId,
         timestamp: envelope.event.timestamp,
-        toolCallId: readStringField(payload, 'toolCallId') ?? envelope.eventId,
+        toolCallId,
         status,
+        ...(error !== undefined ? { error } : {}),
     };
 }
 
@@ -232,6 +252,23 @@ function readStringField(payload: unknown, field: string): string | undefined {
     }
     const value = payload[field];
     return typeof value === 'string' ? value : undefined;
+}
+
+/**
+ * Read + validate a `ProtocolError` from an emit payload. The bridge records the registry's
+ * structured error (or a synthesized one), but it traveled through an `unknown` JSON payload,
+ * so validate against `ProtocolErrorSchema` before assigning to the typed step field — no cast.
+ */
+function readProtocolError(payload: unknown, field: string): ProtocolError | undefined {
+    if (!isPlainObject(payload)) {
+        return undefined;
+    }
+    const value = payload[field];
+    if (!isPlainObject(value)) {
+        return undefined;
+    }
+    const parsed = ProtocolErrorSchema.safeParse(value);
+    return parsed.success ? parsed.data : undefined;
 }
 
 function toolResultStep(

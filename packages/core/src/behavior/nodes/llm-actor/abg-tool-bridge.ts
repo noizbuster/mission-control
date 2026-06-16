@@ -17,10 +17,11 @@
  * error, adjust, and retry — the persona's own instruction.
  */
 
+import type { ProtocolError, ToolResultStatus } from '@mission-control/protocol';
 import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import type { ToolRegistry } from '../../../tools/tool-registry.js';
-import type { ToolAdvertisement } from '../../../tools/tool-registry-types.js';
+import type { ToolAdvertisement, ToolInvocationSettlement } from '../../../tools/tool-registry-types.js';
 
 export class AbgToolBridgeError extends Error {
     constructor(message: string) {
@@ -47,9 +48,47 @@ export type PolicyDecisionObserverInput = PolicyGateDecision & {
     readonly toolName: string;
 };
 
+/**
+ * The authoritative outcome of one bridged tool call, mirroring the settlement the flat
+ * provider path persists on its `toolResult` AgentEvent. The adapter turns this into the
+ * `tool.completed`/`tool.failed` ABG emit so a graph session's coding-step replay carries
+ * the SAME status/output/error detail a flat session does (true parity, not just ids).
+ */
+export type AbgToolSettlement = {
+    readonly toolCallId: string;
+    readonly toolName: string;
+    readonly status: ToolResultStatus;
+    readonly output?: unknown;
+    readonly error?: ProtocolError;
+};
+
+/**
+ * A per-turn ledger the bridge writes (on settle) and the stream-part adapter reads (on the
+ * SDK's `tool-result` part). The SDK's `tool-result` part fires only AFTER `execute` resolves,
+ * so the entry is always recorded before the adapter looks it up — the ledger is the bridge
+ * for the adapter to recover the settlement's true status (the SDK collapses a failed
+ * settlement to a `tool-result` carrying an error string, since the bridge surfaces failures
+ * to the model as readable text; the ledger restores the structured `failed` status).
+ */
+export type AbgToolSettlementLedger = {
+    readonly record: (settlement: AbgToolSettlement) => void;
+    readonly lookup: (toolCallId: string) => AbgToolSettlement | undefined;
+};
+
+export function createAbgToolSettlementLedger(): AbgToolSettlementLedger {
+    const entries = new Map<string, AbgToolSettlement>();
+    return {
+        record: (settlement) => {
+            entries.set(settlement.toolCallId, settlement);
+        },
+        lookup: (toolCallId) => entries.get(toolCallId),
+    };
+}
+
 export type AbgToolBridgeOptions = {
     readonly policyGate?: PolicyGateFn;
     readonly onPolicyDecision?: (decision: PolicyDecisionObserverInput) => void;
+    readonly settlementLedger?: AbgToolSettlementLedger;
 };
 
 /**
@@ -82,12 +121,24 @@ export function bridgeAdvertisementToAiSdk(
             const toolCallId = execOptions.toolCallId;
             const argumentsJson = JSON.stringify(args ?? {});
             const signal = execOptions.abortSignal;
+            const ledger = options.settlementLedger;
 
             if (options.policyGate !== undefined) {
                 const decision = await options.policyGate({ toolCallId, toolName: advertisement.name, argumentsJson });
                 options.onPolicyDecision?.({ ...decision, toolCallId, toolName: advertisement.name });
                 if (!decision.allowed) {
-                    return `BLOCKED by policy gate${decision.reason !== undefined ? `: ${decision.reason}` : ''}`;
+                    const blockMessage = `BLOCKED by policy gate${decision.reason !== undefined ? `: ${decision.reason}` : ''}`;
+                    // A denied call never reaches the registry, so synthesize the settlement:
+                    // the adapter must see a `failed` outcome (not a bare `tool-result`) so the
+                    // replay shows the block. `unknown` is the honest code — there is no
+                    // `blocked` ProtocolErrorCode.
+                    ledger?.record({
+                        toolCallId,
+                        toolName: advertisement.name,
+                        status: 'failed',
+                        error: { code: 'unknown', message: blockMessage, retryable: false },
+                    });
+                    return blockMessage;
                 }
             }
 
@@ -98,6 +149,13 @@ export function bridgeAdvertisementToAiSdk(
                 argumentsJson,
                 ...(signal !== undefined ? { signal } : {}),
             });
+
+            // Record the authoritative settlement BEFORE returning, so the adapter (which sees
+            // the SDK's `tool-result` part only after this resolves) can emit the true
+            // status/output/error. Distinct from the model-facing return below: failures are
+            // surfaced to the model as a readable error string (persona contract), but the
+            // ledger records the structured error so the replay marks the tool failed.
+            ledger?.record(settlementToLedgerEntry(toolCallId, advertisement.name, settlement));
 
             if (settlement.modelOutput !== undefined) {
                 return settlement.modelOutput.content;
@@ -113,6 +171,37 @@ export function bridgeAdvertisementToAiSdk(
             return `Tool "${advertisement.name}" failed (${code}): ${message}`;
         },
     });
+}
+
+/**
+ * Extract the ledger entry from a registry settlement — the SAME fields the flat path persists
+ * on its `toolResult` AgentEvent (`result.output` for completed, `result.error` for failed), so
+ * the graph coding-step replay matches the flat path's detail exactly.
+ */
+function settlementToLedgerEntry(
+    toolCallId: string,
+    toolName: string,
+    settlement: ToolInvocationSettlement,
+): AbgToolSettlement {
+    const result = settlement.result;
+    if (result.status === 'completed') {
+        return {
+            toolCallId,
+            toolName,
+            status: 'completed',
+            ...(result.output !== undefined ? { output: result.output } : {}),
+        };
+    }
+    return {
+        toolCallId,
+        toolName,
+        status: 'failed',
+        error: result.error ?? {
+            code: 'tool_failed',
+            message: 'tool produced no model output',
+            retryable: false,
+        },
+    };
 }
 
 /**

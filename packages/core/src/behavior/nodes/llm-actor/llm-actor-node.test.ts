@@ -29,6 +29,7 @@ import {
     AbgToolBridgeError,
     bridgeAdvertisementsToAiSdk,
     bridgeAdvertisementToAiSdk,
+    createAbgToolSettlementLedger,
     type PolicyGateFn,
 } from './abg-tool-bridge.js';
 import { abgSignalsFromStreamPart, type StreamPartAdapterContext } from './ai-sdk-adapter.js';
@@ -292,6 +293,85 @@ describe('ai-sdk-adapter', () => {
         if (event?.type !== 'emit') throw new Error('expected emit');
         expect((event.event.payload as { error: string }).error).toBe('boom');
     });
+
+    it('recovers a failed settlement from the ledger so tool-result maps to tool.failed (not completed)', () => {
+        // The SDK emits a `tool-result` (not `tool-error`) for a failed settlement because the
+        // bridge surfaces failures to the model as a string. Without the ledger the adapter would
+        // mislabel it `completed`; the ledger restores the true `failed` status + structured error.
+        const ledger = createAbgToolSettlementLedger();
+        ledger.record({
+            toolCallId: 'c',
+            toolName: 'echo',
+            status: 'failed',
+            error: { code: 'tool_failed', message: 'echo blew up', retryable: false },
+        });
+        const out = abgSignalsFromStreamPart(
+            {
+                type: 'tool-result',
+                toolCallId: 'c',
+                toolName: 'echo',
+                output: 'Tool "echo" failed (tool_failed): echo blew up',
+            } as TextStreamPart<ToolSet>,
+            { ...ctx, settlementLedger: ledger },
+        );
+        expect(eventTypes(out)).toEqual(['tool.failed']);
+        const event = out[0];
+        if (event?.type !== 'emit') throw new Error('expected emit');
+        expect((event.event.payload as { error: { code: string } }).error.code).toBe('tool_failed');
+    });
+
+    it('carries the settlement output on tool.completed and falls back to part.output without a ledger', () => {
+        const ledger = createAbgToolSettlementLedger();
+        ledger.record({ toolCallId: 'c', toolName: 'echo', status: 'completed', output: 'echoed: hi' });
+        const withLedger = abgSignalsFromStreamPart(
+            {
+                type: 'tool-result',
+                toolCallId: 'c',
+                toolName: 'echo',
+                output: 'model-facing string',
+            } as TextStreamPart<ToolSet>,
+            { ...ctx, settlementLedger: ledger },
+        );
+        expect(eventTypes(withLedger)).toEqual(['tool.completed']);
+        const ledgerEvent = withLedger[0];
+        if (ledgerEvent?.type !== 'emit') throw new Error('expected emit');
+        // The ledger's settlement output (the parity value) wins over the SDK's model-facing string.
+        expect((ledgerEvent.event.payload as { output: unknown }).output).toBe('echoed: hi');
+
+        // No ledger -> fall back to the part's own output (unchanged pre-enrichment shape).
+        const withoutLedger = abgSignalsFromStreamPart(
+            {
+                type: 'tool-result',
+                toolCallId: 'c',
+                toolName: 'echo',
+                output: 'fallback output',
+            } as TextStreamPart<ToolSet>,
+            ctx,
+        );
+        const fallbackEvent = withoutLedger[0];
+        if (fallbackEvent?.type !== 'emit') throw new Error('expected emit');
+        expect((fallbackEvent.event.payload as { output: unknown }).output).toBe('fallback output');
+    });
+
+    it('coerces a tool-error part into a tool.failed ProtocolError', () => {
+        const out = abgSignalsFromStreamPart(
+            {
+                type: 'tool-error',
+                toolCallId: 'c',
+                toolName: 'echo',
+                error: new Error('execute threw'),
+            } as TextStreamPart<ToolSet>,
+            ctx,
+        );
+        expect(eventTypes(out)).toEqual(['tool.failed']);
+        const event = out[0];
+        if (event?.type !== 'emit') throw new Error('expected emit');
+        expect((event.event.payload as { error: { code: string; message: string } }).error).toEqual({
+            code: 'unknown',
+            message: 'execute threw',
+            retryable: false,
+        });
+    });
 });
 
 describe('abg-tool-bridge', () => {
@@ -318,5 +398,52 @@ describe('abg-tool-bridge', () => {
             parametersJsonSchema: { notASchema: true },
         });
         expect(() => bridgeAdvertisementToAiSdk(registry, advertisement, {})).toThrow(AbgToolBridgeError);
+    });
+
+    it('records the settlement outcome in the ledger (status/output/error parity for the tool emits)', async () => {
+        const registry = new ToolRegistry();
+        const advertisement = registry.register(echoRegistration);
+        const ledger = createAbgToolSettlementLedger();
+        const bridged = bridgeAdvertisementToAiSdk(registry, advertisement, { settlementLedger: ledger });
+        if (bridged.execute === undefined) throw new Error('bridged tool missing execute');
+
+        // completed: echo({ text: 'hi' }) settles completed with an output the adapter will carry.
+        await bridged.execute(
+            { text: 'hi' },
+            { toolCallId: 'c_ok', messages: [] as ModelMessage[], abortSignal: new AbortController().signal },
+        );
+        const completed = ledger.lookup('c_ok');
+        expect(completed?.status).toBe('completed');
+        expect(completed?.output).not.toBeUndefined();
+
+        // failed: { wrong: 1 } fails echo's input zod schema -> schema_invalid settlement.
+        await bridged.execute(
+            { wrong: 1 },
+            { toolCallId: 'c_bad', messages: [] as ModelMessage[], abortSignal: new AbortController().signal },
+        );
+        const failed = ledger.lookup('c_bad');
+        expect(failed?.status).toBe('failed');
+        expect(failed?.error?.code).toBe('schema_invalid');
+    });
+
+    it('records a denied policy gate as a failed settlement so the emit is not mislabeled completed', async () => {
+        const registry = new ToolRegistry();
+        const advertisement = registry.register(echoRegistration);
+        const ledger = createAbgToolSettlementLedger();
+        const deny: PolicyGateFn = async () => ({ allowed: false, reason: 'not permitted' });
+        const bridged = bridgeAdvertisementToAiSdk(registry, advertisement, {
+            policyGate: deny,
+            settlementLedger: ledger,
+        });
+        if (bridged.execute === undefined) throw new Error('bridged tool missing execute');
+
+        const result = await bridged.execute(
+            { text: 'hi' },
+            { toolCallId: 'c_deny', messages: [] as ModelMessage[], abortSignal: new AbortController().signal },
+        );
+        expect(result).toContain('BLOCKED');
+        const entry = ledger.lookup('c_deny');
+        expect(entry?.status).toBe('failed');
+        expect(entry?.error?.code).toBe('unknown');
     });
 });

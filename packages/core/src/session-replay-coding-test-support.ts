@@ -2,6 +2,7 @@ import type {
     AbgEmitMetadata,
     AgentEvent,
     AgentEventEnvelope,
+    ProtocolError,
     RunCoordinatorEventMetadata,
 } from '@mission-control/protocol';
 
@@ -45,19 +46,25 @@ export function graphToolCallProposedEvent(sessionId: string, toolCallId: string
     );
 }
 
-export function graphToolCompletedEvent(sessionId: string, toolCallId: string): AgentEvent {
+export function graphToolCompletedEvent(sessionId: string, toolCallId: string, output?: string): AgentEvent {
     return graphEmitEvent(
         sessionId,
-        { type: 'tool.completed', payload: { toolCallId, toolName: 'file.patch' } },
+        {
+            type: 'tool.completed',
+            payload: { toolCallId, toolName: 'file.patch', ...(output !== undefined ? { output } : {}) },
+        },
         'node emitted event: tool.completed',
         '2026-06-05T10:00:00.500Z',
     );
 }
 
-export function graphToolFailedEvent(sessionId: string, toolCallId: string): AgentEvent {
+export function graphToolFailedEvent(sessionId: string, toolCallId: string, error?: ProtocolError): AgentEvent {
     return graphEmitEvent(
         sessionId,
-        { type: 'tool.failed', payload: { toolCallId, toolName: 'file.patch' } },
+        {
+            type: 'tool.failed',
+            payload: { toolCallId, toolName: 'file.patch', ...(error !== undefined ? { error } : {}) },
+        },
         'node emitted event: tool.failed',
         '2026-06-05T10:00:00.500Z',
     );

@@ -27,7 +27,7 @@ import { assembleSystemPrompt } from '../../../context/system-prompt.js';
 import type { Blackboard } from '../../../memory/blackboard.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../../node-registry.js';
-import { bridgeAdvertisementsToAiSdk } from './abg-tool-bridge.js';
+import { bridgeAdvertisementsToAiSdk, createAbgToolSettlementLedger } from './abg-tool-bridge.js';
 import { type LlmActorTurnResult, runLlmActor } from './llm-actor-node.js';
 
 export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
@@ -75,9 +75,13 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
               }))
             : [];
     const system = readStringConfig(node, 'systemPrompt') ?? assembleSystemPrompt({ toolSnippets });
+    // One ledger per turn: the bridge records each tool settlement; the stream-part adapter
+    // reads it so the `tool.completed`/`tool.failed` emits carry the true status/output/error
+    // (coding-step replay parity with the flat path). Fresh per turn — no stale entries leak.
+    const settlementLedger = createAbgToolSettlementLedger();
     const tools =
         context.toolRegistry !== undefined
-            ? bridgeAdvertisementsToAiSdk(context.toolRegistry, context.toolRegistry.advertise(), {})
+            ? bridgeAdvertisementsToAiSdk(context.toolRegistry, context.toolRegistry.advertise(), { settlementLedger })
             : undefined;
 
     // Keep the model's input BOUNDED across a long run: compact the older conversation into a
@@ -115,6 +119,7 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         ...(tools !== undefined ? { tools } : {}),
         ...(context.abortSignal !== undefined ? { signal: context.abortSignal } : {}),
         now: context.now,
+        ...(context.toolRegistry !== undefined ? { settlementLedger } : {}),
     })) {
         if (signal.type === 'emit' && signal.event.type === 'llm.tool_call.proposed') {
             proposedToolCalls += 1;
