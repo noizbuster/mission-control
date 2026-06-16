@@ -11,12 +11,13 @@
  * provider) and returns a sync resolver. The coding-agent graph uses a single model, so
  * pre-resolving its credential is correct.
  *
- * Phase 5 scope here: the anthropic / openai / openai-compatible mapping. The full migration
- * (delete each adapter's bespoke SSE parsing, route usage → policy.budget.*) is incremental;
- * `provider-events.ts` stays the canonical ABG Signal vocabulary (no dual vocabulary).
+ * Phase 5 scope here: the anthropic / openai / openai-compatible / google-gemini mapping. The full
+ * migration (delete each adapter's bespoke SSE parsing, route usage → policy.budget.*) is
+ * incremental; `provider-events.ts` stays the canonical ABG Signal vocabulary (no dual vocabulary).
  */
 
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { AbgNodeModelOptions, ProviderCredential } from '@mission-control/protocol';
 import type { LlmActorModel } from '../../behavior/nodes/llm-actor/llm-actor-node.js';
@@ -81,9 +82,13 @@ function buildSdkModel(input: {
             };
             return createOpenAI(settings).languageModel(input.modelID);
         }
+        case 'google':
+        case 'google-gemini': {
+            return createGoogleGenerativeAI(withApiKey(input.apiKey)).languageModel(input.modelID);
+        }
         default:
             throw new SdkModelResolverError(
-                `provider "${input.providerID}" has no AI-SDK mapping (anthropic/openai/openai-compatible supported; local providers use a scripted SDK model directly)`,
+                `provider "${input.providerID}" has no AI-SDK mapping (anthropic/openai/openai-compatible/google-gemini supported; local providers use a scripted SDK model directly)`,
             );
     }
 }

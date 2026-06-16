@@ -63,6 +63,23 @@ export class ToolRegistry {
         return [...this.registrations.values()].map((entry) => entry.advertisement);
     }
 
+    /**
+     * Return a NEW registry containing the entries whose advertisement passes `predicate`.
+     * Copies the already-erased `RegisteredTool` entries directly (no re-validation), so a
+     * heterogeneous parent surface can be filtered without re-asserting each registration's
+     * Input/Output generics. Used by the subagent child-policy to drop the `task` tool +
+     * destructive capabilities at the registry layer (ABG §10.6 recursion guard).
+     */
+    cloneWithFilter(predicate: (advertisement: ToolAdvertisement) => boolean): ToolRegistry {
+        const child = new ToolRegistry();
+        for (const [name, entry] of this.registrations) {
+            if (predicate(entry.advertisement)) {
+                child.registrations.set(name, entry);
+            }
+        }
+        return child;
+    }
+
     async invoke(input: ToolInvocationInput): Promise<ToolInvocationSettlement> {
         const registered = this.registrations.get(input.toolName);
         if (registered === undefined) {

@@ -1,6 +1,7 @@
 import type { AbgNodeModelOptions, AbgNodeSpec, AbgPolicySpec, AbgSignal } from '@mission-control/protocol';
 import type { Blackboard } from '../memory/blackboard.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
+import type { CostLedger } from './budget/cost-ledger.js';
 import { createCompositeNodeRunners } from './nodes/composite-nodes.js';
 import { createLeafNodeRunners } from './nodes/leaf-nodes.js';
 import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node.js';
@@ -44,6 +45,13 @@ export type AbgNodeRunContext = {
      * normal control flow).
      */
     readonly abortSignal?: AbortSignal;
+    /**
+     * Per-run cost ledger (ABG §11.4). When present, `LLMActor` prices each turn's usage
+     * against the configured `PricingTable` and emits `policy.budget.accumulated` /
+     * `.warning` / `.exceeded` events. Created once by the coordinator from the graph's
+     * `budgetCents` + a supplied pricing table; shared across loop re-entries.
+     */
+    readonly budgetLedger?: CostLedger;
 };
 
 export type AbgNodeRunner = (node: AbgNodeSpec, context: AbgNodeRunContext) => AsyncIterable<AbgSignal>;

@@ -195,4 +195,43 @@ describe('coding-agent graph — Observe → Decide → Act loop', () => {
         expect(result.status).toBe('failed');
         expect(model.doStreamCalls.length).toBeLessThan(10);
     });
+
+    it('emits policy.budget.* cost events when a pricing table + budgetCents are wired (Phase 5/8)', async () => {
+        const model = buildStepAwareModel();
+        const toolRegistry = new ToolRegistry();
+        toolRegistry.register(echoRegistration);
+
+        // Price the model so each turn's 4 input + 6 output tokens cost real cents, and set a
+        // tiny budget so the exceeded threshold trips within the two-step run.
+        const result = await runAbgGraph({
+            // 1M tokens = 1 cent each way → turn = (4+6)/1M cents ≈ 0, rounds to 0. Use huge
+            // per-token rates so a single turn crosses the ceiling: 1 cent per token.
+            graph: createCodingAgentGraph({
+                model: { ...MODEL_SELECTION, budgetCents: 5 },
+            }),
+            sessionId: 'session_coding_agent_budget',
+            now: () => NOW,
+            modelProviderSelection: MODEL_SELECTION,
+            registry: createCodingAgentNodeRegistry(),
+            resolveSdkModel: () => model,
+            toolRegistry,
+            initialMessages: [{ role: 'user', content: 'echo hi then finish' }],
+            // 1 cent per token (1M tokens = 1M cents) so 10 tokens/turn = 10 cents > budget 5.
+            pricingTable: [
+                {
+                    providerID: 'anthropic',
+                    modelID: 'claude-fable-5',
+                    inputCentsPerMillion: 1_000_000,
+                    outputCentsPerMillion: 1_000_000,
+                },
+            ],
+        });
+
+        expect(result.status).toBe('completed');
+        const types = emittedEventTypes(result.events);
+        // Each turn prices usage against the table → one accumulated event per turn (2 turns).
+        expect(types.filter((type) => type === 'policy.budget.accumulated').length).toBe(2);
+        // Total 20 cents > budgetCents 5 → exceeded fires exactly once.
+        expect(types.filter((type) => type === 'policy.budget.exceeded').length).toBe(1);
+    });
 });

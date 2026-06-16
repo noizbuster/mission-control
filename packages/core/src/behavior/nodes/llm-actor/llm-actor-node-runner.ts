@@ -136,6 +136,30 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         // tool-result message (per the AI-SDK contract), so appending it grows the
         // conversation for the next graph-driven step.
         blackboard.appendMessages(turnResult.responseMessages);
+        // Price this turn's usage and surface `policy.budget.*` events when a ledger is wired
+        // (ABG §11.4). The graph can route `policy.budget.exceeded` to an escalate/abort node.
+        if (context.budgetLedger !== undefined && context.model !== undefined) {
+            for (const event of context.budgetLedger.accumulate({
+                usage: turnResult.usage,
+                selection: context.model,
+            })) {
+                const { eventType, cents, inputTokens, outputTokens, modelCalls, ...rest } = event;
+                yield createAbgEmitSignal({
+                    graphId: context.graphId,
+                    nodeId,
+                    source: 'llm-actor',
+                    eventType,
+                    timestamp: context.now(),
+                    payload: {
+                        cents,
+                        inputTokens,
+                        outputTokens,
+                        modelCalls,
+                        ...rest,
+                    },
+                });
+            }
+        }
     }
 }
 

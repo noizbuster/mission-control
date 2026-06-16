@@ -85,7 +85,12 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
     }
 
     state.events.push(graphEvent('graph.completed', graph.id, input, 'ABG graph completed'));
-    return { graphId: graph.id, status: 'completed', events: state.events };
+    return {
+        graphId: graph.id,
+        status: 'completed',
+        events: state.events,
+        finalMessages: state.blackboard.getMessages(),
+    };
 }
 
 function enqueueSelectedTargets(

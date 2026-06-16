@@ -10,7 +10,10 @@ import type {
 import type { Blackboard } from '../memory/blackboard.js';
 import { createBlackboard } from '../memory/blackboard.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
+import { resetEmitSequence } from './abg-emit.js';
 import type { AuthorableAbgGraph } from './authorable-graph.js';
+import type { CostLedger } from './budget/cost-ledger.js';
+import { createCostLedger } from './budget/cost-ledger.js';
 import type { AbgGraphRunnerInput } from './graph-runner.js';
 import type { AbgNodeRegistry, AbgObservedGraphEvent } from './node-registry.js';
 import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node.js';
@@ -38,13 +41,26 @@ export type CoordinatorState = {
      * read its entries via `blackboard.*` predicates (`toRecord()`).
      */
     readonly blackboard: Blackboard;
+    /**
+     * Per-run cost ledger for `usage → policy.budget.*` events. Undefined when neither a
+     * budget ceiling nor a pricing table is configured (the common no-cost case).
+     */
+    readonly budgetLedger?: CostLedger;
 };
 
 export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGraphRunnerInput): CoordinatorState {
+    // Reset the node-level emit counter for this graph so each run begins the id sequence
+    // at 1 — making sequential runs of the same graph byte-identical (review #9).
+    resetEmitSequence(graph.id);
     const blackboard = createBlackboard();
     if (input.initialMessages !== undefined) {
         blackboard.setMessages(input.initialMessages);
     }
+    const budgetCents = graph.defaults?.model?.budgetCents;
+    const budgetLedger = createCostLedger({
+        ...(input.pricingTable !== undefined ? { pricingTable: input.pricingTable } : {}),
+        ...(budgetCents !== undefined ? { budget: { budgetCents } } : {}),
+    });
     return {
         events: [],
         nodeStatuses: {},
@@ -57,6 +73,7 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         shellConcurrency: input.shellConcurrency ?? defaultShellConcurrency,
         totalNodeRuns: 0,
         blackboard,
+        ...(budgetLedger !== undefined ? { budgetLedger } : {}),
     };
 }
 
@@ -78,6 +95,7 @@ export function runContext(
         model,
         ...(sdkModel !== undefined ? { sdkModel } : {}),
         blackboard: state.blackboard,
+        ...(state.budgetLedger !== undefined ? { budgetLedger: state.budgetLedger } : {}),
         ...(input.toolRegistry !== undefined ? { toolRegistry: input.toolRegistry } : {}),
         ...(input.abortSignal !== undefined ? { abortSignal: input.abortSignal } : {}),
         ...(input.graphInput?.events !== undefined ? { observedEvents: input.graphInput.events } : {}),
@@ -91,6 +109,7 @@ export function runContext(
         readonly model: AbgNodeModelOptions;
         readonly sdkModel?: LlmActorModel;
         readonly blackboard: Blackboard;
+        readonly budgetLedger?: CostLedger;
         readonly toolRegistry?: ToolRegistry;
         readonly abortSignal?: AbortSignal;
         readonly observedEvents?: readonly AbgObservedGraphEvent[];

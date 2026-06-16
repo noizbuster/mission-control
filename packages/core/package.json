@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.84",
+    "@ai-sdk/google": "^3.0.82",
     "@ai-sdk/openai": "^3.0.71",
     "@mission-control/config": "workspace:*",
     "@mission-control/protocol": "workspace:*",

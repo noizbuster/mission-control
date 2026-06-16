@@ -17,6 +17,7 @@ import { runHumanApprovalNode } from './nodes/human-approval-node.js';
 import { runLlmActorNode } from './nodes/llm-actor/llm-actor-node-runner.js';
 import { runMemoryNode } from './nodes/memory-node.js';
 import { runPolicyGateNode } from './nodes/policy-gate-node.js';
+import { runSupervisorNode } from './nodes/supervisor-node.js';
 import { runToolActorNode } from './nodes/tool-actor-node.js';
 
 export function createCodingAgentNodeRegistry(): AbgNodeRegistry {
@@ -27,6 +28,7 @@ export function createCodingAgentNodeRegistry(): AbgNodeRegistry {
     registry.register('policy', runPolicyGateNode);
     registry.register('human-approval', runHumanApprovalNode);
     registry.register('critic', runCriticNode);
+    registry.register('supervisor', runSupervisorNode);
     for (const [id, runner] of createCompositeNodeRunners()) {
         registry.register(id, runner);
     }

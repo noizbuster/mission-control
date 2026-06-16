@@ -29,6 +29,19 @@ describe('createSdkModelResolver', () => {
         expect(model.modelId).toBe('local-model');
     });
 
+    it('resolves a google-gemini selection to an AI-SDK model', async () => {
+        const resolve = await createSdkModelResolver({ providerID: 'google-gemini', apiKey: 'test-key' });
+        const model = resolve({ providerID: 'google-gemini', modelID: 'gemini-2.0-flash' }) as ResolvedModel;
+        expect(model.provider.startsWith('google')).toBe(true);
+        expect(model.modelId).toBe('gemini-2.0-flash');
+    });
+
+    it('resolves the bare "google" providerID alias to a Google model', async () => {
+        const resolve = await createSdkModelResolver({ providerID: 'google', apiKey: 'test-key' });
+        const model = resolve({ providerID: 'google', modelID: 'gemini-2.5-pro' }) as ResolvedModel;
+        expect(model.provider.startsWith('google')).toBe(true);
+    });
+
     it('throws SdkModelResolverError for an unsupported provider', async () => {
         const resolve = await createSdkModelResolver({ providerID: 'openai', apiKey: 'test-key' });
         expect(() => resolve({ providerID: 'some-unknown-provider', modelID: 'x' })).toThrow(SdkModelResolverError);

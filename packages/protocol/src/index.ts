@@ -211,6 +211,24 @@ export {
 } from './schema.js';
 export * from './session-tree.js';
 export {
+    MISSION_STATUSES,
+    type Mission,
+    MissionBudgetSchema,
+    type MissionBudget,
+    MissionCapabilitiesSchema,
+    type MissionCapabilities,
+    MissionSchema,
+    type MissionStatus,
+    MissionStatusSchema,
+    RUN_STATUSES,
+    type Run,
+    RunCostSchema,
+    type RunCost,
+    RunSchema,
+    type RunStatus,
+    RunStatusSchema,
+} from './mission-run.js';
+export {
     TRANSCRIPT_DELIVERY_MODES,
     TRANSCRIPT_VISIBILITIES,
     type TranscriptDeliveryMode,

@@ -15,6 +15,7 @@ import {
     transition,
     uniqueStrings,
 } from './composite-node-utils.js';
+import { runSpeculativeNode } from './speculative-node.js';
 
 const parallelAnySuccessMode = `a${'ny'}-success`;
 
@@ -34,6 +35,7 @@ export function createCompositeNodeRunners(): readonly (readonly [string, AbgNod
         ['join', runJoinNode],
         ['watch', runWatchNode],
         ['statechart', runStatechartNode],
+        ['speculative', runSpeculativeNode],
     ];
 }
 

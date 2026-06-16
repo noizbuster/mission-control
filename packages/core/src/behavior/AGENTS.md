@@ -52,3 +52,36 @@ Beyond the scaffold above, the behavior package now hosts the **real** coding-ag
 
 **Hard constraint (pre-mortem #4):** every `streamText` in `runLlmActor` pins `stopWhen: stepCountIs(1)` — the graph, never the SDK, owns the observe→decide→act loop.
 
+## Deferred per-phase items — delivered (plan §16)
+
+- **Cost ledger (`budget/cost-ledger.ts`):** `CostLedger` prices each turn's usage against an
+  operator-supplied `PricingTable` and emits `policy.budget.accumulated`/`.warning`/`.exceeded`.
+  Threaded as `AbgNodeRunContext.budgetLedger` (coordinator builds it from
+  `graph.defaults.model.budgetCents` + `AbgGraphRunnerInput.pricingTable`). Pricing is
+  operator-supplied (`DEFAULT_PRICING = []`) — no stale list prices ship.
+- **Supervisor node (`nodes/supervisor-node.ts`, `implementation: 'supervisor'`):** retry-vs-
+  escalate with exponential backoff. Backoff is COMPUTED + emitted as data
+  (`supervisor.backoff`/`supervisor.evaluated`); never slept. Escalates via the Phase-1
+  `escalate` signal once `maxAttempts` is exhausted.
+- **Speculative node (`nodes/speculative-node.ts`, `implementation: 'speculative'`):**
+  concurrent branch drain with join-rank (`rankBy: 'score'|'first'`) + early-stop
+  (`stopThreshold`). Losers are abandoned via `.return()` on early-stop.
+- **`task` tool + child spawn (`tools/task-tool.ts`, `subagents/spawn-child.ts`):** the `task`
+  tool delegates to an injected `spawn` fn; `spawnChildCodingAgent` builds a child coding-agent
+  run. Child safety is enforced at the TOOL-REGISTRY layer (`ToolRegistry.cloneWithFilter`
+  drops `task` + destructive capabilities) — the registry-layer recursion guard (ABG §10.6).
+- **`lsp`/`mcp` tools (`tools/lsp-tool.ts`, `tools/mcp-tool.ts`):** client-seam tools
+  (`LspClient`/`McpClient`) with in-process clients for tests; real stdio/JSON-RPC transport
+  sits behind the seam.
+- **Event-id determinism (`abg-emit.ts`):** per-`graphId` counter + `resetEmitSequence` at run
+  start → sequential runs are byte-identical. Persisted ids are store-minted UUIDs (unaffected).
+- **SQLite store (`memory/sqlite-persistent-store.ts`):** `SqlitePersistentStore` over an
+  operator-supplied `better-sqlite3` (dynamic import; ambient types in `better-sqlite3.d.ts`).
+  NOT a manifest dep (dependency-guarded); `InMemoryPersistentStore` stays the default.
+- **Mission/Run schemas (`protocol/mission-run.ts`):** `Mission` (agent definition) + `Run`
+  (execution instance) Zod schemas.
+
+**Still deferred (larger engineering, needs explicit approval):** per-adapter SSE-parsing
+deletion (the risky final cutover — delete only after the CLI defaults to the graph + e2e
+verified); full Inspector UI surfaces (separate app package).
+

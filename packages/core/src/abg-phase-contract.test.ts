@@ -8,6 +8,9 @@ import {
     AbgSignalSchema,
     type AgentEventType,
     AgentEventTypeSchema,
+    MissionSchema,
+    RUN_STATUSES,
+    RunSchema,
 } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import {
@@ -48,5 +51,20 @@ describe('ABG phase contract (Phases 1–8 additions are real + wired)', () => {
     it('createSdkModelResolver rejects an unsupported provider via SdkModelResolverError', async () => {
         const resolve = await createSdkModelResolver({ providerID: 'openai', apiKey: 'k' });
         expect(() => resolve({ providerID: 'no-such-provider', modelID: 'x' })).toThrow();
+    });
+
+    it('Phase 7 Mission + Run schemas parse and the lifecycle is covered', () => {
+        const mission = MissionSchema.parse({
+            id: 'mission-contract',
+            name: 'Contract Agent',
+            graphId: 'coding-agent',
+            createdAt: '2026-06-16T00:00:00.000Z',
+            updatedAt: '2026-06-16T00:00:00.000Z',
+        });
+        expect(mission.graphId).toBe('coding-agent');
+        const run = RunSchema.parse({ id: 'run-contract', missionId: mission.id, status: 'running' });
+        expect(run.status).toBe('running');
+        expect(RUN_STATUSES).toContain('completed');
+        expect(() => RunSchema.parse({ id: 'r', missionId: 'm', status: 'nope' })).toThrow();
     });
 });
