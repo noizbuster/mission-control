@@ -1,4 +1,76 @@
-import type { AgentEvent, AgentEventEnvelope, RunCoordinatorEventMetadata } from '@mission-control/protocol';
+import type {
+    AbgEmitMetadata,
+    AgentEvent,
+    AgentEventEnvelope,
+    RunCoordinatorEventMetadata,
+} from '@mission-control/protocol';
+
+/**
+ * Graph-engine emit events — the durable `log`/`node.*` AgentEvents a coding-agent graph run
+ * persists, with the boundary emit preserved on `abg.emit` (see `signals.ts`). These are the
+ * graph analogs of the flat provider envelopes above; the coding-step projection maps them to the
+ * SAME `CodingReplayStep` kinds so a session's replay looks identical regardless of engine.
+ */
+function graphEmitEvent(sessionId: string, emit: AbgEmitMetadata, message: string, timestamp: string): AgentEvent {
+    return {
+        type: 'log',
+        timestamp,
+        sessionId,
+        message,
+        abg: {
+            graphId: 'graph_coding_agent',
+            nodeId: 'llm_actor',
+            nodeKind: 'llm',
+            signalType: 'emit',
+            emit,
+        },
+    };
+}
+
+export function graphLlmTurnCompletedEvent(sessionId: string, text: string): AgentEvent {
+    return graphEmitEvent(
+        sessionId,
+        { type: 'llm.turn.completed', payload: { text, usage: { total: 6 } } },
+        'node emitted event: llm.turn.completed',
+        '2026-06-05T10:00:01.000Z',
+    );
+}
+
+export function graphToolCallProposedEvent(sessionId: string, toolCallId: string, toolName: string): AgentEvent {
+    return graphEmitEvent(
+        sessionId,
+        { type: 'llm.tool_call.proposed', payload: { toolCallId, toolName, input: {} } },
+        'node emitted event: llm.tool_call.proposed',
+        '2026-06-05T10:00:00.000Z',
+    );
+}
+
+export function graphToolCompletedEvent(sessionId: string, toolCallId: string): AgentEvent {
+    return graphEmitEvent(
+        sessionId,
+        { type: 'tool.completed', payload: { toolCallId, toolName: 'file.patch' } },
+        'node emitted event: tool.completed',
+        '2026-06-05T10:00:00.500Z',
+    );
+}
+
+export function graphToolFailedEvent(sessionId: string, toolCallId: string): AgentEvent {
+    return graphEmitEvent(
+        sessionId,
+        { type: 'tool.failed', payload: { toolCallId, toolName: 'file.patch' } },
+        'node emitted event: tool.failed',
+        '2026-06-05T10:00:00.500Z',
+    );
+}
+
+export function graphLlmErrorEvent(sessionId: string, error: string): AgentEvent {
+    return graphEmitEvent(
+        sessionId,
+        { type: 'llm.error', payload: { error } },
+        'node emitted event: llm.error',
+        '2026-06-05T10:00:01.000Z',
+    );
+}
 
 export function providerToolCallEvent(sessionId: string): AgentEvent {
     return {

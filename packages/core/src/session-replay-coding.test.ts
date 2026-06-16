@@ -4,6 +4,11 @@ import {
     approvalEvent,
     diffAppliedEvent,
     envelope,
+    graphLlmErrorEvent,
+    graphLlmTurnCompletedEvent,
+    graphToolCallProposedEvent,
+    graphToolCompletedEvent,
+    graphToolFailedEvent,
     providerCompletedEvent,
     providerFailedEvent,
     providerToolCallEvent,
@@ -364,5 +369,77 @@ describe('session replay coding projections', () => {
             expect.arrayContaining([expect.objectContaining({ state: 'failed', errorCode: 'unknown' })]),
         );
         expect(runStateSteps.some((step) => 'state' in step && step.state === 'completed')).toBe(false);
+    });
+
+    // Graph-engine parity: a coding-agent graph run persists boundary emits on `abg.emit` (no flat
+    // provider envelopes). The projection maps those emits to the SAME `CodingReplayStep` kinds the
+    // flat path produces, so a session's coding-step replay is identical regardless of engine.
+    it('maps graph emit events to the same coding steps as the flat provider path', () => {
+        const sessionId = 'session_replay_graph_emits';
+        const replay = projectSessionReplay({
+            sessionId,
+            envelopes: [
+                envelope(graphToolCallProposedEvent(sessionId, 'call_1', 'file.patch'), 0, 'event_graph_tool_call'),
+                envelope(graphToolCompletedEvent(sessionId, 'call_1'), 1, 'event_graph_tool_completed'),
+                envelope(graphLlmTurnCompletedEvent(sessionId, 'patch applied'), 2, 'event_graph_turn_completed'),
+            ],
+        });
+
+        expect(replay.codingSteps).toEqual([
+            {
+                kind: 'provider.tool_call',
+                eventId: 'event_graph_tool_call',
+                timestamp: '2026-06-05T10:00:00.000Z',
+                toolCallId: 'call_1',
+                toolName: 'file.patch',
+            },
+            {
+                kind: 'tool.result',
+                eventId: 'event_graph_tool_completed',
+                timestamp: '2026-06-05T10:00:00.500Z',
+                toolCallId: 'call_1',
+                status: 'completed',
+            },
+            {
+                kind: 'provider.message',
+                eventId: 'event_graph_turn_completed',
+                timestamp: '2026-06-05T10:00:01.000Z',
+                messageId: 'event_graph_turn_completed',
+                message: 'patch applied',
+                continuation: false,
+            },
+        ]);
+    });
+
+    it('maps a failed graph tool and an llm error to a tool failure and a provider failure', () => {
+        const sessionId = 'session_replay_graph_failures';
+        const replay = projectSessionReplay({
+            sessionId,
+            envelopes: [
+                envelope(graphToolFailedEvent(sessionId, 'call_1'), 0, 'event_graph_tool_failed'),
+                envelope(graphLlmErrorEvent(sessionId, 'model exploded'), 1, 'event_graph_llm_error'),
+            ],
+        });
+
+        const toolResultSteps = replay.codingSteps.filter((step) => step.kind === 'tool.result');
+        expect(toolResultSteps).toEqual([
+            {
+                kind: 'tool.result',
+                eventId: 'event_graph_tool_failed',
+                timestamp: '2026-06-05T10:00:00.500Z',
+                toolCallId: 'call_1',
+                status: 'failed',
+            },
+        ]);
+        const failureSteps = replay.codingSteps.filter((step) => step.kind === 'provider.failure');
+        expect(failureSteps).toEqual([
+            {
+                kind: 'provider.failure',
+                eventId: 'event_graph_llm_error',
+                timestamp: '2026-06-05T10:00:01.000Z',
+                requestId: 'event_graph_llm_error',
+                error: { code: 'unknown', message: 'model exploded', retryable: false },
+            },
+        ]);
     });
 });

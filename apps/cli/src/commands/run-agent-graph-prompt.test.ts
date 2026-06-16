@@ -304,9 +304,12 @@ describe('runCodingPromptOnGraph — durable session-replay parity', () => {
         expect(replay.diagnostics).toEqual([]);
         expect(replay.timeline.length).toBeGreaterThan(0);
         expect(replay.graphSnapshots.length).toBeGreaterThan(0);
-        // Precise remaining gap: the flat path appends provider-turn ENVELOPES that feed
-        // `codingSteps`; the graph path emits AgentEvents only, so codingSteps is empty until
-        // envelope emission lands. Regression guard for that delta.
-        expect(replay.codingSteps).toEqual([]);
+        // coding-step parity LANDED: the graph path persists boundary emits (`llm.turn.completed`)
+        // on `abg.emit`, and the projection maps them to the SAME `CodingReplayStep` kinds the flat
+        // provider path produces — so the final assistant text now appears in `codingSteps`. (This
+        // was the precise remaining delta; it asserted `codingSteps` was empty before emit parity.)
+        const messageSteps = replay.codingSteps.filter((step) => step.kind === 'provider.message');
+        expect(messageSteps.length).toBeGreaterThanOrEqual(1);
+        expect(messageSteps.some((step) => step.message === 'Done.')).toBe(true);
     });
 });

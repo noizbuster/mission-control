@@ -211,6 +211,20 @@ export const AbgRuntimeErrorSchema = z.object({
 });
 export type AbgRuntimeError = z.infer<typeof AbgRuntimeErrorSchema>;
 
+/**
+ * Trimmed view of an ABG `emit` signal's embedded event, preserved on the durable `AgentEvent` so
+ * the ledger is the single source of truth for what a graph node emitted. Only the structured
+ * `type` (+ optional `payload`) is carried — the embedded event's own id/source/timestamp are
+ * implementation details that duplicate the surrounding envelope. The `payload` is persisted ONLY
+ * for boundary emits (turn/tool lifecycle) that the coding-step replay needs; high-frequency
+ * streaming emits (per-token deltas) keep `{ type }` only, so the ledger stays lean.
+ */
+export const AbgEmitMetadataSchema = z.object({
+    type: z.string().min(1),
+    payload: z.unknown().optional(),
+});
+export type AbgEmitMetadata = z.infer<typeof AbgEmitMetadataSchema>;
+
 export const AbgEventMetadataSchema = z.object({
     graphId: z.string().min(1).optional(),
     nodeId: z.string().min(1).optional(),
@@ -222,6 +236,7 @@ export const AbgEventMetadataSchema = z.object({
     attempt: z.number().int().positive().optional(),
     maxAttempts: z.number().int().positive().optional(),
     error: AbgRuntimeErrorSchema.optional(),
+    emit: AbgEmitMetadataSchema.optional(),
 });
 export type AbgEventMetadata = z.infer<typeof AbgEventMetadataSchema>;
 

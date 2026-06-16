@@ -9,6 +9,8 @@ export {
     AbgEdgeSpecSchema,
     type AbgEmbeddedEvent,
     AbgEmbeddedEventSchema,
+    type AbgEmitMetadata,
+    AbgEmitMetadataSchema,
     type AbgEventMetadata,
     AbgEventMetadataSchema,
     type AbgGraphDefaults,

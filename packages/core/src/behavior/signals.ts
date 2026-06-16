@@ -1,4 +1,10 @@
-import type { AbgNodeKind, AbgNodeModelOptions, AbgSignal, AgentEvent } from '@mission-control/protocol';
+import type {
+    AbgEmitMetadata,
+    AbgNodeKind,
+    AbgNodeModelOptions,
+    AbgSignal,
+    AgentEvent,
+} from '@mission-control/protocol';
 
 export type AbgSignalProjectionInput = {
     readonly graphId: string;
@@ -12,6 +18,23 @@ export type AbgSignalProjectionInput = {
     readonly attempt?: number;
     readonly maxAttempts?: number;
 };
+
+/**
+ * Emit-event types whose payload is persisted on the durable `AgentEvent.abg.emit`. These are the
+ * turn/tool lifecycle boundaries the coding-step replay projects into `codingSteps` (final text,
+ * proposed tool calls, tool outcomes, node errors). High-frequency streaming emits
+ * (`llm.text.delta`, `llm.reasoning.delta`, ...) are NOT listed — their per-token payloads would
+ * bloat the JSONL ledger, and the projection does not need them (the boundary events summarize the
+ * turn). The structured `emit.type` is persisted ONLY for these boundary types; other emits stay
+ * as `log` events with their type encoded in the message string (unchanged).
+ */
+const EMIT_TYPES_WITH_PERSISTED_PAYLOAD: ReadonlySet<string> = new Set([
+    'llm.turn.completed',
+    'llm.tool_call.proposed',
+    'tool.completed',
+    'tool.failed',
+    'llm.error',
+]);
 
 export function projectAbgSignalToEvent(input: AbgSignalProjectionInput): AgentEvent {
     return {
@@ -30,8 +53,27 @@ export function projectAbgSignalToEvent(input: AbgSignalProjectionInput): AgentE
             ...(input.model !== undefined ? { model: input.model } : {}),
             ...(input.attempt !== undefined ? { attempt: input.attempt } : {}),
             ...(input.maxAttempts !== undefined ? { maxAttempts: input.maxAttempts } : {}),
+            ...(emitMetadataForSignal(input.signal) ?? {}),
         },
         ...(modelProviderSelection(input.model) ?? {}),
+    };
+}
+
+/**
+ * Carry a boundary emit's structured type + payload into `abg.emit` so the durable ledger is the
+ * single source of truth for what a graph node emitted. Returns `undefined` for non-emit signals
+ * and for emit signals outside the persisted-payload allowlist (those keep their pre-existing
+ * `log` representation only — no ledger growth).
+ */
+function emitMetadataForSignal(signal: AbgSignal): { readonly emit: AbgEmitMetadata } | undefined {
+    if (signal.type !== 'emit' || !EMIT_TYPES_WITH_PERSISTED_PAYLOAD.has(signal.event.type)) {
+        return undefined;
+    }
+    return {
+        emit: {
+            type: signal.event.type,
+            ...(signal.event.payload !== undefined ? { payload: signal.event.payload } : {}),
+        },
     };
 }
 

@@ -56,6 +56,10 @@ function stepForEnvelope(
     if (runStep !== undefined) {
         return [runStep];
     }
+    const graphStep = graphEmitStep(envelope);
+    if (graphStep !== undefined) {
+        return [graphStep];
+    }
     const chunk = event.providerStreamChunk;
     if (chunk?.kind === 'tool_call_completed') {
         return [
@@ -141,6 +145,93 @@ function runStateStep(envelope: AgentEventEnvelope): CodingReplayStep | undefine
         ...(run.errorCode !== undefined ? { errorCode: run.errorCode } : {}),
         ...(event.message !== undefined ? { message: event.message } : {}),
     };
+}
+
+/**
+ * Project a graph node's boundary emit (preserved on `event.abg.emit`) into the SAME `CodingReplayStep`
+ * kinds the flat provider path produces, so a session's coding-step replay looks identical regardless
+ * of which engine drove it. Returns `undefined` for non-graph envelopes (the flat path sets no
+ * `abg.emit`) and for emit types with no coding-step analog, so the flat projection is byte-identical.
+ *
+ * Mappings: `llm.turn.completed` → the assistant message (final text); `llm.tool_call.proposed` →
+ * the proposed tool call; `tool.completed`/`tool.failed` → the tool outcome; `llm.error` → a provider
+ * failure. Graph tool emits carry ids only (no output/error detail), so the outcome steps omit those
+ * fields — the headline parity is the turn text + the call/result lifecycle.
+ */
+function graphEmitStep(envelope: AgentEventEnvelope): CodingReplayStep | undefined {
+    const emit = envelope.event.abg?.emit;
+    if (emit === undefined) {
+        return undefined;
+    }
+    switch (emit.type) {
+        case 'llm.turn.completed':
+            // Emitted per LLMActor turn (one streamText call = one provider turn), mirroring the
+            // flat path's per-turn `response_completed`. A tool-only turn carries `text: ''`; that
+            // empty message is an intentional turn-boundary marker (the flat path likewise records a
+            // `response_completed` for tool-call turns), not noise. `messageId` deliberately aliases
+            // the envelope `eventId` — graph emits have no provider-side message id, so the durable
+            // event id is the stable handle (no consumer treats graph `messageId` as message-scoped).
+            return {
+                kind: 'provider.message',
+                eventId: envelope.eventId,
+                timestamp: envelope.event.timestamp,
+                messageId: envelope.eventId,
+                message: readStringField(emit.payload, 'text') ?? '',
+                continuation: false,
+            };
+        case 'llm.tool_call.proposed':
+            return {
+                kind: 'provider.tool_call',
+                eventId: envelope.eventId,
+                timestamp: envelope.event.timestamp,
+                toolCallId: readStringField(emit.payload, 'toolCallId') ?? envelope.eventId,
+                toolName: readStringField(emit.payload, 'toolName') ?? 'unknown',
+            };
+        case 'tool.completed':
+            return graphToolResultStep(envelope, emit.payload, 'completed');
+        case 'tool.failed':
+            return graphToolResultStep(envelope, emit.payload, 'failed');
+        case 'llm.error':
+            return {
+                kind: 'provider.failure',
+                eventId: envelope.eventId,
+                timestamp: envelope.event.timestamp,
+                requestId: envelope.eventId,
+                error: {
+                    code: 'unknown',
+                    message: readStringField(emit.payload, 'error') ?? 'graph llm node failed',
+                    retryable: false,
+                },
+            };
+        default:
+            return undefined;
+    }
+}
+
+function graphToolResultStep(
+    envelope: AgentEventEnvelope,
+    payload: unknown,
+    status: ToolResult['status'],
+): CodingReplayStep {
+    return {
+        kind: 'tool.result',
+        eventId: envelope.eventId,
+        timestamp: envelope.event.timestamp,
+        toolCallId: readStringField(payload, 'toolCallId') ?? envelope.eventId,
+        status,
+    };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readStringField(payload: unknown, field: string): string | undefined {
+    if (!isPlainObject(payload)) {
+        return undefined;
+    }
+    const value = payload[field];
+    return typeof value === 'string' ? value : undefined;
 }
 
 function toolResultStep(
