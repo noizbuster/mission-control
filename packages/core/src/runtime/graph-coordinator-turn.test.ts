@@ -13,11 +13,12 @@
  * AI-SDK provider) and the interactive TUI approval broker. Those are flagged in the plan.
  */
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
-import type { AgentEvent, AgentMessage, ModelProviderSelection } from '@mission-control/protocol';
+import type { AbgEmbeddedEvent, AgentEvent, AgentMessage, ModelProviderSelection } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createCodingAgentGraph } from '../behavior/coding-agent-graph.js';
 import { createCodingAgentNodeRegistry } from '../behavior/coding-agent-registry.js';
+import { approvalGraph } from '../behavior/graph-coordinator-test-support.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import {
     agentMessagesToSeedModelMessages,
@@ -179,6 +180,60 @@ describe('createGraphTurnRunner', () => {
         const result = await runner(context);
 
         expect(result.status).toBe('interrupted');
+    });
+});
+
+describe('createGraphTurnRunner approval resume', () => {
+    // The resume logic itself (graphInput.events carrying an approval.updated decision unblocks a
+    // human-approval node) is proven at the runAbgGraph level in
+    // graph-coordinator-approval-concurrency.test.ts. These tests prove the TURN RUNNER threads
+    // broker-provided decisions into graphInput.events — closing the "block but never resume" gap
+    // on the coordinator-driven graph path.
+    it('threads approval decisions into graphInput.events so a blocked human-approval node completes', async () => {
+        const graphId = 'approval-turn-resume';
+        const decision: AbgEmbeddedEvent = {
+            id: 'approval_decided_resume',
+            type: 'approval.updated',
+            source: 'human',
+            timestamp: NOW,
+            payload: {
+                approvalId: `approval_permission_${graphId}_approve`,
+                state: 'approved',
+                reason: 'approved by reviewer',
+            },
+        };
+        const runner = createGraphTurnRunner({
+            graph: approvalGraph(graphId),
+            sessionId: 'session_approval_resume',
+            now: () => NOW,
+            modelProviderSelection: MODEL_SELECTION,
+            readApprovalDecisions: async () => [decision],
+        });
+        const { context, persisted } = buildStubContext([{ role: 'user', content: 'proceed' }]);
+
+        const result = await runner(context);
+
+        expect(result.status).toBe('completed');
+        // The gate observed the threaded decision and resumed (did not re-block).
+        expect(persisted.some((event) => event.type === 'approval.resumed')).toBe(true);
+    });
+
+    it('blocks on the approval node and never resumes when no decision is provided', async () => {
+        // Omitting readApprovalDecisions preserves the pre-existing behavior: the turn runner
+        // passes no graphInput.events, so the gate never observes a decision → blocked_on_approval.
+        const runner = createGraphTurnRunner({
+            graph: approvalGraph('approval-turn-block'),
+            sessionId: 'session_approval_block',
+            now: () => NOW,
+            modelProviderSelection: MODEL_SELECTION,
+        });
+        const { context, persisted } = buildStubContext([{ role: 'user', content: 'proceed' }]);
+
+        const result = await runner(context);
+
+        expect(result.status).toBe('blocked_on_approval');
+        expect(persisted.some((event) => event.type === 'approval.requested')).toBe(true);
+        expect(persisted.some((event) => event.type === 'approval.resumed')).toBe(false);
     });
 });
 

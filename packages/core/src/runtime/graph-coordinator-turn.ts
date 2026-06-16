@@ -12,7 +12,13 @@
  * runtime. This adapter takes the SAME pre-assembled wiring but exposes it as a turn runner so the
  * coordinator owns queue/steer/resume around it.
  */
-import type { AbgNodeModelOptions, AgentEvent, AgentMessage, ModelProviderSelection } from '@mission-control/protocol';
+import type {
+    AbgEmbeddedEvent,
+    AbgNodeModelOptions,
+    AgentEvent,
+    AgentMessage,
+    ModelProviderSelection,
+} from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import type { PricingTable } from '../behavior/budget/cost-ledger.js';
 import { type AbgGraphRunResult, runAbgGraph } from '../behavior/graph-runner.js';
@@ -36,6 +42,17 @@ export type GraphTurnRunnerWiring = {
     readonly resolveSdkModel?: (options: AbgNodeModelOptions) => LlmActorModel;
     readonly toolRegistry?: ToolRegistry;
     readonly pricingTable?: PricingTable;
+    /**
+     * Reads approval decisions to thread into the graph's `graphInput.events`, so a graph that
+     * blocked on a `human-approval` node (or a `requires_approval` policy) RESUMES on a promoted
+     * turn instead of re-blocking. Returns `approval.updated` embedded events keyed by approvalId
+     * (the approvalId a blocked run surfaces via its `approval.requested` event). This is the entry
+     * point an approval broker drives: it owns the decision SOURCE (interactive prompt, persisted
+     * decision, etc.); the turn runner owns the THREADING. Omitted, or empty on a given turn, → the
+     * graph blocks exactly as before (the pre-existing behavior). Called once per promoted turn so
+     * a broker can return `[]` on the first run and the decision on a resumed run.
+     */
+    readonly readApprovalDecisions?: () => Promise<readonly AbgEmbeddedEvent[]>;
 };
 
 /**
@@ -46,10 +63,18 @@ export type GraphTurnRunnerWiring = {
 export function createGraphTurnRunner(wiring: GraphTurnRunnerWiring): RunCoordinatorTurnRunner {
     return async (context) => {
         const initialMessages = agentMessagesToSeedModelMessages(await context.readMessages());
+        // Thread approval decisions into graphInput.events so a graph that blocked on a
+        // human-approval node / requires_approval policy RESUMES on a promoted turn (the gate's
+        // observedApproval(graphInput?.events) sees the decision). The non-graph fields on the
+        // wiring (readApprovalDecisions) are peeled off so only AbgGraphRunnerInput fields are
+        // forwarded. Empty/absent decisions → no graphInput → the graph blocks as before.
+        const { readApprovalDecisions, ...graphRunnerInput } = wiring;
+        const approvalEvents = readApprovalDecisions !== undefined ? await readApprovalDecisions() : [];
         const result = await runAbgGraph({
-            ...wiring,
+            ...graphRunnerInput,
             initialMessages,
             abortSignal: context.signal,
+            ...(approvalEvents.length > 0 ? { graphInput: { events: [...approvalEvents] } } : {}),
         });
         for (const event of result.events) {
             await context.appendDurableEvent(event);
