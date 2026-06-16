@@ -22,6 +22,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import type { AbgNodeModelOptions, ProviderCredential } from '@mission-control/protocol';
 import type { LlmActorModel } from '../../behavior/nodes/llm-actor/llm-actor-node.js';
 import type { ProviderCredentialResolver } from '../credential-resolver.js';
+import { openAICompatibleProviderSpec } from '../openai-compatible/openai-compatible-specs.js';
 
 export type SdkModelResolver = (options: AbgNodeModelOptions) => LlmActorModel;
 
@@ -67,6 +68,17 @@ function buildSdkModel(input: {
     readonly apiKey: string | undefined;
     readonly baseURL?: string;
 }): LlmActorModel {
+    // Real OpenAI-compatible providers (zai-coding-plan, openrouter, groq, deepseek, mistral) are
+    // identified by their spec entry, which carries the full chat-completions endpoint. @ai-sdk/openai
+    // appends '/chat/completions' to its base, so derive the base by stripping that suffix. An
+    // explicit `baseURL` override (escape hatch) wins over the spec endpoint.
+    const compatibleSpec = openAICompatibleProviderSpec(input.providerID);
+    if (compatibleSpec !== undefined) {
+        return createOpenAI({
+            ...withApiKey(input.apiKey),
+            baseURL: input.baseURL ?? openAICompatibleBaseURL(compatibleSpec.endpoint),
+        }).chat(input.modelID);
+    }
     switch (input.providerID) {
         case 'anthropic': {
             return createAnthropic(withApiKey(input.apiKey)).languageModel(input.modelID);
@@ -97,15 +109,35 @@ function withApiKey(apiKey: string | undefined): { readonly apiKey?: string } {
     return apiKey !== undefined ? { apiKey } : {};
 }
 
+/**
+ * Derive the @ai-sdk/openai base URL from a full chat-completions endpoint. The OpenAI-compatible
+ * provider specs store the FULL endpoint (the flat-path transport POSTs to it directly); the AI-SDK
+ * `createOpenAI` appends '/chat/completions' to its base, so strip the suffix when present. Specs
+ * are consistently shaped (`…/chat/completions`), so a non-matching endpoint is returned unchanged.
+ */
+function openAICompatibleBaseURL(endpoint: string): string {
+    const suffix = '/chat/completions';
+    return endpoint.endsWith(suffix) ? endpoint.slice(0, -suffix.length) : endpoint;
+}
+
 async function resolveApiKey(resolver: ProviderCredentialResolver, providerID: string): Promise<string | undefined> {
     const credential = await resolver.resolveProviderCredential({ providerID });
     return extractApiKey(credential);
 }
 
 function extractApiKey(credential: ProviderCredential | undefined): string | undefined {
-    if (credential === undefined || typeof credential !== 'object' || !('apiKey' in credential)) {
+    if (credential === undefined || typeof credential !== 'object') {
         return undefined;
     }
-    const apiKey = (credential as { apiKey?: unknown }).apiKey;
-    return typeof apiKey === 'string' && apiKey.length > 0 ? apiKey : undefined;
+    // The auth store persists an `apiKey`-type credential OR a `fields`-type credential (e.g.
+    // zai-coding-plan stores `ZHIPU_API_KEY` as a named field). Both carry the bearer secret; pull
+    // it from whichever shape is present. OAuth credentials are not bearer API keys → undefined.
+    if (credential.type === 'apiKey') {
+        return credential.apiKey.length > 0 ? credential.apiKey : undefined;
+    }
+    if (credential.type === 'fields') {
+        const secret = Object.values(credential.fields).find((field) => field.secret)?.value;
+        return typeof secret === 'string' && secret.length > 0 ? secret : undefined;
+    }
+    return undefined;
 }
