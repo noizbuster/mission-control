@@ -90,6 +90,11 @@ export {
     toolCallsFromProviderEnvelopes,
 } from './provider-tool-continuation.js';
 export {
+    FlatProviderBridgeError,
+    type FlatProviderBridgeOptions,
+    wrapFlatProviderAsSdkModel,
+} from './providers/ai-sdk/flat-provider-bridge.js';
+export {
     type CreateSdkModelResolverInput,
     createSdkModelResolver,
     type SdkModelResolver,

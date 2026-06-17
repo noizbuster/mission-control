@@ -23,9 +23,11 @@ import {
     createCodingAgentGraph,
     createCodingAgentNodeRegistry,
     createSdkModelResolver,
+    type ProviderAdapter,
     type SdkModelResolver,
     SdkModelResolverError,
     type ToolRegistry,
+    wrapFlatProviderAsSdkModel,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AbgNodeModelOptions, ModelProviderSelection } from '@mission-control/protocol';
 import type { ProviderAuthStore } from '../auth-store.js';
@@ -45,6 +47,12 @@ export type RunCodingPromptOnGraphInput = {
     /** Required when `resolveSdkModel` is omitted (resolves the provider credential). */
     readonly authStore?: ProviderAuthStore;
     /**
+     * Injected flat provider (the flat engine's `ProviderAdapter`). When present, the graph engine
+     * drives THIS provider via the flat→AI-SDK bridge instead of resolving a real provider from the
+     * auth store — so a credential-free scripted/deterministic provider runs unchanged on the graph.
+     */
+    readonly provider?: ProviderAdapter;
+    /**
      * Injected tool surface (tests). When omitted, the full non-interactive coding tool
      * registry is built from `runtime.requestPermission` + `workspaceRoot`.
      */
@@ -58,6 +66,7 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
         selection: input.selection,
         ...(input.resolveSdkModel !== undefined ? { resolveSdkModel: input.resolveSdkModel } : {}),
         ...(input.authStore !== undefined ? { authStore: input.authStore } : {}),
+        ...(input.provider !== undefined ? { provider: input.provider } : {}),
     });
 
     const toolRegistry =
@@ -85,17 +94,37 @@ export type GraphSdkModelResolverInput = {
     readonly selection: ModelProviderSelection;
     readonly resolveSdkModel?: SdkModelResolver;
     readonly authStore?: ProviderAuthStore;
+    readonly provider?: ProviderAdapter;
 };
 
 /**
  * Resolve the SDK model for the graph engine, validating eagerly so an unsupported provider
- * (e.g. `local`) fails with a clear error before the graph starts. Injected resolvers win;
- * otherwise the resolver is built from `authStore`.
+ * (e.g. `local`) fails with a clear error before the graph starts. Injected resolvers win; an
+ * injected flat `ProviderAdapter` is wrapped via the bridge (drives that provider on the graph — no
+ * credential/auth resolution); otherwise the resolver is built from `authStore`.
  */
 export async function resolveGraphSdkModel(input: GraphSdkModelResolverInput): Promise<SdkModelResolver> {
+    if (input.provider !== undefined) {
+        return bridgeResolverFromProvider(input.provider, input.selection);
+    }
     const resolveSdkModel = input.resolveSdkModel ?? (await buildSdkModelResolver(input));
     validateResolverForSelection(resolveSdkModel, input.selection);
     return resolveSdkModel;
+}
+
+/**
+ * Build an `SdkModelResolver` that drives an injected flat `ProviderAdapter` through the bridge.
+ * The provider is already constructed (credential-free scripted/deterministic), so no auth-store
+ * resolution or eager unsupported-provider validation applies — the bridge adapts every flat provider.
+ */
+function bridgeResolverFromProvider(provider: ProviderAdapter, selection: ModelProviderSelection): SdkModelResolver {
+    return (options) =>
+        wrapFlatProviderAsSdkModel({
+            provider,
+            providerID: options.providerID ?? selection.providerID,
+            modelID: options.modelID,
+            ...(selection.variantID !== undefined ? { variantID: selection.variantID } : {}),
+        });
 }
 
 /** Build the default coding-agent graph bound to a model selection (shared by both graph paths). */

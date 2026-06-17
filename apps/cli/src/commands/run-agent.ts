@@ -158,6 +158,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     selection: selectedModelProvider,
                     ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
                     authStore,
+                    ...(options.provider !== undefined ? { provider: options.provider } : {}),
                 });
                 await runOwnerPrompt({
                     sessionId,
@@ -192,6 +193,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     workspaceRoot,
                     ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
                     authStore,
+                    ...(options.provider !== undefined ? { provider: options.provider } : {}),
                     ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
                 });
             } else if (
