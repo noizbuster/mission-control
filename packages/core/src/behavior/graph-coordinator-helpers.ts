@@ -100,6 +100,11 @@ export function runContext(
         ...(input.abortSignal !== undefined ? { abortSignal: input.abortSignal } : {}),
         ...(input.graphInput?.events !== undefined ? { observedEvents: input.graphInput.events } : {}),
         ...(input.graphInput?.input !== undefined ? { input: input.graphInput.input } : {}),
+        // Lets a node forward a tool's own events (file.diff.applied, ...) into the graph stream —
+        // session-scoped so they replay like the flat loop's settleToolCalls events.
+        emitEvent: (event) => {
+            state.events.push({ ...event, sessionId: input.sessionId, modelProviderSelection: input.modelProviderSelection });
+        },
     } satisfies {
         readonly graphId: string;
         readonly now: () => string;
@@ -114,6 +119,7 @@ export function runContext(
         readonly abortSignal?: AbortSignal;
         readonly observedEvents?: readonly AbgObservedGraphEvent[];
         readonly input?: Readonly<Record<string, unknown>>;
+        readonly emitEvent: (event: AgentEvent) => void;
     };
 }
 

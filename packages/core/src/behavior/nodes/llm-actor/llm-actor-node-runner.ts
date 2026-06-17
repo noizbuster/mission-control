@@ -81,7 +81,12 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
     const settlementLedger = createAbgToolSettlementLedger();
     const tools =
         context.toolRegistry !== undefined
-            ? bridgeAdvertisementsToAiSdk(context.toolRegistry, context.toolRegistry.advertise(), { settlementLedger })
+            ? bridgeAdvertisementsToAiSdk(context.toolRegistry, context.toolRegistry.advertise(), {
+                  settlementLedger,
+                  // Forward the tool's own events (file.diff.applied, ...) into the graph stream so
+                  // the graph surfaces the same rich tool events the flat loop's settleToolCalls does.
+                  ...(context.emitEvent !== undefined ? { onToolEvent: context.emitEvent } : {}),
+              })
             : undefined;
 
     // Keep the model's input BOUNDED across a long run: compact the older conversation into a

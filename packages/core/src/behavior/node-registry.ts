@@ -1,4 +1,4 @@
-import type { AbgNodeModelOptions, AbgNodeSpec, AbgPolicySpec, AbgSignal } from '@mission-control/protocol';
+import type { AbgNodeModelOptions, AbgNodeSpec, AbgPolicySpec, AbgSignal, AgentEvent } from '@mission-control/protocol';
 import type { Blackboard } from '../memory/blackboard.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import type { CostLedger } from './budget/cost-ledger.js';
@@ -52,6 +52,13 @@ export type AbgNodeRunContext = {
      * `budgetCents` + a supplied pricing table; shared across loop re-entries.
      */
     readonly budgetLedger?: CostLedger;
+    /**
+     * Forwards a tool's own events (file.diff.applied, command lifecycle, ...) directly into the
+     * graph event stream — session-scoped by the coordinator. `LLMActor` wires the tool bridge's
+     * `onToolEvent` to this so the graph surfaces the same rich tool events the flat run loop's
+     * `settleToolCalls` appends (the adapter still owns the graph-canonical tool lifecycle).
+     */
+    readonly emitEvent?: (event: AgentEvent) => void;
 };
 
 export type AbgNodeRunner = (node: AbgNodeSpec, context: AbgNodeRunContext) => AsyncIterable<AbgSignal>;

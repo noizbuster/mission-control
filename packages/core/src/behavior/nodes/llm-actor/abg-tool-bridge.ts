@@ -17,7 +17,7 @@
  * error, adjust, and retry — the persona's own instruction.
  */
 
-import type { ProtocolError, ToolResultStatus } from '@mission-control/protocol';
+import type { AgentEvent, ProtocolError, ToolResultStatus } from '@mission-control/protocol';
 import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import type { ToolRegistry } from '../../../tools/tool-registry.js';
@@ -117,6 +117,13 @@ export type AbgToolBridgeOptions = {
     readonly policyGate?: PolicyGateFn;
     readonly onPolicyDecision?: (decision: PolicyDecisionObserverInput) => void;
     readonly settlementLedger?: AbgToolSettlementLedger;
+    /**
+     * Forwards a tool's own `settlement.events` (file.diff.applied, command.run lifecycle, ...) into
+     * the graph event stream — parity with the flat run loop's `settleToolCalls`, which appends them.
+     * Tool-lifecycle events the adapter already synthesizes (tool.started/completed/failed) are
+     * filtered so they are not double-emitted; the adapter owns the graph-canonical tool lifecycle.
+     */
+    readonly onToolEvent?: (event: AgentEvent) => void;
 };
 
 /**
@@ -185,6 +192,17 @@ export function bridgeAdvertisementToAiSdk(
             // ledger records the structured error so the replay marks the tool failed.
             ledger?.record(settlementToLedgerEntry(toolCallId, advertisement.name, settlement));
 
+            // Forward the tool's own events (file.diff.applied, command lifecycle, ...) into the
+            // graph stream — parity with the flat run loop's settleToolCalls. The adapter owns the
+            // graph-canonical tool.started/completed/failed, so skip those here to avoid duplicates.
+            if (options.onToolEvent !== undefined) {
+                for (const event of settlement.events) {
+                    if (!isAdapterOwnedToolLifecycle(event.type)) {
+                        options.onToolEvent(event);
+                    }
+                }
+            }
+
             if (settlement.modelOutput !== undefined) {
                 return settlement.modelOutput.content;
             }
@@ -230,6 +248,16 @@ function settlementToLedgerEntry(
             retryable: false,
         },
     };
+}
+
+/**
+ * Tool-lifecycle event types the stream-part adapter synthesizes from the settlement ledger
+ * (tool.started/completed/failed). The bridge forwards a tool's own settlement.events EXCEPT
+ * these, so the adapter remains the single source for the graph-canonical tool lifecycle and the
+ * tool's richer events (file.diff.applied, command output, ...) flow through unchanged.
+ */
+function isAdapterOwnedToolLifecycle(eventType: AgentEvent['type']): boolean {
+    return eventType === 'tool.started' || eventType === 'tool.completed' || eventType === 'tool.failed';
 }
 
 /**
