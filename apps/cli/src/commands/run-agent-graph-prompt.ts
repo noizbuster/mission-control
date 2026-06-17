@@ -99,15 +99,20 @@ export type GraphSdkModelResolverInput = {
 
 /**
  * Resolve the SDK model for the graph engine, validating eagerly so an unsupported provider
- * (e.g. `local`) fails with a clear error before the graph starts. Injected resolvers win; an
- * injected flat `ProviderAdapter` is wrapped via the bridge (drives that provider on the graph — no
+ * (e.g. `local`) fails with a clear error before the graph starts. Precedence: an injected
+ * `resolveSdkModel` wins (tests / scripted models — it is the explicit override); then an injected
+ * flat `ProviderAdapter` is wrapped via the bridge (drives that provider on the graph — no
  * credential/auth resolution); otherwise the resolver is built from `authStore`.
  */
 export async function resolveGraphSdkModel(input: GraphSdkModelResolverInput): Promise<SdkModelResolver> {
+    if (input.resolveSdkModel !== undefined) {
+        validateResolverForSelection(input.resolveSdkModel, input.selection);
+        return input.resolveSdkModel;
+    }
     if (input.provider !== undefined) {
         return bridgeResolverFromProvider(input.provider, input.selection);
     }
-    const resolveSdkModel = input.resolveSdkModel ?? (await buildSdkModelResolver(input));
+    const resolveSdkModel = await buildSdkModelResolver(input);
     validateResolverForSelection(resolveSdkModel, input.selection);
     return resolveSdkModel;
 }

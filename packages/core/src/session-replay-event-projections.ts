@@ -20,7 +20,11 @@ export function projectApprovals(envelopes: readonly AgentEventEnvelope[]): read
 export function projectToolOutcomes(events: readonly AgentEvent[]): readonly ToolOutcomeProjection[] {
     const outcomes = new Map<string, ToolOutcomeProjection>();
     for (const event of events) {
-        const toolId = event.toolResult?.toolCallId ?? event.taskId ?? event.abg?.nodeId;
+        const toolId =
+            event.toolResult?.toolCallId ??
+            event.taskId ??
+            graphToolEventToolCallId(event) ??
+            event.abg?.nodeId;
         if (toolId === undefined) {
             continue;
         }
@@ -35,6 +39,28 @@ export function projectToolOutcomes(events: readonly AgentEvent[]): readonly Too
         outcomes.set(toolId, nextToolOutcome(withDiff, toolId, toolStatus, event));
     }
     return [...outcomes.values()];
+}
+
+/**
+ * Recover the toolCallId a graph tool-lifecycle emit (tool.started/completed/failed from the
+ * LLMActor adapter) carries in its `abg.emit.payload`, so graph tool outcomes key by tool call —
+ * matching the flat path (where these events set `taskId`/`toolResult.toolCallId`). The graph's
+ * adapter emits carry the toolCallId only in the persisted emit payload, not as a top-level field.
+ */
+function graphToolEventToolCallId(event: AgentEvent): string | undefined {
+    const emit = event.abg?.emit;
+    if (
+        emit === undefined ||
+        (emit.type !== 'tool.started' && emit.type !== 'tool.completed' && emit.type !== 'tool.failed')
+    ) {
+        return undefined;
+    }
+    const payload = emit.payload;
+    if (typeof payload !== 'object' || payload === null || !('toolCallId' in payload)) {
+        return undefined;
+    }
+    const value = payload.toolCallId;
+    return typeof value === 'string' ? value : undefined;
 }
 
 function nextToolOutcome(

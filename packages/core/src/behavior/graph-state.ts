@@ -137,5 +137,23 @@ function nextToolOutcome(
 }
 
 function toolIdForEvent(event: AgentEvent): string | undefined {
+    // Tool lifecycle emits (tool.started/completed/failed from the LLMActor adapter) carry the
+    // toolCallId in the emit payload — prefer it over the node id (which is the shared 'llm-actor')
+    // so tool outcomes key by tool call, matching the flat path's taskId-keyed outcomes.
+    const emit = event.abg?.emit;
+    if (emit !== undefined && (emit.type === 'tool.started' || emit.type === 'tool.completed' || emit.type === 'tool.failed')) {
+        const toolCallId = toolCallIdFromPayload(emit.payload);
+        if (toolCallId !== undefined) {
+            return toolCallId;
+        }
+    }
     return event.abg?.nodeId ?? event.taskId;
+}
+
+function toolCallIdFromPayload(payload: unknown): string | undefined {
+    if (typeof payload !== 'object' || payload === null || !('toolCallId' in payload)) {
+        return undefined;
+    }
+    const value = payload.toolCallId;
+    return typeof value === 'string' ? value : undefined;
 }
