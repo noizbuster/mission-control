@@ -120,6 +120,26 @@ describe('mapGraphTurnResult', () => {
         expect(active.status).toBe('failed');
         expect(active).toMatchObject({ reason: 'graph settled non-terminally as active', errorCode: 'unknown' });
     });
+
+    it('maps a provider_aborted terminal error to interrupted (parity with the flat run coordinator)', () => {
+        const aborted = mapGraphTurnResult({
+            graphId: 'g',
+            status: 'failed',
+            events: [],
+            terminalError: { code: 'provider_aborted', message: 'provider aborted', retryable: true },
+        });
+        expect(aborted).toEqual({ status: 'interrupted' });
+    });
+
+    it('keeps a non-abort provider error as failed (only provider_aborted is an interrupt)', () => {
+        const failed = mapGraphTurnResult({
+            graphId: 'g',
+            status: 'failed',
+            events: [],
+            terminalError: { code: 'unknown', message: 'provider exploded', retryable: false },
+        });
+        expect(failed.status).toBe('failed');
+    });
 });
 
 describe('agentMessagesToSeedModelMessages', () => {

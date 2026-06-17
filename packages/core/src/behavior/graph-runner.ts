@@ -63,6 +63,26 @@ export type AbgGraphRunResult = {
      * without re-deriving it from projected events (emit payloads are not carried into AgentEvents).
      */
     readonly finalMessages?: readonly ModelMessage[];
+    /**
+     * On a `failed` run, the structured provider error that terminated the run (when a node surfaced
+     * one — e.g. the flat-bridge `FlatProviderBridgeError`). Carries the `code` so downstream mapping
+     * can distinguish an abort (`provider_aborted`) from a hard failure the way the flat run
+     * coordinator does. Omitted when the failure had no recognizable code (the common case). The code
+     * is a loose string (not `ProtocolErrorCode`) because it is read from a provider-shaped `unknown`
+     * without a runtime union check; consumers compare it literally.
+     */
+    readonly terminalError?: AbgGraphTerminalError;
+};
+
+/**
+ * Structured provider error surfaced on a failed `AbgGraphRunResult`. A loose-shaped mirror of
+ * `ProtocolError` so the graph result can carry a provider error code without claiming the code has
+ * been validated against the `ProtocolErrorCode` union.
+ */
+export type AbgGraphTerminalError = {
+    readonly code: string;
+    readonly message: string;
+    readonly retryable: boolean;
 };
 
 export async function runAbgGraph(input: AbgGraphRunnerInput): Promise<AbgGraphRunResult> {

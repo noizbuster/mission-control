@@ -9,7 +9,7 @@ import {
 } from './graph-coordinator-helpers.js';
 import { runQueuedNode } from './graph-coordinator-node-runner.js';
 import { scheduleQueuedNodes } from './graph-coordinator-scheduler.js';
-import type { AbgGraphRunnerInput, AbgGraphRunResult } from './graph-runner.js';
+import type { AbgGraphRunnerInput, AbgGraphRunResult, AbgGraphTerminalError } from './graph-runner.js';
 import { graphEvent } from './graph-runner-events.js';
 import { createDefaultAbgNodeRegistry } from './node-registry.js';
 import { projectAbgSignalToEvent } from './signals.js';
@@ -75,6 +75,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         state.events,
                         'node_retry_exhausted',
                         `ABG node retry limit exhausted: ${result.node.id}`,
+                        terminalErrorFromSignal(result.lastSignal),
                     );
                 case 'blocked':
                     return { graphId: graph.id, status: 'blocked', events: state.events };
@@ -154,9 +155,35 @@ function failGraph(
     events: AgentEvent[],
     code: string,
     message: string,
+    terminalError?: AbgGraphTerminalError,
 ): AbgGraphRunResult {
     events.push(graphFailureEvent(graphId, input, code, message));
-    return { graphId, status: 'failed', events };
+    return { graphId, status: 'failed', events, ...(terminalError !== undefined ? { terminalError } : {}) };
+}
+
+/**
+ * Pull a structured provider error off a terminal `failure` signal so the run result can carry the
+ * `code` (e.g. `provider_aborted`). Nodes that surface a provider error put `{ message, code }` in
+ * the failure signal's `error` field; other failures carry a plain string. Returns `undefined` when
+ * the signal carries no recognizable code.
+ */
+function terminalErrorFromSignal(signal: AbgSignal | undefined): AbgGraphTerminalError | undefined {
+    if (signal === undefined || signal.type !== 'failure') {
+        return undefined;
+    }
+    const error = signal.error;
+    if (typeof error === 'object' && error !== null && hasField(error, 'code') && typeof error.code === 'string') {
+        const code = error.code;
+        const message = hasField(error, 'message') && typeof error.message === 'string' ? error.message : code;
+        const retryable =
+            hasField(error, 'retryable') && typeof error.retryable === 'boolean' ? error.retryable : false;
+        return { code, message, retryable };
+    }
+    return undefined;
+}
+
+function hasField<T extends string>(value: object, field: T): value is Record<T, unknown> {
+    return field in value;
 }
 
 function graphFailureEvent(graphId: string, input: AbgGraphRunnerInput, code: string, message: string): AgentEvent {

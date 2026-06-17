@@ -34,6 +34,7 @@ export type QueuedNodeResult =
           readonly kind: 'failed';
           readonly node: AbgNodeSpec;
           readonly attempt: number;
+          readonly lastSignal?: AbgSignal;
       }
     | {
           readonly kind: 'blocked';
@@ -79,7 +80,12 @@ export async function runQueuedNode(
                 attemptFailureError(node, attempt, state.maxAttempts),
             ),
         );
-        return { kind: 'failed', node, attempt };
+        return {
+            kind: 'failed',
+            node,
+            attempt,
+            ...(runResult.lastSignal !== undefined ? { lastSignal: runResult.lastSignal } : {}),
+        };
     }
     state.events.push(attemptEvent('attempt.completed', graph.id, node, input, attempt, state.maxAttempts));
     return {

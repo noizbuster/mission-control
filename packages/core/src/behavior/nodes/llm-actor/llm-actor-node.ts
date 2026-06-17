@@ -99,15 +99,25 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         turnResponseMessages = response.messages;
     } catch (error) {
         const message = errorToString(error);
+        const errorCode = extractProviderErrorCode(error);
         yield createAbgEmitSignal({
             graphId: input.graphId,
             nodeId,
             source: 'llm-actor',
             eventType: 'llm.error',
             timestamp: now(),
-            payload: { error: message },
+            payload: { error: message, ...(errorCode !== undefined ? { errorCode } : {}) },
         });
-        yield { type: 'failure', nodeId, ...graphIdPart, error: message };
+        // Carry the structured provider error code in the failure signal so the graph runner can
+        // surface it on the result and the turn-runner mapping can distinguish an abort
+        // (`provider_aborted`) from a hard failure the way the flat run coordinator does. The signal
+        // field is `error: unknown`, so a structured object is permitted without a protocol change.
+        yield {
+            type: 'failure',
+            nodeId,
+            ...graphIdPart,
+            error: errorCode !== undefined ? { message, code: errorCode } : message,
+        };
         return;
     }
 
@@ -125,4 +135,31 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         responseMessages: turnResponseMessages,
     };
     yield { type: 'success', nodeId, ...graphIdPart, result: turnResult };
+}
+
+/**
+ * Extract a provider error code from a thrown error so the graph can preserve the abort/fail
+ * distinction. Flat-bridge and provider-turn errors carry a `ProtocolError` under a nested `.error`
+ * field; some carry `.code` directly. Uses `in`/`typeof` narrowing (no casts) so the helper stays
+ * cast-free. Returns `undefined` for errors with no recognizable code (the common case).
+ */
+function extractProviderErrorCode(error: unknown): string | undefined {
+    if (hasField(error, 'error')) {
+        const nested = codeOfString(error.error);
+        if (nested !== undefined) {
+            return nested;
+        }
+    }
+    return codeOfString(error);
+}
+
+function codeOfString(value: unknown): string | undefined {
+    if (typeof value === 'object' && value !== null && hasField(value, 'code') && typeof value.code === 'string') {
+        return value.code;
+    }
+    return undefined;
+}
+
+function hasField<T extends string>(value: unknown, field: T): value is Record<T, unknown> {
+    return typeof value === 'object' && value !== null && field in value;
 }

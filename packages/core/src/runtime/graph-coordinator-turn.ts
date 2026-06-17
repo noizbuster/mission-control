@@ -105,6 +105,13 @@ export function mapGraphTurnResult(result: AbgGraphRunResult): RunCoordinatorPro
         case 'cancelled':
             return { status: 'interrupted' };
         case 'failed':
+            // A provider abort (`provider_aborted`) is an interrupt, not a hard failure — mirror the
+            // flat run coordinator's abort-awareness (run-coordinator-provider-turn.ts) so the drain
+            // maps it to `run.interrupted`. The code travels on the result's `terminalError` (a node
+            // surfaced a structured provider error); failures with no recognizable code stay `failed`.
+            if (result.terminalError !== undefined && result.terminalError.code === 'provider_aborted') {
+                return { status: 'interrupted' };
+            }
             return {
                 status: 'failed',
                 reason: lastEventMessage(result.events) ?? 'graph run failed',
