@@ -80,6 +80,7 @@ export type AbgToolSettlementLedger = {
     readonly record: (settlement: AbgToolSettlement) => void;
     readonly lookup: (toolCallId: string) => AbgToolSettlement | undefined;
     readonly approvalBlockedSettlement: () => AbgToolSettlement | undefined;
+    readonly deniedSettlement: () => AbgToolSettlement | undefined;
 };
 
 export function createAbgToolSettlementLedger(): AbgToolSettlementLedger {
@@ -92,6 +93,14 @@ export function createAbgToolSettlementLedger(): AbgToolSettlementLedger {
         approvalBlockedSettlement: () => {
             for (const settlement of entries.values()) {
                 if (isApprovalRequiredSettlement(settlement)) {
+                    return settlement;
+                }
+            }
+            return undefined;
+        },
+        deniedSettlement: () => {
+            for (const settlement of entries.values()) {
+                if (isApprovalDeniedSettlement(settlement)) {
                     return settlement;
                 }
             }
@@ -111,6 +120,17 @@ export function createAbgToolSettlementLedger(): AbgToolSettlementLedger {
  */
 export function isApprovalRequiredSettlement(settlement: AbgToolSettlement): boolean {
     return settlement.status === 'failed' && (settlement.error?.message ?? '').startsWith('approval_required:');
+}
+
+/**
+ * A settlement is approval-denied when the permission gate decided `deny` and the tool surfaced
+ * an `approval_denied` error (message prefix; the registry wraps every tool error as code
+ * `tool_failed`). A denial is terminal — the graph surfaces it as a non-retryable `failed` run
+ * (parity with the flat run coordinator's `terminalFailedSettlement`), so the model does not loop
+ * retrying a denied call.
+ */
+export function isApprovalDeniedSettlement(settlement: AbgToolSettlement): boolean {
+    return settlement.status === 'failed' && (settlement.error?.message ?? '').startsWith('approval_denied:');
 }
 
 export type AbgToolBridgeOptions = {
