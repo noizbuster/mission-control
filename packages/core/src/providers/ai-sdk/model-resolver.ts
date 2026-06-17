@@ -23,6 +23,7 @@ import type { AbgNodeModelOptions, ProviderCredential } from '@mission-control/p
 import type { LlmActorModel } from '../../behavior/nodes/llm-actor/llm-actor-node.js';
 import type { ProviderCredentialResolver } from '../credential-resolver.js';
 import { openAICompatibleProviderSpec } from '../openai-compatible/openai-compatible-specs.js';
+import { createLocalEchoSdkModel } from './local-echo-sdk-model.js';
 
 export type SdkModelResolver = (options: AbgNodeModelOptions) => LlmActorModel;
 
@@ -80,6 +81,13 @@ function buildSdkModel(input: {
         }).chat(input.modelID);
     }
     switch (input.providerID) {
+        case 'local': {
+            // The `local/local-echo` sandbox provider is a credential-free scripted mock — drive it
+            // with the local-echo AI-SDK model so the graph engine can run it too (not just flat).
+            // Unblocks the flip-default: credential-free runs (no auth configured) fall back to
+            // local-echo, which the graph can now drive without an AI-SDK mapping error.
+            return createLocalEchoSdkModel({ modelId: input.modelID });
+        }
         case 'anthropic': {
             return createAnthropic(withApiKey(input.apiKey)).languageModel(input.modelID);
         }
@@ -100,7 +108,7 @@ function buildSdkModel(input: {
         }
         default:
             throw new SdkModelResolverError(
-                `provider "${input.providerID}" has no AI-SDK mapping (anthropic/openai/openai-compatible/google-gemini supported; local providers use a scripted SDK model directly)`,
+                `provider "${input.providerID}" has no AI-SDK mapping (local/anthropic/openai/openai-compatible/google-gemini supported)`,
             );
     }
 }
