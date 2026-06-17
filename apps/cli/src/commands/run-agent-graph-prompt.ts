@@ -1,13 +1,12 @@
 /**
- * `--engine graph` cutover path — additive, non-destructive (plan §16, step 1+2).
+ * Graph engine path (plan §16, the strangler-fig cutover seam).
  *
  * Runs the default coding-agent graph against the selected provider through the AI-SDK
- * (`resolveSdkModel` bridge), with the full non-interactive tool surface. The flat
- * provider-turn loop stays the default; this path is opt-in via `--engine graph` (or
- * `MC_USE_GRAPH=1`). Nothing here retires the flat path — it only constructs the graph
- * wiring (registry + resolveSdkModel + toolRegistry + initialMessages) that `run-agent.ts`
- * previously omitted, so `AgentRuntime.runGraph` drives a REAL provider instead of the
- * mock registry.
+ * (`resolveSdkModel` bridge), with the full non-interactive tool surface. The graph engine is now
+ * the DEFAULT (`resolveEngine`); the flat provider-turn loop is retained as an opt-out fallback
+ * (`MC_USE_FLAT=1` / `--engine flat`). This path only constructs the graph wiring (registry +
+ * resolveSdkModel + toolRegistry + initialMessages) so `AgentRuntime.runGraph` drives a REAL
+ * provider instead of the mock registry.
  *
  * Deliberate limitations (tracked separately, not blockers for this seam):
  * - Providers with no AI-SDK mapping (e.g. `local`) are rejected eagerly with a clear error.
@@ -165,7 +164,7 @@ function validateResolverForSelection(resolver: SdkModelResolver, selection: Mod
             throw new SdkModelResolverError(
                 `--engine graph cannot drive provider "${selection.providerID}" — no AI-SDK mapping. ` +
                     'The graph engine supports AI-SDK-backed providers (anthropic, openai, openai-responses, ' +
-                    'openai-compatible, google, google-gemini). Use the default flat engine instead.',
+                    'openai-compatible, google, google-gemini). Use --engine flat (or MC_USE_FLAT=1) instead.',
             );
         }
         throw error;

@@ -260,14 +260,19 @@ function shouldRunInteractiveChat(args: CliArgs, graph: AbgGraphSpec | undefined
 }
 
 /**
- * Resolve the execution engine. `--engine` wins; otherwise `MC_USE_GRAPH=1` opts into the
- * graph path; otherwise the flat loop (the default — strangler-fig keeps it serving traffic).
+ * Resolve the execution engine. `--engine` wins. Otherwise the ABG coding-agent GRAPH is the
+ * default execution engine (strangler-fig cutover). The flat provider-turn loop is retained as an
+ * opt-out escape hatch for fallback / parity comparison: `MC_USE_FLAT=1` (or the back-compat
+ * `MC_USE_GRAPH=0`) selects it. `MC_USE_GRAPH=1` is kept as a now-redundant explicit opt-in.
  */
 function resolveEngine(engine: CliArgs['engine']): 'graph' | 'flat' {
     if (engine !== undefined) {
         return engine;
     }
-    return process.env['MC_USE_GRAPH'] === '1' ? 'graph' : 'flat';
+    if (process.env['MC_USE_FLAT'] === '1' || process.env['MC_USE_GRAPH'] === '0') {
+        return 'flat';
+    }
+    return 'graph';
 }
 
 async function resolveModelProviderSelection(

@@ -32,10 +32,11 @@ export type CliArgs = {
     readonly prompt?: string;
     readonly sessionId?: string;
     /**
-     * Execution engine for non-interactive prompt runs. `'flat'` (default) keeps the incumbent
-     * provider-turn loop; `'graph'` routes through the ABG coding-agent graph + the AI-SDK
-     * `resolveSdkModel` bridge (the strangler-fig cutover seam). Falls back to `MC_USE_GRAPH=1`
-     * at runtime when unset. See `run-agent-graph-prompt.ts`.
+     * Execution engine for non-interactive prompt runs. `'graph'` (default) routes through the
+     * ABG coding-agent graph + the AI-SDK `resolveSdkModel` bridge; `'flat'` keeps the incumbent
+     * provider-turn loop (retained as a fallback / parity comparison). When unset, `resolveEngine`
+     * selects the graph engine unless `MC_USE_FLAT=1` (or back-compat `MC_USE_GRAPH=0`) opts out.
+     * See `run-agent-graph-prompt.ts`.
      */
     readonly engine?: 'graph' | 'flat';
     readonly filePath?: string;
