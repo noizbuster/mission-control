@@ -279,7 +279,7 @@ function bridgeFlatStream(chunks: AsyncIterable<ProviderStreamChunk>): ReadableS
                         }
                         case 'response_completed': {
                             closeText();
-                            // Deterministic/scripted providers (and any provider that delivers the
+                            // Deterministic/scripted providers (and providers that deliver the
                             // full assistant text on completion rather than via text_delta) carry the
                             // final content on the response message. Surface it as a text block when
                             // nothing was streamed so the SDK's result.text — and the turn's

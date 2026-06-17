@@ -58,6 +58,7 @@ export type RunGraphOptions = {
     readonly toolRegistry?: ToolRegistry;
     readonly initialMessages?: readonly ModelMessage[];
     readonly abortSignal?: AbortSignal;
+    readonly haltOnFailedToolSettlement?: boolean;
 };
 
 export class AgentRuntime {
@@ -207,6 +208,7 @@ export class AgentRuntime {
             ...(options?.toolRegistry !== undefined ? { toolRegistry: options.toolRegistry } : {}),
             ...(options?.initialMessages !== undefined ? { initialMessages: options.initialMessages } : {}),
             ...(options?.abortSignal !== undefined ? { abortSignal: options.abortSignal } : {}),
+            ...(options?.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
         });
         for (const event of result.events) {
             this.emit(event);

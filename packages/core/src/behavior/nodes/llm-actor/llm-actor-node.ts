@@ -54,6 +54,7 @@ export type LlmActorRunInput = {
     readonly signal?: AbortSignal;
     readonly now: () => string;
     readonly settlementLedger?: AbgToolSettlementLedger;
+    readonly haltOnFailedToolSettlement?: boolean;
 };
 
 export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSignal> {
@@ -155,6 +156,26 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         return;
     }
 
+    // Terminal tool-failure short-circuit: when `haltOnFailedToolSettlement` is set, a tool that
+    // settled `failed` for a NON-approval reason (e.g. `command_not_allowed` — a non-allowlisted
+    // command the model cannot fix by retrying) terminates the run — parity with the flat run
+    // coordinator's `haltOnFailedToolSettlement` / `terminalFailedSettlement`. Surfacing an
+    // unfixable error would otherwise make the model retry the same call until the node-run budget
+    // is exhausted. Emit a `failure` carrying `tool_settlement_failed` + toolCallId so the node
+    // runner marks it terminal (no retry) and the coordinator fails the run immediately.
+    if (input.haltOnFailedToolSettlement === true) {
+        const terminalFailure = input.settlementLedger?.terminalFailedSettlement();
+        if (terminalFailure !== undefined) {
+            yield {
+                type: 'failure',
+                nodeId,
+                ...graphIdPart,
+                error: terminalToolFailure(terminalFailure),
+            };
+            return;
+        }
+    }
+
     yield createAbgEmitSignal({
         graphId: input.graphId,
         nodeId,
@@ -238,5 +259,28 @@ function approvalDeniedFailure(settlement: AbgToolSettlement): {
         toolCallId: settlement.toolCallId,
         toolName: settlement.toolName,
         message: settlement.error?.message ?? 'tool denied',
+    };
+}
+
+/**
+ * Shape the LLMActor puts in a `failure` signal when a tool settled `failed` for a non-approval
+ * reason (under `haltOnFailedToolSettlement`), so the coordinator fails the run immediately (no
+ * retry) with the toolCallId — parity with the flat run coordinator's `terminalFailedSettlement`
+ * for a non-approval tool failure. `code: 'tool_settlement_failed'` is the discriminator the node
+ * runner recognizes as terminal (no retry); `retryable: false` mirrors the flat result's errorCode.
+ */
+function terminalToolFailure(settlement: AbgToolSettlement): {
+    readonly code: 'tool_settlement_failed';
+    readonly retryable: false;
+    readonly toolCallId: string;
+    readonly toolName: string;
+    readonly message: string;
+} {
+    return {
+        code: 'tool_settlement_failed',
+        retryable: false,
+        toolCallId: settlement.toolCallId,
+        toolName: settlement.toolName,
+        message: settlement.error?.message ?? 'tool failed',
     };
 }

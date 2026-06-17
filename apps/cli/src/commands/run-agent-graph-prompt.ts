@@ -82,6 +82,10 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
         resolveSdkModel,
         toolRegistry,
         initialMessages: [{ role: 'user', content: input.prompt }],
+        // Match the flat owner path's `haltOnFailedToolSettlement: true` (runOwnerPrompt) so a
+        // denied / non-allowlisted command terminates the graph immediately instead of looping
+        // until the node-run budget.
+        haltOnFailedToolSettlement: true,
     });
 }
 

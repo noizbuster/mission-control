@@ -51,6 +51,15 @@ export type AbgGraphRunnerInput = {
      * never trips on its own). List prices drift, so no defaults are shipped.
      */
     readonly pricingTable?: PricingTable;
+    /**
+     * Fail the run on the FIRST non-approval tool settlement failure (a `command_not_allowed`,
+     * a hard registry error, ...) instead of surfacing it to the model — parity with the flat run
+     * coordinator's `haltOnFailedToolSettlement`. Surfacing an unfixable error (e.g. a
+     * non-allowlisted command) would otherwise make the model retry the same call until the
+     * node-run budget is exhausted. Set by the owner/headless wiring; off for paths that want the
+     * model to self-correct on retryable-looking tool errors.
+     */
+    readonly haltOnFailedToolSettlement?: boolean;
 };
 
 export type AbgGraphRunResult = {

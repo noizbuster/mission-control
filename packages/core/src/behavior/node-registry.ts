@@ -59,6 +59,12 @@ export type AbgNodeRunContext = {
      * `settleToolCalls` appends (the adapter still owns the graph-canonical tool lifecycle).
      */
     readonly emitEvent?: (event: AgentEvent) => void;
+    /**
+     * Fail the run on the first non-approval tool settlement failure instead of surfacing it to the
+     * model (parity with the flat run coordinator's `haltOnFailedToolSettlement`). Threaded from
+     * `AbgGraphRunnerInput`; `LLMActor` consults the settlement ledger for a terminal failure.
+     */
+    readonly haltOnFailedToolSettlement?: boolean;
 };
 
 export type AbgNodeRunner = (node: AbgNodeSpec, context: AbgNodeRunContext) => AsyncIterable<AbgSignal>;

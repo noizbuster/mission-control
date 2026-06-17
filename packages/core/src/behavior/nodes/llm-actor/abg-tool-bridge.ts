@@ -81,6 +81,7 @@ export type AbgToolSettlementLedger = {
     readonly lookup: (toolCallId: string) => AbgToolSettlement | undefined;
     readonly approvalBlockedSettlement: () => AbgToolSettlement | undefined;
     readonly deniedSettlement: () => AbgToolSettlement | undefined;
+    readonly terminalFailedSettlement: () => AbgToolSettlement | undefined;
 };
 
 export function createAbgToolSettlementLedger(): AbgToolSettlementLedger {
@@ -101,6 +102,14 @@ export function createAbgToolSettlementLedger(): AbgToolSettlementLedger {
         deniedSettlement: () => {
             for (const settlement of entries.values()) {
                 if (isApprovalDeniedSettlement(settlement)) {
+                    return settlement;
+                }
+            }
+            return undefined;
+        },
+        terminalFailedSettlement: () => {
+            for (const settlement of entries.values()) {
+                if (isTerminalFailedSettlement(settlement)) {
                     return settlement;
                 }
             }
@@ -131,6 +140,23 @@ export function isApprovalRequiredSettlement(settlement: AbgToolSettlement): boo
  */
 export function isApprovalDeniedSettlement(settlement: AbgToolSettlement): boolean {
     return settlement.status === 'failed' && (settlement.error?.message ?? '').startsWith('approval_denied:');
+}
+
+/**
+ * A settlement is a terminal tool failure when it settled `failed` for a reason that is NEITHER an
+ * approval block NOR a denial — e.g. `command_not_allowed` (a hard tool-policy block: the command
+ * is not allowlisted, so the model cannot fix it by retrying). When `haltOnFailedToolSettlement`
+ * is enabled, the LLMActor short-circuits the graph to a terminal `failed` run on such a settlement
+ * instead of surfacing it to the model — parity with the flat run coordinator's
+ * `terminalFailedSettlement` (run-coordinator-provider-turn.ts), which fails the run on the first
+ * non-approval tool failure rather than looping until the tool-call continuation limit.
+ */
+export function isTerminalFailedSettlement(settlement: AbgToolSettlement): boolean {
+    return (
+        settlement.status === 'failed' &&
+        !isApprovalRequiredSettlement(settlement) &&
+        !isApprovalDeniedSettlement(settlement)
+    );
 }
 
 export type AbgToolBridgeOptions = {

@@ -35,6 +35,7 @@ export type QueuedNodeResult =
           readonly node: AbgNodeSpec;
           readonly attempt: number;
           readonly lastSignal?: AbgSignal;
+          readonly terminal?: boolean;
       }
     | {
           readonly kind: 'blocked';
@@ -52,6 +53,13 @@ type NodeRunResult = {
      * flat run loop. Omitted for non-LLM nodes and turns with no text.
      */
     readonly finalText?: string;
+    /**
+     * A non-retryable failure: the LLMActor short-circuited on a terminal tool settlement (a
+     * `command_not_allowed`, or a denial) under `haltOnFailedToolSettlement` / the denied path.
+     * Retrying would re-run the model with unchanged input and fail identically, so the coordinator
+     * fails the run immediately instead of consuming the retry budget.
+     */
+    readonly terminal?: boolean;
 };
 
 export async function runQueuedNode(
@@ -92,6 +100,7 @@ export async function runQueuedNode(
             node,
             attempt,
             ...(runResult.lastSignal !== undefined ? { lastSignal: runResult.lastSignal } : {}),
+            ...(runResult.terminal === true ? { terminal: true } : {}),
         };
     }
     if (runResult.status === 'blocked') {
@@ -203,6 +212,7 @@ async function runNode(
     let lastEventType: string | undefined;
     let lastPolicyDecision: AbgPolicyDecision | undefined;
     let finalText: string | undefined;
+    let terminal = false;
     for await (const signal of runAbgNode(registry, node, runContext(graph, registry, input, state))) {
         lastSignal = signal;
         state.nodeStatuses[signal.nodeId] = nodeStatusForSignal(signal);
@@ -213,6 +223,13 @@ async function runNode(
                 blocked = true;
             } else {
                 failed = true;
+                // A terminal tool-settlement failure (a `command_not_allowed`, or a denial) is
+                // non-retryable: the LLMActor short-circuited under `haltOnFailedToolSettlement`
+                // because retrying cannot change the outcome. Mark it so the coordinator fails the
+                // run immediately instead of consuming the retry budget.
+                if (isTerminalToolFailureError(signal.error)) {
+                    terminal = true;
+                }
             }
         }
         if (signal.type === 'emit') {
@@ -245,6 +262,7 @@ async function runNode(
         ...(lastEventType !== undefined ? { lastEventType } : {}),
         ...(lastPolicyDecision !== undefined ? { lastPolicyDecision } : {}),
         ...(finalText !== undefined ? { finalText } : {}),
+        ...(terminal ? { terminal: true } : {}),
     };
 }
 
@@ -275,6 +293,19 @@ function isToolApprovalBlockedError(error: unknown): boolean {
         return false;
     }
     return error.code === 'tool_approval_blocked';
+}
+
+/**
+ * Recognize a terminal tool-settlement failure the LLMActor short-circuited on (a
+ * `command_not_allowed` under `haltOnFailedToolSettlement`, or a denial) so the node settles as a
+ * NON-retryable `failed`. The `error` is `unknown` (the failure signal contract); narrowed with
+ * `in`/typeof — no cast. Matches the codes `terminalToolFailure`/`approvalDeniedFailure` emit.
+ */
+function isTerminalToolFailureError(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null || !('code' in error)) {
+        return false;
+    }
+    return error.code === 'tool_settlement_failed' || error.code === 'tool_denied';
 }
 
 /**

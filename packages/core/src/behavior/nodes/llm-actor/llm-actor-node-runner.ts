@@ -125,6 +125,7 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         ...(context.abortSignal !== undefined ? { signal: context.abortSignal } : {}),
         now: context.now,
         ...(context.toolRegistry !== undefined ? { settlementLedger } : {}),
+        ...(context.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
     })) {
         if (signal.type === 'emit' && signal.event.type === 'llm.tool_call.proposed') {
             proposedToolCalls += 1;

@@ -178,6 +178,10 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                             registry: createCodingAgentNodeRegistry(),
                             resolveSdkModel,
                             toolRegistry,
+                            // Match the flat owner path's `haltOnFailedToolSettlement: true`
+                            // (runOwnerPrompt) so a denied / non-allowlisted command terminates the
+                            // graph immediately instead of looping until the node-run budget.
+                            haltOnFailedToolSettlement: true,
                         }),
                     ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
                     ...(options.nonInteractiveAutomationPolicy !== undefined

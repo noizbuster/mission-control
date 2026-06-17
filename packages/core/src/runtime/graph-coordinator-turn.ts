@@ -43,6 +43,13 @@ export type GraphTurnRunnerWiring = {
     readonly toolRegistry?: ToolRegistry;
     readonly pricingTable?: PricingTable;
     /**
+     * Fail the run on the first non-approval tool settlement failure instead of surfacing it to the
+     * model — parity with the flat run coordinator's `haltOnFailedToolSettlement`. Flows into
+     * `runAbgGraph` with the rest of the wiring. Set by the owner/headless graph path so a denied /
+     * non-allowlisted command terminates immediately rather than looping until the node-run budget.
+     */
+    readonly haltOnFailedToolSettlement?: boolean;
+    /**
      * Reads approval decisions to thread into the graph's `graphInput.events`, so a graph that
      * blocked on a `human-approval` node (or a `requires_approval` policy) RESUMES on a promoted
      * turn instead of re-blocking. Returns `approval.updated` embedded events keyed by approvalId

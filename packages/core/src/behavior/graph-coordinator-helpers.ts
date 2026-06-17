@@ -105,6 +105,7 @@ export function runContext(
         emitEvent: (event) => {
             state.events.push({ ...event, sessionId: input.sessionId, modelProviderSelection: input.modelProviderSelection });
         },
+        ...(input.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
     } satisfies {
         readonly graphId: string;
         readonly now: () => string;
@@ -120,6 +121,7 @@ export function runContext(
         readonly observedEvents?: readonly AbgObservedGraphEvent[];
         readonly input?: Readonly<Record<string, unknown>>;
         readonly emitEvent: (event: AgentEvent) => void;
+        readonly haltOnFailedToolSettlement?: boolean;
     };
 }
 

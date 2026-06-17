@@ -65,6 +65,22 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     );
                     break;
                 case 'failed':
+                    // A terminal tool-settlement failure (a `command_not_allowed` under
+                    // `haltOnFailedToolSettlement`, or a denial) is non-retryable: the model cannot
+                    // fix it by re-running, so fail the run immediately instead of consuming the
+                    // retry budget. Parity with the flat run coordinator's fail-fast on a terminal
+                    // tool settlement. The toolCallId travels on the run's tool.failed event (set
+                    // via the adapter), so it surfaces on `session.stopped` without threading it here.
+                    if (result.terminal === true) {
+                        return failGraph(
+                            graph.id,
+                            input,
+                            state.events,
+                            'tool_settlement_failed',
+                            `ABG run failed on a non-retryable tool settlement: ${result.node.id}`,
+                            terminalErrorFromSignal(result.lastSignal),
+                        );
+                    }
                     if (result.attempt < state.maxAttempts) {
                         state.queuedNodeIds.unshift(result.node.id);
                         break;

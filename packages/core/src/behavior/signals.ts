@@ -56,6 +56,7 @@ export function projectAbgSignalToEvent(input: AbgSignalProjectionInput): AgentE
             ...(input.maxAttempts !== undefined ? { maxAttempts: input.maxAttempts } : {}),
             ...(emitMetadataForSignal(input.signal) ?? {}),
         },
+        ...(toolResultForEmit(input.signal) ?? {}),
         ...(modelProviderSelection(input.model) ?? {}),
     };
 }
@@ -76,6 +77,37 @@ function emitMetadataForSignal(signal: AbgSignal): { readonly emit: AbgEmitMetad
             ...(signal.event.payload !== undefined ? { payload: signal.event.payload } : {}),
         },
     };
+}
+
+/**
+ * Synthesize `event.toolResult` for a graph tool-lifecycle emit (tool.completed/tool.failed from
+ * the LLMActor adapter) so the toolCallId travels as a first-class field — exactly like the flat
+ * run loop's tool events, which set `toolResult`. The graph's adapter emits carry the toolCallId
+ * only in `abg.emit.payload`; without this, downstream projections keyed on `event.toolResult`
+ * (the JSON renderer's `toolState.toolCallId`, session-replay tool outcomes) never see it, so a
+ * graph run's `session.stopped`/replay misses the toolCallId a flat run surfaces. Payload is
+ * `unknown`; narrowed with `in`/`typeof` — no cast. Returns `undefined` for non-tool emits or
+ * payloads without a string toolCallId.
+ */
+function toolResultForEmit(
+    signal: AbgSignal,
+): { readonly toolResult: { readonly toolCallId: string; readonly status: 'completed' | 'failed' } } | undefined {
+    if (signal.type !== 'emit') {
+        return undefined;
+    }
+    const eventType = signal.event.type;
+    if (eventType !== 'tool.completed' && eventType !== 'tool.failed') {
+        return undefined;
+    }
+    const payload = signal.event.payload;
+    if (typeof payload !== 'object' || payload === null || !('toolCallId' in payload)) {
+        return undefined;
+    }
+    const toolCallId = payload.toolCallId;
+    if (typeof toolCallId !== 'string') {
+        return undefined;
+    }
+    return { toolResult: { toolCallId, status: eventType === 'tool.completed' ? 'completed' : 'failed' } };
 }
 
 function eventTypeForSignal(signal: AbgSignal): AgentEvent['type'] {
