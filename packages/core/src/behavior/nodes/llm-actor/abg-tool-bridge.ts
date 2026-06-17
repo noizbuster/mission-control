@@ -69,10 +69,17 @@ export type AbgToolSettlement = {
  * for the adapter to recover the settlement's true status (the SDK collapses a failed
  * settlement to a `tool-result` carrying an error string, since the bridge surfaces failures
  * to the model as readable text; the ledger restores the structured `failed` status).
+ *
+ * `approvalBlockedSettlement` lets the LLMActor detect a tool that settled as
+ * `approval_required` (a permission gate with no automation, in `block` mode) and short-circuit
+ * the graph to a `blocked` settle instead of surfacing the block to the model — which would
+ * otherwise retry the same call until the loop budget is exhausted. This mirrors the flat run
+ * coordinator's `approvalBlockedSettlement` detection (run-coordinator-provider-turn.ts).
  */
 export type AbgToolSettlementLedger = {
     readonly record: (settlement: AbgToolSettlement) => void;
     readonly lookup: (toolCallId: string) => AbgToolSettlement | undefined;
+    readonly approvalBlockedSettlement: () => AbgToolSettlement | undefined;
 };
 
 export function createAbgToolSettlementLedger(): AbgToolSettlementLedger {
@@ -82,7 +89,28 @@ export function createAbgToolSettlementLedger(): AbgToolSettlementLedger {
             entries.set(settlement.toolCallId, settlement);
         },
         lookup: (toolCallId) => entries.get(toolCallId),
+        approvalBlockedSettlement: () => {
+            for (const settlement of entries.values()) {
+                if (isApprovalRequiredSettlement(settlement)) {
+                    return settlement;
+                }
+            }
+            return undefined;
+        },
     };
+}
+
+/**
+ * A settlement is approval-blocked when the registry invoked the tool through the permission
+ * gate, the gate decided `requires_approval` with no automation, and the tool surfaced an
+ * `approval_required` error. The registry wraps EVERY tool error as `ProtocolError{code:
+ * 'tool_failed', message: '<tool-code>: <detail>'}` (see file-patch-errors.ts
+ * `filePatchFailure`), so the discriminator is the MESSAGE PREFIX, not the `code` — exactly
+ * how the flat run coordinator detects it (`isApprovalBlockedMessage`). `approval_denied:`
+ * (a denial) is NOT a block — it is a terminal failure the graph surfaces as `failed`.
+ */
+export function isApprovalRequiredSettlement(settlement: AbgToolSettlement): boolean {
+    return settlement.status === 'failed' && (settlement.error?.message ?? '').startsWith('approval_required:');
 }
 
 export type AbgToolBridgeOptions = {

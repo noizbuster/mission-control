@@ -72,6 +72,15 @@ export type AbgGraphRunResult = {
      * without a runtime union check; consumers compare it literally.
      */
     readonly terminalError?: AbgGraphTerminalError;
+    /**
+     * On a `blocked` run (a tool settled `approval_required`), the tool call id and reason that
+     * identify the pending approval. The turn-runner mapping threads these into the
+     * `blocked_on_approval` result so the run surfaces as resumable with the toolCallId — parity
+     * with the flat run coordinator. Omitted on non-blocked runs (and on a blocked run with no
+     * recognizable approval context).
+     */
+    readonly toolCallId?: string;
+    readonly reason?: string;
 };
 
 /**

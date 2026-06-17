@@ -38,10 +38,11 @@ export type QueuedNodeResult =
       }
     | {
           readonly kind: 'blocked';
+          readonly lastSignal?: AbgSignal;
       };
 
 type NodeRunResult = {
-    readonly status: 'completed' | 'failed';
+    readonly status: 'completed' | 'failed' | 'blocked';
     readonly lastSignal?: AbgSignal;
     readonly lastEventType?: string;
     readonly lastPolicyDecision?: AbgPolicyDecision;
@@ -84,6 +85,16 @@ export async function runQueuedNode(
             kind: 'failed',
             node,
             attempt,
+            ...(runResult.lastSignal !== undefined ? { lastSignal: runResult.lastSignal } : {}),
+        };
+    }
+    if (runResult.status === 'blocked') {
+        // An approval-block short-circuit (a tool settled `approval_required`): settle the node as
+        // blocked — no attempt.completed/attempt.failed, no retry. The terminal failure signal
+        // carries the toolCallId/approval context so the coordinator can surface it on the graph
+        // result and the turn-runner mapping can thread it into `blocked_on_approval`.
+        return {
+            kind: 'blocked',
             ...(runResult.lastSignal !== undefined ? { lastSignal: runResult.lastSignal } : {}),
         };
     }
@@ -175,6 +186,7 @@ async function runNode(
 ): Promise<NodeRunResult> {
     let lastSignal: AbgSignal | undefined;
     let failed = false;
+    let blocked = false;
     // Per-node runtime edge inputs (NOT shared state — concurrent node runs each carry
     // their own, so rule-gated edges evaluate against the node that just ran, not a
     // sibling's clobbered value).
@@ -183,7 +195,15 @@ async function runNode(
     for await (const signal of runAbgNode(registry, node, runContext(graph, registry, input, state))) {
         lastSignal = signal;
         state.nodeStatuses[signal.nodeId] = nodeStatusForSignal(signal);
-        failed = failed || signal.type === 'failure';
+        if (signal.type === 'failure') {
+            // An LLMActor approval-block short-circuit (code `tool_approval_blocked`) settles the
+            // node as `blocked`, not `failed` — it must not trigger retry/fail handling.
+            if (isToolApprovalBlockedError(signal.error)) {
+                blocked = true;
+            } else {
+                failed = true;
+            }
+        }
         if (signal.type === 'emit') {
             lastEventType = signal.event.type;
             const policyDecision = extractPolicyDecision(signal);
@@ -205,11 +225,23 @@ async function runNode(
         );
     }
     return {
-        status: failed ? 'failed' : 'completed',
+        status: blocked ? 'blocked' : failed ? 'failed' : 'completed',
         ...(lastSignal !== undefined ? { lastSignal } : {}),
         ...(lastEventType !== undefined ? { lastEventType } : {}),
         ...(lastPolicyDecision !== undefined ? { lastPolicyDecision } : {}),
     };
+}
+
+/**
+ * Recognize the LLMActor's approval-block failure (a tool settled `approval_required`) so the
+ * node settles as `blocked` rather than `failed`. The `error` is `unknown` (the failure signal
+ * contract), narrowed with `in`/typeof — no cast.
+ */
+function isToolApprovalBlockedError(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null || !('code' in error)) {
+        return false;
+    }
+    return error.code === 'tool_approval_blocked';
 }
 
 /**

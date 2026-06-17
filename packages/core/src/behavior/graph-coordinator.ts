@@ -77,8 +77,21 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         `ABG node retry limit exhausted: ${result.node.id}`,
                         terminalErrorFromSignal(result.lastSignal),
                     );
-                case 'blocked':
-                    return { graphId: graph.id, status: 'blocked', events: state.events };
+                case 'blocked': {
+                    // A node settled as blocked — currently only the LLMActor approval-block
+                    // short-circuit reaches here. Surface the toolCallId/reason off the terminal
+                    // failure signal so the graph result carries them and the turn-runner mapping
+                    // can thread the toolCallId into the `blocked_on_approval` result (parity with
+                    // the flat run coordinator).
+                    const block = approvalBlockContext(result.lastSignal);
+                    return {
+                        graphId: graph.id,
+                        status: 'blocked',
+                        events: state.events,
+                        ...(block.toolCallId !== undefined ? { toolCallId: block.toolCallId } : {}),
+                        ...(block.reason !== undefined ? { reason: block.reason } : {}),
+                    };
+                }
                 default:
                     return assertNeverQueuedNodeResult(result);
             }
@@ -184,6 +197,32 @@ function terminalErrorFromSignal(signal: AbgSignal | undefined): AbgGraphTermina
 
 function hasField<T extends string>(value: object, field: T): value is Record<T, unknown> {
     return field in value;
+}
+
+/**
+ * Pull the approval-block context (toolCallId + reason) off a terminal `failure` signal emitted by
+ * the LLMActor when a tool settled `approval_required`. The signal's `error` is the structured
+ * `tool_approval_blocked` object the actor builds; `in`/`typeof` narrowing recovers the fields
+ * without a cast. Returns empty for non-approval-block signals.
+ */
+function approvalBlockContext(signal: AbgSignal | undefined): { readonly toolCallId?: string; readonly reason?: string } {
+    if (signal === undefined || signal.type !== 'failure') {
+        return {};
+    }
+    const error = signal.error;
+    if (typeof error !== 'object' || error === null || !('code' in error) || error.code !== 'tool_approval_blocked') {
+        return {};
+    }
+    const toolCallId = 'toolCallId' in error && typeof error.toolCallId === 'string' ? error.toolCallId : undefined;
+    const reason = 'message' in error && typeof error.message === 'string' ? error.message : undefined;
+    const context: { toolCallId?: string; reason?: string } = {};
+    if (toolCallId !== undefined) {
+        context.toolCallId = toolCallId;
+    }
+    if (reason !== undefined) {
+        context.reason = reason;
+    }
+    return context;
 }
 
 function graphFailureEvent(graphId: string, input: AbgGraphRunnerInput, code: string, message: string): AgentEvent {

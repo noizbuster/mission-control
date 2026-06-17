@@ -118,12 +118,17 @@ export function mapGraphTurnResult(result: AbgGraphRunResult): RunCoordinatorPro
                 errorCode: 'unknown',
             };
         case 'blocked':
-            // A graph `blocked` settle is a node-level hold (policy/approval/etc.), not necessarily
-            // a tool failure, so the errorCode stays generic; the blocking context is in the reason.
+            // A graph `blocked` settle is an approval hold (currently only the LLMActor
+            // `approval_required` short-circuit). The result carries the blocking toolCallId + reason
+            // so the drain surfaces a resumable `run.blocked` with the toolCallId — parity with the
+            // flat run coordinator. The errorCode stays generic (the graph's own codes are not
+            // `ProtocolErrorCode` values); the approvalId travels on the gate's emitted
+            // approval.requested/approval.blocked events.
             return {
                 status: 'blocked_on_approval',
-                reason: lastEventMessage(result.events) ?? 'graph run blocked waiting for input',
+                reason: result.reason ?? lastEventMessage(result.events) ?? 'graph run blocked waiting for input',
                 errorCode: 'unknown',
+                ...(result.toolCallId !== undefined ? { toolCallId: result.toolCallId } : {}),
             };
         case 'created':
         case 'active':

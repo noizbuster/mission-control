@@ -23,7 +23,7 @@ import type { ModelMessage, ToolSet } from 'ai';
 import { stepCountIs, streamText } from 'ai';
 import { errorToString } from '../../../util/error-to-string.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
-import type { AbgToolSettlementLedger } from './abg-tool-bridge.js';
+import type { AbgToolSettlement, AbgToolSettlementLedger } from './abg-tool-bridge.js';
 import { abgSignalsFromStreamPart } from './ai-sdk-adapter.js';
 
 type StreamTextParameters = Parameters<typeof streamText>[0];
@@ -121,6 +121,24 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         return;
     }
 
+    // Approval-block short-circuit: if a tool settled as `approval_required` (a permission gate
+    // in `block` mode with no automation), the graph must settle as `blocked` — parity with the
+    // flat run coordinator's `approvalBlockedSettlement` detection. Surfacing the block to the
+    // model instead would make it retry the same call until the loop budget is exhausted. Emit a
+    // `failure` carrying the `tool_approval_blocked` code + toolCallId so the coordinator settles
+    // the graph as `blocked` (not retried as a hard failure). The gate already emitted the
+    // `approval.requested`/`approval.blocked` events through the registry, so no duplicate emit.
+    const approvalBlock = input.settlementLedger?.approvalBlockedSettlement();
+    if (approvalBlock !== undefined) {
+        yield {
+            type: 'failure',
+            nodeId,
+            ...graphIdPart,
+            error: approvalBlockFailure(approvalBlock),
+        };
+        return;
+    }
+
     yield createAbgEmitSignal({
         graphId: input.graphId,
         nodeId,
@@ -162,4 +180,27 @@ function codeOfString(value: unknown): string | undefined {
 
 function hasField<T extends string>(value: unknown, field: T): value is Record<T, unknown> {
     return typeof value === 'object' && value !== null && field in value;
+}
+
+/**
+ * Shape the LLMActor puts in a `failure` signal when a tool settled as `approval_required`, so the
+ * coordinator can settle the graph as `blocked` (resumable) and the turn-runner mapping can thread
+ * the `toolCallId` into the `blocked_on_approval` result — parity with the flat run coordinator's
+ * approval-block detection. `code: 'tool_approval_blocked'` is the discriminator the node runner
+ * recognizes; the rest carries the block context.
+ */
+function approvalBlockFailure(settlement: AbgToolSettlement): {
+    readonly code: 'tool_approval_blocked';
+    readonly toolCallId: string;
+    readonly toolName: string;
+    readonly approvalCode: string;
+    readonly message: string;
+} {
+    return {
+        code: 'tool_approval_blocked',
+        toolCallId: settlement.toolCallId,
+        toolName: settlement.toolName,
+        approvalCode: 'approval_required',
+        message: settlement.error?.message ?? 'tool blocked pending approval',
+    };
 }
