@@ -243,6 +243,7 @@ function bridgeFlatStream(chunks: AsyncIterable<ProviderStreamChunk>): ReadableS
         async start(controller) {
             const textId = 'flat_bridge_text';
             let textOpen = false;
+            let textEmitted = false;
             const closeText = () => {
                 if (textOpen) {
                     controller.enqueue({ type: 'text-end', id: textId });
@@ -261,6 +262,7 @@ function bridgeFlatStream(chunks: AsyncIterable<ProviderStreamChunk>): ReadableS
                                 textOpen = true;
                             }
                             controller.enqueue({ type: 'text-delta', id: textId, delta: chunk.delta });
+                            textEmitted = true;
                             break;
                         case 'tool_call_delta':
                             // Buffered — emitted in full on the matching `tool_call_completed`
@@ -275,10 +277,25 @@ function bridgeFlatStream(chunks: AsyncIterable<ProviderStreamChunk>): ReadableS
                             controller.enqueue({ type: 'tool-call', toolCallId, toolName, input: argumentsJson });
                             break;
                         }
-                        case 'response_completed':
+                        case 'response_completed': {
                             closeText();
+                            // Deterministic/scripted providers (and any provider that delivers the
+                            // full assistant text on completion rather than via text_delta) carry the
+                            // final content on the response message. Surface it as a text block when
+                            // nothing was streamed so the SDK's result.text — and the turn's
+                            // final-text event — carry the model's actual output, matching the flat
+                            // loop (which reads message.content directly).
+                            if (!textEmitted) {
+                                const content = chunk.message?.content;
+                                if (typeof content === 'string' && content.length > 0) {
+                                    controller.enqueue({ type: 'text-start', id: textId });
+                                    controller.enqueue({ type: 'text-delta', id: textId, delta: content });
+                                    controller.enqueue({ type: 'text-end', id: textId });
+                                }
+                            }
                             controller.enqueue(finishStreamPart(chunk.finishReason, chunk.usage));
                             break;
+                        }
                         case 'response_failed':
                             closeText();
                             controller.enqueue(finishStreamPart('error', undefined));

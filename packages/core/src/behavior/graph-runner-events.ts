@@ -110,12 +110,19 @@ export function modelCallEvent(
     node: AbgNodeSpec,
     input: AbgGraphRunnerInput,
     model: AbgNodeModelOptions,
+    /**
+     * The model's final assistant text for a completed LLM turn. When present, the
+     * `model.call.completed` message carries it (parity with the flat run loop, where the event
+     * message is the model's response) instead of the generic `${type}: ${node.id}` label.
+     */
+    finalText?: string,
 ): AgentEvent {
+    const message = type === 'model.call.completed' && finalText !== undefined ? finalText : `${type}: ${node.id}`;
     return {
         type,
         timestamp: input.now(),
         sessionId: input.sessionId,
-        message: `${type}: ${node.id}`,
+        message,
         durability: 'durable',
         modelProviderSelection: {
             providerID: model.providerID,

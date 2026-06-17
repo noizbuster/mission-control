@@ -46,6 +46,12 @@ type NodeRunResult = {
     readonly lastSignal?: AbgSignal;
     readonly lastEventType?: string;
     readonly lastPolicyDecision?: AbgPolicyDecision;
+    /**
+     * The model's final assistant text for an LLM turn (from the `llm.turn.completed` emit), so
+     * `model.call.completed` can carry the model's actual output as its message — parity with the
+     * flat run loop. Omitted for non-LLM nodes and turns with no text.
+     */
+    readonly finalText?: string;
 };
 
 export async function runQueuedNode(
@@ -125,7 +131,11 @@ async function runAttempt(
     }
     const result = await runNode(graph, node, registry, input, state, model, attempt);
     if (node.kind === 'llm') {
-        state.events.push(modelCallEvent('model.call.completed', graph.id, node, input, model));
+        // Carry the turn's final assistant text as the message so consumers (e.g. the session
+        // owner's final-message capture) see the model's actual output, matching the flat loop.
+        state.events.push(
+            modelCallEvent('model.call.completed', graph.id, node, input, model, result.finalText),
+        );
     }
     if (node.kind === 'tool') {
         state.events.push(
@@ -192,6 +202,7 @@ async function runNode(
     // sibling's clobbered value).
     let lastEventType: string | undefined;
     let lastPolicyDecision: AbgPolicyDecision | undefined;
+    let finalText: string | undefined;
     for await (const signal of runAbgNode(registry, node, runContext(graph, registry, input, state))) {
         lastSignal = signal;
         state.nodeStatuses[signal.nodeId] = nodeStatusForSignal(signal);
@@ -209,6 +220,10 @@ async function runNode(
             const policyDecision = extractPolicyDecision(signal);
             if (policyDecision !== undefined) {
                 lastPolicyDecision = policyDecision;
+            }
+            const turnText = extractTurnText(signal);
+            if (turnText !== undefined) {
+                finalText = turnText;
             }
         }
         state.events.push(
@@ -229,7 +244,25 @@ async function runNode(
         ...(lastSignal !== undefined ? { lastSignal } : {}),
         ...(lastEventType !== undefined ? { lastEventType } : {}),
         ...(lastPolicyDecision !== undefined ? { lastPolicyDecision } : {}),
+        ...(finalText !== undefined ? { finalText } : {}),
     };
+}
+
+/**
+ * Pull the model's final assistant text off an `llm.turn.completed` emit so `model.call.completed`
+ * can carry the model's actual output as its message (parity with the flat run loop). The payload
+ * is `unknown`; narrowed with `in`/`typeof` — no cast. Returns `undefined` for other emits.
+ */
+function extractTurnText(signal: AbgSignal): string | undefined {
+    if (signal.type !== 'emit' || signal.event.type !== 'llm.turn.completed') {
+        return undefined;
+    }
+    const payload = signal.event.payload;
+    if (typeof payload !== 'object' || payload === null || !('text' in payload)) {
+        return undefined;
+    }
+    const text = payload.text;
+    return typeof text === 'string' ? text : undefined;
 }
 
 /**
