@@ -62,7 +62,7 @@ function stepForEnvelope(
     if (runStep !== undefined) {
         return [runStep];
     }
-    const graphStep = graphEmitStep(envelope);
+    const graphStep = graphEmitStep(envelope, continuationSequences);
     if (graphStep !== undefined) {
         return [graphStep];
     }
@@ -164,7 +164,10 @@ function runStateStep(envelope: AgentEventEnvelope): CodingReplayStep | undefine
  * output/error, recorded by the tool bridge's settlement ledger); `llm.error` → a provider failure.
  * The outcome steps therefore match the flat path's detail, not just the call/result lifecycle.
  */
-function graphEmitStep(envelope: AgentEventEnvelope): CodingReplayStep | undefined {
+function graphEmitStep(
+    envelope: AgentEventEnvelope,
+    continuationSequences: ReadonlySet<number>,
+): CodingReplayStep | undefined {
     const emit = envelope.event.abg?.emit;
     if (emit === undefined) {
         return undefined;
@@ -177,13 +180,14 @@ function graphEmitStep(envelope: AgentEventEnvelope): CodingReplayStep | undefin
             // `response_completed` for tool-call turns), not noise. `messageId` deliberately aliases
             // the envelope `eventId` — graph emits have no provider-side message id, so the durable
             // event id is the stable handle (no consumer treats graph `messageId` as message-scoped).
+            // `continuation` mirrors the flat path: a turn that follows a tool result is a continuation.
             return {
                 kind: 'provider.message',
                 eventId: envelope.eventId,
                 timestamp: envelope.event.timestamp,
                 messageId: envelope.eventId,
                 message: readStringField(emit.payload, 'text') ?? '',
-                continuation: false,
+                continuation: continuationSequences.has(envelope.sequence),
             };
         case 'llm.tool_call.proposed':
             return {
@@ -339,18 +343,38 @@ function blockedApprovalToolCallIdsSet(envelopes: readonly AgentEventEnvelope[])
 
 function continuationMessageSequences(envelopes: readonly AgentEventEnvelope[]): readonly number[] {
     const sequences: number[] = [];
+    // Flat path: a toolResult sets `awaiting`; the next `response_completed` is a continuation.
     let awaitingToolContinuation = false;
+    // Graph path: a turn is a continuation iff the PREVIOUS turn proposed a tool (a loop re-entry).
+    // The graph bundles proposal+execution+boundary in one SDK step, so a turn's own tool.completed
+    // fires BEFORE its llm.turn.completed — tracking "awaiting after tool.completed" would wrongly
+    // mark the proposing turn as its own continuation. Track tool proposals per turn instead.
+    let graphPrevTurnHadToolCall = false;
+    let graphCurrentTurnHasToolCall = false;
     for (const envelope of envelopes) {
         if (resetsContinuationTracking(envelope.event, awaitingToolContinuation)) {
             awaitingToolContinuation = false;
+            graphPrevTurnHadToolCall = false;
+            graphCurrentTurnHasToolCall = false;
         }
         const providerTurnId = envelope.event.transcript?.providerTurnId;
         const chunk = envelope.event.providerStreamChunk;
+        const graphEmitType = envelope.event.abg?.emit?.type;
         if (chunk?.kind === 'response_completed') {
             if (awaitingToolContinuation || providerTurnId?.includes('_continue_') === true) {
                 sequences.push(envelope.sequence);
             }
             awaitingToolContinuation = false;
+        }
+        if (graphEmitType === 'llm.turn.completed') {
+            if (graphPrevTurnHadToolCall) {
+                sequences.push(envelope.sequence);
+            }
+            graphPrevTurnHadToolCall = graphCurrentTurnHasToolCall;
+            graphCurrentTurnHasToolCall = false;
+        }
+        if (graphEmitType === 'llm.tool_call.proposed') {
+            graphCurrentTurnHasToolCall = true;
         }
         if (envelope.event.toolResult !== undefined) {
             awaitingToolContinuation = true;
