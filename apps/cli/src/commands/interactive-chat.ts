@@ -4,6 +4,7 @@ import type {
     CommandExecutionResult,
     JsonlSessionEventStore,
     ProviderAdapter,
+    SdkModelResolver,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { parseChatLine } from './chat-commands.js';
@@ -11,8 +12,8 @@ import { createInkChatBridge } from './ink-chat-bridge.js';
 import { createInkChatInput } from './ink-chat-input.js';
 import { createInkChatOutput } from './ink-chat-output.js';
 import { createInkModelSelector } from './ink-model-selector.js';
-import { runChatAction } from './interactive-chat-actions.js';
 import type { ChatActionResult } from './interactive-chat-action-result.js';
+import { runChatAction } from './interactive-chat-actions.js';
 import {
     type ChatInput,
     type ChatInputEvent,
@@ -60,6 +61,13 @@ export type InteractiveChatOptions = {
     readonly switchSessionStore?: (sessionId: string) => Promise<JsonlSessionEventStore>;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly persistModelProviderSelection?: (selection: ModelProviderSelection) => Promise<void>;
+    /**
+     * Execution engine for coding turns. `'graph'` drives the ABG coding-agent graph through the same
+     * `SessionRunOwner` (flat path retained as the default when omitted). `resolveSdkModel` resolves the
+     * AI-SDK model for the selection when `engine === 'graph'`.
+     */
+    readonly engine?: 'graph' | 'flat';
+    readonly resolveSdkModel?: SdkModelResolver;
 };
 
 export async function runInteractiveChatSession(
@@ -210,6 +218,8 @@ export async function runInteractiveChatSession(
                         sessionStore: currentSessionStore,
                         workspaceRoot: options.workspaceRoot,
                         ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
+                        ...(options.engine !== undefined ? { engine: options.engine } : {}),
+                        ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
                     },
                 );
             } catch (error) {

@@ -61,7 +61,8 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     const createProvider = options.createProvider ?? ((selection) => createProviderForSelection(selection, authStore));
     const provider = options.provider ?? createProvider(selectedModelProvider);
     const workspaceRoot = options.workspaceRoot ?? process.cwd();
-    const engine = resolveEngine(args.engine);
+    const nonInteractiveEngine = resolveNonInteractiveEngine(args.engine);
+    const interactiveEngine = resolveInteractiveEngine(args.engine);
     const runtime = new AgentRuntime(
         createCliRuntimeOptions({
             ...(args.useNative !== undefined ? { useNative: args.useNative } : {}),
@@ -110,6 +111,10 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                 ...(options.chatInput !== undefined ? { input: options.chatInput } : {}),
                 ...(options.chatOutput !== undefined ? { output: options.chatOutput } : {}),
                 ...(options.selectModel !== undefined ? { selectModel: options.selectModel } : {}),
+                // Wire the graph into the interactive path only when explicitly selected (opt-in); the flat
+                // loop remains the interactive default (see resolveInteractiveEngine).
+                ...(interactiveEngine === 'graph' ? { engine: interactiveEngine } : {}),
+                ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
             });
         } finally {
             if (didStart) {
@@ -140,7 +145,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             if (graph !== undefined) {
                 await runtime.runGraph(graph);
             } else if (
-                engine === 'graph' &&
+                nonInteractiveEngine === 'graph' &&
                 args.prompt !== undefined &&
                 recorder.currentStore() !== undefined &&
                 recorder.currentSessionId() !== undefined
@@ -189,7 +194,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                         : {}),
                     throwOnTerminalFailure: args.mode === 'plain',
                 });
-            } else if (engine === 'graph' && args.prompt !== undefined) {
+            } else if (nonInteractiveEngine === 'graph' && args.prompt !== undefined) {
                 await runCodingPromptOnGraph({
                     runtime,
                     selection: selectedModelProvider,
@@ -260,12 +265,12 @@ function shouldRunInteractiveChat(args: CliArgs, graph: AbgGraphSpec | undefined
 }
 
 /**
- * Resolve the execution engine. `--engine` wins. Otherwise the ABG coding-agent GRAPH is the
- * default execution engine (strangler-fig cutover). The flat provider-turn loop is retained as an
- * opt-out escape hatch for fallback / parity comparison: `MC_USE_FLAT=1` (or the back-compat
- * `MC_USE_GRAPH=0`) selects it. `MC_USE_GRAPH=1` is kept as a now-redundant explicit opt-in.
+ * Resolve the execution engine for NON-INTERACTIVE runs (`--prompt`, `--no-tui`, `--json`). `--engine`
+ * wins; otherwise the ABG coding-agent GRAPH is the default (the flip landed in 3f780c7). The flat
+ * provider-turn loop is the opt-out escape hatch: `MC_USE_FLAT=1` (or back-compat `MC_USE_GRAPH=0`).
+ * `MC_USE_GRAPH=1` is a now-redundant explicit opt-in.
  */
-function resolveEngine(engine: CliArgs['engine']): 'graph' | 'flat' {
+function resolveNonInteractiveEngine(engine: CliArgs['engine']): 'graph' | 'flat' {
     if (engine !== undefined) {
         return engine;
     }
@@ -273,6 +278,27 @@ function resolveEngine(engine: CliArgs['engine']): 'graph' | 'flat' {
         return 'flat';
     }
     return 'graph';
+}
+
+/**
+ * Resolve the execution engine for INTERACTIVE chat runs. The graph is wired into the interactive path
+ * (strangler-fig) but is OPT-IN for now (`--engine graph` / `MC_USE_GRAPH=1`): the interactive graph
+ * path is newer than the non-interactive flip, so the flat loop stays the interactive default until the
+ * graph path is verified in real use. The escape-hatch flags (`MC_USE_FLAT=1`, back-compat
+ * `MC_USE_GRAPH=0`) still force flat. Flipping the interactive default to graph is a one-line change
+ * here (tracked in task #47).
+ */
+function resolveInteractiveEngine(engine: CliArgs['engine']): 'graph' | 'flat' {
+    if (engine !== undefined) {
+        return engine;
+    }
+    if (process.env['MC_USE_FLAT'] === '1' || process.env['MC_USE_GRAPH'] === '0') {
+        return 'flat';
+    }
+    if (process.env['MC_USE_GRAPH'] === '1') {
+        return 'graph';
+    }
+    return 'flat';
 }
 
 async function resolveModelProviderSelection(

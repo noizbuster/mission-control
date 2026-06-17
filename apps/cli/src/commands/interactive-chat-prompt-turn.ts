@@ -6,6 +6,7 @@ import {
     type ProviderAdapter,
     ProviderTurnRunner,
     prependProjectContextMessages,
+    type SdkModelResolver,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { ChatOutput } from './interactive-chat-io.js';
@@ -20,6 +21,14 @@ export type PromptTurnContext = {
     readonly observeStoredEvent: ((event: AgentEvent) => void) | undefined;
     readonly nextTurnId: () => string;
     readonly sessionStore: JsonlSessionEventStore | undefined;
+    /**
+     * Execution engine for the coding-agent turn. `'graph'` drives the turn through the ABG coding-agent
+     * graph (via the same `SessionRunOwner` + graph turn runner the non-interactive `--engine graph`
+     * path uses); omitted/`'flat'` drives the incumbent flat provider-turn loop. The graph path needs
+     * `resolveSdkModel` to resolve the AI-SDK model for the selection.
+     */
+    readonly engine?: 'graph' | 'flat';
+    readonly resolveSdkModel?: SdkModelResolver;
 };
 
 export async function startPromptTurn(
@@ -81,14 +90,7 @@ export async function startPromptTurn(
             });
             if (result.status === 'failed') {
                 const errorMessage = result.error.message;
-                emitFallbackTaskEvent(
-                    coding,
-                    'task.failed',
-                    sessionId,
-                    taskId,
-                    errorMessage,
-                    modelProviderSelection,
-                );
+                emitFallbackTaskEvent(coding, 'task.failed', sessionId, taskId, errorMessage, modelProviderSelection);
                 chatOutput.write(`Error: ${errorMessage}\n`);
                 return undefined;
             }
@@ -119,6 +121,8 @@ export async function startPromptTurn(
         emitEvent: coding.emitEvent ?? (() => undefined),
         ...(coding.observeStoredEvent !== undefined ? { observeStoredEvent: coding.observeStoredEvent } : {}),
         ...(coding.commandExecutor !== undefined ? { commandExecutor: coding.commandExecutor } : {}),
+        ...(coding.engine !== undefined ? { engine: coding.engine } : {}),
+        ...(coding.resolveSdkModel !== undefined ? { resolveSdkModel: coding.resolveSdkModel } : {}),
     });
 }
 

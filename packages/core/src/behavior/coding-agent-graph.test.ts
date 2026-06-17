@@ -10,7 +10,7 @@
  * completes. Exactly 2 model calls, a full llm and tool event stream, no double loop.
  */
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
-import type { AgentEvent } from '@mission-control/protocol';
+import type { AbgSignal, AgentEvent } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -155,6 +155,54 @@ describe('coding-agent graph — Observe → Decide → Act loop', () => {
         expect(types).toContain('tool.completed');
         // Two completed turns (one per graph-driven step).
         expect(types.filter((type) => type === 'llm.turn.completed').length).toBe(2);
+    });
+
+    it('invokes onSignal for every node signal including llm.text.delta without changing projection', async () => {
+        const buildModel = () =>
+            new MockLanguageModelV3({
+                provider: MODEL_SELECTION.providerID,
+                modelId: MODEL_SELECTION.modelID,
+                doStream: async () => ({ stream: convertArrayToReadableStream(finalTextChunks()) }),
+            });
+        const toolRegistry = new ToolRegistry();
+        toolRegistry.register(echoRegistration);
+
+        // Baseline run (no tap) — the source of truth for the projected event stream.
+        const baseline = await runAbgGraph({
+            graph: createCodingAgentGraph({ model: MODEL_SELECTION }),
+            sessionId: 'session_on_signal',
+            now: () => NOW,
+            modelProviderSelection: MODEL_SELECTION,
+            registry: createCodingAgentNodeRegistry(),
+            resolveSdkModel: () => buildModel(),
+            toolRegistry,
+            initialMessages: [{ role: 'user', content: 'just answer' }],
+        });
+
+        // Tapped run — capture every yielded node signal via the observation-only seam.
+        const signals: AbgSignal[] = [];
+        const tapped = await runAbgGraph({
+            graph: createCodingAgentGraph({ model: MODEL_SELECTION }),
+            sessionId: 'session_on_signal',
+            now: () => NOW,
+            modelProviderSelection: MODEL_SELECTION,
+            registry: createCodingAgentNodeRegistry(),
+            resolveSdkModel: () => buildModel(),
+            toolRegistry,
+            initialMessages: [{ role: 'user', content: 'just answer' }],
+            onSignal: (signal) => {
+                signals.push(signal);
+            },
+        });
+
+        // The tap observes pre-projection streaming signals. `llm.text.delta` is NOT persisted (it is
+        // excluded from the boundary allowlist), so observing it here proves the seam surfaces what the
+        // durable event stream drops — the live-streaming input an interactive renderer needs.
+        expect(signals.some((signal) => signal.type === 'emit' && signal.event.type === 'llm.text.delta')).toBe(true);
+        // Pure observation: the projected event stream + terminal status are byte-identical with and
+        // without the tap (it must not influence projection, persistence, or the run result).
+        expect(tapped.events).toEqual(baseline.events);
+        expect(tapped.status).toBe(baseline.status);
     });
 
     it('completes in one step when the model emits no tool calls (loop never re-enters)', async () => {

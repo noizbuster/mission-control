@@ -1,20 +1,30 @@
 import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
+    createCodingAgentNodeRegistry,
+    createGraphTurnRunner,
     type JsonlSessionEventStore,
     ProjectTrustStore,
     type ProviderAdapter,
     projectApprovalContinuationMessages,
+    type SdkModelResolver,
     SessionRunOwner,
     type SessionRunOwnerReceipt,
     type ToolInvocationSettlement,
 } from '@mission-control/core';
-import type { AgentEvent, AgentEventEnvelope, ModelProviderSelection, ToolCall } from '@mission-control/protocol';
+import type {
+    AbgSignal,
+    AgentEvent,
+    AgentEventEnvelope,
+    ModelProviderSelection,
+    ToolCall,
+} from '@mission-control/protocol';
 import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { parseFileWriteOutput } from './interactive-coding-file-write-preview.js';
 import { parseFileEditOutput, parseFilePatchOutput } from './interactive-coding-tool-preview.js';
 import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools.js';
+import { buildCodingAgentGraphForSelection, resolveGraphSdkModel } from './run-agent-graph-prompt.js';
 
 export type ActiveCodingAgentTurn = {
     readonly done: Promise<void>;
@@ -37,6 +47,14 @@ export type CodingAgentTurnOptions = {
     readonly emitEvent: (event: AgentEvent) => void;
     readonly observeStoredEvent?: (event: AgentEvent) => void;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
+    /**
+     * Execution engine for the turn. `'graph'` drives the ABG coding-agent graph through the SAME
+     * `SessionRunOwner` + tool registry the flat loop uses (parity with the non-interactive
+     * `--engine graph` owner path); omitted/`'flat'` drives the flat provider-turn loop. When `'graph'`,
+     * `resolveSdkModel` resolves the AI-SDK model (falling back to the flat→AI-SDK bridge over `provider`).
+     */
+    readonly engine?: 'graph' | 'flat';
+    readonly resolveSdkModel?: SdkModelResolver;
 };
 
 export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Promise<ActiveCodingAgentTurn> {
@@ -106,6 +124,39 @@ async function createInteractiveRunOwner(
         ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
     };
     const toolRegistry = await createInteractiveToolRegistry(toolOptions, approvals);
+
+    // The graph engine drives the turn through the SAME SessionRunOwner + toolRegistry the flat loop uses
+    // (parity with the non-interactive `--engine graph` owner path). Built only when `engine === 'graph'`;
+    // omitted → the owner runs the flat provider-turn loop (byte-identical to the pre-graph behavior).
+    const useGraph = options.engine === 'graph';
+    const resolveSdkModel = useGraph ? await resolveInteractiveSdkModel(options) : undefined;
+    const onSignal = useGraph ? interactiveGraphStreamSignal(options.output, renderState) : undefined;
+    const runProviderTurn =
+        useGraph && resolveSdkModel !== undefined
+            ? createGraphTurnRunner({
+                  graph: buildCodingAgentGraphForSelection(options.modelProviderSelection),
+                  sessionId: options.sessionId,
+                  now: () => new Date().toISOString(),
+                  modelProviderSelection: options.modelProviderSelection,
+                  registry: createCodingAgentNodeRegistry(),
+                  resolveSdkModel,
+                  toolRegistry,
+                  haltOnFailedToolSettlement: true,
+                  ...(onSignal !== undefined ? { onSignal } : {}),
+              })
+            : undefined;
+
+    // Graph events surface ONLY through onDurableEvent (no provider envelopes fire on the graph). Render
+    // them to the TUI when on the graph engine; otherwise observe for recording (the flat path renders via
+    // onProviderEnvelope). `runProviderTurn !== undefined` is the authoritative engine signal here.
+    const onDurableEventHandler =
+        runProviderTurn !== undefined
+            ? (event: AgentEvent) => {
+                  renderInteractiveGraphDurableEvent(options.output, renderState, event);
+                  options.observeStoredEvent?.(event);
+              }
+            : options.observeStoredEvent;
+
     return new SessionRunOwner({
         sessionId: options.sessionId,
         store: options.store,
@@ -115,7 +166,8 @@ async function createInteractiveRunOwner(
         readMessages: async () =>
             projectApprovalContinuationMessages(await options.store.getEvents(options.sessionId), options.sessionId),
         toolRegistry,
-        ...(options.observeStoredEvent !== undefined ? { onDurableEvent: options.observeStoredEvent } : {}),
+        ...(runProviderTurn !== undefined ? { runProviderTurn } : {}),
+        ...(onDurableEventHandler !== undefined ? { onDurableEvent: onDurableEventHandler } : {}),
         onProviderEnvelope: (envelope: AgentEventEnvelope) =>
             renderProviderEnvelope(options.output, renderState, envelope),
         onToolCall: (toolCall: ToolCall) => preflightInteractiveToolCall(toolCall, toolOptions, approvals),
@@ -247,6 +299,173 @@ function renderInteractiveToolSettlement(output: ChatOutput, settlement: ToolInv
             return;
         }
         output.write(`Command output for ${settlement.toolName}\n${settlement.modelOutput?.content ?? ''}\n`);
+    }
+}
+
+/**
+ * Resolve the AI-SDK model for an interactive graph turn. The interactive path always carries a
+ * `provider` (the deterministic or real flat provider), so `resolveGraphSdkModel` short-circuits to the
+ * flat→AI-SDK bridge — driving that provider on the graph with no auth-store resolution. An injected
+ * `resolveSdkModel` (tests) wins.
+ */
+async function resolveInteractiveSdkModel(
+    options: Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string },
+): Promise<SdkModelResolver> {
+    return resolveGraphSdkModel({
+        selection: options.modelProviderSelection,
+        ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
+        provider: options.provider,
+    });
+}
+
+/**
+ * Live token-stream tap for the interactive graph path. Renders `llm.text.delta` signals to the chat
+ * output as they are yielded (before projection), so the TUI streams token-by-token — parity with the
+ * flat path's `text_delta` envelope rendering. Non-delta signals are ignored. The tap does not affect
+ * projection or persistence; `llm.turn.completed` (rendered via `renderInteractiveGraphDurableEvent`)
+ * closes the stream with a newline and records the final message.
+ */
+function interactiveGraphStreamSignal(output: ChatOutput, state: ProviderRenderState): (signal: AbgSignal) => void {
+    return (signal) => {
+        const delta = readDeltaFromSignal(signal);
+        if (delta === undefined) {
+            return;
+        }
+        if (!state.streamingText) {
+            output.write('Assistant: ');
+            state.streamingText = true;
+        }
+        output.write(delta);
+    };
+}
+
+/**
+ * Render a graph AgentEvent (surfaced through `onDurableEvent`) to the interactive TUI. Maps the graph's
+ * boundary emits to the same output the flat path produces: final assistant text (`llm.turn.completed`),
+ * tool outcomes (`tool.completed`/`tool.failed`), and errors (`llm.error`). Tool settlements render here
+ * because the coordinator's `onToolSettlement` hook does NOT fire for graph tool calls (graph tools run
+ * through the registry directly), so the flat `renderInteractiveToolSettlement` would never be reached.
+ */
+function renderInteractiveGraphDurableEvent(output: ChatOutput, state: ProviderRenderState, event: AgentEvent): void {
+    const emit = event.abg?.emit;
+    if (emit === undefined) {
+        return;
+    }
+    if (emit.type === 'llm.turn.completed') {
+        const text = readStringField(emit.payload, 'text') ?? '';
+        if (state.streamingText) {
+            output.write('\n');
+            state.streamingText = false;
+        } else if (text.length > 0) {
+            output.write(`Assistant: ${text}\n`);
+        }
+        if (text.length > 0) {
+            state.finalMessage = text;
+        }
+        return;
+    }
+    if (emit.type === 'tool.completed') {
+        renderGraphToolSettlement(output, emit.payload, 'completed');
+        return;
+    }
+    if (emit.type === 'tool.failed') {
+        renderGraphToolSettlement(output, emit.payload, 'failed');
+        return;
+    }
+    if (emit.type === 'llm.error') {
+        const message = readStringField(emit.payload, 'error');
+        output.write(`Error: ${message ?? 'LLM error'}\n`);
+    }
+}
+
+/**
+ * Render a graph tool outcome from its emit payload. Mirrors the flat `renderInteractiveToolSettlement`
+ * shape, reading fields off the `unknown` payload with `in`/`typeof` narrowing (no casts). The graph
+ * `output` is the model-facing settlement string (a stableJson of the structured object for file tools,
+ * or the command stdout for command tools) — re-parsed to recover the detail the flat path renders.
+ */
+function renderGraphToolSettlement(output: ChatOutput, payload: unknown, status: 'completed' | 'failed'): void {
+    const toolName = readStringField(payload, 'toolName') ?? 'tool';
+    if (status === 'failed') {
+        const message = readErrorMessage(payload);
+        output.write(`${toolName} failed: ${message ?? 'unknown error'}\n`);
+        return;
+    }
+    const modelOutput = readStringField(payload, 'output');
+    const structured = tryParseStructuredOutput(modelOutput);
+    if (toolName === 'file.patch') {
+        const parsed = structured !== undefined ? parseFilePatchOutput(structured) : undefined;
+        if (parsed !== undefined) {
+            output.write(`Applied patch: ${parsed.appliedFiles.join(', ')}\n`);
+        }
+        return;
+    }
+    if (toolName === 'file.edit') {
+        const parsed = structured !== undefined ? parseFileEditOutput(structured) : undefined;
+        if (parsed !== undefined) {
+            const noun = parsed.occurrencesReplaced === 1 ? 'occurrence' : 'occurrences';
+            output.write(`Applied edit: ${parsed.appliedFiles.join(', ')} (${parsed.occurrencesReplaced} ${noun})\n`);
+        }
+        return;
+    }
+    if (toolName === 'file.write') {
+        const parsed = structured !== undefined ? parseFileWriteOutput(structured) : undefined;
+        if (parsed !== undefined) {
+            const verb = parsed.operation === 'created' ? 'Created' : 'Replaced';
+            output.write(`${verb} file: ${parsed.appliedFiles.join(', ')}\n`);
+        }
+        return;
+    }
+    if (toolName === 'command.run' || toolName === 'bash.run') {
+        output.write(`Command output for ${toolName}\n${modelOutput ?? ''}\n`);
+    }
+}
+
+/** Pull the `delta` string off an `llm.text.delta` emit signal; `undefined` for other signals. */
+function readDeltaFromSignal(signal: AbgSignal): string | undefined {
+    if (signal.type !== 'emit' || signal.event.type !== 'llm.text.delta') {
+        return undefined;
+    }
+    return readStringField(signal.event.payload, 'delta');
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readStringField(payload: unknown, field: string): string | undefined {
+    if (!isPlainObject(payload)) {
+        return undefined;
+    }
+    const value = payload[field];
+    return typeof value === 'string' ? value : undefined;
+}
+
+/** Read a human-readable message off an emit payload's `error` field (string or `{ message }`). */
+function readErrorMessage(payload: unknown): string | undefined {
+    if (!isPlainObject(payload)) {
+        return undefined;
+    }
+    const error = payload['error'];
+    if (typeof error === 'string') {
+        return error;
+    }
+    return readStringField(error, 'message');
+}
+
+/**
+ * Recover the structured tool output object the flat path renders. File tools emit the model-facing
+ * `output` as a stableJson of their structured object, so `JSON.parse` recovers it; non-JSON outputs
+ * (command stdout, truncated payloads) yield `undefined` and render as their raw string instead.
+ */
+function tryParseStructuredOutput(modelOutput: string | undefined): unknown {
+    if (modelOutput === undefined) {
+        return undefined;
+    }
+    try {
+        return JSON.parse(modelOutput);
+    } catch {
+        return undefined;
     }
 }
 

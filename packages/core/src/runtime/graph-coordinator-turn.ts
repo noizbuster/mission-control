@@ -15,6 +15,7 @@
 import type {
     AbgEmbeddedEvent,
     AbgNodeModelOptions,
+    AbgSignal,
     AgentEvent,
     AgentMessage,
     ModelProviderSelection,
@@ -49,6 +50,13 @@ export type GraphTurnRunnerWiring = {
      * non-allowlisted command terminates immediately rather than looping until the node-run budget.
      */
     readonly haltOnFailedToolSettlement?: boolean;
+    /**
+     * Observation-only tap forwarded into `runAbgGraph` (`AbgGraphRunnerInput.onSignal`); fires for
+     * every node signal before projection — including `llm.text.delta` streaming deltas. Lets the
+     * interactive owner render live token deltas. Does not affect projection, persistence, or the
+     * run result.
+     */
+    readonly onSignal?: (signal: AbgSignal) => void;
     /**
      * Reads approval decisions to thread into the graph's `graphInput.events`, so a graph that
      * blocked on a `human-approval` node (or a `requires_approval` policy) RESUMES on a promoted

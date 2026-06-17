@@ -142,9 +142,7 @@ async function runAttempt(
     if (node.kind === 'llm') {
         // Carry the turn's final assistant text as the message so consumers (e.g. the session
         // owner's final-message capture) see the model's actual output, matching the flat loop.
-        state.events.push(
-            modelCallEvent('model.call.completed', graph.id, node, input, model, result.finalText),
-        );
+        state.events.push(modelCallEvent('model.call.completed', graph.id, node, input, model, result.finalText));
     }
     if (node.kind === 'tool') {
         state.events.push(
@@ -214,6 +212,11 @@ async function runNode(
     let finalText: string | undefined;
     let terminal = false;
     for await (const signal of runAbgNode(registry, node, runContext(graph, registry, input, state))) {
+        // Observation-only tap: fires for EVERY yielded node signal (including high-frequency
+        // streaming signals such as `llm.text.delta`) before projection to an AgentEvent. Lets an
+        // interactive caller render live token deltas without bloating the durable ledger. Does not
+        // influence projection, persistence, or the run result.
+        input.onSignal?.(signal);
         lastSignal = signal;
         state.nodeStatuses[signal.nodeId] = nodeStatusForSignal(signal);
         if (signal.type === 'failure') {

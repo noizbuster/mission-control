@@ -2,6 +2,7 @@ import type {
     AbgGraphInput,
     AbgGraphStatus,
     AbgNodeModelOptions,
+    AbgSignal,
     AgentEvent,
     ModelProviderSelection,
 } from '@mission-control/protocol';
@@ -60,6 +61,14 @@ export type AbgGraphRunnerInput = {
      * model to self-correct on retryable-looking tool errors.
      */
     readonly haltOnFailedToolSettlement?: boolean;
+    /**
+     * Observation-only tap invoked for every node signal yielded during the run, BEFORE projection to
+     * an AgentEvent — including high-frequency streaming signals (`llm.text.delta`,
+     * `llm.reasoning.delta`) that are NOT persisted. Lets an interactive caller render live token
+     * deltas without bloating the durable ledger. Pure side-effect: does not influence projection,
+     * persistence, or the run result. Omitted by the flat path and the non-interactive graph path.
+     */
+    readonly onSignal?: (signal: AbgSignal) => void;
 };
 
 export type AbgGraphRunResult = {

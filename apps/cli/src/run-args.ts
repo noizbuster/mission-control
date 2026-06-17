@@ -142,7 +142,10 @@ function buildRunArgs(input: {
     if (input.graphPath !== undefined && input.prompt !== undefined) {
         throw new Error('prompt cannot be combined with --graph');
     }
-    if (input.engine === 'graph' && input.prompt === undefined) {
+    // `--engine graph` drives the ABG graph. Without `--prompt` it is valid in the interactive (`ink`)
+    // mode — the prompt arrives via the chat loop — so only require a prompt for the explicitly
+    // non-interactive modes (plain/json/jsonl), where no chat input exists to supply one.
+    if (input.engine === 'graph' && input.prompt === undefined && input.mode !== 'ink') {
         throw new Error('--engine graph requires a prompt');
     }
     const baseArgs = {

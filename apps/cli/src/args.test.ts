@@ -49,8 +49,10 @@ describe('parseArgs', () => {
         expect(parseArgs([]).engine).toBeUndefined();
         expect(() => parseArgs(['--engine', 'turbo'])).toThrow('--engine only supports graph or flat');
         expect(() => parseArgs(['--engine'])).toThrow('--engine requires a value');
-        // --engine graph needs a prompt to seed the graph run.
-        expect(() => parseArgs(['--engine', 'graph'])).toThrow('--engine graph requires a prompt');
+        // --engine graph without --prompt is valid in interactive (ink) mode — the prompt arrives via
+        // the chat loop — but requires a prompt in the non-interactive modes (plain/json/jsonl).
+        expect(parseArgs(['--engine', 'graph']).engine).toBe('graph');
+        expect(() => parseArgs(['--no-tui', '--engine', 'graph'])).toThrow('--engine graph requires a prompt');
     });
 
     it('parses opencode-style provider model shorthand', () => {

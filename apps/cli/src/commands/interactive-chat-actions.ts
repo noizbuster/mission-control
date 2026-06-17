@@ -234,6 +234,8 @@ async function runResumeAction(
             emitEvent: coding.emitEvent ?? (() => undefined),
             ...(coding.observeStoredEvent !== undefined ? { observeStoredEvent: coding.observeStoredEvent } : {}),
             ...(coding.commandExecutor !== undefined ? { commandExecutor: coding.commandExecutor } : {}),
+            ...(coding.engine !== undefined ? { engine: coding.engine } : {}),
+            ...(coding.resolveSdkModel !== undefined ? { resolveSdkModel: coding.resolveSdkModel } : {}),
         }),
     );
 }
