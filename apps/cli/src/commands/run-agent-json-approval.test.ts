@@ -58,16 +58,22 @@ describe('runAgent JSON non-interactive approvals', () => {
         expect(requestAt(requests, 0).tools?.map((tool) => tool.name)).not.toEqual(
             expect.arrayContaining(['read', 'ls', 'grep', 'find']),
         );
-        expect(requestAt(requests, 1).messages).toEqual([
-            { role: 'user', content: 'read README' },
-            { role: 'assistant', content: 'reading README' },
-            {
-                role: 'tool',
-                toolCallId: 'task18_read_call',
-                status: 'completed',
-                output: expect.stringContaining('task18 read result'),
-            },
-        ]);
+        // Engine-agnostic: the flat loop sends exactly [user, assistant, tool]; the graph engine
+        // prepends a coding-agent system prompt and reshapes the assistant/tool turns. The intent —
+        // the model sees the tool's output on the next turn — is captured by checking the read
+        // result reaches a later provider request (and by the task.completed outcome below).
+        const laterToolResult = requests
+            .slice(1)
+            .flatMap((request) => request.messages)
+            .find(
+                (message) => message.role === 'tool' && message.toolCallId === 'task18_read_call',
+            );
+        expect(laterToolResult).toMatchObject({
+            role: 'tool',
+            toolCallId: 'task18_read_call',
+            status: 'completed',
+            output: expect.stringContaining('task18 read result'),
+        });
         expect(events.map((event) => event.type)).toEqual(expect.arrayContaining(['tool.completed', 'task.completed']));
         expect(events.find((event) => event.type === 'task.completed')?.message).toBe('final saw task18 read result');
     });

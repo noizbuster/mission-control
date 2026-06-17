@@ -5,6 +5,7 @@ import type {
     AbgSignal,
     AgentEvent,
 } from '@mission-control/protocol';
+import { AgentEventTypeSchema } from '@mission-control/protocol';
 
 export type AbgSignalProjectionInput = {
     readonly graphId: string;
@@ -85,8 +86,17 @@ function eventTypeForSignal(signal: AbgSignal): AgentEvent['type'] {
         case 'spawn':
         case 'fallback':
             return 'node.progress';
-        case 'emit':
-            return 'log';
+        case 'emit': {
+            // An emit signal whose event.type is itself a first-class AgentEvent type (e.g.
+            // tool.completed, tool.failed from the LLMActor adapter) projects to that type so the
+            // graph's tool-lifecycle events are observable exactly like the flat loop's (which emit
+            // them directly). ABG-internal emit types (llm.text.delta, llm.turn.completed,
+            // context.packed, ...) are NOT AgentEvent types and stay 'log' — their structured type
+            // + payload travel in abg.emit for the coding-step replay. Validated with the schema
+            // (cast-free): safeParse returns the typed value only for real AgentEvent types.
+            const parsed = AgentEventTypeSchema.safeParse(signal.event.type);
+            return parsed.success ? parsed.data : 'log';
+        }
         case 'select':
             return 'decision.selected';
         case 'transition':

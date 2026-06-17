@@ -105,12 +105,22 @@ function buildErrorAfterToolModel(): MockLanguageModelV3 {
 function emittedEventTypes(events: readonly AgentEvent[]): string[] {
     const types: string[] = [];
     for (const event of events) {
+        // Boundary emits (llm.turn.completed, llm.tool_call.proposed, tool.completed, ...) carry
+        // their structured type on `abg.emit.type`. First-class AgentEvent types (tool.completed)
+        // now ALSO project to that type at the top level, so read the source of truth from
+        // `abg.emit.type` first. Non-boundary emits (policy.budget.*, llm.text.delta, ...) are not
+        // allowlisted, so they stay `log` with the type in the message string — recover it there.
+        const emitType = event.abg?.emit?.type;
+        if (emitType !== undefined) {
+            types.push(emitType);
+            continue;
+        }
         if (event.type === 'log' && event.message !== undefined) {
             const match = event.message.match(/event: (.+)$/);
             if (match !== null) {
-                const eventType = match[1];
-                if (eventType !== undefined) {
-                    types.push(eventType);
+                const messageType = match[1];
+                if (messageType !== undefined) {
+                    types.push(messageType);
                 }
             }
         }
