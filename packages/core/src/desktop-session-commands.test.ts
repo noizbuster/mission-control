@@ -1,4 +1,5 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
+import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { createDesktopSessionCommandService } from './desktop-session-commands.js';
 import { commandRunCall, filePatchCall, fixedNow, readReplay } from './desktop-session-commands-test-support.js';
@@ -10,6 +11,7 @@ import {
 } from './desktop-session-run-owner-scenarios.test-support.js';
 import { JsonlSessionEventStore } from './memory/jsonl-session-event-store.js';
 import { createDeterministicProvider } from './providers/deterministic-provider.js';
+import type { ProviderAdapter, ProviderTurnRequest } from './providers/provider-turn-types.js';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -42,12 +44,11 @@ describe('desktop session command service', () => {
             expect(replay.events.find((event) => event.type === 'prompt.admitted')?.message).toBe(
                 'summarize the repo from desktop',
             );
-            expect(
-                replay.events.find((event) => event.type === 'model.call.completed')?.providerStreamChunk,
-            ).toMatchObject({
-                kind: 'response_completed',
-                message: { content: 'desktop answer' },
-            });
+            // Graph emits model.call.completed with final text in `message` (flat carried it on
+            // providerStreamChunk). Asserting the message keeps the test engine-agnostic.
+            expect(replay.events.find((event) => event.type === 'model.call.completed')?.message).toBe(
+                'desktop answer',
+            );
         } finally {
             await rm(dataDir, { recursive: true, force: true });
         }
@@ -109,25 +110,25 @@ describe('desktop session command service', () => {
         // Given
         const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-desktop-allow-'));
         const workspaceRoot = await mkdtemp(join(tmpdir(), 'mctrl-desktop-allow-workspace-'));
-        const provider = createDeterministicProvider([
-            { kind: 'text_delta', delta: 'I can patch and test.' },
-            filePatchCall('call_patch_allowed', '.mission-control-allowed.txt', 'approved write'),
-            commandRunCall('call_test_allowed'),
-            { kind: 'response_completed', content: 'approval required' },
-        ]);
+        // The graph path re-runs the conversation from messages on each resume (the flat path
+        // blocked on the first tool call without execution). Use a stateful provider so each turn
+        // surfaces the next pending tool: patch first, then command, then a final text answer.
+        // stepwiseProvider[0] = patch turn, [1] = command turn, [2] = continuation text turn.
+        const provider = stepwiseProvider();
+        const commandExecutor = async () => ({
+            exitCode: 0,
+            signal: null,
+            stdout: 'desktop test passed\n',
+            stderr: '',
+            timedOut: false,
+            durationMs: 7,
+        });
         const firstProcess = createDesktopSessionCommandService({
             dataDir,
             workspaceRoot,
             now: fixedNow,
             provider,
-            commandExecutor: async () => ({
-                exitCode: 0,
-                signal: null,
-                stdout: 'desktop test passed\n',
-                stderr: '',
-                timedOut: false,
-                durationMs: 7,
-            }),
+            commandExecutor,
         });
 
         try {
@@ -141,14 +142,7 @@ describe('desktop session command service', () => {
                 workspaceRoot,
                 now: fixedNow,
                 provider,
-                commandExecutor: async () => ({
-                    exitCode: 0,
-                    signal: null,
-                    stdout: 'desktop test passed\n',
-                    stderr: '',
-                    timedOut: false,
-                    durationMs: 7,
-                }),
+                commandExecutor,
             });
 
             // When
@@ -158,7 +152,7 @@ describe('desktop session command service', () => {
                 state: 'approved',
                 reason: 'desktop approved patch',
             });
-            const historicalCommandReceipt = await restartedProcess.decideApproval({
+            const commandReceipt = await restartedProcess.decideApproval({
                 sessionId: 'session_desktop_allowed',
                 approvalId: 'approval_permission_call_test_allowed',
                 state: 'approved',
@@ -170,19 +164,22 @@ describe('desktop session command service', () => {
             const replay = await readReplay(dataDir, 'session_desktop_allowed');
             expect(written).toBe('approved write\n');
             expect(patchReceipt.status).toBe('blocked_on_approval');
-            expect(historicalCommandReceipt.status).toBe('idle');
+            expect(commandReceipt.status).toBe('completed');
             expect(replay.approvals).toEqual(
                 expect.arrayContaining([
                     expect.objectContaining({
                         approvalId: 'approval_permission_call_patch_allowed',
                         state: 'approved',
                     }),
+                    expect.objectContaining({
+                        approvalId: 'approval_permission_call_test_allowed',
+                        state: 'approved',
+                    }),
                 ]),
             );
             expect(replay.events.map((event) => event.type)).toEqual(
-                expect.arrayContaining(['approval.resumed', 'file.diff.applied', 'tool.completed']),
+                expect.arrayContaining(['approval.resumed', 'file.diff.applied', 'tool.completed', 'run.completed']),
             );
-            expect(replay.events.map((event) => event.type)).not.toContain('command.completed');
         } finally {
             await rm(dataDir, { recursive: true, force: true });
             await rm(workspaceRoot, { recursive: true, force: true });
@@ -272,3 +269,81 @@ describe('desktop session command service', () => {
         }
     });
 });
+
+/**
+ * Stateful provider for stepwise-approval: each turn surfaces the NEXT pending tool
+ * (patch → command → final text), matching the graph's re-run-from-messages resume semantics.
+ */
+function stepwiseProvider(): ProviderAdapter {
+    let turn = 0;
+    return {
+        async *streamTurn(request: ProviderTurnRequest): AsyncGenerator<ProviderStreamChunk> {
+            turn += 1;
+            if (turn === 1) {
+                const patch = filePatchCall('call_patch_allowed', '.mission-control-allowed.txt', 'approved write\n');
+                if (patch.kind !== 'tool_call_completed') {
+                    throw new TypeError('expected file.patch tool call step');
+                }
+                yield {
+                    kind: 'tool_call_completed',
+                    requestId: request.requestId,
+                    sequence: 1,
+                    toolCall: { toolCallId: patch.toolCallId, toolName: patch.toolName, argumentsJson: patch.argumentsJson },
+                };
+                yield {
+                    kind: 'response_completed',
+                    requestId: request.requestId,
+                    sequence: 2,
+                    message: {
+                        messageId: 'assistant_stepwise_patch',
+                        role: 'assistant',
+                        content: 'approval required',
+                        providerToolCalls: [
+                            { providerID: 'local', toolCallId: patch.toolCallId, toolName: patch.toolName, argumentsJson: patch.argumentsJson },
+                        ],
+                    },
+                    finishReason: 'tool_calls',
+                };
+                return;
+            }
+            if (turn === 2) {
+                const command = commandRunCall('call_test_allowed');
+                if (command.kind !== 'tool_call_completed') {
+                    throw new TypeError('expected command.run tool call step');
+                }
+                yield {
+                    kind: 'tool_call_completed',
+                    requestId: request.requestId,
+                    sequence: 1,
+                    toolCall: { toolCallId: command.toolCallId, toolName: command.toolName, argumentsJson: command.argumentsJson },
+                };
+                yield {
+                    kind: 'response_completed',
+                    requestId: request.requestId,
+                    sequence: 2,
+                    message: {
+                        messageId: 'assistant_stepwise_command',
+                        role: 'assistant',
+                        content: 'approval required',
+                        providerToolCalls: [
+                            { providerID: 'local', toolCallId: command.toolCallId, toolName: command.toolName, argumentsJson: command.argumentsJson },
+                        ],
+                    },
+                    finishReason: 'tool_calls',
+                };
+                return;
+            }
+            yield {
+                kind: 'response_completed',
+                requestId: request.requestId,
+                sequence: 1,
+                message: {
+                    messageId: 'assistant_stepwise_done',
+                    role: 'assistant',
+                    content: 'mission complete',
+                },
+                finishReason: 'stop',
+            };
+        },
+    };
+}

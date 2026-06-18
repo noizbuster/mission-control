@@ -1,4 +1,5 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
+import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { createDesktopSessionCommandService } from './desktop-session-commands.js';
 import { filePatchCall, fixedNow, readReplay } from './desktop-session-commands-test-support.js';
@@ -56,7 +57,12 @@ describe('desktop session command approval continuation', () => {
             expect(requests).toHaveLength(2);
             expect(requests[0]).toMatchObject(originalSelection);
             expect(requests[1]).toMatchObject(originalSelection);
-            expect(requests[1]?.messages.map((message) => message.role)).toEqual(['user', 'assistant', 'tool']);
+            // The graph seed leads with the ABG system persona; assert each expected role is
+            // present rather than exact-array (graph emits extra messages across approval boundaries).
+            const resumeRoles = requests[1]?.messages.map((message) => message.role) ?? [];
+            expect(resumeRoles).toContain('user');
+            expect(resumeRoles).toContain('assistant');
+            expect(resumeRoles).toContain('tool');
             expect(requests[1]?.messages.find((message) => message.role === 'tool')).toMatchObject({
                 toolCallId: 'call_patch_continue',
                 status: 'completed',
@@ -65,7 +71,7 @@ describe('desktop session command approval continuation', () => {
                 expect.arrayContaining(['tool.completed', 'model.call.completed', 'run.completed']),
             );
             expect(replay.events.at(-1)).toMatchObject({ type: 'run.completed' });
-            expect(continuedMessage(replay.events)).toBe('continued after completed tool result');
+            expect(continuedAssistantMessage(replay.events)).toBe('continued after completed tool result');
         } finally {
             await rm(dataDir, { recursive: true, force: true });
             await rm(workspaceRoot, { recursive: true, force: true });
@@ -108,7 +114,10 @@ describe('desktop session command approval continuation', () => {
             const replay = await readReplay(dataDir, 'session_desktop_continue_failed');
             expect(receipt.status).toBe('failed');
             expect(replay.events.at(-1)).toMatchObject({ type: 'run.failed' });
-            expect(lastEventOfType(replay.events, 'model.call.failed')?.message).toBe('provider continuation failed');
+            // The graph surfaces provider errors as `llm.error` emits (log events) and `node.failed`
+            // boundary events, not flat-path `model.call.failed`. Asserting the trailing run.failed
+            // plus the error-bearing log event keeps the test engine-agnostic.
+            expect(replay.events.some((event) => isGraphLlmErrorWithMessage(event, 'provider continuation failed'))).toBe(true);
         } finally {
             await rm(dataDir, { recursive: true, force: true });
             await rm(workspaceRoot, { recursive: true, force: true });
@@ -372,10 +381,29 @@ function unexpectedResumeProvider(requests: ProviderTurnRequest[]): ProviderAdap
     };
 }
 
-function continuedMessage(events: Awaited<ReturnType<typeof readReplay>>['events']): string | undefined {
-    return events.find(
-        (event) => event.providerStreamChunk?.kind === 'response_completed' && event.message?.startsWith('continued'),
-    )?.message;
+function continuedAssistantMessage(events: Awaited<ReturnType<typeof readReplay>>['events']): string | undefined {
+    // The graph carries the model's final assistant text on `model.call.completed.message`
+    // (the flat path carried it on `providerStreamChunk.message.content`).
+    return events
+        .filter((event) => event.type === 'model.call.completed')
+        .reverse()
+        .find((event) => (event.message ?? '').startsWith('continued'))?.message;
+}
+
+function isGraphLlmErrorWithMessage(event: AgentEvent, message: string): boolean {
+    if (event.type !== 'log') {
+        return false;
+    }
+    const emit = event.abg?.emit;
+    if (emit?.type !== 'llm.error') {
+        return false;
+    }
+    const payload = emit.payload;
+    if (typeof payload !== 'object' || payload === null || !('error' in payload)) {
+        return false;
+    }
+    const error = (payload as { readonly error?: unknown }).error;
+    return typeof error === 'string' ? error === message : false;
 }
 
 function lastEventOfType(
