@@ -24,7 +24,7 @@ import { stepCountIs, streamText } from 'ai';
 import { redactCredentialText } from '../../../providers/redaction-handler.js';
 import { errorToString } from '../../../util/error-to-string.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
-import type { AbgToolSettlement, AbgToolSettlementLedger } from './abg-tool-bridge.js';
+import { isApprovalRequiredSettlement, type AbgToolSettlement, type AbgToolSettlementLedger } from './abg-tool-bridge.js';
 import { abgSignalsFromStreamPart } from './ai-sdk-adapter.js';
 
 type StreamTextParameters = Parameters<typeof streamText>[0];
@@ -89,9 +89,19 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
     let turnText = '';
     let turnUsage: unknown;
     let turnResponseMessages: readonly ModelMessage[] = [];
+    // Track proposals in stream order so the approval-block check respects proposal order. The
+    // SDK dispatches execute in non-deterministic order under a serialized batch; the ledger
+    // records in completion order. Using the first-PROPOSED matches flat "first tool call" parity.
+    const proposedToolCallIds: string[] = [];
     try {
         for await (const part of result.fullStream) {
             for (const signal of abgSignalsFromStreamPart(part, adapterContext)) {
+                if (signal.type === 'emit' && signal.event.type === 'llm.tool_call.proposed') {
+                    const proposedId = extractToolCallId(signal.event.payload);
+                    if (proposedId !== undefined) {
+                        proposedToolCallIds.push(proposedId);
+                    }
+                }
                 yield signal;
             }
         }
@@ -137,7 +147,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
     // `failure` carrying the `tool_approval_blocked` code + toolCallId so the coordinator settles
     // the graph as `blocked` (not retried as a hard failure). The gate already emitted the
     // `approval.requested`/`approval.blocked` events through the registry, so no duplicate emit.
-    const approvalBlock = input.settlementLedger?.approvalBlockedSettlement();
+    const approvalBlock = firstApprovalBlockedSettlementInProposalOrder(input.settlementLedger, proposedToolCallIds);
     if (approvalBlock !== undefined) {
         yield {
             type: 'failure',
@@ -198,6 +208,38 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         responseMessages: turnResponseMessages,
     };
     yield { type: 'success', nodeId, ...graphIdPart, result: turnResult };
+}
+
+/**
+ * Find the first-PROPOSED settlement (by stream order) that is approval-blocked, falling back to
+ * the ledger's first-recorded approval block when no proposal order is available. The proposal
+ * order is deterministic (it mirrors the model's tool-call stream); the ledger's insertion order
+ * follows the SDK's execute-dispatch order, which under a serialized batch is FIFO on
+ * microtask-scheduled acquires — non-deterministic across runs. Falls back when the ledger is
+ * absent or no proposals were tracked (preserves prior behavior for those callers).
+ */
+function firstApprovalBlockedSettlementInProposalOrder(
+    ledger: AbgToolSettlementLedger | undefined,
+    proposedToolCallIds: readonly string[],
+): AbgToolSettlement | undefined {
+    if (ledger === undefined) {
+        return undefined;
+    }
+    for (const toolCallId of proposedToolCallIds) {
+        const settlement = ledger.lookup(toolCallId);
+        if (settlement !== undefined && isApprovalRequiredSettlement(settlement)) {
+            return settlement;
+        }
+    }
+    return ledger.approvalBlockedSettlement();
+}
+
+function extractToolCallId(payload: unknown): string | undefined {
+    if (typeof payload !== 'object' || payload === null || !('toolCallId' in payload)) {
+        return undefined;
+    }
+    const value = (payload as { readonly toolCallId?: unknown }).toolCallId;
+    return typeof value === 'string' ? value : undefined;
 }
 
 /**

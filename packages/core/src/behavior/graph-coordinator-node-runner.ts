@@ -216,7 +216,10 @@ async function runNode(
         // streaming signals such as `llm.text.delta`) before projection to an AgentEvent. Lets an
         // interactive caller render live token deltas without bloating the durable ledger. Does not
         // influence projection, persistence, or the run result.
-        input.onSignal?.(signal);
+        // Awaited so a tap returning a Promise (an async tool-arg preview render on the interactive
+        // path) completes before the next signal — preserving TUI output order. Sync taps return void,
+        // which awaits as a no-op.
+        await input.onSignal?.(signal);
         lastSignal = signal;
         state.nodeStatuses[signal.nodeId] = nodeStatusForSignal(signal);
         if (signal.type === 'failure') {
@@ -303,12 +306,20 @@ function isToolApprovalBlockedError(error: unknown): boolean {
  * `command_not_allowed` under `haltOnFailedToolSettlement`, or a denial) so the node settles as a
  * NON-retryable `failed`. The `error` is `unknown` (the failure signal contract); narrowed with
  * `in`/typeof — no cast. Matches the codes `terminalToolFailure`/`approvalDeniedFailure` emit.
+ *
+ * Also recognizes `provider_aborted` (an interrupt/abort) as terminal — without this, the graph
+ * would retry the model call up to `maxAttempts` times before surfacing the interrupt, which hangs
+ * interrupt-aware tests (and wastes budget on a run the user already canceled).
  */
 function isTerminalToolFailureError(error: unknown): boolean {
     if (typeof error !== 'object' || error === null || !('code' in error)) {
         return false;
     }
-    return error.code === 'tool_settlement_failed' || error.code === 'tool_denied';
+    return (
+        error.code === 'tool_settlement_failed' ||
+        error.code === 'tool_denied' ||
+        error.code === 'provider_aborted'
+    );
 }
 
 /**

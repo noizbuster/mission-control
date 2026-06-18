@@ -105,7 +105,8 @@ export function wrapFlatProviderAsSdkModel(options: FlatProviderBridgeOptions): 
                 attempt: 1,
                 signal: callOptions.abortSignal ?? new AbortController().signal,
             };
-            return { stream: bridgeFlatStream(provider.streamTurn(request, context)) };
+            const iterator = provider.streamTurn(request, context)[Symbol.asyncIterator]();
+            return { stream: bridgeFlatStream(iterator, context.signal) };
         },
     };
 }
@@ -231,14 +232,21 @@ function jsonSchemaToRecord(schema: JSONSchema7): Record<string, unknown> {
 }
 
 /**
- * Translate a flat `ProviderStreamChunk` async iterable into a `LanguageModelV3StreamPart` stream.
+ * Translate a flat `ProviderStreamChunk` async iterator into a `LanguageModelV3StreamPart` stream.
  * Text deltas are framed with text-start/text-end; tool calls are emitted in full on
  * `tool_call_completed` (the flat stream only carries the toolName there, so the input deltas are
  * emitted as one block); `response_completed` becomes the terminal `finish`. `response_failed`
  * surfaces through `controller.error` as a `FlatProviderBridgeError` carrying the original
  * `ProtocolError` so the abort/fail distinction is preserved for downstream mapping.
+ *
+ * The iterator's `return()` is called when the consumer aborts (the SDK's abortSignal fires), so a
+ * provider that yields a never-resolving `next()` (e.g. the desktop abort test) is released instead
+ * of hanging the for-await forever.
  */
-function bridgeFlatStream(chunks: AsyncIterable<ProviderStreamChunk>): ReadableStream<LanguageModelV3StreamPart> {
+function bridgeFlatStream(
+    iterator: AsyncIterator<ProviderStreamChunk>,
+    signal: AbortSignal,
+): ReadableStream<LanguageModelV3StreamPart> {
     return new ReadableStream<LanguageModelV3StreamPart>({
         async start(controller) {
             const textId = 'flat_bridge_text';
@@ -251,8 +259,30 @@ function bridgeFlatStream(chunks: AsyncIterable<ProviderStreamChunk>): ReadableS
                 }
             };
             controller.enqueue({ type: 'stream-start', warnings: [] });
+            const abortPromise = new Promise<IteratorResult<ProviderStreamChunk>>((resolve) => {
+                if (signal.aborted) {
+                    resolve({ done: true, value: undefined });
+                    return;
+                }
+                signal.addEventListener(
+                    'abort',
+                    () => {
+                        resolve({ done: true, value: undefined });
+                    },
+                    { once: true },
+                );
+            });
+            let aborted = false;
             try {
-                for await (const chunk of chunks) {
+                while (true) {
+                    const next = await Promise.race([iterator.next(), abortPromise]);
+                    if (next.done === true) {
+                        if (signal.aborted) {
+                            aborted = true;
+                        }
+                        break;
+                    }
+                    const chunk = next.value;
                     switch (chunk.kind) {
                         case 'response_started':
                             break;
@@ -305,13 +335,23 @@ function bridgeFlatStream(chunks: AsyncIterable<ProviderStreamChunk>): ReadableS
                             return assertNeverChunk(chunk);
                     }
                 }
+                if (aborted) {
+                    controller.error(new FlatProviderBridgeError(abortedError()));
+                    return;
+                }
             } catch (error: unknown) {
                 controller.error(error instanceof Error ? error : new Error(String(error)));
                 return;
+            } finally {
+                void iterator.return?.({ done: true, value: undefined });
             }
             controller.close();
         },
     });
+}
+
+function abortedError(): ProtocolError {
+    return { code: 'provider_aborted', message: 'provider turn aborted', retryable: false };
 }
 
 function assertNeverChunk(value: never): never {
