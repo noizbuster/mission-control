@@ -1,8 +1,9 @@
-import type { AgentEvent, AgentMessage } from '@mission-control/protocol';
+import type { AgentEvent, ProtocolError, ProviderStreamChunk } from '@mission-control/protocol';
 import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
 import type { ProviderAdapter, ProviderTurnRequest } from '../providers/provider-turn-types.js';
-import type { ToolRegistry } from '../tools/tool-registry.js';
 import { type RunCoordinatorStore, SessionRunCoordinator } from './run-coordinator.js';
+import type { RunCoordinatorProviderTurnResult } from './run-coordinator-lifecycle.js';
+import type { RunCoordinatorTurnRunner } from './run-coordinator-types.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,18 +14,8 @@ export type CoordinatorContext = {
     readonly sessionId: string;
     readonly dataDir: string;
     readonly store: JsonlSessionEventStore;
-    readonly createCoordinator: (provider: ProviderAdapter, options?: CoordinatorToolOptions) => SessionRunCoordinator;
-    readonly createCoordinatorWithStore: (
-        store: RunCoordinatorStore,
-        provider: ProviderAdapter,
-        options?: CoordinatorToolOptions,
-    ) => SessionRunCoordinator;
+    readonly createCoordinator: (provider: ProviderAdapter) => SessionRunCoordinator;
     readonly events: () => Promise<readonly AgentEvent[]>;
-};
-
-export type CoordinatorToolOptions = {
-    readonly toolRegistry?: ToolRegistry;
-    readonly toolCallLoopLimit?: number;
 };
 
 export async function cleanupCoordinatorContexts(): Promise<void> {
@@ -36,72 +27,6 @@ export async function cleanupCoordinatorContexts(): Promise<void> {
 export async function openCoordinatorContext(sessionId: string): Promise<CoordinatorContext> {
     const dataDir = await mkdtemp(join(tmpdir(), 'mission-control-run-coordinator-'));
     tempDirs.push(dataDir);
-    return openCoordinatorContextAt(sessionId, dataDir);
-}
-
-export async function reopenCoordinatorContext(context: CoordinatorContext): Promise<CoordinatorContext> {
-    return openCoordinatorContextAt(context.sessionId, context.dataDir);
-}
-
-export function providerFromRequests(
-    onRequest: (request: ProviderTurnRequest, index: number) => Promise<void>,
-): ProviderAdapter {
-    let index = 0;
-    return {
-        async *streamTurn(request) {
-            const currentIndex = index;
-            index += 1;
-            await onRequest(request, currentIndex);
-            yield {
-                kind: 'response_completed',
-                requestId: request.requestId,
-                sequence: 1,
-                message: { messageId: `assistant_${currentIndex}`, role: 'assistant', content: 'done' },
-                finishReason: 'stop',
-            };
-        },
-    };
-}
-
-export function messageContents(messages: readonly AgentMessage[]): readonly string[] {
-    return messages.flatMap((message) => (message.role === 'tool' ? [] : [message.content]));
-}
-
-export function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
-    let resolve: (value: T) => void = () => undefined;
-    const promise = new Promise<T>((innerResolve) => {
-        resolve = innerResolve;
-    });
-    return { promise, resolve };
-}
-
-export function delaySecondAdmissionStore(
-    store: RunCoordinatorStore,
-    admissionBlocked: ReturnType<typeof deferred<void>>,
-    holdAdmission: ReturnType<typeof deferred<void>>,
-): RunCoordinatorStore {
-    return delayAdmissionStore(store, 'input_second', admissionBlocked, holdAdmission);
-}
-
-export function delayAdmissionStore(
-    store: RunCoordinatorStore,
-    inputId: string,
-    admissionBlocked: ReturnType<typeof deferred<void>>,
-    holdAdmission: ReturnType<typeof deferred<void>>,
-): RunCoordinatorStore {
-    return {
-        append: async (event: AgentEvent) => {
-            if (event.type === 'prompt.admitted' && event.transcript?.inputId === inputId) {
-                admissionBlocked.resolve();
-                await holdAdmission.promise;
-            }
-            await store.append(event);
-        },
-        getEvents: (sessionId) => store.getEvents(sessionId),
-    };
-}
-
-async function openCoordinatorContextAt(sessionId: string, dataDir: string): Promise<CoordinatorContext> {
     const store = await JsonlSessionEventStore.open({
         sessionId,
         dataDir,
@@ -112,34 +37,70 @@ async function openCoordinatorContextAt(sessionId: string, dataDir: string): Pro
         sessionId,
         dataDir,
         store,
-        createCoordinator(provider, options = {}) {
-            return createCoordinator({ sessionId, store, provider, ...options });
-        },
-        createCoordinatorWithStore(customStore, provider, options = {}) {
-            return createCoordinator({ sessionId, store: customStore, provider, ...options });
-        },
+        createCoordinator: (provider) =>
+            new SessionRunCoordinator({
+                sessionId,
+                store,
+                provider,
+                modelProviderSelection: { providerID: 'local', modelID: 'deterministic' },
+                now: fixedNow,
+                runProviderTurn: createTestTurnRunner(provider),
+                createId: (prefix, index) => `${prefix}_${index}`,
+            }),
         events: () => store.getEvents(sessionId),
     };
 }
 
-function createCoordinator(input: {
-    readonly sessionId: string;
-    readonly store: RunCoordinatorStore;
-    readonly provider: ProviderAdapter;
-    readonly toolRegistry?: ToolRegistry;
-    readonly toolCallLoopLimit?: number;
-}): SessionRunCoordinator {
-    return new SessionRunCoordinator({
-        sessionId: input.sessionId,
-        store: input.store,
-        provider: input.provider,
-        modelProviderSelection: { providerID: 'local', modelID: 'deterministic' },
-        now: fixedNow,
-        timeoutMs: 50,
-        ...(input.toolCallLoopLimit !== undefined ? { toolCallLoopLimit: input.toolCallLoopLimit } : {}),
-        ...(input.toolRegistry !== undefined ? { toolRegistry: input.toolRegistry } : {}),
-        createId: (prefix, index) => `${prefix}_${index}`,
-    });
+export function providerFromRequests(
+    onRequest: (request: ProviderTurnRequest, index: number) => Promise<void>,
+): ProviderAdapter {
+    let index = 0;
+    return {
+        async *streamTurn(request, context) {
+            await onRequest(request, index);
+            index += 1;
+            if (context.signal.aborted) {
+                throw new Error('provider turn aborted');
+            }
+        },
+    };
+}
+
+function createTestTurnRunner(provider: ProviderAdapter): RunCoordinatorTurnRunner {
+    return async (context) => {
+        const messages = await context.readMessages();
+        const request: ProviderTurnRequest = {
+            requestId: `test_req_${Date.now()}`,
+            sessionId: 'test',
+            turnId: `test_turn_${Date.now()}`,
+            providerID: 'local',
+            modelID: 'deterministic',
+            messages,
+        };
+        let failure: ProtocolError | undefined;
+        for await (const chunk of provider.streamTurn(request, { attempt: 1, signal: context.signal })) {
+            if (chunk.kind === 'response_completed') {
+                await context.appendDurableEvent({
+                    type: 'model.call.completed',
+                    timestamp: fixedNow(),
+                    sessionId: 'test',
+                    message: chunk.message.content,
+                    durability: 'durable',
+                    providerStreamChunk: chunk,
+                });
+            }
+            if (chunk.kind === 'response_failed') {
+                failure = chunk.error;
+            }
+        }
+        if (context.signal.aborted) {
+            return { status: 'interrupted' };
+        }
+        if (failure !== undefined) {
+            return { status: 'failed', reason: failure.message, errorCode: failure.code };
+        }
+        return { status: 'completed' };
+    };
 }
 
 function fixedNow(): string {

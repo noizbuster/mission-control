@@ -468,8 +468,9 @@ function MessageBlock({ block }: { readonly block: ChatBlock }): React.ReactElem
     if (!showBlock) {
         return (
             <Box flexDirection="column">
-                {block.lines.map((line) => (
-                    <Text key={line.slice(0, 16)} dimColor>
+                {block.lines.map((line, index) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
+                    <Text key={`sys-${index}`} dimColor>
                         {line}
                     </Text>
                 ))}
@@ -481,18 +482,22 @@ function MessageBlock({ block }: { readonly block: ChatBlock }): React.ReactElem
         <Box flexDirection="row">
             {leftColor !== undefined ? (
                 <Box width={1} flexDirection="column">
-                    {block.lines.map((line) => (
-                        <Text key={`${leftColor}-${line.slice(0, 8)}`} backgroundColor={leftColor}>{' '}</Text>
+                    {block.lines.map((_line, index) => (
+                        // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
+                        <Text key={`bar-${index}`} backgroundColor={leftColor}>
+                            {' '}
+                        </Text>
                     ))}
                 </Box>
             ) : null}
             <Box flexDirection="column" flexGrow={1}>
-                {block.lines.map((line) => {
+                {block.lines.map((line, index) => {
                     const content = prefix.length > 0 && line.startsWith(prefix) ? line.slice(prefix.length) : line;
                     const isError = block.kind === 'error';
                     return (
                         <Text
-                            key={content.slice(0, 16)}
+                            // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
+                            key={`line-${index}`}
                             {...(isError ? { color: 'red' } : {})}
                             {...(block.kind === 'assistant' ? { dimColor: true } : {})}
                         >
