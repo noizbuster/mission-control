@@ -44,10 +44,9 @@ describe('parseArgs', () => {
             engine: 'graph',
             prompt: 'do something',
         });
-        expect(parseArgs(['--engine', 'flat'])).toMatchObject({ engine: 'flat' });
-        // The engine key is absent when the flag is not passed (flat is resolved at runtime).
         expect(parseArgs([]).engine).toBeUndefined();
-        expect(() => parseArgs(['--engine', 'turbo'])).toThrow('--engine only supports graph or flat');
+        expect(() => parseArgs(['--engine', 'turbo'])).toThrow('--engine only supports graph');
+        expect(() => parseArgs(['--engine', 'flat'])).toThrow('--engine only supports graph');
         expect(() => parseArgs(['--engine'])).toThrow('--engine requires a value');
         // --engine graph without --prompt is valid in interactive (ink) mode — the prompt arrives via
         // the chat loop — but requires a prompt in the non-interactive modes (plain/json/jsonl).

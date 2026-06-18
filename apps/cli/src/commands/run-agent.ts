@@ -61,8 +61,6 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     const createProvider = options.createProvider ?? ((selection) => createProviderForSelection(selection, authStore));
     const provider = options.provider ?? createProvider(selectedModelProvider);
     const workspaceRoot = options.workspaceRoot ?? process.cwd();
-    const nonInteractiveEngine = resolveNonInteractiveEngine(args.engine);
-    const interactiveEngine = resolveInteractiveEngine(args.engine);
     const runtime = new AgentRuntime(
         createCliRuntimeOptions({
             ...(args.useNative !== undefined ? { useNative: args.useNative } : {}),
@@ -111,9 +109,9 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                 ...(options.chatInput !== undefined ? { input: options.chatInput } : {}),
                 ...(options.chatOutput !== undefined ? { output: options.chatOutput } : {}),
                 ...(options.selectModel !== undefined ? { selectModel: options.selectModel } : {}),
-                // Wire the graph into the interactive path only when explicitly selected (opt-in); the flat
-                // loop remains the interactive default (see resolveInteractiveEngine).
-                ...(interactiveEngine === 'graph' ? { engine: interactiveEngine } : {}),
+                // Wire the graph into the interactive path. The flat loop is gone; the ABG graph
+                // is the only engine. `resolveSdkModel` is required (resolved below per turn).
+                engine: 'graph',
                 ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
             });
         } finally {
@@ -145,15 +143,14 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             if (graph !== undefined) {
                 await runtime.runGraph(graph);
             } else if (
-                nonInteractiveEngine === 'graph' &&
                 args.prompt !== undefined &&
                 recorder.currentStore() !== undefined &&
                 recorder.currentSessionId() !== undefined
             ) {
-                // `--engine graph --session <id>`: drive the ABG coding-agent graph through the SAME
-                // session owner that powers the flat path's queue/steer/resume. The graph turn runner
-                // is built over the owner's permission-gated tool surface so the two engines share
-                // approval/blocking behavior; the coordinator owns queue/steer/resume around graph runs.
+                // `--prompt --session <id>` (or every prompt with a durable store): drive the ABG
+                // coding-agent graph through the SAME session owner that powers queue/steer/resume.
+                // The graph turn runner is built over the owner's permission-gated tool surface so
+                // approval/blocking behavior is shared; the coordinator owns queue/steer/resume.
                 const sessionStore = recorder.currentStore();
                 const sessionId = recorder.currentSessionId();
                 if (sessionStore === undefined || sessionId === undefined) {
@@ -183,9 +180,8 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                             registry: createCodingAgentNodeRegistry(),
                             resolveSdkModel,
                             toolRegistry,
-                            // Match the flat owner path's `haltOnFailedToolSettlement: true`
-                            // (runOwnerPrompt) so a denied / non-allowlisted command terminates the
-                            // graph immediately instead of looping until the node-run budget.
+                            // Fail-fast on denied / non-allowlisted commands so the graph terminates
+                            // immediately instead of looping until the node-run budget.
                             haltOnFailedToolSettlement: true,
                         }),
                     ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
@@ -194,7 +190,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                         : {}),
                     throwOnTerminalFailure: args.mode === 'plain',
                 });
-            } else if (nonInteractiveEngine === 'graph' && args.prompt !== undefined) {
+            } else if (args.prompt !== undefined) {
                 await runCodingPromptOnGraph({
                     runtime,
                     selection: selectedModelProvider,
@@ -205,33 +201,6 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     ...(options.provider !== undefined ? { provider: options.provider } : {}),
                     ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
                 });
-            } else if (
-                args.prompt !== undefined &&
-                recorder.currentStore() !== undefined &&
-                recorder.currentSessionId() !== undefined
-            ) {
-                const sessionStore = recorder.currentStore();
-                const sessionId = recorder.currentSessionId();
-                if (sessionStore === undefined || sessionId === undefined) {
-                    throw new TypeError('durable session recorder became unavailable while running a prompt');
-                }
-                await runOwnerPrompt({
-                    sessionId,
-                    store: sessionStore,
-                    provider,
-                    modelProviderSelection: selectedModelProvider,
-                    workspaceRoot,
-                    prompt: args.prompt,
-                    emitEvent: emitRuntimeEvent,
-                    observeStoredEvent,
-                    ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
-                    ...(options.nonInteractiveAutomationPolicy !== undefined
-                        ? { nonInteractiveAutomationPolicy: options.nonInteractiveAutomationPolicy }
-                        : {}),
-                    throwOnTerminalFailure: args.mode === 'plain',
-                });
-            } else if (args.prompt !== undefined) {
-                await runtime.runPromptTask(args.prompt);
             } else {
                 await runtime.runDemoTask();
             }
@@ -262,39 +231,6 @@ function shouldRunInteractiveChat(args: CliArgs, graph: AbgGraphSpec | undefined
         args.mode === 'ink' &&
         (options.chatInput !== undefined || (process.stdin.isTTY === true && process.stdout.isTTY === true))
     );
-}
-
-/**
- * Resolve the execution engine for NON-INTERACTIVE runs (`--prompt`, `--no-tui`, `--json`). `--engine`
- * wins; otherwise the ABG coding-agent GRAPH is the default (the flip landed in 3f780c7). The flat
- * provider-turn loop is the opt-out escape hatch: `MC_USE_FLAT=1` (or back-compat `MC_USE_GRAPH=0`).
- * `MC_USE_GRAPH=1` is a now-redundant explicit opt-in.
- */
-function resolveNonInteractiveEngine(engine: CliArgs['engine']): 'graph' | 'flat' {
-    if (engine !== undefined) {
-        return engine;
-    }
-    if (process.env['MC_USE_FLAT'] === '1' || process.env['MC_USE_GRAPH'] === '0') {
-        return 'flat';
-    }
-    return 'graph';
-}
-
-/**
- * Resolve the execution engine for INTERACTIVE chat runs. The ABG coding-agent GRAPH is the default
- * (the non-interactive path flipped in `3f780c7`; the interactive flip lands here) — the flat loop is
- * the opt-out escape hatch: `MC_USE_FLAT=1`, back-compat `MC_USE_GRAPH=0`, or `--engine flat`.
- * `MC_USE_GRAPH=1` is a now-redundant explicit opt-in. On the interactive path the graph serializes a
- * tool BATCH so the approval broker sees one approval at a time (parity with the flat loop's cadence).
- */
-function resolveInteractiveEngine(engine: CliArgs['engine']): 'graph' | 'flat' {
-    if (engine !== undefined) {
-        return engine;
-    }
-    if (process.env['MC_USE_FLAT'] === '1' || process.env['MC_USE_GRAPH'] === '0') {
-        return 'flat';
-    }
-    return 'graph';
 }
 
 async function resolveModelProviderSelection(

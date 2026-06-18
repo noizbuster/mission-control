@@ -13,7 +13,7 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
     let showVersion = false;
     let providerID: string | undefined;
     let modelID: string | undefined;
-    let engine: 'graph' | 'flat' | undefined;
+    let engine: 'graph' | undefined;
     let graphPath = initial.graphPath;
     let sessionId: string | undefined;
     const promptParts: string[] = [];
@@ -67,8 +67,8 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
                 break;
             case '--engine': {
                 const value = readFlagValue(argv, index, '--engine');
-                if (value !== 'graph' && value !== 'flat') {
-                    throw new Error('--engine only supports graph or flat');
+                if (value !== 'graph') {
+                    throw new Error('--engine only supports graph');
                 }
                 engine = value;
                 index += 2;
@@ -133,7 +133,7 @@ function buildRunArgs(input: {
     readonly modelID: string | undefined;
     readonly prompt: string | undefined;
     readonly providerID: string | undefined;
-    readonly engine: 'graph' | 'flat' | undefined;
+    readonly engine: 'graph' | undefined;
     readonly sessionId: string | undefined;
     readonly showHelp: boolean;
     readonly showVersion: boolean;

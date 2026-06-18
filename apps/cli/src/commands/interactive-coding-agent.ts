@@ -7,6 +7,7 @@ import {
     ProjectTrustStore,
     type ProviderAdapter,
     projectApprovalContinuationMessages,
+    redactCredentialText,
     type SdkModelResolver,
     SessionRunOwner,
     type SessionRunOwnerReceipt,
@@ -22,7 +23,7 @@ import type {
 import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { parseFileWriteOutput } from './interactive-coding-file-write-preview.js';
-import { parseFileEditOutput, parseFilePatchOutput } from './interactive-coding-tool-preview.js';
+import { parseFileEditOutput, parseFilePatchOutput, renderToolPreview } from './interactive-coding-tool-preview.js';
 import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools.js';
 import { buildCodingAgentGraphForSelection, resolveGraphSdkModel } from './run-agent-graph-prompt.js';
 
@@ -48,12 +49,11 @@ export type CodingAgentTurnOptions = {
     readonly observeStoredEvent?: (event: AgentEvent) => void;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     /**
-     * Execution engine for the turn. `'graph'` drives the ABG coding-agent graph through the SAME
-     * `SessionRunOwner` + tool registry the flat loop uses (parity with the non-interactive
-     * `--engine graph` owner path); omitted/`'flat'` drives the flat provider-turn loop. When `'graph'`,
+     * Execution engine for the turn. `'graph'` is the only supported value (the flat provider-turn
+     * loop has been removed); retained on the options shape for caller compatibility. When set,
      * `resolveSdkModel` resolves the AI-SDK model (falling back to the flat→AI-SDK bridge over `provider`).
      */
-    readonly engine?: 'graph' | 'flat';
+    readonly engine?: 'graph';
     readonly resolveSdkModel?: SdkModelResolver;
 };
 
@@ -125,40 +125,30 @@ async function createInteractiveRunOwner(
     };
     const toolRegistry = await createInteractiveToolRegistry(toolOptions, approvals);
 
-    // The graph engine drives the turn through the SAME SessionRunOwner + toolRegistry the flat loop uses
-    // (parity with the non-interactive `--engine graph` owner path). Built only when `engine === 'graph'`;
-    // omitted → the owner runs the flat provider-turn loop (byte-identical to the pre-graph behavior).
-    const useGraph = options.engine === 'graph';
-    const resolveSdkModel = useGraph ? await resolveInteractiveSdkModel(options) : undefined;
-    const onSignal = useGraph ? interactiveGraphStreamSignal(options.output, renderState) : undefined;
-    const runProviderTurn =
-        useGraph && resolveSdkModel !== undefined
-            ? createGraphTurnRunner({
-                  graph: buildCodingAgentGraphForSelection(options.modelProviderSelection),
-                  sessionId: options.sessionId,
-                  now: () => new Date().toISOString(),
-                  modelProviderSelection: options.modelProviderSelection,
-                  registry: createCodingAgentNodeRegistry(),
-                  resolveSdkModel,
-                  toolRegistry,
-                  haltOnFailedToolSettlement: true,
-                  // Serialize a proposed tool BATCH: the interactive approval broker allows one
-                  // pending approval, so without this a multi-tool step would auto-deny the 2nd.
-                  serializeToolExecution: true,
-                  ...(onSignal !== undefined ? { onSignal } : {}),
-              })
-            : undefined;
+    // The graph engine is the only engine. Build the graph turn runner unconditionally; the owner
+    // drives the ABG coding-agent graph through the SAME SessionRunOwner + toolRegistry the prior
+    // flat loop used, so approval/blocking semantics are preserved.
+    const resolveSdkModel = await resolveInteractiveSdkModel(options);
+    const onSignal = interactiveGraphStreamSignal(options.output, renderState, options.workspaceRoot);
+    const runProviderTurn = createGraphTurnRunner({
+        graph: buildCodingAgentGraphForSelection(options.modelProviderSelection),
+        sessionId: options.sessionId,
+        now: () => new Date().toISOString(),
+        modelProviderSelection: options.modelProviderSelection,
+        registry: createCodingAgentNodeRegistry(),
+        resolveSdkModel,
+        toolRegistry,
+        haltOnFailedToolSettlement: true,
+        serializeToolExecution: true,
+        onSignal,
+    });
 
-    // Graph events surface ONLY through onDurableEvent (no provider envelopes fire on the graph). Render
-    // them to the TUI when on the graph engine; otherwise observe for recording (the flat path renders via
-    // onProviderEnvelope). `runProviderTurn !== undefined` is the authoritative engine signal here.
-    const onDurableEventHandler =
-        runProviderTurn !== undefined
-            ? (event: AgentEvent) => {
-                  renderInteractiveGraphDurableEvent(options.output, renderState, event);
-                  options.observeStoredEvent?.(event);
-              }
-            : options.observeStoredEvent;
+    // Graph events surface ONLY through onDurableEvent (no provider envelopes fire on the graph).
+    // Render them to the TUI; observe for recording.
+    const onDurableEventHandler = (event: AgentEvent) => {
+        renderInteractiveGraphDurableEvent(options.output, renderState, event);
+        options.observeStoredEvent?.(event);
+    };
 
     return new SessionRunOwner({
         sessionId: options.sessionId,
@@ -169,8 +159,8 @@ async function createInteractiveRunOwner(
         readMessages: async () =>
             projectApprovalContinuationMessages(await options.store.getEvents(options.sessionId), options.sessionId),
         toolRegistry,
-        ...(runProviderTurn !== undefined ? { runProviderTurn } : {}),
-        ...(onDurableEventHandler !== undefined ? { onDurableEvent: onDurableEventHandler } : {}),
+        runProviderTurn,
+        onDurableEvent: onDurableEventHandler,
         onProviderEnvelope: (envelope: AgentEventEnvelope) =>
             renderProviderEnvelope(options.output, renderState, envelope),
         onToolCall: (toolCall: ToolCall) => preflightInteractiveToolCall(toolCall, toolOptions, approvals),
@@ -227,7 +217,7 @@ function settleReceipt(
             options.output.write(formatBlockedRunMessage(receipt.reason ?? 'approval required', receipt.toolCallId));
             return;
         case 'failed':
-            options.output.write(`Error: ${receipt.reason ?? 'run failed'}\n`);
+            options.output.write(`Error: ${redactCredentialText(receipt.reason ?? 'run failed')}\n`);
             emitTaskEvent(options, 'task.failed', receipt.reason ?? 'run failed');
             return;
         case 'idle':
@@ -322,23 +312,44 @@ async function resolveInteractiveSdkModel(
 }
 
 /**
- * Live token-stream tap for the interactive graph path. Renders `llm.text.delta` signals to the chat
- * output as they are yielded (before projection), so the TUI streams token-by-token — parity with the
- * flat path's `text_delta` envelope rendering. Non-delta signals are ignored. The tap does not affect
- * projection or persistence; `llm.turn.completed` (rendered via `renderInteractiveGraphDurableEvent`)
- * closes the stream with a newline and records the final message.
+ * Live signal tap for the interactive graph path. Renders `llm.text.delta` signals to the chat output
+ * as they are yielded (before projection), so the TUI streams token-by-token — parity with the flat
+ * path's `text_delta` envelope rendering. Also renders a tool-arg PREVIEW for each
+ * `llm.tool_call.proposed` signal — the graph equivalent of the flat path's `onToolCall` →
+ * `preflightInteractiveToolCall` → `renderToolPreview`, so a user approving a tool on the default
+ * (graph) engine sees the same patch/command/edit preview they would on the flat escape hatch. The tap
+ * is awaited between signals (see `AbgGraphRunnerInput.onSignal`), so an async preview (file.write
+ * reads the target file) fully renders before the next signal — no fire-and-forget interleaving. Other
+ * signals are ignored. The tap does not affect projection or persistence; `llm.turn.completed`
+ * (rendered via `renderInteractiveGraphDurableEvent`) closes the stream with a newline and records the
+ * final message.
  */
-function interactiveGraphStreamSignal(output: ChatOutput, state: ProviderRenderState): (signal: AbgSignal) => void {
-    return (signal) => {
+function interactiveGraphStreamSignal(
+    output: ChatOutput,
+    state: ProviderRenderState,
+    workspaceRoot: string,
+): (signal: AbgSignal) => Promise<void> {
+    return async (signal) => {
         const delta = readDeltaFromSignal(signal);
-        if (delta === undefined) {
+        if (delta !== undefined) {
+            if (!state.streamingText) {
+                output.write('Assistant: ');
+                state.streamingText = true;
+            }
+            output.write(delta);
             return;
         }
-        if (!state.streamingText) {
-            output.write('Assistant: ');
-            state.streamingText = true;
+        const proposal = readToolCallProposal(signal);
+        if (proposal !== undefined) {
+            // A tool proposal ends the assistant text stream (the model emits no more text after
+            // proposing tools within a single step); close it so the preview does not append to a
+            // half-written assistant line, matching the flat path's non-streaming preview render.
+            if (state.streamingText) {
+                output.write('\n');
+                state.streamingText = false;
+            }
+            await renderToolPreview(proposal, output, workspaceRoot);
         }
-        output.write(delta);
     };
 }
 
@@ -377,7 +388,7 @@ function renderInteractiveGraphDurableEvent(output: ChatOutput, state: ProviderR
     }
     if (emit.type === 'llm.error') {
         const message = readStringField(emit.payload, 'error');
-        output.write(`Error: ${message ?? 'LLM error'}\n`);
+        output.write(`Error: ${redactCredentialText(message ?? 'LLM error')}\n`);
     }
 }
 
@@ -391,7 +402,7 @@ function renderGraphToolSettlement(output: ChatOutput, payload: unknown, status:
     const toolName = readStringField(payload, 'toolName') ?? 'tool';
     if (status === 'failed') {
         const message = readErrorMessage(payload);
-        output.write(`${toolName} failed: ${message ?? 'unknown error'}\n`);
+        output.write(`${toolName} failed: ${redactCredentialText(message ?? 'unknown error')}\n`);
         return;
     }
     const modelOutput = readStringField(payload, 'output');
@@ -433,6 +444,36 @@ function readDeltaFromSignal(signal: AbgSignal): string | undefined {
         return undefined;
     }
     return readStringField(signal.event.payload, 'delta');
+}
+
+/**
+ * Read a `ToolCall` off an `llm.tool_call.proposed` emit signal (the graph's tool-proposal boundary),
+ * re-serializing the parsed `input` object into the `argumentsJson` string `renderToolPreview` expects
+ * (the flat path's `ToolCall` carries the serialized form; the graph adapter carries the parsed object
+ * at `payload.input`). `undefined` for non-proposal signals or payloads missing a string
+ * `toolCallId`/`toolName` or a non-object `input`. Narrowed with `in`/`typeof` — no cast.
+ */
+function readToolCallProposal(signal: AbgSignal): ToolCall | undefined {
+    if (signal.type !== 'emit' || signal.event.type !== 'llm.tool_call.proposed') {
+        return undefined;
+    }
+    const payload = signal.event.payload;
+    if (!isPlainObject(payload)) {
+        return undefined;
+    }
+    const toolCallId = payload['toolCallId'];
+    const toolName = payload['toolName'];
+    const input = payload['input'];
+    if (typeof toolCallId !== 'string' || toolCallId.length === 0) {
+        return undefined;
+    }
+    if (typeof toolName !== 'string' || toolName.length === 0) {
+        return undefined;
+    }
+    if (input === null || typeof input !== 'object') {
+        return undefined;
+    }
+    return { toolCallId, toolName, argumentsJson: JSON.stringify(input) };
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
