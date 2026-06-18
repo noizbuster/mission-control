@@ -62,11 +62,10 @@ export type InteractiveChatOptions = {
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly persistModelProviderSelection?: (selection: ModelProviderSelection) => Promise<void>;
     /**
-     * Execution engine for coding turns. `'graph'` drives the ABG coding-agent graph through the same
-     * `SessionRunOwner` (flat path retained as the default when omitted). `resolveSdkModel` resolves the
-     * AI-SDK model for the selection when `engine === 'graph'`.
+     * Execution engine for coding turns. `'graph'` is the only supported value (the flat engine has
+     * been removed). `resolveSdkModel` resolves the AI-SDK model for the selection.
      */
-    readonly engine?: 'graph' | 'flat';
+    readonly engine?: 'graph';
     readonly resolveSdkModel?: SdkModelResolver;
 };
 

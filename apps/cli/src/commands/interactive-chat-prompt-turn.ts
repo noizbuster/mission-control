@@ -22,12 +22,11 @@ export type PromptTurnContext = {
     readonly nextTurnId: () => string;
     readonly sessionStore: JsonlSessionEventStore | undefined;
     /**
-     * Execution engine for the coding-agent turn. `'graph'` drives the turn through the ABG coding-agent
-     * graph (via the same `SessionRunOwner` + graph turn runner the non-interactive `--engine graph`
-     * path uses); omitted/`'flat'` drives the incumbent flat provider-turn loop. The graph path needs
-     * `resolveSdkModel` to resolve the AI-SDK model for the selection.
+     * Execution engine for the coding-agent turn. `'graph'` is the only supported value (the flat
+     * provider-turn loop has been removed); retained on the options shape for caller compatibility.
+     * The graph path needs `resolveSdkModel` to resolve the AI-SDK model for the selection.
      */
-    readonly engine?: 'graph' | 'flat';
+    readonly engine?: 'graph';
     readonly resolveSdkModel?: SdkModelResolver;
 };
 
@@ -105,8 +104,9 @@ export async function startPromptTurn(
             );
             return undefined;
         }
-        const response = await runtime.runPromptTask(prompt);
-        chatOutput.write(`Assistant: ${response}\n`);
+        // The flat `runtime.runPromptTask` fallback was removed with the flat engine. A chat turn
+        // without a provider cannot run; surface a clear error instead of silently no-op'ing.
+        chatOutput.write('Error: no provider configured for this chat turn.\n');
         return undefined;
     }
     return startCodingAgentTurn({
