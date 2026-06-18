@@ -104,6 +104,9 @@ describe('runAgent interactive coding agent UX', () => {
         });
 
         // Then
+        // The tool-arg preview renders at proposal time (before the approval prompt), independent of
+        // the approval outcome — so it appears even when the call is subsequently denied.
+        expect(output).toContain('Patch preview for file.patch');
         expect(output).toContain('Approve file.patch? [once/always/deny]:');
         expect(output).toContain('Denied file.patch');
         // On the graph a denial is terminal: the tool settles `approval_denied` and the run fails
@@ -144,6 +147,12 @@ describe('runAgent interactive coding agent UX', () => {
         // Then
         expect(requests).toHaveLength(2);
         expect(output).toContain('Applied patch: .mctrl-task20.txt');
+        // Gap A: the graph path renders a tool-arg PREVIEW for each proposal — parity with the flat
+        // path's `renderToolPreview` (fired via `onToolCall` → `preflightInteractiveToolCall`). The
+        // preview fires at proposal time through the awaited `onSignal` tap, so a user on the default
+        // (graph) engine sees the same patch/command detail they would on the flat escape hatch.
+        expect(output).toContain('Patch preview for file.patch');
+        expect(output).toContain('Command preview for command.run');
         // Serialization proof: a multi-tool batch (file.patch + command.run proposed in ONE step)
         // presented each approval one at a time — neither was auto-denied by the approval broker's
         // single-pending invariant. This is the blocker the interactive-default flip had to close

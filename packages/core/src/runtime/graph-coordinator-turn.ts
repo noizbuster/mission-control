@@ -60,10 +60,11 @@ export type GraphTurnRunnerWiring = {
     /**
      * Observation-only tap forwarded into `runAbgGraph` (`AbgGraphRunnerInput.onSignal`); fires for
      * every node signal before projection — including `llm.text.delta` streaming deltas. Lets the
-     * interactive owner render live token deltas. Does not affect projection, persistence, or the
-     * run result.
+     * interactive owner render live token deltas. Awaited between signals (see `AbgGraphRunnerInput`),
+     * so an async tap such as a tool-arg preview render completes in order. Does not affect projection,
+     * persistence, or the run result.
      */
-    readonly onSignal?: (signal: AbgSignal) => void;
+    readonly onSignal?: (signal: AbgSignal) => void | Promise<void>;
     /**
      * Reads approval decisions to thread into the graph's `graphInput.events`, so a graph that
      * blocked on a `human-approval` node (or a `requires_approval` policy) RESUMES on a promoted
@@ -128,7 +129,7 @@ export function mapGraphTurnResult(result: AbgGraphRunResult): RunCoordinatorPro
             return { status: 'interrupted' };
         case 'failed':
             // A provider abort (`provider_aborted`) is an interrupt, not a hard failure — mirror the
-            // flat run coordinator's abort-awareness (run-coordinator-provider-turn.ts) so the drain
+            // prior flat run coordinator's abort-awareness so the drain
             // maps it to `run.interrupted`. The code travels on the result's `terminalError` (a node
             // surfaced a structured provider error); failures with no recognizable code stay `failed`.
             if (result.terminalError !== undefined && result.terminalError.code === 'provider_aborted') {
@@ -165,10 +166,20 @@ export function mapGraphTurnResult(result: AbgGraphRunResult): RunCoordinatorPro
 /**
  * Seed the graph's Blackboard from the admitted conversation. `modelVisibleMessages` from the
  * session admission projection is always `role: 'user'` prompts; system/assistant text roles are
- * mapped too for completeness. `tool` results are not seedable without a tool-name lookup and are
- * skipped — the graph regenerates its own tool turns from the seeded context.
+ * mapped too for completeness. `tool` results are also mapped: the `toolName` is recovered from a
+ * preceding assistant message's `providerToolCalls` (matched by `toolCallId`) because the AI-SDK
+ * tool-result shape requires it. Tool results without a matching prior proposal are skipped (the
+ * SDK would reject a tool-result part with no `toolName`).
  */
 export function agentMessagesToSeedModelMessages(messages: readonly AgentMessage[]): ModelMessage[] {
+    const toolNameByCallId = new Map<string, string>();
+    for (const message of messages) {
+        if (message.role === 'assistant') {
+            for (const call of message.providerToolCalls ?? []) {
+                toolNameByCallId.set(call.toolCallId, call.toolName);
+            }
+        }
+    }
     const seed: ModelMessage[] = [];
     for (const message of messages) {
         if (message.role === 'system') {
@@ -177,9 +188,35 @@ export function agentMessagesToSeedModelMessages(messages: readonly AgentMessage
             seed.push({ role: 'user', content: message.content });
         } else if (message.role === 'assistant') {
             seed.push({ role: 'assistant', content: message.content });
+        } else if (message.role === 'tool') {
+            const toolName = toolNameByCallId.get(message.toolCallId);
+            if (toolName === undefined) {
+                continue;
+            }
+            seed.push({
+                role: 'tool',
+                content: [
+                    {
+                        type: 'tool-result',
+                        toolCallId: message.toolCallId,
+                        toolName,
+                        output: toolResultOutputFor(message),
+                    },
+                ],
+            });
         }
     }
     return seed;
+}
+
+function toolResultOutputFor(message: Extract<AgentMessage, { readonly role: 'tool' }>):
+    | { readonly type: 'text'; readonly value: string }
+    | { readonly type: 'error-text'; readonly value: string } {
+    if (message.status === 'failed') {
+        const error = message.error;
+        return { type: 'error-text', value: error?.message ?? 'tool failed' };
+    }
+    return { type: 'text', value: message.output ?? '' };
 }
 
 function lastEventMessage(events: readonly AgentEvent[]): string | undefined {

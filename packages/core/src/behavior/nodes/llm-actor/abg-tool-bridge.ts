@@ -111,7 +111,7 @@ export type AbgToolSettlement = {
  * `approval_required` (a permission gate with no automation, in `block` mode) and short-circuit
  * the graph to a `blocked` settle instead of surfacing the block to the model — which would
  * otherwise retry the same call until the loop budget is exhausted. This mirrors the flat run
- * coordinator's `approvalBlockedSettlement` detection (run-coordinator-provider-turn.ts).
+ * prior flat run coordinator's `approvalBlockedSettlement` detection.
  */
 export type AbgToolSettlementLedger = {
     readonly record: (settlement: AbgToolSettlement) => void;
@@ -185,7 +185,7 @@ export function isApprovalDeniedSettlement(settlement: AbgToolSettlement): boole
  * is not allowlisted, so the model cannot fix it by retrying). When `haltOnFailedToolSettlement`
  * is enabled, the LLMActor short-circuits the graph to a terminal `failed` run on such a settlement
  * instead of surfacing it to the model — parity with the flat run coordinator's
- * `terminalFailedSettlement` (run-coordinator-provider-turn.ts), which fails the run on the first
+ * `terminalFailedSettlement` (removed), which failed the run on the first
  * non-approval tool failure rather than looping until the tool-call continuation limit.
  */
 export function isTerminalFailedSettlement(settlement: AbgToolSettlement): boolean {

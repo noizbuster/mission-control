@@ -75,8 +75,12 @@ export type AbgGraphRunnerInput = {
      * `llm.reasoning.delta`) that are NOT persisted. Lets an interactive caller render live token
      * deltas without bloating the durable ledger. Pure side-effect: does not influence projection,
      * persistence, or the run result. Omitted by the flat path and the non-interactive graph path.
+     * Awaited between signals: a tap returning a Promise (e.g. an async tool-arg preview render on the
+     * interactive path) completes before the next signal is observed, preserving TUI output order.
+     * Awaiting a `void` return (sync taps such as delta rendering) is a no-op microtask, so streaming
+     * throughput is unaffected.
      */
-    readonly onSignal?: (signal: AbgSignal) => void;
+    readonly onSignal?: (signal: AbgSignal) => void | Promise<void>;
 };
 
 export type AbgGraphRunResult = {
