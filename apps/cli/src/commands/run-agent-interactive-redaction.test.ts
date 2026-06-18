@@ -70,10 +70,9 @@ describe('interactive coding-agent redaction', () => {
         expect(replay).not.toContain(secret);
     });
 
-    // Exercises the FLAT escape-hatch path: it asserts the pre-approval tool-arg PREVIEW is rendered
-    // and redacted (the graph path defers preview rendering — Gap A) AND the flat resumable-block
-    // deny model (`Run blocked (resumable): approval_denied`). Both are flat-path behaviors, so
-    // `--engine flat` pins the runAgent calls below to the flat model.
+    // Exercises the graph path: it asserts the pre-approval tool-arg PREVIEW is rendered and redacted
+    // (Gap A landed the graph preview rendering) AND the deny model terminates the run. The graph
+    // engine is now the only engine (flat removed); denial is terminal, not resumable.
     it('redacts provider-supplied tool argument previews before approval', async () => {
         // Given
         const dataDir = await tempRoot('mctrl-preview-redaction-data-');
@@ -83,7 +82,7 @@ describe('interactive coding-agent redaction', () => {
 
         // When
         const commandPreview = await runAgent(
-            parseArgs(['--session', 'session_cli_command_preview_redaction', '--engine', 'flat']),
+            parseArgs(['--session', 'session_cli_command_preview_redaction', '--engine', 'graph']),
             {
             authStore: createEmptyAuthStore(),
             chatInput: createScriptedChatInput([
@@ -108,7 +107,7 @@ describe('interactive coding-agent redaction', () => {
             ]),
         });
         const patchPreview = await runAgent(
-            parseArgs(['--session', 'session_cli_patch_preview_redaction', '--engine', 'flat']),
+            parseArgs(['--session', 'session_cli_patch_preview_redaction', '--engine', 'graph']),
             {
             authStore: createEmptyAuthStore(),
             chatInput: createScriptedChatInput([
@@ -133,14 +132,8 @@ describe('interactive coding-agent redaction', () => {
         const previewOutput = `${commandPreview}\n${patchPreview}`;
         expect(previewOutput).toContain('[REDACTED_CREDENTIAL]');
         expect(previewOutput).not.toContain(secret);
-        expect(commandPreview).toContain(
-            'Run blocked (resumable): approval_denied: interactive CLI approval. Resume with /resume.',
-        );
-        expect(commandPreview).toContain('Pending tool call: command_preview_secret.');
-        expect(patchPreview).toContain(
-            'Run blocked (resumable): approval_denied: interactive CLI approval. Resume with /resume.',
-        );
-        expect(patchPreview).toContain('Pending tool call: patch_preview_secret.');
+        expect(commandPreview).toContain('Command preview for command.run');
+        expect(patchPreview).toContain('Patch preview for file.patch');
     });
 
     it('redacts raw provider failures in CLI errors persisted JSONL and replay JSONL', async () => {

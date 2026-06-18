@@ -215,6 +215,7 @@ describe('interactive chat session navigation', () => {
                 store,
                 provider: idleProvider(),
                 modelProviderSelection: selection,
+                runProviderTurn: async () => ({ status: 'completed' as const }),
             });
             const receipt = await owner.resume();
             expect(receipt).toMatchObject({

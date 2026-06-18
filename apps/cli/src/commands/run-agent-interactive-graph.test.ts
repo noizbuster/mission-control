@@ -1,13 +1,11 @@
 /**
- * Interactive chat TUI driven by the ABG graph engine (the interactive default — see
- * `resolveInteractiveEngine`). The flat loop is the opt-out escape hatch (`--engine flat` /
- * `MC_USE_FLAT=1`). These tests prove the graph-default wiring renders the assistant output (via the
- * `onSignal` delta tap + the graph-durable-event renderer), that the DEFAULT (no `--engine`) drives the
- * graph, that the flat escape hatch still renders identically when explicitly selected, and that an
+ * Interactive chat TUI driven by the ABG graph engine (the only engine — the flat loop was removed).
+ * These tests prove the graph wiring renders the assistant output (via the `onSignal` delta tap +
+ * the graph-durable-event renderer), that the DEFAULT (no `--engine`) drives the graph, and that an
  * active graph turn interrupts cleanly.
  *
  * The injected deterministic provider is bridged to the AI SDK (`wrapFlatProviderAsSdkModel`) on the
- * graph path — the same fixture the flat tests use, driven through the graph instead of the flat loop.
+ * graph path — the same fixture the prior flat tests used, driven through the graph.
  */
 import { createDeterministicProvider } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
@@ -70,38 +68,6 @@ describe('runAgent interactive coding agent — graph engine', () => {
         expect(output).toContain('Assistant: graph ok');
         // Graph provenance: the turn was driven by the graph (a boundary llm.turn.completed emit persisted).
         expect(events.some((event) => event.abg?.emit?.type === 'llm.turn.completed')).toBe(true);
-    });
-
-    it('renders the assistant answer on the flat loop when --engine flat is set (escape-hatch regression)', async () => {
-        const dataDir = await tempRoot('mctrl-chat-flat-regression-');
-        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
-        const chatOutput = createBufferedChatOutput();
-        const events: AgentEvent[] = [];
-
-        const output = await runAgent(
-            parseArgs(['--session', 'session_interactive_flat_regression', '--engine', 'flat']),
-            {
-                authStore: createEmptyAuthStore(),
-                chatInput: createScriptedChatInput([
-                    { type: 'line', value: 'answer in two words' },
-                    { type: 'interrupt' },
-                    { type: 'interrupt' },
-                ]),
-                chatOutput: chatOutput.output,
-                provider: createDeterministicProvider([
-                    { kind: 'text_delta', delta: 'flat ' },
-                    { kind: 'text_delta', delta: 'ok' },
-                    { kind: 'response_completed', content: 'flat ok' },
-                ]),
-                onRuntimeEvent: (event) => {
-                    events.push(event);
-                },
-            },
-        );
-
-        expect(output).toContain('Assistant: flat ok');
-        // Flat provenance: NO graph boundary emit fired (the flat loop ran, not the graph turn runner).
-        expect(events.some((event) => event.abg?.emit?.type === 'llm.turn.completed')).toBe(false);
     });
 
     it('interrupts an active graph turn', async () => {
