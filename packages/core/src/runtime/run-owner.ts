@@ -79,6 +79,17 @@ export type SessionRunOwnerRegistryOptions = {
      * tool loop; inject a turn runner (e.g. `createGraphTurnRunner`) to drive the ABG graph.
      */
     readonly runProviderTurn?: RunCoordinatorTurnRunner;
+    /**
+     * Per-owner engine factory (preferred over `runProviderTurn`): called for each owner with its
+     * resolved `sessionId`/`modelProviderSelection`/`toolRegistry` so a turn runner can capture
+     * owner-specific context — mirrors `runOwnerPrompt.createTurnRunner`
+     * (`apps/cli/src/commands/run-agent-owner-prompt.ts`). Omit for the flat provider tool loop.
+     */
+    readonly createTurnRunner?: (deps: {
+        readonly sessionId: string;
+        readonly modelProviderSelection: ModelProviderSelection;
+        readonly toolRegistry?: ToolRegistry;
+    }) => RunCoordinatorTurnRunner | Promise<RunCoordinatorTurnRunner>;
 } & RunOwnerObserverOptions;
 
 export type SessionRunOwnerLeaseInput = {
@@ -258,6 +269,18 @@ export class SessionRunOwnerRegistry {
                 this.options.modelProviderSelection,
             )) ??
             this.options.modelProviderSelection;
+        // Prefer the per-owner `createTurnRunner` factory (captures sessionId/modelProviderSelection/
+        // toolRegistry) so a registry driving the graph can build a runner with owner-specific context;
+        // fall back to the legacy single `runProviderTurn`. At least one MUST be provided — the
+        // coordinator throws if no turn runner is injected (the flat provider loop was removed).
+        const turnRunner =
+            this.options.createTurnRunner !== undefined
+                ? await this.options.createTurnRunner({
+                      sessionId: input.sessionId,
+                      modelProviderSelection,
+                      ...(this.options.toolRegistry !== undefined ? { toolRegistry: this.options.toolRegistry } : {}),
+                  })
+                : this.options.runProviderTurn;
         const owner = new SessionRunOwner({
             sessionId: input.sessionId,
             store,
@@ -274,7 +297,7 @@ export class SessionRunOwnerRegistry {
             ...(this.options.toolRegistry !== undefined ? { toolRegistry: this.options.toolRegistry } : {}),
             ...(this.options.createId !== undefined ? { createId: this.options.createId } : {}),
             ...(input.readMessages !== undefined ? { readMessages: input.readMessages } : {}),
-            ...(this.options.runProviderTurn !== undefined ? { runProviderTurn: this.options.runProviderTurn } : {}),
+            ...(turnRunner !== undefined ? { runProviderTurn: turnRunner } : {}),
             ...(this.options.onDurableEvent !== undefined ? { onDurableEvent: this.options.onDurableEvent } : {}),
             ...(this.options.onProviderEnvelope !== undefined
                 ? { onProviderEnvelope: this.options.onProviderEnvelope }
