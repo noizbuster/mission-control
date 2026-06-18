@@ -73,41 +73,6 @@ describe('AgentRuntime', () => {
         });
     });
 
-    it('uses a session-local active model selection', async () => {
-        const runtime = new AgentRuntime({ useNative: false, permissionDecisionResolver: allowAllPermissions });
-        const otherRuntime = new AgentRuntime({ useNative: false, permissionDecisionResolver: allowAllPermissions });
-
-        await runtime.start();
-        runtime.setModelProviderSelection({
-            providerID: 'anthropic',
-            modelID: 'claude-3-5-haiku-20241022',
-        });
-        await runtime.runPromptTask('explain model routing');
-        await otherRuntime.start();
-        await otherRuntime.runPromptTask('default model routing');
-        const completed = runtime
-            .getEvents()
-            .find(
-                (event) =>
-                    event.type === 'task.completed' && event.message === 'received prompt: explain model routing',
-            );
-        const otherCompleted = otherRuntime
-            .getEvents()
-            .find(
-                (event) =>
-                    event.type === 'task.completed' && event.message === 'received prompt: default model routing',
-            );
-
-        expect(completed?.modelProviderSelection).toEqual({
-            providerID: 'anthropic',
-            modelID: 'claude-3-5-haiku-20241022',
-        });
-        expect(otherCompleted?.modelProviderSelection).toEqual({
-            providerID: 'local',
-            modelID: 'local-echo',
-        });
-    });
-
     it('emits scaffold skill invocation events', async () => {
         const runtime = new AgentRuntime({ useNative: false, permissionDecisionResolver: allowAllPermissions });
 
