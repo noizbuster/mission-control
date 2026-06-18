@@ -142,6 +142,9 @@ async function createInteractiveRunOwner(
                   resolveSdkModel,
                   toolRegistry,
                   haltOnFailedToolSettlement: true,
+                  // Serialize a proposed tool BATCH: the interactive approval broker allows one
+                  // pending approval, so without this a multi-tool step would auto-deny the 2nd.
+                  serializeToolExecution: true,
                   ...(onSignal !== undefined ? { onSignal } : {}),
               })
             : undefined;
@@ -392,7 +395,10 @@ function renderGraphToolSettlement(output: ChatOutput, payload: unknown, status:
         return;
     }
     const modelOutput = readStringField(payload, 'output');
-    const structured = tryParseStructuredOutput(modelOutput);
+    // Prefer the structured output object the adapter carries on the emit (parity with the flat
+    // path's `settlement.structuredOutput`); fall back to parsing the model-facing `output` string
+    // for emits/older sessions that carry only that.
+    const structured = readStructuredOutputField(payload) ?? tryParseStructuredOutput(modelOutput);
     if (toolName === 'file.patch') {
         const parsed = structured !== undefined ? parseFilePatchOutput(structured) : undefined;
         if (parsed !== undefined) {
@@ -467,6 +473,19 @@ function tryParseStructuredOutput(modelOutput: string | undefined): unknown {
     } catch {
         return undefined;
     }
+}
+
+/**
+ * Read the structured output object the adapter carries on a `tool.completed` emit
+ * (`payload.structuredOutput`) — the graph-side equivalent of the flat path's
+ * `settlement.structuredOutput`. `undefined` when the payload omits it or carries a non-object.
+ */
+function readStructuredOutputField(payload: unknown): unknown {
+    if (!isPlainObject(payload)) {
+        return undefined;
+    }
+    const value = payload['structuredOutput'];
+    return isPlainObject(value) ? value : undefined;
 }
 
 function parseCommandRunStatus(value: unknown): 'completed' | 'failed' | undefined {

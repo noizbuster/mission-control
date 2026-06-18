@@ -89,9 +89,12 @@ function emitMetadataForSignal(signal: AbgSignal): { readonly emit: AbgEmitMetad
  * `unknown`; narrowed with `in`/`typeof` — no cast. Returns `undefined` for non-tool emits or
  * payloads without a string toolCallId.
  */
-function toolResultForEmit(
-    signal: AbgSignal,
-): { readonly toolResult: { readonly toolCallId: string; readonly status: 'completed' | 'failed' } } | undefined {
+function toolResultForEmit(signal: AbgSignal):
+    | {
+          readonly toolResult: { readonly toolCallId: string; readonly status: 'completed' | 'failed' };
+          readonly taskId: string;
+      }
+    | undefined {
     if (signal.type !== 'emit') {
         return undefined;
     }
@@ -107,7 +110,13 @@ function toolResultForEmit(
     if (typeof toolCallId !== 'string') {
         return undefined;
     }
-    return { toolResult: { toolCallId, status: eventType === 'tool.completed' ? 'completed' : 'failed' } };
+    // `taskId` mirrors the flat run loop's tool events (which set `taskId` to the toolCallId) so a
+    // graph run's `tool.completed`/`tool.failed` events are observable on the SAME field downstream
+    // (engine-agnostic assertions, session replay) — not only on `toolResult.toolCallId`.
+    return {
+        toolResult: { toolCallId, status: eventType === 'tool.completed' ? 'completed' : 'failed' },
+        taskId: toolCallId,
+    };
 }
 
 function eventTypeForSignal(signal: AbgSignal): AgentEvent['type'] {

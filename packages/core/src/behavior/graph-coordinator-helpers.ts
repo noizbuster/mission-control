@@ -103,9 +103,14 @@ export function runContext(
         // Lets a node forward a tool's own events (file.diff.applied, ...) into the graph stream —
         // session-scoped so they replay like the flat loop's settleToolCalls events.
         emitEvent: (event) => {
-            state.events.push({ ...event, sessionId: input.sessionId, modelProviderSelection: input.modelProviderSelection });
+            state.events.push({
+                ...event,
+                sessionId: input.sessionId,
+                modelProviderSelection: input.modelProviderSelection,
+            });
         },
         ...(input.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
+        ...(input.serializeToolExecution === true ? { serializeToolExecution: true } : {}),
     } satisfies {
         readonly graphId: string;
         readonly now: () => string;
@@ -122,6 +127,7 @@ export function runContext(
         readonly input?: Readonly<Record<string, unknown>>;
         readonly emitEvent: (event: AgentEvent) => void;
         readonly haltOnFailedToolSettlement?: boolean;
+        readonly serializeToolExecution?: boolean;
     };
 }
 

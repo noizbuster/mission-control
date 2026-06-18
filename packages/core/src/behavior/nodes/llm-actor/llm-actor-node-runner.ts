@@ -86,6 +86,9 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
                   // Forward the tool's own events (file.diff.applied, ...) into the graph stream so
                   // the graph surfaces the same rich tool events the flat loop's settleToolCalls does.
                   ...(context.emitEvent !== undefined ? { onToolEvent: context.emitEvent } : {}),
+                  // Interactive path: serialize a tool BATCH so the approval broker sees one approval
+                  // at a time (non-interactive omits this → parallel batch execution).
+                  ...(context.serializeToolExecution === true ? { serializeToolExecution: true } : {}),
               })
             : undefined;
 

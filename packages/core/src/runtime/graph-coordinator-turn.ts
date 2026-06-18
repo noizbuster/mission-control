@@ -51,6 +51,13 @@ export type GraphTurnRunnerWiring = {
      */
     readonly haltOnFailedToolSettlement?: boolean;
     /**
+     * Serialize a proposed tool BATCH (interactive graph path): forwarded to `runAbgGraph` so the
+     * tool bridge wraps each tool's `execute` in a shared mutex — at most one approval is pending at
+     * a time, matching the flat path's sequential cadence and the broker's single-pending invariant.
+     * Omitted on the non-interactive path (parallel tool batches).
+     */
+    readonly serializeToolExecution?: boolean;
+    /**
      * Observation-only tap forwarded into `runAbgGraph` (`AbgGraphRunnerInput.onSignal`); fires for
      * every node signal before projection — including `llm.text.delta` streaming deltas. Lets the
      * interactive owner render live token deltas. Does not affect projection, persistence, or the

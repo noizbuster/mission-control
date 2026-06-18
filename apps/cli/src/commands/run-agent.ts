@@ -281,12 +281,11 @@ function resolveNonInteractiveEngine(engine: CliArgs['engine']): 'graph' | 'flat
 }
 
 /**
- * Resolve the execution engine for INTERACTIVE chat runs. The graph is wired into the interactive path
- * (strangler-fig) but is OPT-IN for now (`--engine graph` / `MC_USE_GRAPH=1`): the interactive graph
- * path is newer than the non-interactive flip, so the flat loop stays the interactive default until the
- * graph path is verified in real use. The escape-hatch flags (`MC_USE_FLAT=1`, back-compat
- * `MC_USE_GRAPH=0`) still force flat. Flipping the interactive default to graph is a one-line change
- * here (tracked in task #47).
+ * Resolve the execution engine for INTERACTIVE chat runs. The ABG coding-agent GRAPH is the default
+ * (the non-interactive path flipped in `3f780c7`; the interactive flip lands here) — the flat loop is
+ * the opt-out escape hatch: `MC_USE_FLAT=1`, back-compat `MC_USE_GRAPH=0`, or `--engine flat`.
+ * `MC_USE_GRAPH=1` is a now-redundant explicit opt-in. On the interactive path the graph serializes a
+ * tool BATCH so the approval broker sees one approval at a time (parity with the flat loop's cadence).
  */
 function resolveInteractiveEngine(engine: CliArgs['engine']): 'graph' | 'flat' {
     if (engine !== undefined) {
@@ -295,10 +294,7 @@ function resolveInteractiveEngine(engine: CliArgs['engine']): 'graph' | 'flat' {
     if (process.env['MC_USE_FLAT'] === '1' || process.env['MC_USE_GRAPH'] === '0') {
         return 'flat';
     }
-    if (process.env['MC_USE_GRAPH'] === '1') {
-        return 'graph';
-    }
-    return 'flat';
+    return 'graph';
 }
 
 async function resolveModelProviderSelection(

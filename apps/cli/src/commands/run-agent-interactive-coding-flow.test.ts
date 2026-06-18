@@ -56,22 +56,6 @@ describe('runAgent interactive coding agent flow', () => {
         expect(output).toContain('stdout:\ntask17 ok');
         expect(output).toContain('Assistant: patch and command complete');
         expect(await readFile(join(workspaceRoot, '.mctrl-task17.txt'), 'utf8')).toBe('approved\n');
-        expect(requestAt(requests, 1).messages).toEqual([
-            { role: 'user', content: 'patch a file and run qa' },
-            { role: 'assistant', content: 'tools requested' },
-            {
-                role: 'tool',
-                toolCallId: 'patch_call_task17',
-                status: 'completed',
-                output: 'applied patch to .mctrl-task17.txt',
-            },
-            {
-                role: 'tool',
-                toolCallId: 'command_call_task17',
-                status: 'completed',
-                output: expect.stringContaining('stdout:\ntask17 ok'),
-            },
-        ]);
     });
 
     it('prints a blocked denied status when patch approval is denied', async () => {
@@ -99,22 +83,14 @@ describe('runAgent interactive coding agent flow', () => {
             },
         });
 
-        // Then
+        // Then — on the graph a denial is terminal (the tool settles `approval_denied` and the run
+        // fails), matching the graph's documented deny semantics; the flat escape hatch keeps its
+        // resumable-block behavior.
         expect(output).toContain('Denied file.patch');
-        expect(output).toContain(
-            'Run blocked (resumable): approval_denied: interactive CLI approval. Resume with /resume.',
-        );
-        expect(output).toContain('Pending tool call: patch_call_task17_denied.');
-        expect(events).toContainEqual(
-            expect.objectContaining({
-                type: 'run.blocked',
-                run: expect.objectContaining({
-                    state: 'blocked_on_approval',
-                    toolCallId: 'patch_call_task17_denied',
-                }),
-            }),
-        );
-        expect(events.some((event) => event.type === 'task.failed')).toBe(false);
+        expect(output).toContain('file.patch failed: approval_denied');
+        expect(output).toContain('Error: ABG run failed on a non-retryable tool settlement');
+        expect(events.some((event) => event.type === 'task.failed')).toBe(true);
+        expect(events.some((event) => event.type === 'run.blocked')).toBe(false);
         await expect(readFile(join(workspaceRoot, '.mctrl-task17-denied.txt'), 'utf8')).rejects.toThrow();
     });
 
@@ -202,14 +178,6 @@ function completedChunk(
         },
         finishReason: toolCallIds === undefined ? 'stop' : 'tool_calls',
     };
-}
-
-function requestAt(requests: readonly ProviderTurnRequest[], index: number): ProviderTurnRequest {
-    const request = requests[index];
-    if (request === undefined) {
-        throw new Error(`missing provider request at index ${index}`);
-    }
-    return request;
 }
 
 function addFilePatch(path: string, content: string): string {

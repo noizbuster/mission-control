@@ -110,7 +110,14 @@ function appendToolResultMessage(messages: SequencedAgentMessage[], event: Agent
             toolCallId: event.toolResult.toolCallId,
             status: event.toolResult.status,
             ...(event.toolResult.output !== undefined ? { output: event.toolResult.output } : {}),
-            ...(event.toolResult.error !== undefined ? { error: event.toolResult.error } : {}),
+            // A `failed` result MUST carry an `error` (the schema's `superRefine` rejects one
+            // without). Persisted tool results normally attach one; harden the boundary so a
+            // failed result replayed from an older/oddly-shaped event cannot throw here.
+            ...(event.toolResult.error !== undefined
+                ? { error: event.toolResult.error }
+                : event.toolResult.status === 'failed'
+                  ? { error: { code: 'tool_failed', message: 'tool failed', retryable: false } }
+                  : {}),
             ...(event.toolResult.redactions !== undefined ? { redactions: event.toolResult.redactions } : {}),
         }),
         sourceSequence,

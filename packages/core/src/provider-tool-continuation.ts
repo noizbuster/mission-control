@@ -84,7 +84,15 @@ function toolResultToAgentMessage(result: ToolInvocationSettlement['result']): A
         toolCallId: result.toolCallId,
         status: result.status,
         ...(result.output !== undefined ? { output: result.output } : {}),
-        ...(result.error !== undefined ? { error: result.error } : {}),
+        // A `failed` result MUST carry an `error`: `AgentMessageSchema`'s `superRefine` rejects a
+        // failed result without one ("failed tool result messages must include an error"). Tools
+        // normally attach one, but harden the boundary so a failed result that arrives without an
+        // error cannot throw at conversion time.
+        ...(result.error !== undefined
+            ? { error: result.error }
+            : result.status === 'failed'
+              ? { error: { code: 'tool_failed', message: 'tool failed', retryable: false } }
+              : {}),
         ...(result.redactions !== undefined ? { redactions: result.redactions } : {}),
     });
 }

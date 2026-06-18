@@ -65,6 +65,13 @@ export type AbgNodeRunContext = {
      * `AbgGraphRunnerInput`; `LLMActor` consults the settlement ledger for a terminal failure.
      */
     readonly haltOnFailedToolSettlement?: boolean;
+    /**
+     * Serialize a tool BATCH so at most one tool executes at a time within a turn (interactive graph
+     * path): `LLMActor` forwards this to the tool bridge, which wraps each tool's `execute` in a
+     * shared mutex. Keeps the interactive approval broker's single-pending invariant when the model
+     * proposes multiple tools in one step. Omitted on the non-interactive path (parallel batches).
+     */
+    readonly serializeToolExecution?: boolean;
 };
 
 export type AbgNodeRunner = (node: AbgNodeSpec, context: AbgNodeRunContext) => AsyncIterable<AbgSignal>;

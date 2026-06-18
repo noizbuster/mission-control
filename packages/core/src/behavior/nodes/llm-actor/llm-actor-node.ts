@@ -21,6 +21,7 @@
 import type { AbgSignal } from '@mission-control/protocol';
 import type { ModelMessage, ToolSet } from 'ai';
 import { stepCountIs, streamText } from 'ai';
+import { redactCredentialText } from '../../../providers/redaction-handler.js';
 import { errorToString } from '../../../util/error-to-string.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
 import type { AbgToolSettlement, AbgToolSettlementLedger } from './abg-tool-bridge.js';
@@ -95,11 +96,18 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             }
         }
         const [text, usage, response] = await Promise.all([result.text, result.usage, result.response]);
-        turnText = text;
+        // Redact credentials from the assistant text BEFORE it flows into the `llm.turn.completed`
+        // emit (persisted + rendered) and the turn result — parity with the flat path, which redacts
+        // provider message content at the provider-event layer. Without this the graph path would
+        // stream + persist raw credentials in assistant text.
+        turnText = redactCredentialText(text);
         turnUsage = usage;
         turnResponseMessages = response.messages;
     } catch (error) {
-        const message = errorToString(error);
+        // Redact credentials from the surfaced error message (parity with the flat path, which
+        // redacts provider error messages at the provider-event layer) so a provider failure
+        // carrying a secret does not leak into the `llm.error` emit (rendered + persisted).
+        const message = redactCredentialText(errorToString(error));
         const errorCode = extractProviderErrorCode(error);
         yield createAbgEmitSignal({
             graphId: input.graphId,

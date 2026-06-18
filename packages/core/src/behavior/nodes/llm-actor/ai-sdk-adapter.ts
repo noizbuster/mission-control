@@ -14,6 +14,7 @@
 
 import type { AbgSignal } from '@mission-control/protocol';
 import type { TextStreamPart, ToolSet } from 'ai';
+import { redactCredentialText } from '../../../providers/redaction-handler.js';
 import { errorToString } from '../../../util/error-to-string.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
 import type { AbgToolSettlementLedger } from './abg-tool-bridge.js';
@@ -52,7 +53,10 @@ export function abgSignalsFromStreamPart(
 ): readonly AbgSignal[] {
     switch (part.type) {
         case 'text-delta':
-            return [emit(ctx, 'llm.text.delta', { delta: part.text })];
+            // Redact credentials from each streamed delta so an interactive caller rendering the
+            // `llm.text.delta` tap (the graph's token stream) never writes raw credentials — parity
+            // with the flat path, which redacts provider text deltas at the provider-event layer.
+            return [emit(ctx, 'llm.text.delta', { delta: redactCredentialText(part.text) })];
         case 'reasoning-delta':
             return [emit(ctx, 'llm.reasoning.delta', { delta: part.text })];
         case 'tool-call':
@@ -84,6 +88,12 @@ export function abgSignalsFromStreamPart(
                     toolCallId: part.toolCallId,
                     toolName: part.toolName,
                     ...(output !== undefined ? { output } : {}),
+                    // Carry the structured output object so the graph renderer recovers `Applied patch:`/
+                    // `Applied edit:`/`Created file:` detail the model-facing `output` string loses —
+                    // parity with the flat path's `settlement.structuredOutput`.
+                    ...(settlement?.structuredOutput !== undefined
+                        ? { structuredOutput: settlement.structuredOutput }
+                        : {}),
                 }),
             ];
         }

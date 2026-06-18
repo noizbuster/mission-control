@@ -62,6 +62,14 @@ export type AbgGraphRunnerInput = {
      */
     readonly haltOnFailedToolSettlement?: boolean;
     /**
+     * Serialize a proposed tool BATCH so at most one tool executes at a time within a turn — the
+     * INTERACTIVE graph path needs this because the interactive approval broker allows a single
+     * pending approval (a second concurrent approval in a batch would auto-deny). Forwarded to the
+     * tool bridge via `AbgNodeRunContext`. Omitted on the non-interactive path so tool batches stay
+     * parallel.
+     */
+    readonly serializeToolExecution?: boolean;
+    /**
      * Observation-only tap invoked for every node signal yielded during the run, BEFORE projection to
      * an AgentEvent — including high-frequency streaming signals (`llm.text.delta`,
      * `llm.reasoning.delta`) that are NOT persisted. Lets an interactive caller render live token

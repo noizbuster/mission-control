@@ -70,6 +70,10 @@ describe('interactive coding-agent redaction', () => {
         expect(replay).not.toContain(secret);
     });
 
+    // Exercises the FLAT escape-hatch path: it asserts the pre-approval tool-arg PREVIEW is rendered
+    // and redacted (the graph path defers preview rendering — Gap A) AND the flat resumable-block
+    // deny model (`Run blocked (resumable): approval_denied`). Both are flat-path behaviors, so
+    // `--engine flat` pins the runAgent calls below to the flat model.
     it('redacts provider-supplied tool argument previews before approval', async () => {
         // Given
         const dataDir = await tempRoot('mctrl-preview-redaction-data-');
@@ -78,7 +82,9 @@ describe('interactive coding-agent redaction', () => {
         vi.stubEnv(missionControlDataDirEnvKey, dataDir);
 
         // When
-        const commandPreview = await runAgent(parseArgs(['--session', 'session_cli_command_preview_redaction']), {
+        const commandPreview = await runAgent(
+            parseArgs(['--session', 'session_cli_command_preview_redaction', '--engine', 'flat']),
+            {
             authStore: createEmptyAuthStore(),
             chatInput: createScriptedChatInput([
                 { type: 'line', value: 'preview command tool arguments' },
@@ -101,7 +107,9 @@ describe('interactive coding-agent redaction', () => {
                 { kind: 'response_completed', content: 'preview command' },
             ]),
         });
-        const patchPreview = await runAgent(parseArgs(['--session', 'session_cli_patch_preview_redaction']), {
+        const patchPreview = await runAgent(
+            parseArgs(['--session', 'session_cli_patch_preview_redaction', '--engine', 'flat']),
+            {
             authStore: createEmptyAuthStore(),
             chatInput: createScriptedChatInput([
                 { type: 'line', value: 'preview patch tool arguments' },

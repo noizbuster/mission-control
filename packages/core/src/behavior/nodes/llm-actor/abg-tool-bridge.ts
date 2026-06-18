@@ -30,6 +30,36 @@ export class AbgToolBridgeError extends Error {
     }
 }
 
+/**
+ * A minimal async mutex used to serialize a tool BATCH on the INTERACTIVE graph path. `acquire()`
+ * resolves once every prior acquisition has released; the resolved callback releases the lock. One
+ * instance is shared across every bridged tool in a turn (created by `bridgeAdvertisementsToAiSdk`)
+ * so the AI-SDK's concurrent tool dispatch is reduced to one-at-a-time execution — keeping the
+ * interactive approval broker's single-pending invariant (a 2nd concurrent approval would otherwise
+ * auto-deny). Non-interactive graph runs do not use it, preserving the batch's parallel execution.
+ */
+type ToolExecutionLock = {
+    readonly acquire: () => Promise<() => void>;
+};
+
+function createAsyncMutex(): ToolExecutionLock {
+    // A FIFO promise chain: each `acquire()` appends a "hold" promise to the tail and resolves
+    // with a release callback that ends that hold. The next waiter's `.then` only runs once the
+    // previous hold resolves, so holders run strictly one after the other.
+    let chain: Promise<unknown> = Promise.resolve();
+    return {
+        acquire: () =>
+            new Promise<() => void>((resolveAcquire) => {
+                chain = chain.then(
+                    () =>
+                        new Promise<void>((resolveHold) => {
+                            resolveAcquire(() => resolveHold());
+                        }),
+                );
+            }),
+    };
+}
+
 export type PolicyGateDecision = {
     readonly allowed: boolean;
     readonly reason?: string;
@@ -59,6 +89,13 @@ export type AbgToolSettlement = {
     readonly toolName: string;
     readonly status: ToolResultStatus;
     readonly output?: unknown;
+    /**
+     * The tool's structured output object (e.g. `{ kind: 'file_patch', appliedFiles }`) — the SAME field
+     * the flat path persists as `settlement.structuredOutput` and renders `Applied patch:`/`Applied edit:`/
+     * `Created file:` from. Threaded into the ledger so the adapter can carry it on the `tool.completed`
+     * emit and the graph renderer recovers the detail the model-facing `output` string loses.
+     */
+    readonly structuredOutput?: unknown;
     readonly error?: ProtocolError;
 };
 
@@ -170,10 +207,21 @@ export type AbgToolBridgeOptions = {
      * filtered so they are not double-emitted; the adapter owns the graph-canonical tool lifecycle.
      */
     readonly onToolEvent?: (event: AgentEvent) => void;
+    /**
+     * Serialize a proposed tool BATCH: when true, `bridgeAdvertisementsToAiSdk` creates ONE shared
+     * mutex so the AI-SDK's concurrent tool dispatch runs one `execute` at a time within a turn. The
+     * INTERACTIVE graph path needs this — the interactive approval broker allows a single pending
+     * approval, so a parallel batch would auto-deny a 2nd concurrent approval. Omitted (the default)
+     * leaves tools parallel, which non-interactive graph runs rely on for batched tool execution.
+     */
+    readonly serializeToolExecution?: boolean;
 };
 
 /**
- * Build an AI SDK `ToolSet` from advertised tools, each wrapped with the policy-gate seam.
+ * Build an AI SDK `ToolSet` from advertised tools, each wrapped with the policy-gate seam. When
+ * `options.serializeToolExecution` is set, ONE shared mutex is created here and handed to every
+ * tool so a batch proposed in a single step executes one tool at a time (interactive approval
+ * parity) instead of concurrently.
  */
 export function bridgeAdvertisementsToAiSdk(
     registry: ToolRegistry,
@@ -181,8 +229,9 @@ export function bridgeAdvertisementsToAiSdk(
     options: AbgToolBridgeOptions = {},
 ): Record<string, Tool> {
     const tools: Record<string, Tool> = {};
+    const lock = options.serializeToolExecution === true ? createAsyncMutex() : undefined;
     for (const advertisement of advertisements) {
-        tools[advertisement.name] = bridgeAdvertisementToAiSdk(registry, advertisement, options);
+        tools[advertisement.name] = bridgeAdvertisementToAiSdk(registry, advertisement, options, lock);
     }
     return tools;
 }
@@ -191,6 +240,7 @@ export function bridgeAdvertisementToAiSdk(
     registry: ToolRegistry,
     advertisement: ToolAdvertisement,
     options: AbgToolBridgeOptions = {},
+    lock?: ToolExecutionLock,
 ): Tool {
     const inputSchema = jsonSchema(
         assertJsonSchema(advertisement.name, advertisement.providerTool.parametersJsonSchema),
@@ -203,64 +253,76 @@ export function bridgeAdvertisementToAiSdk(
             const argumentsJson = JSON.stringify(args ?? {});
             const signal = execOptions.abortSignal;
             const ledger = options.settlementLedger;
-
-            if (options.policyGate !== undefined) {
-                const decision = await options.policyGate({ toolCallId, toolName: advertisement.name, argumentsJson });
-                options.onPolicyDecision?.({ ...decision, toolCallId, toolName: advertisement.name });
-                if (!decision.allowed) {
-                    const blockMessage = `BLOCKED by policy gate${decision.reason !== undefined ? `: ${decision.reason}` : ''}`;
-                    // A denied call never reaches the registry, so synthesize the settlement:
-                    // the adapter must see a `failed` outcome (not a bare `tool-result`) so the
-                    // replay shows the block. `unknown` is the honest code — there is no
-                    // `blocked` ProtocolErrorCode.
-                    ledger?.record({
+            // Serialize tool execution within a batch when a shared lock is present (interactive
+            // graph path): acquire BEFORE crossing the policy gate / registry invoke so at most one
+            // approval is pending at a time. No lock (non-interactive) → the SDK runs the batch
+            // concurrently, unchanged.
+            const release = lock !== undefined ? await lock.acquire() : undefined;
+            try {
+                if (options.policyGate !== undefined) {
+                    const decision = await options.policyGate({
                         toolCallId,
                         toolName: advertisement.name,
-                        status: 'failed',
-                        error: { code: 'unknown', message: blockMessage, retryable: false },
+                        argumentsJson,
                     });
-                    return blockMessage;
-                }
-            }
-
-            const settlement = await registry.invoke({
-                toolCallId,
-                toolName: advertisement.name,
-                advertisedVersion: advertisement.version,
-                argumentsJson,
-                ...(signal !== undefined ? { signal } : {}),
-            });
-
-            // Record the authoritative settlement BEFORE returning, so the adapter (which sees
-            // the SDK's `tool-result` part only after this resolves) can emit the true
-            // status/output/error. Distinct from the model-facing return below: failures are
-            // surfaced to the model as a readable error string (persona contract), but the
-            // ledger records the structured error so the replay marks the tool failed.
-            ledger?.record(settlementToLedgerEntry(toolCallId, advertisement.name, settlement));
-
-            // Forward the tool's own events (file.diff.applied, command lifecycle, ...) into the
-            // graph stream — parity with the flat run loop's settleToolCalls. The adapter owns the
-            // graph-canonical tool.started/completed/failed, so skip those here to avoid duplicates.
-            if (options.onToolEvent !== undefined) {
-                for (const event of settlement.events) {
-                    if (!isAdapterOwnedToolLifecycle(event.type)) {
-                        options.onToolEvent(event);
+                    options.onPolicyDecision?.({ ...decision, toolCallId, toolName: advertisement.name });
+                    if (!decision.allowed) {
+                        const blockMessage = `BLOCKED by policy gate${decision.reason !== undefined ? `: ${decision.reason}` : ''}`;
+                        // A denied call never reaches the registry, so synthesize the settlement:
+                        // the adapter must see a `failed` outcome (not a bare `tool-result`) so the
+                        // replay shows the block. `unknown` is the honest code — there is no
+                        // `blocked` ProtocolErrorCode.
+                        ledger?.record({
+                            toolCallId,
+                            toolName: advertisement.name,
+                            status: 'failed',
+                            error: { code: 'unknown', message: blockMessage, retryable: false },
+                        });
+                        return blockMessage;
                     }
                 }
-            }
 
-            if (settlement.modelOutput !== undefined) {
-                return settlement.modelOutput.content;
+                const settlement = await registry.invoke({
+                    toolCallId,
+                    toolName: advertisement.name,
+                    advertisedVersion: advertisement.version,
+                    argumentsJson,
+                    ...(signal !== undefined ? { signal } : {}),
+                });
+
+                // Record the authoritative settlement BEFORE returning, so the adapter (which sees
+                // the SDK's `tool-result` part only after this resolves) can emit the true
+                // status/output/error. Distinct from the model-facing return below: failures are
+                // surfaced to the model as a readable error string (persona contract), but the
+                // ledger records the structured error so the replay marks the tool failed.
+                ledger?.record(settlementToLedgerEntry(toolCallId, advertisement.name, settlement));
+
+                // Forward the tool's own events (file.diff.applied, command lifecycle, ...) into the
+                // graph stream — parity with the flat run loop's settleToolCalls. The adapter owns the
+                // graph-canonical tool.started/completed/failed, so skip those here to avoid duplicates.
+                if (options.onToolEvent !== undefined) {
+                    for (const event of settlement.events) {
+                        if (!isAdapterOwnedToolLifecycle(event.type)) {
+                            options.onToolEvent(event);
+                        }
+                    }
+                }
+
+                if (settlement.modelOutput !== undefined) {
+                    return settlement.modelOutput.content;
+                }
+                if (settlement.result.status !== 'failed' && settlement.result.output !== undefined) {
+                    return settlement.result.output;
+                }
+                // Failed settlement: surface the ProtocolError so the model can adjust/retry
+                // instead of receiving an empty, indistinguishable-from-success result.
+                const error = settlement.result.error;
+                const code = error?.code ?? 'tool_failed';
+                const message = error?.message ?? 'tool produced no model output';
+                return `Tool "${advertisement.name}" failed (${code}): ${message}`;
+            } finally {
+                release?.();
             }
-            if (settlement.result.status !== 'failed' && settlement.result.output !== undefined) {
-                return settlement.result.output;
-            }
-            // Failed settlement: surface the ProtocolError so the model can adjust/retry
-            // instead of receiving an empty, indistinguishable-from-success result.
-            const error = settlement.result.error;
-            const code = error?.code ?? 'tool_failed';
-            const message = error?.message ?? 'tool produced no model output';
-            return `Tool "${advertisement.name}" failed (${code}): ${message}`;
         },
     });
 }
@@ -282,6 +344,7 @@ function settlementToLedgerEntry(
             toolName,
             status: 'completed',
             ...(result.output !== undefined ? { output: result.output } : {}),
+            ...(settlement.structuredOutput !== undefined ? { structuredOutput: settlement.structuredOutput } : {}),
         };
     }
     return {

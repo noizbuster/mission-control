@@ -12,6 +12,10 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+// These exercise the FLAT escape-hatch path's resumable-block approval model: a denied patch settles
+// `blocked_on_approval` (resumable via /resume), and an interrupt-at-approval blocks resumably. The
+// graph DEFAULT instead treats a deny as terminal (no resume) — its deny safety is covered in
+// run-agent-interactive-coding-flow.test.ts. `--engine flat` pins these to the flat model.
 describe('runAgent approval hardening', () => {
     const tempRoots: string[] = [];
 
@@ -28,7 +32,7 @@ describe('runAgent approval hardening', () => {
         const events: AgentEvent[] = [];
         const chatOutput = createBufferedChatOutput();
 
-        const output = await runAgent(parseArgs(['--session', 'session_cli_denied_resume']), {
+        const output = await runAgent(parseArgs(['--session', 'session_cli_denied_resume', '--engine', 'flat']), {
             authStore: createEmptyAuthStore(),
             chatInput: createScriptedChatInput(
                 [
@@ -74,7 +78,7 @@ describe('runAgent approval hardening', () => {
         const events: AgentEvent[] = [];
         const chatOutput = createBufferedChatOutput();
 
-        const output = await runAgent(parseArgs(['--session', 'session_cli_blocked_interrupt']), {
+        const output = await runAgent(parseArgs(['--session', 'session_cli_blocked_interrupt', '--engine', 'flat']), {
             authStore: createEmptyAuthStore(),
             chatInput: createScriptedChatInput([
                 { type: 'line', value: 'patch but interrupt at approval' },

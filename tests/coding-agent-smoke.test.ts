@@ -49,7 +49,14 @@ describe('coding-agent end-to-end smoke', () => {
         await initializeTrustedSmokeWorkspace(dataDir, workspaceRoot);
 
         const provider = scriptedCodingSmokeProvider(providerRequests);
-        const firstOutput = await runAgent(parseArgs(['--session', sessionId, '--model', 'local/local-echo']), {
+        // `--engine flat`: this e2e proves the FLAT escape-hatch path's resumable-block approval
+        // model (a denied/queued patch parks as a pending approval that /resume re-drives). The graph
+        // DEFAULT treats a deny as terminal (no resumable block) and regenerates its own tool turns,
+        // so the flat-cadence scripted provider + block/resume flow is flat-specific. The graph
+        // coding path is covered by the run-agent-interactive-* suite.
+        const firstOutput = await runAgent(
+            parseArgs(['--session', sessionId, '--model', 'local/local-echo', '--engine', 'flat']),
+            {
             authStore: createEmptyAuthStore(),
             chatInput: createScriptedChatInput([
                 { type: 'line', value: 'inspect, edit, write, verify, then queue one blocked approval' },
@@ -71,7 +78,9 @@ describe('coding-agent end-to-end smoke', () => {
 
         await approvePendingSmokePatch(dataDir, sessionId, workspaceRoot, 'smoke_patch_call');
 
-        const resumedOutput = await runAgent(parseArgs(['--session', sessionId, '--model', 'local/local-echo']), {
+        const resumedOutput = await runAgent(
+            parseArgs(['--session', sessionId, '--model', 'local/local-echo', '--engine', 'flat']),
+            {
             authStore: createEmptyAuthStore(),
             chatInput: createScriptedChatInput([
                 { type: 'line', value: '/resume' },
