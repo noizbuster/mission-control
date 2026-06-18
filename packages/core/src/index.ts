@@ -82,14 +82,6 @@ export { PermissionSession, type PermissionSessionOptions } from './permission/s
 export { PermissionRuleStore, type PermissionRuleStoreOptions } from './permission/store.js';
 export { createAllowPermissionDecision, createDefaultPermissionDecision } from './permissions.js';
 export {
-    appendProviderToolResultMessages,
-    DEFAULT_PROVIDER_TOOL_CONTINUATION_LIMIT,
-    providerToolLoopLimitError,
-    sessionScopedToolEvent,
-    settleToolCallWithRegistry,
-    toolCallsFromProviderEnvelopes,
-} from './provider-tool-continuation.js';
-export {
     FlatProviderBridgeError,
     type FlatProviderBridgeOptions,
     wrapFlatProviderAsSdkModel,

@@ -9,8 +9,6 @@ import type {
     ProtocolErrorCode,
 } from '@mission-control/protocol';
 import type { AgentRuntimeOptions } from './agent-runtime-options.js';
-import type { RuntimeApprovalBlockedError } from './agent-runtime-provider-turn.js';
-import { runRuntimeProviderPromptTask } from './agent-runtime-provider-turn.js';
 import { resolveSidecarCommand } from './agent-runtime-sidecar.js';
 import { PermissionGate } from './approval-gate.js';
 import { EventBus } from './event-bus.js';
@@ -199,56 +197,5 @@ export function runBlockedEvent(input: {
             errorCode: input.errorCode,
             ...(input.toolCallId !== undefined ? { toolCallId: input.toolCallId } : {}),
         },
-    };
-}
-
-export async function runRuntimePromptTask(input: {
-    readonly options: AgentRuntimeOptions;
-    readonly sessionId: string;
-    readonly taskId: string;
-    readonly prompt: string;
-    readonly modelProviderSelection: ModelProviderSelection;
-    readonly requestPermission: (request: PermissionRequest) => Promise<PermissionDecision>;
-    readonly onEnvelope: (envelope: AgentEventEnvelope) => void;
-}): Promise<string> {
-    if (input.options.provider === undefined) {
-        return `received prompt: ${input.prompt}`;
-    }
-    const projectContext = runtimeProjectContextOptions(input.options);
-    return runRuntimeProviderPromptTask({
-        provider: input.options.provider,
-        sessionId: input.sessionId,
-        taskId: input.taskId,
-        prompt: input.prompt,
-        modelProviderSelection: input.modelProviderSelection,
-        ...(projectContext !== undefined ? { projectContext } : {}),
-        ...(input.options.providerTimeoutMs !== undefined
-            ? { providerTimeoutMs: input.options.providerTimeoutMs }
-            : {}),
-        ...(input.options.providerRetryLimit !== undefined
-            ? { providerRetryLimit: input.options.providerRetryLimit }
-            : {}),
-        ...(input.options.providerTurnLoopLimit !== undefined
-            ? { providerTurnLoopLimit: input.options.providerTurnLoopLimit }
-            : {}),
-        ...(input.options.createToolRegistry !== undefined
-            ? {
-                  toolRegistry: await input.options.createToolRegistry(input.requestPermission),
-              }
-            : {}),
-        requestPermission: input.requestPermission,
-        onEnvelope: input.onEnvelope,
-    });
-}
-
-export function blockedRuntimePromptMessage(error: RuntimeApprovalBlockedError): {
-    readonly message: string;
-    readonly errorCode: ProtocolErrorCode;
-    readonly toolCallId?: string;
-} {
-    return {
-        message: error.message,
-        errorCode: error.errorCode,
-        ...(error.toolCallId !== undefined ? { toolCallId: error.toolCallId } : {}),
     };
 }

@@ -12,18 +12,14 @@ import type {
 import type { ModelMessage } from 'ai';
 import { runRuntimeDemoTask } from './agent-runtime-demo.js';
 import type { AgentRuntimeOptions } from './agent-runtime-options.js';
-import { RuntimeApprovalBlockedError } from './agent-runtime-provider-turn.js';
 import { runRuntimeSkillInvocationTask, type SkillInvocationTaskInput } from './agent-runtime-skill.js';
 import {
     allocatePromptTaskId,
-    blockedRuntimePromptMessage,
     createRuntimeApprovalGate,
     createRuntimeSession,
     createRuntimeSidecarClient,
     emitRuntimeEnvelope,
     ensureRuntimeSession,
-    runBlockedEvent,
-    runRuntimePromptTask,
     runtimeModelProviderSelection,
     sessionStartedEvent,
     sessionStoppedEvent,
@@ -114,66 +110,6 @@ export class AgentRuntime {
                 this.emit(event);
             },
         });
-    }
-
-    async runPromptTask(prompt: string): Promise<string> {
-        const session = ensureRuntimeSession(this.session);
-        const taskId = this.createPromptTaskId();
-        await this.requestPermission(
-            {
-                id: `permission_${taskId}`,
-                action: 'prompt.submit',
-                reason: 'user chat prompt permission gate',
-            },
-            taskId,
-        );
-        this.emit(
-            taskStartedEvent({
-                timestamp: new Date().toISOString(),
-                sessionId: session.id,
-                taskId,
-                prompt,
-                modelProviderSelection: this.modelProviderSelection,
-            }),
-        );
-        let response: string;
-        try {
-            response = await runRuntimePromptTask({
-                options: this.options,
-                sessionId: session.id,
-                taskId,
-                prompt,
-                modelProviderSelection: this.modelProviderSelection,
-                requestPermission: (request) => this.requestPermission(request, taskId),
-                onEnvelope: (envelope) => {
-                    emitRuntimeEnvelope(this.log, this.bus, envelope);
-                },
-            });
-        } catch (error: unknown) {
-            if (!(error instanceof RuntimeApprovalBlockedError)) {
-                throw error;
-            }
-            this.emit(
-                runBlockedEvent({
-                    timestamp: new Date().toISOString(),
-                    sessionId: session.id,
-                    taskId,
-                    modelProviderSelection: this.modelProviderSelection,
-                    ...blockedRuntimePromptMessage(error),
-                }),
-            );
-            return error.message;
-        }
-        this.emit(
-            taskCompletedEvent({
-                timestamp: new Date().toISOString(),
-                sessionId: session.id,
-                taskId,
-                response,
-                modelProviderSelection: this.modelProviderSelection,
-            }),
-        );
-        return response;
     }
 
     async runSkillInvocationTask(input: SkillInvocationTaskInput): Promise<string> {

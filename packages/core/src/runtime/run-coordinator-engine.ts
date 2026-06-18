@@ -22,7 +22,6 @@ import {
     type RunCoordinatorRunEventType,
 } from './run-coordinator-lifecycle.js';
 import { readRunCoordinatorMessages } from './run-coordinator-messages.js';
-import { type RunCoordinatorProviderTurnInput, runCoordinatorProviderTurn } from './run-coordinator-provider-turn.js';
 import {
     appendRunCoordinatorEnvelope,
     type RunCoordinatorPromptInput,
@@ -191,10 +190,12 @@ export class SessionRunCoordinator {
 
     private async runProviderTurn(signal: AbortSignal): Promise<RunCoordinatorProviderTurnResult> {
         const injected = this.options.runProviderTurn;
-        if (injected !== undefined) {
-            return injected(this.turnContext(signal));
+        if (injected === undefined) {
+            throw new TypeError(
+                `${this.options.sessionId}: SessionRunCoordinator requires runProviderTurn (the flat provider-turn loop has been removed). Inject a RunCoordinatorTurnRunner (e.g. createGraphTurnRunner) via SessionRunCoordinatorOptions or SessionRunOwnerRegistryOptions.createTurnRunner.`,
+            );
         }
-        return runCoordinatorProviderTurn(this.flatTurnInput(), signal);
+        return injected(this.turnContext(signal));
     }
 
     private turnContext(signal: AbortSignal): RunCoordinatorTurnContext {
@@ -212,24 +213,6 @@ export class SessionRunCoordinator {
                 : {}),
             ...(this.options.onToolCall !== undefined ? { onToolCall: this.options.onToolCall } : {}),
             ...(this.options.onToolSettlement !== undefined ? { onToolSettlement: this.options.onToolSettlement } : {}),
-        };
-    }
-
-    private flatTurnInput(): RunCoordinatorProviderTurnInput {
-        return {
-            sessionId: this.options.sessionId,
-            provider: this.options.provider,
-            modelProviderSelection: this.options.modelProviderSelection,
-            ...(this.options.timeoutMs !== undefined ? { timeoutMs: this.options.timeoutMs } : {}),
-            ...(this.options.retryLimit !== undefined ? { retryLimit: this.options.retryLimit } : {}),
-            ...(this.options.toolCallLoopLimit !== undefined
-                ? { toolCallLoopLimit: this.options.toolCallLoopLimit }
-                : {}),
-            ...(this.options.haltOnFailedToolSettlement !== undefined
-                ? { haltOnFailedToolSettlement: this.options.haltOnFailedToolSettlement }
-                : {}),
-            ...(this.options.toolRegistry !== undefined ? { toolRegistry: this.options.toolRegistry } : {}),
-            ...this.turnContextFields(),
         };
     }
 
