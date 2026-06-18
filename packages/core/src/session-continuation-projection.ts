@@ -26,6 +26,11 @@ export function projectApprovalContinuationTranscript(
 ): readonly SequencedAgentMessage[] {
     const messages: SequencedAgentMessage[] = [];
     let currentToolCalls: ProviderToolCallTranscript[] = [];
+    // Graph parity: the graph emits `tool.completed`/`tool.failed` DURING streamText (the bridge
+    // runs tools inline), so those events arrive BEFORE the `model.call.completed` assistant
+    // boundary. Buffering by toolCallId and flushing AFTER the matching assistant keeps the seed
+    // conversation ordered `[user, assistant(tool_call), tool(result)]` the model expects.
+    const pendingToolResults = new Map<string, SequencedAgentMessage>();
 
     events.forEach((event, sourceSequence) => {
         if (event.sessionId !== sessionId) {
@@ -36,10 +41,34 @@ export function projectApprovalContinuationTranscript(
         }
         appendPromptMessage(messages, event, sourceSequence);
         collectProviderToolCall(currentToolCalls, event);
-        appendAssistantMessage(messages, event, currentToolCalls, sourceSequence);
-        appendToolResultMessage(messages, event, sourceSequence);
+        const appendedAssistant = appendAssistantMessage(messages, event, currentToolCalls, sourceSequence);
+        bufferToolResultMessage(pendingToolResults, event, sourceSequence);
+        if (appendedAssistant) {
+            flushPendingToolResults(messages, pendingToolResults, currentToolCalls);
+        }
     });
-    return messages;
+    // Trailing flush: a tool result emitted with no following assistant boundary (e.g. a
+    // `run.blocked` after `tool.failed`) would otherwise stay buffered.
+    flushAllPendingToolResults(messages, pendingToolResults);
+    // Deduplicate tool messages by toolCallId, keeping the LATEST status. The desktop approval
+    // flow writes a `tool.failed` (the original approval-block) followed by a `tool.completed`
+    // (the out-of-band settlement after approval); the model needs only the final state.
+    return deduplicateToolMessagesByToolCallId(messages);
+}
+
+function deduplicateToolMessagesByToolCallId(messages: readonly SequencedAgentMessage[]): readonly SequencedAgentMessage[] {
+    const lastIndexOfToolCallId = new Map<string, number>();
+    messages.forEach((entry, index) => {
+        if (entry.message.role === 'tool') {
+            lastIndexOfToolCallId.set(entry.message.toolCallId, index);
+        }
+    });
+    return messages.filter((entry, index) => {
+        if (entry.message.role !== 'tool') {
+            return true;
+        }
+        return lastIndexOfToolCallId.get(entry.message.toolCallId) === index;
+    });
 }
 
 export function hasPendingDesktopApprovals(events: readonly AgentEvent[], sessionId: string): boolean {
@@ -68,14 +97,46 @@ function appendPromptMessage(messages: SequencedAgentMessage[], event: AgentEven
 
 function collectProviderToolCall(toolCalls: ProviderToolCallTranscript[], event: AgentEvent): void {
     const chunk = event.providerStreamChunk;
-    if (chunk?.kind !== 'tool_call_completed') {
+    if (chunk?.kind === 'tool_call_completed') {
+        toolCalls.push({
+            providerID: event.modelProviderSelection?.providerID ?? 'unknown',
+            toolCallId: chunk.toolCall.toolCallId,
+            toolName: chunk.toolCall.toolName,
+            argumentsJson: chunk.toolCall.argumentsJson,
+        });
         return;
     }
+    collectGraphToolCall(toolCalls, event);
+}
+
+/**
+ * Graph parity for the flat `tool_call_completed` chunk: the ABG graph emits tool-call proposals as
+ * `abg.emit.type === 'llm.tool_call.proposed'` on a `log` event, with parsed `input` JSON-stringified
+ * back into `argumentsJson`. Narrowed `in`/`typeof` (no casts).
+ */
+function collectGraphToolCall(toolCalls: ProviderToolCallTranscript[], event: AgentEvent): void {
+    const emit = event.abg?.emit;
+    if (emit === undefined || emit.type !== 'llm.tool_call.proposed') {
+        return;
+    }
+    const payload = emit.payload;
+    if (typeof payload !== 'object' || payload === null) {
+        return;
+    }
+    if (!('toolCallId' in payload) || typeof payload.toolCallId !== 'string') {
+        return;
+    }
+    if (!('toolName' in payload) || typeof payload.toolName !== 'string') {
+        return;
+    }
+    const toolCallId = payload.toolCallId;
+    const toolName = payload.toolName;
+    const input = 'input' in payload ? payload.input : undefined;
     toolCalls.push({
         providerID: event.modelProviderSelection?.providerID ?? 'unknown',
-        toolCallId: chunk.toolCall.toolCallId,
-        toolName: chunk.toolCall.toolName,
-        argumentsJson: chunk.toolCall.argumentsJson,
+        toolCallId,
+        toolName,
+        argumentsJson: JSON.stringify(input ?? {}),
     });
 }
 
@@ -84,27 +145,90 @@ function appendAssistantMessage(
     event: AgentEvent,
     currentToolCalls: readonly ProviderToolCallTranscript[],
     sourceSequence: number,
-): void {
+): boolean {
     const chunk = event.providerStreamChunk;
-    if (chunk?.kind !== 'response_completed') {
-        return;
+    if (chunk?.kind === 'response_completed') {
+        const providerToolCalls = chunk.message.providerToolCalls ?? currentToolCalls;
+        messages.push({
+            message: AgentMessageSchema.parse({
+                role: 'assistant',
+                content: chunk.message.content,
+                ...(providerToolCalls.length > 0 ? { providerToolCalls: [...providerToolCalls] } : {}),
+            }),
+            sourceSequence,
+        });
+        return true;
     }
-    const providerToolCalls = chunk.message.providerToolCalls ?? currentToolCalls;
+    return appendGraphAssistantMessage(messages, event, currentToolCalls, sourceSequence);
+}
+
+/**
+ * Graph parity for the flat `response_completed` chunk. The graph surfaces an LLM turn's final text
+ * via `model.call.completed.message` (set by `modelCallEvent` from the `llm.turn.completed`
+ * payload). When the LLMActor short-circuited (approval block), the event carries the synthetic
+ * label `'model.call.completed: <nodeId>'` and no real text — synthesize an empty assistant turn
+ * carrying the proposed tool calls so resume seeds `[user, assistant(tool_call), tool(result)]`.
+ */
+function appendGraphAssistantMessage(
+    messages: SequencedAgentMessage[],
+    event: AgentEvent,
+    currentToolCalls: readonly ProviderToolCallTranscript[],
+    sourceSequence: number,
+): boolean {
+    // Only graph-style `model.call.completed` events carry abg metadata (graphId/nodeId/emit).
+    // Flat-path events with the same type would otherwise be misread as graph final-text carriers.
+    if (event.abg === undefined || event.type !== 'model.call.completed' || event.message === undefined) {
+        return false;
+    }
+    if (event.message.startsWith('model.call.completed:')) {
+        if (currentToolCalls.length > 0) {
+            messages.push({
+                message: AgentMessageSchema.parse({
+                    role: 'assistant',
+                    content: '',
+                    ...(currentToolCalls.length > 0 ? { providerToolCalls: [...currentToolCalls] } : {}),
+                }),
+                sourceSequence,
+            });
+            return true;
+        }
+        return false;
+    }
     messages.push({
         message: AgentMessageSchema.parse({
             role: 'assistant',
-            content: chunk.message.content,
-            ...(providerToolCalls.length > 0 ? { providerToolCalls: [...providerToolCalls] } : {}),
+            content: event.message,
+            ...(currentToolCalls.length > 0 ? { providerToolCalls: [...currentToolCalls] } : {}),
         }),
         sourceSequence,
     });
+    return true;
 }
 
 function appendToolResultMessage(messages: SequencedAgentMessage[], event: AgentEvent, sourceSequence: number): void {
-    if (event.toolResult === undefined) {
+    const buffered = bufferToolResultEntry(event, sourceSequence);
+    if (buffered === undefined) {
         return;
     }
-    messages.push({
+    messages.push(buffered);
+}
+
+function bufferToolResultMessage(
+    pending: Map<string, SequencedAgentMessage>,
+    event: AgentEvent,
+    sourceSequence: number,
+): void {
+    const buffered = bufferToolResultEntry(event, sourceSequence);
+    if (buffered !== undefined && buffered.message.role === 'tool') {
+        pending.set(buffered.message.toolCallId, buffered);
+    }
+}
+
+function bufferToolResultEntry(event: AgentEvent, sourceSequence: number): SequencedAgentMessage | undefined {
+    if (event.toolResult === undefined) {
+        return undefined;
+    }
+    return {
         message: AgentMessageSchema.parse({
             role: 'tool',
             toolCallId: event.toolResult.toolCallId,
@@ -121,7 +245,31 @@ function appendToolResultMessage(messages: SequencedAgentMessage[], event: Agent
             ...(event.toolResult.redactions !== undefined ? { redactions: event.toolResult.redactions } : {}),
         }),
         sourceSequence,
-    });
+    };
+}
+
+function flushPendingToolResults(
+    messages: SequencedAgentMessage[],
+    pending: Map<string, SequencedAgentMessage>,
+    currentToolCalls: readonly ProviderToolCallTranscript[],
+): void {
+    if (currentToolCalls.length === 0 || pending.size === 0) {
+        return;
+    }
+    for (const call of currentToolCalls) {
+        const buffered = pending.get(call.toolCallId);
+        if (buffered !== undefined) {
+            messages.push(buffered);
+            pending.delete(call.toolCallId);
+        }
+    }
+}
+
+function flushAllPendingToolResults(messages: SequencedAgentMessage[], pending: Map<string, SequencedAgentMessage>): void {
+    for (const buffered of pending.values()) {
+        messages.push(buffered);
+    }
+    pending.clear();
 }
 
 type LatestCompaction = {

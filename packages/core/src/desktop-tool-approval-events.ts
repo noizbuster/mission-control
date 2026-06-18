@@ -63,9 +63,47 @@ export function toolFailed(sessionId: string, toolCallId: string, message: strin
 
 export function toolCallsFromEvents(events: readonly AgentEvent[]): readonly ToolCall[] {
     return events.flatMap((event) => {
-        const chunk = event.providerStreamChunk;
-        return chunk?.kind === 'tool_call_completed' ? [chunk.toolCall] : [];
+        const fromFlat = toolCallsFromFlatProviderChunk(event);
+        return fromFlat.length > 0 ? fromFlat : toolCallsFromGraphEmit(event);
     });
+}
+
+function toolCallsFromFlatProviderChunk(event: AgentEvent): readonly ToolCall[] {
+    const chunk = event.providerStreamChunk;
+    return chunk?.kind === 'tool_call_completed' ? [chunk.toolCall] : [];
+}
+
+/**
+ * Graph-engine parity for `toolCallsFromFlatProviderChunk`. The flat path records a tool call as
+ * `providerStreamChunk.toolCall` on `model.call.completed`; the ABG graph records the same proposal
+ * as an `abg.emit.type === 'llm.tool_call.proposed'` payload on a `log` event, with the parsed
+ * `input` object that we JSON-stringify back into `argumentsJson`. Narrowed `in`/`typeof` (no casts).
+ */
+function toolCallsFromGraphEmit(event: AgentEvent): readonly ToolCall[] {
+    const emit = event.abg?.emit;
+    if (emit === undefined || emit.type !== 'llm.tool_call.proposed') {
+        return [];
+    }
+    const payload = emit.payload;
+    if (typeof payload !== 'object' || payload === null) {
+        return [];
+    }
+    if (!('toolCallId' in payload) || typeof payload.toolCallId !== 'string') {
+        return [];
+    }
+    if (!('toolName' in payload) || typeof payload.toolName !== 'string') {
+        return [];
+    }
+    const toolCallId = payload.toolCallId;
+    const toolName = payload.toolName;
+    const input = 'input' in payload ? payload.input : undefined;
+    return [
+        {
+            toolCallId,
+            toolName,
+            argumentsJson: JSON.stringify(input ?? {}),
+        },
+    ];
 }
 
 export function pendingApprovalContextForCurrentRun(

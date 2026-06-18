@@ -1,5 +1,12 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
-import type { AgentEvent, AgentMessage, ModelProviderSelection } from '@mission-control/protocol';
+import type {
+    AbgNodeModelOptions,
+    AgentEvent,
+    AgentMessage,
+    ModelProviderSelection,
+    PermissionDecision,
+    PermissionRequest,
+} from '@mission-control/protocol';
 import {
     hasPendingDesktopApprovals,
     projectDesktopApprovalContinuationMessages,
@@ -17,7 +24,17 @@ import { createProviderRouter } from './providers/provider-factory.js';
 import type { ProviderAdapter } from './providers/provider-turn-types.js';
 import type { RunCoordinatorPromptInput, RunCoordinatorReadMessages } from './runtime/run-coordinator.js';
 import { type SessionRunOwner, type SessionRunOwnerReceipt, SessionRunOwnerRegistry } from './runtime/run-owner.js';
+import type { RunCoordinatorTurnRunner } from './runtime/run-coordinator-types.js';
+import { createGraphTurnRunner } from './runtime/graph-coordinator-turn.js';
+import { createCodingAgentGraph } from './behavior/coding-agent-graph.js';
+import { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry.js';
+import { wrapFlatProviderAsSdkModel } from './providers/ai-sdk/flat-provider-bridge.js';
 import type { CommandExecutionRequest, CommandExecutionResult } from './tools/command-run.js';
+import { registerCommandRunTool } from './tools/command-run.js';
+import { registerFileEditTool } from './tools/file-edit.js';
+import { registerFilePatchTool } from './tools/file-patch.js';
+import { registerFileWriteTool } from './tools/file-write.js';
+import { ToolRegistry } from './tools/tool-registry.js';
 
 export type DesktopPromptCommandInput = {
     readonly sessionId: string;
@@ -68,6 +85,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
     private readonly now: () => string;
     private readonly provider: ProviderAdapter;
     private readonly runOwners: SessionRunOwnerRegistry;
+    private graphToolRegistryPromise: Promise<ToolRegistry> | undefined;
 
     constructor(options: DesktopSessionCommandServiceOptions) {
         this.options = options;
@@ -78,6 +96,10 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
             provider: this.provider,
             modelProviderSelection: this.selection(),
             now: this.now,
+            // Drive every owner on the ABG graph (the desktop's engine); a denied/non-allowlisted tool
+            // terminates the run instead of looping (parity with the CLI graph owner path).
+            haltOnFailedToolSettlement: true,
+            createTurnRunner: (deps) => this.createGraphTurnRunner(deps),
             ...(options.createEventId !== undefined ? { createEventId: options.createEventId } : {}),
             resolveModelProviderSelection: async (store, sessionId, fallback) =>
                 latestModelProviderSelection(await store.getEvents(sessionId)) ?? fallback,
@@ -209,6 +231,79 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
             },
         );
     }
+
+    /**
+     * Build the ABG graph turn runner for one owner. Bridges the flat `ProviderAdapter` to an AI-SDK
+     * model (so the desktop's provider runs on the graph) and drives the default coding-agent graph
+     * over the desktop's blocking tool surface. Every tool call settles `approval_required` → the
+     * graph blocks → the desktop's event-layer approval flow (`decideApproval`/`settleDesktopApproval`)
+     * executes the approved tool out-of-band and resumes. This is parity with the flat path, which ran
+     * without a tool registry and blocked on each tool call.
+     */
+    private async createGraphTurnRunner(deps: {
+        readonly sessionId: string;
+        readonly modelProviderSelection: ModelProviderSelection;
+    }): Promise<RunCoordinatorTurnRunner> {
+        const toolRegistry = await this.ensureGraphToolRegistry();
+        const selection = deps.modelProviderSelection;
+        const resolveSdkModel = (options: AbgNodeModelOptions) =>
+            wrapFlatProviderAsSdkModel({
+                provider: this.provider,
+                providerID: options.providerID ?? selection.providerID,
+                modelID: options.modelID,
+                ...(selection.variantID !== undefined ? { variantID: selection.variantID } : {}),
+            });
+        return createGraphTurnRunner({
+            graph: createCodingAgentGraph({ model: selectionToModelOptions(selection) }),
+            sessionId: deps.sessionId,
+            now: this.now,
+            modelProviderSelection: selection,
+            registry: createCodingAgentNodeRegistry(),
+            resolveSdkModel,
+            toolRegistry,
+            haltOnFailedToolSettlement: true,
+            // Match the flat run loop's sequential tool cadence so a multi-call batch surfaces ONE
+            // pending approval at a time (the desktop approval broker's single-pending invariant).
+            serializeToolExecution: true,
+        });
+    }
+
+    private ensureGraphToolRegistry(): Promise<ToolRegistry> {
+        if (this.graphToolRegistryPromise === undefined) {
+            this.graphToolRegistryPromise = this.buildGraphToolRegistry();
+        }
+        return this.graphToolRegistryPromise;
+    }
+
+    private async buildGraphToolRegistry(): Promise<ToolRegistry> {
+        const registry = new ToolRegistry();
+        // `requires_approval` makes each tool settle `approval_required` (file-mutation maps a
+        // non-allow/non-deny decision to that code) so the graph blocks on every tool call. No
+        // PermissionGate is used → no gate-emitted approval events; the desktop owns those via
+        // backfillCurrentBlockedDesktopApproval, exactly as the flat path did.
+        const requestPermission = (request: PermissionRequest): PermissionDecision => ({
+            requestId: request.id,
+            status: 'requires_approval',
+            reason: 'desktop approval required',
+        });
+        await registerFileEditTool(registry, { workspaceRoot: this.options.workspaceRoot, requestPermission });
+        await registerFileWriteTool(registry, { workspaceRoot: this.options.workspaceRoot, requestPermission });
+        await registerFilePatchTool(registry, { workspaceRoot: this.options.workspaceRoot, requestPermission });
+        await registerCommandRunTool(registry, {
+            workspaceRoot: this.options.workspaceRoot,
+            requestPermission,
+            ...(this.options.commandExecutor !== undefined ? { executor: this.options.commandExecutor } : {}),
+        });
+        return registry;
+    }
+}
+
+function selectionToModelOptions(selection: ModelProviderSelection): AbgNodeModelOptions {
+    return {
+        providerID: selection.providerID,
+        modelID: selection.modelID,
+        ...(selection.variantID !== undefined ? { variantID: selection.variantID } : {}),
+    };
 }
 
 async function ensureSessionStarted(
