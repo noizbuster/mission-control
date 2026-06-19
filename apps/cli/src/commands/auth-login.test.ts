@@ -188,6 +188,76 @@ describe('runAuthCommand auth login', () => {
         await rm(authFilePath, { force: true });
     });
 
+    it('prompts interactively for the api key even when a matching env var is present', async () => {
+        const authFilePath = await useTempAuthFile();
+        vi.stubEnv('ZHIPU_API_KEY', 'zhipu_env_secret');
+        const store = createProviderAuthStore();
+        const secretCalls: Array<{
+            message: string;
+            defaultValue: string | undefined;
+            source: string | undefined;
+            preview: string | undefined;
+        }> = [];
+
+        const output = await runAuthCommand(parseArgs(['auth', 'login', '--provider', 'zai-coding-plan']), {
+            now: '2026-06-03T10:00:00.000Z',
+            store,
+            promptSecret: async (message, options) => {
+                secretCalls.push({
+                    message,
+                    defaultValue: options?.defaultValue,
+                    source: options?.defaultValueSource,
+                    preview: options?.defaultValuePreview,
+                });
+                return '';
+            },
+        });
+
+        expect(secretCalls).toHaveLength(1);
+        expect(secretCalls[0]?.message).toBe('ZHIPU_API_KEY');
+        expect(secretCalls[0]?.defaultValue).toBe('zhipu_env_secret');
+        expect(secretCalls[0]?.source).toBe('ZHIPU_API_KEY environment variable');
+        expect(secretCalls[0]?.preview).toBe('zhi**********ret');
+
+        const parsed = ProviderAuthFileSchema.parse(JSON.parse(await readFile(authFilePath, 'utf8')));
+        expect(output).toContain('Logged in zai-coding-plan');
+        expect(output).not.toContain('zhipu_env_secret');
+        expect(parsed.credentials['zai-coding-plan']).toMatchObject({
+            fields: {
+                apiKey: {
+                    value: 'zhipu_env_secret',
+                    secret: true,
+                },
+            },
+        });
+        await rm(authFilePath, { force: true });
+    });
+
+    it('prefers interactive user input over the env var when both are provided', async () => {
+        const authFilePath = await useTempAuthFile();
+        vi.stubEnv('ZHIPU_API_KEY', 'zhipu_env_secret');
+        const store = createProviderAuthStore();
+
+        const output = await runAuthCommand(parseArgs(['auth', 'login', '--provider', 'zai-coding-plan']), {
+            now: '2026-06-03T10:00:00.000Z',
+            store,
+            promptSecret: async () => 'typed_in_key',
+        });
+
+        const parsed = ProviderAuthFileSchema.parse(JSON.parse(await readFile(authFilePath, 'utf8')));
+        expect(output).toContain('Logged in zai-coding-plan');
+        expect(output).not.toContain('zhipu_env_secret');
+        expect(parsed.credentials['zai-coding-plan']).toMatchObject({
+            fields: {
+                apiKey: {
+                    value: 'typed_in_key',
+                    secret: true,
+                },
+            },
+        });
+        await rm(authFilePath, { force: true });
+    });
+
     it('rejects missing required multi-field credentials before writing', async () => {
         const authFilePath = await useTempAuthFile();
         const store = createProviderAuthStore();

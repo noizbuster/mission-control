@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { createProviderAuthStore } from '../auth-store.js';
 import { runAuthCommand } from './auth.js';
-import { createPromptSession } from './auth-prompts.js';
+import { createPromptSession, maskSecretHint } from './auth-prompts.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -180,6 +180,63 @@ describe('runAuthCommand auth prompts', () => {
         } finally {
             terminal.restore();
         }
+    });
+
+    it('renders a defaultValue hint and returns the default when the secret prompt is empty', async () => {
+        const terminal = stubTerminalPromptStreams();
+
+        try {
+            const session = createPromptSession();
+            const secret = session.promptSecret('ZHIPU_API_KEY', {
+                defaultValue: 'env_secret_value',
+                defaultValueSource: 'ZHIPU_API_KEY environment variable',
+                defaultValuePreview: 'env***alue',
+            });
+
+            process.stdin.emit('data', '\r');
+
+            await expect(secret).resolves.toBe('env_secret_value');
+            expect(terminal.getOutput()).toContain(
+                'ZHIPU_API_KEY (env***alue, press Enter to use ZHIPU_API_KEY environment variable): ',
+            );
+            expect(terminal.getOutput()).not.toContain('env_secret_value');
+            session.close();
+        } finally {
+            terminal.restore();
+        }
+    });
+
+    it('returns the typed secret when the user overrides the env default', async () => {
+        const terminal = stubTerminalPromptStreams();
+
+        try {
+            const session = createPromptSession();
+            const secret = session.promptSecret('ZHIPU_API_KEY', {
+                defaultValue: 'env_secret_value',
+                defaultValuePreview: 'env***alue',
+            });
+
+            process.stdin.emit('data', 'typed_value\r');
+
+            await expect(secret).resolves.toBe('typed_value');
+            expect(terminal.getOutput()).toContain('press Enter to use default');
+            session.close();
+        } finally {
+            terminal.restore();
+        }
+    });
+
+    it('masks long secrets with first three and last three characters around asterisks', () => {
+        expect(maskSecretHint('my-env-secret-key')).toBe('my-***********key');
+        expect(maskSecretHint('sk-abcd1234efgh5678')).toBe('sk-*************678');
+        expect(maskSecretHint('abcdefg')).toBe('abc*efg');
+        expect(maskSecretHint('abcdefgh')).toBe('abc**fgh');
+    });
+
+    it('hides short secrets entirely instead of leaking the first and last characters', () => {
+        expect(maskSecretHint('')).toBe('***');
+        expect(maskSecretHint('abc')).toBe('***');
+        expect(maskSecretHint('abcdef')).toBe('***');
     });
 
     it('prompts text credential fields visibly and secret credential fields with the secret prompt', async () => {

@@ -8,11 +8,49 @@ import {
 import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 
-export type AuthPrompt = (message: string) => Promise<string>;
+export type AuthPromptOptions = {
+    readonly defaultValue?: string;
+    readonly defaultValueSource?: string;
+    readonly defaultValuePreview?: string;
+};
+
+export type AuthPrompt = (message: string, options?: AuthPromptOptions) => Promise<string>;
 
 export type ProviderPromptChoice = ProviderPromptKeypressChoice;
 
 export type AuthProviderPrompt = (message: string, choices: readonly ProviderPromptChoice[]) => Promise<string>;
+
+export function maskSecretHint(value: string): string {
+    if (value.length <= 6) {
+        return '***';
+    }
+    const head = value.slice(0, 3);
+    const tail = value.slice(-3);
+    const middleLength = value.length - 6;
+    return `${head}${'*'.repeat(middleLength)}${tail}`;
+}
+
+function formatPromptMessage(message: string, options: AuthPromptOptions | undefined): string {
+    if (options?.defaultValue === undefined || options.defaultValue.length === 0) {
+        return message;
+    }
+    const source = options.defaultValueSource !== undefined && options.defaultValueSource.length > 0
+        ? options.defaultValueSource
+        : 'default';
+    const preview = options.defaultValuePreview;
+    if (preview !== undefined && preview.length > 0) {
+        return `${message} (${preview}, press Enter to use ${source})`;
+    }
+    return `${message} (press Enter to use ${source})`;
+}
+
+function resolvePromptResult(value: string, options: AuthPromptOptions | undefined): string {
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+        return trimmed;
+    }
+    return options?.defaultValue ?? '';
+}
 
 export type AuthPromptSession = {
     readonly prompt: AuthPrompt;
@@ -76,13 +114,13 @@ function createPipedPromptSession(): AuthPromptSession {
     }
 
     return {
-        prompt: async (message) => {
-            output.write(`${message}: `);
-            return readNextAnswer();
+        prompt: async (message, options) => {
+            output.write(`${formatPromptMessage(message, options)}: `);
+            return resolvePromptResult(await readNextAnswer(), options);
         },
-        promptSecret: async (message) => {
-            output.write(`${message}: `);
-            return readNextAnswer();
+        promptSecret: async (message, options) => {
+            output.write(`${formatPromptMessage(message, options)}: `);
+            return resolvePromptResult(await readNextAnswer(), options);
         },
         promptProvider: async (message, choices) => {
             output.write(`${message}:\n`);
@@ -104,17 +142,19 @@ function resolveNumberedProviderChoice(value: string, choices: readonly Provider
     return choices[providerIndex]?.id;
 }
 
-async function questionLine(message: string): Promise<string> {
+async function questionLine(message: string, options?: AuthPromptOptions): Promise<string> {
+    const label = formatPromptMessage(message, options);
     const readline = createInterface({ input, output });
     try {
-        return await readline.question(`${message}: `);
+        return resolvePromptResult(await readline.question(`${label}: `), options);
     } finally {
         readline.close();
     }
 }
 
-async function questionSecretLine(message: string): Promise<string> {
-    output.write(`${message}: `);
+async function questionSecretLine(message: string, options?: AuthPromptOptions): Promise<string> {
+    const label = formatPromptMessage(message, options);
+    output.write(`${label}: `);
     const wasRaw = input.isRaw === true;
     input.setRawMode(true);
     input.resume();
@@ -131,7 +171,7 @@ async function questionSecretLine(message: string): Promise<string> {
         function finish(): void {
             cleanup();
             output.write('\n');
-            resolve(characters.join(''));
+            resolve(resolvePromptResult(characters.join(''), options));
         }
 
         function onData(chunk: Buffer | string): void {
