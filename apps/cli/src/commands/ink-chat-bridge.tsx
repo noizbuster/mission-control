@@ -41,6 +41,14 @@ import {
     resolveSlashCommandMenuSubmission,
     type SlashCommandMenuState,
 } from './interactive-chat-command-menu.js';
+import {
+    createChatInputHistory,
+    isNavigatingChatInputHistory,
+    navigateChatInputHistoryDown,
+    navigateChatInputHistoryUp,
+    recordSubmittedPrompt,
+    type ChatInputHistory,
+} from './interactive-chat-input-history.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
 import type { ModelChoice } from './interactive-chat-model.js';
 
@@ -52,6 +60,7 @@ type BridgeSnapshot = {
     readonly modelPickerChoices: readonly ModelChoice[];
     readonly modelPickerKeypress: ProviderPromptKeypressState;
     readonly generating: boolean;
+    readonly historyNavigation: { readonly position: number; readonly total: number } | null;
 };
 
 /** Public surface consumed by the imperative chat loop. */
@@ -86,6 +95,7 @@ type InkChatBridgeCore = {
     modelPickerActive: boolean;
     modelPickerResolve: ((selection: ModelProviderSelection | undefined) => void) | undefined;
     generating: boolean;
+    history: ChatInputHistory;
 };
 
 /** Minimal props the React tree uses to talk to the bridge core. */
@@ -102,6 +112,9 @@ const slashMenuMaxVisibleChoices = 5;
 const modelPickerMaxVisibleChoices = 10;
 
 function publishSnapshot(core: InkChatBridgeCore): void {
+    const historyNavigation = isNavigatingChatInputHistory(core.history)
+        ? { position: core.history.cursor + 1, total: core.history.entries.length }
+        : null;
     core.snapshot = {
         inputBuffer: core.inputBuffer,
         outputText: core.outputText,
@@ -110,6 +123,7 @@ function publishSnapshot(core: InkChatBridgeCore): void {
         modelPickerChoices: core.modelPickerChoices,
         modelPickerKeypress: core.modelPickerKeypress,
         generating: core.generating,
+        historyNavigation,
     };
     for (const listener of core.listeners) {
         listener();
@@ -137,13 +151,27 @@ function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
         });
         return;
     }
-    if (key.upArrow && core.inputBuffer.startsWith('/')) {
-        core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[A', core.inputBuffer);
+    if (key.upArrow) {
+        if (core.inputBuffer.startsWith('/')) {
+            core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[A', core.inputBuffer);
+        } else {
+            const result = navigateChatInputHistoryUp(core.history, core.inputBuffer);
+            core.history = result.history;
+            core.inputBuffer = result.input;
+            core.menuState = createSlashCommandMenuState();
+        }
         publishSnapshot(core);
         return;
     }
-    if (key.downArrow && core.inputBuffer.startsWith('/')) {
-        core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[B', core.inputBuffer);
+    if (key.downArrow) {
+        if (core.inputBuffer.startsWith('/')) {
+            core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[B', core.inputBuffer);
+        } else {
+            const result = navigateChatInputHistoryDown(core.history, core.inputBuffer);
+            core.history = result.history;
+            core.inputBuffer = result.input;
+            core.menuState = createSlashCommandMenuState();
+        }
         publishSnapshot(core);
         return;
     }
@@ -163,6 +191,7 @@ function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
         enqueueEvent(core, { type: 'line', value });
         core.inputBuffer = '';
         core.menuState = createSlashCommandMenuState();
+        core.history = recordSubmittedPrompt(core.history, value);
         if (!value.startsWith('/')) {
             core.outputText += `You: ${value}\n`;
         }
@@ -300,7 +329,14 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                 <Text dimColor>{'─'.repeat(process.stdout.columns ?? 80)}</Text>
                 <Text>
                     <Text color="cyan">{'>'}</Text> {snapshot.inputBuffer}
-                    {snapshot.inputBuffer.length === 0 ? <Text dimColor> Type a message or / for commands</Text> : null}
+                    {snapshot.historyNavigation !== null ? (
+                        <Text dimColor>
+                            {' '}
+                            {`[history ${snapshot.historyNavigation.position}/${snapshot.historyNavigation.total} — ↑/↓ to recall, Enter to use]`}
+                        </Text>
+                    ) : snapshot.inputBuffer.length === 0 ? (
+                        <Text dimColor> Type a message or / for commands</Text>
+                    ) : null}
                 </Text>
             </Box>
             {statusBarProps !== undefined ? (
@@ -334,6 +370,7 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
             modelPickerChoices: [],
             modelPickerKeypress: createProviderPromptKeypressState(),
             generating: false,
+            historyNavigation: null,
         },
         unmountFn: undefined,
         modelPickerChoices: [],
@@ -341,6 +378,7 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         modelPickerActive: false,
         modelPickerResolve: undefined,
         generating: false,
+        history: createChatInputHistory(),
     };
 
     const subscribe = (listener: () => void): (() => void) => {
