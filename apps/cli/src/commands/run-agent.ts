@@ -92,7 +92,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             return await runInteractiveChatSession(runtime, {
                 modelProviderSelection: selectedModelProvider,
                 provider,
-                sessionId: args.sessionId ?? session.id,
+                sessionId: args.sessionId ?? recorder.currentSessionId() ?? session.id,
                 workspaceRoot,
                 modelChoices: await listAuthenticatedModelChoices(
                     authStore,

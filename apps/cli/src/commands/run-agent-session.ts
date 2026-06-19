@@ -83,7 +83,7 @@ async function hasWorkspaceMetadata(store: JsonlSessionEventStore, sessionId: st
 }
 
 function createsTransientSessionStore(args: CliArgs): boolean {
-    return args.mode === 'jsonl' || (args.mode === 'json' && args.command === 'run');
+    return args.mode === 'jsonl' || args.mode === 'ink' || (args.mode === 'json' && args.command === 'run');
 }
 
 function createSessionId(): string {
