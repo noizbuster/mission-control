@@ -4,6 +4,7 @@ import {
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
     type JsonlSessionEventStore,
+    type ProjectInstructionResource,
     ProjectTrustStore,
     type ProviderAdapter,
     projectApprovalContinuationMessages,
@@ -11,6 +12,7 @@ import {
     type SdkModelResolver,
     SessionRunOwner,
     type SessionRunOwnerReceipt,
+    type SystemPromptEnvironment,
     type ToolInvocationSettlement,
 } from '@mission-control/core';
 import type {
@@ -20,6 +22,10 @@ import type {
     ModelProviderSelection,
     ToolCall,
 } from '@mission-control/protocol';
+import {
+    buildCodingAgentSystemPromptEnv,
+    loadTrustedProjectInstructionResources,
+} from './coding-agent-context.js';
 import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { parseFileWriteOutput } from './interactive-coding-file-write-preview.js';
@@ -130,6 +136,14 @@ async function createInteractiveRunOwner(
     // flat loop used, so approval/blocking semantics are preserved.
     const resolveSdkModel = await resolveInteractiveSdkModel(options);
     const onSignal = interactiveGraphStreamSignal(options.output, renderState, options.workspaceRoot);
+    // System-prompt context: the model needs to know WHERE it is (cwd/workspace/git) and what
+    // project-local instructions (AGENTS.md/CLAUDE.md) apply, otherwise it answers generically.
+    // Built per turn — date is fresh, AGENTS.md may have changed since the prior turn.
+    const systemPromptEnv = await buildCodingAgentSystemPromptEnv({
+        workspaceRoot: options.workspaceRoot,
+        modelId: options.modelProviderSelection.modelID,
+    });
+    const projectInstructionResources = await loadTrustedProjectInstructionResources(options.workspaceRoot);
     const runProviderTurn = createGraphTurnRunner({
         graph: buildCodingAgentGraphForSelection(options.modelProviderSelection),
         sessionId: options.sessionId,
@@ -141,6 +155,8 @@ async function createInteractiveRunOwner(
         haltOnFailedToolSettlement: true,
         serializeToolExecution: true,
         onSignal,
+        systemPromptEnv,
+        ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
     });
 
     // Graph events surface ONLY through onDurableEvent (no provider envelopes fire on the graph).

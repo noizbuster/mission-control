@@ -28,6 +28,7 @@ import {
 } from '@mission-control/core';
 import type { AbgGraphSpec, AbgNodeModelOptions, ModelProviderSelection } from '@mission-control/protocol';
 import type { ProviderAuthStore } from '../auth-store.js';
+import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
 import { createCliProviderCredentialResolver } from '../provider-credential-resolver.js';
 import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
 
@@ -74,6 +75,12 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
             ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
         }));
 
+    const systemPromptEnv = await buildCodingAgentSystemPromptEnv({
+        workspaceRoot: input.workspaceRoot,
+        modelId: input.selection.modelID,
+    });
+    const projectInstructionResources = await loadTrustedProjectInstructionResources(input.workspaceRoot);
+
     return input.runtime.runGraph(buildCodingAgentGraphForSelection(input.selection), undefined, {
         registry: createCodingAgentNodeRegistry(),
         resolveSdkModel,
@@ -83,6 +90,8 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
         // denied / non-allowlisted command terminates the graph immediately instead of looping
         // until the node-run budget.
         haltOnFailedToolSettlement: true,
+        systemPromptEnv,
+        ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
     });
 }
 

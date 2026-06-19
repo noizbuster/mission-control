@@ -18,6 +18,10 @@ import { createCliRuntimeOptions } from './cli-runtime-options.js';
 import { type ChatInput, type ChatOutput, type ModelSelector, runInteractiveChatSession } from './interactive-chat.js';
 import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
 import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
+import {
+    buildCodingAgentSystemPromptEnv,
+    loadTrustedProjectInstructionResources,
+} from './coding-agent-context.js';
 import { createCliProviderForSelection } from './provider-factory.js';
 import { readGraphFile, validateGraphModelOptions, validateModelProviderSelection } from './run-agent-graph.js';
 import {
@@ -162,6 +166,11 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     authStore,
                     ...(options.provider !== undefined ? { provider: options.provider } : {}),
                 });
+                const systemPromptEnv = await buildCodingAgentSystemPromptEnv({
+                    workspaceRoot,
+                    modelId: selectedModelProvider.modelID,
+                });
+                const projectInstructionResources = await loadTrustedProjectInstructionResources(workspaceRoot);
                 await runOwnerPrompt({
                     sessionId,
                     store: sessionStore,
@@ -183,6 +192,10 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                             // Fail-fast on denied / non-allowlisted commands so the graph terminates
                             // immediately instead of looping until the node-run budget.
                             haltOnFailedToolSettlement: true,
+                            systemPromptEnv,
+                            ...(projectInstructionResources.length > 0
+                                ? { projectInstructionResources }
+                                : {}),
                         }),
                     ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
                     ...(options.nonInteractiveAutomationPolicy !== undefined
