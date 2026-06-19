@@ -1,5 +1,6 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { parseAuthArgs } from './auth-args.js';
+import { type McpKeyValueArg, type McpScope, parseMcpArgs } from './mcp-args.js';
 import { parseGraphArgs, parseRunArgs } from './run-args.js';
 import { parseSessionArgs } from './session-args.js';
 
@@ -15,7 +16,11 @@ export type CliCommand =
     | 'session-show'
     | 'session-replay'
     | 'session-export'
-    | 'session-import';
+    | 'session-import'
+    | 'mcp-add'
+    | 'mcp-list'
+    | 'mcp-remove'
+    | 'mcp-test';
 
 export type AuthCredentialArg = {
     readonly fieldID: string;
@@ -45,6 +50,15 @@ export type CliArgs = {
     readonly authApiKey?: string;
     readonly authCredentials?: readonly AuthCredentialArg[];
     readonly modelsProviderID?: string;
+    readonly mcpName?: string;
+    readonly mcpType?: 'local' | 'remote';
+    readonly mcpCommand?: readonly string[];
+    readonly mcpUrl?: string;
+    readonly mcpEnv?: readonly McpKeyValueArg[];
+    readonly mcpHeader?: readonly McpKeyValueArg[];
+    readonly mcpScope?: McpScope;
+    readonly mcpTimeoutMs?: number;
+    readonly mcpEnabled?: boolean;
 };
 
 export const supportedCliFlags = [
@@ -86,6 +100,9 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     }
     if (command === 'session') {
         return parseSessionArgs(argv.slice(1));
+    }
+    if (command === 'mcp') {
+        return parseMcpArgs(argv.slice(1));
     }
     if (command === 'graph') {
         return parseGraphArgs(argv.slice(1));

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`packages/core/src/tools` owns model-callable tool registration and execution for read-only repo tools, `file.patch`, and `command.run`.
+`packages/core/src/tools` owns model-callable tool registration and execution for read-only repo tools, `file.patch`, `command.run`, plus the coding-agent capability tools: `glob`, `todowrite`, `webfetch`, the `task` subagent, the `mcp` proxy and namespaced `mcp__*` clients (stdio/remote), the `skill` on-demand loader, and the opt-in `lsp` seam.
 
 ## Where To Look
 

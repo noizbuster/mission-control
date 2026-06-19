@@ -12,6 +12,7 @@
     "dev:sidecar": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run sidecar:dev --",
     "lint": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run workspace:lint",
     "smoke:coding-agent-built-dist": "node --experimental-strip-types scripts/coding-agent-built-dist-smoke.ts",
+    "smoke:coding-agent-mcp-tools": "node --experimental-strip-types scripts/coding-agent-built-dist-mcp-smoke.ts",
     "test": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run-many -t test",
     "typecheck": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run-many -t typecheck"
   },

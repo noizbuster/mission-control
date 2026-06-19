@@ -2,10 +2,13 @@ import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
     type JsonlSessionEventStore,
+    type LspClient,
     PermissionGate,
     type ProviderAdapter,
     type RunCoordinatorTurnRunner,
+    type SdkModelResolver,
     SessionRunOwner,
+    type SessionRunOwnerReceipt,
     type ToolRegistry,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
@@ -32,6 +35,14 @@ export type RunOwnerPromptInput = {
      * Omit to drive the flat provider loop (the default).
      */
     readonly createTurnRunner?: (deps: { readonly toolRegistry: ToolRegistry }) => RunCoordinatorTurnRunner;
+    /**
+     * When set, the `task` subagent tool registers with a real spawn closure. The graph turn
+     * runner built by `createTurnRunner` already needs a resolver; this same resolver drives the
+     * child graph spawned by `task`.
+     */
+    readonly resolveSdkModel?: SdkModelResolver;
+    /** LSP seam: inject a real `LspClient` to register the `lsp` tool. Default undefined (off). */
+    readonly lspClient?: LspClient;
 };
 
 export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> {
@@ -49,7 +60,7 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
         now: () => new Date().toISOString(),
         pendingApprovalBehavior: 'block',
     });
-    const toolRegistry = await createNonInteractiveToolRegistry({
+    const { registry: toolRegistry, mcpConnectionManager } = await createNonInteractiveToolRegistry({
         workspaceRoot: input.workspaceRoot,
         requestPermission: (request) =>
             gate.requestPermission(request, {
@@ -57,7 +68,11 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
                 taskId,
                 modelProviderSelection: input.modelProviderSelection,
             }),
+        ...(input.resolveSdkModel !== undefined ? { resolveSdkModel: input.resolveSdkModel } : {}),
+        modelProviderSelection: input.modelProviderSelection,
+        sessionId: input.sessionId,
         ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
+        ...(input.lspClient !== undefined ? { lspClient: input.lspClient } : {}),
     });
     // When an alternate engine is requested, build its turn runner over the SAME permission-gated
     // tool surface so the graph's tool calls honor the same approval/blocking behavior as the flat
@@ -81,11 +96,16 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
     });
 
     emitTaskEvent(input, taskId, 'task.started', `user prompt: ${input.prompt}`);
-    const receipt = await owner.submit({
-        prompt: input.prompt,
-        inputId: `input_${taskId}`,
-        messageId: `message_${taskId}`,
-    });
+    let receipt: SessionRunOwnerReceipt;
+    try {
+        receipt = await owner.submit({
+            prompt: input.prompt,
+            inputId: `input_${taskId}`,
+            messageId: `message_${taskId}`,
+        });
+    } finally {
+        await mcpConnectionManager.disconnectAll();
+    }
     if (receipt.status === 'completed') {
         emitTaskEvent(input, taskId, 'task.completed', finalMessage ?? 'run completed');
         return;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { ToolRegistry } from './tool-registry.js';
+import type { ToolRegistration } from './tool-registry-types.js';
 
 describe('ToolRegistry', () => {
     it('advertises schema-validated tools with stable version hashes', () => {
@@ -186,6 +187,60 @@ describe('ToolRegistry', () => {
             status: 'completed',
             output: '{"doubled":42}',
         });
+    });
+});
+
+describe('ToolRegistry — per-tool guideline', () => {
+    // Fixed shape whose advertisedVersion was captured against the pre-guideline source. An
+    // absent optional guideline is omitted from stableJson's Object.entries, so versionHashFor
+    // stays byte-identical — persisted advertisedVersions keep validating after the field lands.
+    const STABLE_ADVERTISED_VERSION = '70f32863c357324a1c88ecbe8fcead2576680447904ed0672de7be11e308b163';
+
+    const stableTool: ToolRegistration<{ readonly text: string }, { readonly echoed: string }> = {
+        name: 'baseline.echo',
+        description: 'baseline echo probe',
+        capabilityClasses: ['read'],
+        parametersJsonSchema: {
+            type: 'object',
+            properties: { text: { type: 'string' } },
+            required: ['text'],
+        },
+        inputSchema: z.object({ text: z.string() }),
+        outputSchema: z.object({ echoed: z.string() }),
+        outputLimit: { maxModelOutputChars: 32 },
+        execute: (input) => ({ echoed: input.text }),
+    };
+
+    it('keeps a tool advertisedVersion byte-identical when no guideline is set (hash stability)', () => {
+        const registry = new ToolRegistry();
+        const advertised = registry.register(stableTool);
+
+        expect(advertised.guideline).toBeUndefined();
+        expect(advertised.version).toBe(STABLE_ADVERTISED_VERSION);
+    });
+
+    it('carries the guideline onto the advertisement when a tool sets one', () => {
+        const registry = new ToolRegistry();
+        const advertised = registry.register({ ...stableTool, guideline: 'prefer edit over write' });
+
+        expect(advertised.guideline).toBe('prefer edit over write');
+        expect(registry.advertise()[0]?.guideline).toBe('prefer edit over write');
+    });
+
+    it('participates in the advertisedVersion when present (two registries isolate the field)', () => {
+        const withoutGuideline = new ToolRegistry().register(stableTool);
+        const withGuideline = new ToolRegistry().register({ ...stableTool, guideline: 'prefer edit over write' });
+
+        expect(withGuideline.version).not.toBe(withoutGuideline.version);
+        expect(withGuideline.guideline).toBe('prefer edit over write');
+        expect(withoutGuideline.guideline).toBeUndefined();
+    });
+
+    it('omits the guideline from the advertisement when set to an empty string', () => {
+        const registry = new ToolRegistry();
+        const advertised = registry.register({ ...stableTool, name: 'empty.guideline', guideline: '' });
+
+        expect(advertised.guideline).toBe('');
     });
 });
 

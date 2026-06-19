@@ -15,13 +15,10 @@ import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.j
 import { type AgentUIRenderer, InkRenderer, JsonRenderer, PlainRenderer } from '../ui/renderers.js';
 import type { NonInteractiveAutomationPolicy } from './cli-runtime-options.js';
 import { createCliRuntimeOptions } from './cli-runtime-options.js';
+import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
 import { type ChatInput, type ChatOutput, type ModelSelector, runInteractiveChatSession } from './interactive-chat.js';
 import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
 import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
-import {
-    buildCodingAgentSystemPromptEnv,
-    loadTrustedProjectInstructionResources,
-} from './coding-agent-context.js';
 import { createCliProviderForSelection } from './provider-factory.js';
 import { readGraphFile, validateGraphModelOptions, validateModelProviderSelection } from './run-agent-graph.js';
 import {
@@ -180,6 +177,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     prompt: args.prompt,
                     emitEvent: emitRuntimeEvent,
                     observeStoredEvent,
+                    resolveSdkModel,
                     createTurnRunner: ({ toolRegistry }) =>
                         createGraphTurnRunner({
                             graph: buildCodingAgentGraphForSelection(selectedModelProvider),
@@ -193,9 +191,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                             // immediately instead of looping until the node-run budget.
                             haltOnFailedToolSettlement: true,
                             systemPromptEnv,
-                            ...(projectInstructionResources.length > 0
-                                ? { projectInstructionResources }
-                                : {}),
+                            ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
                         }),
                     ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
                     ...(options.nonInteractiveAutomationPolicy !== undefined

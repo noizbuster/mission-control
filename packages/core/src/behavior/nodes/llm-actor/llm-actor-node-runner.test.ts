@@ -12,9 +12,14 @@ import type { AbgSignal } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { createBlackboard } from '../../../memory/blackboard.js';
+import { ToolRegistry } from '../../../tools/tool-registry.js';
 import type { AbgNodeRunContext } from '../../node-registry.js';
 import { runLlmActorNode } from './llm-actor-node-runner.js';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const NOW = '2026-06-19T00:00:00.000Z';
 
@@ -174,5 +179,118 @@ describe('runLlmActorNode — system prompt threading', () => {
         const system = capturedSystemText(model.doStreamCalls);
         expect(system).toBe('OVERRIDE_PERSONA');
         expect(system).not.toContain('/should-not-appear');
+    });
+
+    it('surfaces a registered tool guideline in the # Guidelines section of the prompt', async () => {
+        const model = buildModel();
+        const blackboard = createBlackboard();
+        blackboard.appendMessages([{ role: 'user', content: 'ping' } as ModelMessage]);
+
+        const registry = new ToolRegistry();
+        registry.register({
+            name: 'guided.tool',
+            description: 'a tool with a usage hint',
+            capabilityClasses: ['read'],
+            parametersJsonSchema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+            inputSchema: z.object({}),
+            outputSchema: z.object({ ok: z.boolean() }),
+            outputLimit: { maxModelOutputChars: 32 },
+            guideline: 'prefer edit over write',
+            execute: async () => ({ ok: true }),
+        });
+
+        const context: AbgNodeRunContext = {
+            graphId: 'g_guideline',
+            now: () => NOW,
+            sdkModel: model,
+            blackboard,
+            toolRegistry: registry,
+        };
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        const system = capturedSystemText(model.doStreamCalls);
+        expect(system).toContain('# Guidelines');
+        expect(system).toContain('prefer edit over write');
+    });
+
+    it('omits the # Guidelines section when no registered tool carries a guideline', async () => {
+        const model = buildModel();
+        const blackboard = createBlackboard();
+        blackboard.appendMessages([{ role: 'user', content: 'ping' } as ModelMessage]);
+
+        const registry = new ToolRegistry();
+        registry.register({
+            name: 'plain.tool',
+            description: 'a tool without a usage hint',
+            capabilityClasses: ['read'],
+            parametersJsonSchema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+            inputSchema: z.object({}),
+            outputSchema: z.object({ ok: z.boolean() }),
+            outputLimit: { maxModelOutputChars: 32 },
+            execute: async () => ({ ok: true }),
+        });
+
+        const context: AbgNodeRunContext = {
+            graphId: 'g_no_guideline',
+            now: () => NOW,
+            sdkModel: model,
+            blackboard,
+            toolRegistry: registry,
+        };
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        const system = capturedSystemText(model.doStreamCalls);
+        expect(system).not.toContain('# Guidelines');
+    });
+
+    it('lists discovered skills in <available_skills> but does not inject their bodies', async () => {
+        const tempRoot = await mkdtemp(join(tmpdir(), 'runner-skills-'));
+        const previousConfigDir = process.env['MCTRL_CONFIG_DIR'];
+        process.env['MCTRL_CONFIG_DIR'] = join(tempRoot, 'empty-global-config');
+        try {
+            const workspace = join(tempRoot, 'workspace');
+            const skillDir = join(workspace, '.agents', 'skills', 'fixture-skill');
+            await mkdir(skillDir, { recursive: true });
+            const bodyMarker = 'UNIQUE_SKILL_BODY_MARKER_9f8e7d6c5b';
+            await writeFile(
+                join(skillDir, 'SKILL.md'),
+                `---\nname: fixture-skill\ndescription: A fixture skill for testing.\n---\n${bodyMarker}\nDetailed instructions.`,
+                'utf8',
+            );
+
+            const model = buildModel();
+            const blackboard = createBlackboard();
+            blackboard.appendMessages([{ role: 'user', content: 'ping' }] as readonly ModelMessage[]);
+
+            const context: AbgNodeRunContext = {
+                graphId: 'g_skills',
+                now: () => NOW,
+                sdkModel: model,
+                blackboard,
+                systemPromptEnv: {
+                    cwd: workspace,
+                    workspaceRoot: workspace,
+                },
+            };
+
+            await collectSignals(runLlmActorNode(node, context));
+
+            const system = capturedSystemText(model.doStreamCalls);
+            expect(system).toBeDefined();
+            expect(system).toContain('<available_skills>');
+            expect(system).toContain('<name>fixture-skill</name>');
+            expect(system).toContain('<description>A fixture skill for testing.</description>');
+            expect(system).toContain('fixture-skill/SKILL.md');
+            expect(system).not.toContain(bodyMarker);
+        } finally {
+            if (previousConfigDir !== undefined) {
+                process.env['MCTRL_CONFIG_DIR'] = previousConfigDir;
+            } else {
+                delete process.env['MCTRL_CONFIG_DIR'];
+            }
+            await rm(tempRoot, { recursive: true, force: true });
+        }
     });
 });

@@ -68,9 +68,9 @@ Session navigation stays on the durable JSONL session surface: `/new [session-id
 
 Workspace trust is controlled interactively with `/trust` (trust the current workspace for project-local resources), `/trust status` (show the current trust decision), `/trust deny` (deny project-local resources for the workspace), and `/trust reset` (clear the trust decision). Trust decisions persist in the project trust store under the Mission Control data directory. `bash.run`, `file.edit`, and `file.write` are only available when the workspace is trusted; read-only tools work regardless of trust but still enforce workspace path guards.
 
-`$skill args records a scaffold agent skill invocation` inside Mission Control. It does not run actual Codex host skills, spawn agents, or make provider calls. Normal prompt text still sends a prompt, and Ctrl+C twice exits.
+`$skill <name> [args]` loads the named skill's `SKILL.md` body and submits it as the user message (real skill loading, replacing the old scaffold recorder). `/<skill-name>` is the slash-command equivalent and reserved commands take precedence over skill names. Skill bodies are inert text only; it does not run actual Codex host skills, spawn agents, or make provider calls on its own. Normal prompt text still sends a prompt, and Ctrl+C twice exits.
 
-The chat command surface is mixed: normal prompts can run through the deterministic local provider, OpenAI Responses, Anthropic Messages, Google Gemini, or the OpenAI-compatible adapter family for OpenRouter, Groq, DeepSeek, and Mistral when credentials are configured. Skill calls remain recorded scaffold events and real LLM calls are not implemented for those skill invocations.
+The chat command surface is mixed: normal prompts can run through the deterministic local provider, OpenAI Responses, Anthropic Messages, Google Gemini, or the OpenAI-compatible adapter family for OpenRouter, Groq, DeepSeek, and Mistral when credentials are configured. Skill loading is real — the `SKILL.md` body becomes the next user prompt — but the default `local/local-echo` provider does not call tools, so a real tool-calling provider is required for loaded skills to drive agentic behavior.
 
 ## Model Provider Selection
 
@@ -185,7 +185,15 @@ Coding-agent tool set:
 - `file.edit`, `file.write`, `file.patch`, `command.run`, and `bash.run` require approval before executing.
 - `bash.run` additionally requires a trusted workspace.
 - File mutations serialize through a shared workspace mutation queue with pre-approval and post-approval target revalidation to prevent TOCTOU workspace escape.
-- MCP tools, ACP protocol, LSP integration, web tools, and subagent orchestration are not implemented.
+
+Skills + MCP:
+
+- Skills are implemented: `SKILL.md` files are discovered (global, project `.mctrl/skills`, project `.agents/skills`), listed to the model in an `<available_skills>` system-prompt block, and loaded on demand via the `skill` tool or the `/<skill-name>` and `$skill <name>` chat inputs. Skill bodies are framed as reference DATA, never as trusted policy.
+- MCP tools are implemented: configured MCP servers (stdio or remote) connect eagerly at session start, surface their tools as namespaced `mcp__<server>__<tool>` merged with the built-in registry, and disconnect cleanly on stop. A crashing or hanging server is skipped at its deadline with a warning so the run continues without it. Arbitrary MCP server output is framed as untrusted DATA and capped before reaching the model; expanded env/header secret values are redacted from tool output, errors, and session logs.
+- web tools (glob, todowrite, webfetch) are implemented: `glob` and `todowrite` are read-class (no approval), `webfetch` is network-class and approval-required on both flat and graph paths.
+- subagent orchestration via the task tool is implemented: `task` delegates a bounded sub-task to a child coding agent whose tool surface is recursively restricted (no nested `task`, no network, no `mcp__*`).
+- A real tool-calling provider is required for agentic behavior — the default `local/local-echo` provider does not call tools, so skills, MCP tools, and the coding-agent tools only take effect when a tool-calling provider is configured.
+- LSP integration transport is deferred: the `lsp` tool seam exists and registers only when a real `LspClient` is injected (default runs omit it); a stdio JSON-RPC language-server transport is follow-up work.
 
 Graph limits:
 
@@ -408,7 +416,7 @@ ABG runtime TODOs:
 - TODO: full production ABG engine is not implemented.
 - TODO: additional provider adapters beyond local, OpenAI Responses, Anthropic Messages, Google Gemini, and the OpenAI-compatible family are not implemented.
 - TODO: unrestricted file-editing tools are not implemented. `file.edit`, `file.write`, and `bash.run` are approval-gated and workspace-contained only.
-- TODO: MCP tools, ACP protocol, LSP integration, web tools, and subagent orchestration are not implemented.
+- TODO: MCP tools, web tools (glob, todowrite, webfetch), subagent orchestration via the `task` tool, and skills are implemented; ACP protocol and a real LSP stdio transport are not implemented (the `lsp` tool seam exists but a JSON-RPC language-server client is deferred).
 - TODO: visual graph editor remains out of scope.
 - TODO: persistent memory store, vector index, and database storage are not implemented.
 - TODO: advanced scheduler, executor, cancellation propagation, and behavior/action graph engine are not implemented.

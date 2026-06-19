@@ -22,6 +22,8 @@ export const todoWriteToolRegistration: ToolRegistration<TodoWriteInput, TodoWri
     name: 'todowrite',
     description: 'Create or update a structured todo list to track multi-step work. Use this to plan before acting.',
     capabilityClasses: ['read'],
+    guideline:
+        'Write a todo list before multi-step work; mark items in_progress one at a time and completed when done.',
     parametersJsonSchema: {
         type: 'object',
         properties: {

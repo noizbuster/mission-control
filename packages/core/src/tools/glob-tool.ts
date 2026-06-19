@@ -15,18 +15,43 @@ import { isAbsolute, join, relative, sep } from 'node:path';
 const DEFAULT_MAX_RESULTS = 100;
 const OUTPUT_LIMIT_CHARS = 4000;
 
-const globInputSchema = z.object({
+export const globInputSchema = z.object({
     pattern: z.string().min(1),
     path: z.string().min(1).optional(),
     maxResults: z.number().int().positive().optional(),
 });
 export type GlobToolInput = z.infer<typeof globInputSchema>;
 
-const globOutputSchema = z.object({
+export const globOutputSchema = z.object({
     paths: z.array(z.string()),
     truncated: z.boolean(),
 });
 export type GlobToolOutput = z.infer<typeof globOutputSchema>;
+
+export const globParametersJsonSchema = {
+    type: 'object',
+    properties: {
+        pattern: {
+            type: 'string',
+            description: 'Glob pattern. `*` matches within a segment; `**` matches across segments.',
+        },
+        path: { type: 'string', description: 'Base directory to search from. Defaults to the workspace root.' },
+        maxResults: { type: 'integer', description: `Maximum paths to return (default ${DEFAULT_MAX_RESULTS}).` },
+    },
+    required: ['pattern'],
+    additionalProperties: false,
+} as const;
+
+export const globOutputLimit = { maxModelOutputChars: OUTPUT_LIMIT_CHARS } as const;
+
+export function formatGlobModelOutput(output: GlobToolOutput): string {
+    if (output.paths.length === 0) {
+        return 'No files matched the pattern.';
+    }
+    const body = output.paths.join('\n');
+    const truncated = truncateOutput(body, OUTPUT_LIMIT_CHARS - 64);
+    return withContinuationHint(truncated, output.truncated ? 'narrow the pattern or raise maxResults for more' : '');
+}
 
 export const globToolRegistration: ToolRegistration<GlobToolInput, GlobToolOutput> = {
     name: 'glob',
@@ -86,7 +111,7 @@ function resolveBase(path: string | undefined): string {
     return isAbsolute(path) ? path : join(process.cwd(), path);
 }
 
-async function safeReaddirRecursive(base: string): Promise<readonly string[]> {
+export async function safeReaddirRecursive(base: string): Promise<readonly string[]> {
     try {
         const entries = await readdir(base, { recursive: true, withFileTypes: true });
         return entries
@@ -102,7 +127,7 @@ async function safeReaddirRecursive(base: string): Promise<readonly string[]> {
 }
 
 /** Convert a glob pattern (`*`, `**`, `?`) to a RegExp anchoring the whole string. */
-function globToRegExp(pattern: string): RegExp {
+export function globToRegExp(pattern: string): RegExp {
     let regex = '^';
     for (let index = 0; index < pattern.length; index += 1) {
         const char = pattern[index];

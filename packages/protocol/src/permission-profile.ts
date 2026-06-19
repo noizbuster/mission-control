@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-export const PERMISSION_KINDS = ['read', 'edit', 'write', 'patch', 'bash'] as const;
+// `network` (webfetch/mcp) + `subagent` (task) are permission kinds so the CLI policy can scope
+// them to `ask` and the child-policy blocklist can drop them. Schemas derive from the enum below,
+// so `.strict()` still rejects unknown kinds.
+export const PERMISSION_KINDS = ['read', 'edit', 'write', 'patch', 'bash', 'network', 'subagent'] as const;
 export const PERMISSION_RULE_DECISIONS = ['ask', 'once', 'always', 'deny'] as const;
 export const PERMISSION_REPLY_VALUES = ['once', 'always', 'deny'] as const;
 

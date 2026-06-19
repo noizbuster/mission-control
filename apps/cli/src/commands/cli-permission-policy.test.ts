@@ -19,6 +19,53 @@ describe('cli permission policy', () => {
         expect(decision.reason).toContain('bash.run');
     });
 
+    it('allows the read-class glob action and scopes webfetch to requires_approval', async () => {
+        expect(cliAllowsAction('glob')).toBe(true);
+        expect(cliAllowsAction('webfetch')).toBe(true);
+
+        const globDecision = await createCliPermissionDecision({
+            id: 'permission_glob',
+            action: 'glob',
+            reason: 'glob within workspace: .',
+            permission: {
+                kind: 'read',
+                patterns: ['.'],
+                workspaceRoot: '/tmp/workspace',
+            },
+        });
+        expect(globDecision.status).toBe('allow');
+
+        const webfetchDecision = await createCliPermissionDecision({
+            id: 'permission_webfetch',
+            action: 'webfetch',
+            reason: 'fetch url: https://example.test/docs',
+            permission: {
+                kind: 'network',
+                patterns: ['https://example.test/docs'],
+                workspaceRoot: '/tmp/workspace',
+            },
+        });
+        expect(webfetchDecision.status).toBe('requires_approval');
+        expect(webfetchDecision.reason).toContain('webfetch');
+    });
+
+    it('admits the task action and scopes it to requires_approval (subagent kind)', async () => {
+        expect(cliAllowsAction('task')).toBe(true);
+
+        const decision = await createCliPermissionDecision({
+            id: 'permission_task',
+            action: 'task',
+            reason: 'delegate sub-task: summarize deps',
+            permission: {
+                kind: 'subagent',
+                patterns: ['summarize deps'],
+                workspaceRoot: '/tmp/workspace',
+            },
+        });
+        expect(decision.status).toBe('requires_approval');
+        expect(decision.reason).toContain('task');
+    });
+
     it('denies unknown CLI actions', async () => {
         const request: PermissionRequest = {
             id: 'permission_unknown',

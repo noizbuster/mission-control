@@ -4,6 +4,8 @@ import {
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
     type JsonlSessionEventStore,
+    type LspClient,
+    McpConnectionManager,
     type ProjectInstructionResource,
     ProjectTrustStore,
     type ProviderAdapter,
@@ -22,10 +24,7 @@ import type {
     ModelProviderSelection,
     ToolCall,
 } from '@mission-control/protocol';
-import {
-    buildCodingAgentSystemPromptEnv,
-    loadTrustedProjectInstructionResources,
-} from './coding-agent-context.js';
+import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
 import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { parseFileWriteOutput } from './interactive-coding-file-write-preview.js';
@@ -61,6 +60,11 @@ export type CodingAgentTurnOptions = {
      */
     readonly engine?: 'graph';
     readonly resolveSdkModel?: SdkModelResolver;
+    /**
+     * LSP seam: inject a real `LspClient` to register the `lsp` tool for this turn. Default
+     * undefined — the tool stays unadvertised (a real stdio transport is deferred).
+     */
+    readonly lspClient?: LspClient;
 };
 
 export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Promise<ActiveCodingAgentTurn> {
@@ -93,7 +97,7 @@ async function startOwnedCodingAgentTurn(
 ): Promise<ActiveCodingAgentTurn> {
     const approvals = createInteractiveApprovalBroker(options);
     const renderState: ProviderRenderState = { streamingText: false };
-    const owner = await createInteractiveRunOwner(options, approvals, renderState);
+    const { owner, mcpConnectionManager } = await createInteractiveRunOwner(options, approvals, renderState);
     let settled = false;
     const done = runOwnedCodingAgentTurn(options, owner, renderState, action)
         .catch((error: unknown) => {
@@ -102,6 +106,7 @@ async function startOwnedCodingAgentTurn(
         })
         .finally(() => {
             settled = true;
+            void mcpConnectionManager.disconnectAll();
         });
 
     return {
@@ -119,22 +124,29 @@ async function createInteractiveRunOwner(
     options: Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string },
     approvals: ReturnType<typeof createInteractiveApprovalBroker>,
     renderState: ProviderRenderState,
-): Promise<SessionRunOwner> {
+): Promise<{ readonly owner: SessionRunOwner; readonly mcpConnectionManager: McpConnectionManager }> {
+    // Resolve the SDK model BEFORE building the tool registry so the `task` subagent tool can
+    // capture it in its spawn closure (the child graph needs the same model resolver as the parent).
+    const resolveSdkModel = await resolveInteractiveSdkModel(options);
     const toolOptions = {
         workspaceRoot: options.workspaceRoot,
         sessionId: options.sessionId,
         modelProviderSelection: options.modelProviderSelection,
         output: options.output,
         emitEvent: options.emitEvent,
+        resolveSdkModel,
         enableTrustedBash: await workspaceHasTrustedBash(options.workspaceRoot),
         ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
+        ...(options.lspClient !== undefined ? { lspClient: options.lspClient } : {}),
     };
-    const toolRegistry = await createInteractiveToolRegistry(toolOptions, approvals);
+    const { registry: toolRegistry, mcpConnectionManager } = await createInteractiveToolRegistry(
+        toolOptions,
+        approvals,
+    );
 
     // The graph engine is the only engine. Build the graph turn runner unconditionally; the owner
     // drives the ABG coding-agent graph through the SAME SessionRunOwner + toolRegistry the prior
     // flat loop used, so approval/blocking semantics are preserved.
-    const resolveSdkModel = await resolveInteractiveSdkModel(options);
     const onSignal = interactiveGraphStreamSignal(options.output, renderState, options.workspaceRoot);
     // System-prompt context: the model needs to know WHERE it is (cwd/workspace/git) and what
     // project-local instructions (AGENTS.md/CLAUDE.md) apply, otherwise it answers generically.
@@ -166,7 +178,7 @@ async function createInteractiveRunOwner(
         options.observeStoredEvent?.(event);
     };
 
-    return new SessionRunOwner({
+    const owner = new SessionRunOwner({
         sessionId: options.sessionId,
         store: options.store,
         provider: options.provider,
@@ -183,6 +195,8 @@ async function createInteractiveRunOwner(
         onToolSettlement: (settlement: ToolInvocationSettlement) =>
             renderInteractiveToolSettlement(options.output, settlement),
     });
+
+    return { owner, mcpConnectionManager };
 }
 
 async function workspaceHasTrustedBash(workspaceRoot: string): Promise<boolean> {

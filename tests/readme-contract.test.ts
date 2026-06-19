@@ -101,11 +101,12 @@ describe('README stage-01 contract', () => {
             'Workspace trust is controlled interactively with `/trust`',
             '`/trust deny` (deny project-local resources for the workspace)',
             '`/trust reset` (clear the trust decision)',
-            '$skill args records a scaffold agent skill invocation',
+            '$skill <name> [args]` loads the named skill',
+            'real skill loading, replacing the old scaffold recorder',
             'Normal prompt text still sends a prompt',
             'Ctrl+C twice exits',
             'does not run actual Codex host skills',
-            'real LLM calls are not implemented',
+            'the default `local/local-echo` provider does not call tools',
         ] as const;
 
         for (const term of requiredTerms) {
@@ -259,28 +260,38 @@ describe('README stage-01 contract', () => {
         }
     });
 
-    it('does not overclaim deferred features like MCP ACP LSP subagents or web tools', () => {
+    it('documents implemented MCP, web, subagent, and skills capabilities plus deferred LSP transport', () => {
         const content = readme();
-        const deferredFeatureClauses = [
-            'MCP tools, ACP protocol, LSP integration, web tools, and subagent orchestration are not implemented',
-            'full desktop terminal parity is not implemented',
+        const implementedClauses = [
+            'MCP tools are implemented',
+            'web tools (glob, todowrite, webfetch) are implemented',
+            'subagent orchestration via the task tool is implemented',
+            'Skills are implemented',
+            'LSP integration transport is deferred',
         ] as const;
 
-        for (const clause of deferredFeatureClauses) {
+        for (const clause of implementedClauses) {
+            expect(content, `README must document implemented capability: ${clause}`).toContain(clause);
+        }
+
+        const stillDeferredClauses = [
+            'full desktop terminal parity is not implemented',
+            'LSP integration transport is deferred',
+        ] as const;
+
+        for (const clause of stillDeferredClauses) {
             expect(content, `README must document deferral: ${clause}`).toContain(clause);
         }
 
         const forbiddenOverclaims = [
-            'MCP tools are implemented',
             'ACP protocol is implemented',
             'LSP integration is implemented',
-            'web tools are implemented',
-            'subagent orchestration is implemented',
             'all tools execute without approval',
+            'MCP tools, ACP protocol, LSP integration, web tools, and subagent orchestration are not implemented',
         ] as const;
 
         for (const forbidden of forbiddenOverclaims) {
-            expect(content, `README must not overclaim: ${forbidden}`).not.toContain(forbidden);
+            expect(content, `README must not overclaim or restate deferral: ${forbidden}`).not.toContain(forbidden);
         }
     });
 

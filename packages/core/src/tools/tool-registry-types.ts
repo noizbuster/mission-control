@@ -12,6 +12,10 @@ export const ToolRegistrationMetadataSchema = z
                 maxModelOutputChars: z.number().int().positive(),
             })
             .strict(),
+        // Load-bearing: keep `.optional()` with NO `.default()`. An absent guideline must stay
+        // absent in the parsed object so versionHashFor (stableJson/Object.entries) is unchanged
+        // for pre-existing tools — otherwise persisted advertisedVersions break. See hash-stability.
+        guideline: z.string().optional(),
     })
     .strict();
 
@@ -44,6 +48,7 @@ export type ToolRegistration<Input, Output> = {
     readonly execute: (input: Input, context: ToolExecutionContext) => Output | Promise<Output>;
     readonly toModelOutput?: (output: Output) => string;
     readonly toEvents?: (output: Output, context: ToolExecutionContext) => readonly AgentEvent[];
+    readonly guideline?: string;
 };
 
 export type ToolExecutionContext = {
@@ -59,6 +64,7 @@ export type ToolAdvertisement = {
     readonly version: string;
     readonly outputLimit: ToolOutputLimit;
     readonly providerTool: ToolDefinition;
+    readonly guideline?: string;
 };
 
 export type ToolInvocationInput = {

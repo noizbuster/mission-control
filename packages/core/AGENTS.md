@@ -15,7 +15,8 @@
 | Native sidecar | `src/native/` | Process spawn, handshake, status, timeout, mock fallback. |
 | Durable logs | `src/memory/` | JSONL event store, data-dir resolution, projections. |
 | Replay | `src/session-replay.ts`, `src/session-*.ts` | Branch, approval, tool outcome, prompt admission projections. |
-| Tools | `src/tools/` | Tool registry, read-only repo tools, `file.patch`, `command.run`. |
+| Tools | `src/tools/` | Tool registry, read-only repo tools, `file.patch`, `command.run`, `glob`/`todowrite`/`webfetch`, `task` subagent, `mcp` proxy + namespaced `mcp__*` clients, `skill` on-demand loader, opt-in `lsp` seam. |
+| Skills | `src/skills/` | `SKILL.md` discovery (multi-scope, first-wins) and on-demand body loading. |
 | ABG/action graphs | `src/behavior/` | Authorable graph validation, node registry, coordination, projection. |
 | Desktop commands | `src/desktop-session-commands.ts`, `src/desktop-tool-approvals.ts` | Core service behind future desktop write paths. |
 

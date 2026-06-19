@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from './args.js';
 import { runAuthCommand } from './commands/auth.js';
+import { runMcpCommand } from './commands/mcp.js';
 import { runModelsCommand } from './commands/models.js';
 import { runAgent } from './commands/run-agent.js';
 import { runSessionCommand } from './commands/session.js';
@@ -51,8 +52,8 @@ export function createHelpText(): string {
         '  /trust deny            Deny project-local resources for this workspace',
         '  /trust reset           Reset this workspace trust decision',
         '  /exit                  Stop active runs and exit',
-        '  $<skill> [args]        Record a scaffold skill invocation',
-        '  $ skill invocations are scaffolded inside Mission Control',
+        '  $<skill> [args]        Load a skill SKILL.md body as the next user prompt',
+        '  $ skill invocations load real SKILL.md skills inside Mission Control',
         '',
         'Coding-agent tools (effectful tools require approval):',
         '  repo.read / read       Read a text file inside the workspace',
@@ -84,6 +85,11 @@ export function createHelpText(): string {
         '  mctrl auth list',
         '  mctrl auth logout --provider local',
         '  mctrl models local',
+        '  mctrl mcp list',
+        '  mcp add <name> --type local --command <bin> [--command <arg>...] [--env KEY=VAL ...] [--scope project|user]',
+        '  mcp add <name> --type remote --url <url> [--header KEY=VAL ...] [--scope project|user]',
+        '  mcp remove <name> [--scope project|user]',
+        '  mcp test <name>',
     ].join('\n');
 }
 
@@ -113,6 +119,12 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
         case 'session-import':
         case 'session-replay':
             process.stdout.write(await runSessionCommand(args));
+            return;
+        case 'mcp-add':
+        case 'mcp-list':
+        case 'mcp-remove':
+        case 'mcp-test':
+            process.stdout.write(await runMcpCommand(args));
             return;
         case 'run':
             process.stdout.write(await runAgent(args));

@@ -11,6 +11,9 @@ const permissionScopedCliActions = [
     'file.patch',
     'command.run',
     'bash.run',
+    'glob',
+    'webfetch',
+    'task',
 ] as const;
 
 export type NonInteractiveAutomationPolicy = 'test-only-allow-known-safe-patch';
@@ -25,6 +28,8 @@ export function cliPermissionRules(): readonly PermissionRule[] {
         { permission: 'write', pattern: '*', decision: 'ask' },
         { permission: 'patch', pattern: '*', decision: 'ask' },
         { permission: 'bash', pattern: '*', decision: 'ask' },
+        { permission: 'network', pattern: '*', decision: 'ask' },
+        { permission: 'subagent', pattern: '*', decision: 'ask' },
     ];
 }
 

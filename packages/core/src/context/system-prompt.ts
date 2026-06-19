@@ -37,6 +37,8 @@ export type SystemPromptToolSnippet = {
 export type SystemPromptSkill = {
     readonly name: string;
     readonly description: string;
+    /** Absolute path to the SKILL.md file (included in the `<location>` XML element when present). */
+    readonly location?: string;
 };
 
 export type AssembleSystemPromptInput = {
@@ -127,8 +129,24 @@ function renderSkills(skills: readonly SystemPromptSkill[]): string | undefined 
     if (skills.length === 0) {
         return undefined;
     }
-    const lines = skills.map((skill) => `- ${skill.name}: ${skill.description}`);
-    return `# Skills\n${lines.join('\n')}`;
+    const entries = skills.map((skill) => {
+        const location =
+            skill.location !== undefined && skill.location.length > 0
+                ? `<location>${escapeXml(skill.location)}</location>`
+                : '';
+        return `  <skill><name>${escapeXml(skill.name)}</name><description>${escapeXml(skill.description)}</description>${location}</skill>`;
+    });
+    return [
+        'The following skills provide specialized instructions for specific tasks.',
+        'Use the skill tool to load a skill when the task matches its description.',
+        '<available_skills>',
+        ...entries,
+        '</available_skills>',
+    ].join('\n');
+}
+
+function escapeXml(value: string): string {
+    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 export function assembleSystemPrompt(input: AssembleSystemPromptInput = {}): string {

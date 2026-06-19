@@ -2,6 +2,7 @@ import {
     type AgentRuntimeOptions,
     type CommandExecutionRequest,
     type CommandExecutionResult,
+    type LspClient,
     ProjectTrustStore,
     type ProviderAdapter,
 } from '@mission-control/core';
@@ -16,6 +17,8 @@ type CliRuntimeOptionsInput = {
     readonly workspaceRoot?: string;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly nonInteractiveAutomationPolicy?: NonInteractiveAutomationPolicy;
+    /** LSP seam: inject a real `LspClient` to register the `lsp` tool. Default undefined (off). */
+    readonly lspClient?: LspClient;
 };
 
 export function createCliRuntimeOptions(input: CliRuntimeOptionsInput): AgentRuntimeOptions {
@@ -27,14 +30,17 @@ export function createCliRuntimeOptions(input: CliRuntimeOptionsInput): AgentRun
             : {}),
         provider: input.provider,
         createToolRegistry: (requestPermission: (request: PermissionRequest) => Promise<PermissionDecision>) =>
-            workspaceHasTrustedBash(input.workspaceRoot ?? process.cwd()).then((enableTrustedBash) =>
-                createNonInteractiveToolRegistry({
+            workspaceHasTrustedBash(input.workspaceRoot ?? process.cwd()).then(async (enableTrustedBash) => {
+                const { registry, mcpConnectionManager } = await createNonInteractiveToolRegistry({
                     workspaceRoot: input.workspaceRoot ?? process.cwd(),
                     requestPermission,
                     enableTrustedBash,
                     ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
-                }),
-            ),
+                    ...(input.lspClient !== undefined ? { lspClient: input.lspClient } : {}),
+                });
+                void mcpConnectionManager.disconnectAll();
+                return registry;
+            }),
         permissionDecisionResolver: (request) =>
             createCliPermissionDecision(request, {
                 ...(input.nonInteractiveAutomationPolicy !== undefined

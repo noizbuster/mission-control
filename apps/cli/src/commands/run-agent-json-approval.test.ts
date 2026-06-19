@@ -50,10 +50,15 @@ describe('runAgent JSON non-interactive approvals', () => {
             'repo.read',
             'repo.list',
             'repo.search',
+            'glob',
+            'todowrite',
+            'skill',
+            'webfetch',
             'file.edit',
             'file.write',
             'file.patch',
             'command.run',
+            'task',
         ]);
         expect(requestAt(requests, 0).tools?.map((tool) => tool.name)).not.toEqual(
             expect.arrayContaining(['read', 'ls', 'grep', 'find']),
@@ -65,9 +70,7 @@ describe('runAgent JSON non-interactive approvals', () => {
         const laterToolResult = requests
             .slice(1)
             .flatMap((request) => request.messages)
-            .find(
-                (message) => message.role === 'tool' && message.toolCallId === 'task18_read_call',
-            );
+            .find((message) => message.role === 'tool' && message.toolCallId === 'task18_read_call');
         expect(laterToolResult).toMatchObject({
             role: 'tool',
             toolCallId: 'task18_read_call',

@@ -1,10 +1,12 @@
-import type {
-    AgentRuntime,
-    CommandExecutionRequest,
-    CommandExecutionResult,
-    JsonlSessionEventStore,
-    ProviderAdapter,
-    SdkModelResolver,
+import {
+    type AgentRuntime,
+    type CommandExecutionRequest,
+    type CommandExecutionResult,
+    discoverSkills,
+    type JsonlSessionEventStore,
+    type ProviderAdapter,
+    type SdkModelResolver,
+    type Skill,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { parseChatLine } from './chat-commands.js';
@@ -128,6 +130,13 @@ export async function runInteractiveChatSession(
               });
     const unregisterProcessCleanup = inkBridge === undefined ? registerProcessTerminalCleanup(chatInput) : undefined;
 
+    const discoveredSkills =
+        options.workspaceRoot !== undefined
+            ? await discoverSkills({ workspaceRoot: options.workspaceRoot })
+            : { skills: [], diagnostics: [] };
+    const knownSkillNames = new Set<string>(discoveredSkills.skills.map((skill) => skill.name));
+    const sessionSkills: readonly Skill[] = discoveredSkills.skills;
+
     try {
         chatOutput.write('mission-control chat\n');
         chatOutput.write(formatModelProviderStatus(currentModelProviderSelection, { nodeMode: 'none' }));
@@ -185,7 +194,7 @@ export async function runInteractiveChatSession(
                 continue;
             }
 
-            const action = parseChatLine(prompt, { modelChoices });
+            const action = parseChatLine(prompt, { modelChoices, knownSkillNames });
             if (action.kind === 'exit') {
                 activeTurn = await stopActiveTurn(activeTurn);
                 chatOutput.write('Exiting mission-control chat\n');
@@ -216,6 +225,7 @@ export async function runInteractiveChatSession(
                         sessionId: currentSessionId,
                         sessionStore: currentSessionStore,
                         workspaceRoot: options.workspaceRoot,
+                        skills: sessionSkills,
                         ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
                         ...(options.engine !== undefined ? { engine: options.engine } : {}),
                         ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),

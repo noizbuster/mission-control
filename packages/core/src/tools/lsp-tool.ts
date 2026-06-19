@@ -73,6 +73,11 @@ export type LspOutput = z.infer<typeof lspOutputSchema>;
 export type CreateLspToolInput = {
     readonly client: LspClient;
     readonly maxModelOutputChars?: number;
+    /**
+     * Self-describing usage hint surfaced in the system prompt. Must stay absent when unset so
+     * the advertised version hash is stable (see ToolRegistrationMetadataSchema.guideline).
+     */
+    readonly guideline?: string;
 };
 
 const DEFAULT_LSP_OUTPUT_LIMIT = 8000;
@@ -103,6 +108,7 @@ export function createLspToolRegistration(input: CreateLspToolInput): ToolRegist
         inputSchema: lspInputSchema,
         outputSchema: lspOutputSchema,
         outputLimit: { maxModelOutputChars: limit },
+        ...(input.guideline !== undefined ? { guideline: input.guideline } : {}),
         execute: async (toolInput) => {
             try {
                 let result: unknown;

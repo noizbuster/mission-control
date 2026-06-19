@@ -89,10 +89,15 @@ describe('runAgent interactive coding tool registry', () => {
             'ls',
             'grep',
             'find',
+            'glob',
+            'todowrite',
+            'skill',
+            'webfetch',
             'file.edit',
             'file.write',
             'file.patch',
             'command.run',
+            'task',
         ]);
         expect(output).not.toContain('Approve ls?');
         expect(output).not.toContain('Approve read?');

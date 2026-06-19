@@ -159,7 +159,7 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 
 - Keep CLI behavior behind `apps/cli`; do not move command-line parsing or terminal rendering into `packages/core`.
 - Treat help text, JSON, JSONL, and plain output as user-facing contracts. Update focused tests when strings, event ordering, or redaction changes.
-- Normal prompts can run through the deterministic local provider or the OpenAI-compatible adapter when configured. `$skill` chat input records scaffold events only; it must not call Codex host skills or spawn agents.
+- Normal prompts can run through the deterministic local provider or the OpenAI-compatible adapter when configured. `$skill <name>` and `/<skill-name>` load a discovered skill's `SKILL.md` body as the next user prompt (real skill loading, replacing the old scaffold recorder); the loaded body is inert text and does not call Codex host skills or spawn agents on its own. A real tool-calling provider is required for loaded skills to drive agentic behavior — the default `local/local-echo` provider does not call tools.
 - Store auth through `auth-store.ts`; never print raw API keys, OAuth tokens, or multi-field credentials.
 - Argument parsing stays parse-only. Runtime effects belong in command modules.
 - Renderer code should consume protocol/core events, not private runtime fields.

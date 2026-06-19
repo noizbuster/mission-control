@@ -23,8 +23,9 @@ import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import type { ConversationSummary } from '../../../context/compaction.js';
 import { packContext } from '../../../context/context-packer.js';
-import { assembleSystemPrompt } from '../../../context/system-prompt.js';
+import { assembleSystemPrompt, type SystemPromptSkill } from '../../../context/system-prompt.js';
 import type { Blackboard } from '../../../memory/blackboard.js';
+import { discoverSkills } from '../../../skills/skill-loader.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../../node-registry.js';
 import { bridgeAdvertisementsToAiSdk, createAbgToolSettlementLedger } from './abg-tool-bridge.js';
@@ -67,13 +68,20 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         return;
     }
 
-    const toolSnippets =
-        context.toolRegistry !== undefined
-            ? context.toolRegistry.advertise().map((advertisement) => ({
-                  name: advertisement.name,
-                  description: advertisement.description,
-              }))
-            : [];
+    const advertisements = context.toolRegistry !== undefined ? context.toolRegistry.advertise() : [];
+    const toolSnippets = advertisements.map((advertisement) => ({
+        name: advertisement.name,
+        description: advertisement.description,
+    }));
+    const guidelines = advertisements
+        .map((advertisement) => advertisement.guideline)
+        .filter((guideline): guideline is string => typeof guideline === 'string' && guideline.length > 0);
+    // Discover skills fresh per turn so a newly added SKILL.md is picked up without a restart.
+    // Only name + description + location go into the prompt (NOT bodies — bodies load on demand
+    // via the `skill` tool). Skills with disableModelInvocation are hidden from the model.
+    const workspaceRoot = context.systemPromptEnv?.workspaceRoot;
+    const skills: readonly SystemPromptSkill[] =
+        workspaceRoot !== undefined ? await discoverPromptSkills(workspaceRoot) : [];
     // The system prompt is assembled with the caller-supplied environment + trusted project
     // instructions. Without `env` the model has no workspace awareness (cwd, git, date); without
     // `resources` it never sees AGENTS.md/CLAUDE.md — both gaps make the agent answer generically
@@ -82,6 +90,8 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         readStringConfig(node, 'systemPrompt') ??
         assembleSystemPrompt({
             toolSnippets,
+            guidelines,
+            skills,
             ...(context.systemPromptEnv !== undefined ? { env: context.systemPromptEnv } : {}),
             ...(context.projectInstructionResources !== undefined
                 ? { resources: context.projectInstructionResources }
@@ -192,6 +202,26 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
 function readStringConfig(node: AbgNodeSpec, key: string): string | undefined {
     const value = node.config?.[key];
     return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * Discover skills and project them to the system-prompt shape (name + description + location).
+ * Hides skills with `disableModelInvocation` from the model. Never throws — a discovery failure
+ * yields an empty list so one bad skill file cannot break every LLM turn.
+ */
+async function discoverPromptSkills(workspaceRoot: string): Promise<readonly SystemPromptSkill[]> {
+    try {
+        const result = await discoverSkills({ workspaceRoot });
+        return result.skills
+            .filter((skill) => !skill.disableModelInvocation)
+            .map((skill) => ({
+                name: skill.name,
+                description: skill.description,
+                ...(skill.filePath.length > 0 ? { location: skill.filePath } : {}),
+            }));
+    } catch {
+        return [];
+    }
 }
 
 /** Read the prior compaction summary from the Blackboard (written on a previous context.packed). */

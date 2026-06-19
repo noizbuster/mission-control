@@ -208,7 +208,7 @@ describe('runCodingPromptOnGraph (--engine graph wiring)', () => {
                 prompt: 'read token.txt then finish',
                 workspaceRoot,
                 resolveSdkModel: () => model,
-                toolRegistry,
+                toolRegistry: toolRegistry.registry,
             });
 
             expect(result.status).toBe('completed');

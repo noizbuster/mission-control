@@ -53,4 +53,60 @@ describe('assembleSystemPrompt', () => {
         expect(prompt.startsWith('You are a specialized reviewer.')).toBe(true);
         expect(prompt).not.toContain(DEFAULT_CODING_AGENT_PERSONA.slice(0, 40));
     });
+
+    it('omits the guidelines section when no guidelines are provided', () => {
+        const prompt = assembleSystemPrompt({});
+        expect(prompt).not.toContain('# Guidelines');
+    });
+
+    it('omits the guidelines section for empty or whitespace-only guideline strings', () => {
+        expect(assembleSystemPrompt({ guidelines: [''] })).not.toContain('# Guidelines');
+        expect(assembleSystemPrompt({ guidelines: ['   '] })).not.toContain('# Guidelines');
+        expect(assembleSystemPrompt({ guidelines: ['', '   ', 'valid hint'] })).toContain('# Guidelines');
+        expect(assembleSystemPrompt({ guidelines: ['', '   ', 'valid hint'] })).toContain('valid hint');
+    });
+
+    it('renders skills as the canonical <available_skills> XML block with name, description, and location', () => {
+        const prompt = assembleSystemPrompt({
+            skills: [
+                {
+                    name: 'git-master',
+                    description: 'Git operations skill.',
+                    location: '/home/user/.config/mission-control/skills/git-master/SKILL.md',
+                },
+                {
+                    name: 'review-work',
+                    description: 'Post-implementation review.',
+                },
+            ],
+        });
+        expect(prompt).not.toContain('# Skills');
+        expect(prompt).toContain('<available_skills>');
+        expect(prompt).toContain('</available_skills>');
+        expect(prompt).toContain('The following skills provide specialized instructions for specific tasks.');
+        expect(prompt).toContain('Use the skill tool to load a skill when the task matches its description.');
+        expect(prompt).toContain('<name>git-master</name>');
+        expect(prompt).toContain('<description>Git operations skill.</description>');
+        expect(prompt).toContain('<location>/home/user/.config/mission-control/skills/git-master/SKILL.md</location>');
+        expect(prompt).toContain('<name>review-work</name>');
+        expect(prompt).toContain('<description>Post-implementation review.</description>');
+    });
+
+    it('omits the <available_skills> block when no skills are provided', () => {
+        expect(assembleSystemPrompt({})).not.toContain('<available_skills>');
+        expect(assembleSystemPrompt({ skills: [] })).not.toContain('<available_skills>');
+    });
+
+    it('XML-escapes special characters in skill names and descriptions', () => {
+        const prompt = assembleSystemPrompt({
+            skills: [
+                {
+                    name: 'xss-test',
+                    description: 'Reads <script> & "payload" data.',
+                },
+            ],
+        });
+        expect(prompt).toContain('<description>Reads &lt;script&gt; &amp; "payload" data.</description>');
+        expect(prompt).not.toContain('<script>');
+    });
 });

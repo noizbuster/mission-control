@@ -80,6 +80,20 @@ export {
     DiffLineKindSchema,
     DiffLineSchema,
 } from './diff-events.js';
+export {
+    type LocalMcpConfigEntry,
+    type LspConfig,
+    LspConfigSchema,
+    type McpConfig,
+    type McpConfigEntry,
+    McpConfigEntrySchema,
+    McpConfigSchema,
+    type McpProjectConfig,
+    McpProjectConfigSchema,
+    type MissionControlConfig,
+    MissionControlConfigSchema,
+    type RemoteMcpConfigEntry,
+} from './mcp-config.js';
 export * from './misc-exports.js';
 export {
     MISSION_STATUSES,

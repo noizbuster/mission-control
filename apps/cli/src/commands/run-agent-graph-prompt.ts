@@ -20,16 +20,19 @@ import {
     createCodingAgentGraph,
     createCodingAgentNodeRegistry,
     createSdkModelResolver,
+    type LspClient,
+    McpConnectionManager,
     type ProviderAdapter,
     type SdkModelResolver,
     SdkModelResolverError,
     type ToolRegistry,
+    type ToolRegistryWithMcp,
     wrapFlatProviderAsSdkModel,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AbgNodeModelOptions, ModelProviderSelection } from '@mission-control/protocol';
 import type { ProviderAuthStore } from '../auth-store.js';
-import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
 import { createCliProviderCredentialResolver } from '../provider-credential-resolver.js';
+import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
 import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
 
 export type RunCodingPromptOnGraphInput = {
@@ -56,6 +59,8 @@ export type RunCodingPromptOnGraphInput = {
      */
     readonly toolRegistry?: ToolRegistry;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
+    /** LSP seam: inject a real `LspClient` to register the `lsp` tool. Default undefined (off). */
+    readonly lspClient?: LspClient;
 };
 
 /** Build the coding-agent graph wiring and drive it through the runtime. Non-destructive. */
@@ -67,13 +72,20 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
         ...(input.provider !== undefined ? { provider: input.provider } : {}),
     });
 
-    const toolRegistry =
-        input.toolRegistry ??
-        (await createNonInteractiveToolRegistry({
-            workspaceRoot: input.workspaceRoot,
-            requestPermission: (request) => input.runtime.requestPermission(request),
-            ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
-        }));
+    const toolRegistryResult: ToolRegistryWithMcp =
+        input.toolRegistry !== undefined
+            ? { registry: input.toolRegistry, mcpConnectionManager: new McpConnectionManager() }
+            : await createNonInteractiveToolRegistry({
+                  workspaceRoot: input.workspaceRoot,
+                  requestPermission: (request) => input.runtime.requestPermission(request),
+                  resolveSdkModel,
+                  modelProviderSelection: input.selection,
+                  ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
+                  ...(input.lspClient !== undefined ? { lspClient: input.lspClient } : {}),
+              });
+
+    const toolRegistry = toolRegistryResult.registry;
+    const mcpDisconnect = (): Promise<void> => toolRegistryResult.mcpConnectionManager.disconnectAll();
 
     const systemPromptEnv = await buildCodingAgentSystemPromptEnv({
         workspaceRoot: input.workspaceRoot,
@@ -81,18 +93,19 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
     });
     const projectInstructionResources = await loadTrustedProjectInstructionResources(input.workspaceRoot);
 
-    return input.runtime.runGraph(buildCodingAgentGraphForSelection(input.selection), undefined, {
-        registry: createCodingAgentNodeRegistry(),
-        resolveSdkModel,
-        toolRegistry,
-        initialMessages: [{ role: 'user', content: input.prompt }],
-        // Match the flat owner path's `haltOnFailedToolSettlement: true` (runOwnerPrompt) so a
-        // denied / non-allowlisted command terminates the graph immediately instead of looping
-        // until the node-run budget.
-        haltOnFailedToolSettlement: true,
-        systemPromptEnv,
-        ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
-    });
+    try {
+        return await input.runtime.runGraph(buildCodingAgentGraphForSelection(input.selection), undefined, {
+            registry: createCodingAgentNodeRegistry(),
+            resolveSdkModel,
+            toolRegistry,
+            initialMessages: [{ role: 'user', content: input.prompt }],
+            haltOnFailedToolSettlement: true,
+            systemPromptEnv,
+            ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
+        });
+    } finally {
+        await mcpDisconnect();
+    }
 }
 
 /**

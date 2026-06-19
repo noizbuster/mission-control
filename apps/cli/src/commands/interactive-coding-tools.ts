@@ -1,17 +1,30 @@
 import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
+    createLspToolRegistration,
     createReadOnlyRepoToolRegistrations,
+    createTaskSpawnFn,
+    discoverSkills,
+    type LspClient,
+    type McpConnectionManager,
     registerBashRunTool,
     registerCommandRunTool,
     registerFileEditTool,
     registerFilePatchTool,
     registerFileWriteTool,
+    registerGlobTool,
+    registerNamespacedMcpTools,
+    registerSkillTool,
+    registerTaskTool,
+    registerWebfetchTool,
+    type SdkModelResolver,
     type ToolInvocationSettlement,
     ToolRegistry,
+    type ToolRegistryWithMcp,
+    todoWriteToolRegistration,
 } from '@mission-control/core';
-import type { ModelProviderSelection } from '@mission-control/protocol';
-import { type AgentEvent, type PermissionRequest, type ToolCall, ToolResultSchema } from '@mission-control/protocol';
+import type { AbgNodeModelOptions, ModelProviderSelection, PermissionRequest } from '@mission-control/protocol';
+import { type AgentEvent, type ToolCall, ToolResultSchema } from '@mission-control/protocol';
 import { cliAllowsAction } from './cli-permission-policy.js';
 import type { InteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';
@@ -25,12 +38,29 @@ export type InteractiveToolOptions = {
     readonly emitEvent: (event: AgentEvent) => void;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly enableTrustedBash?: boolean;
+    /**
+     * When set, the `task` subagent tool is registered with a real spawn closure built from
+     * `spawnChildCodingAgent` (the child surface derives from THIS registry). Omit to leave the
+     * `task` tool absent (no mock/fallback).
+     */
+    readonly resolveSdkModel?: SdkModelResolver;
+    /**
+     * An already-connected MCP connection manager to reuse across turns (session-scoped).
+     * When omitted, the factory creates a new manager and connects eagerly.
+     */
+    readonly mcpConnectionManager?: McpConnectionManager;
+    /**
+     * LSP seam: when a real `LspClient` is injected, the `lsp` tool is registered (read-class,
+     * opt-in). Default runs omit it — registering with the in-process test client would mislead
+     * the model. A real stdio JSON-RPC transport (tsserver/rust-analyzer) is deferred.
+     */
+    readonly lspClient?: LspClient;
 };
 
 export async function createInteractiveToolRegistry(
     options: InteractiveToolOptions,
     approvals: InteractiveApprovalBroker,
-): Promise<ToolRegistry> {
+): Promise<ToolRegistryWithMcp> {
     const registry = new ToolRegistry();
     const readTools = await createReadOnlyRepoToolRegistrations({
         workspaceRoot: options.workspaceRoot,
@@ -40,6 +70,17 @@ export async function createInteractiveToolRegistry(
     registry.register(readTools[4]);
     registry.register(readTools[5]);
     registry.register(readTools[6]);
+    await registerGlobTool(registry, {
+        workspaceRoot: options.workspaceRoot,
+        requestPermission: approvals.requestPermission,
+    });
+    registry.register(todoWriteToolRegistration);
+    const skillDiscovery = await discoverSkills({ workspaceRoot: options.workspaceRoot });
+    registerSkillTool(registry, { skills: skillDiscovery.skills });
+    await registerWebfetchTool(registry, {
+        workspaceRoot: options.workspaceRoot,
+        requestPermission: approvals.requestPermission,
+    });
     await registerFileEditTool(registry, {
         workspaceRoot: options.workspaceRoot,
         requestPermission: approvals.requestPermission,
@@ -65,7 +106,43 @@ export async function createInteractiveToolRegistry(
             ...(options.commandExecutor !== undefined ? { executor: options.commandExecutor } : {}),
         });
     }
-    return registry;
+    const resolveSdkModel = options.resolveSdkModel;
+    if (resolveSdkModel !== undefined) {
+        const selection = options.modelProviderSelection;
+        const model: AbgNodeModelOptions = {
+            providerID: selection.providerID,
+            modelID: selection.modelID,
+            ...(selection.variantID !== undefined ? { variantID: selection.variantID } : {}),
+        };
+        await registerTaskTool(registry, {
+            workspaceRoot: options.workspaceRoot,
+            requestPermission: approvals.requestPermission,
+            spawn: createTaskSpawnFn({
+                resolveSdkModel,
+                model,
+                parentToolRegistry: registry,
+                parentSessionId: options.sessionId,
+            }),
+        });
+    }
+    const mcpConnectionManager = await registerNamespacedMcpTools(registry, {
+        workspaceRoot: options.workspaceRoot,
+        requestPermission: approvals.requestPermission,
+        ...(options.mcpConnectionManager !== undefined ? { mcpConnectionManager: options.mcpConnectionManager } : {}),
+    });
+    // LSP seam: register `lsp` ONLY when a real client is injected. Default runs (no client)
+    // do not advertise it — a real stdio JSON-RPC language-server transport is deferred.
+    if (options.lspClient !== undefined) {
+        registry.register(
+            createLspToolRegistration({
+                client: options.lspClient,
+                guideline:
+                    'Use lsp for compiler-grade diagnostics, hover, and go-to-definition ' +
+                    'instead of guessing types from source text.',
+            }),
+        );
+    }
+    return { registry, mcpConnectionManager };
 }
 
 export async function preflightInteractiveToolCall(
@@ -116,6 +193,50 @@ export async function preflightInteractiveToolCall(
 }
 
 function approvalRequestForToolCall(toolCall: ToolCall, workspaceRoot: string): PermissionRequest | undefined {
+    if (toolCall.toolName.startsWith('mcp__')) {
+        return {
+            id: `permission_${toolCall.toolCallId}`,
+            action: 'mcp',
+            reason: `MCP tool: ${toolCall.toolName}`,
+            permission: {
+                kind: 'network',
+                patterns: [toolCall.toolName],
+                workspaceRoot,
+            },
+        };
+    }
+    if (toolCall.toolName === 'webfetch') {
+        const url = parseWebfetchUrl(toolCall.argumentsJson);
+        if (url === undefined) {
+            return undefined;
+        }
+        return {
+            id: `permission_${toolCall.toolCallId}`,
+            action: 'webfetch',
+            reason: `fetch url: ${url}`,
+            permission: {
+                kind: 'network',
+                patterns: [url],
+                workspaceRoot,
+            },
+        };
+    }
+    if (toolCall.toolName === 'task') {
+        const description = parseTaskDescription(toolCall.argumentsJson);
+        if (description === undefined) {
+            return undefined;
+        }
+        return {
+            id: `permission_${toolCall.toolCallId}`,
+            action: 'task',
+            reason: `delegate sub-task: ${description}`,
+            permission: {
+                kind: 'subagent',
+                patterns: [description],
+                workspaceRoot,
+            },
+        };
+    }
     if (toolCall.toolName === 'command.run') {
         const input = parseCommandRunPreview(toolCall.argumentsJson);
         if (input === undefined) {
@@ -283,6 +404,22 @@ function parseFileEditPreview(argumentsJson: string):
     };
 }
 
+function parseWebfetchUrl(argumentsJson: string): string | undefined {
+    const value = parseArguments(argumentsJson);
+    if (!isRecord(value) || typeof value.url !== 'string' || value.url.length === 0) {
+        return undefined;
+    }
+    return value.url;
+}
+
+function parseTaskDescription(argumentsJson: string): string | undefined {
+    const value = parseArguments(argumentsJson);
+    if (!isRecord(value) || typeof value.description !== 'string' || value.description.length === 0) {
+        return undefined;
+    }
+    return value.description;
+}
+
 function parseFileWritePreview(
     argumentsJson: string,
 ): { readonly path: string; readonly content: string; readonly createParents: boolean } | undefined {
@@ -356,12 +493,14 @@ function isRecord(value: unknown): value is {
     readonly cwd?: unknown;
     readonly createParents?: unknown;
     readonly commandLine?: unknown;
+    readonly description?: unknown;
     readonly newText?: unknown;
     readonly occurrence?: unknown;
     readonly oldText?: unknown;
     readonly patch?: unknown;
     readonly path?: unknown;
     readonly replaceAll?: unknown;
+    readonly url?: unknown;
 } {
     return typeof value === 'object' && value !== null;
 }

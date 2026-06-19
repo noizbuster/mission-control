@@ -56,6 +56,6 @@ describe('CLI entrypoint', () => {
         expect(help).toContain('/clone [session-id]');
         expect(help).toContain('local/local-echo#fast');
         expect(help).toContain('$<skill> [args]');
-        expect(help).toContain('$ skill invocations are scaffolded inside Mission Control');
+        expect(help).toContain('$ skill invocations load real SKILL.md skills inside Mission Control');
     });
 });

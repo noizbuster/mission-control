@@ -18,9 +18,15 @@ import {
     DiffFileSchema,
     DiffHunkSchema,
     EventDurabilitySchema,
+    McpConfigEntrySchema,
+    McpConfigSchema,
+    McpProjectConfigSchema,
+    MissionControlConfigSchema,
     ModelProviderSelectionSchema,
     ModelVariantEntrySchema,
+    PERMISSION_KINDS,
     PermissionDecisionSchema,
+    PermissionKindSchema,
     PermissionReplySchema,
     PermissionRequestSchema,
     PermissionRuleDecisionSchema,
@@ -95,6 +101,21 @@ describe('protocol public exports', () => {
         expect(PermissionRuleSchema.shape.pattern).toBeDefined();
         expect(PermissionRuleDecisionSchema.parse('once')).toBe('once');
         expect(PermissionStatusSchema.parse('deny')).toBe('deny');
+        // Lock the network/subagent kind cascade: admitted by the enum + strict schemas, unknown kinds still rejected.
+        expect(PERMISSION_KINDS).toContain('network');
+        expect(PERMISSION_KINDS).toContain('subagent');
+        expect(PermissionKindSchema.parse('network')).toBe('network');
+        expect(PermissionKindSchema.parse('subagent')).toBe('subagent');
+        expect(PermissionRuleSchema.parse({ permission: 'network', pattern: '*', decision: 'ask' }).permission).toBe(
+            'network',
+        );
+        expect(() => PermissionKindSchema.parse('remote-exec')).toThrow();
+        expect(McpConfigEntrySchema.parse({ type: 'local', command: ['npx'] }).type).toBe('local');
+        expect(McpConfigEntrySchema.parse({ type: 'remote', url: 'https://example.test/mcp' }).type).toBe('remote');
+        expect(() => McpConfigEntrySchema.parse({ type: 'remote', url: 'nope' })).toThrow();
+        expect(McpConfigSchema.parse({})).toEqual({});
+        expect(MissionControlConfigSchema.shape.mcp).toBeDefined();
+        expect(McpProjectConfigSchema.shape.mcpServers).toBeDefined();
         expect(ApprovalPolicyDecisionSchema.parse('requires_approval')).toBe('requires_approval');
         expect(ApprovalLifecycleStateSchema.parse('pending')).toBe('pending');
         expect(ApprovalSubjectSchema.shape.kind).toBeDefined();

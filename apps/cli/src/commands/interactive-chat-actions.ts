@@ -1,4 +1,5 @@
 import type { AgentRuntime } from '@mission-control/core';
+import { formatSkillInstructions, loadSkillBody, type Skill, type SkillToolOutput } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ChatLineAction } from './chat-commands.js';
 import type { ModelSelector } from './interactive-chat.js';
@@ -21,6 +22,11 @@ import { type ActiveCodingAgentTurn, resumeCodingAgentTurn } from './interactive
 export type CodingActionContext = PromptTurnContext & {
     readonly activeTurn: ActiveCodingAgentTurn | undefined;
     readonly sessionNavigation?: SessionNavigationController;
+    /**
+     * Discovered skills for `/skill-name` + `$skill` real loading (todo 10).
+     * When omitted, the skill action reports that skill loading is unavailable.
+     */
+    readonly skills?: readonly Skill[];
 };
 
 export async function runChatAction(
@@ -143,11 +149,7 @@ export async function runChatAction(
             await runTrustAction(chatOutput, action.action, coding.workspaceRoot);
             return actionResult(currentModelProviderSelection, coding.activeTurn);
         case 'skill':
-            await runtime.runSkillInvocationTask({ skillID: action.name, argumentsText: action.instruction });
-            chatOutput.write(
-                `Skill ${action.name} scaffolded${action.instruction.length > 0 ? `: ${action.instruction}` : ''}\n`,
-            );
-            return actionResult(currentModelProviderSelection, coding.activeTurn);
+            return runSkillAction(runtime, chatOutput, action, currentModelProviderSelection, coding);
         case 'unknown-slash':
             chatOutput.write(`Unknown command: /${action.command}\n`);
             return actionResult(currentModelProviderSelection, coding.activeTurn);
@@ -174,6 +176,60 @@ async function runPromptAction(
         modelProviderSelection,
         await startPromptTurn(runtime, chatOutput, prompt, modelProviderSelection, coding),
     );
+}
+
+async function runSkillAction(
+    runtime: AgentRuntime,
+    chatOutput: ChatOutput,
+    action: Extract<ChatLineAction, { readonly kind: 'skill' }>,
+    modelProviderSelection: ModelProviderSelection,
+    coding: CodingActionContext,
+): Promise<ChatActionResult> {
+    const skills = coding.skills;
+    if (skills === undefined) {
+        chatOutput.write('Skill loading unavailable: no workspace configured.\n');
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    const expanded = await expandSkillToPrompt(skills, action.name, action.instruction);
+    if (expanded.kind === 'error') {
+        chatOutput.write(expanded.message);
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    chatOutput.write(`Loading skill "${action.name}"...\n`);
+    return runPromptAction(runtime, chatOutput, expanded.prompt, modelProviderSelection, coding);
+}
+
+async function expandSkillToPrompt(
+    skills: readonly Skill[],
+    name: string,
+    instruction: string,
+): Promise<
+    { readonly kind: 'prompt'; readonly prompt: string } | { readonly kind: 'error'; readonly message: string }
+> {
+    const known = skills.some((skill) => skill.name === name);
+    if (!known) {
+        const available =
+            skills.length === 0
+                ? '(none discovered)'
+                : skills
+                      .slice(0, 20)
+                      .map((skill) => skill.name)
+                      .join(', ');
+        return {
+            kind: 'error',
+            message: `Unknown skill: ${name}. Available skills: ${available}.\n`,
+        };
+    }
+    let loaded: SkillToolOutput;
+    try {
+        loaded = await loadSkillBody(skills, name);
+    } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        return { kind: 'error', message: `Failed to load skill "${name}": ${detail}\n` };
+    }
+    const wrapped = formatSkillInstructions(loaded.name, loaded.location, loaded.content);
+    const prompt = instruction.length > 0 ? `${wrapped}\n\nUser request: ${instruction}` : wrapped;
+    return { kind: 'prompt', prompt };
 }
 
 async function runInterruptAction(

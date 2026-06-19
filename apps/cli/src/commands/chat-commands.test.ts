@@ -38,6 +38,45 @@ describe('chat command parser', () => {
         expect(formatSkillInvocationPrompt(action)).toBe('Invoke skill "planner": draft a rollout checklist');
     });
 
+    it('expands /<known-skill> into a skill action when the name is discovered', () => {
+        const known = new Set(['git-master', 'planner']);
+
+        expect(parseChatLine('/git-master', { knownSkillNames: known })).toEqual({
+            kind: 'skill',
+            name: 'git-master',
+            instruction: '',
+        });
+        expect(parseChatLine('/planner refactor the auth module', { knownSkillNames: known })).toEqual({
+            kind: 'skill',
+            name: 'planner',
+            instruction: 'refactor the auth module',
+        });
+    });
+
+    it('reserves slash commands take precedence over a same-named skill', () => {
+        const known = new Set(['exit', 'model', 'new', 'session', 'tree', 'compact', 'trust']);
+
+        expect(parseChatLine('/exit', { knownSkillNames: known })).toEqual({ kind: 'exit' });
+        expect(parseChatLine('/model', { knownSkillNames: known })).toEqual({ kind: 'model-pick' });
+        expect(parseChatLine('/new', { knownSkillNames: known })).toEqual({ kind: 'new-session' });
+        expect(parseChatLine('/sessions', { knownSkillNames: known })).toEqual({ kind: 'sessions' });
+        expect(parseChatLine('/compact', { knownSkillNames: known })).toEqual({ kind: 'compact' });
+        expect(parseChatLine('/trust', { knownSkillNames: known })).toEqual({ kind: 'trust', action: 'trust' });
+    });
+
+    it('falls through to the unknown-slash path for an undiscovered /<name>', () => {
+        const known = new Set(['git-master']);
+
+        expect(parseChatLine('/mystery', { knownSkillNames: known })).toEqual({
+            kind: 'unknown-slash',
+            command: 'mystery',
+        });
+        expect(parseChatLine('/mystery')).toEqual({
+            kind: 'unknown-slash',
+            command: 'mystery',
+        });
+    });
+
     it('returns normal prompts when the input is not a command', () => {
         expect(parseChatLine('summarize the mission')).toEqual({
             kind: 'prompt',

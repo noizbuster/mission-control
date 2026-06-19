@@ -38,6 +38,7 @@ export class ToolRegistry {
             capabilityClasses: registration.capabilityClasses,
             parametersJsonSchema: registration.parametersJsonSchema,
             outputLimit: registration.outputLimit,
+            ...(registration.guideline !== undefined ? { guideline: registration.guideline } : {}),
         });
         const providerTool = ToolDefinitionSchema.parse({
             name: metadata.name,
@@ -51,6 +52,7 @@ export class ToolRegistry {
             version: versionHashFor(metadata),
             outputLimit: metadata.outputLimit,
             providerTool,
+            ...(metadata.guideline !== undefined ? { guideline: metadata.guideline } : {}),
         };
         this.registrations.set(metadata.name, {
             advertisement,

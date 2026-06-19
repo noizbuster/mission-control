@@ -1,10 +1,13 @@
-import { AgentRuntime } from '@mission-control/core';
+import { AgentRuntime, type Skill } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CodingActionContext } from './interactive-chat-actions.js';
 import { runChatAction } from './interactive-chat-actions.js';
 import type { SessionNavigationController } from './interactive-chat-session-navigation.js';
 import { SessionNavigationError } from './interactive-chat-session-navigation-store.js';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 
 const currentSelection: ModelProviderSelection = { providerID: 'local', modelID: 'local-echo' };
 const switchedSelection: ModelProviderSelection = { providerID: 'openai', modelID: 'gpt-5.4' };
@@ -287,7 +290,152 @@ describe('interactive chat actions', () => {
         ).rejects.toThrow('internal type error');
         expect(output.getOutput()).toBe('');
     });
+
+    describe('skill action (real loading)', () => {
+        const tempRoots: string[] = [];
+
+        afterEach(async () => {
+            await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
+            tempRoots.length = 0;
+        });
+
+        it('loads the real skill body and submits it as a prompt (no recorder event)', async () => {
+            const runtime = new AgentRuntime();
+            const spy = vi.spyOn(runtime, 'runSkillInvocationTask');
+            const output = createOutput();
+            const skill = await writeFixtureSkill('known-skill', 'Real skill body content.');
+            tempRoots.push(skill.root);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'skill', name: 'known-skill', instruction: 'extra args' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ skills: [skill.skill], activeTurn: fakeActiveTurn() }),
+            );
+
+            const captured = output.getOutput();
+            expect(spy).not.toHaveBeenCalled();
+            expect(captured).not.toContain('scaffolded');
+            expect(captured).toContain('Loading skill "known-skill"');
+            expect(captured).toContain('Queued follow-up:');
+            expect(captured).toContain('<skill-instruction name="known-skill">');
+            expect(captured).toContain('Real skill body content.');
+            expect(captured).toContain('User request: extra args');
+            expect(captured).toContain('</skill-instruction>');
+        });
+
+        it('expands a known skill via the $skill prefix path identically', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const skill = await writeFixtureSkill('planner', 'Plan the work steps.');
+            tempRoots.push(skill.root);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'skill', name: 'planner', instruction: 'draft a checklist' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ skills: [skill.skill], activeTurn: fakeActiveTurn() }),
+            );
+
+            const captured = output.getOutput();
+            expect(captured).toContain('<skill-instruction name="planner">');
+            expect(captured).toContain('Plan the work steps.');
+            expect(captured).toContain('User request: draft a checklist');
+        });
+
+        it('reports a friendly unknown-skill message without throwing', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const skill = await writeFixtureSkill('known-skill', 'body');
+            tempRoots.push(skill.root);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'skill', name: 'missing-skill', instruction: '' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ skills: [skill.skill] }),
+            );
+
+            const captured = output.getOutput();
+            expect(captured).toContain('Unknown skill: missing-skill');
+            expect(captured).toContain('Available skills: known-skill');
+            expect(captured).not.toContain('<skill-instruction');
+        });
+
+        it('reports unavailable skill loading when no skills are configured', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'skill', name: 'anything', instruction: '' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({}),
+            );
+
+            expect(output.getOutput()).toContain('Skill loading unavailable');
+        });
+
+        it('reports empty discovered skill set cleanly', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'skill', name: 'lonely', instruction: '' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ skills: [] }),
+            );
+
+            expect(output.getOutput()).toContain('Unknown skill: lonely');
+            expect(output.getOutput()).toContain('(none discovered)');
+        });
+    });
 });
+
+function fakeActiveTurn(): NonNullable<CodingActionContext['activeTurn']> {
+    return {
+        done: Promise.resolve(),
+        interrupt: () => undefined,
+        answerApproval: () => false,
+        hasPendingApproval: () => false,
+    };
+}
+
+async function writeFixtureSkill(
+    name: string,
+    body: string,
+): Promise<{ readonly root: string; readonly skill: Skill }> {
+    const root = await mkdtemp(join(tmpdir(), 'skill-action-test-'));
+    const skillDir = join(root, 'skills', name);
+    await mkdir(skillDir, { recursive: true });
+    const filePath = join(skillDir, 'SKILL.md');
+    await writeFile(filePath, `---\nname: ${name}\ndescription: ${name} skill.\n---\n${body}`, 'utf8');
+    const skill: Skill = {
+        name,
+        description: `${name} skill.`,
+        disableModelInvocation: false,
+        filePath,
+        baseDir: dirname(filePath),
+        sourceInfo: { scope: 'project', scopeId: 'project-mctrl', sourceDir: dirname(dirname(filePath)) },
+    };
+    return { root, skill };
+}
 
 function createCodingContext(overrides: Partial<CodingActionContext> = {}): CodingActionContext {
     return {
@@ -300,6 +448,7 @@ function createCodingContext(overrides: Partial<CodingActionContext> = {}): Codi
         sessionId: overrides.sessionId ?? 'session_current',
         sessionStore: overrides.sessionStore ?? undefined,
         workspaceRoot: overrides.workspaceRoot ?? '/workspace',
+        ...(overrides.skills !== undefined ? { skills: overrides.skills } : {}),
         ...(overrides.sessionNavigation !== undefined ? { sessionNavigation: overrides.sessionNavigation } : {}),
     };
 }

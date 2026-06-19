@@ -82,8 +82,8 @@ export type SessionRunOwnerRegistryOptions = {
     /**
      * Per-owner engine factory (preferred over `runProviderTurn`): called for each owner with its
      * resolved `sessionId`/`modelProviderSelection`/`toolRegistry` so a turn runner can capture
-     * owner-specific context — mirrors `runOwnerPrompt.createTurnRunner`
-     * (`apps/cli/src/commands/run-agent-owner-prompt.ts`). Omit for the flat provider tool loop.
+     * owner-specific context — mirrors `runOwnerPrompt.createTurnRunner` in the CLI layer
+     * (`run-agent-owner-prompt.ts`). Omit for the flat provider tool loop.
      */
     readonly createTurnRunner?: (deps: {
         readonly sessionId: string;

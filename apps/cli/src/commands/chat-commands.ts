@@ -98,6 +98,14 @@ export type TrustCommandAction = 'trust' | 'status' | 'deny' | 'reset';
 
 export type ChatLineOptions = {
     readonly modelChoices?: readonly ModelChoice[];
+    /**
+     * Discovered skill names for `/<skill-name>` slash expansion (todo 10).
+     * Reserved slash commands and session-navigation commands always take
+     * precedence over a skill name; a name is only matched here in the default
+     * branch after those checks. When omitted, `/<name>` falls through to the
+     * unknown-slash path (skill loading via `$skill` still works).
+     */
+    readonly knownSkillNames?: ReadonlySet<string>;
 };
 
 export function parseChatLine(value: string, options: ChatLineOptions = {}): ChatLineAction {
@@ -148,8 +156,22 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
         case 'compact':
             return parseNoArgumentCommand('compact', parts.tail);
         default:
-            return parseSessionSlashCommand(parts.head, parts.tail) ?? { kind: 'unknown-slash', command: parts.head };
+            return resolveUnreservedSlash(parts, options);
     }
+}
+
+function resolveUnreservedSlash(
+    parts: { readonly head: string; readonly tail: string },
+    options: ChatLineOptions,
+): ChatLineAction {
+    const sessionAction = parseSessionSlashCommand(parts.head, parts.tail);
+    if (sessionAction !== undefined) {
+        return sessionAction;
+    }
+    if (options.knownSkillNames?.has(parts.head)) {
+        return { kind: 'skill', name: parts.head, instruction: parts.tail };
+    }
+    return { kind: 'unknown-slash', command: parts.head };
 }
 
 function parsePromptCommand(kind: 'queue' | 'steer', prompt: string): ChatLineAction {

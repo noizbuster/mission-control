@@ -8,6 +8,9 @@ import {
     createScriptedChatInput,
     setTtyState,
 } from './run-agent-chat-test-support.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 describe('runAgent interactive chat', () => {
     it('opens a prompt for default mctrl execution and exits after two consecutive Ctrl+C interrupts', async () => {
@@ -147,36 +150,44 @@ describe('runAgent interactive chat', () => {
         }
     });
 
-    it('routes $ skill invocations through scaffold skill tasks with the selected skill name', async () => {
+    it('routes $skill invocations through real skill loading instead of the scaffold recorder', async () => {
         const chatOutput = createBufferedChatOutput();
         const events: AgentEvent[] = [];
+        const emptyWorkspace = await mkdtemp(join(tmpdir(), 'mctrl-skill-chat-'));
 
-        const output = await runAgent(parseArgs([]), {
-            authStore: createEmptyAuthStore(),
-            chatInput: createScriptedChatInput([
-                { type: 'line', value: '$planner draft a rollout checklist' },
-                { type: 'interrupt' },
-                { type: 'interrupt' },
-            ]),
-            chatOutput: chatOutput.output,
-            onRuntimeEvent: (event) => {
-                events.push(event);
-            },
-        });
+        try {
+            const output = await runAgent(parseArgs([]), {
+                authStore: createEmptyAuthStore(),
+                workspaceRoot: emptyWorkspace,
+                chatInput: createScriptedChatInput([
+                    { type: 'line', value: '$planner draft a rollout checklist' },
+                    { type: 'interrupt' },
+                    { type: 'interrupt' },
+                ]),
+                chatOutput: chatOutput.output,
+                onRuntimeEvent: (event) => {
+                    events.push(event);
+                },
+            });
 
-        expect(output).toContain('Skill planner scaffolded: draft a rollout checklist');
-        expect(events).toContainEqual(
-            expect.objectContaining({
-                type: 'permission.requested',
-                message: 'permission requested: skill.invoke',
-            }),
-        );
-        expect(events).toContainEqual(
-            expect.objectContaining({
-                type: 'task.completed',
-                message: 'skill invocation scaffolded: planner',
-            }),
-        );
+            // The scaffold recorder path is gone: no skill.invoke permission gate, no scaffold task.
+            expect(output).not.toContain('Skill planner scaffolded');
+            expect(
+                events.some(
+                    (event) => event.type === 'permission.requested' && event.message?.includes('skill.invoke'),
+                ),
+            ).toBe(false);
+            expect(
+                events.some(
+                    (event) =>
+                        event.type === 'task.completed' && event.message?.includes('skill invocation scaffolded'),
+                ),
+            ).toBe(false);
+            // With no discovered `planner` skill, the real loader reports a friendly unknown-skill error.
+            expect(output).toContain('Unknown skill: planner');
+        } finally {
+            await rm(emptyWorkspace, { recursive: true, force: true });
+        }
     });
 
     it('reports unknown slash commands without submitting a prompt task', async () => {
