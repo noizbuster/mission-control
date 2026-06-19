@@ -74,7 +74,19 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
                   description: advertisement.description,
               }))
             : [];
-    const system = readStringConfig(node, 'systemPrompt') ?? assembleSystemPrompt({ toolSnippets });
+    // The system prompt is assembled with the caller-supplied environment + trusted project
+    // instructions. Without `env` the model has no workspace awareness (cwd, git, date); without
+    // `resources` it never sees AGENTS.md/CLAUDE.md — both gaps make the agent answer generically
+    // instead of acting on the codebase. An explicit node `systemPrompt` config still wins.
+    const system =
+        readStringConfig(node, 'systemPrompt') ??
+        assembleSystemPrompt({
+            toolSnippets,
+            ...(context.systemPromptEnv !== undefined ? { env: context.systemPromptEnv } : {}),
+            ...(context.projectInstructionResources !== undefined
+                ? { resources: context.projectInstructionResources }
+                : {}),
+        });
     // One ledger per turn: the bridge records each tool settlement; the stream-part adapter
     // reads it so the `tool.completed`/`tool.failed` emits carry the true status/output/error
     // (coding-step replay parity with the flat path). Fresh per turn — no stale entries leak.
