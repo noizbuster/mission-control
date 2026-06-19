@@ -125,6 +125,7 @@ async function requestPermission(
         eventWithApproval(options, 'approval.requested', approval, `approval requested: ${request.action}`),
     );
     options.output.write(`Approve ${request.action}? [once/always/deny]:`);
+    options.output.showApproval?.(request.action, request.reason);
     const queuedAnswer = queuedAnswers.shift();
     if (queuedAnswer !== undefined) {
         return resolveQueuedApproval(options, permissionSession, request, approval, parseReply(queuedAnswer));
@@ -165,6 +166,7 @@ async function resolveQueuedApproval(
     } satisfies PermissionReply;
     await permissionSession.rememberReply(request, options.sessionId, normalizedReply);
     options.output.write('\n');
+    options.output.hideApproval?.();
     options.output.write(renderApprovalResult(request.action, normalizedReply.reply));
     options.emitEvent(eventWithReply(options, normalizedReply));
     const decidedRecord = approvalDecisionRecord(record, normalizedReply);

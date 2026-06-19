@@ -61,6 +61,10 @@ type BridgeSnapshot = {
     readonly modelPickerKeypress: ProviderPromptKeypressState;
     readonly generating: boolean;
     readonly agentStatusText: string;
+    readonly approvalActive: boolean;
+    readonly approvalToolName: string;
+    readonly approvalAction: string;
+    readonly approvalSelectedIndex: number;
     readonly historyNavigation: { readonly position: number; readonly total: number } | null;
 };
 
@@ -73,6 +77,8 @@ export type InkChatBridge = {
     readonly setGenerating: (value: boolean) => void;
     readonly setAgentStatus: (text: string) => void;
     readonly clearAgentStatus: () => void;
+    readonly showApproval: (toolName: string, action: string) => void;
+    readonly hideApproval: () => void;
     readonly unmount: () => void;
 };
 
@@ -99,6 +105,10 @@ type InkChatBridgeCore = {
     modelPickerResolve: ((selection: ModelProviderSelection | undefined) => void) | undefined;
     generating: boolean;
     agentStatusText: string;
+    approvalActive: boolean;
+    approvalToolName: string;
+    approvalAction: string;
+    approvalSelectedIndex: number;
     history: ChatInputHistory;
 };
 
@@ -128,6 +138,10 @@ function publishSnapshot(core: InkChatBridgeCore): void {
         modelPickerKeypress: core.modelPickerKeypress,
         generating: core.generating,
         agentStatusText: core.agentStatusText,
+        approvalActive: core.approvalActive,
+        approvalToolName: core.approvalToolName,
+        approvalAction: core.approvalAction,
+        approvalSelectedIndex: core.approvalSelectedIndex,
         historyNavigation,
     };
     for (const listener of core.listeners) {
@@ -145,6 +159,10 @@ function enqueueEvent(core: InkChatBridgeCore, event: ChatInputEvent): void {
 }
 
 function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
+    if (core.approvalActive) {
+        handleApprovalInput(core, input, key);
+        return;
+    }
     if (core.modelPickerActive) {
         handleModelPickerInput(core, input, key);
         return;
@@ -218,6 +236,40 @@ function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
     }
 }
 
+const approvalOptions = [
+    { key: 'once', label: 'Allow once', description: 'allow this request only' },
+    { key: 'always', label: 'Always allow', description: 'allow all future matching requests' },
+    { key: 'deny', label: 'Deny', description: 'block this request' },
+] as const;
+
+function handleApprovalInput(core: InkChatBridgeCore, input: string, key: Key): void {
+    if (key.upArrow) {
+        core.approvalSelectedIndex = (core.approvalSelectedIndex - 1 + approvalOptions.length) % approvalOptions.length;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.downArrow) {
+        core.approvalSelectedIndex = (core.approvalSelectedIndex + 1) % approvalOptions.length;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.return || input.includes('\r') || input.includes('\n')) {
+        const selected = approvalOptions[core.approvalSelectedIndex];
+        if (selected !== undefined) {
+            core.approvalActive = false;
+            publishSnapshot(core);
+            enqueueEvent(core, { type: 'line', value: selected.key });
+        }
+        return;
+    }
+    if (key.ctrl && input === 'c') {
+        core.approvalActive = false;
+        core.approvalSelectedIndex = 2;
+        publishSnapshot(core);
+        enqueueEvent(core, { type: 'line', value: 'deny' });
+    }
+}
+
 function handleModelPickerInput(core: InkChatBridgeCore, input: string, key: Key): void {
     if (key.ctrl && input === 'c') {
         core.modelPickerActive = false;
@@ -280,6 +332,42 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     const snapshot = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
     useInput((input, key) => bridge.handleInput(input, key));
 
+    const messageBlocks = parseMessageBlocks(snapshot.outputText);
+
+    if (snapshot.approvalActive) {
+        return (
+            <Box flexDirection="column">
+                {messageBlocks.map((block, index) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
+                    <MessageBlock key={`msg-${block.kind}-${index}`} block={block} />
+                ))}
+                <Box flexDirection="column" borderStyle="single" borderColor="yellow" paddingX={1} marginTop={1}>
+                    <Text bold color="yellow">{'Approval Required'}</Text>
+                    <Text>
+                        <Text bold>Tool:</Text> {snapshot.approvalToolName}
+                    </Text>
+                    <Text dimColor>{snapshot.approvalAction}</Text>
+                    <Box flexDirection="column" marginTop={1}>
+                        {approvalOptions.map((option, index) => {
+                            const isSelected = index === snapshot.approvalSelectedIndex;
+                            return (
+                                <Text key={option.key} {...(isSelected ? { backgroundColor: 'blue' } : {})}>
+                                    {isSelected ? '> ' : '  '}
+                                    {option.label}
+                                    {'  '}
+                                    <Text dimColor>{option.description}</Text>
+                                </Text>
+                            );
+                        })}
+                    </Box>
+                    <Box marginTop={1}>
+                        <Text dimColor>Up/Down to navigate, Enter to select, Ctrl+C to deny</Text>
+                    </Box>
+                </Box>
+            </Box>
+        );
+    }
+
     if (snapshot.modelPickerActive) {
         const promptChoices = snapshot.modelPickerChoices.map((choice) => ({
             id: choice.id,
@@ -320,7 +408,6 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     const menuView = showSlashMenu
         ? createSlashCommandMenuView(snapshot.inputBuffer, snapshot.menuState, slashMenuMaxVisibleChoices)
         : null;
-    const messageBlocks = parseMessageBlocks(snapshot.outputText);
 
     return (
         <Box flexDirection="column">
@@ -399,6 +486,10 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
             modelPickerKeypress: createProviderPromptKeypressState(),
         generating: false,
         agentStatusText: '',
+        approvalActive: false,
+        approvalToolName: '',
+        approvalAction: '',
+        approvalSelectedIndex: 0,
         historyNavigation: null,
         },
         unmountFn: undefined,
@@ -408,6 +499,10 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         modelPickerResolve: undefined,
         generating: false,
         agentStatusText: '',
+        approvalActive: false,
+        approvalToolName: '',
+        approvalAction: '',
+        approvalSelectedIndex: 0,
         history: createChatInputHistory(),
     };
 
@@ -477,11 +572,24 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         publishSnapshot(core);
     };
 
+    const showApproval = (toolName: string, action: string): void => {
+        core.approvalActive = true;
+        core.approvalToolName = toolName;
+        core.approvalAction = action;
+        core.approvalSelectedIndex = 0;
+        publishSnapshot(core);
+    };
+
+    const hideApproval = (): void => {
+        core.approvalActive = false;
+        publishSnapshot(core);
+    };
+
     const unmount = (): void => {
         core.unmountFn?.();
     };
 
-    return { waitForEvent, emitOutput, getOutput, showModelPicker, setGenerating, setAgentStatus, clearAgentStatus, unmount };
+    return { waitForEvent, emitOutput, getOutput, showModelPicker, setGenerating, setAgentStatus, clearAgentStatus, showApproval, hideApproval, unmount };
 }
 
 type ChatBlock = {

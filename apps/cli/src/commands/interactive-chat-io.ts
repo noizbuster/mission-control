@@ -45,6 +45,8 @@ export type ChatOutput = {
     readonly getOutput?: () => string;
     readonly setAgentStatus?: (text: string) => void;
     readonly clearAgentStatus?: () => void;
+    readonly showApproval?: (toolName: string, action: string) => void;
+    readonly hideApproval?: () => void;
 };
 
 type TerminalChatInputStreams = {
