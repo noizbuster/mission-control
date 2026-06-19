@@ -192,7 +192,8 @@ export function isTerminalFailedSettlement(settlement: AbgToolSettlement): boole
     return (
         settlement.status === 'failed' &&
         !isApprovalRequiredSettlement(settlement) &&
-        !isApprovalDeniedSettlement(settlement)
+        !isApprovalDeniedSettlement(settlement) &&
+        settlement.error?.retryable !== true
     );
 }
 

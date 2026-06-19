@@ -19,6 +19,6 @@ function protocolError(message: string): ProtocolError {
     return {
         code: 'tool_failed',
         message,
-        retryable: false,
+        retryable: true,
     };
 }
