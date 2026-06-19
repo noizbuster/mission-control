@@ -96,7 +96,7 @@ async function startOwnedCodingAgentTurn(
     },
 ): Promise<ActiveCodingAgentTurn> {
     const approvals = createInteractiveApprovalBroker(options);
-    const renderState: ProviderRenderState = { streamingText: false };
+    const renderState: ProviderRenderState = { streamingText: false, toolCount: 0, toolNames: [] };
     const { owner, mcpConnectionManager } = await createInteractiveRunOwner(options, approvals, renderState);
     let settled = false;
     const done = runOwnedCodingAgentTurn(options, owner, renderState, action)
@@ -262,6 +262,8 @@ function settleReceipt(
 type ProviderRenderState = {
     streamingText: boolean;
     finalMessage?: string;
+    toolCount: number;
+    toolNames: string[];
 };
 
 function renderProviderEnvelope(output: ChatOutput, state: ProviderRenderState, envelope: AgentEventEnvelope): void {
@@ -360,8 +362,17 @@ function interactiveGraphStreamSignal(
     workspaceRoot: string,
 ): (signal: AbgSignal) => Promise<void> {
     return async (signal) => {
+        if (signal.type === 'emit' && signal.event.type === 'llm.turn.started') {
+            output.setAgentStatus?.('Thinking...');
+            return;
+        }
+        if (signal.type === 'emit' && signal.event.type === 'llm.reasoning.delta') {
+            output.setAgentStatus?.('Thinking...');
+            return;
+        }
         const delta = readDeltaFromSignal(signal);
         if (delta !== undefined) {
+            output.clearAgentStatus?.();
             if (!state.streamingText) {
                 output.write('Assistant: ');
                 state.streamingText = true;
@@ -369,11 +380,14 @@ function interactiveGraphStreamSignal(
             output.write(delta);
             return;
         }
+        if (signal.type === 'emit' && signal.event.type === 'tool.started') {
+            const toolName = readStringField(signal.event.payload, 'toolName') ?? 'tool';
+            output.setAgentStatus?.(`Running ${toolName}...`);
+            return;
+        }
         const proposal = readToolCallProposal(signal);
         if (proposal !== undefined) {
-            // A tool proposal ends the assistant text stream (the model emits no more text after
-            // proposing tools within a single step); close it so the preview does not append to a
-            // half-written assistant line, matching the flat path's non-streaming preview render.
+            output.setAgentStatus?.(`Calling ${proposal.toolName}...`);
             if (state.streamingText) {
                 output.write('\n');
                 state.streamingText = false;
@@ -396,6 +410,15 @@ function renderInteractiveGraphDurableEvent(output: ChatOutput, state: ProviderR
         return;
     }
     if (emit.type === 'llm.turn.completed') {
+        output.clearAgentStatus?.();
+        if (state.toolCount > 0) {
+            const noun = state.toolCount === 1 ? 'tool' : 'tools';
+            const names = state.toolNames.slice(0, 5).join(', ');
+            const suffix = state.toolNames.length > 5 ? `, +${state.toolNames.length - 5} more` : '';
+            output.write(`\u2713 ${state.toolCount} ${noun} (${names}${suffix})\n`);
+            state.toolCount = 0;
+            state.toolNames = [];
+        }
         const text = readStringField(emit.payload, 'text') ?? '';
         if (state.streamingText) {
             output.write('\n');
@@ -409,10 +432,18 @@ function renderInteractiveGraphDurableEvent(output: ChatOutput, state: ProviderR
         return;
     }
     if (emit.type === 'tool.completed') {
+        state.toolCount += 1;
+        const name = readStringField(emit.payload, 'toolName') ?? 'tool';
+        state.toolNames = [...state.toolNames, name];
+        output.clearAgentStatus?.();
         renderGraphToolSettlement(output, emit.payload, 'completed');
         return;
     }
     if (emit.type === 'tool.failed') {
+        state.toolCount += 1;
+        const name = readStringField(emit.payload, 'toolName') ?? 'tool';
+        state.toolNames = [...state.toolNames, name];
+        output.clearAgentStatus?.();
         renderGraphToolSettlement(output, emit.payload, 'failed');
         return;
     }

@@ -15,5 +15,11 @@ export function createInkChatOutput(bridge: InkChatBridge): ChatOutput {
             bridge.emitOutput(text);
         },
         getOutput: () => bridge.getOutput(),
+        setAgentStatus: (text: string) => {
+            bridge.setAgentStatus(text);
+        },
+        clearAgentStatus: () => {
+            bridge.clearAgentStatus();
+        },
     };
 }

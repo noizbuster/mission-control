@@ -26,7 +26,7 @@
 
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { Box, type Key, render, Text, useInput } from 'ink';
-import { useSyncExternalStore } from 'react';
+import { useSyncExternalStore, useState, useEffect } from 'react';
 import { StatusBar } from '../components/StatusBar.js';
 import {
     createProviderPromptKeypressState,
@@ -60,6 +60,7 @@ type BridgeSnapshot = {
     readonly modelPickerChoices: readonly ModelChoice[];
     readonly modelPickerKeypress: ProviderPromptKeypressState;
     readonly generating: boolean;
+    readonly agentStatusText: string;
     readonly historyNavigation: { readonly position: number; readonly total: number } | null;
 };
 
@@ -70,6 +71,8 @@ export type InkChatBridge = {
     readonly getOutput: () => string;
     readonly showModelPicker: (choices: readonly ModelChoice[]) => Promise<ModelProviderSelection | undefined>;
     readonly setGenerating: (value: boolean) => void;
+    readonly setAgentStatus: (text: string) => void;
+    readonly clearAgentStatus: () => void;
     readonly unmount: () => void;
 };
 
@@ -95,6 +98,7 @@ type InkChatBridgeCore = {
     modelPickerActive: boolean;
     modelPickerResolve: ((selection: ModelProviderSelection | undefined) => void) | undefined;
     generating: boolean;
+    agentStatusText: string;
     history: ChatInputHistory;
 };
 
@@ -123,6 +127,7 @@ function publishSnapshot(core: InkChatBridgeCore): void {
         modelPickerChoices: core.modelPickerChoices,
         modelPickerKeypress: core.modelPickerKeypress,
         generating: core.generating,
+        agentStatusText: core.agentStatusText,
         historyNavigation,
     };
     for (const listener of core.listeners) {
@@ -250,6 +255,27 @@ function handleModelPickerInput(core: InkChatBridgeCore, input: string, key: Key
     publishSnapshot(core);
 }
 
+const SPINNER_FRAMES = ['\u280B', '\u2819', '\u2839', '\u2838', '\u283C', '\u2834', '\u2826', '\u2827', '\u2807', '\u280F'] as const;
+const SPINNER_INTERVAL_MS = 80;
+
+function AgentSpinner({ text }: { readonly text: string }): React.ReactElement {
+    const [frame, setFrame] = useState(0);
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setFrame((current) => (current + 1) % SPINNER_FRAMES.length);
+        }, SPINNER_INTERVAL_MS);
+        return () => {
+            clearInterval(timer);
+        };
+    }, []);
+    return (
+        <Box marginTop={1}>
+            <Text color="yellow">{SPINNER_FRAMES[frame]} </Text>
+            <Text dimColor>{text}</Text>
+        </Box>
+    );
+}
+
 function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     const snapshot = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
     useInput((input, key) => bridge.handleInput(input, key));
@@ -302,7 +328,9 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                 // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
                 <MessageBlock key={`msg-${block.kind}-${index}`} block={block} />
             ))}
-            {snapshot.generating ? (
+            {snapshot.agentStatusText.length > 0 ? (
+                <AgentSpinner text={snapshot.agentStatusText} />
+            ) : snapshot.generating ? (
                 <Box marginTop={1}>
                     <Text color="yellow">{'\u25CF Thinking...'}</Text>
                 </Box>
@@ -369,8 +397,9 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
             modelPickerActive: false,
             modelPickerChoices: [],
             modelPickerKeypress: createProviderPromptKeypressState(),
-            generating: false,
-            historyNavigation: null,
+        generating: false,
+        agentStatusText: '',
+        historyNavigation: null,
         },
         unmountFn: undefined,
         modelPickerChoices: [],
@@ -378,6 +407,7 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         modelPickerActive: false,
         modelPickerResolve: undefined,
         generating: false,
+        agentStatusText: '',
         history: createChatInputHistory(),
     };
 
@@ -437,11 +467,21 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         publishSnapshot(core);
     };
 
+    const setAgentStatus = (text: string): void => {
+        core.agentStatusText = text;
+        publishSnapshot(core);
+    };
+
+    const clearAgentStatus = (): void => {
+        core.agentStatusText = '';
+        publishSnapshot(core);
+    };
+
     const unmount = (): void => {
         core.unmountFn?.();
     };
 
-    return { waitForEvent, emitOutput, getOutput, showModelPicker, setGenerating, unmount };
+    return { waitForEvent, emitOutput, getOutput, showModelPicker, setGenerating, setAgentStatus, clearAgentStatus, unmount };
 }
 
 type ChatBlock = {

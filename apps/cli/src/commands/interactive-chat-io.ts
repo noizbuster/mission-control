@@ -43,6 +43,8 @@ export type ChatInput = {
 export type ChatOutput = {
     readonly write: (text: string) => void;
     readonly getOutput?: () => string;
+    readonly setAgentStatus?: (text: string) => void;
+    readonly clearAgentStatus?: () => void;
 };
 
 type TerminalChatInputStreams = {
