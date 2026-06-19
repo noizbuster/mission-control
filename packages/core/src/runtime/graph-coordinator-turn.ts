@@ -21,6 +21,8 @@ import type {
     ModelProviderSelection,
 } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
+import type { ProjectInstructionResource } from '../context/project-context-messages.js';
+import type { SystemPromptEnvironment } from '../context/system-prompt.js';
 import type { PricingTable } from '../behavior/budget/cost-ledger.js';
 import { type AbgGraphRunResult, runAbgGraph } from '../behavior/graph-runner.js';
 import type { AbgNodeRegistry } from '../behavior/node-registry.js';
@@ -76,6 +78,17 @@ export type GraphTurnRunnerWiring = {
      * a broker can return `[]` on the first run and the decision on a resumed run.
      */
     readonly readApprovalDecisions?: () => Promise<readonly AbgEmbeddedEvent[]>;
+    /**
+     * Forwarded to `AbgGraphRunnerInput.systemPromptEnv` so `LLMActor` includes a `# Environment`
+     * section in the system prompt. Built by the caller from process state.
+     */
+    readonly systemPromptEnv?: SystemPromptEnvironment;
+    /**
+     * Forwarded to `AbgGraphRunnerInput.projectInstructionResources` so `LLMActor` appends trusted
+     * AGENTS.md/CLAUDE.md instructions to the system prompt as reference data. The caller owns
+     * trust-aware discovery (see `loadProjectResources`).
+     */
+    readonly projectInstructionResources?: readonly ProjectInstructionResource[];
 };
 
 /**

@@ -7,6 +7,8 @@ import type {
     ModelProviderSelection,
 } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
+import type { ProjectInstructionResource } from '../context/project-context-messages.js';
+import type { SystemPromptEnvironment } from '../context/system-prompt.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import type { PricingTable } from './budget/cost-ledger.js';
 import { runBoundedAbgGraph } from './graph-coordinator.js';
@@ -81,6 +83,20 @@ export type AbgGraphRunnerInput = {
      * throughput is unaffected.
      */
     readonly onSignal?: (signal: AbgSignal) => void | Promise<void>;
+    /**
+     * Environment block threaded into `AbgNodeRunContext.systemPromptEnv` so `LLMActor` can include
+     * a `# Environment` section in the system prompt (cwd, workspaceRoot, git, platform, date).
+     * Without this the model has no workspace awareness. Built by the caller (CLI/desktop) from
+     * process state; the graph never reads process state itself.
+     */
+    readonly systemPromptEnv?: SystemPromptEnvironment;
+    /**
+     * Trusted project instruction resources (AGENTS.md / CLAUDE.md) threaded into
+     * `AbgNodeRunContext.projectInstructionResources` so `LLMActor` can append them to the system
+     * prompt as reference data. The graph never loads these itself; the caller owns trust-aware
+     * discovery (see `loadProjectResources`).
+     */
+    readonly projectInstructionResources?: readonly ProjectInstructionResource[];
 };
 
 export type AbgGraphRunResult = {

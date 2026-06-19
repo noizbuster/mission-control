@@ -10,6 +10,8 @@ import type {
     PermissionRequest,
 } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
+import type { ProjectInstructionResource } from './context/project-context-messages.js';
+import type { SystemPromptEnvironment } from './context/system-prompt.js';
 import { runRuntimeDemoTask } from './agent-runtime-demo.js';
 import type { AgentRuntimeOptions } from './agent-runtime-options.js';
 import { runRuntimeSkillInvocationTask, type SkillInvocationTaskInput } from './agent-runtime-skill.js';
@@ -55,6 +57,16 @@ export type RunGraphOptions = {
     readonly initialMessages?: readonly ModelMessage[];
     readonly abortSignal?: AbortSignal;
     readonly haltOnFailedToolSettlement?: boolean;
+    /**
+     * Forwarded to `AbgGraphRunnerInput.systemPromptEnv` so the LLMActor includes an environment
+     * block in the system prompt. Built by the caller from process state.
+     */
+    readonly systemPromptEnv?: SystemPromptEnvironment;
+    /**
+     * Forwarded to `AbgGraphRunnerInput.projectInstructionResources` so the LLMActor appends trusted
+     * AGENTS.md/CLAUDE.md instructions to the system prompt.
+     */
+    readonly projectInstructionResources?: readonly ProjectInstructionResource[];
 };
 
 export class AgentRuntime {
@@ -142,10 +154,14 @@ export class AgentRuntime {
             ...(options?.registry !== undefined ? { registry: options.registry } : {}),
             ...(options?.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
             ...(options?.toolRegistry !== undefined ? { toolRegistry: options.toolRegistry } : {}),
-            ...(options?.initialMessages !== undefined ? { initialMessages: options.initialMessages } : {}),
-            ...(options?.abortSignal !== undefined ? { abortSignal: options.abortSignal } : {}),
-            ...(options?.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
-        });
+        ...(options?.initialMessages !== undefined ? { initialMessages: options.initialMessages } : {}),
+        ...(options?.abortSignal !== undefined ? { abortSignal: options.abortSignal } : {}),
+        ...(options?.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
+        ...(options?.systemPromptEnv !== undefined ? { systemPromptEnv: options.systemPromptEnv } : {}),
+        ...(options?.projectInstructionResources !== undefined
+            ? { projectInstructionResources: options.projectInstructionResources }
+            : {}),
+    });
         for (const event of result.events) {
             this.emit(event);
         }

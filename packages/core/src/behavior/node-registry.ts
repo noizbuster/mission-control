@@ -1,4 +1,6 @@
 import type { AbgNodeModelOptions, AbgNodeSpec, AbgPolicySpec, AbgSignal, AgentEvent } from '@mission-control/protocol';
+import type { ProjectInstructionResource } from '../context/project-context-messages.js';
+import type { SystemPromptEnvironment } from '../context/system-prompt.js';
 import type { Blackboard } from '../memory/blackboard.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import type { CostLedger } from './budget/cost-ledger.js';
@@ -72,6 +74,20 @@ export type AbgNodeRunContext = {
      * proposes multiple tools in one step. Omitted on the non-interactive path (parallel batches).
      */
     readonly serializeToolExecution?: boolean;
+    /**
+     * Environment block for the coding-agent system prompt (cwd, workspaceRoot, git, platform, date,
+     * modelId). When present, `LLMActor` includes a `# Environment` section so the model knows where
+     * it is operating. Without this the model has no workspace awareness and tends to answer
+     * generically instead of acting on the codebase.
+     */
+    readonly systemPromptEnv?: SystemPromptEnvironment;
+    /**
+     * Trusted project instruction resources (AGENTS.md / CLAUDE.md) discovered + read by the caller
+     * (CLI/desktop). When present, `LLMActor` appends them to the system prompt as reference data
+     * (framed as untrusted context, never commands that override policy — see system-prompt.ts).
+     * The graph never loads these itself; the caller owns trust-aware discovery.
+     */
+    readonly projectInstructionResources?: readonly ProjectInstructionResource[];
 };
 
 export type AbgNodeRunner = (node: AbgNodeSpec, context: AbgNodeRunContext) => AsyncIterable<AbgSignal>;
