@@ -42,6 +42,7 @@ export {
 export {
     loadProjectContextMessages,
     type ProjectContextMessageOptions,
+    type ProjectInstructionResource,
     prependProjectContextMessages,
 } from './context/project-context-messages.js';
 export {
@@ -52,6 +53,14 @@ export {
     type ProjectResourceLoadInput,
     type ProjectResourceLoadResult,
 } from './context/project-resource-loader.js';
+export {
+    assembleSystemPrompt,
+    DEFAULT_CODING_AGENT_PERSONA,
+    type AssembleSystemPromptInput,
+    type SystemPromptEnvironment,
+    type SystemPromptSkill,
+    type SystemPromptToolSnippet,
+} from './context/system-prompt.js';
 export {
     hasPendingDesktopApprovals,
     prepareSessionCompaction,

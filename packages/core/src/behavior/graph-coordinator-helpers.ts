@@ -111,6 +111,10 @@ export function runContext(
         },
         ...(input.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
         ...(input.serializeToolExecution === true ? { serializeToolExecution: true } : {}),
+        ...(input.systemPromptEnv !== undefined ? { systemPromptEnv: input.systemPromptEnv } : {}),
+        ...(input.projectInstructionResources !== undefined
+            ? { projectInstructionResources: input.projectInstructionResources }
+            : {}),
     } satisfies {
         readonly graphId: string;
         readonly now: () => string;
@@ -128,6 +132,8 @@ export function runContext(
         readonly emitEvent: (event: AgentEvent) => void;
         readonly haltOnFailedToolSettlement?: boolean;
         readonly serializeToolExecution?: boolean;
+        readonly systemPromptEnv?: import('../context/system-prompt.js').SystemPromptEnvironment;
+        readonly projectInstructionResources?: readonly import('../context/project-context-messages.js').ProjectInstructionResource[];
     };
 }
 
