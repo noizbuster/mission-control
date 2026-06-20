@@ -10,6 +10,7 @@ import {
     type SdkModelResolver,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import type { AbgOverlayController } from './abg-overlay-controller.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { type ActiveCodingAgentTurn, startCodingAgentTurn } from './interactive-coding-agent.js';
 
@@ -34,6 +35,12 @@ export type PromptTurnContext = {
      * The interactive TUI wires this to the Ink question overlay.
      */
     readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
+    /**
+     * ABG overlay controller (Wave 2/todo 3). When present, it is threaded into the coding-agent
+     * turn so `wireAbgOverlay` can subscribe its signal/event observer. Created once per session
+     * by the interactive chat host and shared with the Ink bridge.
+     */
+    readonly abgOverlayController?: AbgOverlayController;
 };
 
 export async function startPromptTurn(
@@ -130,6 +137,7 @@ export async function startPromptTurn(
         ...(coding.engine !== undefined ? { engine: coding.engine } : {}),
         ...(coding.resolveSdkModel !== undefined ? { resolveSdkModel: coding.resolveSdkModel } : {}),
         ...(coding.requestUserQuestion !== undefined ? { requestUserQuestion: coding.requestUserQuestion } : {}),
+        ...(coding.abgOverlayController !== undefined ? { abgOverlayController: coding.abgOverlayController } : {}),
     });
 }
 

@@ -93,6 +93,7 @@ describe('HOTKEYS_CATEGORIES', () => {
         expect(keys).toContain('Ctrl+O');
         expect(keys).toContain('Ctrl+E');
         expect(keys).toContain('Ctrl+R');
+        expect(keys).toContain('Ctrl+G');
         expect(keys).toContain('Ctrl+V');
         expect(keys).toContain('PgUp');
         expect(keys).toContain('PgDn');

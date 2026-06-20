@@ -27,7 +27,9 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { Box, type Key, render, Text, useInput } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { AbgOverlay, type AbgOverlayTab } from '../components/AbgOverlay.js';
 import { StatusBar } from '../components/StatusBar.js';
+import type { AbgOverlayController } from './abg-overlay-controller.js';
 import {
     createProviderPromptKeypressState,
     createProviderPromptView,
@@ -154,6 +156,10 @@ type BridgeSnapshot = {
     readonly renameBuffer: string;
     readonly historyNavigation: { readonly position: number; readonly total: number } | null;
     readonly scrollOffset: number;
+    readonly abgOverlayActive: boolean;
+    readonly abgOverlayActiveTab: number;
+    readonly abgOverlayScrollOffset: number;
+    readonly abgOverlayLiveOutput: boolean;
 };
 
 /** Public surface consumed by the imperative chat loop. */
@@ -189,6 +195,7 @@ export type InkChatBridgeOptions = {
     readonly sessionID?: string;
     readonly workspaceRoot?: string;
     readonly initialHistoryEntries?: readonly string[];
+    readonly abgOverlayController?: AbgOverlayController;
 };
 
 export type InkChatBridgeCore = {
@@ -236,6 +243,11 @@ export type InkChatBridgeCore = {
     lastEscTimestamp: number | undefined;
     cjkCompositionBuffer: string;
     cjkCompositionTimer: ReturnType<typeof setTimeout> | undefined;
+    abgOverlayActive: boolean;
+    abgOverlayActiveTab: number;
+    abgOverlayScrollOffset: number;
+    abgOverlayLiveOutput: boolean;
+    abgOverlayController: AbgOverlayController | undefined;
 };
 
 /** Minimal props the React tree uses to talk to the bridge core. */
@@ -244,6 +256,7 @@ type ChatRootProps = {
         readonly subscribe: (listener: () => void) => () => void;
         readonly getSnapshot: () => BridgeSnapshot;
         readonly handleInput: (input: string, key: Key) => void;
+        readonly abgOverlayController?: AbgOverlayController;
     };
     readonly statusBarProps?: InkChatBridgeOptions;
 };
@@ -294,6 +307,10 @@ export function publishSnapshot(core: InkChatBridgeCore): void {
         renameBuffer: core.renameBuffer,
         historyNavigation,
         scrollOffset: core.scrollOffset,
+        abgOverlayActive: core.abgOverlayActive,
+        abgOverlayActiveTab: core.abgOverlayActiveTab,
+        abgOverlayScrollOffset: core.abgOverlayScrollOffset,
+        abgOverlayLiveOutput: core.abgOverlayLiveOutput,
     };
     for (const listener of core.listeners) {
         listener();
@@ -419,11 +436,15 @@ function applyFileAutocompleteCompletion(core: InkChatBridgeCore): boolean {
  * Build a fresh bridge core with default initial state. Exported so unit tests
  * can drive `handleInput` against the same initial state the runtime uses.
  */
-export function createInkChatBridgeCore(options?: { readonly workspaceRoot?: string; readonly initialHistoryEntries?: readonly string[] }): InkChatBridgeCore {
+export function createInkChatBridgeCore(options?: {
+    readonly workspaceRoot?: string;
+    readonly initialHistoryEntries?: readonly string[];
+}): InkChatBridgeCore {
     const workspaceRoot = options?.workspaceRoot ?? process.cwd();
-    const history = options?.initialHistoryEntries !== undefined
-        ? createChatInputHistoryFromEntries(options.initialHistoryEntries)
-        : createChatInputHistory();
+    const history =
+        options?.initialHistoryEntries !== undefined
+            ? createChatInputHistoryFromEntries(options.initialHistoryEntries)
+            : createChatInputHistory();
     return {
         inputBuffer: '',
         cursorPosition: 0,
@@ -466,6 +487,10 @@ export function createInkChatBridgeCore(options?: { readonly workspaceRoot?: str
             renameBuffer: '',
             historyNavigation: null,
             scrollOffset: 0,
+            abgOverlayActive: false,
+            abgOverlayActiveTab: 0,
+            abgOverlayScrollOffset: 0,
+            abgOverlayLiveOutput: false,
         },
         unmountFn: undefined,
         modelPickerChoices: [],
@@ -501,6 +526,11 @@ export function createInkChatBridgeCore(options?: { readonly workspaceRoot?: str
         lastEscTimestamp: undefined,
         cjkCompositionBuffer: '',
         cjkCompositionTimer: undefined,
+        abgOverlayActive: false,
+        abgOverlayActiveTab: 0,
+        abgOverlayScrollOffset: 0,
+        abgOverlayLiveOutput: false,
+        abgOverlayController: undefined,
     };
 }
 
@@ -755,9 +785,22 @@ export function handleInput(core: InkChatBridgeCore, input: string, key: Key): v
         handleRenameInput(core, input, key);
         return;
     }
+    if (key.ctrl && input === 'g') {
+        flushCjkBuffer(core);
+        core.abgOverlayActive = !core.abgOverlayActive;
+        if (!core.abgOverlayActive) {
+            core.abgOverlayController?.reset();
+        }
+        publishSnapshot(core);
+        return;
+    }
     const isCjkPrintable = input !== '' && !key.ctrl && !key.meta && isCjkChar(input);
     if (!isCjkPrintable) {
         flushCjkBuffer(core);
+    }
+    if (core.abgOverlayActive) {
+        handleAbgOverlayInput(core, input, key);
+        return;
     }
     if (key.escape || input === '\u001b') {
         handleEscKey(core);
@@ -1010,9 +1053,7 @@ function handleApprovalInput(core: InkChatBridgeCore, input: string, key: Key): 
  * submits the selected labels joined by newlines; Ctrl+C/Esc cancels.
  */
 function handleQuestionInput(core: InkChatBridgeCore, input: string, key: Key): void {
-    const totalEntries = core.questionMultiple
-        ? core.questionOptions.length
-        : core.questionOptions.length + 1;
+    const totalEntries = core.questionMultiple ? core.questionOptions.length : core.questionOptions.length + 1;
     if (core.questionCustomMode) {
         if (key.ctrl && input === 'c') {
             resolveQuestion(core, '');
@@ -1190,6 +1231,107 @@ function handleModelPickerInput(core: InkChatBridgeCore, input: string, key: Key
     }));
     core.modelPickerKeypress = reduceProviderPromptKeypress(core.modelPickerKeypress, rawInput, promptChoices);
     publishSnapshot(core);
+}
+
+const ABG_OVERLAY_TAB_COUNT = 7;
+
+/**
+ * NEVER calls enqueueEvent while active: the chat loop must stay paused (Metis). Unrecognized
+ * input falls through to `default: return` and is silently swallowed.
+ */
+function handleAbgOverlayInput(core: InkChatBridgeCore, input: string, key: Key): void {
+    const controller = core.abgOverlayController;
+
+    if ((key.ctrl && input === 'g') || key.escape || input === '\u001b') {
+        core.abgOverlayActive = false;
+        controller?.reset();
+        publishSnapshot(core);
+        return;
+    }
+
+    if (key.tab) {
+        const direction: 1 | -1 = key.shift ? -1 : 1;
+        core.abgOverlayActiveTab =
+            (core.abgOverlayActiveTab + direction + ABG_OVERLAY_TAB_COUNT) % ABG_OVERLAY_TAB_COUNT;
+        publishSnapshot(core);
+        return;
+    }
+
+    if (key.upArrow) {
+        core.abgOverlayScrollOffset += 1;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.downArrow) {
+        core.abgOverlayScrollOffset = Math.max(0, core.abgOverlayScrollOffset - 1);
+        publishSnapshot(core);
+        return;
+    }
+    if (key.pageUp) {
+        core.abgOverlayScrollOffset += SCROLL_PAGE_SIZE;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.pageDown) {
+        core.abgOverlayScrollOffset = Math.max(0, core.abgOverlayScrollOffset - SCROLL_PAGE_SIZE);
+        publishSnapshot(core);
+        return;
+    }
+    if (key.home) {
+        core.abgOverlayScrollOffset = SCROLL_TOP_OFFSET;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.end) {
+        core.abgOverlayScrollOffset = 0;
+        publishSnapshot(core);
+        return;
+    }
+
+    if (!key.ctrl && !key.meta) {
+        const selectTab = (index: number): void => {
+            core.abgOverlayActiveTab = index;
+            core.abgOverlayScrollOffset = 0;
+            publishSnapshot(core);
+        };
+        switch (input) {
+            case '1':
+                selectTab(0);
+                return;
+            case '2':
+                selectTab(1);
+                return;
+            case '3':
+                selectTab(2);
+                return;
+            case '4':
+                selectTab(3);
+                return;
+            case '5':
+                selectTab(4);
+                return;
+            case '6':
+                selectTab(5);
+                return;
+            case '7':
+                selectTab(6);
+                return;
+            case 'r':
+                controller?.flushNow();
+                publishSnapshot(core);
+                return;
+            case 't':
+                core.abgOverlayLiveOutput = !core.abgOverlayLiveOutput;
+                publishSnapshot(core);
+                return;
+            case 'c':
+                controller?.clearTimeline();
+                publishSnapshot(core);
+                return;
+            default:
+                return;
+        }
+    }
 }
 
 const SPINNER_FRAMES = [
@@ -1389,6 +1531,35 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
         );
     }
 
+    if (snapshot.abgOverlayActive) {
+        const ABG_OVERLAY_TABS: readonly AbgOverlayTab[] = [
+            'overview',
+            'graph',
+            'nodes',
+            'tools',
+            'timeline',
+            'approvals',
+            'cost-policy',
+        ];
+        const activeTab = ABG_OVERLAY_TABS[snapshot.abgOverlayActiveTab] ?? 'overview';
+        const store = bridge.abgOverlayController?.store;
+        if (store === undefined) {
+            return (
+                <Box flexDirection="column">
+                    <Text color="red">ABG overlay active but store not initialized</Text>
+                </Box>
+            );
+        }
+        return (
+            <AbgOverlay
+                store={store}
+                activeTab={activeTab}
+                scrollOffset={snapshot.abgOverlayScrollOffset}
+                modelLabel={`${statusBarProps?.providerID ?? 'unknown'}/${statusBarProps?.modelID ?? 'unknown'}`}
+            />
+        );
+    }
+
     const showSlashMenu = snapshot.inputBuffer.startsWith('/');
     const menuView = showSlashMenu
         ? createSlashCommandMenuView(snapshot.inputBuffer, snapshot.menuState, slashMenuMaxVisibleChoices)
@@ -1484,8 +1655,13 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
 export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBridge {
     const core = createInkChatBridgeCore({
         ...(options?.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
-        ...(options?.initialHistoryEntries !== undefined ? { initialHistoryEntries: options.initialHistoryEntries } : {}),
+        ...(options?.initialHistoryEntries !== undefined
+            ? { initialHistoryEntries: options.initialHistoryEntries }
+            : {}),
     });
+    if (options?.abgOverlayController !== undefined) {
+        core.abgOverlayController = options.abgOverlayController;
+    }
 
     const subscribe = (listener: () => void): (() => void) => {
         core.listeners.add(listener);
@@ -1500,6 +1676,7 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         subscribe,
         getSnapshot,
         handleInput: (input, key) => handleInput(core, input, key),
+        ...(core.abgOverlayController !== undefined ? { abgOverlayController: core.abgOverlayController } : {}),
     };
 
     const instance = render(

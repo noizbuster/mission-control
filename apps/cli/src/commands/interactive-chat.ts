@@ -11,6 +11,8 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { parseChatLine } from './chat-commands.js';
+import { createAbgOverlayController } from './abg-overlay-controller.js';
+import { createAbgOverlayStore } from './abg-overlay-state.js';
 import { createInkChatBridge, type InkChatBridgeOptions } from './ink-chat-bridge.js';
 import { createInkChatInput } from './ink-chat-input.js';
 import { createInkChatOutput } from './ink-chat-output.js';
@@ -86,6 +88,7 @@ export async function runInteractiveChatSession(
         sessionDisplayName?: string;
     };
     const initialHistoryEntries = useInk ? await loadInputHistoryEntries() : [];
+    const abgOverlayController = useInk ? createAbgOverlayController(createAbgOverlayStore()) : undefined;
     const bridgeOptions: SessionBridgeOptions | undefined = useInk
         ? {
               providerID: options.modelProviderSelection.providerID,
@@ -95,6 +98,7 @@ export async function runInteractiveChatSession(
                   : {}),
               ...(options.sessionId !== undefined ? { sessionID: options.sessionId } : {}),
               ...(initialHistoryEntries.length > 0 ? { initialHistoryEntries } : {}),
+              ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
           }
         : undefined;
     const inkBridge = useInk && bridgeOptions !== undefined ? createInkChatBridge(bridgeOptions) : undefined;
@@ -302,6 +306,7 @@ export async function runInteractiveChatSession(
                         ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
                         ...(options.engine !== undefined ? { engine: options.engine } : {}),
                         ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
+                        ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
                         ...(inkBridge !== undefined
                             ? {
                                   requestUserQuestion: (request: AskUserQuestionRequest) =>
@@ -356,6 +361,7 @@ export async function runInteractiveChatSession(
     } finally {
         unregisterProcessCleanup?.();
         activeTurn?.interrupt('force');
+        abgOverlayController?.reset();
         chatInput.close();
     }
 

@@ -108,6 +108,7 @@ describe('KEYBOARD_SHORTCUTS', () => {
         expect(keys).toContain('Home');
         expect(keys).toContain('End');
         expect(keys).toContain('Esc Esc');
+        expect(keys).toContain('Ctrl+G');
     });
 });
 

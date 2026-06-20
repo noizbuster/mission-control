@@ -60,6 +60,7 @@ export const HOTKEYS_CATEGORIES: readonly HotkeyCategory[] = [
             { key: 'Ctrl+O', action: 'Toggle tool output expand/collapse' },
             { key: 'Ctrl+E', action: 'Open external editor ($VISUAL/$EDITOR)' },
             { key: 'Ctrl+R', action: 'Rename session (inline overlay)' },
+            { key: 'Ctrl+G', action: 'Toggle ABG monitoring overlay' },
         ],
     },
     {

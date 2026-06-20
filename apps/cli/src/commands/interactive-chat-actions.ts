@@ -342,6 +342,7 @@ async function runResumeAction(
             ...(coding.engine !== undefined ? { engine: coding.engine } : {}),
             ...(coding.resolveSdkModel !== undefined ? { resolveSdkModel: coding.resolveSdkModel } : {}),
             ...(coding.requestUserQuestion !== undefined ? { requestUserQuestion: coding.requestUserQuestion } : {}),
+            ...(coding.abgOverlayController !== undefined ? { abgOverlayController: coding.abgOverlayController } : {}),
         }),
     );
 }

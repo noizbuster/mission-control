@@ -36,6 +36,7 @@ export const KEYBOARD_SHORTCUTS: readonly KeyboardShortcut[] = [
     { key: 'Esc Esc', action: 'Interrupt active run (configurable via MCTRL_DOUBLE_ESC_ACTION)' },
     { key: 'Ctrl+D', action: 'Exit on empty input / forward-delete on non-empty' },
     { key: 'Ctrl+Z', action: 'Suspend to background (POSIX)' },
+    { key: 'Ctrl+G', action: 'Toggle ABG monitoring overlay' },
 ] as const;
 
 /**

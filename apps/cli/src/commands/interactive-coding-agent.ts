@@ -25,6 +25,8 @@ import type {
     ModelProviderSelection,
     ToolCall,
 } from '@mission-control/protocol';
+import type { AbgOverlayController } from './abg-overlay-controller.js';
+import { type AbgOverlayState, projectAbgSignal, type RunState, readRefreshMsFromEnv } from './abg-overlay-state.js';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
 import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';
@@ -71,6 +73,14 @@ export type CodingAgentTurnOptions = {
      * (no host surface to ask the user). The interactive TUI supplies the Ink question overlay.
      */
     readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
+    /**
+     * Optional ABG overlay controller (Wave 2). When present, its plane-A `observer` is composed
+     * into the interactive graph signal tap (single-slot `onSignal`, Metis 1.1), its
+     * `onDurableEvent` settles `runState` on run-terminal events, and `dispose()` is invoked when the
+     * turn settles so the coalescing flush timer is cleared. Injected by the host (todo 3 bridge)
+     * — NOT threaded through the InkChatBridge public surface (Metis 3.1).
+     */
+    readonly abgOverlayController?: AbgOverlayController;
 };
 
 export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Promise<ActiveCodingAgentTurn> {
@@ -103,7 +113,11 @@ async function startOwnedCodingAgentTurn(
 ): Promise<ActiveCodingAgentTurn> {
     const approvals = createInteractiveApprovalBroker(options);
     const renderState: ProviderRenderState = { streamingText: false, toolCount: 0, toolNames: [] };
-    const { owner, mcpConnectionManager } = await createInteractiveRunOwner(options, approvals, renderState);
+    const { owner, mcpConnectionManager, overlayWiring } = await createInteractiveRunOwner(
+        options,
+        approvals,
+        renderState,
+    );
     let settled = false;
     const done = runOwnedCodingAgentTurn(options, owner, renderState, action)
         .catch((error: unknown) => {
@@ -113,6 +127,7 @@ async function startOwnedCodingAgentTurn(
         .finally(() => {
             settled = true;
             void mcpConnectionManager.disconnectAll();
+            overlayWiring?.dispose();
         });
 
     return {
@@ -130,7 +145,11 @@ async function createInteractiveRunOwner(
     options: Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string },
     approvals: ReturnType<typeof createInteractiveApprovalBroker>,
     renderState: ProviderRenderState,
-): Promise<{ readonly owner: SessionRunOwner; readonly mcpConnectionManager: McpConnectionManager }> {
+): Promise<{
+    readonly owner: SessionRunOwner;
+    readonly mcpConnectionManager: McpConnectionManager;
+    readonly overlayWiring: AbgOverlayWiring | undefined;
+}> {
     // Resolve the SDK model BEFORE building the tool registry so the `task` subagent tool can
     // capture it in its spawn closure (the child graph needs the same model resolver as the parent).
     const resolveSdkModel = await resolveInteractiveSdkModel(options);
@@ -154,7 +173,11 @@ async function createInteractiveRunOwner(
     // The graph engine is the only engine. Build the graph turn runner unconditionally; the owner
     // drives the ABG coding-agent graph through the SAME SessionRunOwner + toolRegistry the prior
     // flat loop used, so approval/blocking semantics are preserved.
-    const onSignal = interactiveGraphStreamSignal(options.output, renderState, options.workspaceRoot);
+    const overlayWiring =
+        options.abgOverlayController !== undefined ? wireAbgOverlay(options.abgOverlayController) : undefined;
+    const extraObservers: ReadonlyArray<(signal: AbgSignal) => void> =
+        overlayWiring !== undefined ? [overlayWiring.observer] : [];
+    const onSignal = interactiveGraphStreamSignal(options.output, renderState, options.workspaceRoot, extraObservers);
     // System-prompt context: the model needs to know WHERE it is (cwd/workspace/git) and what
     // project-local instructions (AGENTS.md/CLAUDE.md) apply, otherwise it answers generically.
     // Built per turn — date is fresh, AGENTS.md may have changed since the prior turn.
@@ -179,10 +202,11 @@ async function createInteractiveRunOwner(
     });
 
     // Graph events surface ONLY through onDurableEvent (no provider envelopes fire on the graph).
-    // Render them to the TUI; observe for recording.
+    // Render them to the TUI; observe for recording; settle the overlay's runState on run-terminal events.
     const onDurableEventHandler = (event: AgentEvent) => {
         renderInteractiveGraphDurableEvent(options.output, renderState, event);
         options.observeStoredEvent?.(event);
+        overlayWiring?.onDurableEvent(event);
     };
 
     const owner = new SessionRunOwner({
@@ -203,7 +227,7 @@ async function createInteractiveRunOwner(
             renderInteractiveToolSettlement(options.output, settlement),
     });
 
-    return { owner, mcpConnectionManager };
+    return { owner, mcpConnectionManager, overlayWiring };
 }
 
 async function workspaceHasTrustedBash(workspaceRoot: string): Promise<boolean> {
@@ -369,45 +393,60 @@ async function resolveInteractiveSdkModel(
  * (rendered via `renderInteractiveGraphDurableEvent`) closes the stream with a newline and records the
  * final message.
  */
-function interactiveGraphStreamSignal(
+export function interactiveGraphStreamSignal(
     output: ChatOutput,
     state: ProviderRenderState,
     workspaceRoot: string,
+    extraObservers: ReadonlyArray<(signal: AbgSignal) => void> = [],
 ): (signal: AbgSignal) => Promise<void> {
     return async (signal) => {
-        if (signal.type === 'emit' && signal.event.type === 'llm.turn.started') {
-            output.setAgentStatus?.('Thinking...');
-            return;
-        }
-        if (signal.type === 'emit' && signal.event.type === 'llm.reasoning.delta') {
-            if (output.isShowThinking?.() !== false) {
+        try {
+            if (signal.type === 'emit' && signal.event.type === 'llm.turn.started') {
                 output.setAgentStatus?.('Thinking...');
+                return;
             }
-            return;
-        }
-        const delta = readDeltaFromSignal(signal);
-        if (delta !== undefined) {
-            output.clearAgentStatus?.();
-            if (!state.streamingText) {
-                output.write('Assistant: ');
-                state.streamingText = true;
+            if (signal.type === 'emit' && signal.event.type === 'llm.reasoning.delta') {
+                if (output.isShowThinking?.() !== false) {
+                    output.setAgentStatus?.('Thinking...');
+                }
+                return;
             }
-            output.write(delta);
-            return;
-        }
-        if (signal.type === 'emit' && signal.event.type === 'tool.started') {
-            const toolName = readStringField(signal.event.payload, 'toolName') ?? 'tool';
-            output.setAgentStatus?.(`Running ${toolName}...`);
-            return;
-        }
-        const proposal = readToolCallProposal(signal);
-        if (proposal !== undefined) {
-            output.setAgentStatus?.(`Calling ${proposal.toolName}...`);
-            if (state.streamingText) {
-                output.write('\n');
-                state.streamingText = false;
+            const delta = readDeltaFromSignal(signal);
+            if (delta !== undefined) {
+                output.clearAgentStatus?.();
+                if (!state.streamingText) {
+                    output.write('Assistant: ');
+                    state.streamingText = true;
+                }
+                output.write(delta);
+                return;
             }
-            await renderToolPreview(proposal, output, workspaceRoot);
+            if (signal.type === 'emit' && signal.event.type === 'tool.started') {
+                const toolName = readStringField(signal.event.payload, 'toolName') ?? 'tool';
+                output.setAgentStatus?.(`Running ${toolName}...`);
+                return;
+            }
+            const proposal = readToolCallProposal(signal);
+            if (proposal !== undefined) {
+                output.setAgentStatus?.(`Calling ${proposal.toolName}...`);
+                if (state.streamingText) {
+                    output.write('\n');
+                    state.streamingText = false;
+                }
+                await renderToolPreview(proposal, output, workspaceRoot);
+            }
+        } finally {
+            // Observers MUST stay sync `(signal) => void`: an async wrap adds a microtask hop per signal
+            // and breaks the 33ms coalescing guarantee. Non-throwing (Metis 4.1): errors logged +
+            // swallowed so a faulty observer cannot reject the awaited onSignal tap. Runs in `finally`
+            // so early returns in the render body above never skip the fan-out.
+            for (const observer of extraObservers) {
+                try {
+                    observer(signal);
+                } catch (err) {
+                    process.stderr.write(`[abg-overlay] observer error: ${String(err)}\n`);
+                }
+            }
         }
     };
 }
@@ -645,4 +684,72 @@ function assertNeverReceipt(value: never): never {
 
 function isRecord(value: unknown): value is { readonly kind?: unknown; readonly status?: unknown } {
     return typeof value === 'object' && value !== null;
+}
+
+export type AbgOverlayWiring = {
+    readonly observer: (signal: AbgSignal) => void;
+    readonly onDurableEvent: (event: AgentEvent) => void;
+    readonly dispose: () => void;
+};
+
+function runSettleState(eventType: string): RunState | undefined {
+    switch (eventType) {
+        case 'run.completed':
+            return 'completed';
+        case 'run.interrupted':
+            return 'interrupted';
+        case 'run.failed':
+            return 'failed';
+        case 'run.blocked':
+            return 'blocked_on_approval';
+        default:
+            return undefined;
+    }
+}
+
+export function wireAbgOverlay(controller: AbgOverlayController): AbgOverlayWiring {
+    const store = controller.store;
+    let pendingSnapshot: AbgOverlayState = store.getSnapshot();
+    let pending: Partial<AbgOverlayState> = {};
+    let dirty = false;
+    const refreshMs = readRefreshMsFromEnv();
+
+    const flush = (): void => {
+        if (!dirty) return;
+        const patch = pending;
+        pending = {};
+        dirty = false;
+        store.update((draft) => {
+            Object.assign(draft, patch);
+        });
+        pendingSnapshot = store.getSnapshot();
+    };
+
+    const timer = setInterval(flush, refreshMs);
+
+    const observer = (signal: AbgSignal): void => {
+        const patch = projectAbgSignal(pendingSnapshot, signal);
+        pendingSnapshot = { ...pendingSnapshot, ...patch };
+        pending = { ...pending, ...patch };
+        dirty = true;
+    };
+
+    const onDurableEvent = (event: AgentEvent): void => {
+        const settleState = runSettleState(event.type);
+        if (settleState === undefined) return;
+        store.update((draft) => {
+            draft.runState = settleState;
+            draft.lastSettledAt = event.timestamp;
+            if (event.type === 'run.interrupted') {
+                draft.graphStatus = 'cancelled';
+            }
+        });
+    };
+
+    const dispose = (): void => {
+        clearInterval(timer);
+        flush();
+    };
+
+    return { observer, onDurableEvent, dispose };
 }
