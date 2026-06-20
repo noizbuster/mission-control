@@ -30,11 +30,15 @@ describe('interactive compact command', () => {
         await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
     });
 
-    it('parses compact slash commands and shows compact help', () => {
+    it('parses compact slash commands with optional focus instructions', () => {
         expect(parseChatLine('/compact')).toEqual({ kind: 'compact' });
-        expect(parseChatLine('/compact now')).toEqual({
-            kind: 'invalid',
-            message: '/compact does not accept arguments',
+        expect(parseChatLine('/compact focus on API changes')).toEqual({
+            kind: 'compact',
+            instructions: 'focus on API changes',
+        });
+        expect(parseChatLine('/compact   multiple   spaces  ')).toEqual({
+            kind: 'compact',
+            instructions: 'multiple   spaces',
         });
         expect(createHelpText()).toContain('/compact');
     });
@@ -71,6 +75,41 @@ describe('interactive compact command', () => {
         expect(JSON.stringify(requests[0]?.messages)).not.toContain('third result');
         expect((await readReplay(dataDir, sessionId)).projection.sessionTree.compactionBoundaries).toEqual([
             expect.objectContaining({ summary: 'summarized session context' }),
+        ]);
+    });
+
+    it('threads custom focus instructions into the compaction summary prompt', async () => {
+        const dataDir = await tempRoot(roots, 'mctrl-compact-data-');
+        const sessionId = 'session_compact_instructions';
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await seedCompactionSession(dataDir, sessionId);
+        const requests: ProviderTurnRequest[] = [];
+
+        const output = await runAgent(parseArgs(['--session', sessionId]), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: '/compact focus on API changes' },
+                { type: 'line', value: '/exit' },
+            ]),
+            chatOutput: createBufferedChatOutput().output,
+            provider: captureSummaryProvider(requests, 'summarized with api focus'),
+        });
+
+        expect(output).toContain(`Compacted session ${sessionId}`);
+        expect(requests[0]?.messages).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    role: 'system',
+                    content: expect.stringContaining('Focus on: focus on API changes'),
+                }),
+                expect.objectContaining({
+                    role: 'system',
+                    content: expect.stringContaining('Summarize the current session'),
+                }),
+            ]),
+        );
+        expect((await readReplay(dataDir, sessionId)).projection.sessionTree.compactionBoundaries).toEqual([
+            expect.objectContaining({ summary: 'summarized with api focus' }),
         ]);
     });
 

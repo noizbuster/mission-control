@@ -19,6 +19,7 @@ type CompactionTurnOptions = {
     readonly output: ChatOutput;
     readonly workspaceRoot?: string;
     readonly observeStoredEvent?: (event: AgentEvent) => void;
+    readonly instructions?: string;
 };
 
 export function startCompactionTurn(options: CompactionTurnOptions): ActiveCodingAgentTurn {
@@ -79,7 +80,7 @@ async function generateCompactionSummary(
     signal: AbortSignal,
 ): Promise<string> {
     const runner = new ProviderTurnRunner({ provider: options.provider, retryLimit: 0 });
-    const requestMessages = buildCompactionRequestMessages(visibleMessages);
+    const requestMessages = buildCompactionRequestMessages(visibleMessages, options.instructions);
     const result = await runner.runTurn({
         sessionId: options.sessionId,
         turnId: `compact_${options.sessionId}`,
@@ -99,7 +100,10 @@ async function generateCompactionSummary(
     return result.message.content.trim();
 }
 
-function buildCompactionRequestMessages(visibleMessages: readonly AgentMessage[]): readonly AgentMessage[] {
+export function buildCompactionRequestMessages(
+    visibleMessages: readonly AgentMessage[],
+    instructions?: string,
+): readonly AgentMessage[] {
     const safeHistory: AgentMessage[] = [];
     for (const message of visibleMessages) {
         if (message.role === 'tool' || message.role === 'system') {
@@ -113,11 +117,16 @@ function buildCompactionRequestMessages(visibleMessages: readonly AgentMessage[]
             safeHistory.push(message);
         }
     }
+    const baseSystemPrompt =
+        'Summarize the current session for future continuation. Preserve goals, decisions, changed files, tests, and pending work. Omit credentials, tokens, secrets, auth-file contents, and shell environment values.';
+    const systemContent =
+        instructions !== undefined && instructions.length > 0
+            ? `${baseSystemPrompt}\n\nFocus on: ${instructions}`
+            : baseSystemPrompt;
     return [
         {
             role: 'system',
-            content:
-                'Summarize the current session for future continuation. Preserve goals, decisions, changed files, tests, and pending work. Omit credentials, tokens, secrets, auth-file contents, and shell environment values.',
+            content: systemContent,
         },
         ...safeHistory,
         {

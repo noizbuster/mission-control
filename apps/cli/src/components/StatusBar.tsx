@@ -5,6 +5,7 @@ export type StatusBarProps = {
     readonly modelID: string;
     readonly variantID?: string;
     readonly sessionID?: string;
+    readonly sessionDisplayName?: string;
 };
 
 function formatStatus(props: StatusBarProps): string {
@@ -12,7 +13,13 @@ function formatStatus(props: StatusBarProps): string {
     if (props.variantID !== undefined) {
         parts.push(`variant: ${props.variantID}`);
     }
-    if (props.sessionID !== undefined) {
+    if (props.sessionDisplayName !== undefined) {
+        if (props.sessionID !== undefined) {
+            parts.push(`session: ${props.sessionDisplayName} (${props.sessionID})`);
+        } else {
+            parts.push(`session: ${props.sessionDisplayName}`);
+        }
+    } else if (props.sessionID !== undefined) {
         parts.push(`session: ${props.sessionID}`);
     }
     return parts.join(' | ');

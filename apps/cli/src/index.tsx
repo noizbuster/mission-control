@@ -45,7 +45,7 @@ export function createHelpText(): string {
         '  /branch <message-id> <prompt>  Continue from a parent message in a new branch',
         '  /fork <entry-id> [session-id]  Fork a durable session from a tree entry',
         '  /clone [session-id]    Clone the current durable session into a new session',
-        '  /compact               Summarize older session history into a durable compaction event',
+        '  /compact [instructions]  Summarize older session history (optional focus text)',
         '  /resume                Resume a blocked run waiting on approval',
         '  /trust                 Trust this workspace for project-local resources',
         '  /trust status          Show this workspace trust decision',

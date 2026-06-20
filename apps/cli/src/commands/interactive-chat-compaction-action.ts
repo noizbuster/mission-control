@@ -10,6 +10,7 @@ export function runCompactAction(
     chatOutput: ChatOutput,
     currentModelProviderSelection: ModelProviderSelection,
     coding: CodingActionContext,
+    instructions?: string,
 ): ChatActionResult {
     if (coding.activeTurn !== undefined) {
         chatOutput.write('Interrupt the active run before compacting the session\n');
@@ -29,6 +30,7 @@ export function runCompactAction(
             output: chatOutput,
             ...(coding.workspaceRoot !== undefined ? { workspaceRoot: coding.workspaceRoot } : {}),
             ...(coding.observeStoredEvent !== undefined ? { observeStoredEvent: coding.observeStoredEvent } : {}),
+            ...(instructions !== undefined ? { instructions } : {}),
         }),
     );
 }
