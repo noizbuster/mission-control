@@ -1,5 +1,6 @@
 import {
     type AgentRuntime,
+    type AskUserQuestionRequest,
     type CommandExecutionRequest,
     type CommandExecutionResult,
     discoverSkills,
@@ -14,6 +15,7 @@ import { createInkChatBridge, type InkChatBridgeOptions } from './ink-chat-bridg
 import { createInkChatInput } from './ink-chat-input.js';
 import { createInkChatOutput } from './ink-chat-output.js';
 import { createInkModelSelector } from './ink-model-selector.js';
+import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
 import type { ChatActionResult } from './interactive-chat-action-result.js';
 import { runChatAction } from './interactive-chat-actions.js';
 import {
@@ -37,7 +39,6 @@ import { createTerminalModelSelector } from './interactive-chat-model-selector.j
 import { createSessionNavigationController } from './interactive-chat-session-navigation.js';
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack.js';
-import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
@@ -303,8 +304,28 @@ export async function runInteractiveChatSession(
                         ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
                         ...(inkBridge !== undefined
                             ? {
-                                  requestUserQuestion: (request: { readonly question: string; readonly options: readonly string[] }) =>
-                                      inkBridge.showQuestion(request.question, request.options),
+                                  requestUserQuestion: (request: AskUserQuestionRequest) =>
+                                      inkBridge.showQuestion(
+                                          request.question,
+                                          request.options.map((option) =>
+                                              typeof option === 'string'
+                                                  ? option
+                                                  : {
+                                                        label: option.label,
+                                                        ...(option.description !== undefined
+                                                            ? { description: option.description }
+                                                            : {}),
+                                                    },
+                                          ),
+                                          {
+                                              ...(request.header !== undefined
+                                                  ? { header: request.header }
+                                                  : {}),
+                                              ...(request.multiple !== undefined
+                                                  ? { multiple: request.multiple }
+                                                  : {}),
+                                          },
+                                      ),
                               }
                             : {}),
                     },

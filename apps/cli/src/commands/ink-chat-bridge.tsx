@@ -95,6 +95,33 @@ export function resetTerminalTitle(): boolean {
     return true;
 }
 
+/**
+ * Labeled option for the `ask_user` overlay. `description` renders as dim
+ * subtext beneath the label. Mirrors `AskUserOption` without crossing the
+ * package boundary for a TUI-only value.
+ */
+export type QuestionOption = {
+    readonly label: string;
+    readonly description?: string;
+};
+
+/**
+ * Normalize legacy `string[]` or labeled `{ label, description? }` options.
+ * The conditional `description` spread honors `exactOptionalPropertyTypes`
+ * by never emitting an explicit `undefined`.
+ */
+export function normalizeQuestionOptions(options: readonly (string | QuestionOption)[]): readonly QuestionOption[] {
+    return options.map((option) => {
+        if (typeof option === 'string') {
+            return { label: option };
+        }
+        return {
+            label: option.label,
+            ...(option.description !== undefined ? { description: option.description } : {}),
+        };
+    });
+}
+
 type BridgeSnapshot = {
     readonly inputBuffer: string;
     readonly cursorPosition: number;
@@ -114,8 +141,11 @@ type BridgeSnapshot = {
     readonly approvalSelectedIndex: number;
     readonly questionActive: boolean;
     readonly questionText: string;
-    readonly questionOptions: readonly string[];
+    readonly questionHeader: string;
+    readonly questionOptions: readonly QuestionOption[];
     readonly questionSelectedIndex: number;
+    readonly questionMultiple: boolean;
+    readonly questionSelectedIndices: ReadonlySet<number>;
     readonly questionCustomMode: boolean;
     readonly questionCustomBuffer: string;
     readonly showThinking: boolean;
@@ -143,7 +173,11 @@ export type InkChatBridge = {
     readonly isToolOutputExpanded: () => boolean;
     readonly showApproval: (toolName: string, action: string) => void;
     readonly hideApproval: () => void;
-    readonly showQuestion: (question: string, options: readonly string[]) => Promise<string>;
+    readonly showQuestion: (
+        question: string,
+        options: readonly (string | QuestionOption)[],
+        metadata?: { readonly header?: string; readonly multiple?: boolean },
+    ) => Promise<string>;
     readonly unmount: () => void;
 };
 
@@ -184,8 +218,11 @@ export type InkChatBridgeCore = {
     approvalSelectedIndex: number;
     questionActive: boolean;
     questionText: string;
-    questionOptions: readonly string[];
+    questionHeader: string;
+    questionOptions: readonly QuestionOption[];
     questionSelectedIndex: number;
+    questionMultiple: boolean;
+    questionSelectedIndices: Set<number>;
     questionCustomMode: boolean;
     questionCustomBuffer: string;
     questionResolve: ((answer: string) => void) | undefined;
@@ -221,7 +258,7 @@ const WHITESPACE_PATTERN = /\s/u;
 const DOUBLE_ESC_WINDOW_MS = 500;
 const DOUBLE_ESC_ACTION_ENV = 'MCTRL_DOUBLE_ESC_ACTION';
 
-function publishSnapshot(core: InkChatBridgeCore): void {
+export function publishSnapshot(core: InkChatBridgeCore): void {
     const historyNavigation = isNavigatingChatInputHistory(core.history)
         ? { position: core.history.cursor + 1, total: core.history.entries.length }
         : null;
@@ -244,8 +281,11 @@ function publishSnapshot(core: InkChatBridgeCore): void {
         approvalSelectedIndex: core.approvalSelectedIndex,
         questionActive: core.questionActive,
         questionText: core.questionText,
+        questionHeader: core.questionHeader,
         questionOptions: core.questionOptions,
         questionSelectedIndex: core.questionSelectedIndex,
+        questionMultiple: core.questionMultiple,
+        questionSelectedIndices: core.questionSelectedIndices,
         questionCustomMode: core.questionCustomMode,
         questionCustomBuffer: core.questionCustomBuffer,
         showThinking: core.showThinking,
@@ -413,8 +453,11 @@ export function createInkChatBridgeCore(options?: { readonly workspaceRoot?: str
             approvalSelectedIndex: 0,
             questionActive: false,
             questionText: '',
+            questionHeader: '',
             questionOptions: [],
             questionSelectedIndex: 0,
+            questionMultiple: false,
+            questionSelectedIndices: new Set<number>(),
             questionCustomMode: false,
             questionCustomBuffer: '',
             showThinking: true,
@@ -440,8 +483,11 @@ export function createInkChatBridgeCore(options?: { readonly workspaceRoot?: str
         approvalSelectedIndex: 0,
         questionActive: false,
         questionText: '',
+        questionHeader: '',
         questionOptions: [],
         questionSelectedIndex: 0,
+        questionMultiple: false,
+        questionSelectedIndices: new Set<number>(),
         questionCustomMode: false,
         questionCustomBuffer: '',
         questionResolve: undefined,
@@ -952,18 +998,21 @@ function handleApprovalInput(core: InkChatBridgeCore, input: string, key: Key): 
 }
 
 /**
- * Handle keystrokes while the `ask_user` question overlay is active. Two sub-modes:
- *  - selection mode: Up/Down navigates the provided options plus a trailing
- *    "Type custom answer..." entry; Enter selects (or enters custom mode);
- *    Ctrl+C/Esc cancels (resolves with an empty answer).
- *  - custom mode: printable chars build `questionCustomBuffer`; Backspace deletes;
- *    Enter submits the typed answer; Esc returns to selection; Ctrl+C cancels.
+ * Handle keystrokes while the `ask_user` question overlay is active.
  *
- * The last entry in the selection list is always the virtual "custom" entry, so the
- * total entry count is `questionOptions.length + 1`.
+ * Single-select mode: Up/Down navigates the provided options plus a trailing
+ * "Type custom answer..." entry; Enter selects (or enters custom mode);
+ * Ctrl+C/Esc cancels (resolves with an empty answer). The trailing custom
+ * entry makes the total entry count `questionOptions.length + 1`.
+ *
+ * Multi-select mode: Up/Down moves the cursor among the options only (no
+ * custom entry); Space toggles membership in `questionSelectedIndices`; Enter
+ * submits the selected labels joined by newlines; Ctrl+C/Esc cancels.
  */
 function handleQuestionInput(core: InkChatBridgeCore, input: string, key: Key): void {
-    const totalEntries = core.questionOptions.length + 1;
+    const totalEntries = core.questionMultiple
+        ? core.questionOptions.length
+        : core.questionOptions.length + 1;
     if (core.questionCustomMode) {
         if (key.ctrl && input === 'c') {
             resolveQuestion(core, '');
@@ -1006,6 +1055,30 @@ function handleQuestionInput(core: InkChatBridgeCore, input: string, key: Key): 
         publishSnapshot(core);
         return;
     }
+    if (core.questionMultiple) {
+        if (input === ' ' && !key.ctrl && !key.meta && !key.return && !key.escape) {
+            const index = core.questionSelectedIndex;
+            if (index < core.questionOptions.length) {
+                const next = new Set(core.questionSelectedIndices);
+                if (next.has(index)) {
+                    next.delete(index);
+                } else {
+                    next.add(index);
+                }
+                core.questionSelectedIndices = next;
+                publishSnapshot(core);
+            }
+            return;
+        }
+        if (key.return || input.includes('\r') || input.includes('\n')) {
+            resolveQuestion(core, collectMultiSelectAnswer(core));
+            return;
+        }
+        if ((key.ctrl && input === 'c') || key.escape) {
+            resolveQuestion(core, '');
+        }
+        return;
+    }
     if (key.return || input.includes('\r') || input.includes('\n')) {
         if (core.questionSelectedIndex >= core.questionOptions.length) {
             core.questionCustomMode = true;
@@ -1014,7 +1087,7 @@ function handleQuestionInput(core: InkChatBridgeCore, input: string, key: Key): 
             return;
         }
         const selected = core.questionOptions[core.questionSelectedIndex];
-        resolveQuestion(core, selected ?? '');
+        resolveQuestion(core, selected?.label ?? '');
         return;
     }
     if ((key.ctrl && input === 'c') || key.escape) {
@@ -1022,10 +1095,26 @@ function handleQuestionInput(core: InkChatBridgeCore, input: string, key: Key): 
     }
 }
 
+function collectMultiSelectAnswer(core: InkChatBridgeCore): string {
+    const labels: string[] = [];
+    for (let index = 0; index < core.questionOptions.length; index++) {
+        if (core.questionSelectedIndices.has(index)) {
+            const option = core.questionOptions[index];
+            if (option !== undefined) {
+                labels.push(option.label);
+            }
+        }
+    }
+    return labels.join('\n');
+}
+
 function resolveQuestion(core: InkChatBridgeCore, answer: string): void {
     core.questionActive = false;
     core.questionCustomMode = false;
     core.questionCustomBuffer = '';
+    core.questionMultiple = false;
+    core.questionSelectedIndices = new Set<number>();
+    core.questionHeader = '';
     const resolve = core.questionResolve;
     core.questionResolve = undefined;
     publishSnapshot(core);
@@ -1182,6 +1271,7 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                     <Text bold color="magenta">
                         {'Question'}
                     </Text>
+                    {snapshot.questionHeader.length > 0 ? <Text bold>{snapshot.questionHeader}</Text> : null}
                     <Text>{snapshot.questionText}</Text>
                     {snapshot.questionCustomMode ? (
                         <>
@@ -1199,26 +1289,42 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                         <>
                             <Box flexDirection="column" marginTop={1}>
                                 {snapshot.questionOptions.map((option, index) => {
-                                    const isSelected = index === snapshot.questionSelectedIndex;
+                                    const isCursor = index === snapshot.questionSelectedIndex;
+                                    const prefix = snapshot.questionMultiple
+                                        ? `${snapshot.questionSelectedIndices.has(index) ? '[x] ' : '[ ] '}`
+                                        : '';
                                     return (
-                                        <Text key={`${index}-${option}`} {...(isSelected ? { backgroundColor: 'blue' } : {})}>
-                                            {isSelected ? '> ' : '  '}
-                                            {option}
-                                        </Text>
+                                        // biome-ignore lint/suspicious/noArrayIndexKey: question options are positional within a single overlay render
+                                        <Box key={`q-opt-${index}-${option.label}`} flexDirection="column">
+                                            <Text {...(isCursor ? { backgroundColor: 'blue' } : {})}>
+                                                {isCursor ? '> ' : '  '}
+                                                {prefix}
+                                                {option.label}
+                                            </Text>
+                                            {option.description !== undefined ? (
+                                                <Text dimColor>{`    ${option.description}`}</Text>
+                                            ) : null}
+                                        </Box>
                                     );
                                 })}
-                                {(() => {
-                                    const customIndex = snapshot.questionOptions.length;
-                                    const isSelected = customIndex === snapshot.questionSelectedIndex;
-                                    return (
-                                        <Text {...(isSelected ? { backgroundColor: 'blue' } : {})}>
-                                            {isSelected ? '> ' : '  '}
-                                            <Text dimColor>Type custom answer...</Text>
-                                        </Text>
-                                    );
-                                })()}
+                                {snapshot.questionMultiple
+                                    ? null
+                                    : (() => {
+                                          const customIndex = snapshot.questionOptions.length;
+                                          const isSelected = customIndex === snapshot.questionSelectedIndex;
+                                          return (
+                                              <Text {...(isSelected ? { backgroundColor: 'blue' } : {})}>
+                                                  {isSelected ? '> ' : '  '}
+                                                  <Text dimColor>Type custom answer...</Text>
+                                              </Text>
+                                          );
+                                      })()}
                             </Box>
-                            <Text dimColor>Up/Down to navigate, Enter to select, Esc to cancel</Text>
+                            <Text dimColor>
+                                {snapshot.questionMultiple
+                                    ? 'Up/Down to navigate, Space to toggle, Enter to submit, Esc to cancel'
+                                    : 'Up/Down to navigate, Enter to select, Esc to cancel'}
+                            </Text>
                         </>
                     )}
                 </Box>
@@ -1475,11 +1581,18 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         publishSnapshot(core);
     };
 
-    const showQuestion = (question: string, options: readonly string[]): Promise<string> => {
+    const showQuestion = (
+        question: string,
+        options: readonly (string | QuestionOption)[],
+        metadata?: { readonly header?: string; readonly multiple?: boolean },
+    ): Promise<string> => {
         core.questionActive = true;
         core.questionText = question;
-        core.questionOptions = options;
+        core.questionHeader = metadata?.header ?? '';
+        core.questionOptions = normalizeQuestionOptions(options);
         core.questionSelectedIndex = 0;
+        core.questionMultiple = metadata?.multiple ?? false;
+        core.questionSelectedIndices = new Set<number>();
         core.questionCustomMode = false;
         core.questionCustomBuffer = '';
         publishSnapshot(core);

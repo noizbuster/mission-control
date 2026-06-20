@@ -1,6 +1,8 @@
 import {
     type AskUserInput,
     type AskUserOutput,
+    type AskUserQuestion,
+    type AskUserQuestionRequest,
     type AskUserToolOptions,
     askUserInputSchema,
     askUserOutputSchema,
@@ -15,19 +17,46 @@ export { askUserInputSchema, askUserOutputSchema, askUserParametersJsonSchema } 
 /**
  * `ask_user` tool — interactive question surface for the model.
  *
- * When the model needs a decision, clarification, or user input it cannot resolve with the
- * other tools, it calls `ask_user`. The tool delegates to a `requestUserQuestion` callback
- * (supplied by the host) that resolves with the user's answer — either a selected option or
- * a custom-typed string. The resolved answer is returned to the model as the tool result.
+ * Two input shapes are supported:
+ * 1. Single-question (legacy): `{ question, options? }`. Backward compatible.
+ * 2. Multi-question: `{ question, questions: [...] }`. Each entry is posed
+ *    sequentially to the host callback; the labeled responses are joined into
+ *    a single `answer` string so the model can correlate each answer with the
+ *    prompt that produced it.
  *
- * Non-interactive hosts (no TUI) supply a callback that resolves with an empty string so the
- * tool degrades gracefully instead of hanging.
+ * Non-interactive hosts supply a callback that resolves with an empty string
+ * so the tool degrades gracefully instead of hanging.
  */
 export async function registerAskUserTool(
     registry: ToolRegistry,
     options: AskUserToolOptions,
 ): Promise<ToolAdvertisement> {
     return registry.register(createAskUserToolRegistration(options));
+}
+
+/**
+ * Build a callback request from a multi-question entry. The `&&`-guarded
+ * spreads add `header`/`multiple` only when they are actually present, so the
+ * resulting object honours `exactOptionalPropertyTypes` (no explicit
+ * `undefined` values sneak through).
+ */
+function buildQuestionRequest(question: AskUserQuestion): AskUserQuestionRequest {
+    return {
+        question: question.question,
+        options: question.options ?? [],
+        ...(question.header !== undefined && { header: question.header }),
+        ...(question.multiple !== undefined && { multiple: question.multiple }),
+    };
+}
+
+/**
+ * Format one multi-question response with a label the model can correlate
+ * with the original prompt. Prefers the optional `header`; falls back to the
+ * question text so every answer is identifiable inside the joined output.
+ */
+function formatLabeledAnswer(question: AskUserQuestion, answer: string): string {
+    const label = question.header ?? question.question;
+    return `${label}: ${answer}`;
 }
 
 export function createAskUserToolRegistration(
@@ -48,12 +77,27 @@ export function createAskUserToolRegistration(
             'Provide clear options when possible; the user may also type a custom answer. ' +
             'Do not use ask_user for information you can obtain yourself by reading files or running commands.',
         execute: async (input) => {
+            // Multi-question mode: `questions` takes precedence over the legacy
+            // `options` field. Sequential invocation preserves order and lets
+            // hosts render one prompt at a time.
+            if (input.questions !== undefined) {
+                const answers: string[] = [];
+                for (const question of input.questions) {
+                    const response = await options.requestUserQuestion(buildQuestionRequest(question));
+                    answers.push(formatLabeledAnswer(question, response));
+                }
+                return { answer: answers.join('\n') };
+            }
             const answer = await options.requestUserQuestion({
                 question: input.question,
                 options: input.options,
             });
             return { answer };
         },
+        // The execute layer already emits a labeled, newline-joined string for
+        // multi-question responses, so the model-facing output passes through
+        // unchanged. Formatting lives upstream because the output schema carries
+        // a single `answer` field and no question context to label from here.
         toModelOutput: (output) => output.answer,
     };
 }

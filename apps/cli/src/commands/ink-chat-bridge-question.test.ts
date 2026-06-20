@@ -1,6 +1,12 @@
 import type { Key } from 'ink';
 import { describe, expect, it, vi } from 'vitest';
-import { createInkChatBridgeCore, handleInput, type InkChatBridgeCore } from './ink-chat-bridge.js';
+import {
+    createInkChatBridgeCore,
+    handleInput,
+    type InkChatBridgeCore,
+    normalizeQuestionOptions,
+    publishSnapshot,
+} from './ink-chat-bridge.js';
 
 function makeKey(overrides: Partial<Key> = {}): Key {
     return {
@@ -38,11 +44,15 @@ function openQuestion(core: InkChatBridgeCore, question: string, options: readon
     const resolve = vi.fn();
     core.questionActive = true;
     core.questionText = question;
-    core.questionOptions = options;
+    core.questionHeader = '';
+    core.questionOptions = normalizeQuestionOptions(options);
     core.questionSelectedIndex = 0;
+    core.questionMultiple = false;
+    core.questionSelectedIndices = new Set<number>();
     core.questionCustomMode = false;
     core.questionCustomBuffer = '';
     core.questionResolve = resolve;
+    publishSnapshot(core);
     return resolve;
 }
 
@@ -57,7 +67,7 @@ describe('ink chat bridge ask_user question overlay', () => {
 
         expect(core.questionActive).toBe(true);
         expect(core.questionText).toBe('Pick one');
-        expect(core.questionOptions).toEqual(['A', 'B']);
+        expect(core.questionOptions).toEqual([{ label: 'A' }, { label: 'B' }]);
         expect(core.questionSelectedIndex).toBe(0);
         expect(core.questionCustomMode).toBe(false);
         expect(core.questionCustomBuffer).toBe('');
