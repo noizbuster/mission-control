@@ -82,7 +82,7 @@ export function setTerminalTitle(title: string): boolean {
     if (!shouldManageTerminalTitle()) {
         return false;
     }
-    process.stdout.write(`${TERMINAL_TITLE_SET_PREFIX}${title}${TERMINAL_TITLE_SET_SUFFIX}`);
+    process.stderr.write(`${TERMINAL_TITLE_SET_PREFIX}${title}${TERMINAL_TITLE_SET_SUFFIX}`);
     return true;
 }
 
@@ -90,7 +90,7 @@ export function resetTerminalTitle(): boolean {
     if (!shouldManageTerminalTitle()) {
         return false;
     }
-    process.stdout.write(TERMINAL_TITLE_RESET);
+    process.stderr.write(TERMINAL_TITLE_RESET);
     return true;
 }
 

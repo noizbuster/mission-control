@@ -21,7 +21,7 @@ describe('setTerminalTitle', () => {
         originalEnv = process.env[ENV_KEY];
         delete process.env[ENV_KEY];
         setTTY(true);
-        writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     });
 
     afterEach(() => {
@@ -84,7 +84,7 @@ describe('resetTerminalTitle', () => {
         originalEnv = process.env[ENV_KEY];
         delete process.env[ENV_KEY];
         setTTY(true);
-        writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     });
 
     afterEach(() => {
@@ -139,7 +139,7 @@ describe('terminal title lifecycle (bridge creation then unmount)', () => {
         originalEnv = process.env[ENV_KEY];
         delete process.env[ENV_KEY];
         setTTY(true);
-        writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     });
 
     afterEach(() => {
