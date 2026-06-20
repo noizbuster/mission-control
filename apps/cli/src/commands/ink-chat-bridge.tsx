@@ -70,13 +70,13 @@ import { join } from 'node:path';
  * Terminal title via OSC 2 (`\x1b]2;<title>\x07`, BEL terminator).
  * Gated on `isTTY` (no escapes to pipes) and `MCTRL_DISABLE_TERMINAL_TITLE !== '1'`.
  */
-const TERMINAL_TITLE_DISABLE_ENV = 'MCTRL_DISABLE_TERMINAL_TITLE';
+const TERMINAL_TITLE_ENABLE_ENV = 'MCTRL_ENABLE_TERMINAL_TITLE';
 const TERMINAL_TITLE_SET_PREFIX = '\x1b]2;';
 const TERMINAL_TITLE_SET_SUFFIX = '\x07';
 const TERMINAL_TITLE_RESET = '\x1b]2;\x07';
 
 function shouldManageTerminalTitle(): boolean {
-    return process.env[TERMINAL_TITLE_DISABLE_ENV] !== '1' && process.stdout.isTTY === true;
+    return process.env[TERMINAL_TITLE_ENABLE_ENV] === '1' && process.stdout.isTTY === true;
 }
 
 export function setTerminalTitle(title: string): boolean {

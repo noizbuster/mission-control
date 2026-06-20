@@ -24,6 +24,8 @@ export const askUserOptionSchema = z
     })
     .strict();
 
+export const askUserLegacyOptionSchema = z.union([z.string().min(1).max(500), askUserOptionSchema]);
+
 export const askUserQuestionSchema = z
     .object({
         question: z.string().min(1).max(4_000),
@@ -36,7 +38,7 @@ export const askUserQuestionSchema = z
 export const askUserInputSchema = z
     .object({
         question: z.string().min(1).max(4_000),
-        options: z.array(z.string().min(1).max(500)).max(50).default([]),
+        options: z.array(askUserLegacyOptionSchema).max(50).default([]),
         questions: z.array(askUserQuestionSchema).max(50).optional(),
     })
     .strict();
@@ -62,7 +64,7 @@ export type AskUserQuestion = {
 
 export type AskUserInput = {
     readonly question: string;
-    readonly options: readonly string[];
+    readonly options: readonly (string | AskUserOption)[];
     readonly questions?: readonly AskUserQuestion[] | undefined;
 };
 
@@ -77,7 +79,7 @@ export type AskUserOutput = {
  */
 export type AskUserQuestionRequest = {
     readonly question: string;
-    readonly options: readonly string[] | readonly AskUserOption[];
+    readonly options: readonly (string | AskUserOption)[];
     readonly header?: string;
     readonly multiple?: boolean;
 };
@@ -100,10 +102,23 @@ export function askUserParametersJsonSchema(): Readonly<Record<string, unknown>>
             },
             options: {
                 type: 'array',
-                items: { type: 'string' },
+                items: {
+                    oneOf: [
+                        { type: 'string' },
+                        {
+                            type: 'object',
+                            properties: {
+                                label: { type: 'string', description: 'Display text for the option.' },
+                                description: { type: 'string', description: 'Optional explanation.' },
+                            },
+                            required: ['label'],
+                            additionalProperties: false,
+                        },
+                    ],
+                },
                 description:
-                    'Legacy single-question options. The user may also type a custom answer. ' +
-                    'Ignored when `questions` is provided.',
+                    'Selectable options. Each item can be a plain string or an object with label + description. ' +
+                    'The user may also type a custom answer.',
             },
             questions: {
                 type: 'array',

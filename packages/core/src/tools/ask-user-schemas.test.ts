@@ -319,7 +319,12 @@ describe('ask_user schemas', () => {
     });
 
     describe('askUserParametersJsonSchema', () => {
-        type OptionSchemaView = { readonly type: string; readonly items?: { readonly type: string } };
+        type OptionSchemaView = {
+            readonly type: string;
+            readonly items?: {
+                readonly oneOf?: readonly { readonly type: string }[];
+            };
+        };
         type QuestionOptionView = {
             readonly items: {
                 readonly properties: {
@@ -362,11 +367,12 @@ describe('ask_user schemas', () => {
             expect(schema.additionalProperties).toBe(false);
         });
 
-        it('exposes legacy options as an array of strings', () => {
+        it('exposes legacy options as an array accepting strings and labeled option objects', () => {
             const options = schemaView().properties.options;
 
             expect(options.type).toBe('array');
-            expect(options.items?.type).toBe('string');
+            expect(options.items?.oneOf?.[0]?.type).toBe('string');
+            expect(options.items?.oneOf?.[1]?.type).toBe('object');
         });
 
         it('exposes questions as an array with labeled options and multiple flag', () => {
