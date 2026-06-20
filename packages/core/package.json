@@ -29,9 +29,10 @@
     "@mission-control/config": "workspace:*",
     "@mission-control/protocol": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "ai": "^6.0.205",
-    "yaml": "^2.4.2",
-    "zod": "^4.1.13"
+        "ai": "^6.0.205",
+        "diff": "^9.0.0",
+        "yaml": "^2.4.2",
+        "zod": "^4.1.13"
   },
   "devDependencies": {
     "@ai-sdk/provider": "^3.0.10"
