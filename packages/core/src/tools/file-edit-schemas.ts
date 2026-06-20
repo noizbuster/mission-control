@@ -10,6 +10,7 @@ export const fileEditInputSchema = z
         newText: z.string(),
         occurrence: z.number().int().positive().optional(),
         replaceAll: z.boolean().optional(),
+        matchStrategy: z.enum(['exact', 'fuzzy']).optional(),
     })
     .strict()
     .superRefine((value, context) => {
@@ -79,6 +80,12 @@ export function fileEditParametersJsonSchema(): Readonly<Record<string, unknown>
             replaceAll: {
                 type: 'boolean',
                 description: 'Replace every exact match. Mutually exclusive with occurrence.',
+            },
+            matchStrategy: {
+                type: 'string',
+                enum: ['exact', 'fuzzy'],
+                description:
+                    "Matching strategy. Omit for exact-first then fuzzy fallback (default). 'exact' disables the fuzzy fallback entirely for strict matching. 'fuzzy' matches the default exact-first fallback behavior.",
             },
         },
         required: ['path', 'oldText', 'newText'],

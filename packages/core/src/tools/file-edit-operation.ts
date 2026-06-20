@@ -1,4 +1,5 @@
 import type { DiffFile, DiffLine } from '@mission-control/protocol';
+import { type FuzzyReplaceResult, replace as fuzzyReplace } from './file-edit-fuzzy.js';
 import type { FileEditInput } from './file-edit-schemas.js';
 import { filePatchFailure } from './file-patch-errors.js';
 
@@ -16,6 +17,10 @@ export function prepareExactEdit(
     originalContent: string,
 ): PreparedExactEdit {
     const matches = findExactMatches(originalContent, input.oldText);
+    // occurrence pins a specific exact match index, so the fuzzy fallback is meaningless when set.
+    if (matches.length === 0 && input.occurrence === undefined && input.matchStrategy !== 'exact') {
+        return applyFuzzyFallback(input, relativePath, originalContent);
+    }
     const selectedMatches = selectMatches(matches, input, relativePath);
     const updatedContent = replaceMatches(originalContent, input.oldText, input.newText, selectedMatches);
     return {
@@ -23,6 +28,54 @@ export function prepareExactEdit(
         occurrencesReplaced: selectedMatches.length,
         diffFiles: [createDiffFile(relativePath, originalContent, updatedContent, selectedMatches, input)],
     };
+}
+
+function applyFuzzyFallback(input: FileEditInput, relativePath: string, originalContent: string): PreparedExactEdit {
+    const fuzzy = fuzzyReplace(originalContent, input.oldText, input.newText, input.replaceAll === true);
+    if (fuzzy.status === 'applied') {
+        return materializeAppliedFallback(fuzzy, input, relativePath, originalContent);
+    }
+    throwForFuzzyFailure(fuzzy, relativePath);
+}
+
+function materializeAppliedFallback(
+    fuzzy: Extract<FuzzyReplaceResult, { readonly status: 'applied' }>,
+    input: FileEditInput,
+    relativePath: string,
+    originalContent: string,
+): PreparedExactEdit {
+    // Re-derive ranges from matchedText so replace + diff stay consistent with fuzzy's result.
+    const ranges = findExactMatches(originalContent, fuzzy.matchedText);
+    const fuzzyInput: FileEditInput = { ...input, oldText: fuzzy.matchedText };
+    const selectedMatches = selectMatches(ranges, fuzzyInput, relativePath);
+    const updatedContent = replaceMatches(originalContent, fuzzy.matchedText, input.newText, selectedMatches);
+    return {
+        updatedContent,
+        occurrencesReplaced: selectedMatches.length,
+        diffFiles: [createDiffFile(relativePath, originalContent, updatedContent, selectedMatches, fuzzyInput)],
+    };
+}
+
+/** Maps a non-applied fuzzy result to its file.edit failure; exported to test the defensive disproportionate branch. */
+export function throwForFuzzyFailure(
+    fuzzy: Exclude<FuzzyReplaceResult, { readonly status: 'applied' }>,
+    relativePath: string,
+): never {
+    switch (fuzzy.status) {
+        case 'not_found':
+            throw filePatchFailure('edit_not_found', `text not found: ${relativePath}`);
+        case 'not_unique':
+            throw filePatchFailure(
+                'edit_not_unique',
+                `multiple fuzzy matches found in ${relativePath}; specify occurrence or replaceAll`,
+            );
+        case 'disproportionate':
+            throw filePatchFailure('edit_not_found', `disproportionate fuzzy match rejected in ${relativePath}`);
+        case 'identical_input':
+        case 'empty_old':
+            // Schema rejects these (oldText min(1), oldText !== newText); guard against contract drift.
+            throw filePatchFailure('edit_not_found', `text not found: ${relativePath}`);
+    }
 }
 
 function findExactMatches(content: string, oldText: string): readonly MatchRange[] {
