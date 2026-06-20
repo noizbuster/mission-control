@@ -341,6 +341,7 @@ async function runResumeAction(
             ...(coding.commandExecutor !== undefined ? { commandExecutor: coding.commandExecutor } : {}),
             ...(coding.engine !== undefined ? { engine: coding.engine } : {}),
             ...(coding.resolveSdkModel !== undefined ? { resolveSdkModel: coding.resolveSdkModel } : {}),
+            ...(coding.requestUserQuestion !== undefined ? { requestUserQuestion: coding.requestUserQuestion } : {}),
         }),
     );
 }

@@ -1,5 +1,6 @@
 import {
     type AgentRuntime,
+    type AskUserQuestionRequest,
     type CommandExecutionRequest,
     type CommandExecutionResult,
     type JsonlSessionEventStore,
@@ -28,6 +29,11 @@ export type PromptTurnContext = {
      */
     readonly engine?: 'graph';
     readonly resolveSdkModel?: SdkModelResolver;
+    /**
+     * `ask_user` tool callback. When omitted, the `ask_user` tool is not registered for the turn.
+     * The interactive TUI wires this to the Ink question overlay.
+     */
+    readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
 };
 
 export async function startPromptTurn(
@@ -123,6 +129,7 @@ export async function startPromptTurn(
         ...(coding.commandExecutor !== undefined ? { commandExecutor: coding.commandExecutor } : {}),
         ...(coding.engine !== undefined ? { engine: coding.engine } : {}),
         ...(coding.resolveSdkModel !== undefined ? { resolveSdkModel: coding.resolveSdkModel } : {}),
+        ...(coding.requestUserQuestion !== undefined ? { requestUserQuestion: coding.requestUserQuestion } : {}),
     });
 }
 

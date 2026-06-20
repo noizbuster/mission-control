@@ -1,4 +1,5 @@
 import {
+    type AskUserQuestionRequest,
     type CommandExecutionRequest,
     type CommandExecutionResult,
     createLspToolRegistration,
@@ -7,6 +8,7 @@ import {
     discoverSkills,
     type LspClient,
     type McpConnectionManager,
+    registerAskUserTool,
     registerBashRunTool,
     registerCommandRunTool,
     registerFileEditTool,
@@ -55,6 +57,12 @@ export type InteractiveToolOptions = {
      * the model. A real stdio JSON-RPC transport (tsserver/rust-analyzer) is deferred.
      */
     readonly lspClient?: LspClient;
+    /**
+     * `ask_user` tool callback: resolves with the user's answer to a model-posed question. When
+     * omitted, the `ask_user` tool is not registered (no host surface to ask the user). The
+     * interactive TUI wires this to the Ink question overlay.
+     */
+    readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
 };
 
 export async function createInteractiveToolRegistry(
@@ -81,6 +89,9 @@ export async function createInteractiveToolRegistry(
         workspaceRoot: options.workspaceRoot,
         requestPermission: approvals.requestPermission,
     });
+    if (options.requestUserQuestion !== undefined) {
+        await registerAskUserTool(registry, { requestUserQuestion: options.requestUserQuestion });
+    }
     await registerFileEditTool(registry, {
         workspaceRoot: options.workspaceRoot,
         requestPermission: approvals.requestPermission,

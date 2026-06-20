@@ -1,3 +1,13 @@
+export {
+    type AskUserInput,
+    type AskUserOutput,
+    type AskUserQuestionRequest,
+    type AskUserToolOptions,
+    askUserInputSchema,
+    askUserOutputSchema,
+    createAskUserToolRegistration,
+    registerAskUserTool,
+} from './ask-user-tool.js';
 export { type BashRunToolOptions, createBashRunToolRegistration, registerBashRunTool } from './bash-run.js';
 export {
     type CommandExecutionRequest,

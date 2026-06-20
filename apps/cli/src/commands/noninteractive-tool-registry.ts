@@ -7,6 +7,7 @@ import {
     discoverSkills,
     type LspClient,
     McpConnectionManager,
+    registerAskUserTool,
     registerBashRunTool,
     registerCommandRunTool,
     registerFileEditTool,
@@ -78,6 +79,9 @@ export async function createNonInteractiveToolRegistry(
         workspaceRoot: options.workspaceRoot,
         requestPermission: options.requestPermission,
     });
+    // Non-interactive runs have no TUI to ask the user, so ask_user resolves with an empty
+    // answer (the documented non-TTY degradation) instead of hanging.
+    await registerAskUserTool(registry, { requestUserQuestion: () => Promise.resolve('') });
     await registerFileEditTool(registry, {
         workspaceRoot: options.workspaceRoot,
         requestPermission: options.requestPermission,

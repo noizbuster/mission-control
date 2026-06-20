@@ -1,4 +1,5 @@
 import {
+    type AskUserQuestionRequest,
     type CommandExecutionRequest,
     type CommandExecutionResult,
     createCodingAgentNodeRegistry,
@@ -65,6 +66,11 @@ export type CodingAgentTurnOptions = {
      * undefined — the tool stays unadvertised (a real stdio transport is deferred).
      */
     readonly lspClient?: LspClient;
+    /**
+     * `ask_user` tool callback. When omitted, the `ask_user` tool is not registered for the turn
+     * (no host surface to ask the user). The interactive TUI supplies the Ink question overlay.
+     */
+    readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
 };
 
 export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Promise<ActiveCodingAgentTurn> {
@@ -138,6 +144,7 @@ async function createInteractiveRunOwner(
         enableTrustedBash: await workspaceHasTrustedBash(options.workspaceRoot),
         ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
         ...(options.lspClient !== undefined ? { lspClient: options.lspClient } : {}),
+        ...(options.requestUserQuestion !== undefined ? { requestUserQuestion: options.requestUserQuestion } : {}),
     };
     const { registry: toolRegistry, mcpConnectionManager } = await createInteractiveToolRegistry(
         toolOptions,

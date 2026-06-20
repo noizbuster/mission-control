@@ -301,6 +301,12 @@ export async function runInteractiveChatSession(
                         ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
                         ...(options.engine !== undefined ? { engine: options.engine } : {}),
                         ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
+                        ...(inkBridge !== undefined
+                            ? {
+                                  requestUserQuestion: (request: { readonly question: string; readonly options: readonly string[] }) =>
+                                      inkBridge.showQuestion(request.question, request.options),
+                              }
+                            : {}),
                     },
                 );
             } catch (error) {

@@ -2,6 +2,14 @@ export type { AgentRuntimeOptions, RunGraphOptions } from './agent-runtime.js';
 export { AgentRuntime } from './agent-runtime.js';
 export { SubAgentRegistry } from './agents/registry.js';
 export type { SubAgent, SubAgentRunInput, SubAgentRunOutput } from './agents/sub-agent.js';
+export {
+    type AskUserInput,
+    type AskUserOutput,
+    type AskUserQuestionRequest,
+    type AskUserToolOptions,
+    createAskUserToolRegistration,
+    registerAskUserTool,
+} from './tools/ask-user-tool.js';
 export type { ApprovalTerminalState, ApprovalUpdateInput, PermissionDecisionResolver } from './approval-gate.js';
 export { PermissionGate, PermissionGateError } from './approval-gate.js';
 export type { ActionGraph, ActionGraphEdge, ActionGraphNode } from './behavior/action-graph.js';

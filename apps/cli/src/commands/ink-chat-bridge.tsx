@@ -112,6 +112,12 @@ type BridgeSnapshot = {
     readonly approvalToolName: string;
     readonly approvalAction: string;
     readonly approvalSelectedIndex: number;
+    readonly questionActive: boolean;
+    readonly questionText: string;
+    readonly questionOptions: readonly string[];
+    readonly questionSelectedIndex: number;
+    readonly questionCustomMode: boolean;
+    readonly questionCustomBuffer: string;
     readonly showThinking: boolean;
     readonly toolOutputExpanded: boolean;
     readonly renameModeActive: boolean;
@@ -137,6 +143,7 @@ export type InkChatBridge = {
     readonly isToolOutputExpanded: () => boolean;
     readonly showApproval: (toolName: string, action: string) => void;
     readonly hideApproval: () => void;
+    readonly showQuestion: (question: string, options: readonly string[]) => Promise<string>;
     readonly unmount: () => void;
 };
 
@@ -175,6 +182,13 @@ export type InkChatBridgeCore = {
     approvalToolName: string;
     approvalAction: string;
     approvalSelectedIndex: number;
+    questionActive: boolean;
+    questionText: string;
+    questionOptions: readonly string[];
+    questionSelectedIndex: number;
+    questionCustomMode: boolean;
+    questionCustomBuffer: string;
+    questionResolve: ((answer: string) => void) | undefined;
     showThinking: boolean;
     toolOutputExpanded: boolean;
     renameModeActive: boolean;
@@ -228,6 +242,12 @@ function publishSnapshot(core: InkChatBridgeCore): void {
         approvalToolName: core.approvalToolName,
         approvalAction: core.approvalAction,
         approvalSelectedIndex: core.approvalSelectedIndex,
+        questionActive: core.questionActive,
+        questionText: core.questionText,
+        questionOptions: core.questionOptions,
+        questionSelectedIndex: core.questionSelectedIndex,
+        questionCustomMode: core.questionCustomMode,
+        questionCustomBuffer: core.questionCustomBuffer,
         showThinking: core.showThinking,
         toolOutputExpanded: core.toolOutputExpanded,
         renameModeActive: core.renameModeActive,
@@ -391,6 +411,12 @@ export function createInkChatBridgeCore(options?: { readonly workspaceRoot?: str
             approvalToolName: '',
             approvalAction: '',
             approvalSelectedIndex: 0,
+            questionActive: false,
+            questionText: '',
+            questionOptions: [],
+            questionSelectedIndex: 0,
+            questionCustomMode: false,
+            questionCustomBuffer: '',
             showThinking: true,
             toolOutputExpanded: true,
             renameModeActive: false,
@@ -412,6 +438,13 @@ export function createInkChatBridgeCore(options?: { readonly workspaceRoot?: str
         approvalToolName: '',
         approvalAction: '',
         approvalSelectedIndex: 0,
+        questionActive: false,
+        questionText: '',
+        questionOptions: [],
+        questionSelectedIndex: 0,
+        questionCustomMode: false,
+        questionCustomBuffer: '',
+        questionResolve: undefined,
         showThinking: true,
         toolOutputExpanded: true,
         renameModeActive: false,
@@ -664,6 +697,10 @@ export function handleInput(core: InkChatBridgeCore, input: string, key: Key): v
         handleApprovalInput(core, input, key);
         return;
     }
+    if (core.questionActive) {
+        handleQuestionInput(core, input, key);
+        return;
+    }
     if (core.modelPickerActive) {
         handleModelPickerInput(core, input, key);
         return;
@@ -914,6 +951,87 @@ function handleApprovalInput(core: InkChatBridgeCore, input: string, key: Key): 
     }
 }
 
+/**
+ * Handle keystrokes while the `ask_user` question overlay is active. Two sub-modes:
+ *  - selection mode: Up/Down navigates the provided options plus a trailing
+ *    "Type custom answer..." entry; Enter selects (or enters custom mode);
+ *    Ctrl+C/Esc cancels (resolves with an empty answer).
+ *  - custom mode: printable chars build `questionCustomBuffer`; Backspace deletes;
+ *    Enter submits the typed answer; Esc returns to selection; Ctrl+C cancels.
+ *
+ * The last entry in the selection list is always the virtual "custom" entry, so the
+ * total entry count is `questionOptions.length + 1`.
+ */
+function handleQuestionInput(core: InkChatBridgeCore, input: string, key: Key): void {
+    const totalEntries = core.questionOptions.length + 1;
+    if (core.questionCustomMode) {
+        if (key.ctrl && input === 'c') {
+            resolveQuestion(core, '');
+            return;
+        }
+        if (key.escape) {
+            core.questionCustomMode = false;
+            core.questionCustomBuffer = '';
+            publishSnapshot(core);
+            return;
+        }
+        if (key.return || input.includes('\r') || input.includes('\n')) {
+            const textBeforeReturn = input.split(/[\r\n]/)[0] ?? '';
+            if (textBeforeReturn.length > 0 && !key.ctrl && !key.meta) {
+                core.questionCustomBuffer += textBeforeReturn;
+            }
+            resolveQuestion(core, core.questionCustomBuffer);
+            return;
+        }
+        if (key.backspace) {
+            if (core.questionCustomBuffer.length > 0) {
+                core.questionCustomBuffer = core.questionCustomBuffer.slice(0, -1);
+                publishSnapshot(core);
+            }
+            return;
+        }
+        if (input !== '' && !key.ctrl && !key.meta && !key.upArrow && !key.downArrow) {
+            core.questionCustomBuffer += input;
+            publishSnapshot(core);
+        }
+        return;
+    }
+    if (key.upArrow) {
+        core.questionSelectedIndex = (core.questionSelectedIndex - 1 + totalEntries) % totalEntries;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.downArrow) {
+        core.questionSelectedIndex = (core.questionSelectedIndex + 1) % totalEntries;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.return || input.includes('\r') || input.includes('\n')) {
+        if (core.questionSelectedIndex >= core.questionOptions.length) {
+            core.questionCustomMode = true;
+            core.questionCustomBuffer = '';
+            publishSnapshot(core);
+            return;
+        }
+        const selected = core.questionOptions[core.questionSelectedIndex];
+        resolveQuestion(core, selected ?? '');
+        return;
+    }
+    if ((key.ctrl && input === 'c') || key.escape) {
+        resolveQuestion(core, '');
+    }
+}
+
+function resolveQuestion(core: InkChatBridgeCore, answer: string): void {
+    core.questionActive = false;
+    core.questionCustomMode = false;
+    core.questionCustomBuffer = '';
+    const resolve = core.questionResolve;
+    core.questionResolve = undefined;
+    publishSnapshot(core);
+    resolve?.(answer);
+}
+
 function handleRenameInput(core: InkChatBridgeCore, input: string, key: Key): void {
     if (key.return || input.includes('\r') || input.includes('\n')) {
         const textBeforeReturn = input.split(/[\r\n]/)[0] ?? '';
@@ -1051,6 +1169,58 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                     <Box marginTop={1}>
                         <Text dimColor>Up/Down to navigate, Enter to select, Ctrl+C to deny</Text>
                     </Box>
+                </Box>
+            </Box>
+        );
+    }
+
+    if (snapshot.questionActive) {
+        return (
+            <Box flexDirection="column">
+                <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
+                <Box flexDirection="column" borderStyle="single" borderColor="magenta" paddingX={1} marginTop={1}>
+                    <Text bold color="magenta">
+                        {'Question'}
+                    </Text>
+                    <Text>{snapshot.questionText}</Text>
+                    {snapshot.questionCustomMode ? (
+                        <>
+                            <Box marginTop={1}>
+                                <Text>
+                                    <Text color="magenta">{'>'}</Text> {snapshot.questionCustomBuffer}
+                                    <Text backgroundColor="white" color="black">
+                                        {'\u2588'}
+                                    </Text>
+                                </Text>
+                            </Box>
+                            <Text dimColor>Enter to submit, Esc to go back to options, Ctrl+C to cancel</Text>
+                        </>
+                    ) : (
+                        <>
+                            <Box flexDirection="column" marginTop={1}>
+                                {snapshot.questionOptions.map((option, index) => {
+                                    const isSelected = index === snapshot.questionSelectedIndex;
+                                    return (
+                                        <Text key={`${index}-${option}`} {...(isSelected ? { backgroundColor: 'blue' } : {})}>
+                                            {isSelected ? '> ' : '  '}
+                                            {option}
+                                        </Text>
+                                    );
+                                })}
+                                {(() => {
+                                    const customIndex = snapshot.questionOptions.length;
+                                    const isSelected = customIndex === snapshot.questionSelectedIndex;
+                                    return (
+                                        <Text {...(isSelected ? { backgroundColor: 'blue' } : {})}>
+                                            {isSelected ? '> ' : '  '}
+                                            <Text dimColor>Type custom answer...</Text>
+                                        </Text>
+                                    );
+                                })()}
+                            </Box>
+                            <Text dimColor>Up/Down to navigate, Enter to select, Esc to cancel</Text>
+                        </>
+                    )}
                 </Box>
             </Box>
         );
@@ -1305,6 +1475,19 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         publishSnapshot(core);
     };
 
+    const showQuestion = (question: string, options: readonly string[]): Promise<string> => {
+        core.questionActive = true;
+        core.questionText = question;
+        core.questionOptions = options;
+        core.questionSelectedIndex = 0;
+        core.questionCustomMode = false;
+        core.questionCustomBuffer = '';
+        publishSnapshot(core);
+        return new Promise<string>((resolve) => {
+            core.questionResolve = resolve;
+        });
+    };
+
     const unmount = (): void => {
         core.unmountFn?.();
         if (titleWasSet) {
@@ -1338,6 +1521,7 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         isToolOutputExpanded,
         showApproval,
         hideApproval,
+        showQuestion,
         unmount,
     };
 }
