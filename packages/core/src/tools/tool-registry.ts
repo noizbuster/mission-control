@@ -153,7 +153,10 @@ async function invokeRegistration<Input, Output>(
 ): Promise<ParsedToolOutput> {
     const parsedInput = registration.inputSchema.safeParse(value);
     if (!parsedInput.success) {
-        return { ok: false, error: protocolError('schema_invalid', parsedInput.error.message), events: [] };
+        // Model-retryable: the LLMActor graph path treats `retryable !== true` as terminal under
+        // `haltOnFailedToolSettlement`, so a non-retryable schema_invalid would kill the run
+        // instead of letting the model read the error and re-emit a corrected call.
+        return { ok: false, error: protocolError('schema_invalid', parsedInput.error.message, true), events: [] };
     }
     const output = await registration.execute(parsedInput.data, context);
     return parseOutputValue(registration, output, context);
@@ -174,7 +177,7 @@ function parseArgumentsJson(input: ToolInvocationInput): ParsedArgumentsJson {
     try {
         parsedJson = JSON.parse(input.argumentsJson);
     } catch (error: unknown) {
-        return { ok: false, error: protocolError('schema_invalid', errorMessage(error)) };
+        return { ok: false, error: protocolError('schema_invalid', errorMessage(error), true) };
     }
     return { ok: true, value: parsedJson };
 }
@@ -243,11 +246,11 @@ function failedSettlement(
     };
 }
 
-function protocolError(code: ProtocolError['code'], message: string): ProtocolError {
+function protocolError(code: ProtocolError['code'], message: string, retryable = false): ProtocolError {
     return {
         code,
         message,
-        retryable: false,
+        retryable,
     };
 }
 

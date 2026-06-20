@@ -188,6 +188,47 @@ describe('ToolRegistry', () => {
             output: '{"doubled":42}',
         });
     });
+
+    it('marks input schema_invalid settlements as model-retryable so the LLMActor graph keeps running', async () => {
+        // Given
+        const registry = new ToolRegistry();
+        const advertised = registry.register(echoTool());
+        const argumentsJson = JSON.stringify({});
+
+        // When
+        const settlement = await registry.invoke({
+            toolCallId: 'tool_call_bad_input',
+            toolName: 'repo.echo',
+            advertisedVersion: advertised.version,
+            argumentsJson,
+        });
+
+        // Then
+        expect(settlement.result).toMatchObject({
+            status: 'failed',
+            error: { code: 'schema_invalid', retryable: true },
+        });
+    });
+
+    it('marks malformed-JSON settlements as model-retryable (same reason as input schema_invalid)', async () => {
+        // Given
+        const registry = new ToolRegistry();
+        const advertised = registry.register(echoTool());
+
+        // When
+        const settlement = await registry.invoke({
+            toolCallId: 'tool_call_bad_json',
+            toolName: 'repo.echo',
+            advertisedVersion: advertised.version,
+            argumentsJson: '{not json',
+        });
+
+        // Then
+        expect(settlement.result).toMatchObject({
+            status: 'failed',
+            error: { code: 'schema_invalid', retryable: true },
+        });
+    });
 });
 
 describe('ToolRegistry — per-tool guideline', () => {
