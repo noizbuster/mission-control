@@ -37,6 +37,7 @@ import { createTerminalModelSelector } from './interactive-chat-model-selector.j
 import { createSessionNavigationController } from './interactive-chat-session-navigation.js';
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack.js';
+import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
@@ -83,6 +84,7 @@ export async function runInteractiveChatSession(
         variantID?: string;
         sessionDisplayName?: string;
     };
+    const initialHistoryEntries = useInk ? await loadInputHistoryEntries() : [];
     const bridgeOptions: SessionBridgeOptions | undefined = useInk
         ? {
               providerID: options.modelProviderSelection.providerID,
@@ -91,6 +93,7 @@ export async function runInteractiveChatSession(
                   ? { variantID: options.modelProviderSelection.variantID }
                   : {}),
               ...(options.sessionId !== undefined ? { sessionID: options.sessionId } : {}),
+              ...(initialHistoryEntries.length > 0 ? { initialHistoryEntries } : {}),
           }
         : undefined;
     const inkBridge = useInk && bridgeOptions !== undefined ? createInkChatBridge(bridgeOptions) : undefined;
@@ -251,6 +254,7 @@ export async function runInteractiveChatSession(
             if (prompt.length === 0) {
                 continue;
             }
+            await appendInputHistoryEntry(prompt);
             if (prompt.length > maxChatPromptLength) {
                 chatOutput.write(`Prompt is too long (max ${maxChatPromptLength} characters).\n`);
                 continue;

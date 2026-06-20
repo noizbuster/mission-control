@@ -53,6 +53,7 @@ import {
 import {
     type ChatInputHistory,
     createChatInputHistory,
+    createChatInputHistoryFromEntries,
     isNavigatingChatInputHistory,
     navigateChatInputHistoryDown,
     navigateChatInputHistoryUp,
@@ -146,6 +147,7 @@ export type InkChatBridgeOptions = {
     readonly variantID?: string;
     readonly sessionID?: string;
     readonly workspaceRoot?: string;
+    readonly initialHistoryEntries?: readonly string[];
 };
 
 export type InkChatBridgeCore = {
@@ -357,8 +359,11 @@ function applyFileAutocompleteCompletion(core: InkChatBridgeCore): boolean {
  * Build a fresh bridge core with default initial state. Exported so unit tests
  * can drive `handleInput` against the same initial state the runtime uses.
  */
-export function createInkChatBridgeCore(options?: { readonly workspaceRoot?: string }): InkChatBridgeCore {
+export function createInkChatBridgeCore(options?: { readonly workspaceRoot?: string; readonly initialHistoryEntries?: readonly string[] }): InkChatBridgeCore {
     const workspaceRoot = options?.workspaceRoot ?? process.cwd();
+    const history = options?.initialHistoryEntries !== undefined
+        ? createChatInputHistoryFromEntries(options.initialHistoryEntries)
+        : createChatInputHistory();
     return {
         inputBuffer: '',
         cursorPosition: 0,
@@ -412,7 +417,7 @@ export function createInkChatBridgeCore(options?: { readonly workspaceRoot?: str
         renameModeActive: false,
         renameBuffer: '',
         onRenameSubmit: undefined,
-        history: createChatInputHistory(),
+        history,
         scrollOffset: 0,
         lastEscTimestamp: undefined,
         cjkCompositionBuffer: '',
@@ -1201,9 +1206,10 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
  * `/model` selection overlay, and `unmount()` to tear down.
  */
 export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBridge {
-    const core = createInkChatBridgeCore(
-        options?.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : undefined,
-    );
+    const core = createInkChatBridgeCore({
+        ...(options?.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
+        ...(options?.initialHistoryEntries !== undefined ? { initialHistoryEntries: options.initialHistoryEntries } : {}),
+    });
 
     const subscribe = (listener: () => void): (() => void) => {
         core.listeners.add(listener);

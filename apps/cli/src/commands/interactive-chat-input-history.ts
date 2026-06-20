@@ -40,6 +40,10 @@ export function createChatInputHistory(): ChatInputHistory {
     return { entries: [], cursor: 0, draft: '' };
 }
 
+export function createChatInputHistoryFromEntries(entries: readonly string[]): ChatInputHistory {
+    return { entries: [...entries], cursor: entries.length, draft: '' };
+}
+
 /** True when the cursor points at a stored entry rather than the draft slot. */
 export function isNavigatingChatInputHistory(history: ChatInputHistory): boolean {
     return history.cursor < history.entries.length;
