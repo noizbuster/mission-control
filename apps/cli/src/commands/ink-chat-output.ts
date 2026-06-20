@@ -21,6 +21,8 @@ export function createInkChatOutput(bridge: InkChatBridge): ChatOutput {
         clearAgentStatus: () => {
             bridge.clearAgentStatus();
         },
+        isShowThinking: () => bridge.isShowThinking(),
+        isToolOutputExpanded: () => bridge.isToolOutputExpanded(),
         showApproval: (toolName: string, action: string) => {
             bridge.showApproval(toolName, action);
         },

@@ -291,6 +291,12 @@ function renderProviderEnvelope(output: ChatOutput, state: ProviderRenderState, 
 }
 
 function renderInteractiveToolSettlement(output: ChatOutput, settlement: ToolInvocationSettlement): void {
+    if (output.isToolOutputExpanded?.() === false) {
+        const indicator = settlement.result.status === 'failed' ? 'failed' : 'ok';
+        output.write(`tool: ${settlement.toolName} \u2014 ${indicator}\n`);
+        output.write('[Ctrl+O to expand/collapse]\n');
+        return;
+    }
     if (settlement.result.status === 'failed') {
         output.write(`${settlement.toolName} failed: ${settlement.result.error?.message ?? 'unknown error'}\n`);
         return;
@@ -367,7 +373,9 @@ function interactiveGraphStreamSignal(
             return;
         }
         if (signal.type === 'emit' && signal.event.type === 'llm.reasoning.delta') {
-            output.setAgentStatus?.('Thinking...');
+            if (output.isShowThinking?.() !== false) {
+                output.setAgentStatus?.('Thinking...');
+            }
             return;
         }
         const delta = readDeltaFromSignal(signal);
@@ -461,6 +469,12 @@ function renderInteractiveGraphDurableEvent(output: ChatOutput, state: ProviderR
  */
 function renderGraphToolSettlement(output: ChatOutput, payload: unknown, status: 'completed' | 'failed'): void {
     const toolName = readStringField(payload, 'toolName') ?? 'tool';
+    if (output.isToolOutputExpanded?.() === false) {
+        const indicator = status === 'completed' ? 'ok' : 'failed';
+        output.write(`tool: ${toolName} \u2014 ${indicator}\n`);
+        output.write('[Ctrl+O to expand/collapse]\n');
+        return;
+    }
     if (status === 'failed') {
         const message = readErrorMessage(payload);
         output.write(`${toolName} failed: ${redactCredentialText(message ?? 'unknown error')}\n`);

@@ -10,7 +10,7 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { parseChatLine } from './chat-commands.js';
-import { createInkChatBridge } from './ink-chat-bridge.js';
+import { createInkChatBridge, type InkChatBridgeOptions } from './ink-chat-bridge.js';
 import { createInkChatInput } from './ink-chat-input.js';
 import { createInkChatOutput } from './ink-chat-output.js';
 import { createInkModelSelector } from './ink-model-selector.js';
@@ -36,6 +36,7 @@ import { createModelChoices, type ModelChoice } from './interactive-chat-model.j
 import { createTerminalModelSelector } from './interactive-chat-model-selector.js';
 import { createSessionNavigationController } from './interactive-chat-session-navigation.js';
 import { formatModelProviderStatus } from './interactive-chat-status.js';
+import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
@@ -76,20 +77,51 @@ export async function runInteractiveChatSession(
     options: InteractiveChatOptions,
 ): Promise<string> {
     const useInk = options.input === undefined && process.stdin.isTTY === true;
-    const inkBridge = useInk
-        ? createInkChatBridge({
+    type SessionBridgeOptions = Omit<InkChatBridgeOptions, 'providerID' | 'modelID' | 'variantID'> & {
+        providerID: string;
+        modelID: string;
+        variantID?: string;
+        sessionDisplayName?: string;
+    };
+    const bridgeOptions: SessionBridgeOptions | undefined = useInk
+        ? {
               providerID: options.modelProviderSelection.providerID,
               modelID: options.modelProviderSelection.modelID,
               ...(options.modelProviderSelection.variantID !== undefined
                   ? { variantID: options.modelProviderSelection.variantID }
                   : {}),
               ...(options.sessionId !== undefined ? { sessionID: options.sessionId } : {}),
-          })
+          }
         : undefined;
+    const inkBridge = useInk && bridgeOptions !== undefined ? createInkChatBridge(bridgeOptions) : undefined;
     const chatInput =
         options.input ?? (inkBridge !== undefined ? createInkChatInput(inkBridge) : createTerminalChatInput());
-    const chatOutput =
+    const baseChatOutput =
         options.output ?? (inkBridge !== undefined ? createInkChatOutput(inkBridge) : createTerminalChatOutput());
+    // Mirror of the conversation text for /undo and /redo. This is display-only;
+    // the durable JSONL session log is never modified by undo/redo.
+    let conversationText = '';
+    let undoRedoStack = createUndoRedoStack();
+    const chatOutput: ChatOutput = {
+        ...baseChatOutput,
+        write: (text: string) => {
+            conversationText += text;
+            baseChatOutput.write(text);
+        },
+    };
+    const undoRedoController = {
+        // The Ink bridge echoes "You: ..." directly to core.outputText, bypassing
+        // the conversationText mirror; prefer the bridge's full text when present.
+        readOutputText: () => inkBridge?.getOutput() ?? conversationText,
+        replaceOutputText: (next: string) => {
+            conversationText = next;
+            inkBridge?.replaceOutputText(next);
+        },
+        getStack: () => undoRedoStack,
+        setStack: (next: UndoRedoStack) => {
+            undoRedoStack = next;
+        },
+    };
     const selectModel =
         inkBridge !== undefined
             ? createInkModelSelector(inkBridge)
@@ -110,6 +142,16 @@ export async function runInteractiveChatSession(
     let currentSessionId = options.sessionId;
     let currentProvider = options.resolveProviderForSelection?.(currentModelProviderSelection) ?? options.provider;
     let currentSessionStore = options.sessionStore;
+    let sessionDisplayName: string | undefined;
+    const sessionDisplayNameController = {
+        current: () => sessionDisplayName,
+        update: (name: string) => {
+            sessionDisplayName = name;
+            if (bridgeOptions !== undefined) {
+                bridgeOptions.sessionDisplayName = name;
+            }
+        },
+    };
     const switchSessionStore = options.switchSessionStore;
     const sessionNavigation =
         switchSessionStore === undefined
@@ -129,6 +171,26 @@ export async function runInteractiveChatSession(
                       : {}),
               });
     const unregisterProcessCleanup = inkBridge === undefined ? registerProcessTerminalCleanup(chatInput) : undefined;
+
+    if (inkBridge !== undefined) {
+        inkBridge.setModelCycleChoices(modelChoices);
+        inkBridge.onModelCycleSelect = (selection) => {
+            currentModelProviderSelection = selection;
+            currentProvider = options.resolveProviderForSelection?.(selection) ?? currentProvider;
+            if (bridgeOptions !== undefined) {
+                bridgeOptions.providerID = selection.providerID;
+                bridgeOptions.modelID = selection.modelID;
+                if (selection.variantID !== undefined) {
+                    bridgeOptions.variantID = selection.variantID;
+                } else {
+                    delete bridgeOptions.variantID;
+                }
+            }
+        };
+        inkBridge.onRenameSubmit = (name: string) => {
+            sessionDisplayNameController.update(name);
+        };
+    }
 
     const discoveredSkills =
         options.workspaceRoot !== undefined
@@ -194,7 +256,11 @@ export async function runInteractiveChatSession(
                 continue;
             }
 
-            const action = parseChatLine(prompt, { modelChoices, knownSkillNames });
+            const action = parseChatLine(prompt, {
+                modelChoices,
+                knownSkillNames,
+                ...(currentSessionId !== undefined ? { currentSessionId } : {}),
+            });
             if (action.kind === 'exit') {
                 activeTurn = await stopActiveTurn(activeTurn);
                 chatOutput.write('Exiting mission-control chat\n');
@@ -226,6 +292,8 @@ export async function runInteractiveChatSession(
                         sessionStore: currentSessionStore,
                         workspaceRoot: options.workspaceRoot,
                         skills: sessionSkills,
+                        sessionDisplayName: sessionDisplayNameController,
+                        undoRedo: undoRedoController,
                         ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
                         ...(options.engine !== undefined ? { engine: options.engine } : {}),
                         ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
