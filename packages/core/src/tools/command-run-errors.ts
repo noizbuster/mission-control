@@ -15,13 +15,14 @@ export function commandRunFailure(
     message: string,
     events: readonly AgentEvent[] = [],
 ): ToolExecutionError {
-    return new ToolExecutionError(protocolError(`${code}: ${message}`), events);
+    const retryable = code === 'command_not_allowed';
+    return new ToolExecutionError(protocolError(`${code}: ${message}`, retryable), events);
 }
 
-function protocolError(message: string): ProtocolError {
+function protocolError(message: string, retryable: boolean = false): ProtocolError {
     return {
         code: 'tool_failed',
         message,
-        retryable: false,
+        retryable,
     };
 }

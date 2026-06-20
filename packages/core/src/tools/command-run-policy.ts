@@ -6,8 +6,10 @@ export const defaultCommandRunPolicyProfile: CommandRunPolicyProfile = 'fixed-ha
 
 const FIXED_HARNESS_COMMAND = ['node', '--eval', "console.log('mission-control command.run harness ok')"] as const;
 
+const SAFE_NO_ARG_COMMANDS = ['pwd', 'whoami', 'hostname'] as const;
+
 const ALLOWED_COMMANDS_BY_PROFILE: Record<CommandRunPolicyProfile, readonly (readonly string[])[]> = {
-    'fixed-harness': [FIXED_HARNESS_COMMAND],
+    'fixed-harness': [FIXED_HARNESS_COMMAND, ...SAFE_NO_ARG_COMMANDS.map((cmd) => [cmd] as const)],
 };
 
 export function allowedCommand(
