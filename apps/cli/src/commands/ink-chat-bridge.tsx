@@ -26,7 +26,7 @@
 
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { Box, type Key, render, Text, useInput } from 'ink';
-import { useSyncExternalStore, useState, useEffect } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { StatusBar } from '../components/StatusBar.js';
 import {
     createProviderPromptKeypressState,
@@ -42,41 +42,98 @@ import {
     type SlashCommandMenuState,
 } from './interactive-chat-command-menu.js';
 import {
+    buildFileAutocompleteCompletion,
+    createFileAutocompleteState,
+    createFileAutocompleteView,
+    type FileAutocompleteState,
+    navigateFileAutocompleteDown,
+    navigateFileAutocompleteUp,
+    updateFileAutocomplete,
+} from './interactive-chat-file-autocomplete.js';
+import {
+    type ChatInputHistory,
     createChatInputHistory,
     isNavigatingChatInputHistory,
     navigateChatInputHistoryDown,
     navigateChatInputHistoryUp,
     recordSubmittedPrompt,
-    type ChatInputHistory,
 } from './interactive-chat-input-history.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
 import type { ModelChoice } from './interactive-chat-model.js';
+import { execSync, spawnSync } from 'node:child_process';
+import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+/**
+ * Terminal title via OSC 2 (`\x1b]2;<title>\x07`, BEL terminator).
+ * Gated on `isTTY` (no escapes to pipes) and `MCTRL_DISABLE_TERMINAL_TITLE !== '1'`.
+ */
+const TERMINAL_TITLE_DISABLE_ENV = 'MCTRL_DISABLE_TERMINAL_TITLE';
+const TERMINAL_TITLE_SET_PREFIX = '\x1b]2;';
+const TERMINAL_TITLE_SET_SUFFIX = '\x07';
+const TERMINAL_TITLE_RESET = '\x1b]2;\x07';
+
+function shouldManageTerminalTitle(): boolean {
+    return process.env[TERMINAL_TITLE_DISABLE_ENV] !== '1' && process.stdout.isTTY === true;
+}
+
+export function setTerminalTitle(title: string): boolean {
+    if (!shouldManageTerminalTitle()) {
+        return false;
+    }
+    process.stdout.write(`${TERMINAL_TITLE_SET_PREFIX}${title}${TERMINAL_TITLE_SET_SUFFIX}`);
+    return true;
+}
+
+export function resetTerminalTitle(): boolean {
+    if (!shouldManageTerminalTitle()) {
+        return false;
+    }
+    process.stdout.write(TERMINAL_TITLE_RESET);
+    return true;
+}
 
 type BridgeSnapshot = {
     readonly inputBuffer: string;
+    readonly cursorPosition: number;
     readonly outputText: string;
     readonly menuState: SlashCommandMenuState;
+    readonly fileAutocomplete: FileAutocompleteState;
     readonly modelPickerActive: boolean;
     readonly modelPickerChoices: readonly ModelChoice[];
     readonly modelPickerKeypress: ProviderPromptKeypressState;
+    readonly modelCycleChoices: readonly ModelChoice[];
+    readonly modelCycleIndex: number;
     readonly generating: boolean;
     readonly agentStatusText: string;
     readonly approvalActive: boolean;
     readonly approvalToolName: string;
     readonly approvalAction: string;
     readonly approvalSelectedIndex: number;
+    readonly showThinking: boolean;
+    readonly toolOutputExpanded: boolean;
+    readonly renameModeActive: boolean;
+    readonly renameBuffer: string;
     readonly historyNavigation: { readonly position: number; readonly total: number } | null;
+    readonly scrollOffset: number;
 };
 
 /** Public surface consumed by the imperative chat loop. */
 export type InkChatBridge = {
     readonly waitForEvent: () => Promise<ChatInputEvent>;
     readonly emitOutput: (text: string) => void;
+    readonly replaceOutputText: (text: string) => void;
     readonly getOutput: () => string;
     readonly showModelPicker: (choices: readonly ModelChoice[]) => Promise<ModelProviderSelection | undefined>;
+    readonly setModelCycleChoices: (choices: readonly ModelChoice[]) => void;
+    onModelCycleSelect: ((selection: ModelProviderSelection) => void) | undefined;
+    onRenameSubmit: ((name: string) => void) | undefined;
     readonly setGenerating: (value: boolean) => void;
     readonly setAgentStatus: (text: string) => void;
     readonly clearAgentStatus: () => void;
+    readonly isShowThinking: () => boolean;
+    readonly isToolOutputExpanded: () => boolean;
     readonly showApproval: (toolName: string, action: string) => void;
     readonly hideApproval: () => void;
     readonly unmount: () => void;
@@ -88,12 +145,16 @@ export type InkChatBridgeOptions = {
     readonly modelID: string;
     readonly variantID?: string;
     readonly sessionID?: string;
+    readonly workspaceRoot?: string;
 };
 
-type InkChatBridgeCore = {
+export type InkChatBridgeCore = {
     inputBuffer: string;
+    cursorPosition: number;
     outputText: string;
     menuState: SlashCommandMenuState;
+    fileAutocomplete: FileAutocompleteState;
+    workspaceRoot: string;
     eventQueue: ChatInputEvent[];
     eventWaiters: Array<(event: ChatInputEvent) => void>;
     listeners: Set<() => void>;
@@ -103,13 +164,25 @@ type InkChatBridgeCore = {
     modelPickerKeypress: ProviderPromptKeypressState;
     modelPickerActive: boolean;
     modelPickerResolve: ((selection: ModelProviderSelection | undefined) => void) | undefined;
+    modelCycleChoices: readonly ModelChoice[];
+    modelCycleIndex: number;
+    onModelCycleSelect: ((selection: ModelProviderSelection) => void) | undefined;
     generating: boolean;
     agentStatusText: string;
     approvalActive: boolean;
     approvalToolName: string;
     approvalAction: string;
     approvalSelectedIndex: number;
+    showThinking: boolean;
+    toolOutputExpanded: boolean;
+    renameModeActive: boolean;
+    renameBuffer: string;
+    onRenameSubmit: ((name: string) => void) | undefined;
     history: ChatInputHistory;
+    scrollOffset: number;
+    lastEscTimestamp: number | undefined;
+    cjkCompositionBuffer: string;
+    cjkCompositionTimer: ReturnType<typeof setTimeout> | undefined;
 };
 
 /** Minimal props the React tree uses to talk to the bridge core. */
@@ -124,6 +197,13 @@ type ChatRootProps = {
 
 const slashMenuMaxVisibleChoices = 5;
 const modelPickerMaxVisibleChoices = 10;
+const fileAutocompleteMaxVisibleChoices = 8;
+const SCROLL_PAGE_SIZE = 10;
+const SCROLLBACK_VIEWPORT_HEIGHT = 20;
+const SCROLL_TOP_OFFSET = Number.MAX_SAFE_INTEGER;
+const WHITESPACE_PATTERN = /\s/u;
+const DOUBLE_ESC_WINDOW_MS = 500;
+const DOUBLE_ESC_ACTION_ENV = 'MCTRL_DOUBLE_ESC_ACTION';
 
 function publishSnapshot(core: InkChatBridgeCore): void {
     const historyNavigation = isNavigatingChatInputHistory(core.history)
@@ -131,18 +211,27 @@ function publishSnapshot(core: InkChatBridgeCore): void {
         : null;
     core.snapshot = {
         inputBuffer: core.inputBuffer,
+        cursorPosition: core.cursorPosition,
         outputText: core.outputText,
         menuState: core.menuState,
+        fileAutocomplete: core.fileAutocomplete,
         modelPickerActive: core.modelPickerActive,
         modelPickerChoices: core.modelPickerChoices,
         modelPickerKeypress: core.modelPickerKeypress,
+        modelCycleChoices: core.modelCycleChoices,
+        modelCycleIndex: core.modelCycleIndex,
         generating: core.generating,
         agentStatusText: core.agentStatusText,
         approvalActive: core.approvalActive,
         approvalToolName: core.approvalToolName,
         approvalAction: core.approvalAction,
         approvalSelectedIndex: core.approvalSelectedIndex,
+        showThinking: core.showThinking,
+        toolOutputExpanded: core.toolOutputExpanded,
+        renameModeActive: core.renameModeActive,
+        renameBuffer: core.renameBuffer,
         historyNavigation,
+        scrollOffset: core.scrollOffset,
     };
     for (const listener of core.listeners) {
         listener();
@@ -158,7 +247,414 @@ function enqueueEvent(core: InkChatBridgeCore, event: ChatInputEvent): void {
     core.eventQueue.push(event);
 }
 
-function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
+/** Ctrl+Left semantics: skip whitespace leftward, then skip the word's chars. */
+function computeWordBoundaryLeft(buffer: string, cursor: number): number {
+    let pos = cursor;
+    while (pos > 0 && isWhitespaceChar(buffer[pos - 1] ?? '')) {
+        pos -= 1;
+    }
+    while (pos > 0 && !isWhitespaceChar(buffer[pos - 1] ?? '')) {
+        pos -= 1;
+    }
+    return pos;
+}
+
+/** Ctrl+Right semantics: skip the word's chars rightward, then skip whitespace. */
+function computeWordBoundaryRight(buffer: string, cursor: number): number {
+    let pos = cursor;
+    const length = buffer.length;
+    while (pos < length && !isWhitespaceChar(buffer[pos] ?? '')) {
+        pos += 1;
+    }
+    while (pos < length && isWhitespaceChar(buffer[pos] ?? '')) {
+        pos += 1;
+    }
+    return pos;
+}
+
+function isWhitespaceChar(value: string): boolean {
+    return WHITESPACE_PATTERN.test(value);
+}
+
+function insertAtCursor(core: InkChatBridgeCore, text: string): void {
+    core.inputBuffer = `${core.inputBuffer.slice(0, core.cursorPosition)}${text}${core.inputBuffer.slice(core.cursorPosition)}`;
+    core.cursorPosition += text.length;
+}
+
+const CJK_BUFFER_MS = 50;
+
+const CJK_RANGES: readonly { readonly start: number; readonly end: number }[] = [
+    { start: 0x1100, end: 0x11ff }, // Hangul Jamo
+    { start: 0x3130, end: 0x318f }, // Hangul Compatibility Jamo
+    { start: 0xac00, end: 0xd7af }, // Hangul Syllables
+    { start: 0x3040, end: 0x309f }, // Hiragana
+    { start: 0x30a0, end: 0x30ff }, // Katakana
+    { start: 0x4e00, end: 0x9fff }, // CJK Unified Ideographs
+    { start: 0x3400, end: 0x4dbf }, // CJK Extension A
+    { start: 0xf900, end: 0xfaff }, // CJK Compatibility Ideographs
+];
+
+export function isCjkChar(char: string): boolean {
+    const code = char.charCodeAt(0);
+    return CJK_RANGES.some((range) => code >= range.start && code <= range.end);
+}
+
+function flushCjkBuffer(core: InkChatBridgeCore): void {
+    if (core.cjkCompositionBuffer.length === 0) {
+        return;
+    }
+    insertAtCursor(core, core.cjkCompositionBuffer);
+    core.cjkCompositionBuffer = '';
+    if (core.cjkCompositionTimer !== undefined) {
+        clearTimeout(core.cjkCompositionTimer);
+        core.cjkCompositionTimer = undefined;
+    }
+    core.menuState = createSlashCommandMenuState();
+    refreshFileAutocomplete(core);
+    publishSnapshot(core);
+}
+
+function readActiveFilePrefix(buffer: string): string | undefined {
+    if (buffer.startsWith('/')) {
+        return undefined;
+    }
+    const atIndex = buffer.lastIndexOf('@');
+    if (atIndex === -1) {
+        return undefined;
+    }
+    const prefix = buffer.slice(atIndex + 1);
+    if (WHITESPACE_PATTERN.test(prefix)) {
+        return undefined;
+    }
+    return prefix;
+}
+
+function refreshFileAutocomplete(core: InkChatBridgeCore): void {
+    const prefix = readActiveFilePrefix(core.inputBuffer);
+    if (prefix === undefined) {
+        core.fileAutocomplete = createFileAutocompleteState();
+        return;
+    }
+    core.fileAutocomplete = updateFileAutocomplete(core.fileAutocomplete, prefix, core.workspaceRoot);
+}
+
+function applyFileAutocompleteCompletion(core: InkChatBridgeCore): boolean {
+    const completed = buildFileAutocompleteCompletion(core.fileAutocomplete);
+    if (completed === undefined) {
+        return false;
+    }
+    const atSuffix = `@${core.fileAutocomplete.prefix}`;
+    if (!core.inputBuffer.endsWith(atSuffix)) {
+        return false;
+    }
+    const before = core.inputBuffer.slice(0, core.inputBuffer.length - atSuffix.length);
+    core.inputBuffer = `${before}@${completed}`;
+    core.cursorPosition = core.inputBuffer.length;
+    return true;
+}
+
+/**
+ * Build a fresh bridge core with default initial state. Exported so unit tests
+ * can drive `handleInput` against the same initial state the runtime uses.
+ */
+export function createInkChatBridgeCore(options?: { readonly workspaceRoot?: string }): InkChatBridgeCore {
+    const workspaceRoot = options?.workspaceRoot ?? process.cwd();
+    return {
+        inputBuffer: '',
+        cursorPosition: 0,
+        outputText: '',
+        menuState: createSlashCommandMenuState(),
+        fileAutocomplete: createFileAutocompleteState(),
+        workspaceRoot,
+        eventQueue: [],
+        eventWaiters: [],
+        listeners: new Set(),
+        snapshot: {
+            inputBuffer: '',
+            cursorPosition: 0,
+            outputText: '',
+            menuState: createSlashCommandMenuState(),
+            fileAutocomplete: createFileAutocompleteState(),
+            modelPickerActive: false,
+            modelPickerChoices: [],
+            modelPickerKeypress: createProviderPromptKeypressState(),
+            modelCycleChoices: [],
+            modelCycleIndex: 0,
+            generating: false,
+            agentStatusText: '',
+            approvalActive: false,
+            approvalToolName: '',
+            approvalAction: '',
+            approvalSelectedIndex: 0,
+            showThinking: true,
+            toolOutputExpanded: true,
+            renameModeActive: false,
+            renameBuffer: '',
+            historyNavigation: null,
+            scrollOffset: 0,
+        },
+        unmountFn: undefined,
+        modelPickerChoices: [],
+        modelPickerKeypress: createProviderPromptKeypressState(),
+        modelPickerActive: false,
+        modelPickerResolve: undefined,
+        modelCycleChoices: [],
+        modelCycleIndex: 0,
+        onModelCycleSelect: undefined,
+        generating: false,
+        agentStatusText: '',
+        approvalActive: false,
+        approvalToolName: '',
+        approvalAction: '',
+        approvalSelectedIndex: 0,
+        showThinking: true,
+        toolOutputExpanded: true,
+        renameModeActive: false,
+        renameBuffer: '',
+        onRenameSubmit: undefined,
+        history: createChatInputHistory(),
+        scrollOffset: 0,
+        lastEscTimestamp: undefined,
+        cjkCompositionBuffer: '',
+        cjkCompositionTimer: undefined,
+    };
+}
+
+/**
+ * Replace `core.outputText` entirely and publish a fresh snapshot. Exported
+ * so unit tests can verify display truncation without mounting the Ink tree.
+ */
+export function replaceCoreOutputText(core: InkChatBridgeCore, text: string): void {
+    core.outputText = text;
+    publishSnapshot(core);
+}
+
+const SUSPEND_UNSUPPORTED_MESSAGE = 'Suspend not supported on Windows.\n';
+
+/**
+ * Suspend signal controls. Exported as an object so unit tests can spy on
+ * `isWindowsPlatform` (simulate Windows on a POSIX CI runner) and intercept
+ * the real SIGTSTP via `vi.spyOn(process, 'kill')` without actually
+ * suspending the test runner.
+ */
+export const suspendControls = {
+    isWindowsPlatform(): boolean {
+        return process.platform === 'win32';
+    },
+    sendSuspendSignal(): void {
+        process.kill(process.pid, 'SIGTSTP');
+    },
+};
+
+const NO_EDITOR_MESSAGE = 'No editor set. Set $VISUAL or $EDITOR.\n';
+const VISUAL_ENV = 'VISUAL';
+const EDITOR_ENV = 'EDITOR';
+
+/**
+ * External editor controls. Exported as an object so unit tests can mock
+ * `resolveEditor` (simulate $VISUAL/$EDITOR presence/absence and priority)
+ * and `runEditor` (intercept the real `spawnSync` so no editor is launched).
+ */
+export const editorControls = {
+    resolveEditor(): string | undefined {
+        return process.env[VISUAL_ENV] ?? process.env[EDITOR_ENV];
+    },
+    runEditor(editor: string, filePath: string): void {
+        spawnSync(editor, [filePath], { stdio: 'inherit' });
+    },
+};
+
+const LINUX_CLIPBOARD_IMAGE_COMMANDS = ['xclip -selection clipboard -t image/png -o', 'wl-paste -t image/png'] as const;
+
+/**
+ * Clipboard image paste controls. Exported so unit tests can spy on
+ * `readClipboardImage` (simulate clipboard with image, without image, or
+ * tool absence) without launching real platform clipboard binaries.
+ *
+ * Platform coverage: Linux X11 (xclip), Linux Wayland (wl-paste), macOS
+ * (pngpaste). Windows and unknown platforms return undefined. On failure
+ * (tool absent, clipboard has no image), returns undefined silently.
+ */
+export const clipboardImageControls = {
+    readClipboardImage(): { readonly path: string } | undefined {
+        const tempPath = join(tmpdir(), `mctrl-paste-${Date.now()}.png`);
+        if (process.platform === 'linux') {
+            return readLinuxClipboardImage(tempPath);
+        }
+        if (process.platform === 'darwin') {
+            return readMacOSClipboardImage(tempPath);
+        }
+        return undefined;
+    },
+};
+
+function readLinuxClipboardImage(tempPath: string): { readonly path: string } | undefined {
+    for (const command of LINUX_CLIPBOARD_IMAGE_COMMANDS) {
+        try {
+            const buffer = execSync(command, { stdio: ['ignore', 'pipe', 'ignore'] });
+            if (buffer.length === 0) {
+                return undefined;
+            }
+            writeFileSync(tempPath, buffer);
+            return { path: tempPath };
+        } catch {
+            // Command not installed or clipboard has no image — try next tool.
+        }
+    }
+    return undefined;
+}
+
+function readMacOSClipboardImage(tempPath: string): { readonly path: string } | undefined {
+    try {
+        execSync(`pngpaste ${tempPath}`, { stdio: 'ignore' });
+        return { path: tempPath };
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * Handle Ctrl+Z: on POSIX, suspend the process via SIGTSTP (the shell's `fg`
+ * resumes it with Ink state intact); on Windows, report that suspension is
+ * unsupported. Never exits or enqueues a chat event.
+ */
+export function handleSuspendRequest(core: InkChatBridgeCore): void {
+    if (suspendControls.isWindowsPlatform()) {
+        core.outputText += SUSPEND_UNSUPPORTED_MESSAGE;
+        publishSnapshot(core);
+        return;
+    }
+    suspendControls.sendSuspendSignal();
+}
+
+/**
+ * Handle Ctrl+D (EOT): on an empty buffer, enqueue an interrupt event so the
+ * main chat loop exits (same shape as the second Ctrl+C). On a non-empty
+ * buffer, forward-delete the character at the cursor (Emacs-style); no-op when
+ * the cursor is already at the end.
+ */
+export function handleCtrlDRequest(core: InkChatBridgeCore): void {
+    if (core.inputBuffer.length === 0) {
+        enqueueEvent(core, { type: 'interrupt', interruptedPartialInput: false });
+        return;
+    }
+    if (core.cursorPosition < core.inputBuffer.length) {
+        core.inputBuffer = `${core.inputBuffer.slice(0, core.cursorPosition)}${core.inputBuffer.slice(core.cursorPosition + 1)}`;
+        core.menuState = createSlashCommandMenuState();
+        refreshFileAutocomplete(core);
+        publishSnapshot(core);
+    }
+}
+
+/**
+ * Handle Ctrl+E: open the current input buffer in an external editor
+ * ($VISUAL or $EDITOR). Writes the buffer to a temp file, blocks on the
+ * editor via `spawnSync` (`stdio: 'inherit'` so the editor owns the
+ * terminal), reads the edited content back, replaces the buffer, and
+ * moves the cursor to the end. The temp file is always cleaned up in
+ * `finally`. If no editor is configured, writes a guidance message.
+ */
+export function handleExternalEditorRequest(core: InkChatBridgeCore): void {
+    const editor = editorControls.resolveEditor();
+    if (editor === undefined) {
+        core.outputText += NO_EDITOR_MESSAGE;
+        publishSnapshot(core);
+        return;
+    }
+    const tempPath = join(tmpdir(), `mctrl-edit-${Date.now()}.md`);
+    writeFileSync(tempPath, core.inputBuffer, 'utf-8');
+    try {
+        editorControls.runEditor(editor, tempPath);
+        const edited = readFileSync(tempPath, 'utf-8');
+        core.inputBuffer = edited;
+        core.cursorPosition = edited.length;
+        core.menuState = createSlashCommandMenuState();
+        refreshFileAutocomplete(core);
+        publishSnapshot(core);
+    } finally {
+        unlinkSync(tempPath);
+    }
+}
+
+/**
+ * Handle Ctrl+V: attempt to read a clipboard image and insert its file path
+ * into the input buffer. If no image is available or no clipboard tool is
+ * installed, silently no-op (the user may have pressed Ctrl+V without an
+ * image in the clipboard). On success, inserts the temp file path followed
+ * by a space at the cursor position.
+ */
+export function handleImagePasteRequest(core: InkChatBridgeCore): void {
+    const result = clipboardImageControls.readClipboardImage();
+    if (result === undefined) {
+        return;
+    }
+    insertAtCursor(core, `${result.path} `);
+    publishSnapshot(core);
+}
+
+function resolveDoubleEscAction(): 'interrupt' | 'tree' | 'fork' | 'none' {
+    const action = process.env[DOUBLE_ESC_ACTION_ENV];
+    if (action === 'none') {
+        return 'none';
+    }
+    if (action === 'tree') {
+        return 'tree';
+    }
+    if (action === 'fork') {
+        return 'fork';
+    }
+    return 'interrupt';
+}
+
+function handleEscKey(core: InkChatBridgeCore): void {
+    if (core.fileAutocomplete.open) {
+        core.fileAutocomplete = createFileAutocompleteState();
+        publishSnapshot(core);
+        return;
+    }
+    if (core.inputBuffer.length > 0) {
+        core.inputBuffer = '';
+        core.cursorPosition = 0;
+        core.menuState = createSlashCommandMenuState();
+        core.fileAutocomplete = createFileAutocompleteState();
+        publishSnapshot(core);
+        return;
+    }
+    const now = Date.now();
+    const action = resolveDoubleEscAction();
+    if (action === 'none') {
+        return;
+    }
+    if (core.lastEscTimestamp !== undefined && now - core.lastEscTimestamp < DOUBLE_ESC_WINDOW_MS) {
+        core.lastEscTimestamp = undefined;
+        if (action === 'interrupt') {
+            enqueueEvent(core, { type: 'interrupt', interruptedPartialInput: false });
+        } else if (action === 'tree') {
+            enqueueEvent(core, { type: 'line', value: '/tree' });
+        } else {
+            enqueueEvent(core, { type: 'line', value: '/fork' });
+        }
+        publishSnapshot(core);
+        return;
+    }
+    core.lastEscTimestamp = now;
+    publishSnapshot(core);
+}
+
+function handleModelCycle(core: InkChatBridgeCore, direction: 1 | -1): void {
+    const choices = core.modelCycleChoices;
+    if (choices.length <= 1) {
+        return;
+    }
+    core.modelCycleIndex = (core.modelCycleIndex + direction + choices.length) % choices.length;
+    const choice = choices[core.modelCycleIndex];
+    if (choice !== undefined) {
+        core.onModelCycleSelect?.(choice.selection);
+    }
+    publishSnapshot(core);
+}
+
+export function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
     if (core.approvalActive) {
         handleApprovalInput(core, input, key);
         return;
@@ -167,21 +663,81 @@ function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
         handleModelPickerInput(core, input, key);
         return;
     }
+    if (core.renameModeActive) {
+        handleRenameInput(core, input, key);
+        return;
+    }
+    const isCjkPrintable = input !== '' && !key.ctrl && !key.meta && isCjkChar(input);
+    if (!isCjkPrintable) {
+        flushCjkBuffer(core);
+    }
+    if (key.escape || input === '\u001b') {
+        handleEscKey(core);
+        return;
+    }
     if (key.ctrl && input === 'c') {
+        const hadPartialInput = core.inputBuffer.length > 0;
         enqueueEvent(core, {
             type: 'interrupt',
-            interruptedPartialInput: core.inputBuffer.length > 0,
+            interruptedPartialInput: hadPartialInput,
         });
+        if (hadPartialInput) {
+            core.inputBuffer = '';
+            core.cursorPosition = 0;
+            core.menuState = createSlashCommandMenuState();
+            core.fileAutocomplete = createFileAutocompleteState();
+            publishSnapshot(core);
+        }
+        return;
+    }
+    if (key.ctrl && input === 'z') {
+        handleSuspendRequest(core);
+        return;
+    }
+    if (key.ctrl && input === 'd') {
+        handleCtrlDRequest(core);
+        return;
+    }
+    if (key.ctrl && input === 't') {
+        core.showThinking = !core.showThinking;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.ctrl && input === 'o') {
+        core.toolOutputExpanded = !core.toolOutputExpanded;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.ctrl && input === 'p') {
+        handleModelCycle(core, key.shift ? -1 : 1);
+        return;
+    }
+    if (key.ctrl && input === 'e') {
+        handleExternalEditorRequest(core);
+        return;
+    }
+    if (key.ctrl && input === 'r') {
+        core.renameModeActive = true;
+        core.renameBuffer = '';
+        publishSnapshot(core);
+        return;
+    }
+    if (key.ctrl && input === 'v') {
+        handleImagePasteRequest(core);
         return;
     }
     if (key.upArrow) {
         if (core.inputBuffer.startsWith('/')) {
             core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[A', core.inputBuffer);
+        } else if (core.fileAutocomplete.open) {
+            core.fileAutocomplete = navigateFileAutocompleteUp(core.fileAutocomplete);
         } else {
             const result = navigateChatInputHistoryUp(core.history, core.inputBuffer);
             core.history = result.history;
             core.inputBuffer = result.input;
+            core.cursorPosition = result.input.length;
             core.menuState = createSlashCommandMenuState();
+            refreshFileAutocomplete(core);
         }
         publishSnapshot(core);
         return;
@@ -189,20 +745,71 @@ function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
     if (key.downArrow) {
         if (core.inputBuffer.startsWith('/')) {
             core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[B', core.inputBuffer);
+        } else if (core.fileAutocomplete.open) {
+            core.fileAutocomplete = navigateFileAutocompleteDown(core.fileAutocomplete);
         } else {
             const result = navigateChatInputHistoryDown(core.history, core.inputBuffer);
             core.history = result.history;
             core.inputBuffer = result.input;
+            core.cursorPosition = result.input.length;
             core.menuState = createSlashCommandMenuState();
+            refreshFileAutocomplete(core);
         }
         publishSnapshot(core);
         return;
     }
-    if (key.return || input.includes('\r') || input.includes('\n')) {
+    if (key.pageUp) {
+        core.scrollOffset += SCROLL_PAGE_SIZE;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.pageDown) {
+        core.scrollOffset = Math.max(0, core.scrollOffset - SCROLL_PAGE_SIZE);
+        publishSnapshot(core);
+        return;
+    }
+    if (key.home) {
+        core.scrollOffset = SCROLL_TOP_OFFSET;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.end) {
+        core.scrollOffset = 0;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.ctrl && key.leftArrow) {
+        core.cursorPosition = computeWordBoundaryLeft(core.inputBuffer, core.cursorPosition);
+        publishSnapshot(core);
+        return;
+    }
+    if (key.ctrl && key.rightArrow) {
+        core.cursorPosition = computeWordBoundaryRight(core.inputBuffer, core.cursorPosition);
+        publishSnapshot(core);
+        return;
+    }
+    if (key.shift && (key.return || input.includes('\r') || input.includes('\n'))) {
         const textBeforeReturn = input.split(/[\r\n]/)[0] ?? '';
         if (textBeforeReturn.length > 0 && !key.ctrl && !key.meta) {
-            core.inputBuffer += textBeforeReturn;
+            insertAtCursor(core, textBeforeReturn);
             core.menuState = createSlashCommandMenuState();
+        }
+        insertAtCursor(core, '\n');
+        refreshFileAutocomplete(core);
+        publishSnapshot(core);
+        return;
+    }
+    if (!key.shift && (key.return || input.includes('\r') || input.includes('\n'))) {
+        const textBeforeReturn = input.split(/[\r\n]/)[0] ?? '';
+        if (textBeforeReturn.length > 0 && !key.ctrl && !key.meta) {
+            insertAtCursor(core, textBeforeReturn);
+            core.menuState = createSlashCommandMenuState();
+        }
+        refreshFileAutocomplete(core);
+        if (core.fileAutocomplete.open && applyFileAutocompleteCompletion(core)) {
+            refreshFileAutocomplete(core);
+            publishSnapshot(core);
+            return;
         }
         let value = core.inputBuffer;
         if (core.inputBuffer.startsWith('/')) {
@@ -213,7 +820,9 @@ function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
         }
         enqueueEvent(core, { type: 'line', value });
         core.inputBuffer = '';
+        core.cursorPosition = 0;
         core.menuState = createSlashCommandMenuState();
+        core.fileAutocomplete = createFileAutocompleteState();
         core.history = recordSubmittedPrompt(core.history, value);
         if (!value.startsWith('/')) {
             core.outputText += `You: ${value}\n`;
@@ -221,18 +830,48 @@ function handleInput(core: InkChatBridgeCore, input: string, key: Key): void {
         publishSnapshot(core);
         return;
     }
+    if (key.tab && core.fileAutocomplete.open) {
+        if (applyFileAutocompleteCompletion(core)) {
+            refreshFileAutocomplete(core);
+        }
+        publishSnapshot(core);
+        return;
+    }
+    if (key.escape && core.fileAutocomplete.open) {
+        core.fileAutocomplete = createFileAutocompleteState();
+        publishSnapshot(core);
+        return;
+    }
     if (key.backspace) {
-        if (core.inputBuffer.length > 0) {
-            core.inputBuffer = core.inputBuffer.slice(0, -1);
+        if (core.cursorPosition > 0) {
+            core.inputBuffer = `${core.inputBuffer.slice(0, core.cursorPosition - 1)}${core.inputBuffer.slice(core.cursorPosition)}`;
+            core.cursorPosition -= 1;
             core.menuState = createSlashCommandMenuState();
+            refreshFileAutocomplete(core);
             publishSnapshot(core);
         }
         return;
     }
     if (input !== '' && !key.ctrl && !key.meta) {
-        core.inputBuffer += input;
-        core.menuState = createSlashCommandMenuState();
-        publishSnapshot(core);
+        if (isCjkChar(input)) {
+            core.cjkCompositionBuffer += input;
+            if (core.cjkCompositionTimer !== undefined) {
+                clearTimeout(core.cjkCompositionTimer);
+            }
+            core.cjkCompositionTimer = setTimeout(() => {
+                core.cjkCompositionTimer = undefined;
+                flushCjkBuffer(core);
+            }, CJK_BUFFER_MS);
+            publishSnapshot(core);
+        } else {
+            if (core.cjkCompositionBuffer.length > 0) {
+                flushCjkBuffer(core);
+            }
+            insertAtCursor(core, input);
+            core.menuState = createSlashCommandMenuState();
+            refreshFileAutocomplete(core);
+            publishSnapshot(core);
+        }
     }
 }
 
@@ -267,6 +906,40 @@ function handleApprovalInput(core: InkChatBridgeCore, input: string, key: Key): 
         core.approvalSelectedIndex = 2;
         publishSnapshot(core);
         enqueueEvent(core, { type: 'line', value: 'deny' });
+    }
+}
+
+function handleRenameInput(core: InkChatBridgeCore, input: string, key: Key): void {
+    if (key.return || input.includes('\r') || input.includes('\n')) {
+        const textBeforeReturn = input.split(/[\r\n]/)[0] ?? '';
+        if (textBeforeReturn.length > 0 && !key.ctrl && !key.meta) {
+            core.renameBuffer += textBeforeReturn;
+        }
+        const name = core.renameBuffer;
+        core.renameModeActive = false;
+        core.renameBuffer = '';
+        publishSnapshot(core);
+        if (name.length > 0) {
+            core.onRenameSubmit?.(name);
+        }
+        return;
+    }
+    if ((key.ctrl && input === 'c') || key.escape) {
+        core.renameModeActive = false;
+        core.renameBuffer = '';
+        publishSnapshot(core);
+        return;
+    }
+    if (key.backspace) {
+        if (core.renameBuffer.length > 0) {
+            core.renameBuffer = core.renameBuffer.slice(0, -1);
+            publishSnapshot(core);
+        }
+        return;
+    }
+    if (input !== '' && !key.ctrl && !key.meta) {
+        core.renameBuffer += input;
+        publishSnapshot(core);
     }
 }
 
@@ -307,7 +980,18 @@ function handleModelPickerInput(core: InkChatBridgeCore, input: string, key: Key
     publishSnapshot(core);
 }
 
-const SPINNER_FRAMES = ['\u280B', '\u2819', '\u2839', '\u2838', '\u283C', '\u2834', '\u2826', '\u2827', '\u2807', '\u280F'] as const;
+const SPINNER_FRAMES = [
+    '\u280B',
+    '\u2819',
+    '\u2839',
+    '\u2838',
+    '\u283C',
+    '\u2834',
+    '\u2826',
+    '\u2827',
+    '\u2807',
+    '\u280F',
+] as const;
 const SPINNER_INTERVAL_MS = 80;
 
 function AgentSpinner({ text }: { readonly text: string }): React.ReactElement {
@@ -337,12 +1021,11 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     if (snapshot.approvalActive) {
         return (
             <Box flexDirection="column">
-                {messageBlocks.map((block, index) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
-                    <MessageBlock key={`msg-${block.kind}-${index}`} block={block} />
-                ))}
+                <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
                 <Box flexDirection="column" borderStyle="single" borderColor="yellow" paddingX={1} marginTop={1}>
-                    <Text bold color="yellow">{'Approval Required'}</Text>
+                    <Text bold color="yellow">
+                        {'Approval Required'}
+                    </Text>
                     <Text>
                         <Text bold>Tool:</Text> {snapshot.approvalToolName}
                     </Text>
@@ -363,6 +1046,27 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                     <Box marginTop={1}>
                         <Text dimColor>Up/Down to navigate, Enter to select, Ctrl+C to deny</Text>
                     </Box>
+                </Box>
+            </Box>
+        );
+    }
+
+    if (snapshot.renameModeActive) {
+        return (
+            <Box flexDirection="column">
+                <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
+                <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1} marginTop={1}>
+                    <Text bold color="cyan">
+                        {'Rename Session'}
+                    </Text>
+                    <Text>Enter new session name:</Text>
+                    <Text>
+                        <Text color="cyan">{'>'}</Text> {snapshot.renameBuffer}
+                        <Text backgroundColor="white" color="black">
+                            {'\u2588'}
+                        </Text>
+                    </Text>
+                    <Text dimColor>Enter to confirm, Esc to cancel</Text>
                 </Box>
             </Box>
         );
@@ -408,13 +1112,14 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     const menuView = showSlashMenu
         ? createSlashCommandMenuView(snapshot.inputBuffer, snapshot.menuState, slashMenuMaxVisibleChoices)
         : null;
+    const fileView =
+        !showSlashMenu && snapshot.fileAutocomplete.open
+            ? createFileAutocompleteView(snapshot.fileAutocomplete, fileAutocompleteMaxVisibleChoices)
+            : null;
 
     return (
         <Box flexDirection="column">
-            {messageBlocks.map((block, index) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
-                <MessageBlock key={`msg-${block.kind}-${index}`} block={block} />
-            ))}
+            <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
             {snapshot.agentStatusText.length > 0 ? (
                 <AgentSpinner text={snapshot.agentStatusText} />
             ) : snapshot.generating ? (
@@ -440,10 +1145,36 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                     )}
                 </Box>
             ) : null}
+            {fileView?.open ? (
+                <Box flexDirection="column" marginTop={1}>
+                    <Text dimColor>{`Files matching @${fileView.prefix}`}</Text>
+                    {fileView.empty ? (
+                        <Text dimColor> no files match</Text>
+                    ) : (
+                        fileView.visibleMatches.map((match, index) => {
+                            const globalIndex = fileView.startIndex + index;
+                            const isSelected = globalIndex === fileView.selectedIndex;
+                            const marker = match.isDirectory ? '/' : ' ';
+                            return (
+                                <Text key={match.name} {...(isSelected ? { backgroundColor: 'blue' } : {})}>
+                                    {isSelected ? '> ' : '  '}
+                                    {marker}
+                                    {match.name}
+                                </Text>
+                            );
+                        })
+                    )}
+                    <Text dimColor>Tab/Enter to complete, Up/Down to navigate, Esc to close</Text>
+                </Box>
+            ) : null}
             <Box flexDirection="column" marginTop={1}>
                 <Text dimColor>{'─'.repeat(process.stdout.columns ?? 80)}</Text>
                 <Text>
-                    <Text color="cyan">{'>'}</Text> {snapshot.inputBuffer}
+                    <Text color="cyan">{'>'}</Text> {snapshot.inputBuffer.slice(0, snapshot.cursorPosition)}
+                    <Text backgroundColor="white" color="black">
+                        {'\u2588'}
+                    </Text>
+                    {snapshot.inputBuffer.slice(snapshot.cursorPosition)}
                     {snapshot.historyNavigation !== null ? (
                         <Text dimColor>
                             {' '}
@@ -470,41 +1201,9 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
  * `/model` selection overlay, and `unmount()` to tear down.
  */
 export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBridge {
-    const core: InkChatBridgeCore = {
-        inputBuffer: '',
-        outputText: '',
-        menuState: createSlashCommandMenuState(),
-        eventQueue: [],
-        eventWaiters: [],
-        listeners: new Set(),
-        snapshot: {
-            inputBuffer: '',
-            outputText: '',
-            menuState: createSlashCommandMenuState(),
-            modelPickerActive: false,
-            modelPickerChoices: [],
-            modelPickerKeypress: createProviderPromptKeypressState(),
-        generating: false,
-        agentStatusText: '',
-        approvalActive: false,
-        approvalToolName: '',
-        approvalAction: '',
-        approvalSelectedIndex: 0,
-        historyNavigation: null,
-        },
-        unmountFn: undefined,
-        modelPickerChoices: [],
-        modelPickerKeypress: createProviderPromptKeypressState(),
-        modelPickerActive: false,
-        modelPickerResolve: undefined,
-        generating: false,
-        agentStatusText: '',
-        approvalActive: false,
-        approvalToolName: '',
-        approvalAction: '',
-        approvalSelectedIndex: 0,
-        history: createChatInputHistory(),
-    };
+    const core = createInkChatBridgeCore(
+        options?.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : undefined,
+    );
 
     const subscribe = (listener: () => void): (() => void) => {
         core.listeners.add(listener);
@@ -526,6 +1225,7 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         { exitOnCtrlC: false },
     );
     core.unmountFn = instance.unmount;
+    const titleWasSet = setTerminalTitle(`mission-control \u2014 ${options?.sessionID ?? 'session'}`);
 
     const waitForEvent = (): Promise<ChatInputEvent> => {
         const queued = core.eventQueue.shift();
@@ -542,6 +1242,8 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         publishSnapshot(core);
     };
 
+    const replaceOutputText = (text: string): void => replaceCoreOutputText(core, text);
+
     const getOutput = (): string => core.outputText;
 
     const showModelPicker = (choices: readonly ModelChoice[]): Promise<ModelProviderSelection | undefined> => {
@@ -555,6 +1257,14 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         return new Promise<ModelProviderSelection | undefined>((resolve) => {
             core.modelPickerResolve = resolve;
         });
+    };
+
+    const setModelCycleChoices = (choices: readonly ModelChoice[]): void => {
+        core.modelCycleChoices = choices;
+        if (core.modelCycleIndex >= choices.length) {
+            core.modelCycleIndex = 0;
+        }
+        publishSnapshot(core);
     };
 
     const setGenerating = (value: boolean): void => {
@@ -572,6 +1282,10 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         publishSnapshot(core);
     };
 
+    const isShowThinking = (): boolean => core.showThinking;
+
+    const isToolOutputExpanded = (): boolean => core.toolOutputExpanded;
+
     const showApproval = (toolName: string, action: string): void => {
         core.approvalActive = true;
         core.approvalToolName = toolName;
@@ -587,9 +1301,39 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
 
     const unmount = (): void => {
         core.unmountFn?.();
+        if (titleWasSet) {
+            resetTerminalTitle();
+        }
     };
 
-    return { waitForEvent, emitOutput, getOutput, showModelPicker, setGenerating, setAgentStatus, clearAgentStatus, showApproval, hideApproval, unmount };
+    return {
+        waitForEvent,
+        emitOutput,
+        replaceOutputText,
+        getOutput,
+        showModelPicker,
+        setModelCycleChoices,
+        get onModelCycleSelect(): ((selection: ModelProviderSelection) => void) | undefined {
+            return core.onModelCycleSelect;
+        },
+        set onModelCycleSelect(value: (selection: ModelProviderSelection) => void) {
+            core.onModelCycleSelect = value;
+        },
+        get onRenameSubmit(): ((name: string) => void) | undefined {
+            return core.onRenameSubmit;
+        },
+        set onRenameSubmit(value: (name: string) => void) {
+            core.onRenameSubmit = value;
+        },
+        setGenerating,
+        setAgentStatus,
+        clearAgentStatus,
+        isShowThinking,
+        isToolOutputExpanded,
+        showApproval,
+        hideApproval,
+        unmount,
+    };
 }
 
 type ChatBlock = {
@@ -693,5 +1437,38 @@ function MessageBlock({ block }: { readonly block: ChatBlock }): React.ReactElem
                 })}
             </Box>
         </Box>
+    );
+}
+
+function MessageWindow({
+    blocks,
+    scrollOffset,
+}: {
+    readonly blocks: readonly ChatBlock[];
+    readonly scrollOffset: number;
+}): React.ReactElement {
+    const total = blocks.length;
+    if (total === 0 || scrollOffset <= 0) {
+        return (
+            <>
+                {blocks.map((block, index) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
+                    <MessageBlock key={`msg-${block.kind}-${index}`} block={block} />
+                ))}
+            </>
+        );
+    }
+    const clampedOffset = Math.min(scrollOffset, total);
+    const endIdx = total - clampedOffset;
+    const startIdx = Math.max(0, endIdx - SCROLLBACK_VIEWPORT_HEIGHT);
+    const windowed = blocks.slice(startIdx, endIdx);
+    return (
+        <>
+            <Text dimColor>{`[scroll ${endIdx}/${total} \u2014 PgUp/PgDn to navigate, End to jump to bottom]`}</Text>
+            {windowed.map((block, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
+                <MessageBlock key={`msg-${block.kind}-${startIdx + index}`} block={block} />
+            ))}
+        </>
     );
 }
