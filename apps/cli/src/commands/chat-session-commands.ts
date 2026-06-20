@@ -5,6 +5,8 @@ export function parseSessionSlashCommand(command: string, input: string): ChatLi
     switch (command) {
         case 'new':
             return parseOptionalSessionCommand('new-session', 'new', input);
+        case 'clear':
+            return parseOptionalSessionCommand('clear', 'clear', input);
         case 'session':
             return parseOptionalSessionCommand('session', 'session', input);
         case 'sessions':
@@ -66,8 +68,8 @@ function parseForkCommand(input: string): ChatLineAction {
 }
 
 function parseOptionalSessionCommand(
-    kind: 'new-session' | 'session' | 'tree' | 'clone',
-    command: 'new' | 'session' | 'tree' | 'clone',
+    kind: 'new-session' | 'session' | 'tree' | 'clone' | 'clear',
+    command: 'new' | 'session' | 'tree' | 'clone' | 'clear',
     input: string,
 ): ChatLineAction {
     const parts = splitCommandParts(input);

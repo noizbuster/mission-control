@@ -24,7 +24,7 @@ export type SlashCommandMenuView = {
 const resetStyle = '\u001b[0m';
 const selectedStyle = '\u001b[48;5;60m\u001b[38;5;231m';
 
-const slashCommandChoices = [
+export const slashCommandChoices = [
     {
         id: '/model',
         insertText: '/model',
@@ -44,6 +44,11 @@ const slashCommandChoices = [
         id: '/new',
         insertText: '/new ',
         description: 'Start a new durable session',
+    },
+    {
+        id: '/clear',
+        insertText: '/clear ',
+        description: 'Clear the screen and start a new session',
     },
     {
         id: '/session',
@@ -77,8 +82,28 @@ const slashCommandChoices = [
     },
     {
         id: '/compact',
-        insertText: '/compact',
-        description: 'Summarize older session history',
+        insertText: '/compact ',
+        description: 'Summarize older session history (optional focus text)',
+    },
+    {
+        id: '/export',
+        insertText: '/export ',
+        description: 'Export the current session to a file (default: session-<id>.html)',
+    },
+    {
+        id: '/rename',
+        insertText: '/rename ',
+        description: 'Set the display name for the current session',
+    },
+    {
+        id: '/undo',
+        insertText: '/undo',
+        description: 'Revert the last user+assistant exchange (display only)',
+    },
+    {
+        id: '/redo',
+        insertText: '/redo',
+        description: 'Re-apply the last reverted exchange (display only)',
     },
     {
         id: '/trust',
@@ -124,6 +149,16 @@ const slashCommandChoices = [
         id: '/clone',
         insertText: '/clone ',
         description: 'Clone the current durable session',
+    },
+    {
+        id: '/help',
+        insertText: '/help',
+        description: 'Show available commands and keyboard shortcuts',
+    },
+    {
+        id: '/hotkeys',
+        insertText: '/hotkeys',
+        description: 'Show all keyboard shortcuts',
     },
 ] as const satisfies readonly SlashCommandMenuChoice[];
 

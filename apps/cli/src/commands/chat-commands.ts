@@ -13,6 +13,14 @@ export type ChatLineAction =
           readonly prompt: string;
       }
     | {
+          readonly kind: 'bash';
+          readonly command: string;
+      }
+    | {
+          readonly kind: 'bash-display-only';
+          readonly command: string;
+      }
+    | {
           readonly kind: 'queue';
           readonly prompt: string;
       }
@@ -25,6 +33,10 @@ export type ChatLineAction =
       }
     | {
           readonly kind: 'new-session';
+          readonly sessionId?: string;
+      }
+    | {
+          readonly kind: 'clear';
           readonly sessionId?: string;
       }
     | {
@@ -55,6 +67,27 @@ export type ChatLineAction =
       }
     | {
           readonly kind: 'compact';
+          readonly instructions?: string;
+      }
+    | {
+          readonly kind: 'export';
+          readonly path: string;
+      }
+    | {
+          readonly kind: 'rename';
+          readonly name?: string;
+      }
+    | {
+          readonly kind: 'undo';
+      }
+    | {
+          readonly kind: 'redo';
+      }
+    | {
+          readonly kind: 'help';
+      }
+    | {
+          readonly kind: 'hotkeys';
       }
     | {
           readonly kind: 'interrupt';
@@ -106,6 +139,11 @@ export type ChatLineOptions = {
      * unknown-slash path (skill loading via `$skill` still works).
      */
     readonly knownSkillNames?: ReadonlySet<string>;
+    /**
+     * Active session id, used to resolve a default export path for `/export` when no
+     * explicit path is supplied. Omitted when the chat has no durable session.
+     */
+    readonly currentSessionId?: string;
 };
 
 export function parseChatLine(value: string, options: ChatLineOptions = {}): ChatLineAction {
@@ -118,6 +156,12 @@ export function parseChatLine(value: string, options: ChatLineOptions = {}): Cha
     }
     if (line.startsWith('$')) {
         return parseSkillInvocation(line);
+    }
+    if (line.startsWith('!!')) {
+        return parseBashInvocation(line.slice(2), 'bash-display-only');
+    }
+    if (line.startsWith('!')) {
+        return parseBashInvocation(line.slice(1), 'bash');
     }
     return { kind: 'prompt', prompt: line };
 }
@@ -154,7 +198,19 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
         case 'trust':
             return parseTrustCommand(parts.tail);
         case 'compact':
-            return parseNoArgumentCommand('compact', parts.tail);
+            return parseCompactCommand(parts.tail);
+        case 'export':
+            return parseExportCommand(parts.tail, options);
+        case 'rename':
+            return parseRenameCommand(parts.tail);
+        case 'undo':
+            return parseNoArgumentCommand('undo', parts.tail);
+        case 'redo':
+            return parseNoArgumentCommand('redo', parts.tail);
+        case 'help':
+            return parseNoArgumentCommand('help', parts.tail);
+        case 'hotkeys':
+            return parseNoArgumentCommand('hotkeys', parts.tail);
         default:
             return resolveUnreservedSlash(parts, options);
     }
@@ -181,14 +237,51 @@ function parsePromptCommand(kind: 'queue' | 'steer', prompt: string): ChatLineAc
     return { kind, prompt };
 }
 
+function parseBashInvocation(commandText: string, kind: 'bash' | 'bash-display-only'): ChatLineAction {
+    const command = commandText.trim();
+    if (command.length === 0) {
+        return { kind: 'invalid', message: 'Bash command is empty' };
+    }
+    return { kind, command };
+}
+
 function parseNoArgumentCommand(
-    kind: 'resume' | 'sessions' | 'compact' | 'interrupt' | 'exit',
+    kind: 'resume' | 'sessions' | 'interrupt' | 'exit' | 'undo' | 'redo' | 'help' | 'hotkeys',
     input: string,
 ): ChatLineAction {
     if (input.length > 0) {
         return { kind: 'invalid', message: `/${kind} does not accept arguments` };
     }
     return { kind };
+}
+
+function parseCompactCommand(input: string): ChatLineAction {
+    if (input.length === 0) {
+        return { kind: 'compact' };
+    }
+    return { kind: 'compact', instructions: input };
+}
+
+function parseExportCommand(input: string, options: ChatLineOptions): ChatLineAction {
+    const parts = splitCommandParts(input);
+    if (parts.tail.length > 0) {
+        return { kind: 'invalid', message: '/export accepts at most one file path' };
+    }
+    if (parts.head.length > 0) {
+        return { kind: 'export', path: parts.head };
+    }
+    if (options.currentSessionId !== undefined) {
+        return { kind: 'export', path: `session-${options.currentSessionId}.html` };
+    }
+    return { kind: 'invalid', message: '/export requires a file path or an active session' };
+}
+
+function parseRenameCommand(input: string): ChatLineAction {
+    const trimmed = input.trim();
+    if (trimmed.length === 0) {
+        return { kind: 'rename' };
+    }
+    return { kind: 'rename', name: trimmed };
 }
 
 function parseTrustCommand(input: string): ChatLineAction {
