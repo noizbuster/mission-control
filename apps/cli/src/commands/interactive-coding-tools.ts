@@ -2,15 +2,20 @@ import {
     type AskUserQuestionRequest,
     type CommandExecutionRequest,
     type CommandExecutionResult,
+    createDelegatingLspClient,
     createLspToolRegistration,
     createReadOnlyRepoToolRegistrations,
     createTaskSpawnFn,
     discoverSkills,
     type LspClient,
+    LspServerManager,
+    type LspServerManagerDeps,
     type McpConnectionManager,
     registerAskUserTool,
+    registerAstGrepTool,
     registerBashRunTool,
     registerCommandRunTool,
+    registerEvalTool,
     registerFileEditTool,
     registerFilePatchTool,
     registerFileWriteTool,
@@ -19,7 +24,9 @@ import {
     registerSkillTool,
     registerTaskTool,
     registerWebfetchTool,
+    registerWebSearchTool,
     type SdkModelResolver,
+    selectWebSearchProvider,
     type ToolInvocationSettlement,
     ToolRegistry,
     type ToolRegistryWithMcp,
@@ -52,11 +59,19 @@ export type InteractiveToolOptions = {
      */
     readonly mcpConnectionManager?: McpConnectionManager;
     /**
-     * LSP seam: when a real `LspClient` is injected, the `lsp` tool is registered (read-class,
-     * opt-in). Default runs omit it — registering with the in-process test client would mislead
-     * the model. A real stdio JSON-RPC transport (tsserver/rust-analyzer) is deferred.
+     * LSP seam: when a real `LspClient` is injected, the `lsp` tool is registered
+     * with that client (test injection path). When omitted, the registry
+     * auto-detects available language servers via `LspServerManager` and registers
+     * the `lsp` tool with a delegating client when at least one server command
+     * resolves on PATH.
      */
     readonly lspClient?: LspClient;
+    /**
+     * Test seam for the auto-detection path: inject a mock `commandExists` /
+     * `createClient` so tests control server availability without spawning real
+     * processes. Ignored when `lspClient` is explicitly provided.
+     */
+    readonly lspServerManagerDeps?: LspServerManagerDeps;
     /**
      * `ask_user` tool callback: resolves with the user's answer to a model-posed question. When
      * omitted, the `ask_user` tool is not registered (no host surface to ask the user). The
@@ -82,6 +97,7 @@ export async function createInteractiveToolRegistry(
         workspaceRoot: options.workspaceRoot,
         requestPermission: approvals.requestPermission,
     });
+    await registerAstGrepTool(registry, { workspaceRoot: options.workspaceRoot });
     registry.register(todoWriteToolRegistration);
     const skillDiscovery = await discoverSkills({ workspaceRoot: options.workspaceRoot });
     registerSkillTool(registry, { skills: skillDiscovery.skills });
@@ -89,6 +105,9 @@ export async function createInteractiveToolRegistry(
         workspaceRoot: options.workspaceRoot,
         requestPermission: approvals.requestPermission,
     });
+    if (selectWebSearchProvider() !== undefined) {
+        await registerWebSearchTool(registry, { sessionId: options.sessionId });
+    }
     if (options.requestUserQuestion !== undefined) {
         await registerAskUserTool(registry, { requestUserQuestion: options.requestUserQuestion });
     }
@@ -116,6 +135,7 @@ export async function createInteractiveToolRegistry(
             requestPermission: approvals.requestPermission,
             ...(options.commandExecutor !== undefined ? { executor: options.commandExecutor } : {}),
         });
+        await registerEvalTool(registry, { workspaceRoot: options.workspaceRoot });
     }
     const resolveSdkModel = options.resolveSdkModel;
     if (resolveSdkModel !== undefined) {
@@ -141,17 +161,23 @@ export async function createInteractiveToolRegistry(
         requestPermission: approvals.requestPermission,
         ...(options.mcpConnectionManager !== undefined ? { mcpConnectionManager: options.mcpConnectionManager } : {}),
     });
-    // LSP seam: register `lsp` ONLY when a real client is injected. Default runs (no client)
-    // do not advertise it — a real stdio JSON-RPC language-server transport is deferred.
+    // LSP seam: prefer an explicitly injected client (test injection); otherwise
+    // auto-detect available language servers and register the `lsp` tool with a
+    // delegating client when at least one server command resolves on PATH.
+    const lspGuideline =
+        'Use lsp for compiler-grade diagnostics, hover, go-to-definition, references, ' +
+        'symbol outlines, implementation, type definition, and incoming call hierarchy ' +
+        'instead of guessing types from source text.';
     if (options.lspClient !== undefined) {
-        registry.register(
-            createLspToolRegistration({
-                client: options.lspClient,
-                guideline:
-                    'Use lsp for compiler-grade diagnostics, hover, and go-to-definition ' +
-                    'instead of guessing types from source text.',
-            }),
-        );
+        registry.register(createLspToolRegistration({ client: options.lspClient, guideline: lspGuideline }));
+    } else {
+        const lspManager = new LspServerManager({ workspaceRoot: options.workspaceRoot }, options.lspServerManagerDeps);
+        const availableServers = await lspManager.detectAvailableServers();
+        if (availableServers.length > 0) {
+            registry.register(
+                createLspToolRegistration({ client: createDelegatingLspClient(lspManager), guideline: lspGuideline }),
+            );
+        }
     }
     return { registry, mcpConnectionManager };
 }
@@ -232,6 +258,22 @@ function approvalRequestForToolCall(toolCall: ToolCall, workspaceRoot: string): 
             },
         };
     }
+    if (toolCall.toolName === 'web_search') {
+        const query = parseWebSearchQuery(toolCall.argumentsJson);
+        if (query === undefined) {
+            return undefined;
+        }
+        return {
+            id: `permission_${toolCall.toolCallId}`,
+            action: 'web_search',
+            reason: `web search query: ${query}`,
+            permission: {
+                kind: 'network',
+                patterns: [query],
+                workspaceRoot,
+            },
+        };
+    }
     if (toolCall.toolName === 'task') {
         const description = parseTaskDescription(toolCall.argumentsJson);
         if (description === undefined) {
@@ -277,6 +319,18 @@ function approvalRequestForToolCall(toolCall: ToolCall, workspaceRoot: string): 
             permission: {
                 kind: 'bash',
                 patterns: [input.commandLine],
+                workspaceRoot,
+            },
+        };
+    }
+    if (toolCall.toolName === 'eval') {
+        return {
+            id: `permission_${toolCall.toolCallId}`,
+            action: 'eval',
+            reason: 'execute code in sandbox',
+            permission: {
+                kind: 'bash',
+                patterns: ['eval'],
                 workspaceRoot,
             },
         };
@@ -423,6 +477,14 @@ function parseWebfetchUrl(argumentsJson: string): string | undefined {
     return value.url;
 }
 
+function parseWebSearchQuery(argumentsJson: string): string | undefined {
+    const value = parseArguments(argumentsJson);
+    if (!isRecord(value) || typeof value.query !== 'string' || value.query.length === 0) {
+        return undefined;
+    }
+    return value.query;
+}
+
 function parseTaskDescription(argumentsJson: string): string | undefined {
     const value = parseArguments(argumentsJson);
     if (!isRecord(value) || typeof value.description !== 'string' || value.description.length === 0) {
@@ -510,6 +572,7 @@ function isRecord(value: unknown): value is {
     readonly oldText?: unknown;
     readonly patch?: unknown;
     readonly path?: unknown;
+    readonly query?: unknown;
     readonly replaceAll?: unknown;
     readonly url?: unknown;
 } {

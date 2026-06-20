@@ -8,6 +8,19 @@ export {
     createAskUserToolRegistration,
     registerAskUserTool,
 } from './ask-user-tool.js';
+export {
+    type AstGrepInput,
+    type AstGrepOutput,
+    astGrepInputSchema,
+    astGrepOutputSchema,
+    astGrepParametersJsonSchema,
+} from './ast-grep-schemas.js';
+export {
+    type AstGrepRunnerFn,
+    type AstGrepToolOptions,
+    createAstGrepToolRegistration,
+    registerAstGrepTool,
+} from './ast-grep-tool.js';
 export { type BashRunToolOptions, createBashRunToolRegistration, registerBashRunTool } from './bash-run.js';
 export {
     type CommandExecutionRequest,
@@ -16,6 +29,23 @@ export {
     createCommandRunToolRegistration,
     registerCommandRunTool,
 } from './command-run.js';
+export {
+    type EvalCell,
+    type EvalCellResult,
+    type EvalInput,
+    type EvalOutput,
+    evalCellResultSchema,
+    evalCellSchema,
+    evalInputSchema,
+    evalOutputSchema,
+    evalParametersJsonSchema,
+} from './eval-schemas.js';
+export { createEvalToolRegistration, type EvalToolOptions, registerEvalTool } from './eval-tool.js';
+export {
+    createEvalToolBridge,
+    type EvalToolBridge,
+    type EvalToolBridgeOptions,
+} from './eval-tool-bridge.js';
 export { createFileEditToolRegistration, type FileEditToolOptions, registerFileEditTool } from './file-edit.js';
 export { createFilePatchToolRegistration, type FilePatchToolOptions, registerFilePatchTool } from './file-patch.js';
 export { createFileWriteToolRegistration, type FileWriteToolOptions, registerFileWriteTool } from './file-write.js';
@@ -25,16 +55,40 @@ export {
     type GlobToolFactoryOptions,
     registerGlobTool,
 } from './glob-tool-factory.js';
+export { createDelegatingLspClient } from './lsp-delegating-client.js';
+export {
+    type CommandExists,
+    DEFAULT_LSP_SERVERS,
+    type LspClientFactory,
+    type LspServerConfig,
+    LspServerManager,
+    type LspServerManagerDeps,
+    type LspServerManagerOptions,
+} from './lsp-server-manager.js';
+export {
+    encodeLspMessage,
+    type LspDocumentSource,
+    LspMessageDecoder,
+    type LspTransport,
+    type LspTransportFactory,
+    StdioLspClient,
+    type StdioLspClientDeps,
+    type StdioLspClientOptions,
+} from './lsp-stdio-client.js';
 export {
     type CreateLspToolInput,
     createLspToolRegistration,
     InProcessLspClient,
+    type LspCallHierarchyItem,
     type LspClient,
     type LspDiagnostic,
     type LspHover,
     type LspInput,
     type LspLocation,
     type LspOutput,
+    type LspPosition,
+    type LspRange,
+    type LspSymbol,
 } from './lsp-tool.js';
 export {
     type LoadMcpConfigOptions,
@@ -122,6 +176,19 @@ export {
     ToolRegistry,
 } from './tool-registry.js';
 export { type TruncatedOutput, truncateOutput, withContinuationHint } from './truncate.js';
+export type {
+    WebSearchInput,
+    WebSearchOutput,
+} from './web-search-schemas.js';
+export {
+    createWebSearchToolRegistration,
+    registerWebSearchTool,
+    type WebSearchToolOptions,
+} from './web-search-tool.js';
+export {
+    selectWebSearchProvider,
+    type WebSearchProviderId,
+} from './web-search-transport.js';
 export { type WebfetchInput, type WebfetchOutput, webfetchToolRegistration } from './webfetch-tool.js';
 export {
     createWebfetchToolRegistration,
