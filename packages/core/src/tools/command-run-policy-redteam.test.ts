@@ -12,7 +12,7 @@ describe('command.run policy red-team gate', () => {
         expect(COMMAND_RUN_POLICY_PROFILES).toEqual(['fixed-harness']);
     });
 
-    it('rejects non harness commands by default', async () => {
+    it('rejects non-allowlisted commands via approval denial', async () => {
         const candidates: readonly CommandCandidate[] = [
             { command: 'cat', args: ['secret.txt'] },
             { command: 'bash', args: ['-lc', 'cat secret.txt'] },
@@ -21,15 +21,15 @@ describe('command.run policy red-team gate', () => {
         ];
 
         for (const candidate of candidates) {
-            const result = await rejectBeforeApproval(candidate);
+            const result = await rejectViaApprovalDenial(candidate);
             expect(result.settlement.result.status).toBe('failed');
-            expect(result.settlement.result.error?.message).toContain('command_not_allowed');
-            expect(result.permissionRequests).toHaveLength(0);
+            expect(result.settlement.result.error?.message).toContain('approval_denied');
+            expect(result.permissionRequests).toHaveLength(1);
             expect(result.commandCalls).toHaveLength(0);
         }
     });
 
-    it('rejects shell metacharacters before approval or spawn', async () => {
+    it('rejects shell metacharacter payloads via approval denial before spawn', async () => {
         const candidates: readonly CommandCandidate[] = [
             {
                 command: 'node',
@@ -40,14 +40,15 @@ describe('command.run policy red-team gate', () => {
         ];
 
         for (const candidate of candidates) {
-            const result = await rejectBeforeApproval(candidate);
-            expect(result.settlement.result.error?.message).toContain('command_not_allowed');
-            expect(result.permissionRequests).toHaveLength(0);
+            const result = await rejectViaApprovalDenial(candidate);
+            expect(result.settlement.result.status).toBe('failed');
+            expect(result.settlement.result.error?.message).toContain('approval_denied');
+            expect(result.permissionRequests).toHaveLength(1);
             expect(result.commandCalls).toHaveLength(0);
         }
     });
 
-    it('rejects cwd escape probes before approval or spawn', async () => {
+    it('rejects cwd escape probes via approval denial before spawn', async () => {
         const candidates: readonly CommandCandidate[] = [
             { command: 'node', args: ['--eval', "process.chdir('/tmp'); console.log(process.cwd())"] },
             {
@@ -57,9 +58,10 @@ describe('command.run policy red-team gate', () => {
         ];
 
         for (const candidate of candidates) {
-            const result = await rejectBeforeApproval(candidate);
-            expect(result.settlement.result.error?.message).toContain('command_not_allowed');
-            expect(result.permissionRequests).toHaveLength(0);
+            const result = await rejectViaApprovalDenial(candidate);
+            expect(result.settlement.result.status).toBe('failed');
+            expect(result.settlement.result.error?.message).toContain('approval_denied');
+            expect(result.permissionRequests).toHaveLength(1);
             expect(result.commandCalls).toHaveLength(0);
         }
     });
@@ -144,7 +146,7 @@ type RegistryInput = {
     readonly timeoutMs?: number;
 };
 
-async function rejectBeforeApproval(candidate: CommandCandidate): Promise<{
+async function rejectViaApprovalDenial(candidate: CommandCandidate): Promise<{
     readonly settlement: ToolInvocationSettlement;
     readonly permissionRequests: readonly PermissionRequest[];
     readonly commandCalls: readonly CommandExecutionRequest[];
@@ -154,7 +156,7 @@ async function rejectBeforeApproval(candidate: CommandCandidate): Promise<{
     const registry = await createRegistry({
         requestPermission: (request) => {
             permissionRequests.push(request);
-            return allowPermission(request);
+            return denyPermission(request);
         },
         executor: async (request) => {
             commandCalls.push(request);
@@ -199,6 +201,10 @@ async function invokeCommand(
 
 function allowPermission(request: PermissionRequest): PermissionDecision {
     return { requestId: request.id, status: 'allow', reason: 'test allow' };
+}
+
+function denyPermission(request: PermissionRequest): PermissionDecision {
+    return { requestId: request.id, status: 'deny', reason: 'test deny' };
 }
 
 function completedResult(): CommandExecutionResult {

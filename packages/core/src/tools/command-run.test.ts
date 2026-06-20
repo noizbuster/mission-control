@@ -25,7 +25,7 @@ describe('command.run tool', () => {
         });
 
         // When
-        const result = await invokeCommand(registry, 'node', allowedHarnessArgs);
+        const result = await invokeCommand(registry, 'echo', ['approval-denied']);
 
         // Then
         expect(result.result.status).toBe('failed');
@@ -36,20 +36,20 @@ describe('command.run tool', () => {
                 action: 'command.run',
                 permission: {
                     kind: 'bash',
-                    patterns: ["node --eval console.log('mission-control command.run harness ok')"],
+                    patterns: ['echo approval-denied'],
                 },
             },
         ]);
     });
 
-    it('rejects non harness commands by default', async () => {
+    it('routes non-allowlisted commands through the approval gate before spawn', async () => {
         // Given
         const calls: CommandExecutionRequest[] = [];
         const permissionRequests: PermissionRequest[] = [];
         const registry = await createRegistry({
             requestPermission: (request) => {
                 permissionRequests.push(request);
-                return allowPermission(request);
+                return denyPermission(request);
             },
             executor: async (request) => {
                 calls.push(request);
@@ -62,19 +62,20 @@ describe('command.run tool', () => {
 
         // Then
         expect(result.result.status).toBe('failed');
-        expect(result.result.error?.message).toContain('command_not_allowed');
-        expect(permissionRequests).toHaveLength(0);
+        expect(result.result.error?.message).toContain('approval_denied');
+        expect(permissionRequests).toHaveLength(1);
+        expect(permissionRequests[0]?.permission?.kind).toBe('bash');
         expect(calls).toHaveLength(0);
     });
 
-    it('rejects provider-created vitest targets before approval or spawn', async () => {
+    it('routes provider-created vitest targets through approval before spawn', async () => {
         // Given
         const calls: CommandExecutionRequest[] = [];
         const permissionRequests: PermissionRequest[] = [];
         const registry = await createRegistry({
             requestPermission: (request) => {
                 permissionRequests.push(request);
-                return allowPermission(request);
+                return denyPermission(request);
             },
             executor: async (request) => {
                 calls.push(request);
@@ -92,19 +93,19 @@ describe('command.run tool', () => {
 
         // Then
         expect(result.result.status).toBe('failed');
-        expect(result.result.error?.message).toContain('command_not_allowed');
-        expect(permissionRequests).toHaveLength(0);
+        expect(result.result.error?.message).toContain('approval_denied');
+        expect(permissionRequests).toHaveLength(1);
         expect(calls).toHaveLength(0);
     });
 
-    it('rejects mutable package scripts before approval or spawn', async () => {
+    it('routes mutable package scripts through approval before spawn', async () => {
         // Given
         const calls: CommandExecutionRequest[] = [];
         const permissionRequests: PermissionRequest[] = [];
         const registry = await createRegistry({
             requestPermission: (request) => {
                 permissionRequests.push(request);
-                return allowPermission(request);
+                return denyPermission(request);
             },
             executor: async (request) => {
                 calls.push(request);
@@ -117,8 +118,8 @@ describe('command.run tool', () => {
 
         // Then
         expect(result.result.status).toBe('failed');
-        expect(result.result.error?.message).toContain('command_not_allowed');
-        expect(permissionRequests).toHaveLength(0);
+        expect(result.result.error?.message).toContain('approval_denied');
+        expect(permissionRequests).toHaveLength(1);
         expect(calls).toHaveLength(0);
     });
 
@@ -319,10 +320,18 @@ describe('command.run tool', () => {
         });
     });
 
-    it('rejects shell-injection payloads in command and args positions', async () => {
+    it('rejects shell-injection payloads in command and args positions via approval denial', async () => {
+        const calls: CommandExecutionRequest[] = [];
+        const permissionRequests: PermissionRequest[] = [];
         const registry = await createRegistry({
-            requestPermission: allowPermission,
-            executor: async () => completedResult(),
+            requestPermission: (request) => {
+                permissionRequests.push(request);
+                return denyPermission(request);
+            },
+            executor: async (request) => {
+                calls.push(request);
+                return completedResult();
+            },
         });
 
         const payloads: ReadonlyArray<readonly [string, readonly string[]]> = [
@@ -341,17 +350,27 @@ describe('command.run tool', () => {
         for (const [command, args] of payloads) {
             const result = await invokeCommand(registry, command, args);
             expect(result.result.status).toBe('failed');
-            expect(result.result.error?.message).toContain('command_not_allowed');
+            expect(result.result.error?.message).toContain('approval_denied');
         }
+        expect(calls).toHaveLength(0);
+        expect(permissionRequests).toHaveLength(payloads.length);
     });
 
-    it('rejects common dangerous executables before approval or spawn', async () => {
+    it('rejects common dangerous executables via approval denial before spawn', async () => {
+        const calls: CommandExecutionRequest[] = [];
+        const permissionRequests: PermissionRequest[] = [];
         const registry = await createRegistry({
-            requestPermission: allowPermission,
-            executor: async () => completedResult(),
+            requestPermission: (request) => {
+                permissionRequests.push(request);
+                return denyPermission(request);
+            },
+            executor: async (request) => {
+                calls.push(request);
+                return completedResult();
+            },
         });
 
-        for (const command of [
+        const dangerous = [
             'cat',
             'sh',
             'bash',
@@ -366,11 +385,15 @@ describe('command.run tool', () => {
             'scp',
             'nc',
             'telnet',
-        ]) {
+        ] as const;
+
+        for (const command of dangerous) {
             const result = await invokeCommand(registry, command, ['--version']);
             expect(result.result.status).toBe('failed');
-            expect(result.result.error?.message).toContain('command_not_allowed');
+            expect(result.result.error?.message).toContain('approval_denied');
         }
+        expect(calls).toHaveLength(0);
+        expect(permissionRequests).toHaveLength(dangerous.length);
     });
 
     it('uses workspace root as cwd and does not honor cwd-escape arguments', async () => {
@@ -442,11 +465,33 @@ describe('command.run tool', () => {
         }
     });
 
-    it('keeps the policy allowlist as a single exact command with no broader profiles', async () => {
+    it('keeps the policy allowlist as exact commands with no broader profiles', async () => {
+        const calls: CommandExecutionRequest[] = [];
+        const permissionRequests: PermissionRequest[] = [];
         const registry = await createRegistry({
-            requestPermission: allowPermission,
-            executor: async () => completedResult(),
+            requestPermission: (request) => {
+                permissionRequests.push(request);
+                return denyPermission(request);
+            },
+            executor: async (request) => {
+                calls.push(request);
+                return completedResult();
+            },
         });
+
+        const allowlisted: ReadonlyArray<readonly [string, readonly string[]]> = [
+            ['node', allowedHarnessArgs],
+            ['pwd', []],
+            ['whoami', []],
+            ['hostname', []],
+        ];
+
+        for (const [command, args] of allowlisted) {
+            const result = await invokeCommand(registry, command, args);
+            expect(result.result.status).toBe('completed');
+        }
+        expect(permissionRequests).toHaveLength(0);
+        expect(calls).toHaveLength(allowlisted.length);
 
         const slightlyDifferent: ReadonlyArray<readonly [string, readonly string[]]> = [
             ['node', ['--eval', "console.log('mission-control command.run harness ok')", '--extra']],
@@ -454,13 +499,18 @@ describe('command.run tool', () => {
             ['node', ['--eval', 'process.exit(0)']],
             ['node', []],
             ['node', ['--version']],
+            ['pwd', ['-L']],
+            ['whoami', ['--help']],
+            ['hostname', ['-f']],
         ];
 
         for (const [command, args] of slightlyDifferent) {
             const result = await invokeCommand(registry, command, args);
             expect(result.result.status).toBe('failed');
-            expect(result.result.error?.message).toContain('command_not_allowed');
+            expect(result.result.error?.message).toContain('approval_denied');
         }
+        expect(permissionRequests).toHaveLength(slightlyDifferent.length);
+        expect(calls).toHaveLength(allowlisted.length);
     });
 
     it('blocks exfiltration payloads through allowed-harness command output', async () => {

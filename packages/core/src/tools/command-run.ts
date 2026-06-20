@@ -7,7 +7,7 @@ import type {
 import { commandRunFailure } from './command-run-errors.js';
 import { executeCommand } from './command-run-executor.js';
 import { interruptedBeforeSpawnResult, runCommandWithTimeout } from './command-run-interruption.js';
-import { allowedCommand, defaultCommandRunPolicyProfile } from './command-run-policy.js';
+import { defaultCommandRunPolicyProfile, isAllowlistedCommand } from './command-run-policy.js';
 import {
     type CommandRunInput,
     type CommandRunOutput,
@@ -43,7 +43,7 @@ export async function createCommandRunToolRegistration(
     const limiter = new CommandRunLimiter();
     return {
         name: 'command.run',
-        description: 'Run an approved fixed non-interactive static verification command.',
+        description: 'Run a command. Safe commands (pwd, whoami, hostname) run without asking. All other commands prompt the user for approval (Allow once / Always allow / Deny).',
         capabilityClasses: ['command.run'],
         parametersJsonSchema: commandRunParametersJsonSchema(),
         inputSchema: commandRunInputSchema,
@@ -73,7 +73,7 @@ async function runCommandTool(
     input: CommandRunInput,
     context: ToolExecutionContext,
 ): Promise<CommandRunOutput> {
-    const command = allowedCommand(input.command, input.args, options.policyProfile);
+    const command: readonly string[] = [input.command, ...input.args];
     const release = limiter.acquire();
     const started = commandEvent(
         'command.started',
@@ -81,7 +81,9 @@ async function runCommandTool(
         commandMetadata(command, options.workspaceRoot, 'started'),
     );
     try {
-        await requireApproval(options, context.toolCallId, command);
+        if (!isAllowlistedCommand(input.command, input.args, options.policyProfile)) {
+            await requireApproval(options, context.toolCallId, command);
+        }
         if (context.signal.aborted) {
             return commandRunOutput(
                 command,

@@ -12,6 +12,22 @@ const ALLOWED_COMMANDS_BY_PROFILE: Record<CommandRunPolicyProfile, readonly (rea
     'fixed-harness': [FIXED_HARNESS_COMMAND, ...SAFE_NO_ARG_COMMANDS.map((cmd) => [cmd] as const)],
 };
 
+/**
+ * Non-throwing predicate: returns true when the command is in the safe allowlist
+ * and can execute without asking the user for approval.
+ *
+ * Commands NOT in the allowlist are still runnable — they just go through the
+ * interactive approval flow (Allow once / Always allow / Deny) before executing.
+ */
+export function isAllowlistedCommand(
+    command: string,
+    args: readonly string[],
+    policyProfile: CommandRunPolicyProfile = defaultCommandRunPolicyProfile,
+): boolean {
+    const fullCommand = [command, ...args];
+    return ALLOWED_COMMANDS_BY_PROFILE[policyProfile].some((allowed) => sameCommand(allowed, fullCommand));
+}
+
 export function allowedCommand(
     command: string,
     args: readonly string[],
