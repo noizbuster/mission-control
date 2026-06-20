@@ -16,6 +16,8 @@
 | Provider events/tools | `src/provider-events.ts` | Provider messages, tool definitions/results, redaction metadata. |
 | Commands and diffs | `src/command-events.ts`, `src/diff-events.ts` | Command lifecycle and file diff event metadata. |
 | Sidecar protocol | `src/sidecar.ts` | Protocol version, capability, status, handshake/task wire schemas. |
+| MCP config schema | `src/mcp-config.ts` | `McpConfigEntrySchema` (local/remote discriminated union), `MissionControlConfigSchema` (mcp + mcp_env_allowlist + lsp placeholder), `McpProjectConfigSchema` (.mcp.json mcpServers). |
+| Permission kinds | `src/permission-profile.ts` | `PERMISSION_KINDS` union: read/edit/write/patch/bash/network/subagent. Strict schemas. |
 | Transcript/run metadata | `src/transcript.ts`, `src/run-coordinator.ts` | Prompt delivery and run command/state events. |
 
 ## Conventions

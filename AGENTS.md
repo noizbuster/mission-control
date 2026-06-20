@@ -1,7 +1,7 @@
 # Mission Control Agent Guide
 
-**Generated:** 2026-06-10T15:30:38+09:00
-**Commit:** b7f2f49
+**Generated:** 2026-06-20T00:30:00+09:00
+**Commit:** 5b04ce5
 **Branch:** master
 
 ## Overview
@@ -28,25 +28,27 @@ mission-control/
 |-- apps/cli/                 # mctrl CLI
 |-- apps/desktop/             # React/Vite UI plus Tauri shell
 |-- packages/protocol/        # shared Zod schemas and exported protocol types
-|-- packages/core/            # runtime, sessions, providers, tools, sidecar fallback, ABG scaffolding
+|-- packages/core/            # runtime, sessions, providers, tools, sidecar fallback, ABG scaffolding, MCP clients, skills
 |-- packages/config/          # product constants and vendored model catalog snapshot
 |-- native/sidecar/           # Rust JSON Lines sidecar binary
-|-- scripts/                  # install, packaging, catalog sync helpers and tests
+|-- scripts/                  # install, packaging, catalog sync helpers, smoke tests
 |-- tests/                    # root workspace, README, workflow, integration, contract tests
 |-- examples/abg/             # valid and intentionally invalid authorable graph fixtures
-|-- boilerplating/            # prompt-pack documents used to create the scaffold
-`-- plans/                    # work plans and execution state documents
+`-- .omo/plans/               # work plans and execution state (gitignored agent state)
 ```
 
 Scoped guidance:
 
 - `apps/cli/AGENTS.md`
 - `apps/desktop/AGENTS.md`
+- `packages/protocol/AGENTS.md`
 - `packages/core/AGENTS.md`
 - `packages/core/src/behavior/AGENTS.md`
+- `packages/core/src/context/AGENTS.md`
 - `packages/core/src/providers/AGENTS.md`
+- `packages/core/src/runtime/AGENTS.md`
 - `packages/core/src/tools/AGENTS.md`
-- `packages/protocol/AGENTS.md`
+- `packages/core/src/tools/mcp/AGENTS.md`
 
 ## Where To Look
 
@@ -66,6 +68,12 @@ Scoped guidance:
 | Native sidecar entry | `native/sidecar/src/main.rs` | Rust JSONL process entry. |
 | Packaging | `scripts/package-cli.ts`, `scripts/install.sh` | CLI tarball and install contract. |
 | Workflow contracts | `.github/workflows/*.yml`, `tests/workflow-yaml.test.ts` | CI and release expectations. |
+| MCP config schema | `packages/protocol/src/mcp-config.ts` | Local/remote MCP server config, LSP config placeholder, strict schemas. |
+| Permission kinds | `packages/protocol/src/permission-profile.ts` | `read`/`edit`/`write`/`patch`/`bash`/`network`/`subagent` PermissionKind union. |
+| Skills loader | `packages/core/src/skills/skill-loader.ts` | 3-scope first-wins SKILL.md discovery, denylist, symlink defense. |
+| MCP clients | `packages/core/src/tools/mcp/` | Stdio + remote transports, config loader, connection manager, namespaced surfacing, secret redaction. |
+| System prompt | `packages/core/src/context/system-prompt.ts` | Persona + env + tools + guidelines + `<available_skills>` XML assembly. |
+| Interactive TUI | `apps/cli/src/commands/ink-chat-bridge.tsx` | Ink keyboard router, agent spinner, approval overlay, model picker. |
 
 ## Code Map
 

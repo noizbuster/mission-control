@@ -2,7 +2,7 @@
 
 ## Overview
 
-`packages/core/src/tools` owns model-callable tool registration and execution for read-only repo tools, `file.patch`, `command.run`, plus the coding-agent capability tools: `glob`, `todowrite`, `webfetch`, the `task` subagent, the `mcp` proxy and namespaced `mcp__*` clients (stdio/remote), the `skill` on-demand loader, and the opt-in `lsp` seam.
+`packages/core/src/tools` owns model-callable tool registration and execution for read-only repo tools, `file.patch`, `command.run`, plus the coding-agent capability tools: `glob`, `todowrite`, `webfetch`, the `task` subagent, the `mcp` proxy and namespaced `mcp__*` clients (stdio/remote), the `skill` on-demand loader, and the opt-in `lsp` seam. The MCP client subsystem lives in `mcp/` (see `mcp/AGENTS.md`).
 
 ## Where To Look
 
@@ -13,6 +13,8 @@
 | Command run tool | `command-run*.ts` | Structured argv, allowlist, executor, interrupts, timeouts, output caps. |
 | Read-only tools | `read-tools*.ts` | Repo read/list/search behavior and path guards. |
 | Tool policy | `command-run-policy.ts`, `tool-defaults-security.test.ts` | Safe default command set and security expectations. |
+| MCP clients | `mcp/` (see `mcp/AGENTS.md`) | Stdio + remote transports, config, connection manager, namespaced surfacing, secret redaction. |
+| Tool factories | `glob-tool-factory.ts`, `webfetch-tool-factory.ts`, `task-tool-factory.ts`, `skill-tool.ts` | Permission-self-gating factories for the interactive + non-interactive registries. |
 
 ## Conventions
 

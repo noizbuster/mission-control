@@ -154,6 +154,11 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | Runtime catalog | `packages/config/src/models-dev-runtime.ts` | Fetches models.dev with 5min disk cache |
 | Output modes | `src/ui/renderers.ts` | Plain, Ink, and JSON renderer contracts. |
 | CLI package targets | `package.json`, `project.json` | `tsc` build, verbose Vitest, Nx `cli:*` targets. |
+| Agent spinner | `src/commands/ink-chat-bridge.tsx` (AgentSpinner) | Braille spinner (`⠋⠙⠹…`) at 80ms; shows "Thinking…" / "Running X…" via `ChatOutput.setAgentStatus`. |
+| Approval overlay | `src/commands/ink-chat-bridge.tsx` (handleApprovalInput) | Arrow-key Up/Down/Enter/Ctrl+C navigation; `ChatOutput.showApproval`/`hideApproval`. |
+| ChatOutput extensions | `src/commands/interactive-chat-io.ts` | Optional `setAgentStatus`/`clearAgentStatus`/`showApproval`/`hideApproval` methods. |
+| Session store fix | `src/commands/run-agent-session.ts` | `createsTransientSessionStore` includes `'ink'` mode so the graph path (with tools) is always used. |
+| Retryable tool errors | `packages/core/src/tools/read-tools-errors.ts` | Repo tool failures are `retryable: true` — the model can adjust and retry instead of the run dying. |
 
 ## Conventions
 
