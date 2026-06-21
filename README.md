@@ -44,6 +44,7 @@ pnpm dev:cli -- --json
 pnpm dev:cli -- --no-tui --provider local --model local-echo
 pnpm dev:cli -- --json --model local/local-echo
 pnpm dev:cli -- --json --graph examples/abg/research-answer.graph.json
+pnpm dev:cli -- --no-tui --workspace /path/to/target-project --provider local --model local-echo "summarize this project"
 pnpm dev:cli -- auth login --provider local --api-key <key>
 pnpm dev:cli -- auth login --provider anthropic --api-key <key>
 pnpm dev:cli -- auth login --provider openai --method oauth-headless
@@ -136,6 +137,13 @@ Session storage:
 - Session event logs live at `sessions/<session-id>.jsonl`.
 - JSONL logs contain durable event envelopes with stable event ids, sequence numbers, causation/correlation ids, and replay cursors.
 - Use --json for transient JSON Lines rendering and --jsonl for JSON Lines rendering plus replayable session persistence.
+
+Workspace selection:
+
+- `--workspace <path>` pins the target project directory the coding agent operates on.
+- `MCTRL_WORKSPACE` env var is the equivalent for tests/scripts that want to avoid command-line flags.
+- Without either, the runtime walks up from `process.cwd()` looking for `.git` or a workspace `package.json`.
+- The interactive StatusBar shows the resolved workspace's basename plus the current git branch.
 
 Provider path:
 

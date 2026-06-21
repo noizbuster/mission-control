@@ -141,10 +141,10 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | Ink components | `src/components/*.tsx` | TextInput, SlashCommandMenu, ModelSelector, MessageList, StatusBar, ApprovalPrompt |
 | Executable entry, help, version | `src/index.tsx` | Package `bin` maps `mctrl` to `./dist/index.js`. |
 | Top-level flags and modes | `src/args.ts` | Keep command/mode string unions explicit. |
-| Run and graph args | `src/run-args.ts` | Owns `--json`, `--jsonl`, provider/model, native, graph flags. |
+| Run and graph args | `src/run-args.ts` | Owns `--json`, `--jsonl`, provider/model, native, graph, `--workspace`, `--session`, `--engine` flags. |
 | Auth args | `src/auth-args.ts` | Delegates into `src/commands/auth*.ts`. |
 | Session args | `src/session-args.ts` | Delegates into `src/commands/session.ts`. |
-| Runtime orchestration | `src/commands/run-agent.ts` | Chooses chat/non-interactive paths, provider setup, permissions, renderers. |
+| Runtime orchestration | `src/commands/run-agent.ts` | Chooses chat/non-interactive paths, provider setup, permissions, renderers, workspace root resolution (`--workspace` > `MCTRL_WORKSPACE` > `detectWorkspaceRoot()`). |
 | Interactive chat | `src/commands/interactive-chat*.ts` | Terminal input, slash commands, model picker, approval broker. Non-TTY fallback path. |
 | Command parsing | `src/commands/chat-commands.ts` | parseChatLine → ChatLineAction |
 | Slash command menu state | `src/commands/interactive-chat-command-menu.ts` | createSlashCommandMenuView, resolveSlashCommandMenuSubmission |
@@ -157,6 +157,8 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | Agent spinner | `src/commands/ink-chat-bridge.tsx` (AgentSpinner) | Braille spinner (`⠋⠙⠹…`) at 80ms; shows "Thinking…" / "Running X…" via `ChatOutput.setAgentStatus`. |
 | Approval overlay | `src/commands/ink-chat-bridge.tsx` (handleApprovalInput) | Arrow-key Up/Down/Enter/Ctrl+C navigation; `ChatOutput.showApproval`/`hideApproval`. |
 | ChatOutput extensions | `src/commands/interactive-chat-io.ts` | Optional `setAgentStatus`/`clearAgentStatus`/`showApproval`/`hideApproval` methods. |
+| Workspace resolution | `src/commands/run-agent.ts` (`resolveWorkspaceRoot`, `detectWorkspaceRoot`) | `--workspace <path>` flag wins, then `MCTRL_WORKSPACE` env var, then `.git`/workspaces heuristic walking up from `process.cwd()`. |
+| StatusBar render surface | `src/components/StatusBar.tsx` | Renders provider/model/variant/project/branch/session; `formatStatus` is exported for unit tests. |
 | Session store fix | `src/commands/run-agent-session.ts` | `createsTransientSessionStore` includes `'ink'` mode so the graph path (with tools) is always used. |
 | Retryable tool errors | `packages/core/src/tools/read-tools-errors.ts` | Repo tool failures are `retryable: true` — the model can adjust and retry instead of the run dying. |
 
