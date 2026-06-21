@@ -1583,10 +1583,10 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     if (snapshot.levelPickerActive) {
         const levels: ReadonlyArray<{ readonly id: string; readonly label: string; readonly desc: string }> = [
             { id: 'verbose', label: 'verbose', desc: 'Ask for every tool call, including reads' },
-            { id: 'safe', label: 'safe', desc: 'Auto-approve read-only tools; ask before modifications' },
-            { id: 'aggressive', label: 'aggressive', desc: 'Auto-approve reads and file edits; ask before bash/network' },
-            { id: 'reckless', label: 'reckless', desc: 'Auto-approve everything except network' },
-            { id: 'yolo', label: 'yolo', desc: 'Auto-approve everything including network (use with caution)' },
+            { id: 'safe', label: 'safe', desc: 'Auto-approve reads and webfetch; ask before modifications' },
+            { id: 'aggressive', label: 'aggressive', desc: 'Auto-approve reads, file edits, and webfetch; ask before bash' },
+            { id: 'reckless', label: 'reckless', desc: 'Auto-approve everything except subagent delegation' },
+            { id: 'yolo', label: 'yolo', desc: 'Auto-approve everything including subagent (use with caution)' },
         ];
         return (
             <Box flexDirection="column">
