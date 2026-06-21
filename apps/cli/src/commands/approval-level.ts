@@ -35,7 +35,7 @@ export const APPROVAL_LEVEL_META: Record<ApprovalLevel, ApprovalLevelMeta> = {
         ],
     },
     aggressive: {
-        description: 'Auto-approve reads, file edits, and webfetch; ask before bash',
+        description: 'Auto-approve reads, file edits, webfetch, and subagent; ask before bash',
         rules: [
             { permission: 'read', pattern: '*', decision: 'always' },
             { permission: 'edit', pattern: '*', decision: 'always' },
@@ -43,19 +43,19 @@ export const APPROVAL_LEVEL_META: Record<ApprovalLevel, ApprovalLevelMeta> = {
             { permission: 'patch', pattern: '*', decision: 'always' },
             { permission: 'bash', pattern: '*', decision: 'ask' },
             { permission: 'network', pattern: '*', decision: 'always' },
-            { permission: 'subagent', pattern: '*', decision: 'ask' },
+            { permission: 'subagent', pattern: '*', decision: 'always' },
         ],
     },
     reckless: {
-        description: 'Auto-approve everything except subagent delegation',
+        description: 'Auto-approve everything; only bash asks before execution',
         rules: [
             { permission: 'read', pattern: '*', decision: 'always' },
             { permission: 'edit', pattern: '*', decision: 'always' },
             { permission: 'write', pattern: '*', decision: 'always' },
             { permission: 'patch', pattern: '*', decision: 'always' },
-            { permission: 'bash', pattern: '*', decision: 'always' },
+            { permission: 'bash', pattern: '*', decision: 'ask' },
             { permission: 'network', pattern: '*', decision: 'always' },
-            { permission: 'subagent', pattern: '*', decision: 'ask' },
+            { permission: 'subagent', pattern: '*', decision: 'always' },
         ],
     },
     yolo: {
