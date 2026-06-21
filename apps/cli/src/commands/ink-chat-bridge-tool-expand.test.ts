@@ -33,28 +33,28 @@ function nextEvent(core: InkChatBridgeCore): unknown {
 }
 
 describe('ink chat bridge Ctrl+O tool output expand/collapse toggle', () => {
-    it('initializes toolOutputExpanded to true', () => {
+    it('initializes toolOutputExpanded to false', () => {
         const core = createInkChatBridgeCore();
 
-        expect(core.toolOutputExpanded).toBe(true);
-        expect(core.snapshot.toolOutputExpanded).toBe(true);
+        expect(core.toolOutputExpanded).toBe(false);
+        expect(core.snapshot.toolOutputExpanded).toBe(false);
     });
 
-    it('toggles toolOutputExpanded to false on Ctrl+O', () => {
+    it('toggles toolOutputExpanded to true on Ctrl+O', () => {
         const core = createInkChatBridgeCore();
 
+        handleInput(core, 'o', makeKey({ ctrl: true }));
+
+        expect(core.toolOutputExpanded).toBe(true);
+    });
+
+    it('toggles toolOutputExpanded back to false on second Ctrl+O', () => {
+        const core = createInkChatBridgeCore();
+
+        handleInput(core, 'o', makeKey({ ctrl: true }));
         handleInput(core, 'o', makeKey({ ctrl: true }));
 
         expect(core.toolOutputExpanded).toBe(false);
-    });
-
-    it('toggles toolOutputExpanded back to true on second Ctrl+O', () => {
-        const core = createInkChatBridgeCore();
-
-        handleInput(core, 'o', makeKey({ ctrl: true }));
-        handleInput(core, 'o', makeKey({ ctrl: true }));
-
-        expect(core.toolOutputExpanded).toBe(true);
     });
 
     it('publishes the new toolOutputExpanded value through the snapshot', () => {
@@ -62,7 +62,7 @@ describe('ink chat bridge Ctrl+O tool output expand/collapse toggle', () => {
 
         handleInput(core, 'o', makeKey({ ctrl: true }));
 
-        expect(core.snapshot.toolOutputExpanded).toBe(false);
+        expect(core.snapshot.toolOutputExpanded).toBe(true);
     });
 
     it('does not enqueue an event on Ctrl+O', () => {
@@ -80,6 +80,6 @@ describe('ink chat bridge Ctrl+O tool output expand/collapse toggle', () => {
 
         expect(core.inputBuffer).toBe('o');
         expect(core.cursorPosition).toBe(1);
-        expect(core.toolOutputExpanded).toBe(true);
+        expect(core.toolOutputExpanded).toBe(false);
     });
 });

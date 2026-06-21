@@ -9,7 +9,6 @@ import {
 
 export async function renderToolPreview(toolCall: ToolCall, output: ChatOutput, workspaceRoot?: string): Promise<void> {
     if (output.isToolOutputExpanded?.() === false) {
-        output.write(`${summarizeToolCall(toolCall)}\n`);
         return;
     }
     if (toolCall.toolName === 'file.edit') {
@@ -172,53 +171,6 @@ function parseBashRunPreview(value: unknown): { readonly commandLine: string; re
 
 function isRecord(value: unknown): value is PreviewRecord {
     return typeof value === 'object' && value !== null;
-}
-
-function summarizeToolCall(toolCall: ToolCall): string {
-    const args = parseJson(toolCall.argumentsJson);
-    const name = toolCall.toolName;
-    const summary = extractToolSummary(name, args);
-    return summary !== undefined ? `tool: ${name}  ${summary}` : `tool: ${name}`;
-}
-
-function extractToolSummary(name: string, args: unknown): string | undefined {
-    switch (name) {
-        case 'file.edit':
-        case 'file.write':
-            return typeofField(args, 'path');
-        case 'file.patch': {
-            const patch = typeofField(args, 'patch');
-            if (patch === undefined) return undefined;
-            const match = /^---\s+a\/(.+)$/mu.exec(patch);
-            return match?.[1];
-        }
-        case 'command.run': {
-            const cmd = typeofField(args, 'command');
-            const cmdArgs = (args as Record<string, unknown> | undefined)?.['args'];
-            if (cmd === undefined) return undefined;
-            return Array.isArray(cmdArgs) ? `${cmd} ${cmdArgs.join(' ')}` : cmd;
-        }
-        case 'bash.run':
-            return typeofField(args, 'commandLine');
-        case 'read':
-        case 'ls':
-        case 'grep':
-        case 'find':
-        case 'repo.read':
-        case 'repo.list':
-        case 'repo.search':
-            return typeofField(args, 'path') ?? typeofField(args, 'pattern');
-        case 'glob':
-            return typeofField(args, 'pattern');
-        default:
-            return undefined;
-    }
-}
-
-function typeofField(value: unknown, field: string): string | undefined {
-    if (typeof value !== 'object' || value === null || !(field in value)) return undefined;
-    const v = (value as Record<string, unknown>)[field];
-    return typeof v === 'string' ? v : undefined;
 }
 
 function redactPreviewText(text: string): string {

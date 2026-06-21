@@ -344,8 +344,6 @@ function renderProviderEnvelope(output: ChatOutput, state: ProviderRenderState, 
 
 function renderInteractiveToolSettlement(output: ChatOutput, settlement: ToolInvocationSettlement): void {
     if (output.isToolOutputExpanded?.() === false) {
-        const indicator = settlement.result.status === 'failed' ? 'failed' : 'ok';
-        output.write(`tool: ${settlement.toolName} \u2014 ${indicator}\n`);
         return;
     }
     if (settlement.result.status === 'failed') {
@@ -508,9 +506,8 @@ function renderInteractiveGraphDurableEvent(output: ChatOutput, state: ProviderR
         }
         if (state.toolCount > 0) {
             const noun = state.toolCount === 1 ? 'tool' : 'tools';
-            const names = state.toolNames.slice(0, 5).join(', ');
-            const suffix = state.toolNames.length > 5 ? `, +${state.toolNames.length - 5} more` : '';
-            output.write(`\u2713 ${state.toolCount} ${noun} (${names}${suffix})\n`);
+            const summary = formatToolCountSummary(state.toolNames);
+            output.write(`\u2713 ${state.toolCount} ${noun} (${summary})\n`);
             state.toolCount = 0;
             state.toolNames = [];
         }
@@ -557,8 +554,6 @@ function renderInteractiveGraphDurableEvent(output: ChatOutput, state: ProviderR
 function renderGraphToolSettlement(output: ChatOutput, payload: unknown, status: 'completed' | 'failed'): void {
     const toolName = readStringField(payload, 'toolName') ?? 'tool';
     if (output.isToolOutputExpanded?.() === false) {
-        const indicator = status === 'completed' ? 'ok' : 'failed';
-        output.write(`tool: ${toolName} \u2014 ${indicator}\n`);
         return;
     }
     if (status === 'failed') {
@@ -597,6 +592,31 @@ function renderGraphToolSettlement(output: ChatOutput, payload: unknown, status:
     if (toolName === 'command.run' || toolName === 'bash.run') {
         output.write(`Command output for ${toolName}\n${modelOutput ?? ''}\n`);
     }
+}
+
+const TOOL_SUMMARY_MAX_ENTRIES = 5;
+
+export function formatToolCountSummary(names: readonly string[]): string {
+    const counts = new Map<string, number>();
+    const order: string[] = [];
+    for (const name of names) {
+        const current = counts.get(name);
+        if (current === undefined) {
+            counts.set(name, 1);
+            order.push(name);
+        } else {
+            counts.set(name, current + 1);
+        }
+    }
+    const entries = order.map((name) => {
+        const count = counts.get(name) ?? 1;
+        return count === 1 ? name : `${name} \u00d7${count}`;
+    });
+    if (entries.length <= TOOL_SUMMARY_MAX_ENTRIES) {
+        return entries.join(', ');
+    }
+    const shown = entries.slice(0, TOOL_SUMMARY_MAX_ENTRIES).join(', ');
+    return `${shown}, +${entries.length - TOOL_SUMMARY_MAX_ENTRIES} more`;
 }
 
 /** Pull the `delta` string off an `llm.text.delta` emit signal; `undefined` for other signals. */

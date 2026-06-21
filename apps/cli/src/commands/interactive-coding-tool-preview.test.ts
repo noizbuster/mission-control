@@ -2,6 +2,7 @@ import type { ToolCall } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { renderToolPreview } from './interactive-coding-tool-preview.js';
 import { createBufferedChatOutput } from './run-agent-chat-test-support.js';
+import type { ChatOutput } from './interactive-chat-io.js';
 import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -165,6 +166,27 @@ describe('interactive coding tool preview', () => {
         expect(output.getOutput()).toContain('Preview blocked until approval');
         expect(output.getOutput()).not.toContain('secret target');
         expect(output.getOutput()).not.toContain('+++ b/linked/child.txt');
+    });
+
+    it('writes nothing in collapsed mode (isToolOutputExpanded returns false)', async () => {
+        const chunks: string[] = [];
+        const collapsedOutput: ChatOutput = {
+            write: (text: string) => {
+                chunks.push(text);
+            },
+            isToolOutputExpanded: () => false,
+        };
+
+        await renderToolPreview(
+            toolCall('file.patch', 'collapsed_patch', { patch: addFilePatch('hidden.txt', 'content') }),
+            collapsedOutput,
+        );
+        await renderToolPreview(
+            toolCall('command.run', 'collapsed_cmd', { command: 'echo', args: ['hi'] }),
+            collapsedOutput,
+        );
+
+        expect(chunks.join('')).toBe('');
     });
 });
 
