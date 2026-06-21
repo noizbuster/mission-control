@@ -140,6 +140,77 @@ describe('mapGraphTurnResult', () => {
         });
         expect(failed.status).toBe('failed');
     });
+
+    it('propagates a tool_failed terminalError code as the protocol errorCode instead of unknown', () => {
+        const failed = mapGraphTurnResult({
+            graphId: 'g',
+            status: 'failed',
+            events: [],
+            terminalError: {
+                code: 'tool_failed',
+                message: 'command_failed: command failed: ls biome*',
+                retryable: false,
+            },
+        });
+        expect(failed.status).toBe('failed');
+        expect(failed).toMatchObject({
+            errorCode: 'tool_failed',
+            reason: 'command_failed: command failed: ls biome*',
+        });
+    });
+
+    it('propagates provider_rate_limited as the errorCode when surfaced as terminalError', () => {
+        const failed = mapGraphTurnResult({
+            graphId: 'g',
+            status: 'failed',
+            events: [],
+            terminalError: {
+                code: 'provider_rate_limited',
+                message: 'rate limited by provider',
+                retryable: true,
+            },
+        });
+        expect(failed).toMatchObject({ errorCode: 'provider_rate_limited' });
+    });
+
+    it('falls back to unknown errorCode for graph-internal codes not in ProtocolErrorCode', () => {
+        const failed = mapGraphTurnResult({
+            graphId: 'g',
+            status: 'failed',
+            events: [{ type: 'graph.failed', message: 'ABG graph loop limit exceeded' } as AgentEvent],
+            terminalError: {
+                code: 'graph_loop_limit',
+                message: 'loop limit hit',
+                retryable: false,
+            },
+        });
+        expect(failed).toMatchObject({ errorCode: 'unknown' });
+        expect(failed).toMatchObject({ reason: 'ABG graph loop limit exceeded' });
+    });
+
+    it('prefers the graph-level event message (which failGraph appends the cause to) over the bare terminalError message', () => {
+        const failed = mapGraphTurnResult({
+            graphId: 'g',
+            status: 'failed',
+            events: [
+                {
+                    type: 'graph.failed',
+                    message:
+                        'ABG run failed on a non-retryable tool settlement: llm-actor — command_failed: command failed: ls biome*',
+                } as AgentEvent,
+            ],
+            terminalError: {
+                code: 'tool_failed',
+                message: 'command_failed: command failed: ls biome*',
+                retryable: false,
+            },
+        });
+        expect(failed).toMatchObject({
+            errorCode: 'tool_failed',
+            reason:
+                'ABG run failed on a non-retryable tool settlement: llm-actor — command_failed: command failed: ls biome*',
+        });
+    });
 });
 
 describe('agentMessagesToSeedModelMessages', () => {

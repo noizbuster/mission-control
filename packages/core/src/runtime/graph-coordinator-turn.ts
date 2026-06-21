@@ -19,7 +19,9 @@ import type {
     AgentEvent,
     AgentMessage,
     ModelProviderSelection,
+    ProtocolErrorCode,
 } from '@mission-control/protocol';
+import { ProtocolErrorCodeSchema } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import type { ProjectInstructionResource } from '../context/project-context-messages.js';
 import type { SystemPromptEnvironment } from '../context/system-prompt.js';
@@ -128,11 +130,13 @@ export function createGraphTurnRunner(wiring: GraphTurnRunnerWiring): RunCoordin
 /**
  * Map a terminal `AbgGraphRunResult` into the coordinator's turn-result shape. `completed` and
  * `cancelled` map directly. `failed`/`blocked` carry a best-effort reason from the graph's trailing
- * `graph.failed`/block events; the coordinator-level `errorCode` is `unknown` because the graph's
- * own codes (`graph_loop_limit`, `node_retry_exhausted`, ...) are not `ProtocolErrorCode` values —
- * the specific cause travels in the `reason`. Non-terminal `created`/`active` should never surface
- * as a turn result; if they do it signals a wiring/runtime bug, so they map to `failed` rather than
- * a silent empty success.
+ * `graph.failed`/block events. When the graph surfaced a structured `terminalError` (e.g. a tool
+ * failure with `code: "tool_failed"`), its code is validated against `ProtocolErrorCodeSchema` and
+ * propagated — so a `tool_failed` settlement surfaces as `errorCode: 'tool_failed'` rather than the
+ * generic `'unknown'`. Codes that are not in the protocol union (e.g. graph-internal
+ * `graph_loop_limit`, `node_retry_exhausted`) fall back to `'unknown'`; the specific cause travels
+ * in the `reason`. Non-terminal `created`/`active` should never surface as a turn result; if they
+ * do it signals a wiring/runtime bug, so they map to `failed` rather than a silent empty success.
  */
 export function mapGraphTurnResult(result: AbgGraphRunResult): RunCoordinatorProviderTurnResult {
     switch (result.status) {
@@ -150,8 +154,8 @@ export function mapGraphTurnResult(result: AbgGraphRunResult): RunCoordinatorPro
             }
             return {
                 status: 'failed',
-                reason: lastEventMessage(result.events) ?? 'graph run failed',
-                errorCode: 'unknown',
+                reason: resolveFailedReason(result),
+                errorCode: resolveProtocolErrorCode(result.terminalError?.code),
             };
         case 'blocked':
             // A graph `blocked` settle is an approval hold (currently only the LLMActor
@@ -240,4 +244,29 @@ function lastEventMessage(events: readonly AgentEvent[]): string | undefined {
         }
     }
     return undefined;
+}
+
+/**
+ * Prefer the graph-level message (which `failGraph` already appends the terminalError cause to)
+ * over the bare terminalError.message. Falls back to terminalError.message, then the generic
+ * default when no graph-level event message exists.
+ */
+function resolveFailedReason(result: AbgGraphRunResult): string {
+    const eventMessage = lastEventMessage(result.events);
+    if (eventMessage !== undefined) {
+        return eventMessage;
+    }
+    return result.terminalError?.message ?? 'graph run failed';
+}
+
+/**
+ * Validate the graph's loose-string terminalError code against `ProtocolErrorCodeSchema`.
+ * Graph-internal codes (`graph_loop_limit`, `node_retry_exhausted`) fall back to `'unknown'`;
+ * tool/provider codes (`tool_failed`, `provider_aborted`) propagate.
+ */
+function resolveProtocolErrorCode(code: string | undefined): ProtocolErrorCode {
+    if (code === undefined) {
+        return 'unknown';
+    }
+    return ProtocolErrorCodeSchema.safeParse(code).success ? (code as ProtocolErrorCode) : 'unknown';
 }

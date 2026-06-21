@@ -202,7 +202,11 @@ function failGraph(
     message: string,
     terminalError?: AbgGraphTerminalError,
 ): AbgGraphRunResult {
-    events.push(graphFailureEvent(graphId, input, code, message));
+    const eventMessage =
+        terminalError !== undefined && terminalError.message.length > 0
+            ? `${message} — ${terminalError.message}`
+            : message;
+    events.push(graphFailureEvent(graphId, input, code, eventMessage));
     return { graphId, status: 'failed', events, ...(terminalError !== undefined ? { terminalError } : {}) };
 }
 
