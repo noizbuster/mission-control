@@ -211,6 +211,7 @@ export type InkChatBridgeOptions = {
     readonly variantID?: string;
     readonly sessionID?: string;
     readonly workspaceRoot?: string;
+    readonly gitBranch?: string;
     readonly initialHistoryEntries?: readonly string[];
     readonly abgOverlayController?: AbgOverlayController;
 };
@@ -1772,6 +1773,36 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
  * events, `emitOutput()` to append chat output, `showModelPicker()` to open the
  * `/model` selection overlay, and `unmount()` to tear down.
  */
+/**
+ * Detect the current git branch of `workspaceRoot` synchronously via `git rev-parse`.
+ * Returns undefined when git is unavailable, the workspace is not a git repo,
+ * or `HEAD` is detached (the rev-parse returns `HEAD` literally in that case).
+ * Exported for unit tests; never throws.
+ */
+export function detectGitBranch(workspaceRoot: string | undefined): string | undefined {
+    if (workspaceRoot === undefined) {
+        return undefined;
+    }
+    try {
+        const result = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+            cwd: workspaceRoot,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'ignore'],
+            timeout: 1000,
+        });
+        if (result.error !== undefined || result.status !== 0) {
+            return undefined;
+        }
+        const branch = (result.stdout ?? '').trim();
+        if (branch.length === 0 || branch === 'HEAD') {
+            return undefined;
+        }
+        return branch;
+    } catch {
+        return undefined;
+    }
+}
+
 export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBridge {
     const core = createInkChatBridgeCore({
         ...(options?.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
@@ -1799,8 +1830,24 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         ...(core.abgOverlayController !== undefined ? { abgOverlayController: core.abgOverlayController } : {}),
     };
 
+    const statusBarProps: InkChatBridgeOptions | undefined =
+        options !== undefined
+            ? {
+                  ...options,
+                  ...(options.gitBranch === undefined && options.workspaceRoot !== undefined
+                      ? (() => {
+                            const detected = detectGitBranch(options.workspaceRoot);
+                            return detected !== undefined ? { gitBranch: detected } : {};
+                        })()
+                      : {}),
+              }
+            : undefined;
+
     const instance = render(
-        <ChatRoot bridge={internalBridge} {...(options !== undefined ? { statusBarProps: options } : {})} />,
+        <ChatRoot
+            bridge={internalBridge}
+            {...(statusBarProps !== undefined ? { statusBarProps } : {})}
+        />,
         { exitOnCtrlC: false },
     );
     core.unmountFn = instance.unmount;

@@ -1,4 +1,5 @@
 import { Text } from 'ink';
+import { basename } from 'node:path';
 
 export type StatusBarProps = {
     readonly providerID: string;
@@ -6,12 +7,24 @@ export type StatusBarProps = {
     readonly variantID?: string;
     readonly sessionID?: string;
     readonly sessionDisplayName?: string;
+    readonly workspaceRoot?: string;
+    readonly gitBranch?: string;
 };
 
-function formatStatus(props: StatusBarProps): string {
+export function formatStatus(props: StatusBarProps): string {
     const parts = [`provider: ${props.providerID}`, `model: ${props.modelID}`];
     if (props.variantID !== undefined) {
         parts.push(`variant: ${props.variantID}`);
+    }
+    if (props.workspaceRoot !== undefined) {
+        const dirLabel = basename(props.workspaceRoot) || props.workspaceRoot;
+        if (props.gitBranch !== undefined && props.gitBranch.length > 0) {
+            parts.push(`project: ${dirLabel} (${props.gitBranch})`);
+        } else {
+            parts.push(`project: ${dirLabel}`);
+        }
+    } else if (props.gitBranch !== undefined && props.gitBranch.length > 0) {
+        parts.push(`branch: ${props.gitBranch}`);
     }
     if (props.sessionDisplayName !== undefined) {
         if (props.sessionID !== undefined) {
