@@ -1,16 +1,13 @@
+import type { AbgOverlayPrefs } from '@mission-control/protocol';
+import { saveAbgOverlayPrefs } from './abg-overlay-prefs-store.js';
 import type { AbgOverlayState, AbgOverlayStore } from './abg-overlay-state.js';
 
-/**
- * Controller that binds the {@link AbgOverlayStore} to the Ink chat bridge. Held outside the
- * bridge public surface (todo 3 spec: "injected where createInkChatBridge is called, NOT through
- * the bridge public surface") and stored on the bridge core so handleInput/handleAbgOverlayInput
- * can reach it.
- *
- * Owns the mutable pending-patch buffer and the refresh interval handle. Todo 2's observer wires
- * signal/event patches into the buffer and starts the refresh timer; flushNow force-applies the
- * buffer on demand (the `r` key), reset tears everything down (Metis 5.3 no-leak), and
- * clearTimeline wipes the recent-events pane (the `c` key).
- */
+export type AbgOverlayPrefsSnapshotProvider = () => AbgOverlayPrefs;
+
+export interface AbgOverlayControllerOptions {
+    readonly readPrefsSnapshot?: AbgOverlayPrefsSnapshotProvider;
+}
+
 export interface AbgOverlayController {
     readonly store: AbgOverlayStore;
     setActive(value: boolean): void;
@@ -19,9 +16,21 @@ export interface AbgOverlayController {
     clearTimeline(): void;
 }
 
-export function createAbgOverlayController(store: AbgOverlayStore): AbgOverlayController {
+export function createAbgOverlayController(
+    store: AbgOverlayStore,
+    options: AbgOverlayControllerOptions = {},
+): AbgOverlayController {
     let refreshTimer: ReturnType<typeof setInterval> | undefined;
     let pendingPatch: Partial<AbgOverlayState> = {};
+    const readPrefsSnapshot = options.readPrefsSnapshot;
+
+    const persistPrefs = (): void => {
+        if (readPrefsSnapshot === undefined) return;
+        const snapshot = readPrefsSnapshot();
+        void saveAbgOverlayPrefs(snapshot).catch((error) => {
+            process.stderr.write(`[abg-overlay] failed to persist preferences: ${String(error)}\n`);
+        });
+    };
 
     return {
         store,
@@ -29,6 +38,7 @@ export function createAbgOverlayController(store: AbgOverlayStore): AbgOverlayCo
             store.setActive(value);
         },
         reset() {
+            persistPrefs();
             if (refreshTimer !== undefined) {
                 clearInterval(refreshTimer);
                 refreshTimer = undefined;

@@ -14,7 +14,7 @@ import type { AbgSignal, AgentEvent } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { ToolRegistry } from '../tools/tool-registry.js';
+import { ToolExecutionError, ToolRegistry } from '../tools/tool-registry.js';
 import type { ToolRegistration } from '../tools/tool-registry-types.js';
 import { createCodingAgentGraph } from './coding-agent-graph.js';
 import { createCodingAgentNodeRegistry } from './coding-agent-registry.js';
@@ -291,5 +291,84 @@ describe('coding-agent graph — Observe → Decide → Act loop', () => {
         expect(types.filter((type) => type === 'policy.budget.accumulated').length).toBe(2);
         // Total 20 cents > budgetCents 5 → exceeded fires exactly once.
         expect(types.filter((type) => type === 'policy.budget.exceeded').length).toBe(1);
+    });
+
+    it('caps consecutive retryable-only tool failures at maxAttempts (not maxNodeRuns)', async () => {
+        const failRegistration: ToolRegistration<{ _trigger: string }, { text: string }> = {
+            name: 'always_fail',
+            description: 'A tool that always fails with a retryable error.',
+            capabilityClasses: ['read'],
+            parametersJsonSchema: {
+                type: 'object',
+                properties: { _trigger: { type: 'string' } },
+                required: ['_trigger'],
+                additionalProperties: false,
+            },
+            inputSchema: z.object({ _trigger: z.string() }),
+            outputSchema: z.object({ text: z.string() }),
+            outputLimit: { maxModelOutputChars: 2000 },
+            execute: async () => {
+                throw new ToolExecutionError({
+                    code: 'tool_failed',
+                    message: 'workspace_escape: always blocked',
+                    retryable: true,
+                });
+            },
+            toModelOutput: (output) => output.text,
+        };
+
+        const model = new MockLanguageModelV3({
+            provider: MODEL_SELECTION.providerID,
+            modelId: MODEL_SELECTION.modelID,
+            doStream: async () => ({
+                stream: convertArrayToReadableStream([
+                    { type: 'stream-start', warnings: [] },
+                    { type: 'text-start', id: 't1' },
+                    { type: 'text-delta', id: 't1', delta: 'Trying.' },
+                    { type: 'text-end', id: 't1' },
+                    {
+                        type: 'tool-input-start',
+                        id: 'call_fail',
+                        toolName: 'always_fail',
+                    },
+                    {
+                        type: 'tool-input-delta',
+                        id: 'call_fail',
+                        delta: JSON.stringify({ _trigger: 'go' }),
+                    },
+                    { type: 'tool-input-end', id: 'call_fail' },
+                    {
+                        type: 'tool-call',
+                        toolCallId: 'call_fail',
+                        toolName: 'always_fail',
+                        input: JSON.stringify({ _trigger: 'go' }),
+                    },
+                    {
+                        type: 'finish',
+                        finishReason: { unified: 'tool-calls', raw: undefined },
+                        usage: buildUsage(),
+                    },
+                ]),
+            }),
+        });
+
+        const toolRegistry = new ToolRegistry();
+        toolRegistry.register(failRegistration);
+
+        const result = await runAbgGraph({
+            graph: createCodingAgentGraph({ model: MODEL_SELECTION }),
+            sessionId: 'session_retryable_cap',
+            now: () => NOW,
+            modelProviderSelection: MODEL_SELECTION,
+            registry: createCodingAgentNodeRegistry(),
+            resolveSdkModel: () => model,
+            toolRegistry,
+            initialMessages: [{ role: 'user', content: 'call the failing tool' }],
+        });
+
+        expect(result.status).toBe('failed');
+        // maxAttempts is 3 (defaultRetryLimit 2 + 1). The graph must fail after 3 consecutive
+        // retryable-only-failure iterations — NOT spin to maxNodeRuns (40).
+        expect(model.doStreamCalls.length).toBeLessThanOrEqual(3);
     });
 });

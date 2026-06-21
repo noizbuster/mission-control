@@ -3,13 +3,30 @@ import { useSyncExternalStore } from 'react';
 import type { AbgOverlayState, AbgOverlayStore } from '../commands/abg-overlay-state.js';
 import { DEFAULT_REFRESH_MS } from '../commands/abg-overlay-state.js';
 import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA.js';
-import { ApprovalsPane, CostPolicyPane, TimelinePane, ToolsPane } from './AbgOverlayPanesB.js';
+import { ApprovalsPane, BlackboardPane, CostPolicyPane, TimelinePane, ToolsPane } from './AbgOverlayPanesB.js';
 
-export type AbgOverlayTab = 'overview' | 'graph' | 'nodes' | 'tools' | 'timeline' | 'approvals' | 'cost-policy';
+export type AbgOverlayTab =
+    | 'overview'
+    | 'graph'
+    | 'nodes'
+    | 'tools'
+    | 'timeline'
+    | 'approvals'
+    | 'cost-policy'
+    | 'blackboard';
 
-const TABS: readonly AbgOverlayTab[] = ['overview', 'graph', 'nodes', 'tools', 'timeline', 'approvals', 'cost-policy'];
+const TABS: readonly AbgOverlayTab[] = [
+    'overview',
+    'graph',
+    'nodes',
+    'tools',
+    'timeline',
+    'approvals',
+    'cost-policy',
+    'blackboard',
+];
 
-/** Min terminal width (cols) for the full 7-tab layout (Metis 2.8). */
+/** Min terminal width (cols) for the full 8-tab layout (Metis 2.8). */
 export const NARROW_THRESHOLD = 100;
 
 /**
@@ -28,6 +45,7 @@ const TAB_LABELS: Record<AbgOverlayTab, string> = {
     timeline: 'Timeline',
     approvals: 'Approvals',
     'cost-policy': 'Cost&Policy',
+    blackboard: 'Blackboard',
 };
 
 export interface AbgOverlayProps {
@@ -145,6 +163,8 @@ function PaneBody({
             return <ApprovalsPane state={state} />;
         case 'cost-policy':
             return <CostPolicyPane state={state} modelLabel={modelLabel} />;
+        case 'blackboard':
+            return <BlackboardPane state={state} />;
         default:
             return (
                 <Box flexDirection="column" marginTop={1}>
@@ -164,7 +184,7 @@ function FooterHint({ narrow }: { narrow: boolean }): React.ReactElement {
     }
     return (
         <Box marginTop={1}>
-            <Text dimColor>1-7 tabs | Tab cycle | ↑↓ scroll | Ctrl+G/Esc close | r refresh | t live | c clear</Text>
+            <Text dimColor>1-8 tabs | Tab cycle | ↑↓ scroll | g cycle graph | Ctrl+G/Esc close | r refresh | t live | c clear</Text>
         </Box>
     );
 }

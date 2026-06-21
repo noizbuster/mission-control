@@ -35,6 +35,7 @@ import {
 import type { AbgNodeModelOptions, ModelProviderSelection, PermissionRequest } from '@mission-control/protocol';
 import { type AgentEvent, type ToolCall, ToolResultSchema } from '@mission-control/protocol';
 import { cliAllowsAction } from './cli-permission-policy.js';
+import type { ApprovalLevel } from './approval-level.js';
 import type { InteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { renderToolPreview } from './interactive-coding-tool-preview.js';
@@ -78,6 +79,7 @@ export type InteractiveToolOptions = {
      * interactive TUI wires this to the Ink question overlay.
      */
     readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
+    readonly approvalLevel?: ApprovalLevel;
 };
 
 export async function createInteractiveToolRegistry(

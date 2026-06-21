@@ -10,10 +10,11 @@ import {
     type Skill,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
-import { parseChatLine } from './chat-commands.js';
 import { createAbgOverlayController } from './abg-overlay-controller.js';
+import { DEFAULT_ABG_OVERLAY_PREFS, loadAbgOverlayPrefs } from './abg-overlay-prefs-store.js';
 import { createAbgOverlayStore } from './abg-overlay-state.js';
-import { createInkChatBridge, type InkChatBridgeOptions } from './ink-chat-bridge.js';
+import { parseChatLine } from './chat-commands.js';
+import { createInkChatBridge, type InkChatBridge, type InkChatBridgeOptions } from './ink-chat-bridge.js';
 import { createInkChatInput } from './ink-chat-input.js';
 import { createInkChatOutput } from './ink-chat-output.js';
 import { createInkModelSelector } from './ink-model-selector.js';
@@ -42,6 +43,7 @@ import { createSessionNavigationController } from './interactive-chat-session-na
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import { loadPricingTable } from './pricing-table-store.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
 
@@ -88,7 +90,14 @@ export async function runInteractiveChatSession(
         sessionDisplayName?: string;
     };
     const initialHistoryEntries = useInk ? await loadInputHistoryEntries() : [];
-    const abgOverlayController = useInk ? createAbgOverlayController(createAbgOverlayStore()) : undefined;
+    const initialAbgOverlayPrefs = useInk ? await loadAbgOverlayPrefs() : undefined;
+    const pricingTableForSession = await loadPricingTable();
+    let inkBridgeRef: InkChatBridge | undefined;
+    const abgOverlayController = useInk
+        ? createAbgOverlayController(createAbgOverlayStore(), {
+              readPrefsSnapshot: () => inkBridgeRef?.getAbgOverlayPrefsSnapshot() ?? DEFAULT_ABG_OVERLAY_PREFS,
+          })
+        : undefined;
     const bridgeOptions: SessionBridgeOptions | undefined = useInk
         ? {
               providerID: options.modelProviderSelection.providerID,
@@ -150,6 +159,7 @@ export async function runInteractiveChatSession(
     let currentSessionId = options.sessionId;
     let currentProvider = options.resolveProviderForSelection?.(currentModelProviderSelection) ?? options.provider;
     let currentSessionStore = options.sessionStore;
+    let currentApprovalLevel: import('./approval-level.js').ApprovalLevel | undefined;
     let sessionDisplayName: string | undefined;
     const sessionDisplayNameController = {
         current: () => sessionDisplayName,
@@ -181,6 +191,10 @@ export async function runInteractiveChatSession(
     const unregisterProcessCleanup = inkBridge === undefined ? registerProcessTerminalCleanup(chatInput) : undefined;
 
     if (inkBridge !== undefined) {
+        inkBridgeRef = inkBridge;
+        if (initialAbgOverlayPrefs !== undefined) {
+            inkBridge.applyAbgOverlayPrefs(initialAbgOverlayPrefs);
+        }
         inkBridge.setModelCycleChoices(modelChoices);
         inkBridge.onModelCycleSelect = (selection) => {
             currentModelProviderSelection = selection;
@@ -208,12 +222,14 @@ export async function runInteractiveChatSession(
     const sessionSkills: readonly Skill[] = discoveredSkills.skills;
 
     try {
-        chatOutput.write('mission-control chat\n');
-        chatOutput.write(formatModelProviderStatus(currentModelProviderSelection, { nodeMode: 'none' }));
-        if (currentSessionId !== undefined && currentSessionStore !== undefined) {
-            chatOutput.write(`resumed session: ${currentSessionId}\n`);
+        if (!useInk) {
+            chatOutput.write('mission-control chat\n');
+            chatOutput.write(formatModelProviderStatus(currentModelProviderSelection, { nodeMode: 'none' }));
+            if (currentSessionId !== undefined && currentSessionStore !== undefined) {
+                chatOutput.write(`resumed session: ${currentSessionId}\n`);
+            }
+            chatOutput.write('Press Ctrl+C twice or /exit to exit\n\n');
         }
-        chatOutput.write('Press Ctrl+C twice or /exit to exit\n\n');
 
         for (;;) {
             if (activeTurn === undefined) {
@@ -307,6 +323,20 @@ export async function runInteractiveChatSession(
                         ...(options.engine !== undefined ? { engine: options.engine } : {}),
                         ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
                         ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
+                        ...(pricingTableForSession.length > 0 ? { pricingTable: pricingTableForSession } : {}),
+                        ...(currentApprovalLevel !== undefined ? { approvalLevel: currentApprovalLevel } : {}),
+                        ...(inkBridge !== undefined
+                            ? {
+                                  selectApprovalLevel: (currentLevel?: import('./approval-level.js').ApprovalLevel) =>
+                                      inkBridge
+                                          .showLevelPicker(currentLevel)
+                                          .then((level): import('./approval-level.js').ApprovalLevel | undefined =>
+                                              level !== undefined
+                                                  ? (level as import('./approval-level.js').ApprovalLevel)
+                                                  : undefined,
+                                          ),
+                              }
+                            : {}),
                         ...(inkBridge !== undefined
                             ? {
                                   requestUserQuestion: (request: AskUserQuestionRequest) =>
@@ -323,12 +353,8 @@ export async function runInteractiveChatSession(
                                                     },
                                           ),
                                           {
-                                              ...(request.header !== undefined
-                                                  ? { header: request.header }
-                                                  : {}),
-                                              ...(request.multiple !== undefined
-                                                  ? { multiple: request.multiple }
-                                                  : {}),
+                                              ...(request.header !== undefined ? { header: request.header } : {}),
+                                              ...(request.multiple !== undefined ? { multiple: request.multiple } : {}),
                                           },
                                       ),
                               }
@@ -357,6 +383,9 @@ export async function runInteractiveChatSession(
             activeTurn = result.activeTurn;
             currentSessionId = result.sessionId ?? currentSessionId;
             currentSessionStore = result.sessionStore ?? currentSessionStore;
+            if (result.approvalLevel !== undefined) {
+                currentApprovalLevel = result.approvalLevel;
+            }
         }
     } finally {
         unregisterProcessCleanup?.();

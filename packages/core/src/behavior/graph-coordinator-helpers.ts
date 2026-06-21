@@ -10,13 +10,14 @@ import type {
 import type { Blackboard } from '../memory/blackboard.js';
 import { createBlackboard } from '../memory/blackboard.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
-import { resetEmitSequence } from './abg-emit.js';
+import { createAbgEmitSignal, resetEmitSequence } from './abg-emit.js';
 import type { AuthorableAbgGraph } from './authorable-graph.js';
 import type { CostLedger } from './budget/cost-ledger.js';
 import { createCostLedger } from './budget/cost-ledger.js';
 import type { AbgGraphRunnerInput } from './graph-runner.js';
 import type { AbgNodeRegistry, AbgObservedGraphEvent } from './node-registry.js';
 import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node.js';
+import { projectAbgSignalToEvent } from './signals.js';
 
 const defaultRetryLimit = 2;
 const defaultMaxNodeRuns = 48;
@@ -29,6 +30,7 @@ export type CoordinatorState = {
     readonly nodeStatuses: Record<string, AbgNodeStatus | undefined>;
     readonly queuedNodeIds: string[];
     readonly attemptsByNodeId: Map<string, number>;
+    readonly consecutiveToolFailuresByNodeId: Map<string, number>;
     readonly maxAttempts: number;
     readonly maxNodeRuns: number;
     readonly graphNodeConcurrency: number;
@@ -52,7 +54,30 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
     // Reset the node-level emit counter for this graph so each run begins the id sequence
     // at 1 — making sequential runs of the same graph byte-identical (review #9).
     resetEmitSequence(graph.id);
-    const blackboard = createBlackboard();
+    // The blackboard mutation observer needs to push events into state.events, but state is
+    // constructed from the blackboard. Deferred via a holder so the closure captures a stable
+    // reference that is populated once state is built.
+    let stateHolder: CoordinatorState | undefined;
+    const blackboard = createBlackboard({
+        onMutation: (kind, payload) => {
+            if (stateHolder === undefined) return;
+            const signal = createAbgEmitSignal({
+                graphId: graph.id,
+                nodeId: '$blackboard',
+                eventType: kind,
+                timestamp: input.now(),
+                ...(payload.value !== undefined ? { payload } : {}),
+            });
+            stateHolder.events.push(
+                projectAbgSignalToEvent({
+                    graphId: graph.id,
+                    sessionId: input.sessionId,
+                    timestamp: input.now(),
+                    signal,
+                }),
+            );
+        },
+    });
     if (input.initialMessages !== undefined) {
         blackboard.setMessages(input.initialMessages);
     }
@@ -61,11 +86,12 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         ...(input.pricingTable !== undefined ? { pricingTable: input.pricingTable } : {}),
         ...(budgetCents !== undefined ? { budget: { budgetCents } } : {}),
     });
-    return {
+    const state: CoordinatorState = {
         events: [],
         nodeStatuses: {},
         queuedNodeIds: [graph.entryNodeId],
         attemptsByNodeId: new Map(),
+        consecutiveToolFailuresByNodeId: new Map(),
         maxAttempts: (graph.defaults?.retryLimit ?? defaultRetryLimit) + 1,
         maxNodeRuns: graph.defaults?.maxNodeRuns ?? input.maxNodeRuns ?? defaultMaxNodeRuns,
         graphNodeConcurrency: input.graphNodeConcurrency ?? defaultGraphNodeConcurrency,
@@ -75,6 +101,8 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         blackboard,
         ...(budgetLedger !== undefined ? { budgetLedger } : {}),
     };
+    stateHolder = state;
+    return state;
 }
 
 export function runContext(

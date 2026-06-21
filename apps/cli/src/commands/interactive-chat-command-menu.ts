@@ -126,6 +126,36 @@ export const slashCommandChoices = [
         description: 'Reset workspace trust',
     },
     {
+        id: '/approval',
+        insertText: '/approval ',
+        description: 'Show or set approval level (verbose/safe/aggressive/reckless/yolo)',
+    },
+    {
+        id: '/approval verbose',
+        insertText: '/approval verbose',
+        description: 'Ask for every tool call',
+    },
+    {
+        id: '/approval safe',
+        insertText: '/approval safe',
+        description: 'Auto-approve reads, ask before modifications',
+    },
+    {
+        id: '/approval aggressive',
+        insertText: '/approval aggressive',
+        description: 'Auto-approve reads + file edits',
+    },
+    {
+        id: '/approval reckless',
+        insertText: '/approval reckless',
+        description: 'Auto-approve everything except network',
+    },
+    {
+        id: '/approval yolo',
+        insertText: '/approval yolo',
+        description: 'Auto-approve everything',
+    },
+    {
         id: '/interrupt',
         insertText: '/interrupt',
         description: 'Interrupt the active run',

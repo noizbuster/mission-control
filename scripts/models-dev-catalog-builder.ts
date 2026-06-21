@@ -2,8 +2,16 @@ import { type GeneratedAuthField, resolveAuthFields } from './models-dev-auth-fi
 
 export const modelsDevURL = 'https://models.dev/api.json';
 
+export type ModelsDevRawCost = {
+    readonly input?: number;
+    readonly output?: number;
+    readonly cache_read?: number;
+    readonly cache_write?: number;
+};
+
 export type ModelsDevRawModel = {
     readonly name?: string;
+    readonly cost?: ModelsDevRawCost | null;
 };
 
 export type ModelsDevRawProvider = {
@@ -14,10 +22,17 @@ export type ModelsDevRawProvider = {
 
 export type ModelsDevRawCatalog = Record<string, ModelsDevRawProvider>;
 
+export type GeneratedCost = {
+    readonly inputCentsPerMillion: number;
+    readonly outputCentsPerMillion: number;
+    readonly cacheReadCentsPerMillion?: number;
+};
+
 export type GeneratedModel = {
     readonly id: string;
     readonly name: string;
     readonly status: 'active';
+    readonly cost?: GeneratedCost;
 };
 
 export type GeneratedProvider = {
@@ -34,8 +49,19 @@ export type GeneratedCatalogSnapshot = {
     readonly generatedAt: string;
     readonly providerCount: number;
     readonly modelCount: number;
+    readonly pricedModelCount: number;
     readonly providers: readonly GeneratedProvider[];
 };
+
+export type GeneratedPricingEntry = {
+    readonly providerID: string;
+    readonly modelID: string;
+    readonly inputCentsPerMillion: number;
+    readonly outputCentsPerMillion: number;
+    readonly cacheReadCentsPerMillion?: number;
+};
+
+export type GeneratedPricingTable = readonly GeneratedPricingEntry[];
 
 export function buildModelsDevCatalogSnapshot(catalog: ModelsDevRawCatalog): GeneratedCatalogSnapshot {
     const providers = Object.entries(catalog)
@@ -43,13 +69,38 @@ export function buildModelsDevCatalogSnapshot(catalog: ModelsDevRawCatalog): Gen
         .filter(isDefined)
         .sort((left, right) => left.id.localeCompare(right.id));
     const modelCount = providers.reduce((count, provider) => count + provider.models.length, 0);
+    const pricedModelCount = providers.reduce(
+        (count, provider) => count + provider.models.filter((model) => model.cost !== undefined).length,
+        0,
+    );
     return {
         source: modelsDevURL,
         generatedAt: new Date().toISOString(),
         providerCount: providers.length,
         modelCount,
+        pricedModelCount,
         providers,
     };
+}
+
+export function buildPricingTableFromSnapshot(snapshot: GeneratedCatalogSnapshot): GeneratedPricingTable {
+    const entries: GeneratedPricingEntry[] = [];
+    for (const provider of snapshot.providers) {
+        for (const model of provider.models) {
+            if (model.cost === undefined) continue;
+            const entry: GeneratedPricingEntry = {
+                providerID: provider.id,
+                modelID: model.id,
+                inputCentsPerMillion: model.cost.inputCentsPerMillion,
+                outputCentsPerMillion: model.cost.outputCentsPerMillion,
+                ...(model.cost.cacheReadCentsPerMillion !== undefined
+                    ? { cacheReadCentsPerMillion: model.cost.cacheReadCentsPerMillion }
+                    : {}),
+            };
+            entries.push(entry);
+        }
+    }
+    return entries;
 }
 
 export function parseModelsDevCatalog(value: unknown): ModelsDevRawCatalog {
@@ -63,11 +114,15 @@ export function parseModelsDevCatalog(value: unknown): ModelsDevRawCatalog {
 
 function buildProvider(id: string, provider: ModelsDevRawProvider): GeneratedProvider | undefined {
     const models = Object.entries(provider.models ?? {})
-        .map(([modelID, model]) => ({
-            id: modelID,
-            name: model.name ?? modelID,
-            status: 'active' as const,
-        }))
+        .map(([modelID, model]) => {
+            const cost = buildCost(model.cost);
+            return {
+                id: modelID,
+                name: model.name ?? modelID,
+                status: 'active' as const,
+                ...(cost !== undefined ? { cost } : {}),
+            };
+        })
         .sort((left, right) => left.id.localeCompare(right.id));
     const defaultModelID = models[0]?.id;
     if (provider.name === undefined || defaultModelID === undefined) {
@@ -82,6 +137,23 @@ function buildProvider(id: string, provider: ModelsDevRawProvider): GeneratedPro
         authLabel,
         authFields,
         models,
+    };
+}
+
+/** Converts upstream dollars-per-million to integer cents-per-million. Skips entries missing input/output. */
+function buildCost(cost: ModelsDevRawCost | null | undefined): GeneratedCost | undefined {
+    if (cost === null || cost === undefined) return undefined;
+    const input = cost.input;
+    const output = cost.output;
+    if (typeof input !== 'number' || !Number.isFinite(input) || input < 0) return undefined;
+    if (typeof output !== 'number' || !Number.isFinite(output) || output < 0) return undefined;
+    const cacheRead = cost.cache_read;
+    return {
+        inputCentsPerMillion: Math.round(input * 100),
+        outputCentsPerMillion: Math.round(output * 100),
+        ...(typeof cacheRead === 'number' && Number.isFinite(cacheRead) && cacheRead >= 0
+            ? { cacheReadCentsPerMillion: Math.round(cacheRead * 100) }
+            : {}),
     };
 }
 
@@ -118,9 +190,34 @@ function parseModels(providerID: string, models: Record<string, unknown>): Recor
             if (name !== undefined && typeof name !== 'string') {
                 throw new Error(`Models.dev model ${providerID}/${modelID} name must be a string`);
             }
-            return [modelID, { ...(name !== undefined ? { name } : {}) }] as const;
+            const cost = parseCost(model['cost']);
+            return [
+                modelID,
+                {
+                    ...(name !== undefined ? { name } : {}),
+                    ...(cost !== undefined ? { cost } : {}),
+                },
+            ] as const;
         }),
     );
+}
+
+function parseCost(value: unknown): ModelsDevRawCost | null | undefined {
+    if (value === null) return null;
+    if (value === undefined) return undefined;
+    if (!isRecord(value)) {
+        throw new Error('Models.dev model cost must be an object');
+    }
+    const input = value['input'];
+    const output = value['output'];
+    const cacheRead = value['cache_read'];
+    const cacheWrite = value['cache_write'];
+    const result: Record<string, number> = {};
+    if (typeof input === 'number') result['input'] = input;
+    if (typeof output === 'number') result['output'] = output;
+    if (typeof cacheRead === 'number') result['cache_read'] = cacheRead;
+    if (typeof cacheWrite === 'number') result['cache_write'] = cacheWrite;
+    return result;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -134,3 +231,4 @@ function isStringArray(value: unknown): value is readonly string[] {
 function isDefined<T>(value: T | undefined): value is T {
     return value !== undefined;
 }
+

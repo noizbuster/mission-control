@@ -1,5 +1,7 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { ApprovalLevel } from './approval-level.js';
+import { isApprovalLevel } from './approval-level.js';
 import { splitCommandParts } from './chat-command-parts.js';
 import { parseSessionSlashCommand } from './chat-session-commands.js';
 import { formatModelSelection, type ModelChoice, resolveModelCommand } from './interactive-chat-model.js';
@@ -112,6 +114,10 @@ export type ChatLineAction =
           readonly action: TrustCommandAction;
       }
     | {
+          readonly kind: 'approval';
+          readonly level?: ApprovalLevel;
+      }
+    | {
           readonly kind: 'skill';
           readonly name: string;
           readonly instruction: string;
@@ -197,6 +203,8 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
             return parseNoArgumentCommand('exit', parts.tail);
         case 'trust':
             return parseTrustCommand(parts.tail);
+        case 'approval':
+            return parseApprovalCommand(parts.tail);
         case 'compact':
             return parseCompactCommand(parts.tail);
         case 'export':
@@ -306,6 +314,20 @@ function invalidTrustCommand(): ChatLineAction {
     return {
         kind: 'invalid',
         message: '/trust supports: status, deny, reset',
+    };
+}
+
+function parseApprovalCommand(input: string): ChatLineAction {
+    const trimmed = input.trim();
+    if (trimmed.length === 0) {
+        return { kind: 'approval' };
+    }
+    if (isApprovalLevel(trimmed)) {
+        return { kind: 'approval', level: trimmed };
+    }
+    return {
+        kind: 'invalid',
+        message: '/approval supports: verbose, safe, aggressive, reckless, yolo',
     };
 }
 

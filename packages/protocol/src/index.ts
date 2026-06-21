@@ -54,6 +54,7 @@ export {
     type AbgToolOutcomeStatus,
     AbgToolOutcomeStatusSchema,
 } from './abg.js';
+export { type AbgOverlayPrefs, AbgOverlayPrefsSchema } from './abg-overlay-prefs.js';
 export {
     APPROVAL_LIFECYCLE_STATES,
     APPROVAL_POLICY_DECISIONS,
@@ -113,6 +114,14 @@ export {
     type RunStatus,
     RunStatusSchema,
 } from './mission-run.js';
+export {
+    type BudgetConfig,
+    BudgetConfigSchema,
+    type PricingEntry,
+    PricingEntrySchema,
+    type PricingTable,
+    PricingTableSchema,
+} from './pricing.js';
 export {
     PROTOCOL_ERROR_CODES,
     PROVIDER_FINISH_REASONS,

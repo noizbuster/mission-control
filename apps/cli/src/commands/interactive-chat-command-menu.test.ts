@@ -30,6 +30,7 @@ describe('interactive chat command menu', () => {
             '/model',
             '/model pick',
             '/model list',
+            '/approval safe',
         ]);
 
         const downState = reduceSlashCommandMenuSelection(initialState, '\u001b[B', '/mo');

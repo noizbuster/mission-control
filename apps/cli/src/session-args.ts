@@ -24,8 +24,14 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
             if (sessionId === undefined) {
                 throw new Error('session replay requires a session id');
             }
+            if (argv[2] === '--interactive' || argv[2] === '-i') {
+                if (argv[3] !== undefined) {
+                    throw new Error(`Unsupported session replay argument: ${argv[3]}`);
+                }
+                return { ...createSessionArgs('session-replay'), mode: 'ink', sessionId, replayInteractive: true };
+            }
             if (argv[2] !== '--jsonl') {
-                throw new Error('session replay requires --jsonl for event output');
+                throw new Error('session replay requires --jsonl for event output (or --interactive for TUI)');
             }
             if (argv[3] !== undefined) {
                 throw new Error(`Unsupported session replay argument: ${argv[3]}`);

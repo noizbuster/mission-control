@@ -1,6 +1,6 @@
 import { PermissionRuleStore, PermissionSession } from '@mission-control/core';
 import type { ApprovalRecord, PermissionDecision, PermissionReply, PermissionRequest } from '@mission-control/protocol';
-import { cliPermissionRules } from './cli-permission-policy.js';
+import { approvalLevelRules, type ApprovalLevel } from './approval-level.js';
 import type { InteractiveToolOptions } from './interactive-coding-tools.js';
 
 export type InteractiveApprovalBroker = {
@@ -19,8 +19,9 @@ type PendingApproval = {
 };
 
 export function createInteractiveApprovalBroker(options: InteractiveToolOptions): InteractiveApprovalBroker {
+    const level: ApprovalLevel = options.approvalLevel ?? 'safe';
     const permissionSession = new PermissionSession({
-        builtInRules: cliPermissionRules(),
+        builtInRules: approvalLevelRules(level),
         persistedRuleStore: new PermissionRuleStore(),
     });
     let pending: PendingApproval | undefined;
@@ -167,7 +168,7 @@ async function resolveQueuedApproval(
     await permissionSession.rememberReply(request, options.sessionId, normalizedReply);
     options.output.write('\n');
     options.output.hideApproval?.();
-    options.output.write(renderApprovalResult(request.action, normalizedReply.reply));
+    options.output.write(renderApprovalResult(request.action, normalizedReply.reply, normalizedReply.reason));
     options.emitEvent(eventWithReply(options, normalizedReply));
     const decidedRecord = approvalDecisionRecord(record, normalizedReply);
     options.emitEvent(
@@ -191,7 +192,10 @@ async function resolveQueuedApproval(
 function parseReply(line: string): PermissionReply {
     const answer = line.trim().toLowerCase();
     if (answer === 'a' || answer === 'always') {
-        return { approvalId: '', reply: 'always', reason: 'interactive CLI approval' };
+        return { approvalId: '', reply: 'always', reason: 'interactive CLI approval', persist: true };
+    }
+    if (answer === 's' || answer === 'session') {
+        return { approvalId: '', reply: 'always', reason: 'interactive CLI approval (session)' };
     }
     if (answer === 'y' || answer === 'yes' || answer === 'allow' || answer === 'o' || answer === 'once') {
         return { approvalId: '', reply: 'once', reason: 'interactive CLI approval' };
@@ -199,7 +203,10 @@ function parseReply(line: string): PermissionReply {
     return { approvalId: '', reply: 'deny', reason: 'interactive CLI approval' };
 }
 
-function renderApprovalResult(action: string, reply: PermissionReply['reply']): string {
+function renderApprovalResult(action: string, reply: PermissionReply['reply'], reason?: string): string {
+    if (reply === 'always' && reason?.includes('session')) {
+        return `Allowed for session: ${action}\n`;
+    }
     switch (reply) {
         case 'always':
             return `Always allow ${action}\n`;
@@ -255,7 +262,7 @@ function eventWithApproval(
 
 function isApprovalAnswer(line: string): boolean {
     const answer = line.trim().toLowerCase();
-    return ['a', 'always', 'd', 'deny', 'n', 'no', 'o', 'once', 'y', 'yes', 'allow'].includes(answer);
+    return ['a', 'always', 'd', 'deny', 'n', 'no', 'o', 'once', 's', 'session', 'y', 'yes', 'allow'].includes(answer);
 }
 
 function approvalIdFor(request: PermissionRequest): string {

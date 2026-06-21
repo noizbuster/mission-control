@@ -54,6 +54,22 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         }
                         break;
                     }
+                    if (result.hadOnlyRetryableToolFailures === true) {
+                        const consecutive = (state.consecutiveToolFailuresByNodeId.get(result.node.id) ?? 0) + 1;
+                        state.consecutiveToolFailuresByNodeId.set(result.node.id, consecutive);
+                        if (consecutive >= state.maxAttempts) {
+                            return failGraph(
+                                graph.id,
+                                input,
+                                state.events,
+                                'node_retry_exhausted',
+                                `ABG node retry limit exhausted on consecutive tool failures: ${result.node.id}`,
+                                terminalErrorFromSignal(result.lastSignal),
+                            );
+                        }
+                    } else if (result.hadProductiveToolUse === true) {
+                        state.consecutiveToolFailuresByNodeId.set(result.node.id, 0);
+                    }
                     enqueueSelectedTargets(
                         graph,
                         result.node,

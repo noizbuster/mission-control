@@ -25,9 +25,27 @@ export type BlackboardEntry = {
     readonly value: unknown;
 };
 
+export type BlackboardMutationKind = 'blackboard.set' | 'blackboard.delete';
+
+export type BlackboardMutationPayload = {
+    readonly key: string;
+    readonly value?: unknown;
+};
+
+export type BlackboardMutationObserver = (kind: BlackboardMutationKind, payload: BlackboardMutationPayload) => void;
+
+export type BlackboardOptions = {
+    readonly onMutation?: BlackboardMutationObserver;
+};
+
 export class Blackboard {
     private readonly entries = new Map<string, unknown>();
     private messages: readonly ModelMessage[] = [];
+    private readonly onMutation: BlackboardMutationObserver | undefined;
+
+    constructor(options: BlackboardOptions = {}) {
+        this.onMutation = options.onMutation;
+    }
 
     /**
      * The running conversation. `LLMActor` reads this as its input message list and
@@ -54,6 +72,7 @@ export class Blackboard {
 
     set(key: string, value: unknown): void {
         this.entries.set(key, value);
+        this.onMutation?.('blackboard.set', { key, value });
     }
 
     has(key: string): boolean {
@@ -62,6 +81,7 @@ export class Blackboard {
 
     delete(key: string): void {
         this.entries.delete(key);
+        this.onMutation?.('blackboard.delete', { key });
     }
 
     /** Snapshot of entries as a plain object, for rule evaluation (`blackboard.*` predicates). */
@@ -74,6 +94,6 @@ export class Blackboard {
     }
 }
 
-export function createBlackboard(): Blackboard {
-    return new Blackboard();
+export function createBlackboard(options?: BlackboardOptions): Blackboard {
+    return new Blackboard(options);
 }

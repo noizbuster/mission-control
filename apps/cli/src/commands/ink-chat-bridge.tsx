@@ -133,6 +133,8 @@ type BridgeSnapshot = {
     readonly modelPickerActive: boolean;
     readonly modelPickerChoices: readonly ModelChoice[];
     readonly modelPickerKeypress: ProviderPromptKeypressState;
+    readonly levelPickerActive: boolean;
+    readonly levelPickerSelectedIndex: number;
     readonly modelCycleChoices: readonly ModelChoice[];
     readonly modelCycleIndex: number;
     readonly generating: boolean;
@@ -169,6 +171,7 @@ export type InkChatBridge = {
     readonly replaceOutputText: (text: string) => void;
     readonly getOutput: () => string;
     readonly showModelPicker: (choices: readonly ModelChoice[]) => Promise<ModelProviderSelection | undefined>;
+    readonly showLevelPicker: (currentLevel?: string) => Promise<string | undefined>;
     readonly setModelCycleChoices: (choices: readonly ModelChoice[]) => void;
     onModelCycleSelect: ((selection: ModelProviderSelection) => void) | undefined;
     onRenameSubmit: ((name: string) => void) | undefined;
@@ -184,6 +187,20 @@ export type InkChatBridge = {
         options: readonly (string | QuestionOption)[],
         metadata?: { readonly header?: string; readonly multiple?: boolean },
     ) => Promise<string>;
+    readonly applyAbgOverlayPrefs: (prefs: {
+        readonly activeTabIndex: number;
+        readonly scrollOffset: number;
+        readonly liveOutput: boolean;
+        readonly showThinking: boolean;
+        readonly toolOutputExpanded: boolean;
+    }) => void;
+    readonly getAbgOverlayPrefsSnapshot: () => {
+        readonly activeTabIndex: number;
+        readonly scrollOffset: number;
+        readonly liveOutput: boolean;
+        readonly showThinking: boolean;
+        readonly toolOutputExpanded: boolean;
+    };
     readonly unmount: () => void;
 };
 
@@ -214,6 +231,9 @@ export type InkChatBridgeCore = {
     modelPickerKeypress: ProviderPromptKeypressState;
     modelPickerActive: boolean;
     modelPickerResolve: ((selection: ModelProviderSelection | undefined) => void) | undefined;
+    levelPickerActive: boolean;
+    levelPickerSelectedIndex: number;
+    levelPickerResolve: ((level: string | undefined) => void) | undefined;
     modelCycleChoices: readonly ModelChoice[];
     modelCycleIndex: number;
     onModelCycleSelect: ((selection: ModelProviderSelection) => void) | undefined;
@@ -284,6 +304,8 @@ export function publishSnapshot(core: InkChatBridgeCore): void {
         modelPickerActive: core.modelPickerActive,
         modelPickerChoices: core.modelPickerChoices,
         modelPickerKeypress: core.modelPickerKeypress,
+        levelPickerActive: core.levelPickerActive,
+        levelPickerSelectedIndex: core.levelPickerSelectedIndex,
         modelCycleChoices: core.modelCycleChoices,
         modelCycleIndex: core.modelCycleIndex,
         generating: core.generating,
@@ -464,6 +486,8 @@ export function createInkChatBridgeCore(options?: {
             modelPickerActive: false,
             modelPickerChoices: [],
             modelPickerKeypress: createProviderPromptKeypressState(),
+            levelPickerActive: false,
+            levelPickerSelectedIndex: 0,
             modelCycleChoices: [],
             modelCycleIndex: 0,
             generating: false,
@@ -482,7 +506,7 @@ export function createInkChatBridgeCore(options?: {
             questionCustomMode: false,
             questionCustomBuffer: '',
             showThinking: true,
-            toolOutputExpanded: true,
+            toolOutputExpanded: false,
             renameModeActive: false,
             renameBuffer: '',
             historyNavigation: null,
@@ -497,6 +521,9 @@ export function createInkChatBridgeCore(options?: {
         modelPickerKeypress: createProviderPromptKeypressState(),
         modelPickerActive: false,
         modelPickerResolve: undefined,
+        levelPickerActive: false,
+        levelPickerSelectedIndex: 0,
+        levelPickerResolve: undefined,
         modelCycleChoices: [],
         modelCycleIndex: 0,
         onModelCycleSelect: undefined,
@@ -517,7 +544,7 @@ export function createInkChatBridgeCore(options?: {
         questionCustomBuffer: '',
         questionResolve: undefined,
         showThinking: true,
-        toolOutputExpanded: true,
+        toolOutputExpanded: false,
         renameModeActive: false,
         renameBuffer: '',
         onRenameSubmit: undefined,
@@ -781,6 +808,10 @@ export function handleInput(core: InkChatBridgeCore, input: string, key: Key): v
         handleModelPickerInput(core, input, key);
         return;
     }
+    if (core.levelPickerActive) {
+        handleLevelPickerInput(core, input, key);
+        return;
+    }
     if (core.renameModeActive) {
         handleRenameInput(core, input, key);
         return;
@@ -1008,7 +1039,8 @@ export function handleInput(core: InkChatBridgeCore, input: string, key: Key): v
 
 const approvalOptions = [
     { key: 'once', label: 'Allow once', description: 'allow this request only' },
-    { key: 'always', label: 'Always allow', description: 'allow all future matching requests' },
+    { key: 'session', label: 'Allow session', description: 'allow for this session only' },
+    { key: 'always', label: 'Always allow', description: 'allow all future matching requests (persisted)' },
     { key: 'deny', label: 'Deny', description: 'block this request' },
 ] as const;
 
@@ -1034,7 +1066,7 @@ function handleApprovalInput(core: InkChatBridgeCore, input: string, key: Key): 
     }
     if (key.ctrl && input === 'c') {
         core.approvalActive = false;
-        core.approvalSelectedIndex = 2;
+        core.approvalSelectedIndex = 3;
         publishSnapshot(core);
         enqueueEvent(core, { type: 'line', value: 'deny' });
     }
@@ -1233,7 +1265,38 @@ function handleModelPickerInput(core: InkChatBridgeCore, input: string, key: Key
     publishSnapshot(core);
 }
 
-const ABG_OVERLAY_TAB_COUNT = 7;
+const APPROVAL_LEVEL_PICKER_COUNT = 5;
+
+function handleLevelPickerInput(core: InkChatBridgeCore, input: string, key: Key): void {
+    if (key.ctrl && input === 'c') {
+        core.levelPickerActive = false;
+        core.levelPickerResolve?.(undefined);
+        core.levelPickerResolve = undefined;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.upArrow) {
+        core.levelPickerSelectedIndex = (core.levelPickerSelectedIndex - 1 + APPROVAL_LEVEL_PICKER_COUNT) % APPROVAL_LEVEL_PICKER_COUNT;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.downArrow) {
+        core.levelPickerSelectedIndex = (core.levelPickerSelectedIndex + 1) % APPROVAL_LEVEL_PICKER_COUNT;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.return || input.includes('\r') || input.includes('\n')) {
+        const levels = ['verbose', 'safe', 'aggressive', 'reckless', 'yolo'] as const;
+        const selected = levels[core.levelPickerSelectedIndex];
+        core.levelPickerActive = false;
+        core.levelPickerResolve?.(selected);
+        core.levelPickerResolve = undefined;
+        publishSnapshot(core);
+        return;
+    }
+}
+
+const ABG_OVERLAY_TAB_COUNT = 8;
 
 /**
  * NEVER calls enqueueEvent while active: the chat loop must stay paused (Metis). Unrecognized
@@ -1316,6 +1379,9 @@ function handleAbgOverlayInput(core: InkChatBridgeCore, input: string, key: Key)
             case '7':
                 selectTab(6);
                 return;
+            case '8':
+                selectTab(7);
+                return;
             case 'r':
                 controller?.flushNow();
                 publishSnapshot(core);
@@ -1328,6 +1394,25 @@ function handleAbgOverlayInput(core: InkChatBridgeCore, input: string, key: Key)
                 controller?.clearTimeline();
                 publishSnapshot(core);
                 return;
+            case 'g': {
+                const store = controller?.store;
+                if (store !== undefined) {
+                    const snapshot = store.getSnapshot();
+                    const graphIds = [...snapshot.graphs.keys()];
+                    if (graphIds.length > 1) {
+                        const currentIdx = graphIds.indexOf(snapshot.focusedGraphId ?? '');
+                        const nextIdx = (currentIdx + 1) % graphIds.length;
+                        const nextGraphId = graphIds[nextIdx];
+                        if (nextGraphId !== undefined) {
+                            store.update((draft) => {
+                                draft.focusedGraphId = nextGraphId;
+                            });
+                        }
+                    }
+                }
+                publishSnapshot(core);
+                return;
+            }
             default:
                 return;
         }
@@ -1376,9 +1461,9 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
         return (
             <Box flexDirection="column">
                 <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
-                <Box flexDirection="column" borderStyle="single" borderColor="yellow" paddingX={1} marginTop={1}>
-                    <Text bold color="yellow">
-                        {'Approval Required'}
+                <Box flexDirection="column" marginTop={1} paddingX={1}>
+                    <Text bold color="yellow" inverse>
+                        {' Approval Required '}
                     </Text>
                     <Text>
                         <Text bold>Tool:</Text> {snapshot.approvalToolName}
@@ -1409,9 +1494,9 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
         return (
             <Box flexDirection="column">
                 <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
-                <Box flexDirection="column" borderStyle="single" borderColor="magenta" paddingX={1} marginTop={1}>
-                    <Text bold color="magenta">
-                        {'Question'}
+                <Box flexDirection="column" marginTop={1} paddingX={1}>
+                    <Text bold color="magenta" inverse>
+                        {' Question '}
                     </Text>
                     {snapshot.questionHeader.length > 0 ? <Text bold>{snapshot.questionHeader}</Text> : null}
                     <Text>{snapshot.questionText}</Text>
@@ -1478,9 +1563,9 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
         return (
             <Box flexDirection="column">
                 <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
-                <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1} marginTop={1}>
-                    <Text bold color="cyan">
-                        {'Rename Session'}
+                <Box flexDirection="column" marginTop={1} paddingX={1}>
+                    <Text bold color="cyan" inverse>
+                        {' Rename Session '}
                     </Text>
                     <Text>Enter new session name:</Text>
                     <Text>
@@ -1490,6 +1575,39 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                         </Text>
                     </Text>
                     <Text dimColor>Enter to confirm, Esc to cancel</Text>
+                </Box>
+            </Box>
+        );
+    }
+
+    if (snapshot.levelPickerActive) {
+        const levels: ReadonlyArray<{ readonly id: string; readonly label: string; readonly desc: string }> = [
+            { id: 'verbose', label: 'verbose', desc: 'Ask for every tool call, including reads' },
+            { id: 'safe', label: 'safe', desc: 'Auto-approve read-only tools; ask before modifications' },
+            { id: 'aggressive', label: 'aggressive', desc: 'Auto-approve reads and file edits; ask before bash/network' },
+            { id: 'reckless', label: 'reckless', desc: 'Auto-approve everything except network' },
+            { id: 'yolo', label: 'yolo', desc: 'Auto-approve everything including network (use with caution)' },
+        ];
+        return (
+            <Box flexDirection="column">
+                <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
+                <Box flexDirection="column" marginTop={1} paddingX={1}>
+                    <Text bold color="cyan" inverse>
+                        {' Select approval level '}
+                    </Text>
+                    {levels.map((level, index) => {
+                        const isSelected = index === snapshot.levelPickerSelectedIndex;
+                        return (
+                            <Box key={level.id} flexDirection="row">
+                                <Text {...(isSelected ? { backgroundColor: 'blue' } : {})}>
+                                    {isSelected ? '> ' : '  '}
+                                    {level.label.padEnd(13)}
+                                </Text>
+                                <Text dimColor>{level.desc}</Text>
+                            </Box>
+                        );
+                    })}
+                    <Text dimColor>{'Up/Down to navigate, Enter to select, Ctrl+C to cancel'}</Text>
                 </Box>
             </Box>
         );
@@ -1540,6 +1658,7 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
             'timeline',
             'approvals',
             'cost-policy',
+            'blackboard',
         ];
         const activeTab = ABG_OVERLAY_TABS[snapshot.abgOverlayActiveTab] ?? 'overview';
         const store = bridge.abgOverlayController?.store;
@@ -1571,6 +1690,7 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
 
     return (
         <Box flexDirection="column">
+            <Banner {...(statusBarProps !== undefined ? { statusBarProps } : {})} />
             <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
             {snapshot.agentStatusText.length > 0 ? (
                 <AgentSpinner text={snapshot.agentStatusText} />
@@ -1633,7 +1753,7 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                             {`[history ${snapshot.historyNavigation.position}/${snapshot.historyNavigation.total} — ↑/↓ to recall, Enter to use]`}
                         </Text>
                     ) : snapshot.inputBuffer.length === 0 ? (
-                        <Text dimColor> Type a message or / for commands</Text>
+                        <Text dimColor> Type a message, / for commands, or Ctrl+C twice to exit</Text>
                     ) : null}
                 </Text>
             </Box>
@@ -1718,6 +1838,17 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         });
     };
 
+    const showLevelPicker = (currentLevel?: string): Promise<string | undefined> => {
+        const levels = ['verbose', 'safe', 'aggressive', 'reckless', 'yolo'];
+        const currentIdx = currentLevel !== undefined ? levels.indexOf(currentLevel) : -1;
+        core.levelPickerSelectedIndex = currentIdx >= 0 ? currentIdx : 1;
+        core.levelPickerActive = true;
+        publishSnapshot(core);
+        return new Promise<string | undefined>((resolve) => {
+            core.levelPickerResolve = resolve;
+        });
+    };
+
     const setModelCycleChoices = (choices: readonly ModelChoice[]): void => {
         core.modelCycleChoices = choices;
         if (core.modelCycleIndex >= choices.length) {
@@ -1744,6 +1875,34 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
     const isShowThinking = (): boolean => core.showThinking;
 
     const isToolOutputExpanded = (): boolean => core.toolOutputExpanded;
+
+    const applyAbgOverlayPrefs = (prefs: {
+        readonly activeTabIndex: number;
+        readonly scrollOffset: number;
+        readonly liveOutput: boolean;
+        readonly showThinking: boolean;
+        readonly toolOutputExpanded: boolean;
+    }): void => {
+        core.abgOverlayActiveTab = prefs.activeTabIndex;
+        core.abgOverlayScrollOffset = prefs.scrollOffset;
+        core.abgOverlayLiveOutput = prefs.liveOutput;
+        core.showThinking = prefs.showThinking;
+        core.toolOutputExpanded = prefs.toolOutputExpanded;
+    };
+
+    const getAbgOverlayPrefsSnapshot = (): {
+        readonly activeTabIndex: number;
+        readonly scrollOffset: number;
+        readonly liveOutput: boolean;
+        readonly showThinking: boolean;
+        readonly toolOutputExpanded: boolean;
+    } => ({
+        activeTabIndex: core.abgOverlayActiveTab,
+        scrollOffset: core.abgOverlayScrollOffset,
+        liveOutput: core.abgOverlayLiveOutput,
+        showThinking: core.showThinking,
+        toolOutputExpanded: core.toolOutputExpanded,
+    });
 
     const showApproval = (toolName: string, action: string): void => {
         core.approvalActive = true;
@@ -1791,6 +1950,7 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         replaceOutputText,
         getOutput,
         showModelPicker,
+        showLevelPicker,
         setModelCycleChoices,
         get onModelCycleSelect(): ((selection: ModelProviderSelection) => void) | undefined {
             return core.onModelCycleSelect;
@@ -1809,6 +1969,8 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         clearAgentStatus,
         isShowThinking,
         isToolOutputExpanded,
+        applyAbgOverlayPrefs,
+        getAbgOverlayPrefsSnapshot,
         showApproval,
         hideApproval,
         showQuestion,
@@ -1816,12 +1978,47 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
     };
 }
 
-type ChatBlock = {
-    readonly kind: 'user' | 'assistant' | 'error' | 'system';
+export type ChatBlock = {
+    readonly kind: 'user' | 'assistant' | 'error' | 'system' | 'tool' | 'thinking';
     readonly lines: readonly string[];
 };
 
-function parseMessageBlocks(outputText: string): readonly ChatBlock[] {
+const TOOL_LINE_PREFIXES: readonly string[] = [
+    'Applied patch: ',
+    'Applied edit: ',
+    'Created file: ',
+    'Replaced file: ',
+    'Command output for ',
+    'tool: ',
+    '[Ctrl+O to expand/collapse]',
+    'Edit preview for ',
+    'Patch preview for ',
+    'Command preview for ',
+    'Write preview for ',
+    'Replace preview for ',
+    'Create preview for ',
+];
+
+const TOOL_FAILURE_PATTERN = /^[A-Za-z][\w.-]* failed: /u;
+const TOOL_SUMMARY_PATTERN = /^\u2713 \d+ tools? /u;
+const THINKING_PREFIX = 'Thinking: ';
+
+function classifyLine(line: string): ChatBlock['kind'] {
+    if (line.startsWith('You: ')) return 'user';
+    if (line.startsWith('Assistant: ')) return 'assistant';
+    if (line.startsWith('Error: ')) return 'error';
+    if (line.startsWith(THINKING_PREFIX)) return 'thinking';
+    if (TOOL_FAILURE_PATTERN.test(line)) return 'tool';
+    if (TOOL_SUMMARY_PATTERN.test(line)) return 'tool';
+    if (TOOL_LINE_PREFIXES.some((prefix) => line.startsWith(prefix))) return 'tool';
+    return 'system';
+}
+
+function isStrongBoundary(kind: ChatBlock['kind']): boolean {
+    return kind === 'user' || kind === 'assistant' || kind === 'error' || kind === 'thinking';
+}
+
+export function parseMessageBlocks(outputText: string): readonly ChatBlock[] {
     const rawLines = outputText.split('\n').filter((line) => line.length > 0);
     const blocks: ChatBlock[] = [];
     let currentKind: ChatBlock['kind'] | undefined;
@@ -1836,19 +2033,14 @@ function parseMessageBlocks(outputText: string): readonly ChatBlock[] {
     };
 
     for (const line of rawLines) {
-        let kind: ChatBlock['kind'];
-        if (line.startsWith('You: ')) {
-            kind = 'user';
-        } else if (line.startsWith('Assistant: ')) {
-            kind = 'assistant';
-        } else if (line.startsWith('Error: ')) {
-            kind = 'error';
-        } else {
-            kind = 'system';
+        const classified = classifyLine(line);
+        if (currentKind === 'tool' && !isStrongBoundary(classified)) {
+            currentLines.push(line);
+            continue;
         }
-        if (kind !== currentKind) {
+        if (classified !== currentKind) {
             flush();
-            currentKind = kind;
+            currentKind = classified;
         }
         currentLines.push(line);
     }
@@ -1861,6 +2053,8 @@ const blockLeftColor: Record<ChatBlock['kind'], string | undefined> = {
     assistant: 'green',
     error: 'red',
     system: undefined,
+    tool: 'yellow',
+    thinking: 'magenta',
 };
 
 const blockPrefix: Record<ChatBlock['kind'], string> = {
@@ -1868,14 +2062,18 @@ const blockPrefix: Record<ChatBlock['kind'], string> = {
     assistant: 'Assistant: ',
     error: 'Error: ',
     system: '',
+    tool: '',
+    thinking: THINKING_PREFIX,
 };
 
 function MessageBlock({ block }: { readonly block: ChatBlock }): React.ReactElement {
     const leftColor = blockLeftColor[block.kind];
     const prefix = blockPrefix[block.kind];
-    const showBlock = block.kind !== 'system';
+    const isSystem = block.kind === 'system';
+    const isTool = block.kind === 'tool';
+    const isThinking = block.kind === 'thinking';
 
-    if (!showBlock) {
+    if (isSystem) {
         return (
             <Box flexDirection="column">
                 {block.lines.map((line, index) => (
@@ -1884,6 +2082,59 @@ function MessageBlock({ block }: { readonly block: ChatBlock }): React.ReactElem
                         {line}
                     </Text>
                 ))}
+            </Box>
+        );
+    }
+
+    if (isTool) {
+        const title = readToolBlockTitle(block.lines);
+        return (
+            <Box flexDirection="row" marginTop={1}>
+                <Box width={2} flexDirection="column">
+                    {block.lines.map((_line, index) => (
+                        <Text key={`bar-${index}`} backgroundColor="yellow">
+                            {'  '}
+                        </Text>
+                    ))}
+                </Box>
+                <Box flexDirection="column" flexGrow={1}>
+                    {title !== undefined ? (
+                        <Text color="yellow" bold>
+                            {`> ${title}`}
+                        </Text>
+                    ) : null}
+                    {block.lines.map((line, index) => (
+                        <Text key={`line-${index}`} color="yellow">
+                            {line}
+                        </Text>
+                    ))}
+                </Box>
+            </Box>
+        );
+    }
+
+    if (isThinking) {
+        return (
+            <Box flexDirection="row" marginTop={1}>
+                <Box width={2} flexDirection="column">
+                    {block.lines.map((_line, index) => (
+                        <Text key={`bar-${index}`} backgroundColor="magenta">
+                            {'  '}
+                        </Text>
+                    ))}
+                </Box>
+                <Box flexDirection="column" flexGrow={1}>
+                    {block.lines.map((line, index) => {
+                        const content = line.startsWith(THINKING_PREFIX)
+                            ? line.slice(THINKING_PREFIX.length)
+                            : line;
+                        return (
+                            <Text key={`line-${index}`} italic dimColor>
+                                {content}
+                            </Text>
+                        );
+                    })}
+                </Box>
             </Box>
         );
     }
@@ -1920,6 +2171,68 @@ function MessageBlock({ block }: { readonly block: ChatBlock }): React.ReactElem
     );
 }
 
+const TOOL_TITLE_PATTERN = /^(?:Edit|Patch|Command|Write|Replace|Create) preview for (\S+)/u;
+const TOOL_TITLE_PATTERN_2 = /^(?:Applied (?:patch|edit):|Created file:|Replaced file:|Command output for) (.+)$/u;
+
+function readToolBlockTitle(lines: readonly string[]): string | undefined {
+    for (const line of lines) {
+        const match1 = TOOL_TITLE_PATTERN.exec(line);
+        if (match1 !== null) {
+            return match1[1];
+        }
+        const match2 = TOOL_TITLE_PATTERN_2.exec(line);
+        if (match2 !== null) {
+            return match2[1];
+        }
+        if (line.startsWith('tool: ')) {
+            return line.slice(6);
+        }
+    }
+    return undefined;
+}
+
+// 1 banner + 1 separator + 1 input + 1 statusbar + ~4 padding/spinner buffer.
+const MESSAGE_WINDOW_CHROME_LINES = 8;
+const MESSAGE_WINDOW_FALLBACK_ROWS = 24;
+const MESSAGE_WINDOW_MIN_LINES = 5;
+
+export function getMessageWindowLineBudget(): number {
+    const rows = process.stdout.rows ?? MESSAGE_WINDOW_FALLBACK_ROWS;
+    return Math.max(MESSAGE_WINDOW_MIN_LINES, rows - MESSAGE_WINDOW_CHROME_LINES);
+}
+
+export function selectTrailingBlocks(
+    blocks: readonly ChatBlock[],
+    lineBudget: number,
+): { readonly startIdx: number; readonly windowed: readonly ChatBlock[]; readonly truncatedTop: boolean } {
+    if (blocks.length === 0) return { startIdx: 0, windowed: [], truncatedTop: false };
+    let lineCount = 0;
+    let startIdx = blocks.length - 1;
+    for (let index = blocks.length - 1; index >= 0; index -= 1) {
+        const block = blocks[index];
+        if (block === undefined) continue;
+        if (lineCount + block.lines.length > lineBudget) {
+            const remaining = lineBudget - lineCount;
+            if (remaining > 0 && index < blocks.length - 1) {
+                const truncatedBlock: ChatBlock = { ...block, lines: block.lines.slice(-remaining) };
+                return {
+                    startIdx: index,
+                    windowed: [truncatedBlock, ...blocks.slice(index + 1)],
+                    truncatedTop: true,
+                };
+            }
+            if (remaining > 0 && index === blocks.length - 1) {
+                const truncatedBlock: ChatBlock = { ...block, lines: block.lines.slice(-remaining) };
+                return { startIdx: index, windowed: [truncatedBlock], truncatedTop: true };
+            }
+            return { startIdx: index + 1, windowed: blocks.slice(index + 1), truncatedTop: index >= 0 };
+        }
+        lineCount += block.lines.length;
+        startIdx = index;
+    }
+    return { startIdx, windowed: blocks.slice(startIdx), truncatedTop: startIdx > 0 };
+}
+
 function MessageWindow({
     blocks,
     scrollOffset,
@@ -1928,19 +2241,31 @@ function MessageWindow({
     readonly scrollOffset: number;
 }): React.ReactElement {
     const total = blocks.length;
-    if (total === 0 || scrollOffset <= 0) {
+    if (total === 0) {
+        return <></>;
+    }
+    const lineBudget = getMessageWindowLineBudget();
+
+    if (scrollOffset <= 0) {
+        const { startIdx, windowed, truncatedTop } = selectTrailingBlocks(blocks, lineBudget);
+        const hidden = startIdx;
+        const showTruncationHint = hidden > 0 || truncatedTop;
         return (
             <>
-                {blocks.map((block, index) => (
+                {showTruncationHint ? (
+                    <Text dimColor>{`[\u2191 earlier output hidden \u2014 PgUp to scroll]`}</Text>
+                ) : null}
+                {windowed.map((block, index) => (
                     // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
-                    <MessageBlock key={`msg-${block.kind}-${index}`} block={block} />
+                    <MessageBlock key={`msg-${block.kind}-${startIdx + index}`} block={block} />
                 ))}
             </>
         );
     }
+
     const clampedOffset = Math.min(scrollOffset, total);
     const endIdx = total - clampedOffset;
-    const startIdx = Math.max(0, endIdx - SCROLLBACK_VIEWPORT_HEIGHT);
+    const startIdx = Math.max(0, endIdx - Math.min(SCROLLBACK_VIEWPORT_HEIGHT, lineBudget));
     const windowed = blocks.slice(startIdx, endIdx);
     return (
         <>
@@ -1951,4 +2276,31 @@ function MessageWindow({
             ))}
         </>
     );
+}
+
+// Rendered outside core.outputText so it cannot accumulate as ghost text when
+// the scrollback grows past the terminal viewport (root cause of the stacking
+// bug). Provider/model/session info mirrors StatusBar props.
+function Banner({ statusBarProps }: { readonly statusBarProps?: InkChatBridgeOptions }): React.ReactElement {
+    if (statusBarProps === undefined) {
+        return <Text bold>{'mission-control chat'}</Text>;
+    }
+    const selection = formatSelectionLabel(statusBarProps);
+    return (
+        <Box flexDirection="column">
+            <Text bold>{'mission-control chat'}</Text>
+            <Text dimColor>{selection}</Text>
+        </Box>
+    );
+}
+
+function formatSelectionLabel(props: InkChatBridgeOptions): string {
+    const parts = [`provider: ${props.providerID}`, `model: ${props.modelID}`];
+    if (props.variantID !== undefined) {
+        parts.push(`variant: ${props.variantID}`);
+    }
+    if (props.sessionID !== undefined) {
+        parts.push(`session: ${props.sessionID}`);
+    }
+    return parts.join(' | ');
 }

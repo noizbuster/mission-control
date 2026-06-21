@@ -10,8 +10,6 @@ import type {
     PermissionRequest,
 } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
-import type { ProjectInstructionResource } from './context/project-context-messages.js';
-import type { SystemPromptEnvironment } from './context/system-prompt.js';
 import { runRuntimeDemoTask } from './agent-runtime-demo.js';
 import type { AgentRuntimeOptions } from './agent-runtime-options.js';
 import { runRuntimeSkillInvocationTask, type SkillInvocationTaskInput } from './agent-runtime-skill.js';
@@ -30,10 +28,13 @@ import {
     taskStartedEvent,
 } from './agent-runtime-support.js';
 import { type ApprovalUpdateInput, PermissionGate } from './approval-gate.js';
+import type { PricingTable } from './behavior/budget/cost-ledger.js';
 import { type AbgGraphRunResult, runAbgGraph } from './behavior/graph-runner.js';
 import type { AbgNodeRegistry } from './behavior/node-registry.js';
 import type { LlmActorModel } from './behavior/nodes/llm-actor/llm-actor-node.js';
 import type { AbgTimelineEntry } from './behavior/timeline.js';
+import type { ProjectInstructionResource } from './context/project-context-messages.js';
+import type { SystemPromptEnvironment } from './context/system-prompt.js';
 import { EventBus } from './event-bus.js';
 import type { SidecarClient } from './native/sidecar-client.js';
 import { SessionEventLog } from './session-log.js';
@@ -67,6 +68,12 @@ export type RunGraphOptions = {
      * AGENTS.md/CLAUDE.md instructions to the system prompt.
      */
     readonly projectInstructionResources?: readonly ProjectInstructionResource[];
+    /**
+     * Forwarded to `AbgGraphRunnerInput.pricingTable` so the CostLedger prices each LLMActor turn
+     * and emits `policy.budget.accumulated`/`.warning`/`.exceeded` events. Operator-supplied;
+     * absent by default (the ledger stays `undefined` and no budget events fire).
+     */
+    readonly pricingTable?: PricingTable;
 };
 
 export class AgentRuntime {
@@ -154,14 +161,15 @@ export class AgentRuntime {
             ...(options?.registry !== undefined ? { registry: options.registry } : {}),
             ...(options?.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
             ...(options?.toolRegistry !== undefined ? { toolRegistry: options.toolRegistry } : {}),
-        ...(options?.initialMessages !== undefined ? { initialMessages: options.initialMessages } : {}),
-        ...(options?.abortSignal !== undefined ? { abortSignal: options.abortSignal } : {}),
-        ...(options?.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
-        ...(options?.systemPromptEnv !== undefined ? { systemPromptEnv: options.systemPromptEnv } : {}),
-        ...(options?.projectInstructionResources !== undefined
-            ? { projectInstructionResources: options.projectInstructionResources }
-            : {}),
-    });
+            ...(options?.initialMessages !== undefined ? { initialMessages: options.initialMessages } : {}),
+            ...(options?.abortSignal !== undefined ? { abortSignal: options.abortSignal } : {}),
+            ...(options?.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
+            ...(options?.systemPromptEnv !== undefined ? { systemPromptEnv: options.systemPromptEnv } : {}),
+            ...(options?.projectInstructionResources !== undefined
+                ? { projectInstructionResources: options.projectInstructionResources }
+                : {}),
+            ...(options?.pricingTable !== undefined ? { pricingTable: options.pricingTable } : {}),
+        });
         for (const event of result.events) {
             this.emit(event);
         }

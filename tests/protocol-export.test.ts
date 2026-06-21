@@ -3,6 +3,7 @@ import {
     AbgGraphSnapshotSchema,
     AbgGraphSpecSchema,
     AbgNodeModelOptionsSchema,
+    AbgOverlayPrefsSchema,
     AbgPolicyDecisionSchema,
     AbgSignalSchema,
     AbgToolOutcomeSnapshotSchema,
@@ -15,6 +16,7 @@ import {
     ApprovalPolicyDecisionSchema,
     ApprovalRecordSchema,
     ApprovalSubjectSchema,
+    BudgetConfigSchema,
     DiffFileSchema,
     DiffHunkSchema,
     EventDurabilitySchema,
@@ -32,6 +34,8 @@ import {
     PermissionRuleDecisionSchema,
     PermissionRuleSchema,
     PermissionStatusSchema,
+    PricingEntrySchema,
+    PricingTableSchema,
     ProtocolErrorSchema,
     ProviderApiKeyCredentialSchema,
     ProviderAuthFileSchema,
@@ -170,6 +174,11 @@ describe('protocol public exports', () => {
         expect(TranscriptDeliveryModeSchema.parse('steer')).toBe('steer');
         expect(TranscriptVisibilitySchema.parse('model_visible')).toBe('model_visible');
         expect(TranscriptEventMetadataSchema.shape.messageId).toBeDefined();
+        expect(PricingEntrySchema.shape.providerID).toBeDefined();
+        expect(PricingTableSchema.element).toBeDefined();
+        expect(BudgetConfigSchema.shape.budgetCents).toBeDefined();
+        expect(AbgOverlayPrefsSchema.shape.activeTabIndex).toBeDefined();
+        expect(AbgOverlayPrefsSchema.parse({}).activeTabIndex).toBe(0);
     });
 
     it('exports ABG protocol schemas for graph authoring and runtime events', () => {

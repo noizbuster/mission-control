@@ -7,6 +7,7 @@ import {
     type JsonlSessionEventStore,
     type LspClient,
     McpConnectionManager,
+    type PricingTable,
     type ProjectInstructionResource,
     ProjectTrustStore,
     type ProviderAdapter,
@@ -26,10 +27,18 @@ import type {
     ToolCall,
 } from '@mission-control/protocol';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
-import { type AbgOverlayState, projectAbgSignal, type RunState, readRefreshMsFromEnv } from './abg-overlay-state.js';
+import {
+    type AbgOverlayState,
+    projectAbgSignal,
+    RECENT_EVENTS_CAP,
+    type RecentEvent,
+    type RunState,
+    readRefreshMsFromEnv,
+} from './abg-overlay-state.js';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
 import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';
+import type { ApprovalLevel } from './approval-level.js';
 import { parseFileWriteOutput } from './interactive-coding-file-write-preview.js';
 import { parseFileEditOutput, parseFilePatchOutput, renderToolPreview } from './interactive-coding-tool-preview.js';
 import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools.js';
@@ -81,6 +90,9 @@ export type CodingAgentTurnOptions = {
      * — NOT threaded through the InkChatBridge public surface (Metis 3.1).
      */
     readonly abgOverlayController?: AbgOverlayController;
+    /** Operator-supplied pricing table; threaded to the graph so `CostLedger` emits `policy.budget.*`. */
+    readonly pricingTable?: PricingTable;
+    readonly approvalLevel?: ApprovalLevel;
 };
 
 export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Promise<ActiveCodingAgentTurn> {
@@ -112,7 +124,7 @@ async function startOwnedCodingAgentTurn(
     },
 ): Promise<ActiveCodingAgentTurn> {
     const approvals = createInteractiveApprovalBroker(options);
-    const renderState: ProviderRenderState = { streamingText: false, toolCount: 0, toolNames: [] };
+    const renderState: ProviderRenderState = { streamingText: false, streamingThinking: false, toolCount: 0, toolNames: [] };
     const { owner, mcpConnectionManager, overlayWiring } = await createInteractiveRunOwner(
         options,
         approvals,
@@ -199,6 +211,7 @@ async function createInteractiveRunOwner(
         onSignal,
         systemPromptEnv,
         ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
+        ...(options.pricingTable !== undefined ? { pricingTable: options.pricingTable } : {}),
     });
 
     // Graph events surface ONLY through onDurableEvent (no provider envelopes fire on the graph).
@@ -220,11 +233,18 @@ async function createInteractiveRunOwner(
         toolRegistry,
         runProviderTurn,
         onDurableEvent: onDurableEventHandler,
-        onProviderEnvelope: (envelope: AgentEventEnvelope) =>
-            renderProviderEnvelope(options.output, renderState, envelope),
-        onToolCall: (toolCall: ToolCall) => preflightInteractiveToolCall(toolCall, toolOptions, approvals),
-        onToolSettlement: (settlement: ToolInvocationSettlement) =>
-            renderInteractiveToolSettlement(options.output, settlement),
+        onProviderEnvelope: (envelope: AgentEventEnvelope) => {
+            renderProviderEnvelope(options.output, renderState, envelope);
+            overlayWiring?.onProviderEnvelope?.(envelope);
+        },
+        onToolCall: (toolCall: ToolCall) => {
+            overlayWiring?.onToolCall?.(toolCall);
+            return preflightInteractiveToolCall(toolCall, toolOptions, approvals);
+        },
+        onToolSettlement: (settlement: ToolInvocationSettlement) => {
+            renderInteractiveToolSettlement(options.output, settlement);
+            overlayWiring?.onToolSettlement?.(settlement);
+        },
     });
 
     return { owner, mcpConnectionManager, overlayWiring };
@@ -292,6 +312,7 @@ function settleReceipt(
 
 type ProviderRenderState = {
     streamingText: boolean;
+    streamingThinking: boolean;
     finalMessage?: string;
     toolCount: number;
     toolNames: string[];
@@ -325,7 +346,6 @@ function renderInteractiveToolSettlement(output: ChatOutput, settlement: ToolInv
     if (output.isToolOutputExpanded?.() === false) {
         const indicator = settlement.result.status === 'failed' ? 'failed' : 'ok';
         output.write(`tool: ${settlement.toolName} \u2014 ${indicator}\n`);
-        output.write('[Ctrl+O to expand/collapse]\n');
         return;
     }
     if (settlement.result.status === 'failed') {
@@ -407,13 +427,30 @@ export function interactiveGraphStreamSignal(
             }
             if (signal.type === 'emit' && signal.event.type === 'llm.reasoning.delta') {
                 if (output.isShowThinking?.() !== false) {
-                    output.setAgentStatus?.('Thinking...');
+                    const reasoningDelta = readReasoningDeltaFromSignal(signal);
+                    if (reasoningDelta !== undefined) {
+                        if (!state.streamingThinking) {
+                            if (state.streamingText) {
+                                output.write('\n');
+                                state.streamingText = false;
+                            }
+                            output.write('Thinking: ');
+                            state.streamingThinking = true;
+                        }
+                        output.write(reasoningDelta);
+                    } else {
+                        output.setAgentStatus?.('Thinking...');
+                    }
                 }
                 return;
             }
             const delta = readDeltaFromSignal(signal);
             if (delta !== undefined) {
                 output.clearAgentStatus?.();
+                if (state.streamingThinking) {
+                    output.write('\n');
+                    state.streamingThinking = false;
+                }
                 if (!state.streamingText) {
                     output.write('Assistant: ');
                     state.streamingText = true;
@@ -465,6 +502,10 @@ function renderInteractiveGraphDurableEvent(output: ChatOutput, state: ProviderR
     }
     if (emit.type === 'llm.turn.completed') {
         output.clearAgentStatus?.();
+        if (state.streamingThinking) {
+            output.write('\n');
+            state.streamingThinking = false;
+        }
         if (state.toolCount > 0) {
             const noun = state.toolCount === 1 ? 'tool' : 'tools';
             const names = state.toolNames.slice(0, 5).join(', ');
@@ -518,7 +559,6 @@ function renderGraphToolSettlement(output: ChatOutput, payload: unknown, status:
     if (output.isToolOutputExpanded?.() === false) {
         const indicator = status === 'completed' ? 'ok' : 'failed';
         output.write(`tool: ${toolName} \u2014 ${indicator}\n`);
-        output.write('[Ctrl+O to expand/collapse]\n');
         return;
     }
     if (status === 'failed') {
@@ -562,6 +602,13 @@ function renderGraphToolSettlement(output: ChatOutput, payload: unknown, status:
 /** Pull the `delta` string off an `llm.text.delta` emit signal; `undefined` for other signals. */
 function readDeltaFromSignal(signal: AbgSignal): string | undefined {
     if (signal.type !== 'emit' || signal.event.type !== 'llm.text.delta') {
+        return undefined;
+    }
+    return readStringField(signal.event.payload, 'delta');
+}
+
+function readReasoningDeltaFromSignal(signal: AbgSignal): string | undefined {
+    if (signal.type !== 'emit' || signal.event.type !== 'llm.reasoning.delta') {
         return undefined;
     }
     return readStringField(signal.event.payload, 'delta');
@@ -689,6 +736,9 @@ function isRecord(value: unknown): value is { readonly kind?: unknown; readonly 
 export type AbgOverlayWiring = {
     readonly observer: (signal: AbgSignal) => void;
     readonly onDurableEvent: (event: AgentEvent) => void;
+    readonly onProviderEnvelope?: (envelope: AgentEventEnvelope) => void;
+    readonly onToolCall?: (toolCall: ToolCall) => void;
+    readonly onToolSettlement?: (settlement: ToolInvocationSettlement) => void;
     readonly dispose: () => void;
 };
 
@@ -705,6 +755,32 @@ function runSettleState(eventType: string): RunState | undefined {
         default:
             return undefined;
     }
+}
+
+function applyProviderEnvelopeToPatch(state: AbgOverlayState, envelope: AgentEventEnvelope): Partial<AbgOverlayState> {
+    const event = envelope.event;
+    const chunk = event.providerStreamChunk;
+    if (chunk === undefined) return {};
+    if (chunk.kind === 'text_delta' && typeof chunk.delta === 'string') {
+        return { lastLiveDelta: redactCredentialText(chunk.delta, []) };
+    }
+    if (chunk.kind === 'response_completed' && chunk.usage !== undefined) {
+        return {
+            inputTokens: state.inputTokens + chunk.usage.inputTokens,
+            outputTokens: state.outputTokens + chunk.usage.outputTokens,
+            modelCalls: state.modelCalls + 1,
+        };
+    }
+    return {};
+}
+
+function applyToolCallToPatch(toolCall: ToolCall): Partial<AbgOverlayState> {
+    const event: RecentEvent = {
+        timestamp: '',
+        type: 'tool.started',
+        message: redactCredentialText(`tool call: ${toolCall.toolName}`, []),
+    };
+    return { recentEvents: [event] };
 }
 
 export function wireAbgOverlay(controller: AbgOverlayController): AbgOverlayWiring {
@@ -746,10 +822,42 @@ export function wireAbgOverlay(controller: AbgOverlayController): AbgOverlayWiri
         });
     };
 
+    const onProviderEnvelope = (envelope: AgentEventEnvelope): void => {
+        const patch = applyProviderEnvelopeToPatch(pendingSnapshot, envelope);
+        if (Object.keys(patch).length === 0) return;
+        pendingSnapshot = { ...pendingSnapshot, ...patch };
+        pending = { ...pending, ...patch };
+        dirty = true;
+    };
+
+    const onToolCall = (toolCall: ToolCall): void => {
+        const patch = applyToolCallToPatch(toolCall);
+        pendingSnapshot = { ...pendingSnapshot, ...patch };
+        pending = { ...pending, ...patch };
+        dirty = true;
+    };
+
+    const onToolSettlement = (settlement: ToolInvocationSettlement): void => {
+        const event: RecentEvent = {
+            timestamp: '',
+            type: settlement.result.status === 'completed' ? 'tool.completed' : 'tool.failed',
+            message: redactCredentialText(`tool ${settlement.toolName}: ${settlement.result.status}`, []),
+        };
+        pendingSnapshot = {
+            ...pendingSnapshot,
+            recentEvents: [...pendingSnapshot.recentEvents, event].slice(-RECENT_EVENTS_CAP),
+        };
+        pending = {
+            ...pending,
+            recentEvents: [...(pending.recentEvents ?? []), event],
+        };
+        dirty = true;
+    };
+
     const dispose = (): void => {
         clearInterval(timer);
         flush();
     };
 
-    return { observer, onDurableEvent, dispose };
+    return { observer, onDurableEvent, onProviderEnvelope, onToolCall, onToolSettlement, dispose };
 }

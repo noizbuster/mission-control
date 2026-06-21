@@ -1,6 +1,8 @@
 import type { AgentRuntime } from '@mission-control/core';
 import { formatSkillInstructions, loadSkillBody, type Skill, type SkillToolOutput } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { ApprovalLevel } from './approval-level.js';
+import { APPROVAL_LEVEL_META } from './approval-level.js';
 import type { ChatLineAction } from './chat-commands.js';
 import type { ModelSelector } from './interactive-chat.js';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
@@ -50,6 +52,7 @@ export type CodingActionContext = PromptTurnContext & {
      * never touches the durable JSONL session log.
      */
     readonly undoRedo?: UndoRedoConversationController;
+    readonly selectApprovalLevel?: (currentLevel?: ApprovalLevel) => Promise<ApprovalLevel | undefined>;
 };
 
 export async function runChatAction(
@@ -197,6 +200,15 @@ export async function runChatAction(
             }
             await runTrustAction(chatOutput, action.action, coding.workspaceRoot);
             return actionResult(currentModelProviderSelection, coding.activeTurn);
+        case 'approval':
+            return runApprovalAction(
+                chatOutput,
+                currentModelProviderSelection,
+                action.level,
+                coding.activeTurn,
+                coding.approvalLevel,
+                coding.selectApprovalLevel,
+            );
         case 'skill':
             return runSkillAction(runtime, chatOutput, action, currentModelProviderSelection, coding);
         case 'unknown-slash':
@@ -343,10 +355,43 @@ async function runResumeAction(
             ...(coding.resolveSdkModel !== undefined ? { resolveSdkModel: coding.resolveSdkModel } : {}),
             ...(coding.requestUserQuestion !== undefined ? { requestUserQuestion: coding.requestUserQuestion } : {}),
             ...(coding.abgOverlayController !== undefined ? { abgOverlayController: coding.abgOverlayController } : {}),
+            ...(coding.pricingTable !== undefined ? { pricingTable: coding.pricingTable } : {}),
         }),
     );
 }
 
 function assertNever(value: never): never {
     throw new Error(`Unexpected chat action: ${String(value)}`);
+}
+
+async function runApprovalAction(
+    chatOutput: ChatOutput,
+    modelProviderSelection: ModelProviderSelection,
+    requestedLevel: ApprovalLevel | undefined,
+    activeTurn: ActiveCodingAgentTurn | undefined,
+    currentLevel: ApprovalLevel | undefined,
+    selectApprovalLevel?: (currentLevel?: ApprovalLevel) => Promise<ApprovalLevel | undefined>,
+): Promise<ChatActionResult> {
+    if (activeTurn !== undefined) {
+        chatOutput.write('Approval level changes apply to the next prompt (cannot change mid-run)\n');
+        return actionResult(modelProviderSelection, activeTurn);
+    }
+    if (requestedLevel !== undefined) {
+        const meta = APPROVAL_LEVEL_META[requestedLevel];
+        chatOutput.write(`Approval level set to: ${requestedLevel}\n  ${meta.description}\n`);
+        return actionResult(modelProviderSelection, activeTurn, { approvalLevel: requestedLevel });
+    }
+    if (selectApprovalLevel !== undefined) {
+        const selected = await selectApprovalLevel(currentLevel);
+        if (selected === undefined) {
+            return actionResult(modelProviderSelection, activeTurn);
+        }
+        const meta = APPROVAL_LEVEL_META[selected];
+        chatOutput.write(`Approval level set to: ${selected}\n  ${meta.description}\n`);
+        return actionResult(modelProviderSelection, activeTurn, { approvalLevel: selected });
+    }
+    const level = currentLevel ?? 'safe';
+    const meta = APPROVAL_LEVEL_META[level];
+    chatOutput.write(`Approval level: ${level}\n  ${meta.description}\n`);
+    return actionResult(modelProviderSelection, activeTurn);
 }

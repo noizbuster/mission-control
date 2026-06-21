@@ -1,23 +1,33 @@
-import { buildModelsDevCatalogSnapshot, modelsDevURL, parseModelsDevCatalog } from './models-dev-catalog-builder.js';
+import {
+    buildModelsDevCatalogSnapshot,
+    buildPricingTableFromSnapshot,
+    modelsDevURL,
+    parseModelsDevCatalog,
+} from './models-dev-catalog-builder.js';
 import { spawnSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { get } from 'node:https';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export { buildModelsDevCatalogSnapshot } from './models-dev-catalog-builder.js';
+export { buildModelsDevCatalogSnapshot, buildPricingTableFromSnapshot } from './models-dev-catalog-builder.js';
 
-const outputPath = resolve('packages/config/src/generated/models-dev-catalog.json');
+const catalogOutputPath = resolve('packages/config/src/generated/models-dev-catalog.json');
+const pricingOutputPath = resolve('packages/config/src/generated/pricing-table.json');
 
 async function main(): Promise<void> {
     const rawCatalog = parseModelsDevCatalog(JSON.parse(await fetchText(modelsDevURL)));
     const snapshot = buildModelsDevCatalogSnapshot(rawCatalog);
-    await mkdir(dirname(outputPath), { recursive: true });
-    await writeFile(outputPath, `${JSON.stringify(snapshot, null, 2)}\n`);
-    formatSnapshot(outputPath);
+    const pricingTable = buildPricingTableFromSnapshot(snapshot);
+    await mkdir(dirname(catalogOutputPath), { recursive: true });
+    await writeFile(catalogOutputPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+    await writeFile(pricingOutputPath, `${JSON.stringify(pricingTable, null, 2)}\n`);
+    formatSnapshot(catalogOutputPath);
+    formatSnapshot(pricingOutputPath);
     process.stdout.write(
-        `wrote ${outputPath} with ${snapshot.providerCount} providers and ${snapshot.modelCount} models\n`,
+        `wrote ${catalogOutputPath} with ${snapshot.providerCount} providers and ${snapshot.modelCount} models\n`,
     );
+    process.stdout.write(`wrote ${pricingOutputPath} with ${pricingTable.length} priced entries\n`);
 }
 
 async function fetchText(url: string): Promise<string> {

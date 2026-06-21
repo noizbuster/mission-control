@@ -6,6 +6,7 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
+import { runReplayOverlay } from './replay-overlay.js';
 import { exportSessionArchiveFile, importSessionArchiveFile } from './session-archive.js';
 import { formatSessionCatalogEntry, listSessionCatalogEntries, readSessionCatalogEntry } from './session-catalog.js';
 import { parseCliSessionId } from './session-id.js';
@@ -39,6 +40,10 @@ export async function runSessionCommand(args: CliArgs): Promise<string> {
         case 'session-show':
             return `${JSON.stringify(await showSession(requireSessionId(args)), null, 2)}\n`;
         case 'session-replay':
+            if (args.replayInteractive === true) {
+                await runReplayInteractiveSession(requireSessionId(args));
+                return '';
+            }
             return `${(await replaySession(requireSessionId(args))).map((record) => JSON.stringify(record)).join('\n')}\n`;
         case 'session-export':
             return exportSessionArchiveFile({
@@ -104,6 +109,21 @@ async function replaySession(sessionId: string): Promise<readonly ReplayJsonlRec
         ]),
         ...replay.diagnostics.map((diagnostic) => ({ kind: 'diagnostic' as const, diagnostic })),
     ];
+}
+
+async function runReplayInteractiveSession(sessionId: string): Promise<void> {
+    const replay = projectJsonlSessionReplayPrefix({
+        sessionId,
+        contents: await readSessionLog(sessionId),
+    });
+    if (replay.projection.envelopes.length === 0) {
+        process.stderr.write(`No events found for session ${sessionId}\n`);
+        return;
+    }
+    await runReplayOverlay({
+        sessionId,
+        envelopes: replay.projection.envelopes,
+    });
 }
 
 function codingStepsByEventId(steps: readonly CodingReplayStep[]): ReadonlyMap<string, readonly CodingReplayStep[]> {

@@ -2,14 +2,6 @@ export type { AgentRuntimeOptions, RunGraphOptions } from './agent-runtime.js';
 export { AgentRuntime } from './agent-runtime.js';
 export { SubAgentRegistry } from './agents/registry.js';
 export type { SubAgent, SubAgentRunInput, SubAgentRunOutput } from './agents/sub-agent.js';
-export {
-    type AskUserInput,
-    type AskUserOutput,
-    type AskUserQuestionRequest,
-    type AskUserToolOptions,
-    createAskUserToolRegistration,
-    registerAskUserTool,
-} from './tools/ask-user-tool.js';
 export type { ApprovalTerminalState, ApprovalUpdateInput, PermissionDecisionResolver } from './approval-gate.js';
 export { PermissionGate, PermissionGateError } from './approval-gate.js';
 export type { ActionGraph, ActionGraphEdge, ActionGraphNode } from './behavior/action-graph.js';
@@ -17,6 +9,22 @@ export { createActionGraph } from './behavior/action-graph.js';
 export type { AuthorableAbgGraph } from './behavior/authorable-graph.js';
 export { createAuthorableAbgGraph, resolveAbgNodeModel } from './behavior/authorable-graph.js';
 export type { BehaviorNode, BehaviorNodeType } from './behavior/behavior-node.js';
+export {
+    type BudgetConfig,
+    type BudgetCostEvent,
+    type CostBreakdown,
+    CostLedger,
+    type CostLedgerTotals,
+    createCostLedger,
+    DEFAULT_PRICING,
+    estimateCostCents,
+    extractTokenUsage,
+    type ModelSelection,
+    type PricingEntry,
+    type PricingTable,
+    resolvePricing,
+    type TokenUsage,
+} from './behavior/budget/cost-ledger.js';
 export {
     CODING_AGENT_GRAPH_ID,
     type CodingAgentGraphOptions,
@@ -26,6 +34,7 @@ export { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry.
 export type { AbgGraphRunnerInput, AbgGraphRunResult } from './behavior/graph-runner.js';
 export { runAbgGraph } from './behavior/graph-runner.js';
 export { deriveAbgGraphSnapshot } from './behavior/graph-state.js';
+export * from './abg-overlay/index.js';
 export type { AbgNodeRegistry, AbgNodeRunContext, AbgNodeRunner } from './behavior/node-registry.js';
 export {
     AbgNodeRegistryError,
@@ -62,9 +71,9 @@ export {
     type ProjectResourceLoadResult,
 } from './context/project-resource-loader.js';
 export {
+    type AssembleSystemPromptInput,
     assembleSystemPrompt,
     DEFAULT_CODING_AGENT_PERSONA,
-    type AssembleSystemPromptInput,
     type SystemPromptEnvironment,
     type SystemPromptSkill,
     type SystemPromptToolSnippet,
@@ -94,11 +103,19 @@ export {
     settleDesktopApproval,
 } from './desktop-tool-approvals.js';
 export { EventBus } from './event-bus.js';
+export {
+    type Blackboard,
+    type BlackboardEntry,
+    type BlackboardMutationKind,
+    type BlackboardMutationObserver,
+    type BlackboardMutationPayload,
+    type BlackboardOptions,
+    createBlackboard,
+} from './memory/blackboard.js';
 export * from './memory/index.js';
 export { PermissionSession, type PermissionSessionOptions } from './permission/session.js';
 export { PermissionRuleStore, type PermissionRuleStoreOptions } from './permission/store.js';
 export { createAllowPermissionDecision, createDefaultPermissionDecision } from './permissions.js';
-export * from './skills/index.js';
 export {
     FlatProviderBridgeError,
     type FlatProviderBridgeOptions,
@@ -252,5 +269,14 @@ export {
     type ToolOutcomeProjection,
     type ToolOutcomeStatus,
 } from './session-replay.js';
+export * from './skills/index.js';
+export {
+    type AskUserInput,
+    type AskUserOutput,
+    type AskUserQuestionRequest,
+    type AskUserToolOptions,
+    createAskUserToolRegistration,
+    registerAskUserTool,
+} from './tools/ask-user-tool.js';
 export * from './tools/index.js';
 export * from './trust/index.js';

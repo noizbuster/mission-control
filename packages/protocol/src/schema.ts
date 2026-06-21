@@ -170,6 +170,17 @@ export const AGENT_EVENT_TYPES = [
     'file.diff.proposed',
     'file.diff.applied',
     'workflow.transitioned',
+    // v2: cost ledger surface — emitted by CostLedger.accumulate() and projected
+    // from emit signals into first-class durable events so the overlay Cost&Policy
+    // pane can read running $ totals from `event.abg.emit.payload.cents`.
+    'policy.budget.accumulated',
+    'policy.budget.warning',
+    'policy.budget.exceeded',
+    // v2: blackboard surface — emitted by the Blackboard class on key mutations so
+    // the overlay Blackboard tab can observe the agent's evolving working memory
+    // (goals, hypotheses, decisions, observations) without polling the snapshot.
+    'blackboard.set',
+    'blackboard.delete',
 ] as const;
 
 export const SESSION_STATUSES = ['idle', 'running', 'stopped', 'failed'] as const;

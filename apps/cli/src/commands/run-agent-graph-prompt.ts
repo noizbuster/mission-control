@@ -12,6 +12,8 @@
  *   this path records emitted events via the runtime bus but does not yet match the flat
  *   loop's full session orchestration.
  */
+
+import type { PricingTable } from '@mission-control/core';
 import {
     type AbgGraphRunResult,
     type AgentRuntime,
@@ -61,6 +63,8 @@ export type RunCodingPromptOnGraphInput = {
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     /** LSP seam: inject a real `LspClient` to register the `lsp` tool. Default undefined (off). */
     readonly lspClient?: LspClient;
+    /** Operator-supplied pricing table; threaded to `runtime.runGraph` so the CostLedger emits `policy.budget.*`. */
+    readonly pricingTable?: PricingTable;
 };
 
 /** Build the coding-agent graph wiring and drive it through the runtime. Non-destructive. */
@@ -102,6 +106,7 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
             haltOnFailedToolSettlement: true,
             systemPromptEnv,
             ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
+            ...(input.pricingTable !== undefined ? { pricingTable: input.pricingTable } : {}),
         });
     } finally {
         await mcpDisconnect();

@@ -13,12 +13,15 @@ import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
 import { type AgentUIRenderer, InkRenderer, JsonRenderer, PlainRenderer } from '../ui/renderers.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import type { NonInteractiveAutomationPolicy } from './cli-runtime-options.js';
 import { createCliRuntimeOptions } from './cli-runtime-options.js';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
 import { type ChatInput, type ChatOutput, type ModelSelector, runInteractiveChatSession } from './interactive-chat.js';
 import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
 import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
+import { loadPricingTable } from './pricing-table-store.js';
 import { createCliProviderForSelection } from './provider-factory.js';
 import { readGraphFile, validateGraphModelOptions, validateModelProviderSelection } from './run-agent-graph.js';
 import {
@@ -61,7 +64,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     const shouldRunChat = shouldRunInteractiveChat(args, graph, options);
     const createProvider = options.createProvider ?? ((selection) => createProviderForSelection(selection, authStore));
     const provider = options.provider ?? createProvider(selectedModelProvider);
-    const workspaceRoot = options.workspaceRoot ?? process.cwd();
+    const workspaceRoot = options.workspaceRoot ?? detectWorkspaceRoot();
     const runtime = new AgentRuntime(
         createCliRuntimeOptions({
             ...(args.useNative !== undefined ? { useNative: args.useNative } : {}),
@@ -136,6 +139,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         renderer.render(event);
     };
     let didStart = false;
+    const pricingTable = await loadPricingTable();
     try {
         await renderer.start(runtime);
         await runtime.start();
@@ -192,6 +196,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                             haltOnFailedToolSettlement: true,
                             systemPromptEnv,
                             ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
+                            ...(pricingTable.length > 0 ? { pricingTable } : {}),
                         }),
                     ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
                     ...(options.nonInteractiveAutomationPolicy !== undefined
@@ -209,6 +214,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     authStore,
                     ...(options.provider !== undefined ? { provider: options.provider } : {}),
                     ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
+                    ...(pricingTable.length > 0 ? { pricingTable } : {}),
                 });
             } else {
                 await runtime.runDemoTask();
@@ -320,4 +326,29 @@ function createRenderer(mode: CliArgs['mode']): AgentUIRenderer {
 
 function assertNever(value: never): never {
     throw new Error(`Unexpected CLI mode: ${String(value)}`);
+}
+
+export function detectWorkspaceRoot(): string {
+    const cwd = process.cwd();
+    let dir = cwd;
+    for (let i = 0; i < 20; i++) {
+        if (existsSync(join(dir, '.git'))) {
+            return dir;
+        }
+        const pkgPath = join(dir, 'package.json');
+        if (existsSync(pkgPath)) {
+            try {
+                const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+                if (Array.isArray(pkg.workspaces) || typeof pkg.workspaces === 'object') {
+                    return dir;
+                }
+            } catch {
+                // ignore parse errors
+            }
+        }
+        const parent = dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+    }
+    return cwd;
 }

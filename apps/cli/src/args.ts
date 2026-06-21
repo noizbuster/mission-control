@@ -59,6 +59,8 @@ export type CliArgs = {
     readonly mcpScope?: McpScope;
     readonly mcpTimeoutMs?: number;
     readonly mcpEnabled?: boolean;
+    /** When true, `session replay` mounts the Ink overlay instead of dumping JSONL. */
+    readonly replayInteractive?: boolean;
 };
 
 export const supportedCliFlags = [

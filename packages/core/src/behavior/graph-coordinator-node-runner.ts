@@ -29,6 +29,8 @@ export type QueuedNodeResult =
           readonly lastSignal?: AbgSignal;
           readonly lastEventType?: string;
           readonly lastPolicyDecision?: AbgPolicyDecision;
+          readonly hadOnlyRetryableToolFailures?: boolean;
+          readonly hadProductiveToolUse?: boolean;
       }
     | {
           readonly kind: 'failed';
@@ -47,19 +49,10 @@ type NodeRunResult = {
     readonly lastSignal?: AbgSignal;
     readonly lastEventType?: string;
     readonly lastPolicyDecision?: AbgPolicyDecision;
-    /**
-     * The model's final assistant text for an LLM turn (from the `llm.turn.completed` emit), so
-     * `model.call.completed` can carry the model's actual output as its message — parity with the
-     * flat run loop. Omitted for non-LLM nodes and turns with no text.
-     */
     readonly finalText?: string;
-    /**
-     * A non-retryable failure: the LLMActor short-circuited on a terminal tool settlement (a
-     * `command_not_allowed`, or a denial) under `haltOnFailedToolSettlement` / the denied path.
-     * Retrying would re-run the model with unchanged input and fail identically, so the coordinator
-     * fails the run immediately instead of consuming the retry budget.
-     */
     readonly terminal?: boolean;
+    readonly hadOnlyRetryableToolFailures?: boolean;
+    readonly hadProductiveToolUse?: boolean;
 };
 
 export async function runQueuedNode(
@@ -120,6 +113,8 @@ export async function runQueuedNode(
         ...(runResult.lastSignal !== undefined ? { lastSignal: runResult.lastSignal } : {}),
         ...(runResult.lastEventType !== undefined ? { lastEventType: runResult.lastEventType } : {}),
         ...(runResult.lastPolicyDecision !== undefined ? { lastPolicyDecision: runResult.lastPolicyDecision } : {}),
+        ...(runResult.hadOnlyRetryableToolFailures === true ? { hadOnlyRetryableToolFailures: true } : {}),
+        ...(runResult.hadProductiveToolUse === true ? { hadProductiveToolUse: true } : {}),
     };
 }
 
@@ -204,35 +199,21 @@ async function runNode(
     let lastSignal: AbgSignal | undefined;
     let failed = false;
     let blocked = false;
-    // Per-node runtime edge inputs (NOT shared state — concurrent node runs each carry
-    // their own, so rule-gated edges evaluate against the node that just ran, not a
-    // sibling's clobbered value).
     let lastEventType: string | undefined;
     let lastPolicyDecision: AbgPolicyDecision | undefined;
     let finalText: string | undefined;
     let terminal = false;
+    let retryableToolFailures = 0;
+    let completedTools = 0;
     for await (const signal of runAbgNode(registry, node, runContext(graph, registry, input, state))) {
-        // Observation-only tap: fires for EVERY yielded node signal (including high-frequency
-        // streaming signals such as `llm.text.delta`) before projection to an AgentEvent. Lets an
-        // interactive caller render live token deltas without bloating the durable ledger. Does not
-        // influence projection, persistence, or the run result.
-        // Awaited so a tap returning a Promise (an async tool-arg preview render on the interactive
-        // path) completes before the next signal — preserving TUI output order. Sync taps return void,
-        // which awaits as a no-op.
         await input.onSignal?.(signal);
         lastSignal = signal;
         state.nodeStatuses[signal.nodeId] = nodeStatusForSignal(signal);
         if (signal.type === 'failure') {
-            // An LLMActor approval-block short-circuit (code `tool_approval_blocked`) settles the
-            // node as `blocked`, not `failed` — it must not trigger retry/fail handling.
             if (isToolApprovalBlockedError(signal.error)) {
                 blocked = true;
             } else {
                 failed = true;
-                // A terminal tool-settlement failure (a `command_not_allowed`, or a denial) is
-                // non-retryable: the LLMActor short-circuited under `haltOnFailedToolSettlement`
-                // because retrying cannot change the outcome. Mark it so the coordinator fails the
-                // run immediately instead of consuming the retry budget.
                 if (isTerminalToolFailureError(signal.error)) {
                     terminal = true;
                 }
@@ -248,6 +229,12 @@ async function runNode(
             if (turnText !== undefined) {
                 finalText = turnText;
             }
+            if (signal.event.type === 'tool.completed') {
+                completedTools += 1;
+            }
+            if (signal.event.type === 'tool.failed' && isRetryableToolFailurePayload(signal.event.payload)) {
+                retryableToolFailures += 1;
+            }
         }
         state.events.push(
             projectAbgSignalToEvent({
@@ -262,6 +249,9 @@ async function runNode(
             }),
         );
     }
+    const hadOnlyRetryableToolFailures =
+        !failed && !blocked && retryableToolFailures > 0 && completedTools === 0;
+    const hadProductiveToolUse = completedTools > 0;
     return {
         status: blocked ? 'blocked' : failed ? 'failed' : 'completed',
         ...(lastSignal !== undefined ? { lastSignal } : {}),
@@ -269,6 +259,8 @@ async function runNode(
         ...(lastPolicyDecision !== undefined ? { lastPolicyDecision } : {}),
         ...(finalText !== undefined ? { finalText } : {}),
         ...(terminal ? { terminal: true } : {}),
+        ...(hadOnlyRetryableToolFailures ? { hadOnlyRetryableToolFailures: true } : {}),
+        ...(hadProductiveToolUse ? { hadProductiveToolUse: true } : {}),
     };
 }
 
@@ -347,4 +339,15 @@ function attemptFailureError(node: AbgNodeSpec, attempt: number, maxAttempts: nu
         message: retryable ? `ABG node attempt failed: ${node.id}` : `ABG node retry limit exhausted: ${node.id}`,
         retryable,
     };
+}
+
+function isRetryableToolFailurePayload(payload: unknown): boolean {
+    if (typeof payload !== 'object' || payload === null || !('error' in payload)) {
+        return false;
+    }
+    const error = (payload as { readonly error?: unknown }).error;
+    if (typeof error !== 'object' || error === null || !('retryable' in error)) {
+        return false;
+    }
+    return (error as { readonly retryable?: unknown }).retryable === true;
 }

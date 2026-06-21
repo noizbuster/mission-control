@@ -231,6 +231,9 @@ export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): Reac
     const outputTokens = state.outputTokens;
     const modelCalls = state.modelCalls;
     const policyEvents = state.recentEvents.filter(isPolicyEvent);
+    const hasWarning = policyEvents.some((event) => event.type === 'policy.budget.warning');
+    const hasExceeded = policyEvents.some((event) => event.type === 'policy.budget.exceeded');
+    const costColor = hasExceeded ? 'red' : hasWarning ? 'yellow' : undefined;
 
     return (
         <Box flexDirection="column" marginTop={1}>
@@ -238,13 +241,22 @@ export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): Reac
                 <Text bold>Cost Summary</Text>
                 {modelLabel !== undefined ? <Text dimColor>model: {modelLabel}</Text> : null}
                 <Box flexDirection="row">
-                    <Text>{cost}</Text>
+                    <Text {...(costColor !== undefined ? { color: costColor } : {})}>{cost}</Text>
                     <Text> / </Text>
                     <Text>{inputTokens} in</Text>
                     <Text> / </Text>
                     <Text>{outputTokens} out</Text>
                 </Box>
                 <Text dimColor>model calls: {modelCalls}</Text>
+                {hasExceeded ? (
+                    <Text bold color="red">
+                        BUDGET EXCEEDED
+                    </Text>
+                ) : hasWarning ? (
+                    <Text bold color="yellow">
+                        approaching budget threshold
+                    </Text>
+                ) : null}
             </Box>
             <Box marginTop={1} flexDirection="column">
                 <Text bold>Policy Events</Text>
@@ -255,10 +267,18 @@ export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): Reac
                         const type = truncate(event.type, 24);
                         const timestamp = event.timestamp !== '' ? shortTime(event.timestamp) : '';
                         const message = truncate(event.emitPayloadText ?? event.message, 60);
+                        const eventColor =
+                            event.type === 'policy.budget.exceeded'
+                                ? 'red'
+                                : event.type === 'policy.budget.warning'
+                                  ? 'yellow'
+                                  : event.type === 'policy.blocked'
+                                    ? 'red'
+                                    : undefined;
                         return (
                             // biome-ignore lint/suspicious/noArrayIndexKey: policy events are append-only within a single overlay render
                             <Box key={`policy-${event.timestamp}-${event.type}-${index}`} flexDirection="row">
-                                <Text color="yellow">{type}</Text>
+                                <Text {...(eventColor !== undefined ? { color: eventColor } : {})}>{type}</Text>
                                 <Text dimColor> </Text>
                                 <Text dimColor>{timestamp}</Text>
                                 {message !== '' ? (
@@ -272,6 +292,85 @@ export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): Reac
                     })
                 )}
             </Box>
+        </Box>
+    );
+}
+
+function formatBlackboardValue(value: unknown): string {
+    if (value === null) return 'null';
+    if (value === undefined) return 'undefined';
+    if (typeof value === 'string') return value;
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return '[unserializable]';
+    }
+}
+
+function blackboardKeyColor(key: string): string | undefined {
+    if (key.startsWith('goal') || key.startsWith('goal_')) return 'cyan';
+    if (key.startsWith('hypothesis') || key.startsWith('hypothesis_')) return 'magenta';
+    if (key.startsWith('observation') || key.startsWith('observation_')) return 'blue';
+    if (key.startsWith('decision') || key.startsWith('decision_')) return 'green';
+    if (key.startsWith('critic')) return 'yellow';
+    if (key.startsWith('supervisor')) return 'red';
+    return undefined;
+}
+
+export function BlackboardPane({ state }: AbgOverlayPaneProps): React.ReactElement {
+    const entries = [...state.blackboardEntries.entries()].sort(([left], [right]) => left.localeCompare(right));
+    const recentMutations = state.recentEvents.filter(
+        (event) => event.type === 'blackboard.set' || event.type === 'blackboard.delete',
+    );
+
+    return (
+        <Box flexDirection="column" marginTop={1}>
+            <Box flexDirection="column">
+                <Text bold>Blackboard</Text>
+                <Text dimColor>working memory: {entries.length} entries</Text>
+                {entries.length === 0 ? (
+                    <Text dimColor>
+                        No blackboard entries — node runners (MemoryNode, LLMActor, Supervisor) will populate goals,
+                        hypotheses, and observations here.
+                    </Text>
+                ) : (
+                    entries.map(([key, value]) => {
+                        const valueText = truncate(formatBlackboardValue(value), 80);
+                        const keyColor = blackboardKeyColor(key);
+                        return (
+                            <Box key={`bb-${key}`} flexDirection="row">
+                                <Text {...(keyColor !== undefined ? { color: keyColor } : {})} bold>
+                                    {key}
+                                </Text>
+                                <Text dimColor> = </Text>
+                                <Text dimColor>{valueText}</Text>
+                            </Box>
+                        );
+                    })
+                )}
+            </Box>
+            {recentMutations.length > 0 ? (
+                <Box marginTop={1} flexDirection="column">
+                    <Text bold>Recent Mutations</Text>
+                    {recentMutations
+                        .slice(-10)
+                        .reverse()
+                        .map((event, index) => {
+                            const type = event.type === 'blackboard.set' ? 'set' : 'del';
+                            const timestamp = event.timestamp !== '' ? shortTime(event.timestamp) : '';
+                            const message = truncate(event.emitPayloadText ?? event.message, 60);
+                            const color = event.type === 'blackboard.set' ? 'green' : 'red';
+                            return (
+                                // biome-ignore lint/suspicious/noArrayIndexKey: blackboard mutations are append-only within a render
+                                <Box key={`bb-mut-${event.timestamp}-${index}`} flexDirection="row">
+                                    <Text color={color}>{type}</Text>
+                                    <Text dimColor> {timestamp}</Text>
+                                    {message !== '' ? <Text dimColor> {message}</Text> : null}
+                                </Box>
+                            );
+                        })}
+                </Box>
+            ) : null}
         </Box>
     );
 }

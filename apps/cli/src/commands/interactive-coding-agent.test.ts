@@ -118,7 +118,7 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
 
             const tap = interactiveGraphStreamSignal(
                 output,
-                { streamingText: false, toolCount: 0, toolNames: [] },
+                { streamingText: false, streamingThinking: false, toolCount: 0, toolNames: [] },
                 '/ws',
                 [throwingObserver],
             );
@@ -237,7 +237,7 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
             const baselineOutput = bufferedOutput();
             const baselineTap = interactiveGraphStreamSignal(
                 baselineOutput,
-                { streamingText: false, toolCount: 0, toolNames: [] },
+                { streamingText: false, streamingThinking: false, toolCount: 0, toolNames: [] },
                 '/ws',
             );
 
@@ -247,7 +247,7 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
             const overlayOutput = bufferedOutput();
             const overlayTap = interactiveGraphStreamSignal(
                 overlayOutput,
-                { streamingText: false, toolCount: 0, toolNames: [] },
+                { streamingText: false, streamingThinking: false, toolCount: 0, toolNames: [] },
                 '/ws',
                 [wiring.observer],
             );

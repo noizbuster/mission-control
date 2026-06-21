@@ -35,6 +35,15 @@ const EMIT_TYPES_WITH_PERSISTED_PAYLOAD: ReadonlySet<string> = new Set([
     'tool.completed',
     'tool.failed',
     'llm.error',
+    // v2: persisted so the overlay Cost&Policy pane can read `cents`, `budgetCents`,
+    // and token totals off `event.abg.emit.payload` instead of staying at $0.00.
+    'policy.budget.accumulated',
+    'policy.budget.warning',
+    'policy.budget.exceeded',
+    // v2: persisted so the overlay Blackboard tab can show key/value deltas as
+    // first-class events with structured payloads (not just log strings).
+    'blackboard.set',
+    'blackboard.delete',
 ]);
 
 export function projectAbgSignalToEvent(input: AbgSignalProjectionInput): AgentEvent {

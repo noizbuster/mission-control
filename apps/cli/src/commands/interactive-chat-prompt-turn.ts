@@ -4,6 +4,7 @@ import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
     type JsonlSessionEventStore,
+    type PricingTable,
     type ProviderAdapter,
     ProviderTurnRunner,
     prependProjectContextMessages,
@@ -11,6 +12,7 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
+import type { ApprovalLevel } from './approval-level.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { type ActiveCodingAgentTurn, startCodingAgentTurn } from './interactive-coding-agent.js';
 
@@ -23,24 +25,12 @@ export type PromptTurnContext = {
     readonly observeStoredEvent: ((event: AgentEvent) => void) | undefined;
     readonly nextTurnId: () => string;
     readonly sessionStore: JsonlSessionEventStore | undefined;
-    /**
-     * Execution engine for the coding-agent turn. `'graph'` is the only supported value (the flat
-     * provider-turn loop has been removed); retained on the options shape for caller compatibility.
-     * The graph path needs `resolveSdkModel` to resolve the AI-SDK model for the selection.
-     */
     readonly engine?: 'graph';
     readonly resolveSdkModel?: SdkModelResolver;
-    /**
-     * `ask_user` tool callback. When omitted, the `ask_user` tool is not registered for the turn.
-     * The interactive TUI wires this to the Ink question overlay.
-     */
     readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
-    /**
-     * ABG overlay controller (Wave 2/todo 3). When present, it is threaded into the coding-agent
-     * turn so `wireAbgOverlay` can subscribe its signal/event observer. Created once per session
-     * by the interactive chat host and shared with the Ink bridge.
-     */
     readonly abgOverlayController?: AbgOverlayController;
+    readonly pricingTable?: PricingTable;
+    readonly approvalLevel?: ApprovalLevel;
 };
 
 export async function startPromptTurn(
@@ -138,6 +128,8 @@ export async function startPromptTurn(
         ...(coding.resolveSdkModel !== undefined ? { resolveSdkModel: coding.resolveSdkModel } : {}),
         ...(coding.requestUserQuestion !== undefined ? { requestUserQuestion: coding.requestUserQuestion } : {}),
         ...(coding.abgOverlayController !== undefined ? { abgOverlayController: coding.abgOverlayController } : {}),
+        ...(coding.pricingTable !== undefined ? { pricingTable: coding.pricingTable } : {}),
+        ...(coding.approvalLevel !== undefined ? { approvalLevel: coding.approvalLevel } : {}),
     });
 }
 

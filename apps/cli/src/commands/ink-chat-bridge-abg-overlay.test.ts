@@ -137,14 +137,14 @@ describe('ink chat bridge ABG overlay tab navigation', () => {
 
         handleInput(core, '', makeKey({ tab: true, shift: true }));
 
-        expect(core.abgOverlayActiveTab).toBe(6);
+        expect(core.abgOverlayActiveTab).toBe(7);
     });
 
     it('wraps forward from the last tab to the first on Tab', () => {
         const core = createInkChatBridgeCore();
         openOverlay(core);
-        handleInput(core, '7', makeKey());
-        expect(core.abgOverlayActiveTab).toBe(6);
+        handleInput(core, '8', makeKey());
+        expect(core.abgOverlayActiveTab).toBe(7);
 
         handleInput(core, '', makeKey({ tab: true }));
 
@@ -347,7 +347,7 @@ describe('ink chat bridge ABG overlay controller reset', () => {
     });
 });
 
-describe('ink chat bridge ABG overlay direct digit selection (1-7)', () => {
+describe('ink chat bridge ABG overlay direct digit selection (1-8)', () => {
     it.each([
         ['1', 0],
         ['2', 1],
@@ -356,6 +356,7 @@ describe('ink chat bridge ABG overlay direct digit selection (1-7)', () => {
         ['5', 4],
         ['6', 5],
         ['7', 6],
+        ['8', 7],
     ] as const)('selects tab index %i on digit %s and resets the scroll offset', (digit, expectedTab) => {
         const core = createInkChatBridgeCore();
         openOverlay(core);
@@ -368,13 +369,12 @@ describe('ink chat bridge ABG overlay direct digit selection (1-7)', () => {
         expect(core.snapshot.abgOverlayActiveTab).toBe(expectedTab);
     });
 
-    it('silently ignores digits 8 and 9 (no tab bound) via the default branch', () => {
+    it('silently ignores digit 9 (no tab bound) via the default branch', () => {
         const core = createInkChatBridgeCore();
         openOverlay(core);
         handleInput(core, '3', makeKey());
         expect(core.abgOverlayActiveTab).toBe(2);
 
-        handleInput(core, '8', makeKey());
         handleInput(core, '9', makeKey());
 
         expect(core.abgOverlayActiveTab).toBe(2);
