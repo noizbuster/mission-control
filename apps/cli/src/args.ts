@@ -37,6 +37,11 @@ export type CliArgs = {
     readonly prompt?: string;
     readonly sessionId?: string;
     /**
+     * Explicit target workspace path passed via `--workspace <path>`. When unset, the runtime
+     * falls back to `MCTRL_WORKSPACE` env var and then to the `detectWorkspaceRoot()` heuristic.
+     */
+    readonly workspacePath?: string;
+    /**
      * Execution engine for prompt runs. `'graph'` (the only supported value) routes through the
      * ABG coding-agent graph + the AI-SDK `resolveSdkModel` bridge. Retained as an explicit flag
      * for callers/tests that pass `--engine graph`; the value `'flat'` is no longer accepted.
@@ -75,6 +80,7 @@ export const supportedCliFlags = [
     '--graph',
     '--engine',
     '--session',
+    '--workspace',
     '--api-key',
     '--credential',
     '--method',

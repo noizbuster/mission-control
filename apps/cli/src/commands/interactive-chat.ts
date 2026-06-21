@@ -106,6 +106,7 @@ export async function runInteractiveChatSession(
                   ? { variantID: options.modelProviderSelection.variantID }
                   : {}),
               ...(options.sessionId !== undefined ? { sessionID: options.sessionId } : {}),
+              ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
               ...(initialHistoryEntries.length > 0 ? { initialHistoryEntries } : {}),
               ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
           }

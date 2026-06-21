@@ -16,6 +16,7 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
     let engine: 'graph' | undefined;
     let graphPath = initial.graphPath;
     let sessionId: string | undefined;
+    let workspacePath: string | undefined;
     const promptParts: string[] = [];
     let index = 0;
 
@@ -78,6 +79,10 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
                 sessionId = readFlagValue(argv, index, '--session');
                 index += 2;
                 break;
+            case '--workspace':
+                workspacePath = readFlagValue(argv, index, '--workspace');
+                index += 2;
+                break;
             case '--version':
                 showVersion = true;
                 index += 1;
@@ -105,6 +110,7 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
         showHelp,
         showVersion,
         useNative,
+        workspacePath,
     });
 
     function setJsonMode(nextMode: 'json' | 'jsonl'): void {
@@ -138,6 +144,7 @@ function buildRunArgs(input: {
     readonly showHelp: boolean;
     readonly showVersion: boolean;
     readonly useNative: boolean | undefined;
+    readonly workspacePath: string | undefined;
 }): CliArgs {
     if (input.graphPath !== undefined && input.prompt !== undefined) {
         throw new Error('prompt cannot be combined with --graph');
@@ -158,6 +165,7 @@ function buildRunArgs(input: {
         ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
         ...(input.engine !== undefined ? { engine: input.engine } : {}),
         ...(input.sessionId !== undefined ? { sessionId: input.sessionId } : {}),
+        ...(input.workspacePath !== undefined ? { workspacePath: input.workspacePath } : {}),
     } satisfies CliArgs;
     const modelProviderSelection = resolveModelProviderSelection(input.providerID, input.modelID);
     if (modelProviderSelection === undefined) {

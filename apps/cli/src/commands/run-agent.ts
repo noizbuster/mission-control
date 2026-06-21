@@ -13,7 +13,7 @@ import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
 import { type AgentUIRenderer, InkRenderer, JsonRenderer, PlainRenderer } from '../ui/renderers.js';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { NonInteractiveAutomationPolicy } from './cli-runtime-options.js';
 import { createCliRuntimeOptions } from './cli-runtime-options.js';
@@ -64,7 +64,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     const shouldRunChat = shouldRunInteractiveChat(args, graph, options);
     const createProvider = options.createProvider ?? ((selection) => createProviderForSelection(selection, authStore));
     const provider = options.provider ?? createProvider(selectedModelProvider);
-    const workspaceRoot = options.workspaceRoot ?? detectWorkspaceRoot();
+    const workspaceRoot = options.workspaceRoot ?? resolveWorkspaceRoot(args.workspacePath);
     const runtime = new AgentRuntime(
         createCliRuntimeOptions({
             ...(args.useNative !== undefined ? { useNative: args.useNative } : {}),
@@ -351,4 +351,33 @@ export function detectWorkspaceRoot(): string {
         dir = parent;
     }
     return cwd;
+}
+
+/**
+ * Workspace resolution precedence:
+ *   1. `--workspace <path>` flag (`args.workspacePath`)
+ *   2. `MCTRL_WORKSPACE` env var (lets tests/scripts pin without flags)
+ *   3. `detectWorkspaceRoot()` heuristic (`.git` / workspaces `package.json`)
+ *
+ * An explicit `--workspace` value must point to an existing directory; failure is hard
+ * because silently falling back would hide a typo from the user. Env/heuristic results
+ * are trusted as-is to preserve existing behavior.
+ */
+export function resolveWorkspaceRoot(explicitPath: string | undefined): string {
+    if (explicitPath !== undefined) {
+        const resolved = resolve(explicitPath);
+        if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
+            throw new Error(`--workspace path does not exist or is not a directory: ${explicitPath}`);
+        }
+        return resolved;
+    }
+    const envWorkspace = process.env['MCTRL_WORKSPACE'];
+    if (envWorkspace !== undefined && envWorkspace.length > 0) {
+        const resolved = resolve(envWorkspace);
+        if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
+            throw new Error(`MCTRL_WORKSPACE path does not exist or is not a directory: ${envWorkspace}`);
+        }
+        return resolved;
+    }
+    return detectWorkspaceRoot();
 }

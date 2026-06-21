@@ -22,6 +22,11 @@ describe('parseArgs', () => {
         expect(parseArgs(['--session', 'session_cli'])).toMatchObject({
             sessionId: 'session_cli',
         });
+        expect(parseArgs(['--workspace', '/tmp/some-project'])).toMatchObject({
+            workspacePath: '/tmp/some-project',
+        });
+        expect(() => parseArgs(['--workspace'])).toThrow('--workspace requires a value');
+        expect(() => parseArgs(['--workspace', '--json'])).toThrow('--workspace requires a value');
         expect(parseArgs(['--version']).showVersion).toBe(true);
         expect(parseArgs(['--help']).showHelp).toBe(true);
     });
