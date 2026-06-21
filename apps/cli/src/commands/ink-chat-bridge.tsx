@@ -1740,7 +1740,7 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                 </Box>
             ) : null}
             <Box flexDirection="column" marginTop={1}>
-                <Text dimColor>{'─'.repeat(process.stdout.columns ?? 80)}</Text>
+                <Text dimColor>{'-'.repeat(process.stdout.columns ?? 80)}</Text>
                 <Text>
                     <Text color="cyan">{'>'}</Text> {snapshot.inputBuffer.slice(0, snapshot.cursorPosition)}
                     <Text backgroundColor="white" color="black">
@@ -1816,9 +1816,16 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         });
     };
 
+    let emitOutputScheduled = false;
     const emitOutput = (text: string): void => {
         core.outputText += text;
-        publishSnapshot(core);
+        if (!emitOutputScheduled) {
+            emitOutputScheduled = true;
+            setTimeout(() => {
+                emitOutputScheduled = false;
+                publishSnapshot(core);
+            }, 16);
+        }
     };
 
     const replaceOutputText = (text: string): void => replaceCoreOutputText(core, text);

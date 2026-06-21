@@ -25,7 +25,7 @@ function truncate(value: string, maxLength: number): string {
 
 export function ApprovalPrompt({ toolName, toolArguments, options, message }: ApprovalPromptProps): React.ReactElement {
     return (
-        <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1}>
+        <Box flexDirection="column" paddingX={1}>
             {message !== undefined ? <Text dimColor>{message}</Text> : null}
             <Text>
                 <Text bold>Tool:</Text> {truncate(toolName, MAX_ARGS_LENGTH)}
