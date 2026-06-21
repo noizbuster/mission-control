@@ -1433,20 +1433,37 @@ const SPINNER_FRAMES = [
     '\u280F',
 ] as const;
 const SPINNER_INTERVAL_MS = 80;
+const SPINNER_STATIC_GLYPH = '\u25CF';
+const SPINNER_MODE_ENV = 'MCTRL_SPINNER';
+
+/**
+ * Resolve the spinner mode from `MCTRL_SPINNER`. Default is `'static'` (no
+ * interval, no re-renders) because Ink's per-frame re-render writes ANSI
+ * redraw escapes to stdout and disrupts terminal mouse text selection.
+ * `'animate'` restores the original 80ms braille animation.
+ */
+export function resolveSpinnerMode(env: NodeJS.ProcessEnv = process.env): 'static' | 'animate' {
+    return env[SPINNER_MODE_ENV] === 'animate' ? 'animate' : 'static';
+}
 
 function AgentSpinner({ text }: { readonly text: string }): React.ReactElement {
+    const spinnerMode = resolveSpinnerMode();
     const [frame, setFrame] = useState(0);
     useEffect(() => {
+        if (spinnerMode === 'static') {
+            return;
+        }
         const timer = setInterval(() => {
             setFrame((current) => (current + 1) % SPINNER_FRAMES.length);
         }, SPINNER_INTERVAL_MS);
         return () => {
             clearInterval(timer);
         };
-    }, []);
+    }, [spinnerMode]);
+    const glyph = spinnerMode === 'static' ? SPINNER_STATIC_GLYPH : (SPINNER_FRAMES[frame] ?? SPINNER_STATIC_GLYPH);
     return (
         <Box marginTop={1}>
-            <Text color="yellow">{SPINNER_FRAMES[frame]} </Text>
+            <Text color="yellow">{glyph} </Text>
             <Text dimColor>{text}</Text>
         </Box>
     );
