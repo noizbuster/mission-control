@@ -1,4 +1,5 @@
 export * from './abg-overlay/index.js';
+export * from './agents/index.js';
 export type { AgentRuntimeOptions, RunGraphOptions } from './agent-runtime.js';
 export { AgentRuntime } from './agent-runtime.js';
 export { SubAgentRegistry } from './agents/registry.js';

@@ -10,6 +10,9 @@ export type SubAgentRunOutput = {
     readonly metadata?: Record<string, unknown>;
 };
 
+/**
+ * @deprecated Use AgentDefinition from '@mission-control/protocol' instead.
+ */
 export interface SubAgent {
     readonly id: string;
     readonly name: string;

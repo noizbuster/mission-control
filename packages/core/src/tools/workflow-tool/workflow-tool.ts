@@ -12,11 +12,10 @@
  * task tool's thin-contract shape. `not_found` is a RETURNED status (not thrown)
  * so the model can read the available-names hint and retry with a corrected name.
  *
- * Capability class `'workflow'` is a new surface; it is not in the child-dropped
- * set yet (`CHILD_DROPPED_CAPABILITY_KINDS`), so child registries currently see
- * it — harmless for v1 since execute is side-effect-free. When the runtime
- * adapter wires real graph execution, the child policy should be extended to drop
- * `'workflow'` to prevent recursion.
+ * Capability class `'workflow'` is in `CHILD_DROPPED_CAPABILITY_KINDS`, so child
+ * registries built via `createChildToolRegistry` do not expose this tool — that
+ * prevents a delegated child from self-invoking a workflow graph and recursing
+ * back into the runtime adapter.
  */
 import type { WorkflowSpec } from '@mission-control/protocol';
 import { z } from 'zod';

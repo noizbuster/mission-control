@@ -48,13 +48,16 @@ describe('createChildPermissionRules (subagent child policy)', () => {
     });
 });
 
-describe('CHILD_DROPPED_CAPABILITY_KINDS (network/subagent blocklist extension)', () => {
+describe('CHILD_DROPPED_CAPABILITY_KINDS (network/subagent/workflow blocklist extension)', () => {
     it('is a strict superset of DESTRUCTIVE_PERMISSION_KINDS', () => {
         for (const kind of DESTRUCTIVE_PERMISSION_KINDS) {
             expect(CHILD_DROPPED_CAPABILITY_KINDS).toContain(kind);
         }
         expect(CHILD_DROPPED_CAPABILITY_KINDS).toContain('network');
         expect(CHILD_DROPPED_CAPABILITY_KINDS).toContain('subagent');
+        expect(CHILD_DROPPED_CAPABILITY_KINDS).toContain('workflow');
+        // 3 destructive + network + subagent + workflow = 6 entries.
+        expect(CHILD_DROPPED_CAPABILITY_KINDS.length).toBe(DESTRUCTIVE_PERMISSION_KINDS.length + 3);
     });
 
     it('BEFORE-fix characterization: with only the destructive set, a network/subagent capability LEAKS (the bug this extension closes)', () => {
@@ -63,13 +66,16 @@ describe('CHILD_DROPPED_CAPABILITY_KINDS (network/subagent blocklist extension)'
         expect(isChildSafeCapability(['subagent'], DESTRUCTIVE_PERMISSION_KINDS)).toBe(true);
     });
 
-    it('AFTER fix: the default blocklist drops network and subagent capability classes', () => {
-        // webfetch/mcp tools declare capability class 'network'; the task tool declares 'subagent'.
+    it('AFTER fix: the default blocklist drops network, subagent, and workflow capability classes', () => {
+        // webfetch/mcp tools declare capability class 'network'; the task tool declares 'subagent';
+        // the workflow tool declares capability class 'workflow' — dropped to prevent child recursion.
         expect(isChildSafeCapability(['network'])).toBe(false);
         expect(isChildSafeCapability(['subagent'])).toBe(false);
+        expect(isChildSafeCapability(['workflow'])).toBe(false);
         // Compound capability sets are blocked if they include a dropped kind.
         expect(isChildSafeCapability(['read', 'network'])).toBe(false);
         expect(isChildSafeCapability(['read', 'subagent'])).toBe(false);
+        expect(isChildSafeCapability(['read', 'workflow'])).toBe(false);
     });
 
     it('keeps read-class capabilities child-safe under the extended default', () => {

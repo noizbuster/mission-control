@@ -50,6 +50,10 @@ temp/
 evidence/
 .debug-journal.md
 
+# Generated bundled agent modules (codegenned from bundled-src/*.md)
+packages/core/src/agents/bundled/**/*.md.ts
+packages/core/src/agents/bundled/index.ts
+
 # OS and editor noise
 .DS_Store
 Thumbs.db

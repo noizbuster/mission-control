@@ -1,5 +1,8 @@
 import type { SubAgent } from './sub-agent.js';
 
+/**
+ * @deprecated Use AgentIndex from './agent-registry.js' instead. This class is scaffold and will be removed in v3.
+ */
 export class SubAgentRegistry {
     private readonly agents = new Map<string, SubAgent>();
 
