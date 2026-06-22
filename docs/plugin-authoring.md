@@ -27,6 +27,7 @@ Every field documented below appears there with inline comments.
 10. [Examples](#examples)
 11. [Gotchas](#gotchas)
 12. [Diagnostics reference](#diagnostics-reference)
+13. [Plugin Directory Structure](#plugin-directory-structure)
 
 ---
 
@@ -667,3 +668,263 @@ a `code`, a `message`, and an optional `path`.
 When a workflow is missing, check the diagnostics stream first. The loader
 collects these instead of throwing, so a broken file in one scope never blocks
 discovery of the rest.
+
+---
+
+## Plugin Directory Structure
+
+A **plugin** is a self-contained bundle that extends Mission Control with
+skills, workflows, categories, modes, MCP servers, tools, node kinds, LSP
+servers, context sources, and sub-agent definitions. Plugins live under a
+dedicated plugin home (`~/.gctrl/`), separate from the mission-control config
+directory, so plugin installs never collide with skill/workflow config.
+
+### Plugin home
+
+The plugin home is resolved in this order:
+
+1. `GCTRL_HOME` environment variable
+2. `~/.gctrl/` (via `os.homedir()`)
+
+Each plugin occupies one subdirectory:
+
+```
+~/.gctrl/plugins/{plugin-name}/
+├── plugin.json              # manifest (required)
+├── skills/                  # SKILL.md files
+├── workflows/               # *.workflow.json files
+├── categories/              # *.category.json files
+├── modes/                   # *.mode.json files
+├── mcp.json                 # MCP server config
+├── tools/                   # *.tool.json definitions
+├── nodes/                   # *.node.json definitions
+├── lsp.json                 # LSP server config
+├── context/                 # context source configs
+└── subagents/               # sub-agent definitions
+```
+
+If the plugin home does not exist, plugin loading is skipped silently. A
+missing `plugin.json` in a subdirectory is also skipped silently (no
+diagnostic). A present-but-invalid `plugin.json` produces a diagnostic and the
+plugin is skipped.
+
+### `plugin.json` manifest
+
+The manifest declares the plugin identity and what it provides. The schema is
+`PluginManifestSchema` in [plugin.ts](/packages/protocol/src/plugin.ts). It is
+strict.
+
+```jsonc
+{
+  "name": "my-plugin",          // required, non-empty
+  "version": "1.0.0",           // required, non-empty
+  "description": "what it does",// optional
+  "author": "your-name",        // optional
+  "homepage": "https://...",    // optional
+  "provides": {                 // optional, defaults to all-false
+    "skills": true,
+    "workflows": true,
+    "categories": true,
+    "modes": true,
+    "mcp": false,
+    "tools": false,
+    "nodes": false,
+    "lsp": false,
+    "context": false,
+    "subagents": false
+  }
+}
+```
+
+The `provides` map tells the PluginManager which subdirectories to scan. If a
+flag is `false` (or omitted), the manager skips the corresponding directory
+even if files exist there. This lets you ship a plugin that only provides
+skills, or only provides workflows, without the manager touching unrelated
+paths.
+
+### `skills/`
+
+One or more subdirectories, each containing a `SKILL.md` file with YAML
+frontmatter. The format is identical to the standard skill discovery format
+(see the Skills section above). Plugin skills are discovered as an additional
+scope after the three standard scopes (global-user, project-mctrl,
+project-agents), so a standard-scope skill with the same name shadows a plugin
+skill (first-wins).
+
+```
+skills/
+└── my-skill/
+    └── SKILL.md
+```
+
+### `workflows/`
+
+One or more `*.workflow.json` or `*.workflow.jsonc` files. The format is
+identical to the standard workflow format (see [The `*.workflow.json`
+format](#the-workflowjson-format)). Plugin workflows are discovered as an
+additional scope after the three standard scopes.
+
+### `categories/`
+
+One or more `*.category.json` files. Each file contains a single `Category`
+object matching `CategorySchema` (see [Categories](#categories)).
+
+```jsonc
+{
+  "id": "plugin-researcher",
+  "model": { "providerID": "anthropic", "modelID": "claude-sonnet" },
+  "permissions": ["read", "network"],
+  "systemPromptAddendum": "Focus on source citations.",
+  "tools": ["read", "grep", "webfetch"]
+}
+```
+
+Plugin categories are registered into the `WorkflowRegistry` via
+`pluginManager.registerInto(registry)`.
+
+### `modes/`
+
+One or more `*.mode.json` files. Each file contains a single `Mode` object
+matching `ModeSchema` (see [Modes](#modes)).
+
+```jsonc
+{
+  "id": "plugin-strict-readonly",
+  "systemPromptOverlay": "Never modify files. Cite every claim.",
+  "policies": [
+    { "action": "write", "resource": "**", "effect": "deny" },
+    { "action": "bash", "resource": "**", "effect": "deny" }
+  ]
+}
+```
+
+Plugin modes are registered into the `WorkflowRegistry` via
+`pluginManager.registerInto(registry)`.
+
+### `mcp.json`
+
+MCP server configuration in the Claude-Code-compatible `.mcp.json` shape. Only
+`type: "local"` (stdio) entries are surfaced from plugins.
+
+```jsonc
+{
+  "mcpServers": {
+    "my-server": {
+      "type": "local",
+      "command": ["node", "/path/to/server.js"],
+      "environment": { "API_KEY": "${MY_API_KEY}" },
+      "enabled": true,
+      "timeoutMs": 5000
+    }
+  }
+}
+```
+
+### `tools/`
+
+One or more `*.tool.json` files. Each declares a tool definition matching
+`PluginToolDefinitionSchema`. A tool may be backed by an MCP server
+(`mcpServer` field) or be a reference-only entry.
+
+```jsonc
+{
+  "name": "custom-search",
+  "description": "Search a custom data source",
+  "inputSchema": { "query": { "type": "string" } },
+  "mcpServer": "my-server",
+  "capability": "read"
+}
+```
+
+### `nodes/`
+
+One or more `*.node.json` files. Each maps a `kind` string to a built-in
+runner so graphs can reference plugin-provided node kinds.
+
+```jsonc
+{
+  "kind": "custom-gate",
+  "runner": "llm",
+  "defaultConfig": { "outputKey": "gate.result" }
+}
+```
+
+### `lsp.json`
+
+LSP server configuration as a JSON array of `PluginLspServer` objects. Each
+declares a command, language, and file extensions so a future LSP transport
+can spawn the server and route matching files.
+
+```jsonc
+[
+  {
+    "name": "rust-analyzer",
+    "language": "rust",
+    "command": "rust-analyzer",
+    "args": [],
+    "extensions": [".rs"],
+    "timeoutMs": 30000
+  }
+]
+```
+
+### `context/`
+
+One or more `*.json` files declaring context source definitions matching
+`PluginContextSourceSchema`.
+
+```jsonc
+{
+  "key": "api-docs",
+  "description": "Internal API documentation baseline",
+  "baselineFile": "api-baseline.md"
+}
+```
+
+### `subagents/`
+
+One or more `*.json` files declaring sub-agent definitions matching
+`PluginSubAgentSchema`.
+
+```jsonc
+{
+  "id": "code-reviewer",
+  "name": "Code Reviewer",
+  "systemPrompt": "You are a meticulous code reviewer.",
+  "model": "anthropic/claude-sonnet",
+  "tools": ["read", "grep"]
+}
+```
+
+### Discovery diagnostics
+
+Plugin discovery mirrors the skill/workflow loader: it never throws. Broken
+manifests, oversized files, denylisted paths, and symlinks produce diagnostics
+that are logged to stderr at bootstrap. Each diagnostic carries a `pluginName`,
+`severity` (`error`, `warning`, or `info`), a `code`, a `message`, and an
+optional `path`.
+
+| Code                  | Severity | Meaning                                                       |
+| --------------------- | -------- | ------------------------------------------------------------- |
+| `validation_error`    | error    | The manifest failed `PluginManifestSchema` validation.       |
+| `parse_error`         | error    | The manifest was not valid JSON.                              |
+| `read_failed`         | error    | The manifest could not be read from disk.                     |
+| `duplicate_name`      | warning  | A plugin with this name was already discovered.              |
+| `limit_reached`       | warning  | The max-plugins cap (256) was hit.                           |
+| `size_exceeded`       | warning  | The manifest exceeded the 64 KB size bound.                  |
+| `denylisted`          | warning  | The plugin path matched the discovery denylist.              |
+
+### Integration with skill and workflow discovery
+
+The CLI bootstraps the PluginManager after the standard skill and workflow
+discovery. Plugin skill dirs from `getSkillDirs()` are passed as
+`additionalSkillDirs` to `discoverSkills`, and plugin workflow dirs from
+`getWorkflowDirs()` are passed as `additionalWorkflowDirs` to
+`discoverWorkflows`. This means:
+
+- Standard-scope skills and workflows shadow plugin-provided ones (first-wins).
+- Plugin categories and modes are registered into the `WorkflowRegistry` via
+  `registerInto()`.
+- If the plugin home does not exist, all plugin loading is skipped silently.
+- If the PluginManager throws during initialization, the error is logged to
+  stderr and the session continues with standard discovery only.

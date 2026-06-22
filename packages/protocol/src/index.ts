@@ -128,6 +128,27 @@ export {
     RunStatusSchema,
 } from './mission-run.js';
 export {
+    PLUGIN_DISCOVERY_DIAGNOSTIC_SEVERITIES,
+    type PluginContextSource,
+    PluginContextSourceSchema,
+    type PluginDescriptor,
+    PluginDescriptorSchema,
+    type PluginDiscoveryDiagnostic,
+    PluginDiscoveryDiagnosticSchema,
+    type PluginDiscoveryDiagnosticSeverity,
+    PluginDiscoveryDiagnosticSeveritySchema,
+    type PluginLspServer,
+    PluginLspServerSchema,
+    type PluginManifest,
+    PluginManifestSchema,
+    type PluginNodeDefinition,
+    PluginNodeDefinitionSchema,
+    type PluginSubAgent,
+    PluginSubAgentSchema,
+    type PluginToolDefinition,
+    PluginToolDefinitionSchema,
+} from './plugin.js';
+export {
     type Mode,
     type ModeDeclaration,
     ModeDeclarationSchema,

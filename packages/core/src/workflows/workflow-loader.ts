@@ -38,6 +38,12 @@ export type DiscoverWorkflowsOptions = {
     readonly env?: Readonly<Record<string, string | undefined>>;
     readonly maxWorkflowFileBytes?: number;
     readonly maxWorkflows?: number;
+    /**
+     * Additional directories to scan for `*.workflow.json(c)` files after the
+     * three standard scopes. First-wins by name applies across all scopes.
+     * Used to wire plugin-provided workflow directories.
+     */
+    readonly additionalWorkflowDirs?: readonly string[];
 };
 
 export type DiscoverWorkflowsResult = {
@@ -191,6 +197,9 @@ function resolveWorkflowScopes(
     } else {
         scopes.push({ dir: join(options.workspaceRoot, '.mctrl', 'workflows'), skipped: false });
         scopes.push({ dir: join(options.workspaceRoot, '.agents', 'workflows'), skipped: false });
+    }
+    for (const dir of options.additionalWorkflowDirs ?? []) {
+        scopes.push({ dir, skipped: false });
     }
     return scopes;
 }

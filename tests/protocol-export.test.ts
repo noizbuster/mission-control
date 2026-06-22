@@ -40,7 +40,16 @@ import {
     PermissionRuleDecisionSchema,
     PermissionRuleSchema,
     PermissionStatusSchema,
+    PLUGIN_DISCOVERY_DIAGNOSTIC_SEVERITIES,
     POLICY_EFFECTS,
+    PluginContextSourceSchema,
+    PluginDescriptorSchema,
+    PluginDiscoveryDiagnosticSchema,
+    PluginLspServerSchema,
+    PluginManifestSchema,
+    PluginNodeDefinitionSchema,
+    PluginSubAgentSchema,
+    PluginToolDefinitionSchema,
     PolicyEffectRuleSchema,
     PolicyEffectRuleSetSchema,
     PolicyEffectSchema,
@@ -272,5 +281,65 @@ describe('protocol public exports', () => {
         expect(AbgGraphSnapshotSchema.shape.graphId).toBeDefined();
         expect(AbgToolOutcomeStatusSchema.parse('completed')).toBe('completed');
         expect(AbgToolOutcomeSnapshotSchema.shape.toolId).toBeDefined();
+    });
+
+    it('exports plugin system schemas (PluginManifest, PluginDescriptor, PluginDiscoveryDiagnostic, PluginLspServer, PluginToolDefinition, PluginNodeDefinition, PluginContextSource, PluginSubAgent)', () => {
+        expect(PLUGIN_DISCOVERY_DIAGNOSTIC_SEVERITIES).toEqual(['error', 'warning', 'info']);
+        expect(
+            PluginManifestSchema.parse({
+                name: 'my-plugin',
+                version: '1.0.0',
+            }).provides.skills,
+        ).toBe(false);
+        expect(
+            PluginManifestSchema.parse({
+                name: 'p',
+                version: '1.0.0',
+                provides: { skills: true, mcp: true },
+            }).provides.mcp,
+        ).toBe(true);
+        expect(() => PluginManifestSchema.parse({ version: '1.0.0' })).toThrow();
+        expect(
+            PluginDescriptorSchema.shape.rootPath,
+        ).toBeDefined();
+        expect(
+            PluginDiscoveryDiagnosticSchema.parse({
+                pluginName: 'broken',
+                severity: 'error',
+                code: 'validation_error',
+                message: 'bad manifest',
+            }).severity,
+        ).toBe('error');
+        expect(
+            PluginLspServerSchema.parse({
+                name: 'tsserver',
+                language: 'typescript',
+                command: 'tsserver',
+            }).timeoutMs,
+        ).toBe(30000);
+        expect(
+            PluginToolDefinitionSchema.parse({
+                name: 'my-tool',
+                description: 'a tool',
+                inputSchema: {},
+            }).capability,
+        ).toBe('read');
+        expect(
+            PluginNodeDefinitionSchema.parse({ kind: 'my-node' }).runner,
+        ).toBe('llm');
+        expect(
+            PluginContextSourceSchema.parse({
+                key: 'docs',
+                description: 'docs source',
+                baselineFile: 'docs/baseline.md',
+            }).baselineFile,
+        ).toBe('docs/baseline.md');
+        expect(
+            PluginSubAgentSchema.parse({
+                id: 'agent-1',
+                name: 'Agent One',
+                systemPrompt: 'You are agent one.',
+            }).tools,
+        ).toEqual([]);
     });
 });

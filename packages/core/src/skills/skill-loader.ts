@@ -51,7 +51,7 @@ const denylistDirNameSet: ReadonlySet<string> = new Set(
 
 export type SkillScope = 'user' | 'project';
 
-export type SkillScopeId = 'global-user' | 'project-mctrl' | 'project-agents';
+export type SkillScopeId = 'global-user' | 'project-mctrl' | 'project-agents' | 'project-plugin';
 
 export type SkillSourceInfo = {
     readonly scope: SkillScope;
@@ -90,6 +90,13 @@ export type DiscoverSkillsOptions = {
     readonly env?: Readonly<Record<string, string | undefined>>;
     readonly maxSkillFileBytes?: number;
     readonly maxSkills?: number;
+    /**
+     * Additional directories to scan for SKILL.md files after the three standard
+     * scopes (global-user, project-mctrl, project-agents). First-wins by name
+     * applies across all scopes, so a skill found in a standard scope shadows
+     * one found here. Used to wire plugin-provided skill directories.
+     */
+    readonly additionalSkillDirs?: readonly string[];
 };
 
 export type DiscoverSkillsResult = {
@@ -342,6 +349,9 @@ function resolveScopeDescriptors(
             dir: join(options.workspaceRoot, '.agents', 'skills'),
             skipped: false,
         });
+    }
+    for (const dir of options.additionalSkillDirs ?? []) {
+        scopes.push({ scopeId: 'project-plugin', scope: 'project', dir, skipped: false });
     }
     return scopes;
 }

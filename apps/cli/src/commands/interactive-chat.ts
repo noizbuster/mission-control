@@ -6,6 +6,7 @@ import {
     discoverSkills,
     discoverWorkflows,
     type JsonlSessionEventStore,
+    PluginManager,
     type ProviderAdapter,
     type SdkModelResolver,
     type Skill,
@@ -217,18 +218,45 @@ export async function runInteractiveChatSession(
         };
     }
 
+    const pluginManager = new PluginManager(
+        options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {},
+    );
+    const pluginSkillDirs: string[] = [];
+    const pluginWorkflowDirs: string[] = [];
+    try {
+        await pluginManager.initialize();
+        pluginSkillDirs.push(...pluginManager.getSkillDirs());
+        pluginWorkflowDirs.push(...pluginManager.getWorkflowDirs());
+        for (const diagnostic of pluginManager.getDiagnostics()) {
+            process.stderr.write(
+                `plugin discovery [${diagnostic.severity}] ${diagnostic.pluginName}: ${diagnostic.message}\n`,
+            );
+        }
+    } catch (error: unknown) {
+        process.stderr.write(
+            `plugin discovery [warning] skipped: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
+    }
+
     const discoveredSkills =
         options.workspaceRoot !== undefined
-            ? await discoverSkills({ workspaceRoot: options.workspaceRoot })
+            ? await discoverSkills({
+                  workspaceRoot: options.workspaceRoot,
+                  ...(pluginSkillDirs.length > 0 ? { additionalSkillDirs: pluginSkillDirs } : {}),
+              })
             : { skills: [], diagnostics: [] };
     const knownSkillNames = new Set<string>(discoveredSkills.skills.map((skill) => skill.name));
     const sessionSkills: readonly Skill[] = discoveredSkills.skills;
 
     const discoveredWorkflows =
         options.workspaceRoot !== undefined
-            ? await discoverWorkflows({ workspaceRoot: options.workspaceRoot })
+            ? await discoverWorkflows({
+                  workspaceRoot: options.workspaceRoot,
+                  ...(pluginWorkflowDirs.length > 0 ? { additionalWorkflowDirs: pluginWorkflowDirs } : {}),
+              })
             : { workflows: [], diagnostics: [] };
     const sessionWorkflowRegistry = new WorkflowRegistry(discoveredWorkflows.workflows);
+    await pluginManager.registerInto(sessionWorkflowRegistry);
     const knownWorkflowNames = new Set<string>(sessionWorkflowRegistry.names());
     inkBridge?.setWorkflowNames(sessionWorkflowRegistry.names());
     if (discoveredWorkflows.diagnostics.length > 0) {

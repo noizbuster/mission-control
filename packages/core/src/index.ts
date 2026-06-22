@@ -136,6 +136,7 @@ export {
     createBlackboard,
 } from './memory/blackboard.js';
 export * from './memory/index.js';
+export * from './plugins/index.js';
 export { PermissionSession, type PermissionSessionOptions } from './permission/session.js';
 export { PermissionRuleStore, type PermissionRuleStoreOptions } from './permission/store.js';
 export { createAllowPermissionDecision, createDefaultPermissionDecision } from './permissions.js';

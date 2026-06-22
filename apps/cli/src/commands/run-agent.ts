@@ -7,6 +7,7 @@ import {
     createGraphTurnRunner,
     discoverWorkflows,
     PermissionGateError,
+    PluginManager,
     type ProviderAdapter,
     type SdkModelResolver,
     WorkflowRegistry,
@@ -291,13 +292,40 @@ function resolveWorkflowInvocation(args: CliArgs): WorkflowInvocation | undefine
 }
 
 async function discoverWorkflowRegistry(workspaceRoot: string): Promise<WorkflowRegistry> {
-    const result = await discoverWorkflows({ workspaceRoot });
+    const pluginManager = new PluginManager({ workspaceRoot });
+    let pluginWorkflowDirs: readonly string[] = [];
+    try {
+        await pluginManager.initialize();
+        pluginWorkflowDirs = pluginManager.getWorkflowDirs();
+        for (const diagnostic of pluginManager.getDiagnostics()) {
+            process.stderr.write(
+                `plugin discovery [${diagnostic.severity}] ${diagnostic.pluginName}: ${diagnostic.message}\n`,
+            );
+        }
+    } catch (error: unknown) {
+        process.stderr.write(
+            `plugin discovery [warning] skipped: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
+    }
+
+    const result = await discoverWorkflows({
+        workspaceRoot,
+        ...(pluginWorkflowDirs.length > 0 ? { additionalWorkflowDirs: pluginWorkflowDirs } : {}),
+    });
     for (const diagnostic of result.diagnostics) {
         process.stderr.write(
             `workflow discovery [${diagnostic.severity}] ${diagnostic.workflowName}: ${diagnostic.message}\n`,
         );
     }
-    return new WorkflowRegistry(result.workflows);
+    const registry = new WorkflowRegistry(result.workflows);
+    try {
+        await pluginManager.registerInto(registry);
+    } catch (error: unknown) {
+        process.stderr.write(
+            `plugin registration [warning] skipped: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
+    }
+    return registry;
 }
 
 async function resolveModelProviderSelection(
