@@ -56,6 +56,21 @@ export {
 } from './abg.js';
 export { type AbgOverlayPrefs, AbgOverlayPrefsSchema } from './abg-overlay-prefs.js';
 export {
+    AGENT_SOURCES,
+    AGENT_THINKING_LEVELS,
+    AGENT_TIERS,
+    type AgentDefinition,
+    AgentDefinitionSchema,
+    type AgentList,
+    AgentListSchema,
+    type AgentSource,
+    AgentSourceSchema,
+    type AgentThinkingLevel,
+    AgentThinkingLevelSchema,
+    type AgentTier,
+    AgentTierSchema,
+} from './agent.js';
+export {
     APPROVAL_LIFECYCLE_STATES,
     APPROVAL_POLICY_DECISIONS,
     type ApprovalLifecycleState,

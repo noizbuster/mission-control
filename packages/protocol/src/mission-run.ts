@@ -103,6 +103,12 @@ export const RunSchema = z.object({
     endedAt: z.string().min(1).optional(),
     /** Human/terminal reason for a terminal status (failure code, cancel cause, etc.). */
     terminalReason: z.string().optional(),
+    /** Links a child agent run to its parent Run. Absent on top-level runs. */
+    parentRunId: z.string().min(1).optional(),
+    /** The agent name/id used for a child run (paired with parentRunId). */
+    childAgentId: z.string().min(1).optional(),
+    /** The agent kind for a child run. */
+    childKind: z.enum(['main', 'sub', 'advisor']).optional(),
 });
 export type Run = z.infer<typeof RunSchema>;
 
