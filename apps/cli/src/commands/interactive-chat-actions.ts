@@ -1,9 +1,9 @@
-import type { AgentRuntime } from '@mission-control/core';
+import type { AgentRuntime, WorkflowRegistry } from '@mission-control/core';
 import { formatSkillInstructions, loadSkillBody, type Skill, type SkillToolOutput } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ApprovalLevel } from './approval-level.js';
 import { APPROVAL_LEVEL_META } from './approval-level.js';
-import type { ChatLineAction } from './chat-commands.js';
+import type { ChatLineAction, WorkflowInvocationAction } from './chat-commands.js';
 import type { ModelSelector } from './interactive-chat.js';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import { runBashAction, runBashDisplayOnlyAction } from './interactive-chat-bash-action.js';
@@ -41,6 +41,11 @@ export type CodingActionContext = PromptTurnContext & {
      * When omitted, the skill action reports that skill loading is unavailable.
      */
     readonly skills?: readonly Skill[];
+    /**
+     * Discovered workflows for `#workflow-name` invocation (Task 2.3). When omitted,
+     * the workflow action reports that workflow invocation is unavailable.
+     */
+    readonly workflowRegistry?: WorkflowRegistry;
     /**
      * In-memory session display name controller for `/rename`. When omitted, the
      * rename action still runs but cannot persist the name across the StatusBar.
@@ -211,6 +216,8 @@ export async function runChatAction(
             );
         case 'skill':
             return runSkillAction(runtime, chatOutput, action, currentModelProviderSelection, coding);
+        case 'workflow':
+            return runWorkflowAction(runtime, chatOutput, action, currentModelProviderSelection, coding);
         case 'unknown-slash':
             chatOutput.write(`Unknown command: /${action.command}\n`);
             return actionResult(currentModelProviderSelection, coding.activeTurn);
@@ -291,6 +298,32 @@ async function expandSkillToPrompt(
     const wrapped = formatSkillInstructions(loaded.name, loaded.location, loaded.content);
     const prompt = instruction.length > 0 ? `${wrapped}\n\nUser request: ${instruction}` : wrapped;
     return { kind: 'prompt', prompt };
+}
+
+async function runWorkflowAction(
+    runtime: AgentRuntime,
+    chatOutput: ChatOutput,
+    action: WorkflowInvocationAction,
+    modelProviderSelection: ModelProviderSelection,
+    coding: CodingActionContext,
+): Promise<ChatActionResult> {
+    const registry = coding.workflowRegistry;
+    if (registry === undefined) {
+        chatOutput.write('Workflow invocation unavailable: no workflow registry configured.\n');
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    const spec = registry.lookup(action.name);
+    if (spec === undefined) {
+        const names = registry.names();
+        const available = names.length === 0 ? '(none discovered)' : names.slice(0, 20).join(', ');
+        chatOutput.write(`Unknown workflow: ${action.name}. Available workflows: ${available}.\n`);
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    chatOutput.write(`Running workflow "${action.name}"...\n`);
+    return runPromptAction(runtime, chatOutput, action.prompt, modelProviderSelection, {
+        ...coding,
+        graph: spec.graph,
+    });
 }
 
 async function runInterruptAction(

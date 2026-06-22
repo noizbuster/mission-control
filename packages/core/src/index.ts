@@ -1,3 +1,4 @@
+export * from './abg-overlay/index.js';
 export type { AgentRuntimeOptions, RunGraphOptions } from './agent-runtime.js';
 export { AgentRuntime } from './agent-runtime.js';
 export { SubAgentRegistry } from './agents/registry.js';
@@ -34,7 +35,6 @@ export { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry.
 export type { AbgGraphRunnerInput, AbgGraphRunResult } from './behavior/graph-runner.js';
 export { runAbgGraph } from './behavior/graph-runner.js';
 export { deriveAbgGraphSnapshot } from './behavior/graph-state.js';
-export * from './abg-overlay/index.js';
 export type { AbgNodeRegistry, AbgNodeRunContext, AbgNodeRunner } from './behavior/node-registry.js';
 export {
     AbgNodeRegistryError,
@@ -57,6 +57,11 @@ export {
     packContext,
 } from './context/context-packer.js';
 export {
+    emitMidConversationSystemMessage,
+    type MidConversationEmitResult,
+    type SystemMessage,
+} from './context/mid-conversation-message.js';
+export {
     loadProjectContextMessages,
     type ProjectContextMessageOptions,
     type ProjectInstructionResource,
@@ -71,12 +76,30 @@ export {
     type ProjectResourceLoadResult,
 } from './context/project-resource-loader.js';
 export {
+    type AdmittedSnapshot,
+    type ContextUpdateBatch,
+    jsonContextCodec,
+    type LoadedSource,
+    type PackedSystemContextSource,
+    packSystemContextSource,
+    type SourceComparison,
+    type SourceObservation,
+    type SystemContextCodec,
+    type SystemContextKey,
+    SystemContextRegistry,
+    SystemContextRegistryError,
+    type SystemContextRegistryErrorCode,
+    type SystemContextSource,
+    stringContextCodec,
+} from './context/system-context-source.js';
+export {
     type AssembleSystemPromptInput,
     assembleSystemPrompt,
     DEFAULT_CODING_AGENT_PERSONA,
     type SystemPromptEnvironment,
     type SystemPromptSkill,
     type SystemPromptToolSnippet,
+    type SystemPromptWorkflow,
 } from './context/system-prompt.js';
 export {
     hasPendingDesktopApprovals,
@@ -280,3 +303,4 @@ export {
 } from './tools/ask-user-tool.js';
 export * from './tools/index.js';
 export * from './trust/index.js';
+export * from './workflows/index.js';

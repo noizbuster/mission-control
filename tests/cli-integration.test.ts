@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../apps/cli/src/args.js';
 import { createProviderAuthStore } from '../apps/cli/src/auth-store.js';
 import { runAuthCommand } from '../apps/cli/src/commands/auth.js';
-import { runAgent } from '../apps/cli/src/commands/run-agent.js';
+import { createCliProviderForSelection, runAgent } from '../apps/cli/src/commands/run-agent.js';
 import { missionControlAuthFileEnvKey } from '../packages/config/src/index.js';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -13,6 +13,32 @@ async function useTempAuthFile(): Promise<string> {
     const authFilePath = join(directory, 'auth.json');
     vi.stubEnv(missionControlAuthFileEnvKey, authFilePath);
     return authFilePath;
+}
+
+const SMOKE_WORKFLOW_SPEC = {
+    name: 'default',
+    description: 'Smoke-test default workflow for CLI integration',
+    graph: {
+        id: 'default-smoke',
+        version: '0.1.0',
+        entryNodeId: 'smoke-entry',
+        defaults: {
+            model: { providerID: 'local', modelID: 'local-echo' },
+            maxNodeRuns: 8,
+        },
+        nodes: [{ id: 'smoke-entry', kind: 'llm', label: 'Smoke entry node' }],
+        edges: [{ source: 'smoke-entry', target: 'smoke-entry', condition: 'smoke-loop', priority: 10 }],
+        rules: [{ id: 'smoke-loop', when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true } }],
+        policies: [],
+    },
+} as const;
+
+async function createWorkflowWorkspace(): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), 'mctrl-cli-wf-ws-'));
+    const workflowsDir = join(dir, '.mctrl', 'workflows');
+    await mkdir(workflowsDir, { recursive: true });
+    await writeFile(join(workflowsDir, 'default.workflow.json'), JSON.stringify(SMOKE_WORKFLOW_SPEC), 'utf8');
+    return dir;
 }
 
 describe('CLI integration', () => {
@@ -78,5 +104,36 @@ describe('CLI integration', () => {
         expect(output).toContain('task.completed');
         expect(output).not.toContain('anthropic_key');
         await rm(authFilePath, { force: true });
+    });
+
+    it('routes #default hello through workflow discovery to graph dispatch', async () => {
+        const workspaceDir = await createWorkflowWorkspace();
+        const configDir = await mkdtemp(join(tmpdir(), 'mctrl-cli-wf-cfg-'));
+        vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
+        try {
+            const provider = createCliProviderForSelection(
+                { providerID: 'local', modelID: 'local-echo' },
+                createProviderAuthStore(),
+            );
+            const output = await runAgent(
+                parseArgs([
+                    '--no-tui',
+                    '--workspace',
+                    workspaceDir,
+                    '#default hello',
+                    '--provider',
+                    'local',
+                    '--model',
+                    'local-echo',
+                ]),
+                { provider, workspaceRoot: workspaceDir },
+            );
+
+            expect(output).toContain('graph=default-smoke');
+            expect(output).toContain('node=smoke-entry mode=llm');
+        } finally {
+            await rm(workspaceDir, { recursive: true, force: true });
+            await rm(configDir, { recursive: true, force: true });
+        }
     });
 });

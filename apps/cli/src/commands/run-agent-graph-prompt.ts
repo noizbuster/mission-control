@@ -43,6 +43,11 @@ export type RunCodingPromptOnGraphInput = {
     readonly prompt: string;
     readonly workspaceRoot: string;
     /**
+     * Override the default coding-agent graph with a workflow's graph spec. When omitted,
+     * `buildCodingAgentGraphForSelection` builds the standard coding-agent graph.
+     */
+    readonly graph?: AbgGraphSpec;
+    /**
      * Injected SDK model resolver (tests / scripted models). When omitted, the resolver is
      * built from `authStore` for the selection's provider via `createSdkModelResolver`.
      */
@@ -98,16 +103,20 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
     const projectInstructionResources = await loadTrustedProjectInstructionResources(input.workspaceRoot);
 
     try {
-        return await input.runtime.runGraph(buildCodingAgentGraphForSelection(input.selection), undefined, {
-            registry: createCodingAgentNodeRegistry(),
-            resolveSdkModel,
-            toolRegistry,
-            initialMessages: [{ role: 'user', content: input.prompt }],
-            haltOnFailedToolSettlement: true,
-            systemPromptEnv,
-            ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
-            ...(input.pricingTable !== undefined ? { pricingTable: input.pricingTable } : {}),
-        });
+        return await input.runtime.runGraph(
+            input.graph ?? buildCodingAgentGraphForSelection(input.selection),
+            undefined,
+            {
+                registry: createCodingAgentNodeRegistry(),
+                resolveSdkModel,
+                toolRegistry,
+                initialMessages: [{ role: 'user', content: input.prompt }],
+                haltOnFailedToolSettlement: true,
+                systemPromptEnv,
+                ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
+                ...(input.pricingTable !== undefined ? { pricingTable: input.pricingTable } : {}),
+            },
+        );
     } finally {
         await mcpDisconnect();
     }

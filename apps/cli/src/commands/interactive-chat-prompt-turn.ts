@@ -10,7 +10,7 @@ import {
     prependProjectContextMessages,
     type SdkModelResolver,
 } from '@mission-control/core';
-import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
 import type { ApprovalLevel } from './approval-level.js';
 import type { ChatOutput } from './interactive-chat-io.js';
@@ -31,6 +31,7 @@ export type PromptTurnContext = {
     readonly abgOverlayController?: AbgOverlayController;
     readonly pricingTable?: PricingTable;
     readonly approvalLevel?: ApprovalLevel;
+    readonly graph?: AbgGraphSpec;
 };
 
 export async function startPromptTurn(
@@ -130,6 +131,7 @@ export async function startPromptTurn(
         ...(coding.abgOverlayController !== undefined ? { abgOverlayController: coding.abgOverlayController } : {}),
         ...(coding.pricingTable !== undefined ? { pricingTable: coding.pricingTable } : {}),
         ...(coding.approvalLevel !== undefined ? { approvalLevel: coding.approvalLevel } : {}),
+        ...(coding.graph !== undefined ? { graph: coding.graph } : {}),
     });
 }
 

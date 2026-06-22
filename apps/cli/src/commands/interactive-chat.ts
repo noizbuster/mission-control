@@ -4,10 +4,12 @@ import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
     discoverSkills,
+    discoverWorkflows,
     type JsonlSessionEventStore,
     type ProviderAdapter,
     type SdkModelResolver,
     type Skill,
+    WorkflowRegistry,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { createAbgOverlayController } from './abg-overlay-controller.js';
@@ -222,6 +224,21 @@ export async function runInteractiveChatSession(
     const knownSkillNames = new Set<string>(discoveredSkills.skills.map((skill) => skill.name));
     const sessionSkills: readonly Skill[] = discoveredSkills.skills;
 
+    const discoveredWorkflows =
+        options.workspaceRoot !== undefined
+            ? await discoverWorkflows({ workspaceRoot: options.workspaceRoot })
+            : { workflows: [], diagnostics: [] };
+    const sessionWorkflowRegistry = new WorkflowRegistry(discoveredWorkflows.workflows);
+    const knownWorkflowNames = new Set<string>(sessionWorkflowRegistry.names());
+    inkBridge?.setWorkflowNames(sessionWorkflowRegistry.names());
+    if (discoveredWorkflows.diagnostics.length > 0) {
+        for (const diagnostic of discoveredWorkflows.diagnostics) {
+            process.stderr.write(
+                `workflow discovery [${diagnostic.severity}] ${diagnostic.workflowName}: ${diagnostic.message}\n`,
+            );
+        }
+    }
+
     try {
         if (!useInk) {
             chatOutput.write('mission-control chat\n');
@@ -285,6 +302,7 @@ export async function runInteractiveChatSession(
             const action = parseChatLine(prompt, {
                 modelChoices,
                 knownSkillNames,
+                knownWorkflowNames,
                 ...(currentSessionId !== undefined ? { currentSessionId } : {}),
             });
             if (action.kind === 'exit') {
@@ -318,6 +336,7 @@ export async function runInteractiveChatSession(
                         sessionStore: currentSessionStore,
                         workspaceRoot: options.workspaceRoot,
                         skills: sessionSkills,
+                        workflowRegistry: sessionWorkflowRegistry,
                         sessionDisplayName: sessionDisplayNameController,
                         undoRedo: undoRedoController,
                         ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),

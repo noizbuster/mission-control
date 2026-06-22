@@ -1,0 +1,123 @@
+// custom-example.workflow.jsonc
+//
+// A documented example workflow for the plugin authoring guide
+// (docs/plugin-authoring.md). It shows every optional block a workflow file
+// can carry: a behavior graph, a mode overlay, and a category preset.
+//
+// Invoke it from the CLI:
+//   mctrl "#custom-example {your question}"            # interactive
+//   mctrl run --workflow custom-example "your question"  # non-interactive
+//
+// JSONC notes:
+//   - `//` line comments and `/* ... */` block comments are stripped before
+//     JSON.parse. Comment-like text inside string values is preserved.
+//   - Trailing commas are NOT supported. Keep this file comma-valid.
+{
+  // ----- WorkflowSpec top-level -------------------------------------------
+  // `name` is the invocation key used by `#name {prompt}` and `--workflow name`.
+  // Discovery is first-wins by name across three scopes, so pick something
+  // unique if you ship this into a shared config dir.
+  "name": "custom-example",
+  // Free-form description. Surfaced in registry listings and diagnostics.
+  "description": "Documented example: research a question with a tool node, then answer. Ships a read-only mode and a researcher category preset.",
+
+  // ----- The authorable behavior graph (AbgGraphSpec) ---------------------
+  "graph": {
+    "id": "custom-example",
+    "version": "0.1.0",
+    // Must reference an existing node id declared in `nodes` below.
+    "entryNodeId": "research",
+    // Graph-wide defaults. Any node may override `model` per-node.
+    "defaults": {
+      "model": {
+        "providerID": "local",
+        "modelID": "local-echo"
+      },
+      "maxNodeRuns": 16
+    },
+    "nodes": [
+      {
+        // `id` must be unique within the graph.
+        "id": "research",
+        // `kind` is one of the ABG node kinds: condition, action, selector,
+        // sequence, parallel, race, join, watch, policy, statechart, actor,
+        // memory, tool, llm, human-approval.
+        "kind": "tool",
+        "label": "Gather context via repo search",
+        // `capabilities` are free-form verbs the graph policies can gate on.
+        "capabilities": ["search"]
+      },
+      {
+        "id": "answer",
+        "kind": "llm",
+        "label": "Synthesize the final answer",
+        // `config` is an opaque record (string keys). Common keys used by the
+        // built-in llm node: systemPrompt, outputKey.
+        "config": {
+          "systemPrompt": "Answer the user's question using the research results.",
+          "outputKey": "answer.ready"
+        }
+      }
+    ],
+    "edges": [
+      // An edge with no `condition` is an unconditional transition.
+      { "source": "research", "target": "answer" },
+      // A conditional edge references a rule id in `condition`. Lower
+      // `priority` numbers win when multiple edges from the same source qualify.
+      { "source": "answer", "target": "answer", "condition": "answer-loop", "priority": 5 }
+    ],
+    "rules": [
+      {
+        "id": "answer-loop",
+        "description": "Re-enter answer while the LLM signals it is still working",
+        // `when` is a discriminated rule predicate. Available kinds:
+        //   event.type.equals, signal.type.equals, node.status.equals,
+        //   blackboard.key.exists, blackboard.value.equals, policy.decision.equals
+        "when": { "kind": "blackboard.value.equals", "key": "llm.loop_active", "value": true }
+      }
+    ],
+    // Graph-level policies use { id, capability, decision }.
+    // `decision` is one of: "allow" | "deny" | "requires_approval".
+    // This is DISTINCT from mode policy rules (action/resource/effect) below.
+    "policies": [
+      { "id": "allow-search", "capability": "search", "decision": "allow" }
+    ]
+  },
+
+  // ----- Mode overlays (optional) -----------------------------------------
+  // A mode is a STRUCTURAL overlay, not a prompt injection. It adds a
+  // system-prompt addendum, policy-gate rules, and an optional required-tools
+  // filter at materialization time. Bind a Mission/Run to a mode by id using
+  // a ModeDeclaration { modeId, active } at the run level, not inline here.
+  "modes": [
+    {
+      "id": "read-only",
+      "systemPromptOverlay": "You are in read-only mode. Never modify files. Cite your sources.",
+      // Mode policy rules use { action, resource, effect }.
+      // `effect` is one of: "allow" | "deny" | "ask". Last-match-wins.
+      "policies": [
+        { "action": "write", "resource": "**", "effect": "deny" },
+        { "action": "edit", "resource": "**", "effect": "deny" }
+      ],
+      "requiredTools": ["read", "grep"]
+    }
+  ],
+
+  // ----- Category presets (optional) --------------------------------------
+  // A category presets the model, granted permission kinds, an optional prompt
+  // addendum, and an optional tool allowlist for a task() child session.
+  // `permissions` here is a list of PERMISSION KIND strings (not policy rules):
+  //   "read" | "edit" | "write" | "patch" | "bash" | "network" | "subagent"
+  "categories": [
+    {
+      "id": "researcher",
+      "model": {
+        "providerID": "anthropic",
+        "modelID": "claude-sonnet"
+      },
+      "permissions": ["read", "network"],
+      "systemPromptAddendum": "You are a research specialist. Gather sources before answering.",
+      "tools": ["read", "ls", "grep", "find", "webfetch"]
+    }
+  ]
+}

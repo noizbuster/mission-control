@@ -15,6 +15,7 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
     let modelID: string | undefined;
     let engine: 'graph' | undefined;
     let graphPath = initial.graphPath;
+    let workflowName: string | undefined;
     let sessionId: string | undefined;
     let workspacePath: string | undefined;
     const promptParts: string[] = [];
@@ -66,6 +67,10 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
                 graphPath = readFlagValue(argv, index, '--graph');
                 index += 2;
                 break;
+            case '--workflow':
+                workflowName = readFlagValue(argv, index, '--workflow');
+                index += 2;
+                break;
             case '--engine': {
                 const value = readFlagValue(argv, index, '--engine');
                 if (value !== 'graph') {
@@ -110,6 +115,7 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
         showHelp,
         showVersion,
         useNative,
+        workflowName,
         workspacePath,
     });
 
@@ -144,10 +150,17 @@ function buildRunArgs(input: {
     readonly showHelp: boolean;
     readonly showVersion: boolean;
     readonly useNative: boolean | undefined;
+    readonly workflowName: string | undefined;
     readonly workspacePath: string | undefined;
 }): CliArgs {
     if (input.graphPath !== undefined && input.prompt !== undefined) {
         throw new Error('prompt cannot be combined with --graph');
+    }
+    if (input.workflowName !== undefined && input.graphPath !== undefined) {
+        throw new Error('--workflow cannot be combined with --graph');
+    }
+    if (input.workflowName !== undefined && input.prompt === undefined && input.mode !== 'ink') {
+        throw new Error('--workflow requires a prompt');
     }
     // `--engine graph` drives the ABG graph. Without `--prompt` it is valid in the interactive (`ink`)
     // mode — the prompt arrives via the chat loop — so only require a prompt for the explicitly
@@ -163,6 +176,7 @@ function buildRunArgs(input: {
         showVersion: input.showVersion,
         ...(input.graphPath !== undefined ? { graphPath: input.graphPath } : {}),
         ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
+        ...(input.workflowName !== undefined ? { workflowName: input.workflowName } : {}),
         ...(input.engine !== undefined ? { engine: input.engine } : {}),
         ...(input.sessionId !== undefined ? { sessionId: input.sessionId } : {}),
         ...(input.workspacePath !== undefined ? { workspacePath: input.workspacePath } : {}),

@@ -73,7 +73,13 @@ Scoped guidance:
 | Skills loader | `packages/core/src/skills/skill-loader.ts` | 3-scope first-wins SKILL.md discovery, denylist, symlink defense. |
 | MCP clients | `packages/core/src/tools/mcp/` | Stdio + remote transports, config loader, connection manager, namespaced surfacing, secret redaction. |
 | System prompt | `packages/core/src/context/system-prompt.ts` | Persona + env + tools + guidelines + `<available_skills>` XML assembly. |
+| Workflow protocol schemas | `packages/protocol/src/{workflow,category,mode,permission-rule,delivery}.ts` | `WorkflowSpecSchema`, `CategorySchema`, `ModeSchema`, `PolicyEffectRuleSchema`, `DELIVERY_MODES`. Workflow policy-gate rules use action/resource/effect. |
+| Workflow runtime foundations | see **Workflow Foundations** below | Permission rule algebra, `.omo/` persistence, Mission/Run store, drain-lane coordinator v2, context-source registry, continuation runtime, full-parity `task()` tool. |
+| Workflow invocation | `apps/cli/src/commands/chat-commands.ts`, `apps/cli/src/commands/interactive-chat-actions.ts` | `#name {prompt}` parsing and dispatch. `--workflow` non-interactive flag lives in `run-agent.ts`. See **Workflow Invocation** below. |
 | Interactive TUI | `apps/cli/src/commands/ink-chat-bridge.tsx` | Ink keyboard router, agent spinner, approval overlay, model picker. |
+| Workflow tool | `packages/core/src/tools/workflow-tool/workflow-tool.ts` | `workflow(name, prompt)` tool; resolves via `WorkflowRegistry`, returns `started`/`not_found`. |
+| Modes + mode overlay | `packages/core/src/behavior/modes/` | `autopilotMode` declaration, `applyMode` pure transform (overlay + policy conversion + tool filter). |
+| Built-in workflow graphs | `examples/abg/{default,planner,runner}.workflow.json` | Reference graph instances; autopilot is a mode overlay, not a graph file. |
 
 ## Code Map
 
@@ -86,6 +92,59 @@ Scoped guidance:
 | `AgentEventSchema` | Zod schema | `packages/protocol/src/schema.ts` | Shared event contract. |
 | `AbgGraphSpecSchema` | Zod schema | `packages/protocol/src/abg.ts` | Authorable graph contract. |
 | `SIDECAR_PROTOCOL_VERSION` | const | `packages/protocol/src/sidecar.ts`, `native/sidecar/src/protocol.rs` | Sidecar wire version. |
+| `createWorkflowToolRegistration` | function | `packages/core/src/tools/workflow-tool/workflow-tool.ts` | Builds the `workflow` tool that self-invokes a named workflow. |
+| `applyMode` | function | `packages/core/src/behavior/modes/mode-application.ts` | Pure transform overlaying a `Mode` onto a graph (prompt + policies + tool filter). |
+| `autopilotMode` | const | `packages/core/src/behavior/modes/autopilot-mode.ts` | Built-in `autopilot` mode declaration (edit-gate policy + operating directives overlay). |
+
+## Workflow Foundations
+
+The workflow system is built on eight runtime foundations (Phase 1, Tasks 1.1 through 1.8). Each is self-contained and test-covered. `packages/core/src/runtime/AGENTS.md` and `packages/core/src/context/AGENTS.md` hold the scoped guidance for the runtime and context modules.
+
+| Foundation | Location | Key symbols and notes |
+| --- | --- | --- |
+| Protocol additions | `packages/protocol/src/{workflow,category,mode,permission-rule,delivery}.ts` | `WorkflowSpecSchema` (graph + metadata), `CategorySchema`/`CategoryCatalogSchema`, `ModeSchema`/`ModeDeclarationSchema`, `PolicyEffectRuleSchema`/`PolicyEffectRuleSetSchema`/`PolicyEffectSchema`, `DELIVERY_MODES`/`DeliverySchema`/`SessionInputDeliverySchema`, `WorkflowDiscoveryDiagnosticSchema`. `PolicyEffectRuleSchema` is the workflow policy-gate shape; the workspace `PermissionRuleSchema` in `permission-profile.ts` is a separate system, do not collapse them. |
+| Permission rule algebra | `packages/core/src/permissions/` | `wildcardMatch` (segment glob: `*` stays within a segment, `**` spans segments, `?` one char), `evaluateRules` (flattens rulesets, last-match-wins, defaults to `'ask'`), `deriveChildPermissions` (forwards parent denies, appends a nested-subagent deny; allows intersect implicitly via last-match-wins). |
+| `.omo/` persistence | `packages/core/src/persistence/` | `paths.ts` (`resolveOmoRoot`, `ensureOmoDirs`, `isGitignored`), `boulder-store.ts` (`readBoulder`/`writeBoulder`/`updateBoulderWork`, `.passthrough()` schemas preserve orchestrator-authored fields), `plan-store.ts` (`readPlan`, `parsePlanChecklist`), `notepad-store.ts` (`appendNotepad`, `assertAppendOnly`, atomic temp-file-then-rename writes). |
+| Mission/Run store | `packages/core/src/runtime/mission-run/` | `mission-store.ts` (`createMission`/`readMission`/`updateMission`/`listMissions`), `run-store.ts` (`createRun`/`readRun`/`updateRunStatus`/`listRunsForMission`, `ALLOWED_RUN_TRANSITIONS`, `assertRunTransition`), `mission-run-service.ts` (`materializeMission` turns a `WorkflowSpec` into a `Mission`, `startRun`, `completeRun`, `failRun`). One JSON file per record under `.omo/{missions,runs}/`; timestamps auto-managed by the service. |
+| Steer/queue delivery + run-coordinator v2 | `packages/core/src/runtime/run-coordinator-v2.ts`, `session-input-delivery.ts` | `RunCoordinatorV2` (per-key drain-lane: `run` joins or starts a drain, `wake` coalesces, `interrupt` aborts with seq suppression, `awaitIdle` waits; demand coalescing via `coalesceDemand`; successor lanes on failure), `SessionInputDelivery` (FIFO `admitInput`/`promoteSteers`/`promoteNextQueued`). Native Promise/AbortController port of the opencode Effect drain-lane. |
+| System Context Source | `packages/core/src/context/system-context-source.ts`, `mid-conversation-message.ts` | `SystemContextRegistry` (`register`/`remove`/`lookup`/`list`, `getBaselineText`, `getUpdatesSince`, monotonic Context Epoch), `packSystemContextSource` (type-erased carrier), `emitMidConversationSystemMessage` (combines admitted source changes into one system message). Pull-based at safe provider-turn boundaries; source changes never push asynchronously. |
+| Session-spanning continuation | `packages/core/src/runtime/continuation/continuation-runtime.ts` | `ContinuationRuntime` (`runWithContinuation`, `shouldContinue`, `advance`, `persistState`/`loadState`, `ContinuationOutcome` with reasons `done_signal`/`max_iterations`/`loop_inactive`). Bounds how many sessions a `loop_active` graph can resume; distinct from graph-level `maxNodeRuns`. State persisted in the boulder work `continuation_runtime` passthrough field. |
+| `task()` full parity | `packages/core/src/tools/task/` | `createFullParityTaskToolRegistration` (coexists with the simpler `createTaskToolRegistration` in the sibling `tools/task-tool.ts`), `category-catalog.ts` (`BUILTIN_CATEGORIES`/`getCategory`: quick, deep, ultrabrain, visual-engineering, explore, oracle, librarian, metis, momus), `TaskToolRuntime` (mockable session-lifecycle seam). Child permissions = category rules plus `deriveChildPermissions` denies; nested `task` denied in children. |
+
+## Workflow Invocation
+
+Workflows are authorable graphs discovered as `*.workflow.json` or `*.workflow.jsonc` files across three scopes, first-wins by name: global `<config-dir>/workflows/`, project `.mctrl/workflows/`, and project `.agents/workflows/`. The loader (`discoverWorkflows` in `packages/core/src/workflows/workflow-loader.ts`) mirrors `discoverSkills`: symlink defense, shared read-tool denylist, size bound, never throws. Broken files produce `WorkflowDiscoveryDiagnostic` entries logged at bootstrap. Discovered specs land in `WorkflowRegistry` (`packages/core/src/workflows/workflow-registry.ts`), which resolves by name.
+
+`#<workflow-name> {prompt}` invokes a named workflow in interactive chat. `parseWorkflowInvocation` in `apps/cli/src/commands/chat-commands.ts` parses the prefix (known-set gate against discovered names, same name regex as skills). `runWorkflowAction` in `apps/cli/src/commands/interactive-chat-actions.ts` resolves the spec via the registry and threads `spec.graph` through the existing prompt-turn lifecycle. `--workflow <name> "<prompt>"` is the non-interactive equivalent, resolved by `resolveWorkflowInvocation` in `apps/cli/src/commands/run-agent.ts` and mutually exclusive with `--graph`. A prompt with no `#` prefix runs the `default` workflow fallback (`examples/abg/default.workflow.json`).
+
+Key conventions:
+
+- `WorkflowSpecSchema` is strict at the top level; JSONC comments are stripped before `JSON.parse`. Name collisions are first-wins and skipped with a `duplicate_name` diagnostic.
+- The workflow graph overrides the default coding-agent graph but reuses the same interactive infrastructure (approval broker, tools, ABG overlay, TUI rendering). It does not spawn a separate runtime.
+- `examples/abg/default.workflow.json` and `packages/core/src/behavior/default-workflow-graph.ts` are kept in parity by a JSON-vs-factory test. The graph routes intent-gate to trivial (direct-respond), explicit (memory, todo-plan, delegate-wave, verify-wave critic, supervisor retry loop), or ambiguous (clarify loop).
+
+### Built-in Workflows
+
+| Workflow | Source | Role |
+| --- | --- | --- |
+| `default` | `examples/abg/default.workflow.json` | No-`#` fallback. Intent gate routes trivial (direct-respond), explicit (memory, todo-plan, delegate-wave, verify-wave critic, supervisor retry loop), or ambiguous (clarify loop) prompts. |
+| `planner` | `examples/abg/planner.workflow.json` | Read-only planning. Ambiguity gate routes clear (explore, draft-plan, review), unclear (research, adopt-defaults, draft-plan), or on-the-fence (ask-one-question, re-route) requests. Ships the `planner-readonly` mode: deny all writes except `.omo/plans/**` and `.omo/specs/**`. |
+| `runner` | `examples/abg/runner.workflow.json` | Plan execution. Parses a plan checklist, delegates waves via `task()` fan-out with per-task critic verification, updates checkboxes, loops until done, then runs a four-critic final verification wave (goal, constraints, tests, code quality). Routes to complete or fix-loop. |
+| `autopilot` | `packages/core/src/behavior/modes/autopilot-mode.ts` | Mode overlay, not a standalone graph. Prepends six operating directives to every `llm` node and adds a hard `edit -> ask` policy-gate rule. Applied to any workflow via `modeDeclarations`. |
+
+### Workflow Tool
+
+`createWorkflowToolRegistration` in `packages/core/src/tools/workflow-tool/workflow-tool.ts` exposes the `workflow(name, prompt)` tool. The model self-invokes a named workflow shown in the `<available_workflows>` system-prompt block. The tool resolves the name through the injected `WorkflowRegistry` and returns `started` or `not_found` (with available names for retry). It validates and resolves only; the runtime adapter routes the resolved `spec.graph` through the same prompt-turn lifecycle as `#name` invocation. Capability class `'workflow'`.
+
+### Modes
+
+A mode is a structural overlay applied at materialization time, not a prompt injection. `applyMode` in `packages/core/src/behavior/modes/mode-application.ts` is a pure function that overlays a `Mode` onto an `AbgGraphSpec` without mutating the input. Three transforms:
+
+- `systemPromptOverlay` is prepended to every `llm`-kind node's `config.systemPrompt`. Node-specific prompts are preserved below.
+- `policies` (`PolicyEffectRule[]`: action/resource/effect) are converted to `AbgPolicySpec` entries and appended to `graph.policies`. The `ask` effect maps to `requires_approval`.
+- `requiredTools` (when non-empty) intersects each node's `capabilities` with the required set.
+
+Modes are declared in `WorkflowSpec.modes` and activated via `modeDeclarations` on the mission. The graph schema is not modified by mode application; the two policy vocabularies (`PolicyEffectRule` action/resource/effect and `AbgPolicySpec` capability/decision) coexist by design.
 
 ## Conventions
 
@@ -99,6 +158,9 @@ Scoped guidance:
 - Keep `Cargo.lock` files for Rust crates unless deliberately updating dependencies.
 - Biome owns lint/format config. Do not add ESLint or Prettier for routine linting.
 - Commit source, docs, tests, config, lockfiles, and workflows. Do not edit generated `dist`, `build`, `target`, `coverage`, `.nx`, `.omo`, `evidence`, `temp`, or reference-repo files.
+- Workflow policy-gate rules use `PolicyEffectRuleSchema` (action/resource/effect). The workspace permission store uses `PermissionRuleSchema` (permission/pattern/decision). They coexist by design; pick the one matching the layer you are editing.
+- `.omo/` is agent state. Externally-authored files (boulder) use `.passthrough()` schemas and atomic temp-file-then-rename writes so unknown fields survive read-modify-write round-trips.
+- `RunCoordinatorV2` and `SessionInputDelivery` are the workflow-path session-spanning drain-lane; the original `run-coordinator.ts` stays for interactive coding-agent runs.
 
 ## Anti-Patterns
 
@@ -109,6 +171,9 @@ Scoped guidance:
 - Do not use `any`, `as any`, `as unknown`, `@ts-ignore`, `@ts-expect-error`, or non-null assertions.
 - Do not use `unwrap`, `expect`, or `panic` in Rust production code; Cargo lints deny them.
 - Do not change release artifact names without updating `scripts`, workflows, README, and contract tests.
+- Do not collapse `PolicyEffectRuleSchema` and `PermissionRuleSchema`. They are two separate permission systems on purpose (workflow policy-gate vs workspace permission store).
+- Do not route continuation state through `updateBoulderWork`; its patch type excludes custom fields. Read and write the boulder directly so the `continuation_runtime` passthrough field survives.
+- Do not let child `task()` sessions spawn their own nested tasks; `deriveChildPermissions` appends a `subagent` deny for `'**'`.
 
 ## Commands
 

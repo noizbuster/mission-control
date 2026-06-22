@@ -71,7 +71,22 @@ Workspace trust is controlled interactively with `/trust` (trust the current wor
 
 `$skill <name> [args]` loads the named skill's `SKILL.md` body and submits it as the user message (real skill loading, replacing the old scaffold recorder). `/<skill-name>` is the slash-command equivalent and reserved commands take precedence over skill names. Skill bodies are inert text only; it does not run actual Codex host skills, spawn agents, or make provider calls on its own. Normal prompt text still sends a prompt, and Ctrl+C twice exits.
 
+`#<workflow-name> {prompt}` invokes a named workflow with the given prompt. Workflows are discovered from `.mctrl/workflows/`, `.agents/workflows/`, and the config workflows directory. A prompt without a `#` prefix runs the `default` workflow fallback. Four built-in workflows ship with the runtime: `default` (no-`#` fallback), `planner` (read-only planning), `runner` (plan execution), and `autopilot` (a mode overlay applied to any workflow). See Built-in Workflows below.
+
 The chat command surface is mixed: normal prompts can run through the deterministic local provider, OpenAI Responses, Anthropic Messages, Google Gemini, or the OpenAI-compatible adapter family for OpenRouter, Groq, DeepSeek, and Mistral when credentials are configured. Skill loading is real — the `SKILL.md` body becomes the next user prompt — but the default `local/local-echo` provider does not call tools, so a real tool-calling provider is required for loaded skills to drive agentic behavior.
+
+## Built-in Workflows
+
+Four built-in workflows ship with the workflow runtime. The first three are graph files discovered from `examples/abg/`; autopilot is a mode overlay, not a standalone graph.
+
+- **`default`**: the no-`#` fallback. An intent gate classifies a prompt as trivial (direct respond), explicit (memory recall, todo planning, delegate wave via `task()` fan-out, verify wave with a critic, supervisor retry loop), or ambiguous (clarify loop). Running `mctrl` with a plain prompt (no `#` prefix) invokes this workflow.
+- **`planner`**: read-only planning. An ambiguity gate routes clear requests through codebase exploration and plan drafting, unclear requests through best-practice research and default adoption, and on-the-fence requests through a single clarifying question. The planner writes plan artifacts to `.omo/plans/` and spec artifacts to `.omo/specs/` only; all other writes are denied by the `planner-readonly` mode. Invoke with `#planner {your planning request}`.
+- **`runner`**: plan execution. Parses a plan checklist from `.omo/plans/`, delegates waves of tasks via `task()` fan-out with per-task critic verification, updates checkboxes, loops until all tasks are done, then runs a final four-critic verification wave (goal, constraints, tests, code quality). Routes to a completion report or a fix-loop that reopens tasks. Invoke with `#runner {execute plan <slug>}`.
+- **`autopilot`**: a mode overlay, not a standalone graph. Prepends six operating directives (certainty before action, scenario before edit, test-driven discipline, QA verification, reviewer separation, completion discipline) to every LLM node and adds a hard policy-gate rule requiring approval before any edit. Applied to any workflow via `modeDeclarations` in the workflow spec.
+
+Non-interactive equivalent: `mctrl run --workflow <name> "<prompt>"` (mutually exclusive with `--graph`). The model can also self-invoke a workflow through the `workflow(name, prompt)` tool, which resolves the name via the workflow registry and returns a `started` or `not_found` status.
+
+Discovered workflows are listed to the model in an `<available_workflows>` system-prompt block. Custom workflows follow the same `*.workflow.json` or `*.workflow.jsonc` format and the same three-scope first-wins discovery as skills (global config dir, `.mctrl/workflows/`, `.agents/workflows/`).
 
 ## Model Provider Selection
 

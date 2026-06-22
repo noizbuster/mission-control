@@ -20,6 +20,7 @@ import {
     type ToolInvocationSettlement,
 } from '@mission-control/core';
 import type {
+    AbgGraphSpec,
     AbgSignal,
     AgentEvent,
     AgentEventEnvelope,
@@ -93,6 +94,12 @@ export type CodingAgentTurnOptions = {
     /** Operator-supplied pricing table; threaded to the graph so `CostLedger` emits `policy.budget.*`. */
     readonly pricingTable?: PricingTable;
     readonly approvalLevel?: ApprovalLevel;
+    /**
+     * Optional ABG graph override. When provided (e.g. from a `#workflow` invocation), the turn
+     * runs THIS graph instead of the default coding-agent graph built from the model selection.
+     * Falls back to `buildCodingAgentGraphForSelection` when omitted.
+     */
+    readonly graph?: AbgGraphSpec;
 };
 
 export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Promise<ActiveCodingAgentTurn> {
@@ -199,7 +206,7 @@ async function createInteractiveRunOwner(
     });
     const projectInstructionResources = await loadTrustedProjectInstructionResources(options.workspaceRoot);
     const runProviderTurn = createGraphTurnRunner({
-        graph: buildCodingAgentGraphForSelection(options.modelProviderSelection),
+        graph: options.graph ?? buildCodingAgentGraphForSelection(options.modelProviderSelection),
         sessionId: options.sessionId,
         now: () => new Date().toISOString(),
         modelProviderSelection: options.modelProviderSelection,

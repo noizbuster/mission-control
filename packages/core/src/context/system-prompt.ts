@@ -41,6 +41,12 @@ export type SystemPromptSkill = {
     readonly location?: string;
 };
 
+export type SystemPromptWorkflow = {
+    readonly name: string;
+    readonly description?: string;
+    readonly categories?: readonly string[];
+};
+
 export type AssembleSystemPromptInput = {
     /** Provider/model-family persona text. Defaults to the mission-control coding-agent persona. */
     readonly persona?: string;
@@ -51,6 +57,9 @@ export type AssembleSystemPromptInput = {
     /** Tool-usage guidelines contributed by individual tools (e.g. "prefer edit over write"). */
     readonly guidelines?: readonly string[];
     readonly skills?: readonly SystemPromptSkill[];
+    readonly workflows?: readonly SystemPromptWorkflow[];
+    /** Pre-rendered Baseline System Context from the SystemContextRegistry (trusted state). */
+    readonly contextBaseline?: string;
     /** Free-form text appended verbatim at the end (user/config overrides). */
     readonly append?: string;
 };
@@ -152,6 +161,30 @@ function renderSkills(skills: readonly SystemPromptSkill[]): string | undefined 
     ].join('\n');
 }
 
+function renderWorkflows(workflows: readonly SystemPromptWorkflow[]): string | undefined {
+    if (workflows.length === 0) {
+        return undefined;
+    }
+    const entries = workflows.map((workflow) => {
+        const description =
+            workflow.description !== undefined && workflow.description.length > 0
+                ? `<description>${escapeXml(workflow.description)}</description>`
+                : '';
+        const categories =
+            workflow.categories !== undefined && workflow.categories.length > 0
+                ? `<categories>${workflow.categories.map(escapeXml).join(', ')}</categories>`
+                : '';
+        return `  <workflow><name>${escapeXml(workflow.name)}</name>${description}${categories}</workflow>`;
+    });
+    return [
+        'The following workflows provide structured task execution patterns.',
+        'Select the appropriate workflow when the task matches its description.',
+        '<available_workflows>',
+        ...entries,
+        '</available_workflows>',
+    ].join('\n');
+}
+
 function escapeXml(value: string): string {
     return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -183,6 +216,15 @@ export function assembleSystemPrompt(input: AssembleSystemPromptInput = {}): str
         if (rendered !== undefined) {
             sections.push(rendered);
         }
+    }
+    if (input.workflows !== undefined) {
+        const rendered = renderWorkflows(input.workflows);
+        if (rendered !== undefined) {
+            sections.push(rendered);
+        }
+    }
+    if (nonEmpty(input.contextBaseline)) {
+        sections.push(input.contextBaseline.trim());
     }
     // Untrusted project instructions come LAST (after trusted policy) and are framed as
     // reference data, so injected text cannot override the established persona/policy.

@@ -2017,6 +2017,56 @@ Mission
 
 Each Agent is an Actor. The Coordinator is a combination of Decision Node and Join Node.
 
+### 21.4 Default Intent-Gated Workflow
+
+`mission-control` ships a default workflow as the reference no-prefix fallback graph. An intent gate classifies a prompt as trivial, explicit, or ambiguous, then routes to one of three subgraphs:
+
+```text
+Intent Gate
+  ├─ trivial   -> direct respond
+  ├─ explicit  -> memory -> plan todos -> delegate wave (parallel delegation)
+  │                -> verify wave (critic) -> { final respond | supervisor retry loop }
+  └─ ambiguous -> clarify -> intent gate (loop)
+```
+
+Explicit tasks decompose into ordered todos, fan out as parallel delegations, pass through a critic verify wave, and loop through a supervisor on critic failure until the result passes or attempts are exhausted. The concrete reference instance lives at `examples/abg/default.workflow.json`. This shape is a worked example of the Selector, Parallel, and Watch patterns above, not a separate concept.
+
+### 21.5 Planner Workflow
+
+A read-only planning graph. An ambiguity gate routes the request before any plan is drafted:
+
+```text
+Intake
+  -> assess ambiguity
+      -> clear        -> explore -> draft-plan -> review-plan -> present
+      -> unclear      -> research -> adopt-defaults -> draft-plan -> review-plan -> ...
+      -> on-the-fence -> ask-one-question -> assess ambiguity (loop)
+
+  review-plan rejected -> draft-plan (revise)
+```
+
+The `planner-readonly` mode denies all writes except `.omo/plans/**` and `.omo/specs/**`, enforced through policy-gate rules. The reference instance lives at `examples/abg/planner.workflow.json`.
+
+### 21.6 Runner Workflow
+
+A plan-execution graph. It parses a plan checklist, delegates waves of tasks, verifies each, and runs a final four-critic verification wave:
+
+```text
+Parse plan
+  -> init notepad
+  -> next wave
+      -> tasks remain -> delegate wave (task fan-out) -> per-task verify -> checkbox update -> next wave (loop)
+      -> all done     -> final verification wave (F1-F4 parallel critics)
+                           -> APPROVE -> complete
+                           -> REJECT  -> fix-loop -> next wave (loop)
+```
+
+The reference instance lives at `examples/abg/runner.workflow.json`.
+
+### 21.7 Autopilot Mode Pattern
+
+Autopilot is a mode overlay, not a standalone graph. Applied to any workflow at materialization time via `modeDeclarations`, it prepends six operating directives (certainty before action, scenario before edit, test-driven discipline, QA verification, reviewer separation, completion discipline) to every LLM node and adds a hard `edit -> ask` policy-gate rule requiring approval before any edit. The declaration lives at `packages/core/src/behavior/modes/autopilot-mode.ts`. This is the mode application pattern in general: behavioral guidance lives in the prompt overlay, enforceable constraints live in policy rules, and the two coexist without one substituting for the other.
+
 ---
 
 ## 22. How to Think About Graph Authoring

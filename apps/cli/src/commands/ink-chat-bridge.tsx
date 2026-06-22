@@ -39,8 +39,11 @@ import {
 import {
     createSlashCommandMenuState,
     createSlashCommandMenuView,
+    createWorkflowCommandMenuView,
     reduceSlashCommandMenuSelection,
+    reduceWorkflowCommandMenuSelection,
     resolveSlashCommandMenuSubmission,
+    resolveWorkflowCommandMenuSubmission,
     type SlashCommandMenuState,
 } from './interactive-chat-command-menu.js';
 import {
@@ -129,6 +132,7 @@ type BridgeSnapshot = {
     readonly cursorPosition: number;
     readonly outputText: string;
     readonly menuState: SlashCommandMenuState;
+    readonly workflowNames: readonly string[];
     readonly fileAutocomplete: FileAutocompleteState;
     readonly modelPickerActive: boolean;
     readonly modelPickerChoices: readonly ModelChoice[];
@@ -176,6 +180,7 @@ export type InkChatBridge = {
     onModelCycleSelect: ((selection: ModelProviderSelection) => void) | undefined;
     onRenameSubmit: ((name: string) => void) | undefined;
     readonly setGenerating: (value: boolean) => void;
+    readonly setWorkflowNames: (names: readonly string[]) => void;
     readonly setAgentStatus: (text: string) => void;
     readonly clearAgentStatus: () => void;
     readonly isShowThinking: () => boolean;
@@ -221,6 +226,7 @@ export type InkChatBridgeCore = {
     cursorPosition: number;
     outputText: string;
     menuState: SlashCommandMenuState;
+    workflowNames: readonly string[];
     fileAutocomplete: FileAutocompleteState;
     workspaceRoot: string;
     eventQueue: ChatInputEvent[];
@@ -301,6 +307,7 @@ export function publishSnapshot(core: InkChatBridgeCore): void {
         cursorPosition: core.cursorPosition,
         outputText: core.outputText,
         menuState: core.menuState,
+        workflowNames: core.workflowNames,
         fileAutocomplete: core.fileAutocomplete,
         modelPickerActive: core.modelPickerActive,
         modelPickerChoices: core.modelPickerChoices,
@@ -417,7 +424,7 @@ function flushCjkBuffer(core: InkChatBridgeCore): void {
 }
 
 function readActiveFilePrefix(buffer: string): string | undefined {
-    if (buffer.startsWith('/')) {
+    if (buffer.startsWith('/') || buffer.startsWith('#')) {
         return undefined;
     }
     const atIndex = buffer.lastIndexOf('@');
@@ -473,6 +480,7 @@ export function createInkChatBridgeCore(options?: {
         cursorPosition: 0,
         outputText: '',
         menuState: createSlashCommandMenuState(),
+        workflowNames: [],
         fileAutocomplete: createFileAutocompleteState(),
         workspaceRoot,
         eventQueue: [],
@@ -483,6 +491,7 @@ export function createInkChatBridgeCore(options?: {
             cursorPosition: 0,
             outputText: '',
             menuState: createSlashCommandMenuState(),
+            workflowNames: [],
             fileAutocomplete: createFileAutocompleteState(),
             modelPickerActive: false,
             modelPickerChoices: [],
@@ -892,6 +901,13 @@ export function handleInput(core: InkChatBridgeCore, input: string, key: Key): v
     if (key.upArrow) {
         if (core.inputBuffer.startsWith('/')) {
             core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[A', core.inputBuffer);
+        } else if (core.inputBuffer.startsWith('#')) {
+            core.menuState = reduceWorkflowCommandMenuSelection(
+                core.menuState,
+                '\u001b[A',
+                core.inputBuffer,
+                core.workflowNames,
+            );
         } else if (core.fileAutocomplete.open) {
             core.fileAutocomplete = navigateFileAutocompleteUp(core.fileAutocomplete);
         } else {
@@ -908,6 +924,13 @@ export function handleInput(core: InkChatBridgeCore, input: string, key: Key): v
     if (key.downArrow) {
         if (core.inputBuffer.startsWith('/')) {
             core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[B', core.inputBuffer);
+        } else if (core.inputBuffer.startsWith('#')) {
+            core.menuState = reduceWorkflowCommandMenuSelection(
+                core.menuState,
+                '\u001b[B',
+                core.inputBuffer,
+                core.workflowNames,
+            );
         } else if (core.fileAutocomplete.open) {
             core.fileAutocomplete = navigateFileAutocompleteDown(core.fileAutocomplete);
         } else {
@@ -977,6 +1000,11 @@ export function handleInput(core: InkChatBridgeCore, input: string, key: Key): v
         let value = core.inputBuffer;
         if (core.inputBuffer.startsWith('/')) {
             const resolved = resolveSlashCommandMenuSubmission(core.inputBuffer, core.menuState);
+            if (resolved !== core.inputBuffer) {
+                value = resolved;
+            }
+        } else if (core.inputBuffer.startsWith('#')) {
+            const resolved = resolveWorkflowCommandMenuSubmission(core.inputBuffer, core.menuState, core.workflowNames);
             if (resolved !== core.inputBuffer) {
                 value = resolved;
             }
@@ -1698,11 +1726,19 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     }
 
     const showSlashMenu = snapshot.inputBuffer.startsWith('/');
+    const showWorkflowMenu = snapshot.inputBuffer.startsWith('#');
     const menuView = showSlashMenu
         ? createSlashCommandMenuView(snapshot.inputBuffer, snapshot.menuState, slashMenuMaxVisibleChoices)
-        : null;
+        : showWorkflowMenu
+          ? createWorkflowCommandMenuView(
+                snapshot.inputBuffer,
+                snapshot.menuState,
+                slashMenuMaxVisibleChoices,
+                snapshot.workflowNames,
+            )
+          : null;
     const fileView =
-        !showSlashMenu && snapshot.fileAutocomplete.open
+        !showSlashMenu && !showWorkflowMenu && snapshot.fileAutocomplete.open
             ? createFileAutocompleteView(snapshot.fileAutocomplete, fileAutocompleteMaxVisibleChoices)
             : null;
 
@@ -1771,7 +1807,7 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                             {`[history ${snapshot.historyNavigation.position}/${snapshot.historyNavigation.total} — ↑/↓ to recall, Enter to use]`}
                         </Text>
                     ) : snapshot.inputBuffer.length === 0 ? (
-                        <Text dimColor> Type a message, / for commands, or Ctrl+C twice to exit</Text>
+                        <Text dimColor> Type a message, / for commands, # for workflows, or Ctrl+C twice to exit</Text>
                     ) : null}
                 </Text>
             </Box>
@@ -1933,6 +1969,11 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         publishSnapshot(core);
     };
 
+    const setWorkflowNames = (names: readonly string[]): void => {
+        core.workflowNames = names;
+        publishSnapshot(core);
+    };
+
     const setAgentStatus = (text: string): void => {
         core.agentStatusText = text;
         publishSnapshot(core);
@@ -2036,6 +2077,7 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
             core.onRenameSubmit = value;
         },
         setGenerating,
+        setWorkflowNames,
         setAgentStatus,
         clearAgentStatus,
         isShowThinking,

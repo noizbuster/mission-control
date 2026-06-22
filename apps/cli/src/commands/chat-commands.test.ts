@@ -38,6 +38,64 @@ describe('chat command parser', () => {
         expect(formatSkillInvocationPrompt(action)).toBe('Invoke skill "planner": draft a rollout checklist');
     });
 
+    it('parses workflow invocations when input starts with a hash', () => {
+        expect(parseChatLine('#planner plan X')).toEqual({
+            kind: 'workflow',
+            name: 'planner',
+            prompt: 'plan X',
+        });
+        expect(parseChatLine('#default hello')).toEqual({
+            kind: 'workflow',
+            name: 'default',
+            prompt: 'hello',
+        });
+    });
+
+    it('accepts any valid-format workflow name when no known set is provided', () => {
+        expect(parseChatLine('#unknown-name do the thing')).toEqual({
+            kind: 'workflow',
+            name: 'unknown-name',
+            prompt: 'do the thing',
+        });
+    });
+
+    it('accepts known workflow names when a known set is provided', () => {
+        const known = new Set(['planner', 'default']);
+
+        expect(parseChatLine('#planner plan X', { knownWorkflowNames: known })).toEqual({
+            kind: 'workflow',
+            name: 'planner',
+            prompt: 'plan X',
+        });
+    });
+
+    it('rejects an empty workflow name after the hash prefix', () => {
+        expect(parseChatLine('#')).toEqual({
+            kind: 'invalid',
+            message: 'Workflow command is empty',
+        });
+        expect(parseChatLine('#   ')).toEqual({
+            kind: 'invalid',
+            message: 'Workflow command is empty',
+        });
+    });
+
+    it('rejects workflow names with invalid characters', () => {
+        expect(parseChatLine('#invalid!name prompt')).toEqual({
+            kind: 'invalid',
+            message: 'Invalid workflow command',
+        });
+    });
+
+    it('rejects unknown workflow names when a known set is provided', () => {
+        const known = new Set(['planner', 'default']);
+
+        expect(parseChatLine('#unknown-name prompt', { knownWorkflowNames: known })).toEqual({
+            kind: 'invalid',
+            message: 'Unknown workflow "unknown-name"',
+        });
+    });
+
     it('expands /<known-skill> into a skill action when the name is discovered', () => {
         const known = new Set(['git-master', 'planner']);
 

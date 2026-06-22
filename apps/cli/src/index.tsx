@@ -54,6 +54,8 @@ export function createHelpText(): string {
         '  /exit                  Stop active runs and exit',
         '  $<skill> [args]        Load a skill SKILL.md body as the next user prompt',
         '  $ skill invocations load real SKILL.md skills inside Mission Control',
+        '  #<workflow-name> {prompt}  Invoke a named workflow with the given prompt',
+        '  # workflows are discovered from .mctrl/workflows, .agents/workflows, and the config dir; #default is the fallback',
         '',
         'Coding-agent tools (effectful tools require approval):',
         '  repo.read / read       Read a text file inside the workspace',

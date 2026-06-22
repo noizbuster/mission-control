@@ -196,16 +196,26 @@ export function createSlashCommandMenuState(): SlashCommandMenuState {
     return { selectedIndex: 0 };
 }
 
-export function createSlashCommandMenuView(
+export function workflowCommandChoices(workflows: readonly string[]): readonly SlashCommandMenuChoice[] {
+    return workflows.map((name) => ({
+        id: `#${name}`,
+        insertText: `#${name} `,
+        description: `Run the ${name} workflow`,
+    }));
+}
+
+function createCommandMenuView(
     line: string,
     state: SlashCommandMenuState,
     maxVisibleChoices: number,
+    prefix: string,
+    choices: readonly SlashCommandMenuChoice[],
 ): SlashCommandMenuView {
-    const query = readSlashCommandQuery(line);
+    const query = readCommandQuery(line, prefix);
     if (query === undefined) {
         return closedMenuView;
     }
-    const filteredChoices = filterSlashCommandChoices(query);
+    const filteredChoices = filterCommandChoices(query, choices);
     const selectedIndex = clampSelection(state.selectedIndex, filteredChoices.length);
     const visibleLimit = Math.max(1, maxVisibleChoices);
     const startIndex = getWindowStartIndex(selectedIndex, filteredChoices.length, visibleLimit);
@@ -220,12 +230,24 @@ export function createSlashCommandMenuView(
     };
 }
 
-export function reduceSlashCommandMenuSelection(
-    state: SlashCommandMenuState,
-    chunk: string,
+export function createSlashCommandMenuView(
     line: string,
-): SlashCommandMenuState {
-    const view = createSlashCommandMenuView(line, state, slashCommandChoices.length);
+    state: SlashCommandMenuState,
+    maxVisibleChoices: number,
+): SlashCommandMenuView {
+    return createCommandMenuView(line, state, maxVisibleChoices, '/', slashCommandChoices);
+}
+
+export function createWorkflowCommandMenuView(
+    line: string,
+    state: SlashCommandMenuState,
+    maxVisibleChoices: number,
+    workflows: readonly string[],
+): SlashCommandMenuView {
+    return createCommandMenuView(line, state, maxVisibleChoices, '#', workflowCommandChoices(workflows));
+}
+
+function reduceCommandMenuSelection(chunk: string, view: SlashCommandMenuView): SlashCommandMenuState {
     if (!view.open || view.totalCount === 0) {
         return { selectedIndex: 0 };
     }
@@ -239,13 +261,47 @@ export function reduceSlashCommandMenuSelection(
     return { selectedIndex: view.selectedIndex };
 }
 
-export function resolveSlashCommandMenuSubmission(line: string, state: SlashCommandMenuState): string {
-    const view = createSlashCommandMenuView(line, state, slashCommandChoices.length);
+export function reduceSlashCommandMenuSelection(
+    state: SlashCommandMenuState,
+    chunk: string,
+    line: string,
+): SlashCommandMenuState {
+    return reduceCommandMenuSelection(chunk, createSlashCommandMenuView(line, state, slashCommandChoices.length));
+}
+
+export function reduceWorkflowCommandMenuSelection(
+    state: SlashCommandMenuState,
+    chunk: string,
+    line: string,
+    workflows: readonly string[],
+): SlashCommandMenuState {
+    return reduceCommandMenuSelection(
+        chunk,
+        createWorkflowCommandMenuView(line, state, workflowCommandChoices(workflows).length, workflows),
+    );
+}
+
+function resolveCommandMenuSubmission(line: string, view: SlashCommandMenuView): string {
     const selectedChoice = view.visibleChoices[view.selectedIndex - view.startIndex];
     if (!view.open || selectedChoice === undefined) {
         return line;
     }
     return selectedChoice.insertText.trimEnd();
+}
+
+export function resolveSlashCommandMenuSubmission(line: string, state: SlashCommandMenuState): string {
+    return resolveCommandMenuSubmission(line, createSlashCommandMenuView(line, state, slashCommandChoices.length));
+}
+
+export function resolveWorkflowCommandMenuSubmission(
+    line: string,
+    state: SlashCommandMenuState,
+    workflows: readonly string[],
+): string {
+    return resolveCommandMenuSubmission(
+        line,
+        createWorkflowCommandMenuView(line, state, workflowCommandChoices(workflows).length, workflows),
+    );
 }
 
 export function formatSlashCommandMenuLines(view: SlashCommandMenuView, columns: number): readonly string[] {
@@ -273,22 +329,25 @@ const closedMenuView = {
     empty: false,
 } satisfies SlashCommandMenuView;
 
-function readSlashCommandQuery(line: string): string | undefined {
-    if (!line.startsWith('/')) {
+function readCommandQuery(line: string, prefix: string): string | undefined {
+    if (!line.startsWith(prefix)) {
         return undefined;
     }
-    const commandToken = line.slice(1);
+    const commandToken = line.slice(prefix.length);
     if (commandToken.includes(' ') || commandToken.includes('\n') || commandToken.includes('\t')) {
         return undefined;
     }
     return commandToken.toLowerCase();
 }
 
-function filterSlashCommandChoices(query: string): readonly SlashCommandMenuChoice[] {
+function filterCommandChoices(
+    query: string,
+    choices: readonly SlashCommandMenuChoice[],
+): readonly SlashCommandMenuChoice[] {
     if (query.length === 0) {
-        return slashCommandChoices;
+        return choices;
     }
-    return slashCommandChoices.filter(
+    return choices.filter(
         (choice) =>
             choice.id.slice(1).toLowerCase().includes(query) || choice.description.toLowerCase().includes(query),
     );

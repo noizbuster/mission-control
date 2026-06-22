@@ -123,6 +123,11 @@ export type ChatLineAction =
           readonly instruction: string;
       }
     | {
+          readonly kind: 'workflow';
+          readonly name: string;
+          readonly prompt: string;
+      }
+    | {
           readonly kind: 'unknown-slash';
           readonly command: string;
       }
@@ -132,6 +137,8 @@ export type ChatLineAction =
       };
 
 export type SkillInvocationAction = Extract<ChatLineAction, { readonly kind: 'skill' }>;
+
+export type WorkflowInvocationAction = Extract<ChatLineAction, { readonly kind: 'workflow' }>;
 
 export type TrustCommandAction = 'trust' | 'status' | 'deny' | 'reset';
 
@@ -145,6 +152,13 @@ export type ChatLineOptions = {
      * unknown-slash path (skill loading via `$skill` still works).
      */
     readonly knownSkillNames?: ReadonlySet<string>;
+    /**
+     * Discovered workflow names for `#<workflow-name>` invocation (Task 2.2). When
+     * provided, a name that parses cleanly but is absent from the set is rejected as
+     * an invalid action. When omitted, any valid-format name is accepted (the
+     * registry may not be populated yet).
+     */
+    readonly knownWorkflowNames?: ReadonlySet<string>;
     /**
      * Active session id, used to resolve a default export path for `/export` when no
      * explicit path is supplied. Omitted when the chat has no durable session.
@@ -162,6 +176,9 @@ export function parseChatLine(value: string, options: ChatLineOptions = {}): Cha
     }
     if (line.startsWith('$')) {
         return parseSkillInvocation(line);
+    }
+    if (line.startsWith('#')) {
+        return parseWorkflowInvocation(line, options);
     }
     if (line.startsWith('!!')) {
         return parseBashInvocation(line.slice(2), 'bash-display-only');
@@ -361,6 +378,24 @@ function parseSkillInvocation(line: string): ChatLineAction {
         kind: 'skill',
         name: parts.head,
         instruction: parts.tail,
+    };
+}
+
+function parseWorkflowInvocation(line: string, options: ChatLineOptions): ChatLineAction {
+    const parts = splitCommandParts(line.slice(1));
+    if (parts.head.length === 0) {
+        return { kind: 'invalid', message: 'Workflow command is empty' };
+    }
+    if (!/^[A-Za-z0-9_.:/-]+$/.test(parts.head)) {
+        return { kind: 'invalid', message: 'Invalid workflow command' };
+    }
+    if (options.knownWorkflowNames !== undefined && !options.knownWorkflowNames.has(parts.head)) {
+        return { kind: 'invalid', message: `Unknown workflow "${parts.head}"` };
+    }
+    return {
+        kind: 'workflow',
+        name: parts.head,
+        prompt: parts.tail,
     };
 }
 

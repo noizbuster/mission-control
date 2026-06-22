@@ -5,16 +5,17 @@ import {
     type CommandExecutionResult,
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
+    discoverWorkflows,
     PermissionGateError,
     type ProviderAdapter,
     type SdkModelResolver,
+    WorkflowRegistry,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
 import { type AgentUIRenderer, InkRenderer, JsonRenderer, PlainRenderer } from '../ui/renderers.js';
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { splitCommandParts } from './chat-command-parts.js';
 import type { NonInteractiveAutomationPolicy } from './cli-runtime-options.js';
 import { createCliRuntimeOptions } from './cli-runtime-options.js';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
@@ -31,6 +32,8 @@ import {
 } from './run-agent-graph-prompt.js';
 import { runOwnerPrompt } from './run-agent-owner-prompt.js';
 import { createRunEventRecorder } from './run-agent-session.js';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 
 export { createCliProviderForSelection } from './provider-factory.js';
 
@@ -140,6 +143,20 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     };
     let didStart = false;
     const pricingTable = await loadPricingTable();
+    const workflowInvocation = resolveWorkflowInvocation(args);
+    let effectivePrompt = args.prompt;
+    let workflowGraph: AbgGraphSpec | undefined;
+    if (workflowInvocation !== undefined) {
+        const registry = await discoverWorkflowRegistry(workspaceRoot);
+        const spec = registry.lookup(workflowInvocation.name);
+        if (spec === undefined) {
+            const names = registry.names();
+            const available = names.length === 0 ? '(none discovered)' : names.slice(0, 20).join(', ');
+            throw new Error(`Unknown workflow "${workflowInvocation.name}". Available workflows: ${available}.`);
+        }
+        workflowGraph = spec.graph;
+        effectivePrompt = workflowInvocation.prompt;
+    }
     try {
         await renderer.start(runtime);
         await runtime.start();
@@ -148,7 +165,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             if (graph !== undefined) {
                 await runtime.runGraph(graph);
             } else if (
-                args.prompt !== undefined &&
+                effectivePrompt !== undefined &&
                 recorder.currentStore() !== undefined &&
                 recorder.currentSessionId() !== undefined
             ) {
@@ -178,13 +195,13 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     provider,
                     modelProviderSelection: selectedModelProvider,
                     workspaceRoot,
-                    prompt: args.prompt,
+                    prompt: effectivePrompt,
                     emitEvent: emitRuntimeEvent,
                     observeStoredEvent,
                     resolveSdkModel,
                     createTurnRunner: ({ toolRegistry }) =>
                         createGraphTurnRunner({
-                            graph: buildCodingAgentGraphForSelection(selectedModelProvider),
+                            graph: workflowGraph ?? buildCodingAgentGraphForSelection(selectedModelProvider),
                             sessionId,
                             now: () => new Date().toISOString(),
                             modelProviderSelection: selectedModelProvider,
@@ -204,12 +221,13 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                         : {}),
                     throwOnTerminalFailure: args.mode === 'plain',
                 });
-            } else if (args.prompt !== undefined) {
+            } else if (effectivePrompt !== undefined) {
                 await runCodingPromptOnGraph({
                     runtime,
                     selection: selectedModelProvider,
-                    prompt: args.prompt,
+                    prompt: effectivePrompt,
                     workspaceRoot,
+                    ...(workflowGraph !== undefined ? { graph: workflowGraph } : {}),
                     ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
                     authStore,
                     ...(options.provider !== undefined ? { provider: options.provider } : {}),
@@ -246,6 +264,40 @@ function shouldRunInteractiveChat(args: CliArgs, graph: AbgGraphSpec | undefined
         args.mode === 'ink' &&
         (options.chatInput !== undefined || (process.stdin.isTTY === true && process.stdout.isTTY === true))
     );
+}
+
+const WORKFLOW_NAME_PATTERN = /^[A-Za-z0-9_.:/-]+$/;
+
+type WorkflowInvocation = {
+    readonly name: string;
+    readonly prompt: string;
+};
+
+function resolveWorkflowInvocation(args: CliArgs): WorkflowInvocation | undefined {
+    if (args.workflowName !== undefined) {
+        return { name: args.workflowName, prompt: args.prompt ?? '' };
+    }
+    if (args.prompt?.startsWith('#')) {
+        const parts = splitCommandParts(args.prompt.slice(1));
+        if (parts.head.length === 0) {
+            throw new Error('Workflow invocation requires a name after "#"');
+        }
+        if (!WORKFLOW_NAME_PATTERN.test(parts.head)) {
+            throw new Error(`Invalid workflow name: "${parts.head}"`);
+        }
+        return { name: parts.head, prompt: parts.tail };
+    }
+    return undefined;
+}
+
+async function discoverWorkflowRegistry(workspaceRoot: string): Promise<WorkflowRegistry> {
+    const result = await discoverWorkflows({ workspaceRoot });
+    for (const diagnostic of result.diagnostics) {
+        process.stderr.write(
+            `workflow discovery [${diagnostic.severity}] ${diagnostic.workflowName}: ${diagnostic.message}\n`,
+        );
+    }
+    return new WorkflowRegistry(result.workflows);
 }
 
 async function resolveModelProviderSelection(

@@ -35,6 +35,11 @@ export type CliArgs = {
     readonly showVersion: boolean;
     readonly graphPath?: string;
     readonly prompt?: string;
+    /**
+     * Workflow name resolved from the `--workflow <name>` flag. When set, the prompt is the
+     * remaining positional argument. Mutually exclusive with `graphPath`.
+     */
+    readonly workflowName?: string;
     readonly sessionId?: string;
     /**
      * Explicit target workspace path passed via `--workspace <path>`. When unset, the runtime
@@ -78,6 +83,7 @@ export const supportedCliFlags = [
     '--provider',
     '--model',
     '--graph',
+    '--workflow',
     '--engine',
     '--session',
     '--workspace',

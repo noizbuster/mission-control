@@ -68,6 +68,19 @@ export {
     ApprovalSubjectSchema,
 } from './approval.js';
 export {
+    type Category,
+    type CategoryCatalog,
+    CategoryCatalogSchema,
+    CategorySchema,
+} from './category.js';
+export {
+    DELIVERY_MODES,
+    type Delivery,
+    DeliverySchema,
+    type SessionInputDelivery,
+    SessionInputDeliverySchema,
+} from './delivery.js';
+export {
     DIFF_CHANGE_KINDS,
     DIFF_LINE_KINDS,
     type DiffChangeKind,
@@ -114,6 +127,21 @@ export {
     type RunStatus,
     RunStatusSchema,
 } from './mission-run.js';
+export {
+    type Mode,
+    type ModeDeclaration,
+    ModeDeclarationSchema,
+    ModeSchema,
+} from './mode.js';
+export {
+    POLICY_EFFECTS,
+    type PolicyEffect,
+    type PolicyEffectRule,
+    PolicyEffectRuleSchema,
+    type PolicyEffectRuleSet,
+    PolicyEffectRuleSetSchema,
+    PolicyEffectSchema,
+} from './permission-rule.js';
 export {
     type BudgetConfig,
     BudgetConfigSchema,
@@ -263,3 +291,12 @@ export {
     type TranscriptVisibility,
     TranscriptVisibilitySchema,
 } from './transcript.js';
+export {
+    WORKFLOW_DISCOVERY_DIAGNOSTIC_SEVERITIES,
+    type WorkflowDiscoveryDiagnostic,
+    WorkflowDiscoveryDiagnosticSchema,
+    type WorkflowDiscoveryDiagnosticSeverity,
+    WorkflowDiscoveryDiagnosticSeveritySchema,
+    type WorkflowSpec,
+    WorkflowSpecSchema,
+} from './workflow.js';

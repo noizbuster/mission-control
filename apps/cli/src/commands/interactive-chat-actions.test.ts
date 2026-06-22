@@ -1,5 +1,5 @@
-import { AgentRuntime, type Skill } from '@mission-control/core';
-import type { ModelProviderSelection } from '@mission-control/protocol';
+import { AgentRuntime, type Skill, WorkflowRegistry } from '@mission-control/core';
+import type { ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CodingActionContext } from './interactive-chat-actions.js';
 import { runChatAction } from './interactive-chat-actions.js';
@@ -406,6 +406,117 @@ describe('interactive chat actions', () => {
             expect(output.getOutput()).toContain('(none discovered)');
         });
     });
+
+    describe('workflow action', () => {
+        it('dispatches a known workflow by threading its graph through the prompt turn', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const registry = new WorkflowRegistry([
+                createTestWorkflowSpec('planner'),
+                createTestWorkflowSpec('runner'),
+            ]);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'workflow', name: 'planner', prompt: 'plan the migration' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({
+                    workflowRegistry: registry,
+                    activeTurn: fakeActiveTurn(),
+                }),
+            );
+
+            const captured = output.getOutput();
+            expect(captured).toContain('Running workflow "planner"');
+            expect(captured).toContain('Queued follow-up:');
+            expect(captured).toContain('plan the migration');
+        });
+
+        it('lists available workflows when the name is unknown', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const registry = new WorkflowRegistry([
+                createTestWorkflowSpec('planner'),
+                createTestWorkflowSpec('runner'),
+            ]);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'workflow', name: 'missing', prompt: 'do something' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ workflowRegistry: registry }),
+            );
+
+            const captured = output.getOutput();
+            expect(captured).toContain('Unknown workflow: missing');
+            expect(captured).toContain('Available workflows: planner, runner');
+        });
+
+        it('reports unavailable when no workflow registry is configured', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'workflow', name: 'planner', prompt: 'plan X' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({}),
+            );
+
+            expect(output.getOutput()).toContain('Workflow invocation unavailable');
+        });
+
+        it('reports empty registry cleanly', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const registry = new WorkflowRegistry([]);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'workflow', name: 'planner', prompt: 'plan X' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ workflowRegistry: registry }),
+            );
+
+            const captured = output.getOutput();
+            expect(captured).toContain('Unknown workflow: planner');
+            expect(captured).toContain('(none discovered)');
+        });
+
+        it('truncates available workflow list to 20 entries', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const specs = Array.from({ length: 25 }, (_, i) => createTestWorkflowSpec(`wf-${i}`));
+            const registry = new WorkflowRegistry(specs);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'workflow', name: 'missing', prompt: 'x' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ workflowRegistry: registry }),
+            );
+
+            const captured = output.getOutput();
+            expect(captured).toContain('Unknown workflow: missing');
+            expect(captured).toContain('wf-0, wf-1');
+            expect(captured).not.toContain('wf-24');
+        });
+    });
 });
 
 function fakeActiveTurn(): NonNullable<CodingActionContext['activeTurn']> {
@@ -437,6 +548,20 @@ async function writeFixtureSkill(
     return { root, skill };
 }
 
+function createTestWorkflowSpec(name: string): WorkflowSpec {
+    return {
+        name,
+        graph: {
+            id: `${name}-graph`,
+            entryNodeId: 'entry',
+            nodes: [{ id: 'entry', kind: 'llm' }],
+            edges: [],
+            rules: [],
+            policies: [],
+        },
+    };
+}
+
 function createCodingContext(overrides: Partial<CodingActionContext> = {}): CodingActionContext {
     return {
         activeTurn: overrides.activeTurn ?? undefined,
@@ -450,6 +575,7 @@ function createCodingContext(overrides: Partial<CodingActionContext> = {}): Codi
         workspaceRoot: overrides.workspaceRoot ?? '/workspace',
         ...(overrides.skills !== undefined ? { skills: overrides.skills } : {}),
         ...(overrides.sessionNavigation !== undefined ? { sessionNavigation: overrides.sessionNavigation } : {}),
+        ...(overrides.workflowRegistry !== undefined ? { workflowRegistry: overrides.workflowRegistry } : {}),
     };
 }
 

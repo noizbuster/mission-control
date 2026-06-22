@@ -1,4 +1,11 @@
-import type { AbgNodeModelOptions, AbgNodeSpec, AbgPolicySpec, AbgSignal, AgentEvent } from '@mission-control/protocol';
+import type {
+    AbgNodeModelOptions,
+    AbgNodeSpec,
+    AbgPolicySpec,
+    AbgSignal,
+    AgentEvent,
+    PolicyEffectRule,
+} from '@mission-control/protocol';
 import type { ProjectInstructionResource } from '../context/project-context-messages.js';
 import type { SystemPromptEnvironment } from '../context/system-prompt.js';
 import type { Blackboard } from '../memory/blackboard.js';
@@ -27,6 +34,15 @@ export type AbgNodeRunContext = {
      */
     readonly sdkModel?: LlmActorModel;
     readonly policies?: readonly AbgPolicySpec[];
+    /**
+     * Workflow mode policy-gate rules (Task 1.2 / 3.2) in the action/resource/effect vocabulary.
+     * Threaded from the active {@linkcode Mode}'s `policies` at materialization. The
+     * `mode-policy-gate` node evaluates these via `evaluateRules` to enforce e.g. the planner's
+     * read-only scope (deny writes except `.omo/plans/**` and `.omo/specs/**`). Distinct from
+     * {@linkcode policies} (the graph-level `AbgPolicySpec` capability/decision model); both
+     * coexist by design.
+     */
+    readonly modePolicies?: readonly PolicyEffectRule[];
     readonly input?: Readonly<Record<string, unknown>>;
     /**
      * The live Blackboard (ABG §10.4 runtime memory). The SAME instance is handed to

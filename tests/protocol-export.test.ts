@@ -17,6 +17,10 @@ import {
     ApprovalRecordSchema,
     ApprovalSubjectSchema,
     BudgetConfigSchema,
+    CategoryCatalogSchema,
+    CategorySchema,
+    DELIVERY_MODES,
+    DeliverySchema,
     DiffFileSchema,
     DiffHunkSchema,
     EventDurabilitySchema,
@@ -24,8 +28,10 @@ import {
     McpConfigSchema,
     McpProjectConfigSchema,
     MissionControlConfigSchema,
+    ModeDeclarationSchema,
     ModelProviderSelectionSchema,
     ModelVariantEntrySchema,
+    ModeSchema,
     PERMISSION_KINDS,
     PermissionDecisionSchema,
     PermissionKindSchema,
@@ -34,6 +40,10 @@ import {
     PermissionRuleDecisionSchema,
     PermissionRuleSchema,
     PermissionStatusSchema,
+    POLICY_EFFECTS,
+    PolicyEffectRuleSchema,
+    PolicyEffectRuleSetSchema,
+    PolicyEffectSchema,
     PricingEntrySchema,
     PricingTableSchema,
     ProtocolErrorSchema,
@@ -57,6 +67,7 @@ import {
     SessionArchiveChecksumSchema,
     SessionArchiveFileSchema,
     SessionArchiveManifestSchema,
+    SessionInputDeliverySchema,
     SessionTreeEventMetadataSchema,
     SessionTreeEventTypeSchema,
     SidecarCancelTaskCommandSchema,
@@ -69,6 +80,8 @@ import {
     TranscriptDeliveryModeSchema,
     TranscriptEventMetadataSchema,
     TranscriptVisibilitySchema,
+    WorkflowDiscoveryDiagnosticSchema,
+    WorkflowSpecSchema,
 } from '../packages/protocol/src/index.js';
 
 describe('protocol public exports', () => {
@@ -179,6 +192,76 @@ describe('protocol public exports', () => {
         expect(BudgetConfigSchema.shape.budgetCents).toBeDefined();
         expect(AbgOverlayPrefsSchema.shape.activeTabIndex).toBeDefined();
         expect(AbgOverlayPrefsSchema.parse({}).activeTabIndex).toBe(0);
+    });
+
+    it('exports workflow system schemas (Category, Mode, Delivery, PolicyEffectRule, WorkflowSpec)', () => {
+        // Category + catalog
+        expect(CategorySchema.shape.id).toBeDefined();
+        expect(CategorySchema.shape.permissions).toBeDefined();
+        expect(CategorySchema.parse({ id: 'deep', permissions: ['read', 'edit', 'bash'] }).permissions).toEqual([
+            'read',
+            'edit',
+            'bash',
+        ]);
+        expect(() => CategorySchema.parse({ id: 'x', permissions: ['bogus'] })).toThrow();
+        expect(CategoryCatalogSchema.parse({}).categories).toEqual([]);
+
+        // Mode + declaration
+        expect(ModeSchema.shape.id).toBeDefined();
+        expect(ModeSchema.shape.policies).toBeDefined();
+        expect(ModeSchema.parse({ id: 'autopilot' }).policies).toEqual([]);
+        expect(ModeDeclarationSchema.parse({ modeId: 'autopilot' }).active).toBe(true);
+        expect(ModeDeclarationSchema.parse({ modeId: 'autopilot', active: false }).active).toBe(false);
+
+        // Delivery
+        expect(DELIVERY_MODES).toEqual(['steer', 'queue']);
+        expect(DeliverySchema.parse('steer')).toBe('steer');
+        expect(DeliverySchema.parse('queue')).toBe('queue');
+        expect(() => DeliverySchema.parse('interrupt')).toThrow();
+        expect(SessionInputDeliverySchema.parse({ mode: 'queue' }).mode).toBe('queue');
+
+        // PolicyEffect rules (distinct from workspace PermissionRuleSchema)
+        expect(POLICY_EFFECTS).toEqual(['allow', 'deny', 'ask']);
+        expect(PolicyEffectSchema.parse('allow')).toBe('allow');
+        expect(PolicyEffectSchema.parse('ask')).toBe('ask');
+        expect(PolicyEffectRuleSchema.shape.effect).toBeDefined();
+        expect(PolicyEffectRuleSchema.parse({ action: 'write', resource: '**', effect: 'deny' }).effect).toBe('deny');
+        expect(() => PolicyEffectRuleSchema.parse({ action: 'write', resource: '**', effect: 'maybe' })).toThrow();
+        expect(PolicyEffectRuleSetSchema.parse({}).rules).toEqual([]);
+        // Lock the name-collision avoidance: existing PermissionRuleSchema keeps its shape.
+        expect(PermissionRuleSchema.shape.permission).toBeDefined();
+        expect(PermissionRuleSchema.shape.pattern).toBeDefined();
+
+        // WorkflowSpec wraps AbgGraphSpecSchema
+        expect(WorkflowSpecSchema.shape.graph).toBeDefined();
+        expect(WorkflowSpecSchema.shape.name).toBeDefined();
+        expect(
+            WorkflowSpecSchema.parse({
+                name: 'default',
+                graph: {
+                    id: 'wf-1',
+                    entryNodeId: 'n1',
+                    nodes: [{ id: 'n1', kind: 'llm' }],
+                },
+            }).graph.id,
+        ).toBe('wf-1');
+        expect(() =>
+            WorkflowSpecSchema.parse({
+                name: 'bad',
+                graph: { id: 'wf-1', entryNodeId: 'missing', nodes: [{ id: 'n1', kind: 'llm' }] },
+            }),
+        ).toThrow();
+
+        // Workflow discovery diagnostic
+        expect(WorkflowDiscoveryDiagnosticSchema.shape.severity).toBeDefined();
+        expect(
+            WorkflowDiscoveryDiagnosticSchema.parse({
+                workflowName: 'planner',
+                severity: 'warning',
+                code: 'invalid_mode',
+                message: 'unknown mode id',
+            }).severity,
+        ).toBe('warning');
     });
 
     it('exports ABG protocol schemas for graph authoring and runtime events', () => {

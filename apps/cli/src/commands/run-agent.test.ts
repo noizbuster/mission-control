@@ -1,8 +1,10 @@
+import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { missionControlAuthFileEnvKey } from '@mission-control/config';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createProviderAuthStore } from '../auth-store.js';
 import { runAgent } from './run-agent.js';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -261,5 +263,176 @@ describe('runAgent plain reporter', () => {
             }),
         ).rejects.toThrow('unknown ABG edge condition rule: missing-rule');
         await rm(directory, { recursive: true, force: true });
+    });
+});
+
+const PLANNER_WORKFLOW = {
+    name: 'planner',
+    description: 'Test planner workflow for Task 2.7',
+    graph: {
+        id: 'planner-test-graph',
+        version: '0.1.0',
+        entryNodeId: 'planner-intake',
+        defaults: {
+            model: { providerID: 'local', modelID: 'local-echo' },
+            maxNodeRuns: 10,
+        },
+        nodes: [{ id: 'planner-intake', kind: 'llm', label: 'Planner intake' }],
+        edges: [{ source: 'planner-intake', target: 'planner-intake', condition: 'planner-loop', priority: 10 }],
+        rules: [
+            {
+                id: 'planner-loop',
+                when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true },
+            },
+        ],
+        policies: [],
+    },
+} as const;
+
+function buildMockUsage() {
+    return {
+        inputTokens: { total: 4, noCache: 4, cacheRead: 0, cacheWrite: 0 },
+        outputTokens: { total: 6, text: 6, reasoning: 0 },
+    };
+}
+
+function finalTextChunks(): LanguageModelV3StreamPart[] {
+    return [
+        { type: 'stream-start', warnings: [] },
+        { type: 'text-start', id: 't1' },
+        { type: 'text-delta', id: 't1', delta: 'Done.' },
+        { type: 'text-end', id: 't1' },
+        { type: 'finish', finishReason: { unified: 'stop', raw: undefined }, usage: buildMockUsage() },
+    ];
+}
+
+function createMockModel(): MockLanguageModelV3 {
+    return new MockLanguageModelV3({
+        provider: 'local',
+        modelId: 'local-echo',
+        doStream: async () => ({ stream: convertArrayToReadableStream(finalTextChunks()) }),
+    });
+}
+
+async function createWorkflowWorkspace(): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), 'mctrl-workflow-ws-'));
+    const workflowsDir = join(dir, '.mctrl', 'workflows');
+    await mkdir(workflowsDir, { recursive: true });
+    await writeFile(join(workflowsDir, 'planner.workflow.json'), JSON.stringify(PLANNER_WORKFLOW), 'utf8');
+    return dir;
+}
+
+describe('runAgent workflow invocation', () => {
+    let workspaceDir: string;
+    let configDir: string;
+
+    beforeEach(async () => {
+        workspaceDir = await createWorkflowWorkspace();
+        configDir = await mkdtemp(join(tmpdir(), 'mctrl-workflow-cfg-'));
+        vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
+    });
+
+    afterEach(async () => {
+        vi.unstubAllEnvs();
+        await rm(workspaceDir, { recursive: true, force: true });
+        await rm(configDir, { recursive: true, force: true });
+    });
+
+    it('routes #name prompt to the discovered workflow graph', async () => {
+        const output = await runAgent(
+            {
+                mode: 'plain',
+                useNative: false,
+                command: 'run',
+                showHelp: false,
+                showVersion: false,
+                prompt: '#planner plan the migration',
+                modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+            },
+            {
+                workspaceRoot: workspaceDir,
+                resolveSdkModel: () => createMockModel(),
+            },
+        );
+
+        expect(output).toContain('graph=planner-test-graph');
+        expect(output).toContain('node=planner-intake mode=llm');
+    });
+
+    it('routes --workflow flag to the discovered workflow graph', async () => {
+        const output = await runAgent(
+            {
+                mode: 'plain',
+                useNative: false,
+                command: 'run',
+                showHelp: false,
+                showVersion: false,
+                workflowName: 'planner',
+                prompt: 'plan the migration',
+                modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+            },
+            {
+                workspaceRoot: workspaceDir,
+                resolveSdkModel: () => createMockModel(),
+            },
+        );
+
+        expect(output).toContain('graph=planner-test-graph');
+        expect(output).toContain('node=planner-intake mode=llm');
+    });
+
+    it('throws on unknown #workflow name with available workflows listed', async () => {
+        await expect(
+            runAgent(
+                {
+                    mode: 'plain',
+                    useNative: false,
+                    command: 'run',
+                    showHelp: false,
+                    showVersion: false,
+                    prompt: '#nonexistent do something',
+                    modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+                },
+                { workspaceRoot: workspaceDir },
+            ),
+        ).rejects.toThrow('Unknown workflow "nonexistent"');
+    });
+
+    it('throws on unknown --workflow name with available workflows listed', async () => {
+        await expect(
+            runAgent(
+                {
+                    mode: 'plain',
+                    useNative: false,
+                    command: 'run',
+                    showHelp: false,
+                    showVersion: false,
+                    workflowName: 'nonexistent',
+                    prompt: 'do something',
+                    modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+                },
+                { workspaceRoot: workspaceDir },
+            ),
+        ).rejects.toThrow('Unknown workflow "nonexistent"');
+    });
+
+    it('does not treat a normal prompt as a workflow invocation', async () => {
+        const output = await runAgent(
+            {
+                mode: 'plain',
+                useNative: false,
+                command: 'run',
+                showHelp: false,
+                showVersion: false,
+                prompt: 'just a regular prompt',
+                modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+            },
+            {
+                workspaceRoot: workspaceDir,
+                resolveSdkModel: () => createMockModel(),
+            },
+        );
+
+        expect(output).not.toContain('planner-test-graph');
     });
 });

@@ -24,7 +24,11 @@ import { stepCountIs, streamText } from 'ai';
 import { redactCredentialText } from '../../../providers/redaction-handler.js';
 import { errorToString } from '../../../util/error-to-string.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
-import { isApprovalRequiredSettlement, type AbgToolSettlement, type AbgToolSettlementLedger } from './abg-tool-bridge.js';
+import {
+    type AbgToolSettlement,
+    type AbgToolSettlementLedger,
+    isApprovalRequiredSettlement,
+} from './abg-tool-bridge.js';
 import { abgSignalsFromStreamPart } from './ai-sdk-adapter.js';
 
 type StreamTextParameters = Parameters<typeof streamText>[0];

@@ -19,6 +19,7 @@ import {
     type AbgPolicySpec,
     AbgPolicySpecSchema,
 } from './abg.js';
+import { type ModeDeclaration, ModeDeclarationSchema } from './mode.js';
 
 export const MISSION_STATUSES = ['draft', 'active', 'archived'] as const;
 export const MissionStatusSchema = z.enum(MISSION_STATUSES);
@@ -59,6 +60,10 @@ export const MissionSchema = z
         capabilities: MissionCapabilitiesSchema.default({ allow: [], deny: [] }),
         policies: z.array(AbgPolicySpecSchema).default([]),
         budget: MissionBudgetSchema.optional(),
+        /** Optional reference to the workflow spec this Mission was materialized from. */
+        workflowName: z.string().min(1).optional(),
+        /** Mode bindings active for runs of this Mission (e.g. `autopilot`). */
+        modeDeclarations: z.array(ModeDeclarationSchema).optional(),
         createdAt: z.string().min(1),
         updatedAt: z.string().min(1),
     })
@@ -101,4 +106,4 @@ export const RunSchema = z.object({
 });
 export type Run = z.infer<typeof RunSchema>;
 
-export type { AbgGraphSpec, AbgNodeModelOptions, AbgPolicySpec };
+export type { AbgGraphSpec, AbgNodeModelOptions, AbgPolicySpec, ModeDeclaration };

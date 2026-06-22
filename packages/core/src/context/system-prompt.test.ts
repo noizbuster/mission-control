@@ -109,4 +109,76 @@ describe('assembleSystemPrompt', () => {
         expect(prompt).toContain('<description>Reads &lt;script&gt; &amp; "payload" data.</description>');
         expect(prompt).not.toContain('<script>');
     });
+
+    it('renders workflows as the canonical <available_workflows> XML block', () => {
+        const prompt = assembleSystemPrompt({
+            workflows: [
+                { name: 'ralph-loop', description: 'Self-referential loop until completion.', categories: ['coding'] },
+                { name: 'review-work', description: 'Post-implementation review.' },
+            ],
+        });
+        expect(prompt).toContain('<available_workflows>');
+        expect(prompt).toContain('</available_workflows>');
+        expect(prompt).toContain('<name>ralph-loop</name>');
+        expect(prompt).toContain('<description>Self-referential loop until completion.</description>');
+        expect(prompt).toContain('<categories>coding</categories>');
+        expect(prompt).toContain('<name>review-work</name>');
+        expect(prompt).toContain('<description>Post-implementation review.</description>');
+        expect(prompt).not.toContain('<name>review-work</name><categories>');
+    });
+
+    it('renders workflows with multiple categories as a comma-separated list', () => {
+        const prompt = assembleSystemPrompt({
+            workflows: [
+                { name: 'default', description: 'Fallback workflow.', categories: ['deep', 'quick', 'plan'] },
+            ],
+        });
+        expect(prompt).toContain('<categories>deep, quick, plan</categories>');
+    });
+
+    it('omits the <description> and <categories> tags when not present on a workflow', () => {
+        const prompt = assembleSystemPrompt({
+            workflows: [{ name: 'bare' }],
+        });
+        expect(prompt).toContain('<name>bare</name>');
+        expect(prompt).not.toContain('<description>');
+        expect(prompt).not.toContain('<categories>');
+    });
+
+    it('omits the <available_workflows> block when no workflows are provided', () => {
+        expect(assembleSystemPrompt({})).not.toContain('<available_workflows>');
+        expect(assembleSystemPrompt({ workflows: [] })).not.toContain('<available_workflows>');
+    });
+
+    it('XML-escapes special characters in workflow names, descriptions, and categories', () => {
+        const prompt = assembleSystemPrompt({
+            workflows: [
+                {
+                    name: 'a&b<c>',
+                    description: 'Runs <script> & "payload" data.',
+                    categories: ['cat<1>', 'cat&2'],
+                },
+            ],
+        });
+        expect(prompt).toContain('<name>a&amp;b&lt;c&gt;</name>');
+        expect(prompt).toContain('<description>Runs &lt;script&gt; &amp; "payload" data.</description>');
+        expect(prompt).toContain('<categories>cat&lt;1&gt;, cat&amp;2</categories>');
+        expect(prompt).not.toContain('<script>');
+    });
+
+    it('includes the context baseline before project instructions', () => {
+        const prompt = assembleSystemPrompt({
+            contextBaseline: 'Boulder state: iteration 3 of 10.',
+            resources: [{ path: 'AGENTS.md', content: 'Always use pnpm.' }],
+        });
+        const baselineIndex = prompt.indexOf('Boulder state: iteration 3 of 10.');
+        const instructionsIndex = prompt.indexOf('# Project instructions');
+        expect(baselineIndex).toBeGreaterThan(-1);
+        expect(instructionsIndex).toBeGreaterThan(-1);
+        expect(baselineIndex).toBeLessThan(instructionsIndex);
+    });
+
+    it('omits empty context baseline', () => {
+        expect(assembleSystemPrompt({ contextBaseline: '   ' })).not.toContain('contextBaseline');
+    });
 });

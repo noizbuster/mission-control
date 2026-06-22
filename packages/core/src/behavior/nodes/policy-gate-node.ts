@@ -20,7 +20,15 @@
  * inside SDK tool-execute callbacks and not observable at the graph level.
  */
 
-import type { AbgNodeSpec, AbgPolicyDecision, AbgSignal } from '@mission-control/protocol';
+import type {
+    AbgNodeSpec,
+    AbgPolicyDecision,
+    AbgSignal,
+    PolicyEffect,
+    PolicyEffectRule,
+    PolicyEffectRuleSet,
+} from '@mission-control/protocol';
+import { evaluateRules } from '../../permissions/rule-evaluator.js';
 import { createAbgEmitSignal } from '../abg-emit.js';
 import type { AbgNodeRunContext } from '../node-registry.js';
 
@@ -94,4 +102,128 @@ export async function* runPolicyGateNode(node: AbgNodeSpec, context: AbgNodeRunC
         nodeId: node.id,
         result,
     };
+}
+
+type ModePolicyEvaluatedPayload = {
+    readonly decision: AbgPolicyDecision;
+    readonly effect: PolicyEffect;
+    readonly action: string;
+    readonly resource: string;
+    readonly reason?: string;
+    readonly matchedRule?: PolicyEffectRule;
+};
+
+/**
+ * Mode policy-gate node (Task 3.2) — enforces a workflow {@linkcode Mode}'s policies via the
+ * Task 1.2 `evaluateRules` algebra (action/resource/effect, last-match-wins).
+ *
+ * Unlike {@linkcode runPolicyGateNode} (which consumes the graph-level `AbgPolicySpec`
+ * capability/decision vocabulary), this node consumes the action/resource/effect
+ * {@linkcode PolicyEffectRule} vocabulary carried by a workflow mode on `context.modePolicies`.
+ * It evaluates a single attempted `(action, resource)` operation — e.g. an llm-actor's pending
+ * write — and emits a `policy.evaluated` event carrying both the raw {@linkcode PolicyEffect}
+ * (`effect`) and a routing-compatible {@linkcode AbgPolicyDecision} (`decision`).
+ *
+ * Outcomes: `deny` emits a reason and yields `failure` (`policy_blocked`) — the write is
+ * BLOCKED; `allow` yields `success` — the llm-actor proceeds; `ask` yields `success` with
+ * `decision: 'requires_approval'` so a `policy.decision.equals` edge can route to a
+ * human-approval node.
+ */
+export async function* runModePolicyGateNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+    yield {
+        type: 'started',
+        graphId: context.graphId,
+        nodeId: node.id,
+    };
+
+    const action = readNonEmptyConfigString(node, 'action');
+    const resource = readNonEmptyConfigString(node, 'resource');
+
+    if (action === undefined || resource === undefined) {
+        yield {
+            type: 'failure',
+            graphId: context.graphId,
+            nodeId: node.id,
+            error: { code: 'mode_policy_action_resource_required' },
+        };
+        return;
+    }
+
+    const ruleset: PolicyEffectRuleSet = { rules: [...(context.modePolicies ?? [])] };
+    const { effect, matchedRule } = evaluateRules(action, resource, [ruleset]);
+    const decision = modeEffectToDecision(effect);
+    const reason = modePolicyReason(action, resource, effect, matchedRule);
+
+    const payload: ModePolicyEvaluatedPayload = {
+        decision,
+        effect,
+        action,
+        resource,
+        ...(reason !== undefined ? { reason } : {}),
+        ...(matchedRule !== undefined ? { matchedRule } : {}),
+    };
+
+    yield createAbgEmitSignal({
+        graphId: context.graphId,
+        nodeId: node.id,
+        eventType: 'policy.evaluated',
+        source: 'mode-policy-gate',
+        timestamp: context.now(),
+        payload,
+    });
+
+    if (effect === 'deny') {
+        yield {
+            type: 'failure',
+            graphId: context.graphId,
+            nodeId: node.id,
+            error: {
+                code: 'policy_blocked',
+                action,
+                resource,
+                effect,
+                ...(reason !== undefined ? { reason } : {}),
+            },
+        };
+        return;
+    }
+
+    yield {
+        type: 'success',
+        graphId: context.graphId,
+        nodeId: node.id,
+        result: { decision, effect, action, resource },
+    };
+}
+
+function readNonEmptyConfigString(node: AbgNodeSpec, key: string): string | undefined {
+    const value = node.config?.[key];
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function modeEffectToDecision(effect: PolicyEffect): AbgPolicyDecision {
+    switch (effect) {
+        case 'allow':
+            return 'allow';
+        case 'deny':
+            return 'deny';
+        case 'ask':
+            return 'requires_approval';
+    }
+}
+
+function modePolicyReason(
+    action: string,
+    resource: string,
+    effect: PolicyEffect,
+    matchedRule: PolicyEffectRule | undefined,
+): string | undefined {
+    if (effect === 'allow') {
+        return undefined;
+    }
+    const verdict = effect === 'deny' ? 'denied' : 'requires approval';
+    if (matchedRule !== undefined) {
+        return `${action} on '${resource}' ${verdict} by policy { action: '${matchedRule.action}', resource: '${matchedRule.resource}', effect: '${matchedRule.effect}' }`;
+    }
+    return `${action} on '${resource}' ${verdict}: no explicit allow rule matched`;
 }

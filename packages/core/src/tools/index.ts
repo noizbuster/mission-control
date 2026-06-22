@@ -133,6 +133,16 @@ export {
     type McpToolInfo,
 } from './mcp-tool.js';
 export {
+    assertNotepadWriteAllowed,
+    isNotepadPath,
+    NotepadGuardError,
+    type NotepadGuardErrorCode,
+    type NotepadGuardInput,
+    type NotepadWriteOperation,
+    type NotepadWriteOperationAppend,
+    type NotepadWriteOperationForbidden,
+} from './notepad-guard/notepad-guard.js';
+export {
     createReadOnlyRepoToolRegistrations,
     type ReadOnlyRepoToolOptions,
     registerReadOnlyRepoTools,
@@ -147,6 +157,21 @@ export {
     type SkillToolOptions,
     type SkillToolOutput,
 } from './skill-tool.js';
+export {
+    BUILTIN_CATEGORIES,
+    type CategoryDefinition,
+    getCategory,
+} from './task/category-catalog.js';
+export {
+    type ChildSpawnRequest,
+    type ChildSpawnResult,
+    type CreateFullParityTaskToolOptions,
+    createFullParityTaskToolRegistration,
+    type TaskToolBackgroundHandle,
+    type TaskToolParams,
+    type TaskToolResult,
+    type TaskToolRuntime,
+} from './task/task-tool.js';
 export {
     type CreateTaskToolInput,
     createChildToolRegistry,
@@ -195,3 +220,12 @@ export {
     registerWebfetchTool,
     type WebfetchToolOptions,
 } from './webfetch-tool-factory.js';
+export {
+    createWorkflowToolRegistration,
+    registerWorkflowTool,
+    WORKFLOW_TOOL_NAME,
+    type WorkflowToolOptions,
+    type WorkflowToolParams,
+    type WorkflowToolResult,
+    workflowInputSchema,
+} from './workflow-tool/workflow-tool.js';
