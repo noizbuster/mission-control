@@ -9,6 +9,7 @@ import {
     PermissionGateError,
     PluginManager,
     type ProviderAdapter,
+    registerBuiltinWorkflows,
     type SdkModelResolver,
     WorkflowRegistry,
 } from '@mission-control/core';
@@ -318,6 +319,7 @@ async function discoverWorkflowRegistry(workspaceRoot: string): Promise<Workflow
         );
     }
     const registry = new WorkflowRegistry(result.workflows);
+    registerBuiltinWorkflows(registry);
     try {
         await pluginManager.registerInto(registry);
     } catch (error: unknown) {

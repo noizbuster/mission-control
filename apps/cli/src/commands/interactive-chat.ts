@@ -8,6 +8,7 @@ import {
     type JsonlSessionEventStore,
     PluginManager,
     type ProviderAdapter,
+    registerBuiltinWorkflows,
     type SdkModelResolver,
     type Skill,
     WorkflowRegistry,
@@ -256,6 +257,7 @@ export async function runInteractiveChatSession(
               })
             : { workflows: [], diagnostics: [] };
     const sessionWorkflowRegistry = new WorkflowRegistry(discoveredWorkflows.workflows);
+    registerBuiltinWorkflows(sessionWorkflowRegistry);
     await pluginManager.registerInto(sessionWorkflowRegistry);
     const knownWorkflowNames = new Set<string>(sessionWorkflowRegistry.names());
     inkBridge?.setWorkflowNames(sessionWorkflowRegistry.names());

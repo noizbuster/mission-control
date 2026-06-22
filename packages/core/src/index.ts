@@ -32,6 +32,7 @@ export {
     createCodingAgentGraph,
 } from './behavior/coding-agent-graph.js';
 export { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry.js';
+export { BUILTIN_WORKFLOWS, BUILTIN_MODES, registerBuiltinWorkflows } from './behavior/builtin-workflows.js';
 export type { AbgGraphRunnerInput, AbgGraphRunResult } from './behavior/graph-runner.js';
 export { runAbgGraph } from './behavior/graph-runner.js';
 export { deriveAbgGraphSnapshot } from './behavior/graph-state.js';
