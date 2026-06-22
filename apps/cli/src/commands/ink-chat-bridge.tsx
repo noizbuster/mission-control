@@ -758,6 +758,15 @@ function resolveDoubleEscAction(): 'interrupt' | 'tree' | 'fork' | 'none' {
 }
 
 function handleEscKey(core: InkChatBridgeCore): void {
+    // When the agent is actively generating, Esc interrupts the current run
+    // immediately (single press). This prevents accidental exits and provides
+    // a reliable stop mechanism while work is in progress.
+    if (core.generating) {
+        core.lastEscTimestamp = undefined;
+        enqueueEvent(core, { type: 'interrupt', interruptedPartialInput: false });
+        publishSnapshot(core);
+        return;
+    }
     if (core.fileAutocomplete.open) {
         core.fileAutocomplete = createFileAutocompleteState();
         publishSnapshot(core);
@@ -1807,7 +1816,11 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                             {`[history ${snapshot.historyNavigation.position}/${snapshot.historyNavigation.total} — ↑/↓ to recall, Enter to use]`}
                         </Text>
                     ) : snapshot.inputBuffer.length === 0 ? (
-                        <Text dimColor> Type a message, / for commands, # for workflows, or Ctrl+C twice to exit</Text>
+                        snapshot.generating ? (
+                            <Text dimColor> Press Esc to stop, or wait for the response…</Text>
+                        ) : (
+                            <Text dimColor> Type a message, / for commands, # for workflows, or Ctrl+C twice to exit</Text>
+                        )
                     ) : null}
                 </Text>
             </Box>
