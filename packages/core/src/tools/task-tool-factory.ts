@@ -15,6 +15,10 @@
  * via `createChildToolRegistry` (registry-layer recursion guard — the child never sees `task`
  * itself, and after the child-policy blocklist extension it never sees network/subagent caps
  * either).
+ *
+ * The full-parity factory (`registerFullParityTaskTool`) lives in
+ * `task-tool-full-parity-factory.ts`; the simple `createTaskToolRegistration` here stays
+ * available until its deprecation in Wave 6 todo 34.
  */
 import type {
     AbgNodeModelOptions,

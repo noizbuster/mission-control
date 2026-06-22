@@ -166,8 +166,10 @@ export {
     type ChildSpawnRequest,
     type ChildSpawnResult,
     type CreateFullParityTaskToolOptions,
+    batchTaskItemSchema,
     createFullParityTaskToolRegistration,
     type TaskToolBackgroundHandle,
+    taskToolBaseObjectSchema,
     type TaskToolParams,
     type TaskToolResult,
     type TaskToolRuntime,
@@ -188,6 +190,11 @@ export {
     type TaskToolOptions,
     type TaskToolSpawnContext,
 } from './task-tool-factory.js';
+export {
+    type FullParityTaskToolOptions,
+    createFullParityTaskToolRegistrationForCli,
+    registerFullParityTaskTool,
+} from './task-tool-full-parity-factory.js';
 export { type TodoItem, type TodoWriteInput, todoWriteToolRegistration } from './todowrite-tool.js';
 export {
     type ToolAdvertisement,

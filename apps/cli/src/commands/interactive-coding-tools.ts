@@ -5,7 +5,6 @@ import {
     createDelegatingLspClient,
     createLspToolRegistration,
     createReadOnlyRepoToolRegistrations,
-    createTaskSpawnFn,
     discoverSkills,
     type LspClient,
     LspServerManager,
@@ -22,7 +21,7 @@ import {
     registerGlobTool,
     registerNamespacedMcpTools,
     registerSkillTool,
-    registerTaskTool,
+    registerFullParityTaskTool,
     registerWebfetchTool,
     registerWebSearchTool,
     type SdkModelResolver,
@@ -147,15 +146,13 @@ export async function createInteractiveToolRegistry(
             modelID: selection.modelID,
             ...(selection.variantID !== undefined ? { variantID: selection.variantID } : {}),
         };
-        await registerTaskTool(registry, {
+        await registerFullParityTaskTool(registry, {
             workspaceRoot: options.workspaceRoot,
             requestPermission: approvals.requestPermission,
-            spawn: createTaskSpawnFn({
-                resolveSdkModel,
-                model,
-                parentToolRegistry: registry,
-                parentSessionId: options.sessionId,
-            }),
+            resolveSdkModel,
+            model,
+            parentToolRegistry: registry,
+            parentSessionId: options.sessionId,
         });
     }
     const mcpConnectionManager = await registerNamespacedMcpTools(registry, {

@@ -1,7 +1,9 @@
 import type { PolicyEffectRuleSet } from '@mission-control/protocol';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { discoverAgents } from '../../agents/agent-loader.js';
+import { AgentIndex } from '../../agents/agent-registry.js';
 import type { ToolExecutionContext } from '../tool-registry-types.js';
-import { BUILTIN_CATEGORIES, getCategory } from './category-catalog.js';
+import { getCategory } from './category-catalog.js';
 import {
     type ChildSpawnRequest,
     type CreateFullParityTaskToolOptions,
@@ -18,7 +20,12 @@ interface MockCall {
     readonly sessionId?: string;
 }
 
-function createMockRuntime(existingSessionIds: ReadonlySet<string> = new Set(['ses_existing'])): {
+type RunResultOverride = (request: ChildSpawnRequest) => { status: 'completed' | 'failed'; output: string };
+
+function createMockRuntime(
+    existingSessionIds: ReadonlySet<string> = new Set(['ses_existing']),
+    runResultOverride?: RunResultOverride,
+): {
     readonly runtime: TaskToolRuntime;
     readonly calls: MockCall[];
 } {
@@ -28,6 +35,9 @@ function createMockRuntime(existingSessionIds: ReadonlySet<string> = new Set(['s
     const runtime: TaskToolRuntime = {
         runChildSession: async (request) => {
             calls.push({ kind: 'run', request });
+            if (runResultOverride !== undefined) {
+                return { sessionId: request.sessionId, ...runResultOverride(request) };
+            }
             return { sessionId: request.sessionId, status: 'completed', output: 'child output' };
         },
         startBackgroundSession: (request) => {
@@ -51,8 +61,8 @@ function createMockRuntime(existingSessionIds: ReadonlySet<string> = new Set(['s
     return { runtime, calls };
 }
 
-function buildTool(options?: Partial<CreateFullParityTaskToolOptions>) {
-    const mock = createMockRuntime();
+function buildTool(options?: Partial<CreateFullParityTaskToolOptions>, runResultOverride?: RunResultOverride) {
+    const mock = createMockRuntime(new Set(['ses_existing']), runResultOverride);
     const tool = createFullParityTaskToolRegistration({
         runtime: mock.runtime,
         ...options,
@@ -68,6 +78,31 @@ const CTX: ToolExecutionContext = {
 
 function params(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     return { prompt: 'do the thing', load_skills: [], ...overrides };
+}
+
+// --- Bundled agent discovery (shared across discovery + parity tests) -------
+
+let agentIndex: AgentIndex;
+
+beforeAll(async () => {
+    const result = await discoverAgents({ workspaceRoot: '/nonexistent', userConfigDir: '/nonexistent' });
+    agentIndex = new AgentIndex(result);
+});
+
+const ALL_CATEGORY_IDS = [
+    'quick',
+    'deep',
+    'ultrabrain',
+    'visual-engineering',
+    'explore',
+    'oracle',
+    'librarian',
+    'metis',
+    'momus',
+] as const;
+
+function ruleKey(rule: { readonly action: string; readonly resource: string; readonly effect: string }): string {
+    return `${rule.action}|${rule.resource}|${rule.effect}`;
 }
 
 // --- Tests -----------------------------------------------------------------
@@ -202,52 +237,210 @@ describe('task tool — nested task denial', () => {
     });
 });
 
-describe('category catalog', () => {
-    it('quick has minimal tools and sonnet model', () => {
-        const quick = getCategory('quick');
-        expect(quick).toBeDefined();
-        expect(quick?.model).toBe('sonnet');
-        expect(quick?.tools).toEqual(['read', 'ls', 'grep', 'find', 'glob', 'todowrite']);
-    });
-
-    it('ultrabrain has opus model and full tool access', () => {
-        const ultrabrain = getCategory('ultrabrain');
-        expect(ultrabrain).toBeDefined();
-        expect(ultrabrain?.model).toBe('opus');
-        expect(ultrabrain?.tools).toBeUndefined();
-        expect(ultrabrain?.permissions.some((r) => r.effect === 'allow')).toBe(true);
-    });
-
-    it('metis can write to .omo/plans/ and .omo/notepads/ but deny elsewhere', () => {
-        const metis = getCategory('metis');
-        expect(metis).toBeDefined();
-        const allows = metis?.permissions.filter((r) => r.effect === 'allow') ?? [];
-        const allowResources = allows.map((r) => r.resource);
-        expect(allowResources).toContain('.omo/plans/**');
-        expect(allowResources).toContain('.omo/notepads/**');
-        const denies = metis?.permissions.filter((r) => r.effect === 'deny') ?? [];
-        expect(denies.some((r) => r.action === 'write' && r.resource === '**')).toBe(true);
-    });
-
-    it('all 9 built-in categories are present in the map', () => {
-        const expected = [
-            'quick',
-            'deep',
-            'ultrabrain',
-            'visual-engineering',
-            'explore',
-            'oracle',
-            'librarian',
-            'metis',
-            'momus',
-        ];
-        for (const id of expected) {
-            expect(BUILTIN_CATEGORIES.has(id)).toBe(true);
+describe('bundled agent discovery via AgentIndex', () => {
+    it('all 9 built-in agent names are discoverable', () => {
+        for (const id of ALL_CATEGORY_IDS) {
+            expect(agentIndex.lookup(id)).toBeDefined();
         }
     });
 
+    it('quick has minimal tools', () => {
+        const quick = agentIndex.lookup('quick');
+        expect(quick?.tools).toEqual(['read', 'ls', 'grep', 'find', 'glob', 'todowrite']);
+    });
+
+    it('ultrabrain has full tool access (no allowlist)', () => {
+        const ultrabrain = agentIndex.lookup('ultrabrain');
+        expect(ultrabrain?.tools).toBeUndefined();
+    });
+
+    it('metis pathPolicies allow .omo/plans/ and .omo/notepads/ writes, deny elsewhere', () => {
+        const metis = agentIndex.lookup('metis');
+        expect(metis?.pathPolicies).toBeDefined();
+        const allows = metis?.pathPolicies?.filter((r) => r.effect === 'allow') ?? [];
+        expect(allows.map((r) => r.resource)).toContain('.omo/plans/**');
+        expect(allows.map((r) => r.resource)).toContain('.omo/notepads/**');
+        const denies = metis?.pathPolicies?.filter((r) => r.effect === 'deny') ?? [];
+        expect(denies.some((r) => r.action === 'write' && r.resource === '**')).toBe(true);
+    });
+
     it('librarian includes webfetch in its tool allowlist', () => {
-        const librarian = getCategory('librarian');
+        const librarian = agentIndex.lookup('librarian');
         expect(librarian?.tools).toContain('webfetch');
+    });
+});
+
+describe('bundled agent parity with category catalog', () => {
+    it('tools match between catalog and bundled for every category', () => {
+        for (const id of ALL_CATEGORY_IDS) {
+            const catalog = getCategory(id);
+            const bundled = agentIndex.lookup(id);
+            expect(catalog).toBeDefined();
+            expect(bundled).toBeDefined();
+            if (catalog?.tools === undefined) {
+                expect(bundled?.tools).toBeUndefined();
+            } else {
+                expect(bundled?.tools ?? []).toEqual([...catalog.tools]);
+            }
+        }
+    });
+
+    it('catalog systemPromptAddendum is a substring of bundled systemPrompt for every category', () => {
+        for (const id of ALL_CATEGORY_IDS) {
+            const catalog = getCategory(id);
+            const bundled = agentIndex.lookup(id);
+            if (catalog?.systemPromptAddendum !== undefined) {
+                expect(bundled?.systemPrompt ?? '').toContain(catalog.systemPromptAddendum);
+            }
+        }
+    });
+
+    it('metis bundled pathPolicies set matches catalog permissions set', () => {
+        const catalog = getCategory('metis');
+        const bundled = agentIndex.lookup('metis');
+        const catalogKeys = (catalog?.permissions ?? []).map(ruleKey).sort();
+        const bundledKeys = (bundled?.pathPolicies ?? []).map(ruleKey).sort();
+        expect(bundledKeys).toEqual(catalogKeys);
+    });
+
+    it('read-only categories enforce read-only via tier and tool surface (parity with catalog READ_ONLY_DENIES)', () => {
+        const readOnlyIds = ['explore', 'oracle', 'librarian', 'momus'] as const;
+        const mutatingTools = ['file.edit', 'file.write', 'file.patch', 'command.run', 'bash.run'];
+        for (const id of readOnlyIds) {
+            const bundled = agentIndex.lookup(id);
+            expect(bundled?.tier).toBe('read');
+            for (const tool of mutatingTools) {
+                expect(bundled?.tools ?? []).not.toContain(tool);
+            }
+        }
+    });
+});
+
+describe('task tool — batch mode', () => {
+    it('rejects prompt and tasks provided together (XOR at schema level)', () => {
+        const result = taskToolInputSchema.safeParse(params({ tasks: [{ agent: 'explore', assignment: 'look' }] }));
+        expect(result.success).toBe(false);
+        if (!result.success) {
+            expect(result.error.issues.some((i) => i.message.includes('either'))).toBe(true);
+        }
+    });
+
+    it('rejects tasks and assignment provided together (XOR at schema level)', () => {
+        const result = taskToolInputSchema.safeParse({
+            load_skills: [],
+            assignment: 'do thing',
+            tasks: [{ agent: 'explore', assignment: 'look' }],
+        });
+        expect(result.success).toBe(false);
+    });
+
+    it('spawns one child per task and returns a batch summary', async () => {
+        const { tool, mock } = buildTool();
+        const result = await tool.execute(
+            taskToolInputSchema.parse({
+                load_skills: [],
+                tasks: [
+                    { agent: 'explore', assignment: 'find a', role: 'finder-a' },
+                    { agent: 'explore', assignment: 'find b', role: 'finder-b' },
+                    { agent: 'librarian', assignment: 'find c', role: 'finder-c' },
+                ],
+            }),
+            CTX,
+        );
+        const runCalls = mock.calls.filter((c) => c.kind === 'run');
+        expect(runCalls).toHaveLength(3);
+        expect(result.batch).toBeDefined();
+        expect(result.batch).toHaveLength(3);
+        expect(result.status).toBe('completed');
+        for (const item of result.batch ?? []) {
+            expect(item.status).toBe('completed');
+            expect(item.sessionId).toMatch(/^ses_mock_/);
+        }
+        const roles = (result.batch ?? []).map((b) => b.role).sort();
+        expect(roles).toEqual(['finder-a', 'finder-b', 'finder-c']);
+    });
+
+    it('returns partial results when one child fails (no throw)', async () => {
+        const { tool, mock } = buildTool(undefined, (request) => {
+            if (request.prompt.includes('fail-me')) {
+                return { status: 'failed', output: 'boom' };
+            }
+            return { status: 'completed', output: 'ok' };
+        });
+        const result = await tool.execute(
+            taskToolInputSchema.parse({
+                load_skills: [],
+                tasks: [
+                    { agent: 'explore', assignment: 'work-1' },
+                    { agent: 'explore', assignment: 'fail-me' },
+                    { agent: 'explore', assignment: 'work-2' },
+                ],
+            }),
+            CTX,
+        );
+        expect(result.batch).toHaveLength(3);
+        const statuses = (result.batch ?? []).map((b) => b.status).sort();
+        expect(statuses).toEqual(['completed', 'completed', 'failed']);
+        const failedItem = (result.batch ?? []).find((b) => b.status === 'failed');
+        expect(failedItem?.output).toBe('boom');
+        expect(mock.calls.filter((c) => c.kind === 'run')).toHaveLength(3);
+    });
+
+    it('propagates context to every child as parentContext', async () => {
+        const { tool, mock } = buildTool();
+        await tool.execute(
+            taskToolInputSchema.parse({
+                load_skills: [],
+                context: 'shared batch context for all children',
+                tasks: [
+                    { agent: 'explore', assignment: 'a' },
+                    { agent: 'explore', assignment: 'b' },
+                ],
+            }),
+            CTX,
+        );
+        const runCalls = mock.calls.filter((c) => c.kind === 'run');
+        expect(runCalls).toHaveLength(2);
+        for (const call of runCalls) {
+            expect(call.request?.parentContext).toBe('shared batch context for all children');
+        }
+    });
+
+    it('rejects an empty tasks array', () => {
+        const result = taskToolInputSchema.safeParse({ load_skills: [], tasks: [] });
+        expect(result.success).toBe(false);
+    });
+
+    it('accepts agent alias for single-spawn (routes like subagent_type)', async () => {
+        const { tool, mock } = buildTool();
+        await tool.execute(taskToolInputSchema.parse({ load_skills: [], agent: 'oracle', assignment: 'think' }), CTX);
+        const request = mock.calls[0]?.request;
+        expect(request?.category?.id).toBe('oracle');
+        expect(request?.prompt).toBe('think');
+    });
+
+    it('rejects agent provided alongside category', () => {
+        const result = taskToolInputSchema.safeParse({
+            load_skills: [],
+            category: 'deep',
+            agent: 'oracle',
+            assignment: 'x',
+        });
+        expect(result.success).toBe(false);
+    });
+
+    it('toModelOutput summarizes each batch item concisely', async () => {
+        const { tool } = buildTool();
+        const result = await tool.execute(
+            taskToolInputSchema.parse({
+                load_skills: [],
+                tasks: [{ agent: 'explore', assignment: 'a', role: 'scout' }],
+            }),
+            CTX,
+        );
+        const summary = tool.toModelOutput?.(result);
+        expect(summary).toBeDefined();
+        expect(summary).toContain('scout');
+        expect(summary).toContain('completed');
     });
 });
