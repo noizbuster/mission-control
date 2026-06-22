@@ -73,6 +73,8 @@ Workspace trust is controlled interactively with `/trust` (trust the current wor
 
 `#<workflow-name> {prompt}` invokes a named workflow with the given prompt. Workflows are discovered from `.mctrl/workflows/`, `.agents/workflows/`, and the config workflows directory. A prompt without a `#` prefix runs the `default` workflow fallback. Four built-in workflows ship with the runtime: `default` (no-`#` fallback), `planner` (read-only planning), `runner` (plan execution), and `autopilot` (a mode overlay applied to any workflow). See Built-in Workflows below.
 
+`/agents` inspects and manages discovered agents. `/agents` with no argument lists every discovered agent with its source, model, and tier. `/agents <name>` shows full details for one agent (description, tools, spawns, thinking level, max turns, recursion, file path, disabled status). `/agents reload` re-runs discovery without restarting the chat. `/agents disable <name>` disables a single agent so it cannot be spawned via `task()`. The reserved subcommands `reload` and `disable` take precedence over any agent literally named `reload` or `disable`. See Agent System below.
+
 The chat command surface is mixed: normal prompts can run through the deterministic local provider, OpenAI Responses, Anthropic Messages, Google Gemini, or the OpenAI-compatible adapter family for OpenRouter, Groq, DeepSeek, and Mistral when credentials are configured. Skill loading is real — the `SKILL.md` body becomes the next user prompt — but the default `local/local-echo` provider does not call tools, so a real tool-calling provider is required for loaded skills to drive agentic behavior.
 
 ## Built-in Workflows
@@ -87,6 +89,42 @@ Four built-in workflows ship with the workflow runtime. The first three are grap
 Non-interactive equivalent: `mctrl run --workflow <name> "<prompt>"` (mutually exclusive with `--graph`). The model can also self-invoke a workflow through the `workflow(name, prompt)` tool, which resolves the name via the workflow registry and returns a `started` or `not_found` status.
 
 Discovered workflows are listed to the model in an `<available_workflows>` system-prompt block. Custom workflows follow the same `*.workflow.json` or `*.workflow.jsonc` format and the same three-scope first-wins discovery as skills (global config dir, `.mctrl/workflows/`, `.agents/workflows/`).
+
+## Agent System
+
+The agent system discovers, validates, and resolves deployable subagents that the `task()` tool spawns as child coding agents. Agents are markdown files with YAML frontmatter, discovered across four builtin scopes plus nine cross-harness importers, first-wins by name. Discovery, parsing, the by-name registry, recursion bounds, and approval tiers are implemented and test-covered. The default spawn function still throws `not_yet_implemented`, so live child-agent execution through `task()` requires the CLI graph-runner connection before it runs end to end.
+
+Agent discovery scopes (first-wins by name):
+
+- Project: `<workspace>/.mctrl/agents/`.
+- User: `<config-dir>/agents/`.
+- Plugin: configured `additionalDirs`.
+- Bundled: runtime agents shipped with `@mission-control/core` (`deep`, `quick`, `ultrabrain`, `visual-engineering`, `explore`, `oracle`, `librarian`, `metis`, `momus`).
+
+Cross-harness importers (priority 50, lower than the builtin 100) scan each harness's own agent directories and import what they find: Claude Code, Cursor, Codex, Gemini, Cline, Windsurf, VS Code, GitHub Copilot, and OpenCode. A mission-control agent always wins a name conflict over an imported one. Discovery is discovery-safe: symbolic links are skipped, paths on the shared read-tool denylist are pruned, files above the 64KB size bound are skipped, the agent count is capped at 256, and discovery never throws. Broken files emit diagnostics and are skipped rather than failing the run.
+
+Agent definition format:
+
+- Required frontmatter: `name`, `description`.
+- Required body: a non-empty markdown body, parsed into the agent's `systemPrompt`.
+- Optional frontmatter: `tools` (CSV string, array, or object map of enabled tools), `spawns` (array or `'*'`), `model` (string or `{providerID, modelID}`), `thinkingLevel` (`low`/`medium`/`high`/`xhigh`), `tier` (`read`/`write`/`exec`), `maxTurns`, `recursion` (`-1` for unlimited), `role`, `pathPolicies`, `autoloadSkills`, `blocking`.
+- The schema is strict; unknown frontmatter keys are rejected.
+
+Managing agents in interactive chat:
+
+- `/agents` lists every discovered agent with its source, model, and tier.
+- `/agents <name>` shows full details for one agent.
+- `/agents reload` re-runs discovery without restarting the chat.
+- `/agents disable <name>` disables a single agent so it cannot be spawned via `task()`.
+
+Spawning child agents:
+
+- `task()` delegates a bounded sub-task to a child coding agent. The single form takes `{ agent: '<name>', assignment: '<prompt>' }`; the batch form takes `{ tasks: [{ agent, assignment, role? }, ...] }` and runs the wave concurrently.
+- The child tool surface is recursively restricted: the child loses the `task` tool (registry-layer recursion guard), gains a `yield` tool for result submission, and drops tools whose capability classes are denied by the derived path policies.
+- Recursion is bounded. `DEFAULT_MAX_RECURSION_DEPTH=2` means a root agent (depth 0) may spawn a child (depth 1), and that child may spawn one grandchild (depth 2 is the blocked boundary). `HARD_RECURSION_CAP=10` bounds even `recursion: -1` unlimited configurations.
+- Approval tiers rank tools `read` (0), `write` (1), `exec` (2). The active `ApprovalMode` (`always-ask`, `write`, `yolo`) controls how many tiers auto-approve. Per-tool user policies (`prompt`/`deny`/`allow`) override the mode. Child `task()` sessions are forced to `yolo` mode, so the parent's `task()` approval is the authorization boundary for the whole child run.
+
+Adopted child agents run under an idle-to-parked-to-revived lifecycle (default 7 minute idle TTL) and a concurrency-bounded async job manager. Both are in-memory only; persistence is deferred.
 
 ## Model Provider Selection
 

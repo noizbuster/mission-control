@@ -49,6 +49,7 @@ Scoped guidance:
 - `packages/core/src/runtime/AGENTS.md`
 - `packages/core/src/tools/AGENTS.md`
 - `packages/core/src/tools/mcp/AGENTS.md`
+- `packages/core/src/agents/AGENTS.md`
 
 ## Where To Look
 
@@ -80,6 +81,13 @@ Scoped guidance:
 | Workflow tool | `packages/core/src/tools/workflow-tool/workflow-tool.ts` | `workflow(name, prompt)` tool; resolves via `WorkflowRegistry`, returns `started`/`not_found`. |
 | Modes + mode overlay | `packages/core/src/behavior/modes/` | `autopilotMode` declaration, `applyMode` pure transform (overlay + policy conversion + tool filter). |
 | Built-in workflow graphs | `examples/abg/{default,planner,runner}.workflow.json` | Reference graph instances; autopilot is a mode overlay, not a graph file. |
+| Agent loader | `packages/core/src/agents/agent-loader.ts` | `discoverAgents`: 4-scope builtin discovery (project `.mctrl/agents/`, user `<cfg>/agents/`, plugin dirs, bundled) plus 9 cross-harness importers. First-wins by name. Builtin provider runs at priority 100, importers at 50. Symlink defense, denylist pruning, 64KB size bound, 256-agent cap, never throws. |
+| Agent capability registry | `packages/core/src/agents/capability/` | `CapabilityRegistry`: priority-sorted `loadAll`, dedups by name (highest priority wins), rejecting providers emit `provider_error` diagnostics. `disableProvider`/`enableProvider` toggle importers. |
+| Cross-harness agent importers | `packages/core/src/agents/providers/` | `CROSS_HARNESS_PROVIDERS` (9): Claude Code, Cursor, Codex, Gemini, Cline, Windsurf, VS Code, GitHub Copilot, OpenCode. `registerBuiltinProviders` wires them into the registry. |
+| Agent lifecycle manager | `packages/core/src/agents/lifecycle-manager.ts` | `AgentLifecycleManager`: idle to parked to revived TTL lifecycle for adopted subagents (default 7min idle TTL). |
+| Async job manager | `packages/core/src/agents/async-job-manager.ts` | `AsyncJobManager`: maxConcurrency semaphore for background child-agent jobs. queued, running, completed, failed, cancelled. Cooperative AbortController cancellation per job. In-memory only. |
+| Recursion policy | `packages/core/src/agents/recursion-policy.ts` | `canSpawnAtDepth`, `RecursionTracker`. `DEFAULT_MAX_RECURSION_DEPTH=2`, `HARD_RECURSION_CAP=10` bounds even unlimited recursion. |
+| Task tool runtime | `packages/core/src/agents/task-tool-runtime.ts` | `ConcreteTaskToolRuntime`: bridges `task()` to agent resolution, model resolution, child system-prompt assembly, child tool-surface construction. Child surface drops `task`, gains `yield`, removes denied-capability tools. |
 
 ## Code Map
 
@@ -110,6 +118,23 @@ The workflow system is built on eight runtime foundations (Phase 1, Tasks 1.1 th
 | System Context Source | `packages/core/src/context/system-context-source.ts`, `mid-conversation-message.ts` | `SystemContextRegistry` (`register`/`remove`/`lookup`/`list`, `getBaselineText`, `getUpdatesSince`, monotonic Context Epoch), `packSystemContextSource` (type-erased carrier), `emitMidConversationSystemMessage` (combines admitted source changes into one system message). Pull-based at safe provider-turn boundaries; source changes never push asynchronously. |
 | Session-spanning continuation | `packages/core/src/runtime/continuation/continuation-runtime.ts` | `ContinuationRuntime` (`runWithContinuation`, `shouldContinue`, `advance`, `persistState`/`loadState`, `ContinuationOutcome` with reasons `done_signal`/`max_iterations`/`loop_inactive`). Bounds how many sessions a `loop_active` graph can resume; distinct from graph-level `maxNodeRuns`. State persisted in the boulder work `continuation_runtime` passthrough field. |
 | `task()` full parity | `packages/core/src/tools/task/` | `createFullParityTaskToolRegistration` (coexists with the simpler `createTaskToolRegistration` in the sibling `tools/task-tool.ts`), `category-catalog.ts` (`BUILTIN_CATEGORIES`/`getCategory`: quick, deep, ultrabrain, visual-engineering, explore, oracle, librarian, metis, momus), `TaskToolRuntime` (mockable session-lifecycle seam). Child permissions = category rules plus `deriveChildPermissions` denies; nested `task` denied in children. |
+
+## Agent System
+
+The agent system under `packages/core/src/agents/` discovers, validates, and resolves deployable subagents that the `task()` tool spawns as child coding agents. Six logical components cover discovery, registry, lifecycle, and policy. The discovery, parsing, registry, and policy layers are implemented and test-covered; the default spawn function wired into `ConcreteTaskToolRuntime` still throws `not_yet_implemented` until the CLI graph-runner connection (todo 25) lands. Scoped governance lives in `packages/core/src/agents/AGENTS.md`.
+
+| Component | Location | Key symbols and notes |
+| --- | --- | --- |
+| C1 Discovery and loading | `packages/core/src/agents/agent-loader.ts`, `capability/`, `providers/` | `discoverAgents` orchestrates the builtin 4-scope loader (priority 100) and the 9 cross-harness importers (priority 50) through `CapabilityRegistry.loadAll`. First-wins by name across all providers. Broken files, symlinks, and oversized entries produce diagnostics and are skipped. |
+| C2 Registry | `packages/core/src/agents/agent-registry.ts`, `runtime-registry.ts`, `registry.ts` | `AgentIndex` is the by-name lookup built from discovery. `RuntimeAgentRegistry` holds live `AgentRef` entries the lifecycle manager mutates. `registry.ts` keeps the older `SubAgentRegistry` mock surface. |
+| C3 Markdown format and parsing | `packages/core/src/agents/agent-parser.ts`, `bundled/` | `parseAgentFile` parses YAML frontmatter plus a markdown body. The body becomes `systemPrompt`. `tools` accepts three on-disk dialects (CSV string, array, object map of enabled tools) normalized to `string[]`. `AgentParseError` on any failure; never returns a partial or defaulted agent. `bundled/` ships the runtime agents (`deep`, `quick`, `ultrabrain`, `visual-engineering`, `explore`, `oracle`, `librarian`, `metis`, `momus`). |
+| C4 Recursion policy | `packages/core/src/agents/recursion-policy.ts` | `DEFAULT_MAX_RECURSION_DEPTH=2` (root at depth 0 may spawn a child at depth 1, grandchild at depth 2 is the blocked boundary). `HARD_RECURSION_CAP=10` bounds even `recursion: -1` unlimited configurations. `canSpawnAtDepth` and `RecursionTracker` gate whether a depth may still spawn. |
+| C5 Approval tiers | `packages/core/src/agents/approval-tier.ts` | `ToolTier` ranks `read` (0), `write` (1), `exec` (2). `ApprovalMode` values `always-ask` (approves nothing), `write` (auto-approves read and write), `yolo` (auto-approves everything). Per-tool user policies (`prompt`/`deny`/`allow`) override the mode. Child `task()` sessions are forced to `yolo` by `ConcreteTaskToolRuntime`. Separate from `PolicyEffectRuleSchema` and `PermissionRuleSchema` by design. |
+| C6 Lifecycle and async jobs | `packages/core/src/agents/lifecycle-manager.ts`, `async-job-manager.ts`, `task-tool-runtime.ts` | `AgentLifecycleManager` owns the idle to parked to revived TTL lifecycle for adopted subagents (default 420000ms idle TTL). `AsyncJobManager` bounds concurrent background child-agent execution via a maxConcurrency semaphore with cooperative `AbortController` cancellation. `ConcreteTaskToolRuntime` bridges `task()` to agent resolution, model resolution, child system-prompt assembly, and child tool-surface construction. |
+
+Agent definition format is markdown with YAML frontmatter, validated by `AgentDefinitionSchema` in `packages/protocol/src/agent.ts`. Required fields are `name`, `description`, and a non-empty body (parsed into `systemPrompt`). Optional fields include `tools`, `spawns` (array or `'*'`), `model` (string or `{providerID, modelID}`), `thinkingLevel` (`low`/`medium`/`high`/`xhigh`), `tier` (`read`/`write`/`exec`), `maxTurns`, `recursion` (`-1` for unlimited), `role`, `pathPolicies`, `autoloadSkills`, and `blocking`. The schema is strict; unknown frontmatter keys are rejected.
+
+Discovery priority, first-wins by name: builtin 4-scope provider (priority 100) scans project `.mctrl/agents/`, user `<config-dir>/agents/`, plugin `additionalDirs`, and bundled templates. The 9 cross-harness importers (priority 50) each scan their own harness directories: Claude Code, Cursor, Codex, Gemini, Cline, Windsurf, VS Code, GitHub Copilot, and OpenCode. A mission-control agent always wins a name conflict over an imported one. Discovery mirrors `discoverSkills` and `discoverWorkflows`: symlink `lstat` defense, shared read-tool denylist pruning, 64KB size bound, 256-agent cap, and never throws.
 
 ## Workflow Invocation
 
