@@ -47,6 +47,9 @@ export type CreateTaskToolInput = {
  * Build the `task` tool registration. The `spawn` closure captures the runtime's model
  * resolver + parent tool list so the tool's `execute` (which only receives `toolCallId`/
  * `toolName`/`signal`) can still delegate to a full child run.
+ *
+ * @deprecated Use `createFullParityTaskToolRegistration` from `./task/task-tool.js` with the simple-syntax shim instead.
+ * The simple task tool is a legacy surface that will be removed in v3.
  */
 export function createTaskToolRegistration(input: CreateTaskToolInput): ToolRegistration<TaskInput, TaskOutput> {
     const summaryLimit = input.summaryLimit ?? DEFAULT_SUMMARY_LIMIT;

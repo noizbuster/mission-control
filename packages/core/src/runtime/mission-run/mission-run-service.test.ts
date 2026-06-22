@@ -480,6 +480,110 @@ describe('run-store', () => {
         const runs = await listRunsForMission(root, 'any');
         expect(runs).toEqual([]);
     });
+
+    it('persists parentRunId, childAgentId, and childKind on a child run', async () => {
+        // Given
+        const root = seedOmoRoot(makeTempRoot());
+        const parent = await seedRun(root, 'mission-1');
+        const childRun = RunSchema.parse({
+            id: crypto.randomUUID(),
+            missionId: 'mission-1',
+            parentRunId: parent.id,
+            childAgentId: 'executor',
+            childKind: 'sub',
+        });
+
+        // When
+        await createRun(root, childRun);
+
+        // Then
+        const read = await readRun(root, childRun.id);
+        expect(read.parentRunId).toBe(parent.id);
+        expect(read.childAgentId).toBe('executor');
+        expect(read.childKind).toBe('sub');
+    });
+
+    it('omits parentRunId, childAgentId, and childKind when not provided', async () => {
+        // Given
+        const root = seedOmoRoot(makeTempRoot());
+
+        // When
+        const run = await seedRun(root, 'mission-1');
+
+        // Then
+        const read = await readRun(root, run.id);
+        expect(read.parentRunId).toBeUndefined();
+        expect(read.childAgentId).toBeUndefined();
+        expect(read.childKind).toBeUndefined();
+    });
+
+    it('listRunsForMission filters by parentId returning only matching children', async () => {
+        // Given
+        const root = seedOmoRoot(makeTempRoot());
+        const parent = await seedRun(root, 'mission-1');
+        await createRun(
+            root,
+            RunSchema.parse({
+                id: crypto.randomUUID(),
+                missionId: 'mission-1',
+                parentRunId: parent.id,
+                childAgentId: 'a',
+                childKind: 'sub',
+            }),
+        );
+        await createRun(
+            root,
+            RunSchema.parse({
+                id: crypto.randomUUID(),
+                missionId: 'mission-1',
+                parentRunId: parent.id,
+                childAgentId: 'b',
+                childKind: 'advisor',
+            }),
+        );
+        await createRun(
+            root,
+            RunSchema.parse({
+                id: crypto.randomUUID(),
+                missionId: 'mission-1',
+                parentRunId: 'other-parent',
+                childAgentId: 'c',
+                childKind: 'main',
+            }),
+        );
+
+        // When
+        const children = await listRunsForMission(root, 'mission-1', { parentId: parent.id });
+
+        // Then
+        expect(children).toHaveLength(2);
+        expect(children.every((r) => r.parentRunId === parent.id)).toBe(true);
+    });
+
+    it('listRunsForMission without filter returns all runs including children', async () => {
+        // Given
+        const root = seedOmoRoot(makeTempRoot());
+        const parent = await seedRun(root, 'mission-1');
+        const child = await createRun(
+            root,
+            RunSchema.parse({
+                id: crypto.randomUUID(),
+                missionId: 'mission-1',
+                parentRunId: parent.id,
+                childAgentId: 'a',
+                childKind: 'sub',
+            }),
+        );
+
+        // When
+        const all = await listRunsForMission(root, 'mission-1');
+
+        // Then
+        expect(all).toHaveLength(2);
+        const ids = all.map((r) => r.id);
+        expect(ids).toContain(parent.id);
+        expect(ids).toContain(child.id);
+    });
 });
 
 // ---------------------------------------------------------------------------

@@ -158,8 +158,16 @@ export async function updateRunStatus(
 /**
  * List all Runs belonging to `missionId`. Returns an empty array when the runs
  * directory does not exist yet. Throws on corrupt individual files.
+ *
+ * When `filter.parentId` is provided, only child Runs whose `parentRunId`
+ * matches are returned. Without a filter, all Runs for the mission (including
+ * children) are returned.
  */
-export async function listRunsForMission(root: string, missionId: string): Promise<readonly Run[]> {
+export async function listRunsForMission(
+    root: string,
+    missionId: string,
+    filter: { readonly parentId?: string } = {},
+): Promise<readonly Run[]> {
     const dir = omoFilePath(root, RUNS_DIR);
     let entries: readonly string[];
     try {
@@ -178,9 +186,13 @@ export async function listRunsForMission(root: string, missionId: string): Promi
         }
         const runId = entry.slice(0, -JSON_EXTENSION.length);
         const run = await readRun(root, runId);
-        if (run.missionId === missionId) {
-            runs.push(run);
+        if (run.missionId !== missionId) {
+            continue;
         }
+        if (filter.parentId !== undefined && run.parentRunId !== filter.parentId) {
+            continue;
+        }
+        runs.push(run);
     }
     return runs;
 }
