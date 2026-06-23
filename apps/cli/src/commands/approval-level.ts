@@ -35,13 +35,13 @@ export const APPROVAL_LEVEL_META: Record<ApprovalLevel, ApprovalLevelMeta> = {
         ],
     },
     aggressive: {
-        description: 'Auto-approve reads, file edits, webfetch, and subagent; ask before bash',
+        description: 'Auto-approve reads, file edits, webfetch, subagent, and bash (command.run + bash.run)',
         rules: [
             { permission: 'read', pattern: '*', decision: 'always' },
             { permission: 'edit', pattern: '*', decision: 'always' },
             { permission: 'write', pattern: '*', decision: 'always' },
             { permission: 'patch', pattern: '*', decision: 'always' },
-            { permission: 'bash', pattern: '*', decision: 'ask' },
+            { permission: 'bash', pattern: '*', decision: 'always' },
             { permission: 'network', pattern: '*', decision: 'always' },
             { permission: 'subagent', pattern: '*', decision: 'always' },
         ],
