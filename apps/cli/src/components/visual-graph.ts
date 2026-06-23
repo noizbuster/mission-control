@@ -20,7 +20,7 @@ export type VisualGraphInput = {
     readonly maxWidth?: number;
 };
 
-export const VISUAL_GRAPH_MAX_NODES = 8;
+export const VISUAL_GRAPH_MAX_NODES = 16;
 export const VISUAL_GRAPH_DEFAULT_WIDTH = 40;
 
 export type VisualGraphRender = {
@@ -81,8 +81,7 @@ export function renderVisualGraph(input: VisualGraphInput): VisualGraphRender {
 
         // Outgoing edges from this node — find children
         const outgoing = input.edges.filter((edge) => edge.from === node.nodeId);
-        const isLast = index === input.nodes.length - 1;
-        if (outgoing.length === 0 || isLast) {
+        if (outgoing.length === 0) {
             return;
         }
         // Single-edge case: vertical connector

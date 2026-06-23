@@ -34,11 +34,18 @@ export type GraphSummary = {
     readonly lastUpdated: string;
 };
 
+export type AbgOverlayEdge = {
+    readonly source: string;
+    readonly target: string;
+    readonly condition?: string;
+};
+
 export type AbgOverlayState = {
     readonly activeGraphId: string | undefined;
     readonly focusedGraphId: string | undefined;
     readonly graphStatus: AbgGraphStatus | undefined;
     readonly nodes: ReadonlyMap<string, AbgNodeStatus>;
+    readonly graphEdges: readonly AbgOverlayEdge[];
     readonly activeNodeIds: readonly string[];
     readonly toolOutcomes: readonly AbgToolOutcomeSnapshot[];
     readonly recentEvents: readonly RecentEvent[];
@@ -67,6 +74,7 @@ export type AbgOverlayDraft = {
     focusedGraphId: string | undefined;
     graphStatus: AbgGraphStatus | undefined;
     nodes: Map<string, AbgNodeStatus>;
+    graphEdges: AbgOverlayEdge[];
     activeNodeIds: string[];
     toolOutcomes: AbgToolOutcomeSnapshot[];
     recentEvents: RecentEvent[];
@@ -104,6 +112,7 @@ type AbgOverlayPatch = {
     focusedGraphId?: string;
     graphStatus?: AbgGraphStatus;
     nodes?: Map<string, AbgNodeStatus>;
+    graphEdges?: readonly AbgOverlayEdge[];
     activeNodeIds?: readonly string[];
     toolOutcomes?: readonly AbgToolOutcomeSnapshot[];
     recentEvents?: RecentEvent[];
@@ -235,6 +244,7 @@ function createDefaultState(): AbgOverlayDraft {
         focusedGraphId: undefined,
         graphStatus: undefined,
         nodes: new Map(),
+        graphEdges: [],
         activeNodeIds: [],
         toolOutcomes: [],
         recentEvents: [],
@@ -260,6 +270,7 @@ function cloneState(state: AbgOverlayState): AbgOverlayDraft {
         focusedGraphId: state.focusedGraphId,
         graphStatus: state.graphStatus,
         nodes: new Map(state.nodes),
+        graphEdges: [...state.graphEdges],
         activeNodeIds: [...state.activeNodeIds],
         toolOutcomes: [...state.toolOutcomes],
         recentEvents: [...state.recentEvents],

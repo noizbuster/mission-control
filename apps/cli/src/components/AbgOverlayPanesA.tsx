@@ -173,15 +173,12 @@ export function GraphPane({ state }: PaneProps): React.ReactElement {
         status,
         isActive: state.activeNodeIds.includes(nodeId),
     }));
-    // Infer linear edges between consecutive nodes when no explicit edges are available.
-    const inferredEdges: VisualGraphEdge[] =
-        visualNodes.length > 1
-            ? visualNodes.slice(0, -1).map((node, idx) => {
-                  const next = visualNodes[idx + 1];
-                  return { from: node.nodeId, to: next?.nodeId ?? node.nodeId };
-              })
-            : [];
-    const visual = renderVisualGraph({ nodes: visualNodes, edges: inferredEdges });
+    const visualEdges: VisualGraphEdge[] = state.graphEdges.map((edge) => ({
+        from: edge.source,
+        to: edge.target,
+        ...(edge.condition !== undefined ? { label: edge.condition } : {}),
+    }));
+    const visual = renderVisualGraph({ nodes: visualNodes, edges: visualEdges });
 
     return (
         <Box flexDirection="column" marginTop={1}>
@@ -197,7 +194,7 @@ export function GraphPane({ state }: PaneProps): React.ReactElement {
                 </Box>
             ) : (
                 <Box flexDirection="column">
-                    <Text dimColor>(graph too wide — falling back to tree)</Text>
+                    <Text dimColor>(graph too wide — adjacency list)</Text>
                     {nodes.length === 0 ? (
                         <Box flexDirection="row" marginLeft={2}>
                             <Text dimColor>(no nodes)</Text>
@@ -206,16 +203,28 @@ export function GraphPane({ state }: PaneProps): React.ReactElement {
                         nodes.map(([nodeId, status]) => {
                             const color = statusColor(status);
                             const glyph = statusGlyph(status);
+                            const outgoing = state.graphEdges.filter((e) => e.source === nodeId);
                             return (
-                                <Box key={nodeId} flexDirection="row" marginLeft={2}>
-                                    {color !== undefined ? (
-                                        <Text color={color}>{glyph}</Text>
-                                    ) : (
-                                        <Text dimColor>{glyph}</Text>
-                                    )}
-                                    <Text> </Text>
-                                    <Text>{nodeId}</Text>
-                                    <Text dimColor> ({status})</Text>
+                                <Box key={nodeId} flexDirection="column" marginLeft={2}>
+                                    <Box flexDirection="row">
+                                        {color !== undefined ? (
+                                            <Text color={color}>{glyph}</Text>
+                                        ) : (
+                                            <Text dimColor>{glyph}</Text>
+                                        )}
+                                        <Text> </Text>
+                                        <Text>{nodeId}</Text>
+                                        <Text dimColor> ({status})</Text>
+                                    </Box>
+                                    {outgoing.map((edge) => (
+                                        <Box key={`${nodeId}-${edge.source}-${edge.target}`} flexDirection="row" marginLeft={4}>
+                                            <Text dimColor>└→</Text>
+                                            <Text dimColor> {edge.target}</Text>
+                                            {edge.condition !== undefined ? (
+                                                <Text dimColor> [{truncate(edge.condition, 24)}]</Text>
+                                            ) : null}
+                                        </Box>
+                                    ))}
                                 </Box>
                             );
                         })

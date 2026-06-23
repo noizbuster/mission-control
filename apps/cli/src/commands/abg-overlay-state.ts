@@ -3,6 +3,7 @@
 // CLI-only callers continue to import from this path; the symbols are identical.
 export {
     type AbgOverlayDraft,
+    type AbgOverlayEdge,
     type AbgOverlayState,
     type AbgOverlayStore,
     createAbgOverlayStore,

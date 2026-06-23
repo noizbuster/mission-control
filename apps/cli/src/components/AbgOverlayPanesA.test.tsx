@@ -8,6 +8,7 @@ function createEmptyState(): AbgOverlayState {
         activeGraphId: undefined,
         graphStatus: undefined,
         nodes: new Map(),
+        graphEdges: [],
         activeNodeIds: [],
         toolOutcomes: [],
         recentEvents: [],
@@ -37,6 +38,10 @@ function createHappyState(): AbgOverlayState {
         activeGraphId: 'test-graph-123',
         graphStatus: 'active',
         nodes,
+        graphEdges: [
+            { source: 'node-1', target: 'node-2', condition: 'success' },
+            { source: 'node-1', target: 'node-3', condition: 'failure' },
+        ],
         activeNodeIds: ['node-1'],
         toolOutcomes: [],
         recentEvents: [
@@ -70,6 +75,7 @@ function createMalformedState(): AbgOverlayState {
         activeGraphId: 'malformed-graph',
         graphStatus: 'active',
         nodes: new Map(),
+        graphEdges: [],
         activeNodeIds: [],
         toolOutcomes: [],
         recentEvents: [],

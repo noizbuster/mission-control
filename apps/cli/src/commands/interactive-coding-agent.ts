@@ -862,6 +862,26 @@ export function wireAbgOverlay(controller: AbgOverlayController, graphSpec?: Abg
 
     const timer = setInterval(commitToStore, refreshMs);
 
+    // Seed the store at construction time so the overlay shows the graph structure before
+    // graph.started fires (closes the async setup timing gap). Idempotent with graph.started.
+    if (graphSpec !== undefined) {
+        const seedNodes = new Map(pendingSnapshot.nodes);
+        for (const node of graphSpec.nodes) {
+            if (!seedNodes.has(node.id)) {
+                seedNodes.set(node.id, 'idle');
+            }
+        }
+        const seedEdges = graphSpec.edges.map((edge) => ({
+            source: edge.source,
+            target: edge.target,
+            ...(edge.condition !== undefined ? { condition: edge.condition } : {}),
+        }));
+        pending = { ...pending, activeGraphId: graphSpec.id, graphStatus: 'active', nodes: seedNodes, graphEdges: seedEdges };
+        pendingSnapshot = { ...pendingSnapshot, ...pending };
+        dirty = true;
+        commitToStore();
+    }
+
     const observer = (signal: AbgSignal): void => {
         const patch = projectAbgSignal(pendingSnapshot, signal);
         pendingSnapshot = { ...pendingSnapshot, ...patch };

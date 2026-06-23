@@ -1,6 +1,6 @@
 import type { AgentRuntime, WorkflowRegistry } from '@mission-control/core';
 import { formatSkillInstructions, loadSkillBody, type Skill, type SkillToolOutput } from '@mission-control/core';
-import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { AbgGraphSpec, ModelProviderSelection } from '@mission-control/protocol';
 import type { ApprovalLevel } from './approval-level.js';
 import { APPROVAL_LEVEL_META } from './approval-level.js';
 import type { ChatLineAction, WorkflowInvocationAction } from './chat-commands.js';
@@ -320,9 +320,31 @@ async function runWorkflowAction(
         return actionResult(modelProviderSelection, coding.activeTurn);
     }
     chatOutput.write(`Running workflow "${action.name}"...\n`);
+    seedOverlayForWorkflow(coding, spec.graph);
     return runPromptAction(runtime, chatOutput, action.prompt, modelProviderSelection, {
         ...coding,
         graph: spec.graph,
+    });
+}
+
+function seedOverlayForWorkflow(coding: CodingActionContext, graph: AbgGraphSpec): void {
+    const controller = coding.abgOverlayController;
+    if (controller === undefined) return;
+    controller.store.update((draft) => {
+        const nodes = new Map(draft.nodes);
+        for (const node of graph.nodes) {
+            if (!nodes.has(node.id)) {
+                nodes.set(node.id, 'idle');
+            }
+        }
+        draft.activeGraphId = graph.id;
+        draft.graphStatus = 'active';
+        draft.nodes = nodes;
+        draft.graphEdges = graph.edges.map((edge) => ({
+            source: edge.source,
+            target: edge.target,
+            ...(edge.condition !== undefined ? { condition: edge.condition } : {}),
+        }));
     });
 }
 
