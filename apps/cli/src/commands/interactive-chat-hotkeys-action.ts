@@ -52,7 +52,7 @@ export const HOTKEYS_CATEGORIES: readonly HotkeyCategory[] = [
         category: 'Quick Actions',
         shortcuts: [
             { key: 'Ctrl+C', action: 'Interrupt (press twice to exit)' },
-            { key: 'Esc Esc', action: 'Interrupt active run (configurable via MCTRL_DOUBLE_ESC_ACTION)' },
+            { key: 'Esc', action: 'Interrupt active run / clear input (double-Esc: /tree or /fork via MCTRL_DOUBLE_ESC_ACTION)' },
             { key: 'Ctrl+Z', action: 'Suspend to background (POSIX; resume with fg)' },
             { key: 'Ctrl+P', action: 'Cycle to next model' },
             { key: 'Shift+Ctrl+P', action: 'Cycle to previous model' },

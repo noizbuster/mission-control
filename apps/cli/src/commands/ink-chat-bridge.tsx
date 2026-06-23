@@ -747,18 +747,23 @@ export function handleImagePasteRequest(core: InkChatBridgeCore): void {
     publishSnapshot(core);
 }
 
-function resolveDoubleEscAction(): 'interrupt' | 'tree' | 'fork' | 'none' {
+/**
+ * Double-Esc action resolver. The default is `'none'` so that mashing Esc on
+ * an empty prompt never enqueues an `interrupt` event (which the main loop
+ * treats as a Ctrl+C-style exit signal). Esc's only built-in job is to
+ * interrupt the active run while generating and to clear a non-empty input
+ * buffer; exit is exclusively Ctrl+C. Users who want `/tree` or `/fork` on
+ * double-Esc can opt in via `MCTRL_DOUBLE_ESC_ACTION=tree|fork`.
+ */
+function resolveDoubleEscAction(): 'tree' | 'fork' | 'none' {
     const action = process.env[DOUBLE_ESC_ACTION_ENV];
-    if (action === 'none') {
-        return 'none';
-    }
     if (action === 'tree') {
         return 'tree';
     }
     if (action === 'fork') {
         return 'fork';
     }
-    return 'interrupt';
+    return 'none';
 }
 
 function handleEscKey(core: InkChatBridgeCore): void {
@@ -791,9 +796,7 @@ function handleEscKey(core: InkChatBridgeCore): void {
     }
     if (core.lastEscTimestamp !== undefined && now - core.lastEscTimestamp < DOUBLE_ESC_WINDOW_MS) {
         core.lastEscTimestamp = undefined;
-        if (action === 'interrupt') {
-            enqueueEvent(core, { type: 'interrupt', interruptedPartialInput: false });
-        } else if (action === 'tree') {
+        if (action === 'tree') {
             enqueueEvent(core, { type: 'line', value: '/tree' });
         } else {
             enqueueEvent(core, { type: 'line', value: '/fork' });

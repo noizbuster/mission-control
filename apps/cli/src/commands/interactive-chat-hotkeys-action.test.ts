@@ -58,7 +58,7 @@ describe('formatHotkeysText', () => {
         expect(formatHotkeysText()).toContain('Ctrl+E');
     });
 
-    it('includes wave-5 shortcuts (scrollback, clipboard, double-esc)', () => {
+    it('includes wave-5 shortcuts (scrollback, clipboard, esc)', () => {
         const text = formatHotkeysText();
 
         expect(text).toContain('Ctrl+V');
@@ -66,7 +66,7 @@ describe('formatHotkeysText', () => {
         expect(text).toContain('PgDn');
         expect(text).toContain('Home');
         expect(text).toContain('End');
-        expect(text).toContain('Esc Esc');
+        expect(text).toContain('Esc');
     });
 
     it('ends with a newline so the next prompt starts on a fresh line', () => {
@@ -99,7 +99,7 @@ describe('HOTKEYS_CATEGORIES', () => {
         expect(keys).toContain('PgDn');
         expect(keys).toContain('Home');
         expect(keys).toContain('End');
-        expect(keys).toContain('Esc Esc');
+        expect(keys).toContain('Esc');
         expect(keys).toContain('/model');
     });
 });
