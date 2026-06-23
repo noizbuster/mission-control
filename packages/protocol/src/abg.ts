@@ -95,6 +95,7 @@ export const AbgNodeSpecSchema = z.object({
     kind: AbgNodeKindSchema,
     label: z.string().min(1).optional(),
     implementation: z.string().min(1).optional(),
+    agent: z.string().min(1).optional(),
     model: AbgNodeModelOptionsSchema.optional(),
     capabilities: z.array(z.string().min(1)).optional(),
     children: z.array(z.string().min(1)).optional(),
@@ -114,6 +115,7 @@ export const AbgPolicyDecisionSchema = ApprovalPolicyDecisionSchema;
 export type AbgPolicyDecision = z.infer<typeof AbgPolicyDecisionSchema>;
 
 export const AbgGraphDefaultsSchema = z.object({
+    agent: z.string().min(1).optional(),
     model: AbgNodeModelOptionsSchema.optional(),
     timeoutMs: z.number().int().positive().optional(),
     retryLimit: z.number().int().nonnegative().optional(),

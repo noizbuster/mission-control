@@ -30,6 +30,7 @@ export type CoordinatorState = {
     readonly nodeStatuses: Record<string, AbgNodeStatus | undefined>;
     readonly queuedNodeIds: string[];
     readonly attemptsByNodeId: Map<string, number>;
+    readonly consecutiveFailuresByNodeId: Map<string, number>;
     readonly consecutiveToolFailuresByNodeId: Map<string, number>;
     readonly maxAttempts: number;
     readonly maxNodeRuns: number;
@@ -91,6 +92,7 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         nodeStatuses: {},
         queuedNodeIds: [graph.entryNodeId],
         attemptsByNodeId: new Map(),
+        consecutiveFailuresByNodeId: new Map(),
         consecutiveToolFailuresByNodeId: new Map(),
         maxAttempts: (graph.defaults?.retryLimit ?? defaultRetryLimit) + 1,
         maxNodeRuns: graph.defaults?.maxNodeRuns ?? input.maxNodeRuns ?? defaultMaxNodeRuns,

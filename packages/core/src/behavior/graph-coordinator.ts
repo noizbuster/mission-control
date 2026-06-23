@@ -15,7 +15,7 @@ import { createDefaultAbgNodeRegistry } from './node-registry.js';
 import { projectAbgSignalToEvent } from './signals.js';
 
 export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<AbgGraphRunResult> {
-    const graph = createAuthorableAbgGraph(input.graph);
+    const graph = createAuthorableAbgGraph(input.graph, input.agentModelLookup);
     const registry = input.registry ?? createDefaultAbgNodeRegistry();
     const state = createCoordinatorState(graph, input);
 
@@ -70,6 +70,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     } else if (result.hadProductiveToolUse === true) {
                         state.consecutiveToolFailuresByNodeId.set(result.node.id, 0);
                     }
+                    state.consecutiveFailuresByNodeId.set(result.node.id, 0);
                     enqueueSelectedTargets(
                         graph,
                         result.node,
@@ -97,7 +98,9 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                             terminalErrorFromSignal(result.lastSignal),
                         );
                     }
-                    if (result.attempt < state.maxAttempts) {
+                    const consecutiveFailures = (state.consecutiveFailuresByNodeId.get(result.node.id) ?? 0) + 1;
+                    state.consecutiveFailuresByNodeId.set(result.node.id, consecutiveFailures);
+                    if (consecutiveFailures < state.maxAttempts) {
                         state.queuedNodeIds.unshift(result.node.id);
                         break;
                     }

@@ -4,25 +4,34 @@ import {
     type AbgNodeModelOptions,
     type AbgNodeSpec,
 } from '@mission-control/protocol';
+import type { AgentModelLookup } from './agent-model-resolver.js';
+import { resolveGraphAgentModels } from './agent-model-resolver.js';
 import { AbgGraphValidationError, type CompiledAbgRule, compileAbgRule } from './rule-compiler.js';
 
 export type AuthorableAbgGraph = AbgGraphSpec & {
     readonly compiledRules: readonly CompiledAbgRule[];
 };
 
-export function createAuthorableAbgGraph(input: unknown): AuthorableAbgGraph {
+export function createAuthorableAbgGraph(
+    input: unknown,
+    agentModelLookup?: AgentModelLookup,
+): AuthorableAbgGraph {
     const parsed = AbgGraphSpecSchema.safeParse(input);
     if (!parsed.success) {
         throw new AbgGraphValidationError('invalid ABG graph spec', parsed.error.issues.length);
     }
     assertRuleReferences(parsed.data);
+    const resolved =
+        agentModelLookup !== undefined
+            ? resolveGraphAgentModels(parsed.data, agentModelLookup)
+            : parsed.data;
     const graph = {
-        ...parsed.data,
-        nodes: parsed.data.nodes.map((node) => ({ ...node })),
-        edges: parsed.data.edges.map((edge) => ({ ...edge })),
-        rules: parsed.data.rules.map((rule) => ({ ...rule })),
-        policies: parsed.data.policies.map((policy) => ({ ...policy })),
-        compiledRules: parsed.data.rules.map((rule) => compileAbgRule(rule)),
+        ...resolved,
+        nodes: resolved.nodes.map((node) => ({ ...node })),
+        edges: resolved.edges.map((edge) => ({ ...edge })),
+        rules: resolved.rules.map((rule) => ({ ...rule })),
+        policies: resolved.policies.map((policy) => ({ ...policy })),
+        compiledRules: resolved.rules.map((rule) => compileAbgRule(rule)),
     } satisfies AuthorableAbgGraph;
     freezeDeep(graph);
     return graph;

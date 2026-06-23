@@ -1,4 +1,5 @@
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
+import { createAbgEmitSignal } from '../abg-emit.js';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
 import {
     cancel,
@@ -107,6 +108,18 @@ async function* runParallelNode(node: AbgNodeSpec, context: AbgNodeRunContext): 
     if (failedChildren.length > 0) {
         yield failure(node, context, { code: 'parallel_child_failed', failedChildren });
         return;
+    }
+    const completionKey = readStringConfig(node, 'completionKey');
+    if (completionKey !== undefined && context.blackboard !== undefined) {
+        context.blackboard.set(completionKey, true);
+        yield createAbgEmitSignal({
+            graphId: context.graphId,
+            nodeId: node.id,
+            source: 'parallel',
+            eventType: 'blackboard.set',
+            timestamp: context.now(),
+            payload: { key: completionKey, value: true },
+        });
     }
     yield success(node, context, { completedChildren });
 }

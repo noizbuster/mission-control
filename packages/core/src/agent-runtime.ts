@@ -54,6 +54,7 @@ export type { SkillInvocationTaskInput };
 export type RunGraphOptions = {
     readonly registry?: AbgNodeRegistry;
     readonly resolveSdkModel?: (options: AbgNodeModelOptions) => LlmActorModel;
+    readonly agentModelLookup?: import('./behavior/agent-model-resolver.js').AgentModelLookup;
     readonly toolRegistry?: ToolRegistry;
     readonly initialMessages?: readonly ModelMessage[];
     readonly abortSignal?: AbortSignal;
@@ -160,6 +161,7 @@ export class AgentRuntime {
             ...(graphInput !== undefined ? { graphInput } : {}),
             ...(options?.registry !== undefined ? { registry: options.registry } : {}),
             ...(options?.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
+            ...(options?.agentModelLookup !== undefined ? { agentModelLookup: options.agentModelLookup } : {}),
             ...(options?.toolRegistry !== undefined ? { toolRegistry: options.toolRegistry } : {}),
             ...(options?.initialMessages !== undefined ? { initialMessages: options.initialMessages } : {}),
             ...(options?.abortSignal !== undefined ? { abortSignal: options.abortSignal } : {}),

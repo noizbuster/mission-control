@@ -25,26 +25,25 @@ import type { AbgGraphSpec, AbgNodeModelOptions } from '@mission-control/protoco
 export const RUNNER_WORKFLOW_GRAPH_ID = 'runner';
 export const RUNNER_WORKFLOW_MAX_NODE_RUNS = 64;
 
-const RUNNER_WORKFLOW_MODEL: AbgNodeModelOptions = {
-    providerID: 'local',
-    modelID: 'local-echo',
-};
-
 export type RunnerWorkflowGraphOptions = {
-    /** Provider/model the LLM nodes resolve via the runner's `resolveSdkModel`. Defaults to local/local-echo. */
+    /**
+     * Provider/model pin for the graph's `defaults.model`. When omitted, the graph does NOT
+     * declare a default model; the runtime resolves each LLM node's model from the session's
+     * `modelProviderSelection` (the logged-in provider) at `runContext` time. Pass an explicit
+     * model only when a graph should override the session provider.
+     */
     readonly model?: AbgNodeModelOptions;
     /** Graph loop bound. Default 64. */
     readonly maxNodeRuns?: number;
 };
 
 export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = {}): AbgGraphSpec {
-    const model: AbgNodeModelOptions = options.model ?? RUNNER_WORKFLOW_MODEL;
     return {
         id: RUNNER_WORKFLOW_GRAPH_ID,
         version: '0.1.0',
         entryNodeId: 'parse-plan',
         defaults: {
-            model,
+            ...(options.model !== undefined ? { model: options.model } : {}),
             maxNodeRuns: options.maxNodeRuns ?? RUNNER_WORKFLOW_MAX_NODE_RUNS,
         },
         nodes: [
@@ -193,14 +192,19 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
         ],
         rules: [
             {
+                id: 'llm-loop-active',
+                description: 'LLM node re-enters while it proposes tool calls',
+                when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true },
+            },
+            {
                 id: 'plan-parsed',
                 description: 'plan parsed successfully',
-                when: { kind: 'blackboard.value.equals', key: 'plan.parsed', value: true },
+                when: { kind: 'blackboard.key.exists', key: 'plan.parsed' },
             },
             {
                 id: 'notepad-ready',
                 description: 'notepad initialized',
-                when: { kind: 'blackboard.value.equals', key: 'notepad.ready', value: true },
+                when: { kind: 'blackboard.key.exists', key: 'notepad.ready' },
             },
             {
                 id: 'wave-pending',
@@ -220,12 +224,12 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
             {
                 id: 'verify-done',
                 description: 'per-task verification complete',
-                when: { kind: 'blackboard.value.equals', key: 'verify.complete', value: true },
+                when: { kind: 'blackboard.key.exists', key: 'verify.complete' },
             },
             {
                 id: 'checkbox-updated',
                 description: 'plan checkboxes updated',
-                when: { kind: 'blackboard.value.equals', key: 'checkbox.updated', value: true },
+                when: { kind: 'blackboard.key.exists', key: 'checkbox.updated' },
             },
             {
                 id: 'final-approved',

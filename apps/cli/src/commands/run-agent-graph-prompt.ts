@@ -13,7 +13,7 @@
  *   loop's full session orchestration.
  */
 
-import type { PricingTable } from '@mission-control/core';
+import type { PricingTable, AgentModelLookup } from '@mission-control/core';
 import {
     type AbgGraphRunResult,
     type AgentRuntime,
@@ -70,6 +70,8 @@ export type RunCodingPromptOnGraphInput = {
     readonly lspClient?: LspClient;
     /** Operator-supplied pricing table; threaded to `runtime.runGraph` so the CostLedger emits `policy.budget.*`. */
     readonly pricingTable?: PricingTable;
+    /** Optional agent-name → model resolver for graphs that use `agent` refs instead of explicit `model`. */
+    readonly agentModelLookup?: AgentModelLookup;
 };
 
 /** Build the coding-agent graph wiring and drive it through the runtime. Non-destructive. */
@@ -109,6 +111,7 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
             {
                 registry: createCodingAgentNodeRegistry(),
                 resolveSdkModel,
+                ...(input.agentModelLookup !== undefined ? { agentModelLookup: input.agentModelLookup } : {}),
                 toolRegistry,
                 initialMessages: [{ role: 'user', content: input.prompt }],
                 haltOnFailedToolSettlement: true,
@@ -160,11 +163,11 @@ export async function resolveGraphSdkModel(input: GraphSdkModelResolverInput): P
  * resolution or eager unsupported-provider validation applies — the bridge adapts every flat provider.
  */
 function bridgeResolverFromProvider(provider: ProviderAdapter, selection: ModelProviderSelection): SdkModelResolver {
-    return (options) =>
+    return () =>
         wrapFlatProviderAsSdkModel({
             provider,
-            providerID: options.providerID ?? selection.providerID,
-            modelID: options.modelID,
+            providerID: selection.providerID,
+            modelID: selection.modelID,
             ...(selection.variantID !== undefined ? { variantID: selection.variantID } : {}),
         });
 }

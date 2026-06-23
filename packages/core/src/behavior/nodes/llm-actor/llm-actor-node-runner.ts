@@ -68,7 +68,11 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         return;
     }
 
-    const advertisements = context.toolRegistry !== undefined ? context.toolRegistry.advertise() : [];
+    const hasOutputKey = readStringConfig(node, 'outputKey') !== undefined;
+    const hasCapabilities = (node.capabilities ?? []).length > 0;
+    const suppressTools = hasOutputKey && !hasCapabilities;
+    const advertisedTools = suppressTools ? [] : (context.toolRegistry !== undefined ? context.toolRegistry.advertise() : []);
+    const advertisements = advertisedTools;
     const toolSnippets = advertisements.map((advertisement) => ({
         name: advertisement.name,
         description: advertisement.description,
@@ -101,9 +105,9 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
     // reads it so the `tool.completed`/`tool.failed` emits carry the true status/output/error
     // (coding-step replay parity with the flat path). Fresh per turn — no stale entries leak.
     const settlementLedger = createAbgToolSettlementLedger();
-    const tools =
-        context.toolRegistry !== undefined
-            ? bridgeAdvertisementsToAiSdk(context.toolRegistry, context.toolRegistry.advertise(), {
+    const tools = suppressTools || context.toolRegistry === undefined
+        ? undefined
+        : bridgeAdvertisementsToAiSdk(context.toolRegistry, advertisedTools, {
                   settlementLedger,
                   // Forward the tool's own events (file.diff.applied, ...) into the graph stream so
                   // the graph surfaces the same rich tool events the flat loop's settleToolCalls does.
@@ -111,8 +115,7 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
                   // Interactive path: serialize a tool BATCH so the approval broker sees one approval
                   // at a time (non-interactive omits this → parallel batch execution).
                   ...(context.serializeToolExecution === true ? { serializeToolExecution: true } : {}),
-              })
-            : undefined;
+              });
 
     // Keep the model's input BOUNDED across a long run: compact the older conversation into a
     // structured summary when it exceeds the budget, preserving the recent tail verbatim. The
@@ -168,10 +171,22 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
     const loopActive = turnResult !== undefined && proposedToolCalls > 0;
     blackboard.set('llm.loop_active', loopActive);
     if (turnResult !== undefined) {
-        // The SDK's response.messages already contains the assistant turn AND every executed
-        // tool-result message (per the AI-SDK contract), so appending it grows the
-        // conversation for the next graph-driven step.
         blackboard.appendMessages(turnResult.responseMessages);
+        const outputKey = readStringConfig(node, 'outputKey');
+        if (outputKey !== undefined && !loopActive) {
+            const outputValue = turnResult.text.length > 0
+                ? extractOutputValue(turnResult.text, outputKey)
+                : true;
+            blackboard.set(outputKey, outputValue);
+            yield createAbgEmitSignal({
+                graphId: context.graphId,
+                nodeId,
+                source: 'llm-actor',
+                eventType: 'blackboard.set',
+                timestamp: context.now(),
+                payload: { key: outputKey, value: outputValue },
+            });
+        }
         // Price this turn's usage and surface `policy.budget.*` events when a ledger is wired
         // (ABG §11.4). The graph can route `policy.budget.exceeded` to an escalate/abort node.
         if (context.budgetLedger !== undefined && context.model !== undefined) {
@@ -202,6 +217,15 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
 function readStringConfig(node: AbgNodeSpec, key: string): string | undefined {
     const value = node.config?.[key];
     return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function extractOutputValue(text: string, _outputKey: string): unknown {
+    const trimmed = text.trim();
+    const firstLine = (trimmed.split('\n')[0] ?? trimmed).trim();
+    const lower = firstLine.toLowerCase();
+    if (lower === 'true') return true;
+    if (lower === 'false') return false;
+    return firstLine;
 }
 
 /**

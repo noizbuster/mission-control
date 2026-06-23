@@ -192,8 +192,9 @@ async function createInteractiveRunOwner(
     // The graph engine is the only engine. Build the graph turn runner unconditionally; the owner
     // drives the ABG coding-agent graph through the SAME SessionRunOwner + toolRegistry the prior
     // flat loop used, so approval/blocking semantics are preserved.
+    const graphSpec = options.graph ?? buildCodingAgentGraphForSelection(options.modelProviderSelection);
     const overlayWiring =
-        options.abgOverlayController !== undefined ? wireAbgOverlay(options.abgOverlayController) : undefined;
+        options.abgOverlayController !== undefined ? wireAbgOverlay(options.abgOverlayController, graphSpec) : undefined;
     const extraObservers: ReadonlyArray<(signal: AbgSignal) => void> =
         overlayWiring !== undefined ? [overlayWiring.observer] : [];
     const onSignal = interactiveGraphStreamSignal(options.output, renderState, options.workspaceRoot, extraObservers);
@@ -426,6 +427,29 @@ export function interactiveGraphStreamSignal(
 ): (signal: AbgSignal) => Promise<void> {
     return async (signal) => {
         try {
+            if (signal.type === 'started') {
+                if (state.streamingText) {
+                    output.write('\n');
+                    state.streamingText = false;
+                }
+                if (state.streamingThinking) {
+                    output.write('\n');
+                    state.streamingThinking = false;
+                }
+                output.write(`▸ ${signal.nodeId}\n`);
+                return;
+            }
+            if (signal.type === 'failure') {
+                const errorMsg = extractSignalError(signal.error);
+                output.clearAgentStatus?.();
+                if (state.streamingText || state.streamingThinking) {
+                    output.write('\n');
+                    state.streamingText = false;
+                    state.streamingThinking = false;
+                }
+                output.write(`✗ ${signal.nodeId}: ${errorMsg}\n`);
+                return;
+            }
             if (signal.type === 'emit' && signal.event.type === 'llm.turn.started') {
                 output.setAgentStatus?.('Thinking...');
                 return;
@@ -641,6 +665,14 @@ function readReasoningDeltaFromSignal(signal: AbgSignal): string | undefined {
     return readStringField(signal.event.payload, 'delta');
 }
 
+function extractSignalError(error: unknown): string {
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+        const msg = (error as { message: unknown }).message;
+        return typeof msg === 'string' ? msg : String(msg);
+    }
+    return typeof error === 'string' ? error : String(error ?? 'unknown error');
+}
+
 /**
  * Read a `ToolCall` off an `llm.tool_call.proposed` emit signal (the graph's tool-proposal boundary),
  * re-serializing the parsed `input` object into the `argumentsJson` string `renderToolPreview` expects
@@ -810,14 +842,14 @@ function applyToolCallToPatch(toolCall: ToolCall): Partial<AbgOverlayState> {
     return { recentEvents: [event] };
 }
 
-export function wireAbgOverlay(controller: AbgOverlayController): AbgOverlayWiring {
+export function wireAbgOverlay(controller: AbgOverlayController, graphSpec?: AbgGraphSpec): AbgOverlayWiring {
     const store = controller.store;
     let pendingSnapshot: AbgOverlayState = store.getSnapshot();
     let pending: Partial<AbgOverlayState> = {};
     let dirty = false;
     const refreshMs = readRefreshMsFromEnv();
 
-    const flush = (): void => {
+    const commitToStore = (): void => {
         if (!dirty) return;
         const patch = pending;
         pending = {};
@@ -828,24 +860,85 @@ export function wireAbgOverlay(controller: AbgOverlayController): AbgOverlayWiri
         pendingSnapshot = store.getSnapshot();
     };
 
-    const timer = setInterval(flush, refreshMs);
+    const timer = setInterval(commitToStore, refreshMs);
 
     const observer = (signal: AbgSignal): void => {
         const patch = projectAbgSignal(pendingSnapshot, signal);
         pendingSnapshot = { ...pendingSnapshot, ...patch };
         pending = { ...pending, ...patch };
         dirty = true;
+        commitToStore();
     };
 
     const onDurableEvent = (event: AgentEvent): void => {
+        const abg = event.abg;
+        if (abg !== undefined) {
+            if (abg.graphId !== undefined && event.type === 'graph.started') {
+                const nodes = new Map(pendingSnapshot.nodes);
+                if (graphSpec !== undefined) {
+                    for (const node of graphSpec.nodes) {
+                        if (!nodes.has(node.id)) {
+                            nodes.set(node.id, 'idle');
+                        }
+                    }
+                }
+                pending = { ...pending, activeGraphId: abg.graphId, graphStatus: 'active', nodes };
+                pendingSnapshot = { ...pendingSnapshot, ...pending };
+                dirty = true;
+            }
+            if (abg.graphId !== undefined && event.type === 'graph.completed') {
+                pending = { ...pending, graphStatus: 'completed' };
+                pendingSnapshot = { ...pendingSnapshot, ...pending };
+                dirty = true;
+            }
+            if (abg.graphId !== undefined && event.type === 'graph.failed') {
+                pending = { ...pending, graphStatus: 'failed' };
+                pendingSnapshot = { ...pendingSnapshot, ...pending };
+                dirty = true;
+            }
+            if (abg.nodeId !== undefined) {
+                const nodes = new Map(pendingSnapshot.nodes);
+                if (event.type === 'node.started') {
+                    nodes.set(abg.nodeId, 'running');
+                } else if (event.type === 'node.completed') {
+                    nodes.set(abg.nodeId, 'succeeded');
+                } else if (event.type === 'node.failed') {
+                    nodes.set(abg.nodeId, 'failed');
+                }
+                pending = { ...pending, nodes };
+                pendingSnapshot = { ...pendingSnapshot, nodes };
+                dirty = true;
+            }
+        }
+        commitToStore();
         const settleState = runSettleState(event.type);
         if (settleState === undefined) return;
-        store.update((draft) => {
-            draft.runState = settleState;
-            draft.lastSettledAt = event.timestamp;
-            if (event.type === 'run.interrupted') {
-                draft.graphStatus = 'cancelled';
+        let pendingApprovalsPatch: readonly { approvalId: string; requestId: string; policyDecision: 'prompt'; state: 'pending'; subject: { kind: 'tool'; id: string }; requestedAt: string; reason?: string }[] | undefined;
+        if (event.type === 'run.blocked') {
+            const evt = event as { toolCallId?: string; approvalId?: string; run?: { toolCallId?: string; reason?: string } };
+            const toolCallId = evt.toolCallId ?? evt.run?.toolCallId;
+            const reason = evt.run?.reason ?? event.message;
+            if (toolCallId !== undefined) {
+                pendingApprovalsPatch = [{
+                    approvalId: evt.approvalId ?? toolCallId,
+                    requestId: toolCallId,
+                    policyDecision: 'prompt',
+                    state: 'pending',
+                    subject: { kind: 'tool', id: toolCallId },
+                    requestedAt: event.timestamp,
+                    ...(reason !== undefined ? { reason } : {}),
+                }];
             }
+        } else if (settleState === 'running' || settleState === 'completed' || settleState === 'failed') {
+            pendingApprovalsPatch = [];
+        }
+        store.update((draft) => {
+            Object.assign(draft, {
+                runState: settleState,
+                lastSettledAt: event.timestamp,
+                ...(event.type === 'run.interrupted' ? { graphStatus: 'cancelled' } : {}),
+                ...(pendingApprovalsPatch !== undefined ? { pendingApprovals: pendingApprovalsPatch } : {}),
+            });
         });
     };
 
@@ -883,7 +976,7 @@ export function wireAbgOverlay(controller: AbgOverlayController): AbgOverlayWiri
 
     const dispose = (): void => {
         clearInterval(timer);
-        flush();
+        commitToStore();
     };
 
     return { observer, onDurableEvent, onProviderEnvelope, onToolCall, onToolSettlement, dispose };

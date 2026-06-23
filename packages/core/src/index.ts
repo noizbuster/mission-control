@@ -10,6 +10,8 @@ export type { ActionGraph, ActionGraphEdge, ActionGraphNode } from './behavior/a
 export { createActionGraph } from './behavior/action-graph.js';
 export type { AuthorableAbgGraph } from './behavior/authorable-graph.js';
 export { createAuthorableAbgGraph, resolveAbgNodeModel } from './behavior/authorable-graph.js';
+export type { AgentModelLookup } from './behavior/agent-model-resolver.js';
+export { resolveGraphAgentModels } from './behavior/agent-model-resolver.js';
 export type { BehaviorNode, BehaviorNodeType } from './behavior/behavior-node.js';
 export {
     type BudgetConfig,

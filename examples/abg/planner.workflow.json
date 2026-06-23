@@ -6,10 +6,6 @@
     "version": "0.1.0",
     "entryNodeId": "intake",
     "defaults": {
-      "model": {
-        "providerID": "local",
-        "modelID": "local-echo"
-      },
       "maxNodeRuns": 32
     },
     "nodes": [
@@ -35,7 +31,9 @@
         "id": "explore",
         "kind": "llm",
         "label": "Explore the codebase to ground the plan",
-        "capabilities": ["read"],
+        "capabilities": [
+          "read"
+        ],
         "config": {
           "systemPrompt": "Explore the relevant codebase areas to ground the plan in real structure. Set explore.complete when exploration is done.",
           "outputKey": "explore.complete"
@@ -45,7 +43,9 @@
         "id": "research",
         "kind": "llm",
         "label": "Research best practices for an unclear request",
-        "capabilities": ["read"],
+        "capabilities": [
+          "read"
+        ],
         "config": {
           "systemPrompt": "Research best practices and prior art to make the unclear request plannable. Set research.complete when research is done.",
           "outputKey": "research.complete"
@@ -73,7 +73,9 @@
         "id": "draft-plan",
         "kind": "llm",
         "label": "Draft the plan as .omo/plans/{slug}.md",
-        "capabilities": ["read"],
+        "capabilities": [
+          "read"
+        ],
         "config": {
           "systemPrompt": "Draft the plan as a .omo/plans/{slug}.md checklist with a TL;DR, ordered TODOs, and a Final Verification Wave. Set plan.drafted when the plan is written.",
           "outputKey": "plan.drafted"
@@ -96,68 +98,166 @@
       }
     ],
     "edges": [
-      { "source": "intake", "target": "assess-ambiguity", "priority": 10 },
-      { "source": "assess-ambiguity", "target": "explore", "condition": "ambiguity-clear", "priority": 30 },
-      { "source": "assess-ambiguity", "target": "research", "condition": "ambiguity-unclear", "priority": 20 },
-      { "source": "assess-ambiguity", "target": "ask-one-question", "condition": "ambiguity-on-the-fence", "priority": 10 },
-      { "source": "explore", "target": "draft-plan", "condition": "explore-complete", "priority": 10 },
-      { "source": "research", "target": "adopt-defaults", "condition": "research-complete", "priority": 10 },
-      { "source": "adopt-defaults", "target": "draft-plan", "condition": "defaults-adopted", "priority": 10 },
-      { "source": "ask-one-question", "target": "assess-ambiguity", "condition": "question-answered", "priority": 10 },
-      { "source": "draft-plan", "target": "review-plan", "condition": "plan-drafted", "priority": 10 },
-      { "source": "review-plan", "target": "present", "condition": "plan-approved", "priority": 20 },
-      { "source": "review-plan", "target": "draft-plan", "condition": "plan-rejected", "priority": 10 }
+      {
+        "source": "intake",
+        "target": "assess-ambiguity",
+        "priority": 10
+      },
+      {
+        "source": "assess-ambiguity",
+        "target": "explore",
+        "condition": "ambiguity-clear",
+        "priority": 30
+      },
+      {
+        "source": "assess-ambiguity",
+        "target": "research",
+        "condition": "ambiguity-unclear",
+        "priority": 20
+      },
+      {
+        "source": "assess-ambiguity",
+        "target": "ask-one-question",
+        "condition": "ambiguity-on-the-fence",
+        "priority": 10
+      },
+      {
+        "source": "explore",
+        "target": "draft-plan",
+        "condition": "explore-complete",
+        "priority": 10
+      },
+      {
+        "source": "research",
+        "target": "adopt-defaults",
+        "condition": "research-complete",
+        "priority": 10
+      },
+      {
+        "source": "adopt-defaults",
+        "target": "draft-plan",
+        "condition": "defaults-adopted",
+        "priority": 10
+      },
+      {
+        "source": "ask-one-question",
+        "target": "assess-ambiguity",
+        "condition": "question-answered",
+        "priority": 10
+      },
+      {
+        "source": "draft-plan",
+        "target": "review-plan",
+        "condition": "plan-drafted",
+        "priority": 10
+      },
+      {
+        "source": "review-plan",
+        "target": "present",
+        "condition": "plan-approved",
+        "priority": 20
+      },
+      {
+        "source": "review-plan",
+        "target": "draft-plan",
+        "condition": "plan-rejected",
+        "priority": 10
+      }
     ],
     "rules": [
       {
+        "id": "llm-loop-active",
+        "description": "LLM node re-enters while it proposes tool calls",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "llm.loop_active",
+          "value": true
+        }
+      },
+      {
         "id": "ambiguity-clear",
         "description": "ambiguity classified as clear",
-        "when": { "kind": "blackboard.value.equals", "key": "ambiguity.classification", "value": "clear" }
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "ambiguity.classification",
+          "value": "clear"
+        }
       },
       {
         "id": "ambiguity-unclear",
         "description": "ambiguity classified as unclear",
-        "when": { "kind": "blackboard.value.equals", "key": "ambiguity.classification", "value": "unclear" }
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "ambiguity.classification",
+          "value": "unclear"
+        }
       },
       {
         "id": "ambiguity-on-the-fence",
         "description": "ambiguity classified as on-the-fence",
-        "when": { "kind": "blackboard.value.equals", "key": "ambiguity.classification", "value": "on-the-fence" }
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "ambiguity.classification",
+          "value": "on-the-fence"
+        }
       },
       {
         "id": "explore-complete",
         "description": "codebase exploration finished",
-        "when": { "kind": "blackboard.value.equals", "key": "explore.complete", "value": true }
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "explore.complete"
+        }
       },
       {
         "id": "research-complete",
         "description": "best-practice research finished",
-        "when": { "kind": "blackboard.value.equals", "key": "research.complete", "value": true }
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "research.complete"
+        }
       },
       {
         "id": "defaults-adopted",
         "description": "documented defaults adopted",
-        "when": { "kind": "blackboard.value.equals", "key": "defaults.adopted", "value": true }
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "defaults.adopted"
+        }
       },
       {
         "id": "question-answered",
         "description": "clarifying question answered — re-classify",
-        "when": { "kind": "blackboard.value.equals", "key": "clarify.answered", "value": true }
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "clarify.answered"
+        }
       },
       {
         "id": "plan-drafted",
         "description": "plan drafted to .omo/plans/{slug}.md",
-        "when": { "kind": "blackboard.value.equals", "key": "plan.drafted", "value": true }
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "plan.drafted"
+        }
       },
       {
         "id": "plan-approved",
         "description": "review-plan critic approved the plan",
-        "when": { "kind": "blackboard.value.equals", "key": "plan.approved", "value": true }
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "critic.passed",
+          "value": true
+        }
       },
       {
         "id": "plan-rejected",
         "description": "review-plan critic rejected the plan — revise",
-        "when": { "kind": "blackboard.value.equals", "key": "plan.approved", "value": false }
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "critic.passed",
+          "value": false
+        }
       }
     ],
     "policies": []
@@ -167,9 +267,21 @@
       "id": "planner-readonly",
       "systemPromptOverlay": "You are a PLANNER. You are READ-ONLY. You must not edit source files. You may only write plan artifacts to .omo/plans/ and spec artifacts to .omo/specs/. When the request is ambiguous, ask at most ONE high-signal clarifying question.",
       "policies": [
-        { "action": "write", "resource": "**", "effect": "deny" },
-        { "action": "write", "resource": ".omo/plans/**", "effect": "allow" },
-        { "action": "write", "resource": ".omo/specs/**", "effect": "allow" }
+        {
+          "action": "write",
+          "resource": "**",
+          "effect": "deny"
+        },
+        {
+          "action": "write",
+          "resource": ".omo/plans/**",
+          "effect": "allow"
+        },
+        {
+          "action": "write",
+          "resource": ".omo/specs/**",
+          "effect": "allow"
+        }
       ]
     }
   ]

@@ -12,6 +12,7 @@ import type { SystemPromptEnvironment } from '../context/system-prompt.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import type { PricingTable } from './budget/cost-ledger.js';
 import { runBoundedAbgGraph } from './graph-coordinator.js';
+import type { AgentModelLookup } from './agent-model-resolver.js';
 import type { AbgNodeRegistry } from './node-registry.js';
 import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node.js';
 
@@ -47,6 +48,13 @@ export type AbgGraphRunnerInput = {
      * a scripted/mock resolver in the integration test. When absent, `LLMActor` cannot run.
      */
     readonly resolveSdkModel?: (options: AbgNodeModelOptions) => LlmActorModel;
+    /**
+     * Optional agent-name → model resolver. When provided, `createAuthorableAbgGraph`
+     * resolves every node/defaults `agent` reference into a concrete `model` before
+     * the graph is frozen and the coordinator starts. Built by the CLI from the
+     * discovered `AgentIndex`. Absent in tests that inject explicit models.
+     */
+    readonly agentModelLookup?: AgentModelLookup;
     /**
      * Operator-supplied token pricing (cents per million tokens) for the `usage →
      * `policy.budget.*` cost events. Combined with the graph's `budgetCents` to build the

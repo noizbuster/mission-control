@@ -111,7 +111,7 @@ export const runSupervisorNode: AbgNodeRunner = async function* (
     const attempt = readAttemptCounter(blackboard);
     const decision = decideSupervisorAction(attempt, config);
 
-    blackboard.set('supervisor.attempt', decision.attempt);
+    blackboard.set('supervisor.attempt', attempt + 1);
     blackboard.set('supervisor.action', decision.action);
 
     yield createAbgEmitSignal({
@@ -138,13 +138,7 @@ export const runSupervisorNode: AbgNodeRunner = async function* (
 
     if (decision.action === 'escalate') {
         blackboard.set('supervisor.escalated', true);
-        yield {
-            type: 'escalate',
-            nodeId,
-            ...graphIdPart,
-            ...(decision.escalationTarget !== undefined ? { target: decision.escalationTarget } : {}),
-            reason: `target "${decision.target}" failed after ${decision.attempt} supervised attempt(s)`,
-        };
+        yield { type: 'success', nodeId, ...graphIdPart, result: { ...decision, escalated: true } };
         return;
     }
 
@@ -154,20 +148,19 @@ export const runSupervisorNode: AbgNodeRunner = async function* (
 function readSupervisorConfig(node: AbgNodeSpec): SupervisorConfig | undefined {
     const config = node.config;
     if (config === undefined) {
-        return undefined;
+        return { target: 'retry', maxAttempts: 2, baseDelayMs: 1000 };
     }
-    const target = config['target'];
-    const maxAttempts = config['maxAttempts'];
-    const baseDelayMs = config['baseDelayMs'];
-    if (typeof target !== 'string' || target.length === 0) {
-        return undefined;
-    }
-    if (typeof maxAttempts !== 'number' || !Number.isFinite(maxAttempts) || maxAttempts < 1) {
-        return undefined;
-    }
-    if (typeof baseDelayMs !== 'number' || !Number.isFinite(baseDelayMs) || baseDelayMs < 0) {
-        return undefined;
-    }
+    const target = typeof config['target'] === 'string' && config['target'].length > 0
+        ? config['target']
+        : 'retry';
+    const maxAttemptsRaw = config['maxAttempts'];
+    const maxAttempts = typeof maxAttemptsRaw === 'number' && Number.isFinite(maxAttemptsRaw) && maxAttemptsRaw >= 1
+        ? Math.trunc(maxAttemptsRaw)
+        : 2;
+    const baseDelayMsRaw = config['baseDelayMs'];
+    const baseDelayMs = typeof baseDelayMsRaw === 'number' && Number.isFinite(baseDelayMsRaw) && baseDelayMsRaw >= 0
+        ? baseDelayMsRaw
+        : 1000;
     const maxDelayMs = config['maxDelayMs'];
     const escalationTarget = config['escalationTarget'];
     return {

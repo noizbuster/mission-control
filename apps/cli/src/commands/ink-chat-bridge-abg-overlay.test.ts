@@ -285,7 +285,7 @@ describe('ink chat bridge ABG overlay action keys', () => {
 });
 
 describe('ink chat bridge ABG overlay controller reset', () => {
-    it('calls controller.reset and clears the store when the overlay closes via Ctrl+G', () => {
+    it('hides the overlay without resetting the store when closed via Ctrl+G', () => {
         const core = createInkChatBridgeCore();
         const controller = attachController(core);
         const resetSpy = vi.spyOn(controller, 'reset');
@@ -293,11 +293,11 @@ describe('ink chat bridge ABG overlay controller reset', () => {
 
         handleInput(core, 'g', makeKey({ ctrl: true }));
 
-        expect(resetSpy).toHaveBeenCalledTimes(1);
+        expect(resetSpy).not.toHaveBeenCalled();
         expect(core.abgOverlayActive).toBe(false);
     });
 
-    it('calls controller.reset when the overlay closes via Escape', () => {
+    it('hides the overlay without resetting the store when closed via Escape', () => {
         const core = createInkChatBridgeCore();
         const controller = attachController(core);
         const resetSpy = vi.spyOn(controller, 'reset');
@@ -305,7 +305,7 @@ describe('ink chat bridge ABG overlay controller reset', () => {
 
         handleInput(core, '', makeKey({ escape: true }));
 
-        expect(resetSpy).toHaveBeenCalledTimes(1);
+        expect(resetSpy).not.toHaveBeenCalled();
         expect(core.abgOverlayActive).toBe(false);
     });
 
@@ -413,7 +413,7 @@ describe('ink chat bridge ABG overlay close via raw escape byte', () => {
 
         expect(core.abgOverlayActive).toBe(false);
         expect(core.snapshot.abgOverlayActive).toBe(false);
-        expect(resetSpy).toHaveBeenCalledTimes(1);
+        expect(resetSpy).not.toHaveBeenCalled();
     });
 
     it('does not enqueue a chat event when closing via the raw escape byte', () => {

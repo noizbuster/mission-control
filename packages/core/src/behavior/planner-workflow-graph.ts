@@ -26,11 +26,6 @@ export const PLANNER_WORKFLOW_GRAPH_ID = 'planner';
 export const PLANNER_WORKFLOW_MAX_NODE_RUNS = 32;
 export const PLANNER_READONLY_MODE_ID = 'planner-readonly';
 
-const PLANNER_MODEL: AbgNodeModelOptions = {
-    providerID: 'local',
-    modelID: 'local-echo',
-};
-
 /**
  * Read-only policies carried by the {@linkcode PLANNER_READONLY_MODE}. Last-match-wins semantics
  * (Task 1.2 `rule-evaluator.ts`): the broad `write **` deny fires first, then the specific
@@ -57,20 +52,24 @@ export const PLANNER_READONLY_MODE: Mode = {
 };
 
 export type PlannerWorkflowGraphOptions = {
-    /** Provider/model the LLM nodes resolve via the runner's `resolveSdkModel`. Defaults to local/local-echo. */
+    /**
+     * Provider/model pin for the graph's `defaults.model`. When omitted, the graph does NOT
+     * declare a default model; the runtime resolves each LLM node's model from the session's
+     * `modelProviderSelection` (the logged-in provider) at `runContext` time. Pass an explicit
+     * model only when a graph should override the session provider.
+     */
     readonly model?: AbgNodeModelOptions;
     /** Graph loop bound. Default 32. */
     readonly maxNodeRuns?: number;
 };
 
 export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions = {}): AbgGraphSpec {
-    const model: AbgNodeModelOptions = options.model ?? PLANNER_MODEL;
     return {
         id: PLANNER_WORKFLOW_GRAPH_ID,
         version: '0.1.0',
         entryNodeId: 'intake',
         defaults: {
-            model,
+            ...(options.model !== undefined ? { model: options.model } : {}),
             maxNodeRuns: options.maxNodeRuns ?? PLANNER_WORKFLOW_MAX_NODE_RUNS,
         },
         nodes: [
@@ -183,6 +182,11 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
         ],
         rules: [
             {
+                id: 'llm-loop-active',
+                description: 'LLM node re-enters while it proposes tool calls',
+                when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true },
+            },
+            {
                 id: 'ambiguity-clear',
                 description: 'ambiguity classified as clear',
                 when: { kind: 'blackboard.value.equals', key: 'ambiguity.classification', value: 'clear' },
@@ -200,37 +204,37 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
             {
                 id: 'explore-complete',
                 description: 'codebase exploration finished',
-                when: { kind: 'blackboard.value.equals', key: 'explore.complete', value: true },
+                when: { kind: 'blackboard.key.exists', key: 'explore.complete' },
             },
             {
                 id: 'research-complete',
                 description: 'best-practice research finished',
-                when: { kind: 'blackboard.value.equals', key: 'research.complete', value: true },
+                when: { kind: 'blackboard.key.exists', key: 'research.complete' },
             },
             {
                 id: 'defaults-adopted',
                 description: 'documented defaults adopted',
-                when: { kind: 'blackboard.value.equals', key: 'defaults.adopted', value: true },
+                when: { kind: 'blackboard.key.exists', key: 'defaults.adopted' },
             },
             {
                 id: 'question-answered',
                 description: 'clarifying question answered — re-classify',
-                when: { kind: 'blackboard.value.equals', key: 'clarify.answered', value: true },
+                when: { kind: 'blackboard.key.exists', key: 'clarify.answered' },
             },
             {
                 id: 'plan-drafted',
                 description: 'plan drafted to .omo/plans/{slug}.md',
-                when: { kind: 'blackboard.value.equals', key: 'plan.drafted', value: true },
+                when: { kind: 'blackboard.key.exists', key: 'plan.drafted' },
             },
             {
                 id: 'plan-approved',
                 description: 'review-plan critic approved the plan',
-                when: { kind: 'blackboard.value.equals', key: 'plan.approved', value: true },
+                when: { kind: 'blackboard.value.equals', key: 'critic.passed', value: true },
             },
             {
                 id: 'plan-rejected',
                 description: 'review-plan critic rejected the plan — revise',
-                when: { kind: 'blackboard.value.equals', key: 'plan.approved', value: false },
+                when: { kind: 'blackboard.value.equals', key: 'critic.passed', value: false },
             },
         ],
         policies: [],

@@ -1,19 +1,22 @@
 import { defaultModelProviderSelection, getRuntimeModelProviderCatalog } from '@mission-control/config';
 import {
     AgentRuntime,
+    type AgentModelLookup,
     type CommandExecutionRequest,
     type CommandExecutionResult,
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
+    discoverAgents,
     discoverWorkflows,
     PermissionGateError,
     PluginManager,
     type ProviderAdapter,
     registerBuiltinWorkflows,
     type SdkModelResolver,
+    resolveUserConfigDir,
     WorkflowRegistry,
 } from '@mission-control/core';
-import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import type { AbgGraphSpec, AbgNodeModelOptions, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
 import { type AgentUIRenderer, InkRenderer, JsonRenderer, PlainRenderer } from '../ui/renderers.js';
@@ -70,6 +73,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     const createProvider = options.createProvider ?? ((selection) => createProviderForSelection(selection, authStore));
     const provider = options.provider ?? createProvider(selectedModelProvider);
     const workspaceRoot = options.workspaceRoot ?? resolveWorkspaceRoot(args.workspacePath);
+    const agentModelLookup = await buildAgentModelLookup(workspaceRoot);
     const runtime = new AgentRuntime(
         createCliRuntimeOptions({
             ...(args.useNative !== undefined ? { useNative: args.useNative } : {}),
@@ -235,6 +239,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     ...(options.provider !== undefined ? { provider: options.provider } : {}),
                     ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
                     ...(pricingTable.length > 0 ? { pricingTable } : {}),
+                    ...(agentModelLookup !== undefined ? { agentModelLookup } : {}),
                 });
             } else {
                 await runtime.runDemoTask();
@@ -462,4 +467,28 @@ export function resolveWorkspaceRoot(explicitPath: string | undefined): string {
         return resolved;
     }
     return detectWorkspaceRoot();
+}
+
+async function buildAgentModelLookup(workspaceRoot: string): Promise<AgentModelLookup | undefined> {
+    const result = await discoverAgents({
+        workspaceRoot,
+        userConfigDir: resolveUserConfigDir(),
+    });
+    const index = new Map<string, AbgNodeModelOptions>();
+    for (const agent of result.agents) {
+        if (agent.model === undefined || agent.disabled === true) continue;
+        const resolved =
+            typeof agent.model === 'string' ? parseAgentModelString(agent.model) : agent.model;
+        if (resolved !== undefined) {
+            index.set(agent.name, resolved);
+        }
+    }
+    if (index.size === 0) return undefined;
+    return (name: string) => index.get(name);
+}
+
+function parseAgentModelString(value: string): AbgNodeModelOptions | undefined {
+    const sep = value.indexOf('/');
+    if (sep <= 0 || sep === value.length - 1) return undefined;
+    return { providerID: value.slice(0, sep), modelID: value.slice(sep + 1) };
 }

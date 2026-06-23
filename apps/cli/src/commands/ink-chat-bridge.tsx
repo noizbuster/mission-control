@@ -275,6 +275,8 @@ export type InkChatBridgeCore = {
     abgOverlayScrollOffset: number;
     abgOverlayLiveOutput: boolean;
     abgOverlayController: AbgOverlayController | undefined;
+    abgOverlayUnsubscribe: (() => void) | undefined;
+    abgOverlayRefreshTimer: ReturnType<typeof setInterval> | undefined;
 };
 
 /** Minimal props the React tree uses to talk to the bridge core. */
@@ -568,6 +570,8 @@ export function createInkChatBridgeCore(options?: {
         abgOverlayScrollOffset: 0,
         abgOverlayLiveOutput: false,
         abgOverlayController: undefined,
+        abgOverlayUnsubscribe: undefined,
+        abgOverlayRefreshTimer: undefined,
     };
 }
 
@@ -838,9 +842,6 @@ export function handleInput(core: InkChatBridgeCore, input: string, key: Key): v
     if (key.ctrl && input === 'g') {
         flushCjkBuffer(core);
         core.abgOverlayActive = !core.abgOverlayActive;
-        if (!core.abgOverlayActive) {
-            core.abgOverlayController?.reset();
-        }
         publishSnapshot(core);
         return;
     }
@@ -1345,7 +1346,6 @@ function handleAbgOverlayInput(core: InkChatBridgeCore, input: string, key: Key)
 
     if ((key.ctrl && input === 'g') || key.escape || input === '\u001b') {
         core.abgOverlayActive = false;
-        controller?.reset();
         publishSnapshot(core);
         return;
     }
@@ -1878,6 +1878,14 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
     });
     if (options?.abgOverlayController !== undefined) {
         core.abgOverlayController = options.abgOverlayController;
+        core.abgOverlayUnsubscribe = options.abgOverlayController.store.subscribe(() => {
+            publishSnapshot(core);
+        });
+        core.abgOverlayRefreshTimer = setInterval(() => {
+            if (core.abgOverlayActive) {
+                publishSnapshot(core);
+            }
+        }, 100);
     }
 
     const subscribe = (listener: () => void): (() => void) => {

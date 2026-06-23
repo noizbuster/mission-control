@@ -27,26 +27,25 @@ import type { AbgGraphSpec, AbgNodeModelOptions } from '@mission-control/protoco
 export const DEFAULT_WORKFLOW_GRAPH_ID = 'default';
 export const DEFAULT_WORKFLOW_MAX_NODE_RUNS = 48;
 
-const DEFAULT_WORKFLOW_MODEL: AbgNodeModelOptions = {
-    providerID: 'local',
-    modelID: 'local-echo',
-};
-
 export type DefaultWorkflowGraphOptions = {
-    /** Provider/model the LLM nodes resolve via the runner's `resolveSdkModel`. Defaults to local/local-echo. */
+    /**
+     * Provider/model pin for the graph's `defaults.model`. When omitted, the graph does NOT
+     * declare a default model; the runtime resolves each LLM node's model from the session's
+     * `modelProviderSelection` (the logged-in provider) at `runContext` time. Pass an explicit
+     * model only when a graph should override the session provider.
+     */
     readonly model?: AbgNodeModelOptions;
     /** Graph loop bound. Default 48. */
     readonly maxNodeRuns?: number;
 };
 
 export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions = {}): AbgGraphSpec {
-    const model: AbgNodeModelOptions = options.model ?? DEFAULT_WORKFLOW_MODEL;
     return {
         id: DEFAULT_WORKFLOW_GRAPH_ID,
         version: '0.1.0',
         entryNodeId: 'intent-gate',
         defaults: {
-            model,
+            ...(options.model !== undefined ? { model: options.model } : {}),
             maxNodeRuns: options.maxNodeRuns ?? DEFAULT_WORKFLOW_MAX_NODE_RUNS,
         },
         nodes: [
@@ -56,7 +55,7 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                 label: 'Intent classification — trivial | explicit | ambiguous',
                 config: {
                     systemPrompt:
-                        'Classify the user prompt as "trivial" (single-turn answer), "explicit" (multi-step task), or "ambiguous" (needs clarification). Write the label to intent.classification.',
+                        'Classify the user prompt into exactly one category. Respond with ONLY the category name, nothing else.\n\n- trivial: A greeting, simple question, or single-turn answer that needs no tools or file changes.\n- explicit: A coding task, file edit, project setup, or multi-step request that requires tools.\n- ambiguous: A request too vague to act on without clarification.',
                     outputKey: 'intent.classification',
                 },
             },
@@ -69,7 +68,7 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                 id: 'memory',
                 kind: 'memory',
                 label: 'Recall relevant session context',
-                config: { outputKey: 'memory.loaded' },
+                config: { op: 'set', key: 'memory.loaded', value: true },
             },
             {
                 id: 'todo-plan',
@@ -109,7 +108,7 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                 kind: 'llm',
                 implementation: 'supervisor',
                 label: 'Retry or escalate on critic failure',
-                config: { maxAttempts: 2, outputKey: 'supervisor.retry' },
+                config: { maxAttempts: 2 },
             },
             {
                 id: 'final-respond',
@@ -131,14 +130,20 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
             { source: 'intent-gate', target: 'direct-respond', condition: 'intent-trivial', priority: 30 },
             { source: 'intent-gate', target: 'memory', condition: 'intent-explicit', priority: 20 },
             { source: 'intent-gate', target: 'clarify', condition: 'intent-ambiguous', priority: 10 },
+            { source: 'intent-gate', target: 'intent-gate', condition: 'llm-loop-active', priority: 5 },
             { source: 'direct-respond', target: 'direct-respond', condition: 'llm-loop-active', priority: 10 },
             { source: 'memory', target: 'todo-plan', condition: 'memory-loaded', priority: 10 },
             { source: 'todo-plan', target: 'delegate-wave', condition: 'plan-ready', priority: 10 },
+            { source: 'todo-plan', target: 'todo-plan', condition: 'llm-loop-active', priority: 5 },
             { source: 'delegate-wave', target: 'verify-wave', condition: 'wave-complete', priority: 10 },
+            { source: 'delegate-worker', target: 'delegate-worker', condition: 'llm-loop-active', priority: 5 },
             { source: 'verify-wave', target: 'final-respond', condition: 'critic-passed', priority: 20 },
             { source: 'verify-wave', target: 'supervisor', condition: 'critic-failed', priority: 10 },
             { source: 'supervisor', target: 'delegate-wave', condition: 'supervisor-retry', priority: 10 },
+            { source: 'supervisor', target: 'final-respond', condition: 'supervisor-escalated', priority: 20 },
+            { source: 'final-respond', target: 'final-respond', condition: 'llm-loop-active', priority: 5 },
             { source: 'clarify', target: 'intent-gate', condition: 'clarify-loop', priority: 10 },
+            { source: 'clarify', target: 'clarify', condition: 'llm-loop-active', priority: 5 },
         ],
         rules: [
             {
@@ -169,12 +174,12 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
             {
                 id: 'plan-ready',
                 description: 'todo plan produced',
-                when: { kind: 'blackboard.value.equals', key: 'plan.ready', value: true },
+                when: { kind: 'blackboard.key.exists', key: 'plan.ready' },
             },
             {
                 id: 'wave-complete',
                 description: 'delegation wave finished',
-                when: { kind: 'blackboard.value.equals', key: 'delegate.complete', value: true },
+                when: { kind: 'blackboard.key.exists', key: 'delegate.complete' },
             },
             {
                 id: 'critic-passed',
@@ -189,7 +194,12 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
             {
                 id: 'supervisor-retry',
                 description: 'supervisor decided to retry delegation',
-                when: { kind: 'blackboard.value.equals', key: 'supervisor.retry', value: true },
+                when: { kind: 'blackboard.value.equals', key: 'supervisor.action', value: 'retry' },
+            },
+            {
+                id: 'supervisor-escalated',
+                description: 'supervisor escalated after exhausting retries',
+                when: { kind: 'blackboard.key.exists', key: 'supervisor.escalated' },
             },
             {
                 id: 'clarify-loop',

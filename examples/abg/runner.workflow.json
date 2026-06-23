@@ -6,10 +6,6 @@
     "version": "0.1.0",
     "entryNodeId": "parse-plan",
     "defaults": {
-      "model": {
-        "providerID": "local",
-        "modelID": "local-echo"
-      },
       "maxNodeRuns": 64
     },
     "nodes": [
@@ -44,7 +40,9 @@
         "id": "delegate-wave",
         "kind": "parallel",
         "label": "Fan out task() delegation per wave task",
-        "children": ["delegate-worker"],
+        "children": [
+          "delegate-worker"
+        ],
         "config": {
           "fanOutKey": "wave.tasks",
           "completionKey": "delegate.complete"
@@ -54,7 +52,9 @@
         "id": "delegate-worker",
         "kind": "llm",
         "label": "Single task() delegation",
-        "capabilities": ["task"],
+        "capabilities": [
+          "task"
+        ],
         "config": {
           "systemPrompt": "Execute the delegated sub-task via the task tool."
         }
@@ -82,7 +82,12 @@
         "id": "final-verification-wave",
         "kind": "parallel",
         "label": "Final verification wave — F1-F4 parallel critics",
-        "children": ["f1", "f2", "f3", "f4"],
+        "children": [
+          "f1",
+          "f2",
+          "f3",
+          "f4"
+        ],
         "config": {
           "completionKey": "final.verdict"
         }
@@ -147,67 +152,162 @@
       }
     ],
     "edges": [
-      { "source": "parse-plan", "target": "init-notepad", "condition": "plan-parsed", "priority": 10 },
-      { "source": "init-notepad", "target": "next-wave", "condition": "notepad-ready", "priority": 10 },
-      { "source": "next-wave", "target": "delegate-wave", "condition": "wave-pending", "priority": 20 },
-      { "source": "next-wave", "target": "final-verification-wave", "condition": "all-tasks-done", "priority": 10 },
-      { "source": "delegate-wave", "target": "per-task-verify", "condition": "delegate-complete", "priority": 10 },
-      { "source": "per-task-verify", "target": "checkbox-update", "condition": "verify-done", "priority": 10 },
-      { "source": "checkbox-update", "target": "next-wave", "condition": "checkbox-updated", "priority": 10 },
-      { "source": "final-verification-wave", "target": "complete", "condition": "final-approved", "priority": 20 },
-      { "source": "final-verification-wave", "target": "fix-loop", "condition": "final-rejected", "priority": 10 },
-      { "source": "fix-loop", "target": "next-wave", "condition": "fix-retry", "priority": 10 }
+      {
+        "source": "parse-plan",
+        "target": "init-notepad",
+        "condition": "plan-parsed",
+        "priority": 10
+      },
+      {
+        "source": "init-notepad",
+        "target": "next-wave",
+        "condition": "notepad-ready",
+        "priority": 10
+      },
+      {
+        "source": "next-wave",
+        "target": "delegate-wave",
+        "condition": "wave-pending",
+        "priority": 20
+      },
+      {
+        "source": "next-wave",
+        "target": "final-verification-wave",
+        "condition": "all-tasks-done",
+        "priority": 10
+      },
+      {
+        "source": "delegate-wave",
+        "target": "per-task-verify",
+        "condition": "delegate-complete",
+        "priority": 10
+      },
+      {
+        "source": "per-task-verify",
+        "target": "checkbox-update",
+        "condition": "verify-done",
+        "priority": 10
+      },
+      {
+        "source": "checkbox-update",
+        "target": "next-wave",
+        "condition": "checkbox-updated",
+        "priority": 10
+      },
+      {
+        "source": "final-verification-wave",
+        "target": "complete",
+        "condition": "final-approved",
+        "priority": 20
+      },
+      {
+        "source": "final-verification-wave",
+        "target": "fix-loop",
+        "condition": "final-rejected",
+        "priority": 10
+      },
+      {
+        "source": "fix-loop",
+        "target": "next-wave",
+        "condition": "fix-retry",
+        "priority": 10
+      }
     ],
     "rules": [
       {
+        "id": "llm-loop-active",
+        "description": "LLM node re-enters while it proposes tool calls",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "llm.loop_active",
+          "value": true
+        }
+      },
+      {
         "id": "plan-parsed",
         "description": "plan parsed successfully",
-        "when": { "kind": "blackboard.value.equals", "key": "plan.parsed", "value": true }
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "plan.parsed"
+        }
       },
       {
         "id": "notepad-ready",
         "description": "notepad initialized",
-        "when": { "kind": "blackboard.value.equals", "key": "notepad.ready", "value": true }
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "notepad.ready"
+        }
       },
       {
         "id": "wave-pending",
         "description": "unchecked tasks remain in the plan",
-        "when": { "kind": "blackboard.value.equals", "key": "wave.pending", "value": true }
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "wave.pending",
+          "value": true
+        }
       },
       {
         "id": "all-tasks-done",
         "description": "all plan tasks checked",
-        "when": { "kind": "blackboard.value.equals", "key": "wave.pending", "value": false }
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "wave.pending",
+          "value": false
+        }
       },
       {
         "id": "delegate-complete",
         "description": "delegation wave finished",
-        "when": { "kind": "blackboard.value.equals", "key": "delegate.complete", "value": true }
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "delegate.complete",
+          "value": true
+        }
       },
       {
         "id": "verify-done",
         "description": "per-task verification complete",
-        "when": { "kind": "blackboard.value.equals", "key": "verify.complete", "value": true }
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "verify.complete"
+        }
       },
       {
         "id": "checkbox-updated",
         "description": "plan checkboxes updated",
-        "when": { "kind": "blackboard.value.equals", "key": "checkbox.updated", "value": true }
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "checkbox.updated"
+        }
       },
       {
         "id": "final-approved",
         "description": "all final critics approved",
-        "when": { "kind": "blackboard.value.equals", "key": "final.verdict", "value": "APPROVE" }
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "final.verdict",
+          "value": "APPROVE"
+        }
       },
       {
         "id": "final-rejected",
         "description": "at least one final critic rejected",
-        "when": { "kind": "blackboard.value.equals", "key": "final.verdict", "value": "REJECT" }
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "final.verdict",
+          "value": "REJECT"
+        }
       },
       {
         "id": "fix-retry",
         "description": "fix-loop reopening tasks",
-        "when": { "kind": "blackboard.value.equals", "key": "fix.retry", "value": true }
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "fix.retry",
+          "value": true
+        }
       }
     ],
     "policies": []

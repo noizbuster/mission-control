@@ -101,17 +101,16 @@ describe('runSupervisorNode', () => {
         expect(out.some((s) => s.type === 'escalate')).toBe(false);
     });
 
-    it('emits an escalate signal (routed to escalationTarget) once attempts are exhausted', async () => {
+    it('escalates via success signal (enabling edge-based routing) once attempts are exhausted', async () => {
         const { node, context } = buildContext(config.maxAttempts);
         const out = await collect(node, context);
-        const escalate = out.find((s) => s.type === 'escalate');
-        expect(escalate).toBeDefined();
-        expect(escalate?.type === 'escalate' && escalate.target).toBe('human-approval');
+        const success = out.find((s) => s.type === 'success');
+        expect(success).toBeDefined();
         expect(context.blackboard?.get('supervisor.escalated')).toBe(true);
-        expect(out.some((s) => s.type === 'success')).toBe(false);
+        expect(context.blackboard?.get('supervisor.action')).toBe('escalate');
     });
 
-    it('fails fast when misconfigured (missing required config)', async () => {
+    it('uses defaults when config is partial (missing maxAttempts/baseDelayMs)', async () => {
         const blackboard = createBlackboard();
         const node: AbgNodeSpec = {
             id: 'supervisor',
@@ -121,8 +120,7 @@ describe('runSupervisorNode', () => {
         };
         const context = { graphId: 'g', now: () => NOW, blackboard } as AbgNodeRunContext;
         const out = await collect(node, context);
-        const failure = out.find((s) => s.type === 'failure');
-        const error = failure === undefined ? undefined : errorCode(failure);
-        expect(error).toMatchObject({ code: 'supervisor_misconfigured' });
+        const successSignal = out.find((s) => s.type === 'success');
+        expect(successSignal).toBeDefined();
     });
 });

@@ -6,10 +6,6 @@
     "version": "0.1.0",
     "entryNodeId": "intent-gate",
     "defaults": {
-      "model": {
-        "providerID": "local",
-        "modelID": "local-echo"
-      },
       "maxNodeRuns": 48
     },
     "nodes": [
@@ -18,7 +14,7 @@
         "kind": "llm",
         "label": "Intent classification — trivial | explicit | ambiguous",
         "config": {
-          "systemPrompt": "Classify the user prompt as \"trivial\" (single-turn answer), \"explicit\" (multi-step task), or \"ambiguous\" (needs clarification). Write the label to intent.classification.",
+          "systemPrompt": "Classify the user prompt into exactly one category. Respond with ONLY the category name, nothing else.\n\n- trivial: A greeting, simple question, or single-turn answer that needs no tools or file changes.\n- explicit: A coding task, file edit, project setup, or multi-step request that requires tools.\n- ambiguous: A request too vague to act on without clarification.",
           "outputKey": "intent.classification"
         }
       },
@@ -32,7 +28,9 @@
         "kind": "memory",
         "label": "Recall relevant session context",
         "config": {
-          "outputKey": "memory.loaded"
+          "op": "set",
+          "key": "memory.loaded",
+          "value": true
         }
       },
       {
@@ -79,8 +77,7 @@
         "implementation": "supervisor",
         "label": "Retry or escalate on critic failure",
         "config": {
-          "maxAttempts": 2,
-          "outputKey": "supervisor.retry"
+          "maxAttempts": 2
         }
       },
       {
@@ -102,14 +99,20 @@
       { "source": "intent-gate", "target": "direct-respond", "condition": "intent-trivial", "priority": 30 },
       { "source": "intent-gate", "target": "memory", "condition": "intent-explicit", "priority": 20 },
       { "source": "intent-gate", "target": "clarify", "condition": "intent-ambiguous", "priority": 10 },
+      { "source": "intent-gate", "target": "intent-gate", "condition": "llm-loop-active", "priority": 5 },
       { "source": "direct-respond", "target": "direct-respond", "condition": "llm-loop-active", "priority": 10 },
       { "source": "memory", "target": "todo-plan", "condition": "memory-loaded", "priority": 10 },
       { "source": "todo-plan", "target": "delegate-wave", "condition": "plan-ready", "priority": 10 },
+      { "source": "todo-plan", "target": "todo-plan", "condition": "llm-loop-active", "priority": 5 },
       { "source": "delegate-wave", "target": "verify-wave", "condition": "wave-complete", "priority": 10 },
+      { "source": "delegate-worker", "target": "delegate-worker", "condition": "llm-loop-active", "priority": 5 },
       { "source": "verify-wave", "target": "final-respond", "condition": "critic-passed", "priority": 20 },
       { "source": "verify-wave", "target": "supervisor", "condition": "critic-failed", "priority": 10 },
       { "source": "supervisor", "target": "delegate-wave", "condition": "supervisor-retry", "priority": 10 },
-      { "source": "clarify", "target": "intent-gate", "condition": "clarify-loop", "priority": 10 }
+      { "source": "supervisor", "target": "final-respond", "condition": "supervisor-escalated", "priority": 20 },
+      { "source": "final-respond", "target": "final-respond", "condition": "llm-loop-active", "priority": 5 },
+      { "source": "clarify", "target": "intent-gate", "condition": "clarify-loop", "priority": 10 },
+      { "source": "clarify", "target": "clarify", "condition": "llm-loop-active", "priority": 5 }
     ],
     "rules": [
       {
@@ -137,16 +140,16 @@
         "description": "context memory loaded",
         "when": { "kind": "blackboard.value.equals", "key": "memory.loaded", "value": true }
       },
-      {
-        "id": "plan-ready",
-        "description": "todo plan produced",
-        "when": { "kind": "blackboard.value.equals", "key": "plan.ready", "value": true }
-      },
-      {
-        "id": "wave-complete",
-        "description": "delegation wave finished",
-        "when": { "kind": "blackboard.value.equals", "key": "delegate.complete", "value": true }
-      },
+        {
+          "id": "plan-ready",
+          "description": "todo plan produced",
+          "when": { "kind": "blackboard.key.exists", "key": "plan.ready" }
+        },
+        {
+          "id": "wave-complete",
+          "description": "delegation wave finished",
+          "when": { "kind": "blackboard.key.exists", "key": "delegate.complete" }
+        },
       {
         "id": "critic-passed",
         "description": "verify-wave critic approved results",
@@ -157,11 +160,16 @@
         "description": "verify-wave critic rejected results",
         "when": { "kind": "blackboard.value.equals", "key": "critic.passed", "value": false }
       },
-      {
-        "id": "supervisor-retry",
-        "description": "supervisor decided to retry delegation",
-        "when": { "kind": "blackboard.value.equals", "key": "supervisor.retry", "value": true }
-      },
+        {
+          "id": "supervisor-retry",
+          "description": "supervisor decided to retry delegation",
+          "when": { "kind": "blackboard.value.equals", "key": "supervisor.action", "value": "retry" }
+        },
+        {
+          "id": "supervisor-escalated",
+          "description": "supervisor escalated after exhausting retries",
+          "when": { "kind": "blackboard.key.exists", "key": "supervisor.escalated" }
+        },
       {
         "id": "clarify-loop",
         "description": "clarification collected — re-classify intent",
