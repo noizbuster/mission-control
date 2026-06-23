@@ -9,7 +9,7 @@ export type PermissionSessionOptions = {
 };
 
 export class PermissionSession {
-    private readonly builtInRules: readonly PermissionRule[];
+    private builtInRules: readonly PermissionRule[];
     private readonly persistedRuleStore: PermissionRuleStore | undefined;
     private readonly sessionRules = new Map<string, PermissionRule[]>();
     private readonly consumedOnceRuleKeys = new Map<string, Set<string>>();
@@ -17,6 +17,14 @@ export class PermissionSession {
     constructor(options: PermissionSessionOptions = {}) {
         this.builtInRules = options.builtInRules ?? [];
         this.persistedRuleStore = options.persistedRuleStore;
+    }
+
+    /**
+     * Swap the baseline tier rules at runtime. Session-scoped "always" replies
+     * and persisted rules survive; only the level-derived baseline changes.
+     */
+    replaceBuiltInRules(rules: readonly PermissionRule[]): void {
+        this.builtInRules = rules;
     }
 
     async evaluate(request: PermissionRequest, sessionId: string): Promise<PermissionEvaluation> {

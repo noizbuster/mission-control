@@ -73,6 +73,27 @@ describe('visual-graph renderVisualGraph', () => {
         expect(result.lines[0]?.length).toBeLessThan(longId.length + 5);
         expect(result.lines[0]).toContain('…');
     });
+
+    it('emits structured node rows with bracketed status and per-segment status tinting', () => {
+        const nodes = [node('start', 'succeeded'), node('work', 'running', true)];
+        const result = renderVisualGraph({ nodes, edges: [] });
+        const nodeRows = result.rows.filter((row) => row.kind === 'node');
+        expect(nodeRows).toHaveLength(2);
+
+        const first = nodeRows[0];
+        expect(first?.status).toBe('succeeded');
+        expect(first?.isActive).toBe(false);
+        expect(first?.segments.map((s) => s.text).join('')).toBe('✓ start [succeeded]');
+        expect(first?.segments[0]).toMatchObject({ text: '✓', status: 'succeeded' });
+        expect(first?.segments.some((s) => s.text === 'succeeded' && s.status === 'succeeded')).toBe(true);
+
+        const second = nodeRows[1];
+        expect(second?.isActive).toBe(true);
+        // The active marker lives only in the flat `lines` view; the React consumer renders an
+        // animated spinner off `isActive` instead of a static `*`.
+        expect(second?.segments.map((s) => s.text).join('')).toBe('▶ work [running]');
+        expect(result.lines[result.lines.length - 1]).toBe('▶ work [running] *');
+    });
 });
 
 describe('visual-graph status helpers', () => {

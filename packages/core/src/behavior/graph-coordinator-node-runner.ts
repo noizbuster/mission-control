@@ -295,9 +295,12 @@ function isToolApprovalBlockedError(error: unknown): boolean {
 
 /**
  * Recognize a terminal tool-settlement failure the LLMActor short-circuited on (a
- * `command_not_allowed` under `haltOnFailedToolSettlement`, or a denial) so the node settles as a
- * NON-retryable `failed`. The `error` is `unknown` (the failure signal contract); narrowed with
- * `in`/typeof — no cast. Matches the codes `terminalToolFailure`/`approvalDeniedFailure` emit.
+ * `command_not_allowed` under `haltOnFailedToolSettlement`) so the node settles as a NON-retryable
+ * `failed`. The `error` is `unknown` (the failure signal contract); narrowed with `in`/typeof — no
+ * cast. Matches the codes `terminalToolFailure` emits.
+ *
+ * A denial (`approval_denied`) is intentionally NOT terminal — the LLMActor surfaces it to the
+ * model so the run can adapt instead of dying on the first denied tool.
  *
  * Also recognizes `provider_aborted` (an interrupt/abort) as terminal — without this, the graph
  * would retry the model call up to `maxAttempts` times before surfacing the interrupt, which hangs
@@ -307,11 +310,7 @@ function isTerminalToolFailureError(error: unknown): boolean {
     if (typeof error !== 'object' || error === null || !('code' in error)) {
         return false;
     }
-    return (
-        error.code === 'tool_settlement_failed' ||
-        error.code === 'tool_denied' ||
-        error.code === 'provider_aborted'
-    );
+    return error.code === 'tool_settlement_failed' || error.code === 'provider_aborted';
 }
 
 /**

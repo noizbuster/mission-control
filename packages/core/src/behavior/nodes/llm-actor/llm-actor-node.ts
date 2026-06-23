@@ -162,21 +162,10 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         return;
     }
 
-    // Approval-denied short-circuit: if a tool settled as `approval_denied` (the permission gate
-    // denied it), the run is a terminal failure — parity with the flat run coordinator's
-    // `terminalFailedSettlement`. Surfacing the denial to the model would make it retry the denied
-    // call until the loop budget is exhausted. Emit a `failure` carrying `tool_denied` + toolCallId
-    // so the coordinator fails the run (non-retryable) with the toolCallId.
-    const denied = input.settlementLedger?.deniedSettlement();
-    if (denied !== undefined) {
-        yield {
-            type: 'failure',
-            nodeId,
-            ...graphIdPart,
-            error: approvalDeniedFailure(denied),
-        };
-        return;
-    }
+    // A tool that settled `approval_denied` (the user denied the permission gate) is intentionally
+    // NOT short-circuited. The bridge surfaces the denial to the model as a readable tool-result
+    // string, so the re-entry loop feeds it back and the model can adapt. A single read-only-tool
+    // denial must not terminate a long multi-step run. Retry is bounded by `maxNodeRuns`.
 
     // Terminal tool-failure short-circuit: when `haltOnFailedToolSettlement` is set, a tool that
     // settled `failed` for a NON-approval reason (e.g. `command_not_allowed` — a non-allowlisted
@@ -293,26 +282,6 @@ function approvalBlockFailure(settlement: AbgToolSettlement): {
         toolName: settlement.toolName,
         approvalCode: 'approval_required',
         message: settlement.error?.message ?? 'tool blocked pending approval',
-    };
-}
-
-/**
- * Shape the LLMActor puts in a `failure` signal when a tool settled as `approval_denied`, so the
- * coordinator fails the run (non-retryable) with the toolCallId — parity with the flat run
- * coordinator's `terminalFailedSettlement` for a denied tool. `code: 'tool_denied'` is the
- * discriminator the node runner recognizes as terminal (no retry).
- */
-function approvalDeniedFailure(settlement: AbgToolSettlement): {
-    readonly code: 'tool_denied';
-    readonly toolCallId: string;
-    readonly toolName: string;
-    readonly message: string;
-} {
-    return {
-        code: 'tool_denied',
-        toolCallId: settlement.toolCallId,
-        toolName: settlement.toolName,
-        message: settlement.error?.message ?? 'tool denied',
     };
 }
 

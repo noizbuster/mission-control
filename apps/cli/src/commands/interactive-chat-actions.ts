@@ -427,13 +427,11 @@ async function runApprovalAction(
     currentLevel: ApprovalLevel | undefined,
     selectApprovalLevel?: (currentLevel?: ApprovalLevel) => Promise<ApprovalLevel | undefined>,
 ): Promise<ChatActionResult> {
-    if (activeTurn !== undefined) {
-        chatOutput.write('Approval level changes apply to the next prompt (cannot change mid-run)\n');
-        return actionResult(modelProviderSelection, activeTurn);
-    }
     if (requestedLevel !== undefined) {
+        activeTurn?.setApprovalLevel(requestedLevel);
         const meta = APPROVAL_LEVEL_META[requestedLevel];
-        chatOutput.write(`Approval level set to: ${requestedLevel}\n  ${meta.description}\n`);
+        const applied = activeTurn !== undefined ? ' (applied to active run)' : '';
+        chatOutput.write(`Approval level set to: ${requestedLevel}${applied}\n  ${meta.description}\n`);
         return actionResult(modelProviderSelection, activeTurn, { approvalLevel: requestedLevel });
     }
     if (selectApprovalLevel !== undefined) {
@@ -441,8 +439,10 @@ async function runApprovalAction(
         if (selected === undefined) {
             return actionResult(modelProviderSelection, activeTurn);
         }
+        activeTurn?.setApprovalLevel(selected);
         const meta = APPROVAL_LEVEL_META[selected];
-        chatOutput.write(`Approval level set to: ${selected}\n  ${meta.description}\n`);
+        const applied = activeTurn !== undefined ? ' (applied to active run)' : '';
+        chatOutput.write(`Approval level set to: ${selected}${applied}\n  ${meta.description}\n`);
         return actionResult(modelProviderSelection, activeTurn, { approvalLevel: selected });
     }
     const level = currentLevel ?? 'safe';

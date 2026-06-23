@@ -50,6 +50,7 @@ export type ActiveCodingAgentTurn = {
     readonly interrupt: (mode?: InterruptMode) => void;
     readonly answerApproval: (line: string) => boolean;
     readonly hasPendingApproval: () => boolean;
+    readonly setApprovalLevel: (level: ApprovalLevel) => void;
 };
 
 export type InterruptMode = 'soft' | 'force';
@@ -157,6 +158,7 @@ async function startOwnedCodingAgentTurn(
         },
         answerApproval: approvals.answer,
         hasPendingApproval: approvals.hasPending,
+        setApprovalLevel: approvals.setApprovalLevel,
     };
 }
 

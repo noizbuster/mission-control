@@ -92,4 +92,18 @@ describe('StatusBar formatStatus', () => {
         });
         expect(out).toContain('project: /');
     });
+
+    it('renders approval level when provided', () => {
+        const out = formatStatus({
+            providerID: 'local',
+            modelID: 'local-echo',
+            approvalLevel: 'aggressive',
+        });
+        expect(out).toContain('approval: aggressive');
+    });
+
+    it('omits approval segment when level is undefined', () => {
+        const out = formatStatus({ providerID: 'local', modelID: 'local-echo' });
+        expect(out).not.toContain('approval:');
+    });
 });

@@ -83,11 +83,13 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     break;
                 case 'failed':
                     // A terminal tool-settlement failure (a `command_not_allowed` under
-                    // `haltOnFailedToolSettlement`, or a denial) is non-retryable: the model cannot
-                    // fix it by re-running, so fail the run immediately instead of consuming the
-                    // retry budget. Parity with the flat run coordinator's fail-fast on a terminal
-                    // tool settlement. The toolCallId travels on the run's tool.failed event (set
-                    // via the adapter), so it surfaces on `session.stopped` without threading it here.
+                    // `haltOnFailedToolSettlement`) is non-retryable: the model cannot fix it by
+                    // re-running, so fail the run immediately instead of consuming the retry
+                    // budget. Parity with the flat run coordinator's fail-fast on a terminal
+                    // tool settlement. A denial is NOT terminal — the LLMActor surfaces it to the
+                    // model so the run can adapt. The toolCallId travels on the run's tool.failed
+                    // event (set via the adapter), so it surfaces on `session.stopped` without
+                    // threading it here.
                     if (result.terminal === true) {
                         return failGraph(
                             graph.id,

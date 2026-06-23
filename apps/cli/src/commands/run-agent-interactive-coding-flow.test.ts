@@ -83,14 +83,14 @@ describe('runAgent interactive coding agent flow', () => {
             },
         });
 
-        // Then — on the graph a denial is terminal (the tool settles `approval_denied` and the run
-        // fails), matching the graph's documented deny semantics; the flat escape hatch keeps its
-        // resumable-block behavior.
+        // Then — a denial surfaces the tool failure to the model; the run does NOT hard-fail on a
+        // single denied tool. The provider adapts (text-only turn after seeing the denial) and the
+        // run completes normally.
         expect(output).toContain('Denied file.patch');
         expect(output).toContain('file.patch failed: approval_denied');
-        expect(output).toContain('Error: ABG run failed on a non-retryable tool settlement');
-        expect(events.some((event) => event.type === 'task.failed')).toBe(true);
+        expect(events.some((event) => event.type === 'task.failed')).toBe(false);
         expect(events.some((event) => event.type === 'run.blocked')).toBe(false);
+        expect(events.map((event) => event.type)).toEqual(expect.arrayContaining(['run.completed']));
         await expect(readFile(join(workspaceRoot, '.mctrl-task17-denied.txt'), 'utf8')).rejects.toThrow();
     });
 
@@ -133,12 +133,19 @@ function providerFromTask17Requests(requests: ProviderTurnRequest[]): ProviderAd
 }
 
 function providerWithDeniedPatch(): ProviderAdapter {
+    let calls = 0;
     return {
         async *streamTurn(request) {
-            yield task17ToolCall(request, 'patch_call_task17_denied', 'file.patch', {
-                patch: addFilePatch('.mctrl-task17-denied.txt', 'denied'),
-            });
-            yield completedChunk(request, 'patch proposed', ['patch_call_task17_denied']);
+            calls += 1;
+            if (calls === 1) {
+                yield task17ToolCall(request, 'patch_call_task17_denied', 'file.patch', {
+                    patch: addFilePatch('.mctrl-task17-denied.txt', 'denied'),
+                });
+                yield completedChunk(request, 'patch proposed', ['patch_call_task17_denied']);
+                return;
+            }
+            // The model sees the denial in tool-result history and adapts — text only, no retry.
+            yield completedChunk(request, 'skipping the denied patch');
         },
     };
 }

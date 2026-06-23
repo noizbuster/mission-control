@@ -39,6 +39,7 @@ export function startCompactionTurn(options: CompactionTurnOptions): ActiveCodin
         },
         answerApproval: () => false,
         hasPendingApproval: () => false,
+        setApprovalLevel: () => undefined,
     };
 }
 

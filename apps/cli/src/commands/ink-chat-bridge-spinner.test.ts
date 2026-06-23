@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { resolveSpinnerMode } from './ink-chat-bridge.js';
+import { resolveSpinnerMode } from '../components/spinner.js';
 
 const ENV_KEY = 'MCTRL_SPINNER';
 

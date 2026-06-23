@@ -28,6 +28,10 @@ import { type ChatInput, type ChatOutput, type ModelSelector, runInteractiveChat
 import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
 import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
 import { loadPricingTable } from './pricing-table-store.js';
+import {
+    loadPersistedApprovalLevel,
+    savePersistedApprovalLevel,
+} from './approval-level-store.js';
 import { createCliProviderForSelection } from './provider-factory.js';
 import { readGraphFile, validateGraphModelOptions, validateModelProviderSelection } from './run-agent-graph.js';
 import {
@@ -101,6 +105,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             const session = await runtime.start();
             didStart = true;
             const sessionStore = recorder.currentStore();
+            const persistedApprovalLevel = await loadPersistedApprovalLevel();
             return await runInteractiveChatSession(runtime, {
                 modelProviderSelection: selectedModelProvider,
                 provider,
@@ -117,6 +122,12 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                 ...(options.provider === undefined ? { resolveProviderForSelection: createProvider } : {}),
                 persistModelProviderSelection: async (selection) => {
                     await authStore.setDefaultSelection(selection);
+                },
+                ...(persistedApprovalLevel !== undefined
+                    ? { initialApprovalLevel: persistedApprovalLevel }
+                    : {}),
+                persistApprovalLevel: async (level) => {
+                    await savePersistedApprovalLevel(level);
                 },
                 ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
                 ...(options.chatInput !== undefined ? { input: options.chatInput } : {}),

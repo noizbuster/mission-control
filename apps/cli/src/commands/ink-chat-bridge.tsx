@@ -29,6 +29,8 @@ import { Box, type Key, render, Text, useInput } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { AbgOverlay, type AbgOverlayTab } from '../components/AbgOverlay.js';
 import { StatusBar } from '../components/StatusBar.js';
+import { useSpinnerFrame } from '../components/spinner.js';
+import type { ApprovalLevel } from './approval-level.js';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
 import {
     createProviderPromptKeypressState,
@@ -166,6 +168,7 @@ type BridgeSnapshot = {
     readonly abgOverlayActiveTab: number;
     readonly abgOverlayScrollOffset: number;
     readonly abgOverlayLiveOutput: boolean;
+    readonly approvalLevel: ApprovalLevel | undefined;
 };
 
 /** Public surface consumed by the imperative chat loop. */
@@ -176,6 +179,7 @@ export type InkChatBridge = {
     readonly getOutput: () => string;
     readonly showModelPicker: (choices: readonly ModelChoice[]) => Promise<ModelProviderSelection | undefined>;
     readonly showLevelPicker: (currentLevel?: string) => Promise<string | undefined>;
+    readonly setApprovalLevel: (level: ApprovalLevel | undefined) => void;
     readonly setModelCycleChoices: (choices: readonly ModelChoice[]) => void;
     onModelCycleSelect: ((selection: ModelProviderSelection) => void) | undefined;
     onRenameSubmit: ((name: string) => void) | undefined;
@@ -218,6 +222,7 @@ export type InkChatBridgeOptions = {
     readonly workspaceRoot?: string;
     readonly gitBranch?: string;
     readonly initialHistoryEntries?: readonly string[];
+    readonly initialApprovalLevel?: ApprovalLevel;
     readonly abgOverlayController?: AbgOverlayController;
 };
 
@@ -277,6 +282,7 @@ export type InkChatBridgeCore = {
     abgOverlayController: AbgOverlayController | undefined;
     abgOverlayUnsubscribe: (() => void) | undefined;
     abgOverlayRefreshTimer: ReturnType<typeof setInterval> | undefined;
+    approvalLevel: ApprovalLevel | undefined;
 };
 
 /** Minimal props the React tree uses to talk to the bridge core. */
@@ -343,6 +349,7 @@ export function publishSnapshot(core: InkChatBridgeCore): void {
         abgOverlayActiveTab: core.abgOverlayActiveTab,
         abgOverlayScrollOffset: core.abgOverlayScrollOffset,
         abgOverlayLiveOutput: core.abgOverlayLiveOutput,
+        approvalLevel: core.approvalLevel,
     };
     for (const listener of core.listeners) {
         listener();
@@ -471,12 +478,14 @@ function applyFileAutocompleteCompletion(core: InkChatBridgeCore): boolean {
 export function createInkChatBridgeCore(options?: {
     readonly workspaceRoot?: string;
     readonly initialHistoryEntries?: readonly string[];
+    readonly initialApprovalLevel?: ApprovalLevel;
 }): InkChatBridgeCore {
     const workspaceRoot = options?.workspaceRoot ?? process.cwd();
     const history =
         options?.initialHistoryEntries !== undefined
             ? createChatInputHistoryFromEntries(options.initialHistoryEntries)
             : createChatInputHistory();
+    const initialApprovalLevel = options?.initialApprovalLevel;
     return {
         inputBuffer: '',
         cursorPosition: 0,
@@ -527,6 +536,7 @@ export function createInkChatBridgeCore(options?: {
             abgOverlayActiveTab: 0,
             abgOverlayScrollOffset: 0,
             abgOverlayLiveOutput: false,
+            approvalLevel: initialApprovalLevel,
         },
         unmountFn: undefined,
         modelPickerChoices: [],
@@ -572,6 +582,7 @@ export function createInkChatBridgeCore(options?: {
         abgOverlayController: undefined,
         abgOverlayUnsubscribe: undefined,
         abgOverlayRefreshTimer: undefined,
+        approvalLevel: initialApprovalLevel,
     };
 }
 
@@ -1460,47 +1471,8 @@ function handleAbgOverlayInput(core: InkChatBridgeCore, input: string, key: Key)
     }
 }
 
-const SPINNER_FRAMES = [
-    '\u280B',
-    '\u2819',
-    '\u2839',
-    '\u2838',
-    '\u283C',
-    '\u2834',
-    '\u2826',
-    '\u2827',
-    '\u2807',
-    '\u280F',
-] as const;
-const SPINNER_INTERVAL_MS = 80;
-const SPINNER_STATIC_GLYPH = '\u25CF';
-const SPINNER_MODE_ENV = 'MCTRL_SPINNER';
-
-/**
- * Resolve the spinner mode from `MCTRL_SPINNER`. Default is `'static'` (no
- * interval, no re-renders) because Ink's per-frame re-render writes ANSI
- * redraw escapes to stdout and disrupts terminal mouse text selection.
- * `'animate'` restores the original 80ms braille animation.
- */
-export function resolveSpinnerMode(env: NodeJS.ProcessEnv = process.env): 'static' | 'animate' {
-    return env[SPINNER_MODE_ENV] === 'animate' ? 'animate' : 'static';
-}
-
 function AgentSpinner({ text }: { readonly text: string }): React.ReactElement {
-    const spinnerMode = resolveSpinnerMode();
-    const [frame, setFrame] = useState(0);
-    useEffect(() => {
-        if (spinnerMode === 'static') {
-            return;
-        }
-        const timer = setInterval(() => {
-            setFrame((current) => (current + 1) % SPINNER_FRAMES.length);
-        }, SPINNER_INTERVAL_MS);
-        return () => {
-            clearInterval(timer);
-        };
-    }, [spinnerMode]);
-    const glyph = spinnerMode === 'static' ? SPINNER_STATIC_GLYPH : (SPINNER_FRAMES[frame] ?? SPINNER_STATIC_GLYPH);
+    const { glyph } = useSpinnerFrame();
     return (
         <Box marginTop={1}>
             <Text color="yellow">{glyph} </Text>
@@ -1829,7 +1801,12 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
             </Box>
             {statusBarProps !== undefined ? (
                 <Box marginTop={1}>
-                    <StatusBar {...statusBarProps} />
+                    <StatusBar
+                        {...statusBarProps}
+                        {...(snapshot.approvalLevel !== undefined
+                            ? { approvalLevel: snapshot.approvalLevel }
+                            : {})}
+                    />
                 </Box>
             ) : null}
         </Box>
@@ -1877,6 +1854,9 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         ...(options?.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
         ...(options?.initialHistoryEntries !== undefined
             ? { initialHistoryEntries: options.initialHistoryEntries }
+            : {}),
+        ...(options?.initialApprovalLevel !== undefined
+            ? { initialApprovalLevel: options.initialApprovalLevel }
             : {}),
     });
     if (options?.abgOverlayController !== undefined) {
@@ -1978,6 +1958,11 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         return new Promise<string | undefined>((resolve) => {
             core.levelPickerResolve = resolve;
         });
+    };
+
+    const setApprovalLevel = (level: ApprovalLevel | undefined): void => {
+        core.approvalLevel = level;
+        publishSnapshot(core);
     };
 
     const setModelCycleChoices = (choices: readonly ModelChoice[]): void => {
@@ -2087,6 +2072,7 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         getOutput,
         showModelPicker,
         showLevelPicker,
+        setApprovalLevel,
         setModelCycleChoices,
         get onModelCycleSelect(): ((selection: ModelProviderSelection) => void) | undefined {
             return core.onModelCycleSelect;

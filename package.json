@@ -17,7 +17,7 @@
     "typecheck": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run-many -t typecheck"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.0",
+    "@biomejs/biome": "^2.5.1",
     "@types/node": "^26.0.0",
     "diff": "^9.0.0",
     "nx": "23.0.0",

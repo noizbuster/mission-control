@@ -201,6 +201,45 @@ describe('PermissionSession', () => {
         });
     });
 
+    it('replaceBuiltInRules swaps the baseline tier rules at runtime', async () => {
+        const session = new PermissionSession({
+            builtInRules: [{ permission: 'patch', pattern: '*', decision: 'ask' }],
+        });
+        const request = patchRequest('src/app.ts', '/workspace-a');
+
+        await expect(session.evaluate(request, 'session_swap')).resolves.toMatchObject({
+            decision: { status: 'requires_approval' },
+        });
+
+        session.replaceBuiltInRules([{ permission: 'patch', pattern: '*', decision: 'always' }]);
+
+        await expect(session.evaluate(request, 'session_swap')).resolves.toMatchObject({
+            decision: { status: 'allow', matchedRule: { decision: 'always' } },
+        });
+    });
+
+    it('replaceBuiltInRules preserves session-scoped always replies', async () => {
+        const session = new PermissionSession({
+            builtInRules: [{ permission: 'patch', pattern: '*', decision: 'ask' }],
+        });
+        const request = patchRequest('src/app.ts', '/workspace-a');
+
+        await session.rememberReply(request, 'session_survive', {
+            approvalId: 'approval_patch_survive',
+            reply: 'always',
+            reason: 'session-scoped always',
+        });
+        await expect(session.evaluate(request, 'session_survive')).resolves.toMatchObject({
+            decision: { status: 'allow' },
+        });
+
+        session.replaceBuiltInRules([{ permission: 'patch', pattern: '*', decision: 'ask' }]);
+
+        await expect(session.evaluate(request, 'session_survive')).resolves.toMatchObject({
+            decision: { status: 'allow', matchedRule: { decision: 'always' } },
+        });
+    });
+
     async function tempRoot(prefix: string): Promise<string> {
         const root = await mkdtemp(join(tmpdir(), prefix));
         roots.push(root);

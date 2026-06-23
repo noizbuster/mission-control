@@ -54,6 +54,7 @@ describe('interactive coding tools preflight', () => {
                 answer: () => false,
                 cancel: () => undefined,
                 hasPending: () => false,
+                setApprovalLevel: () => undefined,
             },
         );
 
@@ -91,6 +92,7 @@ describe('interactive coding tools preflight', () => {
                 answer: () => false,
                 cancel: () => undefined,
                 hasPending: () => false,
+                setApprovalLevel: () => undefined,
             },
         );
 
@@ -125,6 +127,7 @@ describe('interactive coding tools preflight', () => {
                 answer: () => false,
                 cancel: () => undefined,
                 hasPending: () => false,
+                setApprovalLevel: () => undefined,
             },
         );
 
@@ -263,6 +266,7 @@ describe('interactive coding tool registry surface', () => {
             answer: () => false,
             cancel: () => undefined,
             hasPending: () => false,
+            setApprovalLevel: () => undefined,
         };
     }
 });
@@ -423,6 +427,7 @@ describe('web_search tool wiring', () => {
                 answer: () => false,
                 cancel: () => undefined,
                 hasPending: () => false,
+                setApprovalLevel: () => undefined,
             },
         );
 
@@ -452,6 +457,7 @@ describe('web_search tool wiring', () => {
             answer: () => false,
             cancel: () => undefined,
             hasPending: () => false,
+            setApprovalLevel: () => undefined,
         };
     }
 });

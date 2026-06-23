@@ -1,6 +1,6 @@
 import { PermissionRuleStore, PermissionSession } from '@mission-control/core';
 import type { ApprovalRecord, PermissionDecision, PermissionReply, PermissionRequest } from '@mission-control/protocol';
-import { approvalLevelRules, type ApprovalLevel } from './approval-level.js';
+import { type ApprovalLevel, approvalLevelRules } from './approval-level.js';
 import type { InteractiveToolOptions } from './interactive-coding-tools.js';
 
 export type InteractiveApprovalBroker = {
@@ -10,6 +10,7 @@ export type InteractiveApprovalBroker = {
     readonly answer: (line: string) => boolean;
     readonly cancel: (reason: string) => void;
     readonly hasPending: () => boolean;
+    readonly setApprovalLevel: (level: ApprovalLevel) => void;
 };
 
 type PendingApproval = {
@@ -86,6 +87,9 @@ export function createInteractiveApprovalBroker(options: InteractiveToolOptions)
             });
         },
         hasPending: () => pending !== undefined,
+        setApprovalLevel: (nextLevel) => {
+            permissionSession.replaceBuiltInRules(approvalLevelRules(nextLevel));
+        },
     };
 }
 

@@ -214,6 +214,7 @@ describe('interactive chat actions', () => {
                     interrupt: () => undefined,
                     answerApproval: () => false,
                     hasPendingApproval: () => false,
+                    setApprovalLevel: () => undefined,
                 },
                 sessionNavigation: createNavigationController(),
             }),
@@ -517,6 +518,65 @@ describe('interactive chat actions', () => {
             expect(captured).not.toContain('wf-24');
         });
     });
+
+    describe('/approval action', () => {
+        it('applies the requested level to an active turn immediately', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const setApprovalLevel = vi.fn();
+            const activeTurn = { ...fakeActiveTurn(), setApprovalLevel };
+
+            const result = await runChatAction(
+                runtime,
+                output,
+                { kind: 'approval', level: 'aggressive' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ activeTurn }),
+            );
+
+            expect(setApprovalLevel).toHaveBeenCalledWith('aggressive');
+            expect(result.approvalLevel).toBe('aggressive');
+            expect(output.getOutput()).toContain('applied to active run');
+        });
+
+        it('sets the level without an active turn', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+
+            const result = await runChatAction(
+                runtime,
+                output,
+                { kind: 'approval', level: 'safe' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({}),
+            );
+
+            expect(result.approvalLevel).toBe('safe');
+            expect(output.getOutput()).toContain('Approval level set to: safe');
+            expect(output.getOutput()).not.toContain('applied to active run');
+        });
+
+        it('reports the current level when no level is requested', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'approval' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ approvalLevel: 'reckless' }),
+            );
+
+            expect(output.getOutput()).toContain('Approval level: reckless');
+        });
+    });
 });
 
 function fakeActiveTurn(): NonNullable<CodingActionContext['activeTurn']> {
@@ -525,6 +585,7 @@ function fakeActiveTurn(): NonNullable<CodingActionContext['activeTurn']> {
         interrupt: () => undefined,
         answerApproval: () => false,
         hasPendingApproval: () => false,
+        setApprovalLevel: () => undefined,
     };
 }
 
@@ -576,6 +637,8 @@ function createCodingContext(overrides: Partial<CodingActionContext> = {}): Codi
         ...(overrides.skills !== undefined ? { skills: overrides.skills } : {}),
         ...(overrides.sessionNavigation !== undefined ? { sessionNavigation: overrides.sessionNavigation } : {}),
         ...(overrides.workflowRegistry !== undefined ? { workflowRegistry: overrides.workflowRegistry } : {}),
+        ...(overrides.approvalLevel !== undefined ? { approvalLevel: overrides.approvalLevel } : {}),
+        ...(overrides.selectApprovalLevel !== undefined ? { selectApprovalLevel: overrides.selectApprovalLevel } : {}),
     };
 }
 

@@ -534,6 +534,34 @@ describe('command.run tool', () => {
         expect(modelOutput).not.toContain(secret);
         expect(eventsJson).not.toContain(secret);
     });
+
+    it('marks a nonzero-exit command as retryable so the run surfaces it to the model instead of terminating', async () => {
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+            executor: async () => ({
+                exitCode: 6,
+                signal: null,
+                timedOut: false,
+                stdout: '',
+                stderr: 'curl: (6) Could not resolve host: |',
+                durationMs: 1,
+            }),
+        });
+
+        const result = await invokeCommand(registry, 'curl', [
+            '-s',
+            'https://registry.npmjs.org/@biomejs/biome',
+            '|',
+            'grep',
+            '-o',
+            '\'"latest":[^,]*\'',
+        ]);
+
+        expect(result.result.status).toBe('failed');
+        expect(result.result.error?.message).toContain('command_failed');
+        expect(result.result.error?.message).toContain('exit: 6');
+        expect(result.result.error?.retryable).toBe(true);
+    });
 });
 
 type PermissionResolver = (request: PermissionRequest) => PermissionDecision;

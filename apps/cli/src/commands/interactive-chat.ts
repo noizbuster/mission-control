@@ -17,6 +17,7 @@ import type { AgentEvent, ModelProviderSelection } from '@mission-control/protoc
 import { createAbgOverlayController } from './abg-overlay-controller.js';
 import { DEFAULT_ABG_OVERLAY_PREFS, loadAbgOverlayPrefs } from './abg-overlay-prefs-store.js';
 import { createAbgOverlayStore } from './abg-overlay-state.js';
+import type { ApprovalLevel } from './approval-level.js';
 import { parseChatLine } from './chat-commands.js';
 import { createInkChatBridge, type InkChatBridge, type InkChatBridgeOptions } from './ink-chat-bridge.js';
 import { createInkChatInput } from './ink-chat-input.js';
@@ -74,6 +75,8 @@ export type InteractiveChatOptions = {
     readonly switchSessionStore?: (sessionId: string) => Promise<JsonlSessionEventStore>;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly persistModelProviderSelection?: (selection: ModelProviderSelection) => Promise<void>;
+    readonly initialApprovalLevel?: ApprovalLevel;
+    readonly persistApprovalLevel?: (level: ApprovalLevel) => Promise<void>;
     /**
      * Execution engine for coding turns. `'graph'` is the only supported value (the flat engine has
      * been removed). `resolveSdkModel` resolves the AI-SDK model for the selection.
@@ -112,6 +115,9 @@ export async function runInteractiveChatSession(
               ...(options.sessionId !== undefined ? { sessionID: options.sessionId } : {}),
               ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
               ...(initialHistoryEntries.length > 0 ? { initialHistoryEntries } : {}),
+              ...(options.initialApprovalLevel !== undefined
+                  ? { initialApprovalLevel: options.initialApprovalLevel }
+                  : {}),
               ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
           }
         : undefined;
@@ -164,7 +170,7 @@ export async function runInteractiveChatSession(
     let currentSessionId = options.sessionId;
     let currentProvider = options.resolveProviderForSelection?.(currentModelProviderSelection) ?? options.provider;
     let currentSessionStore = options.sessionStore;
-    let currentApprovalLevel: import('./approval-level.js').ApprovalLevel | undefined;
+    let currentApprovalLevel: ApprovalLevel | undefined = options.initialApprovalLevel;
     let sessionDisplayName: string | undefined;
     const sessionDisplayNameController = {
         current: () => sessionDisplayName,
@@ -377,13 +383,11 @@ export async function runInteractiveChatSession(
                         ...(currentApprovalLevel !== undefined ? { approvalLevel: currentApprovalLevel } : {}),
                         ...(inkBridge !== undefined
                             ? {
-                                  selectApprovalLevel: (currentLevel?: import('./approval-level.js').ApprovalLevel) =>
+                                  selectApprovalLevel: (currentLevel?: ApprovalLevel) =>
                                       inkBridge
                                           .showLevelPicker(currentLevel)
-                                          .then((level): import('./approval-level.js').ApprovalLevel | undefined =>
-                                              level !== undefined
-                                                  ? (level as import('./approval-level.js').ApprovalLevel)
-                                                  : undefined,
+                                          .then((level): ApprovalLevel | undefined =>
+                                              level !== undefined ? (level as ApprovalLevel) : undefined,
                                           ),
                               }
                             : {}),
@@ -435,6 +439,8 @@ export async function runInteractiveChatSession(
             currentSessionStore = result.sessionStore ?? currentSessionStore;
             if (result.approvalLevel !== undefined) {
                 currentApprovalLevel = result.approvalLevel;
+                inkBridge?.setApprovalLevel(currentApprovalLevel);
+                await options.persistApprovalLevel?.(currentApprovalLevel);
             }
         }
     } finally {

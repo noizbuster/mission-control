@@ -1,4 +1,5 @@
 import { Text } from 'ink';
+import type { ApprovalLevel } from '../commands/approval-level.js';
 import { basename } from 'node:path';
 
 export type StatusBarProps = {
@@ -9,12 +10,16 @@ export type StatusBarProps = {
     readonly sessionDisplayName?: string;
     readonly workspaceRoot?: string;
     readonly gitBranch?: string;
+    readonly approvalLevel?: ApprovalLevel;
 };
 
 export function formatStatus(props: StatusBarProps): string {
     const parts = [`provider: ${props.providerID}`, `model: ${props.modelID}`];
     if (props.variantID !== undefined) {
         parts.push(`variant: ${props.variantID}`);
+    }
+    if (props.approvalLevel !== undefined) {
+        parts.push(`approval: ${props.approvalLevel}`);
     }
     if (props.workspaceRoot !== undefined) {
         const dirLabel = basename(props.workspaceRoot) || props.workspaceRoot;

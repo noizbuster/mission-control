@@ -88,16 +88,7 @@ describe('runAgent interactive coding agent UX', () => {
             ]),
             chatOutput: chatOutput.output,
             workspaceRoot,
-            provider: createDeterministicProvider([
-                { kind: 'text_delta', delta: 'I can patch this.' },
-                {
-                    kind: 'tool_call_completed',
-                    toolCallId: 'patch_call',
-                    toolName: 'file.patch',
-                    argumentsJson: JSON.stringify({ patch: addFilePatch('.mctrl-task20.txt', 'denied') }),
-                },
-                { kind: 'response_completed', content: 'patch proposed' },
-            ]),
+            provider: providerThatAdaptsAfterDenial(),
             onRuntimeEvent: (event) => {
                 events.push(event);
             },
@@ -109,10 +100,12 @@ describe('runAgent interactive coding agent UX', () => {
         expect(output).toContain('Patch preview for file.patch');
         expect(output).toContain('Approve file.patch? [once/always/deny]:');
         expect(output).toContain('Denied file.patch');
-        // On the graph a denial is terminal: the tool settles `approval_denied` and the run fails
-        // (the graph's documented deny semantics) rather than flat's resumable block.
+        // A denial surfaces the tool failure to the model; the run does NOT hard-fail on a single
+        // denied tool. The provider adapts (text-only turn after seeing the denial) and the run
+        // completes normally.
         expect(output).toContain('file.patch failed: approval_denied');
-        expect(events.some((event) => event.type === 'task.failed')).toBe(true);
+        expect(events.some((event) => event.type === 'task.failed')).toBe(false);
+        expect(events.map((event) => event.type)).toEqual(expect.arrayContaining(['run.completed']));
         await expect(readFile(join(workspaceRoot, '.mctrl-task20.txt'), 'utf8')).rejects.toThrow();
     });
 
@@ -475,6 +468,31 @@ function providerFromApprovedToolRequests(requests: ProviderTurnRequest[]): Prov
                 return;
             }
             yield cliCompletedChunk(request, 'patch and test complete');
+        },
+    };
+}
+
+function providerThatAdaptsAfterDenial(): ProviderAdapter {
+    let calls = 0;
+    return {
+        async *streamTurn(request) {
+            calls += 1;
+            if (calls === 1) {
+                yield {
+                    kind: 'tool_call_completed',
+                    requestId: request.requestId,
+                    sequence: 1,
+                    toolCall: {
+                        toolCallId: 'patch_call',
+                        toolName: 'file.patch',
+                        argumentsJson: JSON.stringify({ patch: addFilePatch('.mctrl-task20.txt', 'denied') }),
+                    },
+                };
+                yield cliCompletedChunk(request, 'patch proposed', ['patch_call']);
+                return;
+            }
+            // The model sees the denial in tool-result history and adapts — text only, no retry.
+            yield cliCompletedChunk(request, 'skipping the denied patch');
         },
     };
 }

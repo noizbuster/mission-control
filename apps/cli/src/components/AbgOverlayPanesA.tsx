@@ -1,6 +1,7 @@
 import { Box, Text } from 'ink';
 import type { AbgOverlayState } from '../commands/abg-overlay-state.js';
-import { renderVisualGraph, type VisualGraphEdge, type VisualGraphNode } from './visual-graph.js';
+import { renderVisualGraph, type VisualGraphEdge, type VisualGraphNode, type VisualGraphRow } from './visual-graph.js';
+import { useSpinnerFrame } from './spinner.js';
 
 export interface PaneProps {
     readonly state: AbgOverlayState;
@@ -153,7 +154,36 @@ export function OverviewPane({ state, modelLabel }: PaneProps): React.ReactEleme
     );
 }
 
+function renderVisualRow(row: VisualGraphRow, idx: number, spinnerGlyph: string): React.ReactElement {
+    if (row.kind === 'connector') {
+        const text = row.segments.map((segment) => segment.text).join('');
+        return (
+            <Text key={`vis-${idx}`} dimColor>
+                {text}
+            </Text>
+        );
+    }
+    return (
+        <Box key={`vis-${idx}`} flexDirection="row">
+            {row.segments.map((segment, segIdx) => {
+                const color = statusColor(segment.status);
+                return (
+                    <Text
+                        // biome-ignore lint/suspicious/noArrayIndexKey: segments are positional and stable per node row
+                        key={`seg-${segIdx}`}
+                        {...(color !== undefined ? { color } : { dimColor: true })}
+                    >
+                        {segment.text}
+                    </Text>
+                );
+            })}
+            {row.isActive ? <Text color="yellow"> {spinnerGlyph}</Text> : null}
+        </Box>
+    );
+}
+
 export function GraphPane({ state }: PaneProps): React.ReactElement {
+    const { glyph: spinnerGlyph } = useSpinnerFrame();
     if (isEmptyState(state)) {
         return (
             <Box flexDirection="column" marginTop={1}>
@@ -185,12 +215,7 @@ export function GraphPane({ state }: PaneProps): React.ReactElement {
             <Text bold>{graphId}</Text>
             {!visual.collapsed ? (
                 <Box flexDirection="column" marginLeft={2}>
-                    {visual.lines.map((line, idx) => (
-                        // biome-ignore lint/suspicious/noArrayIndexKey: visual lines are stable per render
-                        <Text key={`vis-${idx}`} dimColor>
-                            {line}
-                        </Text>
-                    ))}
+                    {visual.rows.map((row, idx) => renderVisualRow(row, idx, spinnerGlyph))}
                 </Box>
             ) : (
                 <Box flexDirection="column">
@@ -280,11 +305,22 @@ export function NodesPane({ state }: PaneProps): React.ReactElement {
             ) : (
                 nodes.map(([nodeId, status]) => {
                     const color = statusColor(status);
+                    const glyph = statusGlyph(status);
                     return (
                         <Box key={nodeId} flexDirection="row">
+                            {color !== undefined ? (
+                                <Text color={color}>{glyph}</Text>
+                            ) : (
+                                <Text dimColor>{glyph}</Text>
+                            )}
+                            <Text> </Text>
                             <Text>{truncate(nodeId, 10)}</Text>
                             <Text> </Text>
-                            {color !== undefined ? <Text color={color}>{status}</Text> : <Text dimColor>{status}</Text>}
+                            {color !== undefined ? (
+                                <Text color={color}>[{status}]</Text>
+                            ) : (
+                                <Text dimColor>[{status}]</Text>
+                            )}
                         </Box>
                     );
                 })

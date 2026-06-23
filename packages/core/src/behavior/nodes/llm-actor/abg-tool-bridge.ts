@@ -162,7 +162,8 @@ export function createAbgToolSettlementLedger(): AbgToolSettlementLedger {
  * 'tool_failed', message: '<tool-code>: <detail>'}` (see file-patch-errors.ts
  * `filePatchFailure`), so the discriminator is the MESSAGE PREFIX, not the `code` — exactly
  * how the flat run coordinator detects it (`isApprovalBlockedMessage`). `approval_denied:`
- * (a denial) is NOT a block — it is a terminal failure the graph surfaces as `failed`.
+ * (a denial) is NOT a block — the LLMActor surfaces it to the model as a tool-result error so the
+ * run can adapt.
  */
 export function isApprovalRequiredSettlement(settlement: AbgToolSettlement): boolean {
     return settlement.status === 'failed' && (settlement.error?.message ?? '').startsWith('approval_required:');
@@ -171,9 +172,8 @@ export function isApprovalRequiredSettlement(settlement: AbgToolSettlement): boo
 /**
  * A settlement is approval-denied when the permission gate decided `deny` and the tool surfaced
  * an `approval_denied` error (message prefix; the registry wraps every tool error as code
- * `tool_failed`). A denial is terminal — the graph surfaces it as a non-retryable `failed` run
- * (parity with the flat run coordinator's `terminalFailedSettlement`), so the model does not loop
- * retrying a denied call.
+ * `tool_failed`). The LLMActor surfaces a denial to the model as a readable tool-result string so
+ * it can adapt, rather than terminating the run on the first denied tool.
  */
 export function isApprovalDeniedSettlement(settlement: AbgToolSettlement): boolean {
     return settlement.status === 'failed' && (settlement.error?.message ?? '').startsWith('approval_denied:');
