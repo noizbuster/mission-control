@@ -63,20 +63,24 @@ All keyboard events flow through `handleInput(core, input, key)`. Priority:
 
 ### Output Rendering
 
-The output text is parsed into `ChatBlock` objects by `parseMessageBlocks()`. Each block has a `kind` that determines its visual styling:
+The output text is parsed into `ChatBlock` objects by `parseMessageBlocks()`. Each block has a `kind` that routes to a dedicated renderer:
 
-| Prefix in outputText | Block kind | Left bar color | Text style |
-|---|---|---|---|
-| `You: ` | user | cyan | normal |
-| `Assistant: ` | assistant | green | dimColor |
-| `Error: ` | error | red | red |
-| (anything else) | system | none | dimColor |
+| Prefix in outputText | Block kind | Renderer |
+|---|---|---|
+| `You: ` | user | flat row, cyan left bar, raw text |
+| `Assistant: ` | assistant | `<Markdown>` via `MarkdownPanel` (green bar, width 1) |
+| `Thinking: ` | thinking | `<Markdown>` via `MarkdownPanel` (magenta bar, width 2, italic-dim theme) |
+| `Error: ` | error | flat row, red left bar, red text |
+| tool preview/output lines | tool | `<ToolCard>` (rounded border, diff-aware) |
+| (anything else) | system | flat dim text, no left bar |
 
-User input is echoed to `outputText` with `You: ` prefix when a non-slash-command line is submitted. This ensures both sides of the conversation are visible in the scroll history.
+The markdown pipeline (`src/components/markdown/`) is Ink-native: `Markdown.tsx` walks `marked` tokens into a serializable IR (`InlineRun`/`RenderLine`/`RenderBlock`), styled by `theme.ts` (`darkTheme`), with code-block syntax highlighting from `highlight.ts` (T5) and streaming-unsafe markdown healing from `stream.ts` (T3). A 64-entry LRU cache (`getCachedBlocks`) keys on `(text, width, streaming, theme)`. Wrapping uses `wrap-ansi` with `trim:false` so every character survives; CJK double-width glyphs are counted as 2 columns by `string-width`/`get-east-asian-width`, so lines never overflow the target width.
 
-Each `MessageBlock` renders as a `<Box flexDirection="row">` with:
-- A 1-character-wide colored `<Box>` as the left edge (visual category indicator)
-- A `<Box flexDirection="column">` containing the message text lines
+`parseMessageBlocks` splits `outputText` WITHOUT dropping blank lines: interior blanks survive as markdown paragraph separators (so `Assistant: para1\n\npara2` stays one block), and only leading/trailing empties are trimmed. Continuation absorption keeps multi-line assistant/thinking messages as a single markdown unit (absorbing only `system`-classified lines), while tool blocks keep the broader `!isStrongBoundary` absorption. Tool-preview lines (`Edit preview for`, `+++`, `---`, etc.) are strong-enough boundaries that they always start a new `tool` block.
+
+`MessageBlock` routes each `ChatBlock`: assistant/thinking → `MarkdownPanel` (a colored bar whose row count matches the rendered markdown line count, plus the `<Markdown>` tree); tool → `<ToolCard>`; user/error/system → the legacy flat row. When the trailing window budget is exceeded, `selectTrailingBlocks` drops markdown blocks whole (tail-slicing mid-block can split a code fence) and tail-slices non-markdown blocks, marking them `ChatBlock.truncated: true`. The `toolOutputExpanded` flag (Ctrl+O toggle) collapses `<ToolCard>` to a header-only `> title (N lines)` view.
+
+The diff renderer (`src/components/diff/`) classifies mctrl's no-line-number format (`-old`/`+new`/`--- a/`/`+++ b/`/`@@`) via `render-diff.ts` and renders green/red/cyan rows with inverse intra-line highlighting through `DiffView.tsx`. `ToolCard` auto-detects diff content via `hasDiffContent` and routes accordingly; prose tool output falls back to plain yellow lines.
 
 ### Screen Layout (top to bottom)
 
@@ -139,6 +143,12 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | Ink ChatInput adapter | `src/commands/ink-chat-input.ts` | Delegates to bridge.waitForEvent |
 | Ink ChatOutput adapter | `src/commands/ink-chat-output.ts` | Delegates to bridge.emitOutput |
 | Ink components | `src/components/*.tsx` | TextInput, SlashCommandMenu, ModelSelector, MessageList, StatusBar, ApprovalPrompt |
+| Markdown renderer | `src/components/markdown/Markdown.tsx` | Ink-native markdown: token walker → IR (`InlineRun`/`RenderLine`/`RenderBlock`) → `<Box>`/`<Text>`. Pure helpers (`getCachedBlocks`, `reflowRuns`, `renderInlineToRuns`, `computeTableColumnWidths`) are exported for unit tests. 64-entry LRU cache. |
+| Markdown theme | `src/components/markdown/theme.ts` | `darkTheme` (14 element styles + `highlightCode` slot), `noColorTheme`. `InkTextStyle` = subset of Ink `<Text>` props. |
+| Markdown streaming healer | `src/components/markdown/stream.ts` | `streamBlocks` heals incomplete markdown (open `**`, ```` ``` ```` fence) via `remend` and splits live input into renderable blocks. Never throws. |
+| Code highlighting | `src/components/markdown/highlight.ts` | `highlightCode` tokenizes via `cli-highlight` with a sentinel-encoded custom theme; scope→color table; zero raw ANSI leakage. |
+| Diff renderer | `src/components/diff/` | `render-diff.ts` classifies mctrl no-line-number diffs; `DiffView.tsx` renders green/red/cyan with inverse intra-line spans. `kindStyle`/`splitLineSpans` exported for tests. |
+| Tool card | `src/components/ToolCard.tsx` | Bordered card; `hasDiffContent` auto-routes to `<DiffView>` or yellow prose lines; `expanded` prop collapses to header. |
 | Executable entry, help, version | `src/index.tsx` | Package `bin` maps `mctrl` to `./dist/index.js`. |
 | Top-level flags and modes | `src/args.ts` | Keep command/mode string unions explicit. |
 | Run and graph args | `src/run-args.ts` | Owns `--json`, `--jsonl`, provider/model, native, graph, `--workspace`, `--session`, `--engine` flags. |
@@ -170,6 +180,9 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 - Store auth through `auth-store.ts`; never print raw API keys, OAuth tokens, or multi-field credentials.
 - Argument parsing stays parse-only. Runtime effects belong in command modules.
 - Renderer code should consume protocol/core events, not private runtime fields.
+- The markdown/diff/ToolCard renderers consume already-redacted `outputText` (provider/tool output is redacted upstream in `packages/core`). Never read raw provider or tool structured output in a renderer.
+- `react-test-renderer` is intentionally not a dependency. Test renderer logic via the pure exported helpers (`getCachedBlocks`/`reflowRuns`/`kindStyle`/`hasDiffContent`) or Ink's headless `renderToString({columns})`. Never mount a full React tree in a unit test.
+- Visible-width math (wrapping, table columns, bar row counts) counts East Asian Wide glyphs as 2 columns — `wrap-ansi` relies on `string-width`/`get-east-asian-width`, so CJK never overflows.
 - The bridge core is the single source of truth. React components are read-only views of the snapshot.
 - `useSyncExternalStore` requires `getSnapshot()` to return a referentially stable object — `publishSnapshot()` always creates a new object.
 - Ink's `useInput` batches multi-char input. Always check for `\r`/`\n` inside the `input` string, not just `key.return`.
