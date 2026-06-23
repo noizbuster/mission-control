@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+    type ChatBlock,
     getMessageWindowLineBudget,
     parseMessageBlocks,
     selectTrailingBlocks,
-    type ChatBlock,
 } from './ink-chat-bridge.js';
 
 function kinds(blocks: readonly ChatBlock[]): readonly string[] {
@@ -142,5 +142,120 @@ describe('parseMessageBlocks — tool block sticky classification', () => {
         } finally {
             Object.defineProperty(process.stdout, 'rows', { value: original, configurable: true });
         }
+    });
+});
+
+// Reconstruct the MessageBlock join contract (strip prefix from line 0, join with \n)
+// to assert that a parsed assistant/thinking block reconstructs its source markdown.
+function joinedMarkdown(block: ChatBlock, prefix: string): string {
+    const first = block.lines[0] ?? '';
+    const rest = block.lines.slice(1);
+    const stripped = prefix.length > 0 && first.startsWith(prefix) ? first.slice(prefix.length) : first;
+    return [stripped, ...rest].join('\n');
+}
+
+describe('parseMessageBlocks — markdown-unit preservation (T6)', () => {
+    it('keeps a multi-paragraph assistant message as ONE block with blank lines intact', () => {
+        // Pre-fix behavior (characterization): this fragmented into [assistant(1 line), system(1 line)]
+        // and the blank line was dropped, so the joined text lost the paragraph break.
+        const blocks = parseMessageBlocks('Assistant: para1\n\npara2\n');
+
+        expect(kinds(blocks)).toEqual(['assistant']);
+        expect(blocks[0]?.lines).toEqual(['Assistant: para1', '', 'para2']);
+        // The renderer joins block.lines (stripping the prefix from line 0) into one
+        // markdown document that reconstructs both paragraphs separated by a blank line.
+        expect(joinedMarkdown(blocks[0] as ChatBlock, 'Assistant: ')).toBe('para1\n\npara2');
+    });
+
+    it('absorbs plain-text continuation lines into an assistant block (no fragmentation)', () => {
+        const output = ['Assistant: line one', 'line two continued', '', 'line three'].join('\n');
+        const blocks = parseMessageBlocks(output);
+
+        expect(kinds(blocks)).toEqual(['assistant']);
+        expect(blocks[0]?.lines.length).toBe(4);
+        expect(joinedMarkdown(blocks[0] as ChatBlock, 'Assistant: ')).toBe(
+            'line one\nline two continued\n\nline three',
+        );
+    });
+
+    it('absorbs blank lines and continuation into a thinking block', () => {
+        const output = ['Thinking: first thought', '', 'second thought', 'Assistant: answer'].join('\n');
+        const blocks = parseMessageBlocks(output);
+
+        expect(kinds(blocks)).toEqual(['thinking', 'assistant']);
+        const thinking = blocks.find((b) => b.kind === 'thinking') as ChatBlock;
+        expect(thinking.lines).toEqual(['Thinking: first thought', '', 'second thought']);
+        expect(joinedMarkdown(thinking, 'Thinking: ')).toBe('first thought\n\nsecond thought');
+    });
+
+    it('does NOT absorb a tool-preview line into an assistant block (tool cards stay separate)', () => {
+        const output = ['Assistant: done', 'Edit preview for file.edit', 'Target: a.ts'].join('\n');
+        const blocks = parseMessageBlocks(output);
+
+        // The assistant block must NOT swallow the tool preview — it stays a tool block
+        // so T7 tool-card rendering keeps working.
+        expect(kinds(blocks)).toEqual(['assistant', 'tool']);
+        expect(joinedMarkdown(blocks[0] as ChatBlock, 'Assistant: ')).toBe('done');
+    });
+
+    it('drops leading and trailing blank lines but keeps interior ones', () => {
+        const output = '\n\nAssistant: hi\n\nbye\n\n';
+        const blocks = parseMessageBlocks(output);
+
+        expect(kinds(blocks)).toEqual(['assistant']);
+        expect(blocks[0]?.lines).toEqual(['Assistant: hi', '', 'bye']);
+    });
+
+    it('renders a bold-heading assistant block as markdown (not a literal #)', () => {
+        // The renderer feeds this joined text to <Markdown>; the stopping condition is
+        // that '# Heading' renders bold, not as literal '#'. Here we assert the parser
+        // produces a single assistant block whose joined text is well-formed markdown
+        // that marked.lexer will tokenize as a heading (verified in Markdown.test.tsx).
+        const output = 'Assistant: # Title\n\nbody text';
+        const blocks = parseMessageBlocks(output);
+
+        expect(kinds(blocks)).toEqual(['assistant']);
+        expect(joinedMarkdown(blocks[0] as ChatBlock, 'Assistant: ')).toBe('# Title\n\nbody text');
+    });
+
+    it('marks truncated non-markdown blocks and drops whole markdown blocks for budget', () => {
+        // System lines come FIRST so they form a standalone system block (system
+        // lines following an assistant line are correctly absorbed as continuation).
+        // An overflowing system block gets tail-sliced + marked `truncated`; an
+        // overflowing markdown (assistant/thinking) block gets dropped whole.
+        const blocks = parseMessageBlocks(
+            ['system note one', 'system note two', 'system note three', 'Assistant: short answer'].join('\n'),
+        );
+        expect(kinds(blocks)).toEqual(['system', 'assistant']);
+
+        const original = process.stdout.rows;
+        Object.defineProperty(process.stdout, 'rows', { value: 16, configurable: true });
+        try {
+            // budget = 8; system (3 lines) + assistant (1 line) = 4 ≤ 8, no truncation.
+            const { truncatedTop, windowed } = selectTrailingBlocks(blocks, getMessageWindowLineBudget());
+            expect(truncatedTop).toBe(false);
+            expect(windowed).toHaveLength(2);
+        } finally {
+            Object.defineProperty(process.stdout, 'rows', { value: original, configurable: true });
+        }
+
+        // Budget 2: assistant(1) fits, system(3) overflows and is tail-sliced.
+        const { windowed, truncatedTop } = selectTrailingBlocks(blocks, 2);
+        const sys = windowed.find((b) => b.kind === 'system');
+        expect(sys?.truncated).toBe(true);
+        expect(truncatedTop).toBe(true);
+    });
+
+    it('drops a whole markdown block when it alone exceeds the budget', () => {
+        const big: string[] = ['Assistant: '];
+        for (let i = 0; i < 30; i++) big.push(`line ${i}`);
+        const blocks = parseMessageBlocks(big.join('\n'));
+        expect(blocks).toHaveLength(1);
+        expect(blocks[0]?.kind).toBe('assistant');
+
+        const { windowed, truncatedTop } = selectTrailingBlocks(blocks, 8);
+        // Markdown block dropped whole (no partial slice that could split a fence).
+        expect(truncatedTop).toBe(true);
+        expect(windowed).toEqual([]);
     });
 });

@@ -28,10 +28,13 @@ import type { ModelProviderSelection } from '@mission-control/protocol';
 import { Box, type Key, render, Text, useInput } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { AbgOverlay, type AbgOverlayTab } from '../components/AbgOverlay.js';
+import { getCachedBlocks, Markdown } from '../components/markdown/Markdown.js';
+import { darkTheme, type TerminalMarkdownTheme } from '../components/markdown/theme.js';
 import { StatusBar } from '../components/StatusBar.js';
 import { useSpinnerFrame } from '../components/spinner.js';
-import type { ApprovalLevel } from './approval-level.js';
+import { ToolCard } from '../components/ToolCard.js';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
+import type { ApprovalLevel } from './approval-level.js';
 import {
     createProviderPromptKeypressState,
     createProviderPromptView,
@@ -1329,7 +1332,8 @@ function handleLevelPickerInput(core: InkChatBridgeCore, input: string, key: Key
         return;
     }
     if (key.upArrow) {
-        core.levelPickerSelectedIndex = (core.levelPickerSelectedIndex - 1 + APPROVAL_LEVEL_PICKER_COUNT) % APPROVAL_LEVEL_PICKER_COUNT;
+        core.levelPickerSelectedIndex =
+            (core.levelPickerSelectedIndex - 1 + APPROVAL_LEVEL_PICKER_COUNT) % APPROVAL_LEVEL_PICKER_COUNT;
         publishSnapshot(core);
         return;
     }
@@ -1490,7 +1494,12 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     if (snapshot.approvalActive) {
         return (
             <Box flexDirection="column">
-                <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
+                <MessageWindow
+                    blocks={messageBlocks}
+                    scrollOffset={snapshot.scrollOffset}
+                    generating={snapshot.generating}
+                    toolOutputExpanded={snapshot.toolOutputExpanded}
+                />
                 <Box flexDirection="column" marginTop={1} paddingX={1}>
                     <Text bold color="yellow" inverse>
                         {' Approval Required '}
@@ -1523,7 +1532,12 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     if (snapshot.questionActive) {
         return (
             <Box flexDirection="column">
-                <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
+                <MessageWindow
+                    blocks={messageBlocks}
+                    scrollOffset={snapshot.scrollOffset}
+                    generating={snapshot.generating}
+                    toolOutputExpanded={snapshot.toolOutputExpanded}
+                />
                 <Box flexDirection="column" marginTop={1} paddingX={1}>
                     <Text bold color="magenta" inverse>
                         {' Question '}
@@ -1592,7 +1606,12 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     if (snapshot.renameModeActive) {
         return (
             <Box flexDirection="column">
-                <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
+                <MessageWindow
+                    blocks={messageBlocks}
+                    scrollOffset={snapshot.scrollOffset}
+                    generating={snapshot.generating}
+                    toolOutputExpanded={snapshot.toolOutputExpanded}
+                />
                 <Box flexDirection="column" marginTop={1} paddingX={1}>
                     <Text bold color="cyan" inverse>
                         {' Rename Session '}
@@ -1614,13 +1633,22 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
         const levels: ReadonlyArray<{ readonly id: string; readonly label: string; readonly desc: string }> = [
             { id: 'verbose', label: 'verbose', desc: 'Ask for every tool call, including reads' },
             { id: 'safe', label: 'safe', desc: 'Auto-approve reads and webfetch; ask before modifications' },
-            { id: 'aggressive', label: 'aggressive', desc: 'Auto-approve reads, edits, webfetch, subagent; ask before bash' },
+            {
+                id: 'aggressive',
+                label: 'aggressive',
+                desc: 'Auto-approve reads, edits, webfetch, subagent; ask before bash',
+            },
             { id: 'reckless', label: 'reckless', desc: 'Auto-approve everything; only bash asks before execution' },
             { id: 'yolo', label: 'yolo', desc: 'Auto-approve everything including subagent (use with caution)' },
         ];
         return (
             <Box flexDirection="column">
-                <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
+                <MessageWindow
+                    blocks={messageBlocks}
+                    scrollOffset={snapshot.scrollOffset}
+                    generating={snapshot.generating}
+                    toolOutputExpanded={snapshot.toolOutputExpanded}
+                />
                 <Box flexDirection="column" marginTop={1} paddingX={1}>
                     <Text bold color="cyan" inverse>
                         {' Select approval level '}
@@ -1729,7 +1757,12 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
     return (
         <Box flexDirection="column">
             <Banner {...(statusBarProps !== undefined ? { statusBarProps } : {})} />
-            <MessageWindow blocks={messageBlocks} scrollOffset={snapshot.scrollOffset} />
+            <MessageWindow
+                blocks={messageBlocks}
+                scrollOffset={snapshot.scrollOffset}
+                generating={snapshot.generating}
+                toolOutputExpanded={snapshot.toolOutputExpanded}
+            />
             {snapshot.agentStatusText.length > 0 ? (
                 <AgentSpinner text={snapshot.agentStatusText} />
             ) : snapshot.generating ? (
@@ -1794,7 +1827,10 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                         snapshot.generating ? (
                             <Text dimColor> Press Esc to stop, or wait for the response…</Text>
                         ) : (
-                            <Text dimColor> Type a message, / for commands, # for workflows, or Ctrl+C twice to exit</Text>
+                            <Text dimColor>
+                                {' '}
+                                Type a message, / for commands, # for workflows, or Ctrl+C twice to exit
+                            </Text>
                         )
                     ) : null}
                 </Text>
@@ -1803,9 +1839,7 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                 <Box marginTop={1}>
                     <StatusBar
                         {...statusBarProps}
-                        {...(snapshot.approvalLevel !== undefined
-                            ? { approvalLevel: snapshot.approvalLevel }
-                            : {})}
+                        {...(snapshot.approvalLevel !== undefined ? { approvalLevel: snapshot.approvalLevel } : {})}
                     />
                 </Box>
             ) : null}
@@ -1855,9 +1889,7 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
         ...(options?.initialHistoryEntries !== undefined
             ? { initialHistoryEntries: options.initialHistoryEntries }
             : {}),
-        ...(options?.initialApprovalLevel !== undefined
-            ? { initialApprovalLevel: options.initialApprovalLevel }
-            : {}),
+        ...(options?.initialApprovalLevel !== undefined ? { initialApprovalLevel: options.initialApprovalLevel } : {}),
     });
     if (options?.abgOverlayController !== undefined) {
         core.abgOverlayController = options.abgOverlayController;
@@ -1901,10 +1933,7 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
             : undefined;
 
     const instance = render(
-        <ChatRoot
-            bridge={internalBridge}
-            {...(statusBarProps !== undefined ? { statusBarProps } : {})}
-        />,
+        <ChatRoot bridge={internalBridge} {...(statusBarProps !== undefined ? { statusBarProps } : {})} />,
         { exitOnCtrlC: false },
     );
     core.unmountFn = instance.unmount;
@@ -2104,6 +2133,8 @@ export function createInkChatBridge(options?: InkChatBridgeOptions): InkChatBrid
 export type ChatBlock = {
     readonly kind: 'user' | 'assistant' | 'error' | 'system' | 'tool' | 'thinking';
     readonly lines: readonly string[];
+    /** Set when this block was tail-sliced or dropped for line budget (truncation marker). */
+    readonly truncated?: boolean;
 };
 
 const TOOL_LINE_PREFIXES: readonly string[] = [
@@ -2141,15 +2172,31 @@ function isStrongBoundary(kind: ChatBlock['kind']): boolean {
     return kind === 'user' || kind === 'assistant' || kind === 'error' || kind === 'thinking';
 }
 
+/** Drop trailing empty lines so a block never ends on a blank (interior blanks survive as paragraph separators). */
+function trimTrailingEmptyLines(lines: readonly string[]): readonly string[] {
+    let end = lines.length;
+    while (end > 0 && (lines[end - 1] ?? '').length === 0) {
+        end -= 1;
+    }
+    return lines.slice(0, end);
+}
+
 export function parseMessageBlocks(outputText: string): readonly ChatBlock[] {
-    const rawLines = outputText.split('\n').filter((line) => line.length > 0);
+    // Split without dropping empty lines: interior blanks are markdown paragraph
+    // separators and must survive so a joined assistant block reconstructs the
+    // original multi-paragraph text. Leading/trailing empties that would produce
+    // an empty block are trimmed at flush.
+    const rawLines = outputText.split('\n');
     const blocks: ChatBlock[] = [];
     let currentKind: ChatBlock['kind'] | undefined;
     let currentLines: string[] = [];
 
     const flush = (): void => {
         if (currentKind !== undefined && currentLines.length > 0) {
-            blocks.push({ kind: currentKind, lines: currentLines });
+            const trimmed = trimTrailingEmptyLines(currentLines);
+            if (trimmed.length > 0) {
+                blocks.push({ kind: currentKind, lines: trimmed });
+            }
         }
         currentKind = undefined;
         currentLines = [];
@@ -2157,7 +2204,16 @@ export function parseMessageBlocks(outputText: string): readonly ChatBlock[] {
 
     for (const line of rawLines) {
         const classified = classifyLine(line);
-        if (currentKind === 'tool' && !isStrongBoundary(classified)) {
+        // Continuation absorption keeps multi-line blocks together. Tool blocks
+        // absorb any non-strong-boundary line (unchanged). Assistant and thinking
+        // blocks absorb plain-text continuation + blank lines (system-classified)
+        // so a multi-paragraph message stays one block, but they do NOT absorb
+        // tool/user/error/thinking lines, which start new blocks instead.
+        const absorbable =
+            currentKind !== undefined &&
+            ((currentKind === 'tool' && !isStrongBoundary(classified)) ||
+                ((currentKind === 'assistant' || currentKind === 'thinking') && classified === 'system'));
+        if (absorbable) {
             currentLines.push(line);
             continue;
         }
@@ -2189,14 +2245,76 @@ const blockPrefix: Record<ChatBlock['kind'], string> = {
     thinking: THINKING_PREFIX,
 };
 
-function MessageBlock({ block }: { readonly block: ChatBlock }): React.ReactElement {
-    const leftColor = blockLeftColor[block.kind];
-    const prefix = blockPrefix[block.kind];
-    const isSystem = block.kind === 'system';
-    const isTool = block.kind === 'tool';
-    const isThinking = block.kind === 'thinking';
+// Thinking blocks render as italic, dimmed markdown: defaultTextStyle layers
+// under every element style so prose, headings, and list items all read italic
+// without losing their per-element coloring. Requires Markdown's defaultTextStyle
+// support (see tokenToBlocks in Markdown.tsx).
+const thinkingTheme: TerminalMarkdownTheme = { ...darkTheme, defaultTextStyle: { italic: true, dimColor: true } };
 
-    if (isSystem) {
+function terminalContentWidth(): number {
+    return Math.max(1, process.stdout.columns ?? 80);
+}
+
+/** Join a block's lines into one markdown document, stripping the prefix from the first line only. */
+function joinBlockText(lines: readonly string[], prefix: string): string {
+    if (lines.length === 0) return '';
+    const first = lines[0] ?? '';
+    const rest = lines.slice(1);
+    const strippedFirst = prefix.length > 0 && first.startsWith(prefix) ? first.slice(prefix.length) : first;
+    return rest.length === 0 ? strippedFirst : [strippedFirst, ...rest].join('\n');
+}
+
+function MarkdownPanel({
+    text,
+    theme,
+    barColor,
+    barWidth,
+    streaming,
+    marginTop,
+}: {
+    readonly text: string;
+    readonly theme: TerminalMarkdownTheme;
+    readonly barColor: string;
+    readonly barWidth: number;
+    readonly streaming?: boolean;
+    readonly marginTop?: number;
+}): React.ReactElement {
+    const width = Math.max(1, terminalContentWidth() - barWidth);
+    // Match the bar height to the exact rendered line count: getCachedBlocks
+    // returns the same IR <Markdown> will render (cache hit), so summing block
+    // lines yields a bar that spans the full content height. An empty bar Box
+    // does not reliably flex-stretch across multi-block markdown.
+    const rendered = getCachedBlocks(text, width, streaming ?? false, theme);
+    const barRows = rendered.reduce((sum, block) => sum + block.lines.length, 0);
+    return (
+        <Box flexDirection="row" {...(marginTop !== undefined ? { marginTop } : {})}>
+            <Box width={barWidth} flexDirection="column">
+                {Array.from({ length: barRows }, (_value, index) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: bar rows mirror markdown line count
+                    <Text key={`bar-${index}`} backgroundColor={barColor}>
+                        {' '.repeat(barWidth)}
+                    </Text>
+                ))}
+            </Box>
+            <Box flexDirection="column" flexGrow={1}>
+                <Markdown text={text} width={width} theme={theme} {...(streaming ? { streaming: true } : {})} />
+            </Box>
+        </Box>
+    );
+}
+
+function MessageBlock({
+    block,
+    isStreaming,
+    toolOutputExpanded,
+}: {
+    readonly block: ChatBlock;
+    readonly isStreaming?: boolean;
+    readonly toolOutputExpanded: boolean;
+}): React.ReactElement {
+    const prefix = blockPrefix[block.kind];
+
+    if (block.kind === 'system') {
         return (
             <Box flexDirection="column">
                 {block.lines.map((line, index) => (
@@ -2209,59 +2327,58 @@ function MessageBlock({ block }: { readonly block: ChatBlock }): React.ReactElem
         );
     }
 
-    if (isTool) {
+    if (block.kind === 'tool') {
+        // Redaction invariant: block.lines come from already-redacted chatOutput
+        // text (interactive-coding-tool-preview.ts redacts via redactCredentialText
+        // before writing). The renderer never reads raw provider or tool output.
         const title = readToolBlockTitle(block.lines);
         return (
-            <Box flexDirection="row" marginTop={1}>
-                <Box width={2} flexDirection="column">
-                    {block.lines.map((_line, index) => (
-                        <Text key={`bar-${index}`} backgroundColor="yellow">
-                            {'  '}
-                        </Text>
-                    ))}
-                </Box>
-                <Box flexDirection="column" flexGrow={1}>
-                    {title !== undefined ? (
-                        <Text color="yellow" bold>
-                            {`> ${title}`}
-                        </Text>
-                    ) : null}
-                    {block.lines.map((line, index) => (
-                        <Text key={`line-${index}`} color="yellow">
-                            {line}
-                        </Text>
-                    ))}
-                </Box>
+            <Box marginTop={1}>
+                <ToolCard
+                    lines={block.lines}
+                    expanded={toolOutputExpanded}
+                    {...(title !== undefined ? { title } : {})}
+                />
             </Box>
         );
     }
 
-    if (isThinking) {
+    if (block.kind === 'thinking') {
+        // Redaction invariant: block.lines come from already-redacted chatOutput
+        // text (see provider-turn-events.ts / interactive-coding-agent.ts). The
+        // renderer never reads raw provider or tool structured output.
+        const joined = joinBlockText(block.lines, prefix);
         return (
-            <Box flexDirection="row" marginTop={1}>
-                <Box width={2} flexDirection="column">
-                    {block.lines.map((_line, index) => (
-                        <Text key={`bar-${index}`} backgroundColor="magenta">
-                            {'  '}
-                        </Text>
-                    ))}
-                </Box>
-                <Box flexDirection="column" flexGrow={1}>
-                    {block.lines.map((line, index) => {
-                        const content = line.startsWith(THINKING_PREFIX)
-                            ? line.slice(THINKING_PREFIX.length)
-                            : line;
-                        return (
-                            <Text key={`line-${index}`} italic dimColor>
-                                {content}
-                            </Text>
-                        );
-                    })}
-                </Box>
-            </Box>
+            <MarkdownPanel
+                text={joined}
+                theme={thinkingTheme}
+                barColor="magenta"
+                barWidth={2}
+                marginTop={1}
+                {...(isStreaming ? { streaming: true } : {})}
+            />
         );
     }
 
+    if (block.kind === 'assistant') {
+        // Redaction invariant: block.lines come from already-redacted chatOutput
+        // text (see provider-turn-events.ts / interactive-coding-agent.ts). The
+        // renderer never reads raw provider or tool structured output.
+        const joined = joinBlockText(block.lines, prefix);
+        return (
+            <MarkdownPanel
+                text={joined}
+                theme={darkTheme}
+                barColor="green"
+                barWidth={1}
+                {...(isStreaming ? { streaming: true } : {})}
+            />
+        );
+    }
+
+    // user / error fallthrough
+    const leftColor = blockLeftColor[block.kind];
+    const isError = block.kind === 'error';
     return (
         <Box flexDirection="row">
             {leftColor !== undefined ? (
@@ -2277,13 +2394,11 @@ function MessageBlock({ block }: { readonly block: ChatBlock }): React.ReactElem
             <Box flexDirection="column" flexGrow={1}>
                 {block.lines.map((line, index) => {
                     const content = prefix.length > 0 && line.startsWith(prefix) ? line.slice(prefix.length) : line;
-                    const isError = block.kind === 'error';
                     return (
                         <Text
                             // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
                             key={`line-${index}`}
                             {...(isError ? { color: 'red' } : {})}
-                            {...(block.kind === 'assistant' ? { dimColor: true } : {})}
                         >
                             {content}
                         </Text>
@@ -2336,17 +2451,18 @@ export function selectTrailingBlocks(
         if (block === undefined) continue;
         if (lineCount + block.lines.length > lineBudget) {
             const remaining = lineBudget - lineCount;
-            if (remaining > 0 && index < blocks.length - 1) {
-                const truncatedBlock: ChatBlock = { ...block, lines: block.lines.slice(-remaining) };
+            const isMarkdownBlock = block.kind === 'assistant' || block.kind === 'thinking';
+            // Markdown-rendered blocks must stay intact: tail-slicing mid-block
+            // can split a code fence or orphan a heading, so the whole block is
+            // dropped and earlier blocks fill the budget. Non-markdown blocks
+            // keep the original tail-slice behavior, marked `truncated`.
+            if (remaining > 0 && !isMarkdownBlock) {
+                const truncatedBlock: ChatBlock = { ...block, lines: block.lines.slice(-remaining), truncated: true };
                 return {
                     startIdx: index,
                     windowed: [truncatedBlock, ...blocks.slice(index + 1)],
                     truncatedTop: true,
                 };
-            }
-            if (remaining > 0 && index === blocks.length - 1) {
-                const truncatedBlock: ChatBlock = { ...block, lines: block.lines.slice(-remaining) };
-                return { startIdx: index, windowed: [truncatedBlock], truncatedTop: true };
             }
             return { startIdx: index + 1, windowed: blocks.slice(index + 1), truncatedTop: index >= 0 };
         }
@@ -2359,15 +2475,20 @@ export function selectTrailingBlocks(
 function MessageWindow({
     blocks,
     scrollOffset,
+    generating,
+    toolOutputExpanded,
 }: {
     readonly blocks: readonly ChatBlock[];
     readonly scrollOffset: number;
+    readonly generating: boolean;
+    readonly toolOutputExpanded: boolean;
 }): React.ReactElement {
     const total = blocks.length;
     if (total === 0) {
         return <></>;
     }
     const lineBudget = getMessageWindowLineBudget();
+    const lastIndex = total - 1;
 
     if (scrollOffset <= 0) {
         const { startIdx, windowed, truncatedTop } = selectTrailingBlocks(blocks, lineBudget);
@@ -2378,10 +2499,19 @@ function MessageWindow({
                 {showTruncationHint ? (
                     <Text dimColor>{`[\u2191 earlier output hidden \u2014 PgUp to scroll]`}</Text>
                 ) : null}
-                {windowed.map((block, index) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
-                    <MessageBlock key={`msg-${block.kind}-${startIdx + index}`} block={block} />
-                ))}
+                {windowed.map((block, index) => {
+                    const globalIndex = startIdx + index;
+                    const streaming = generating && globalIndex === lastIndex;
+                    return (
+                        // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
+                        <MessageBlock
+                            key={`msg-${block.kind}-${globalIndex}`}
+                            block={block}
+                            toolOutputExpanded={toolOutputExpanded}
+                            {...(streaming ? { isStreaming: true } : {})}
+                        />
+                    );
+                })}
             </>
         );
     }
@@ -2393,10 +2523,19 @@ function MessageWindow({
     return (
         <>
             <Text dimColor>{`[scroll ${endIdx}/${total} \u2014 PgUp/PgDn to navigate, End to jump to bottom]`}</Text>
-            {windowed.map((block, index) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
-                <MessageBlock key={`msg-${block.kind}-${startIdx + index}`} block={block} />
-            ))}
+            {windowed.map((block, index) => {
+                const globalIndex = startIdx + index;
+                const streaming = generating && globalIndex === lastIndex;
+                return (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
+                    <MessageBlock
+                        key={`msg-${block.kind}-${globalIndex}`}
+                        block={block}
+                        toolOutputExpanded={toolOutputExpanded}
+                        {...(streaming ? { isStreaming: true } : {})}
+                    />
+                );
+            })}
         </>
     );
 }
