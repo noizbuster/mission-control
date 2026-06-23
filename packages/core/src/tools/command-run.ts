@@ -101,10 +101,11 @@ async function runCommandTool(
             ]);
         }
         if (output.status === 'failed') {
-            throw commandRunFailure('command_failed', commandFailedMessage(output), [
-                started,
-                commandEvent('command.failed', context.toolCallId, metadataForOutput(output, 'failed')),
-            ]);
+            throw commandRunFailure(
+                'command_failed',
+                commandFailedMessage(output, options.maxModelOutputChars),
+                [started, commandEvent('command.failed', context.toolCallId, metadataForOutput(output, 'failed'))],
+            );
         }
         return output;
     } finally {
@@ -182,8 +183,26 @@ function metadataForOutput(
     };
 }
 
-function commandFailedMessage(output: CommandRunOutput): string {
-    return `command failed: ${output.command.join(' ')} exit: ${output.exitCode ?? output.signal ?? 'unknown'}`;
+// The captured stdout/stderr MUST be surfaced (bounded) on a non-zero exit: a nonzero exit is
+// often an informative result the model must read to recover (linter = "issues found", test runner
+// = failure report). Discarding it leaves the model blind and it loops the same failing command
+// until the graph retry budget runs out. Streams are already capped/redacted by commandRunOutput;
+// each is further bounded to half of maxModelOutputChars here.
+function commandFailedMessage(output: CommandRunOutput, maxModelOutputChars: number): string {
+    const header = `command failed: ${output.command.join(' ')} exit: ${output.exitCode ?? output.signal ?? 'unknown'}`;
+    const perStream = Math.max(256, Math.floor(maxModelOutputChars / 2));
+    const stdout = boundedStream('stdout', output.stdout, perStream, output.stdoutTruncated);
+    const stderr = boundedStream('stderr', output.stderr, perStream, output.stderrTruncated);
+    return `${header}${stdout}${stderr}`;
+}
+
+function boundedStream(label: string, text: string, maxChars: number, streamTruncated: boolean): string {
+    if (text.length === 0) {
+        return '';
+    }
+    const slice = text.slice(0, maxChars);
+    const note = streamTruncated || text.length > maxChars ? ` [truncated ${slice.length}/${text.length}]` : '';
+    return `\n${label}:${note}\n${slice}`;
 }
 
 function commandMetadata(

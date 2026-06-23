@@ -239,6 +239,58 @@ describe('command.run tool', () => {
         expect(result.events.map((event) => event.type)).not.toContain('tool.completed');
     });
 
+    it('surfaces captured stdout/stderr to the model on a nonzero exit so it can recover', async () => {
+        // Given
+        const registry = await createRegistry({
+            maxOutputBytes: 4096,
+            requestPermission: allowPermission,
+            executor: async () => ({
+                exitCode: 1,
+                signal: null,
+                timedOut: false,
+                stdout: 'src/index.ts:1:1 lint/noUnusedVariables — unused import',
+                stderr: 'Formatted 42 files in 11ms. Found 1 error.',
+                durationMs: 3,
+            }),
+        });
+
+        // When
+        const result = await invokeCommand(registry, 'node', allowedHarnessArgs);
+
+        // Then
+        expect(result.result.status).toBe('failed');
+        expect(result.result.error?.message).toContain('command_failed');
+        expect(result.result.error?.message).toContain('exit: 1');
+        expect(result.result.error?.message).toContain('lint/noUnusedVariables');
+        expect(result.result.error?.message).toContain('Formatted 42 files');
+        expect(result.result.error?.retryable).toBe(true);
+    });
+
+    it('bounds the stdout/stderr surfaced on a nonzero exit to the model output budget', async () => {
+        // Given
+        const registry = await createRegistry({
+            maxOutputBytes: 32 * 1024,
+            requestPermission: allowPermission,
+            executor: async () => ({
+                exitCode: 2,
+                signal: null,
+                timedOut: false,
+                stdout: 'x'.repeat(20_000),
+                stderr: 'y'.repeat(20_000),
+                durationMs: 1,
+            }),
+        });
+
+        // When
+        const result = await invokeCommand(registry, 'node', allowedHarnessArgs);
+
+        // Then: default maxModelOutputChars is 8192 → each stream bounded to 4096.
+        expect(result.result.status).toBe('failed');
+        const message = result.result.error?.message ?? '';
+        expect(message.length).toBeLessThan(10_000);
+        expect(message).toContain('[truncated');
+    });
+
     it('enforces shell concurrency limit one', async () => {
         // Given
         const release = deferred<CommandExecutionResult>();
