@@ -12,18 +12,22 @@ describe('approval-level', () => {
         expect(bashRule?.decision).toBe('always');
     });
 
-    it('still asks before bash in verbose, safe, and reckless modes', () => {
-        for (const level of ['verbose', 'safe', 'reckless'] as const) {
+    it('still asks before bash in verbose and safe modes', () => {
+        for (const level of ['verbose', 'safe'] as const) {
             const rules = approvalLevelRules(level);
             const bashRule = rules.find((rule) => rule.permission === 'bash');
             expect(bashRule?.decision).toBe('ask');
         }
     });
 
-    it('keeps yolo auto-approving bash', () => {
-        const rules = approvalLevelRules('yolo');
-        const bashRule = rules.find((rule) => rule.permission === 'bash');
-        expect(bashRule?.decision).toBe('always');
+    it('auto-approves bash at aggressive and above (monotonic)', () => {
+        // aggressive, reckless, and yolo must all auto-approve bash so that "level >= aggressive"
+        // implies command.run / bash.run run without prompting. Reckless mirrors yolo's rule set.
+        for (const level of ['aggressive', 'reckless', 'yolo'] as const) {
+            const rules = approvalLevelRules(level);
+            const bashRule = rules.find((rule) => rule.permission === 'bash');
+            expect(bashRule?.decision).toBe('always');
+        }
     });
 
     it('every level exposes a non-empty description and seven permission rules', () => {

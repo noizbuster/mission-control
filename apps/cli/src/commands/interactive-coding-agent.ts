@@ -38,6 +38,7 @@ import {
 } from './abg-overlay-state.js';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
 import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
+import type { PermissionSession } from '@mission-control/core';
 import type { ChatOutput } from './interactive-chat-io.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { parseFileWriteOutput } from './interactive-coding-file-write-preview.js';
@@ -101,6 +102,7 @@ export type CodingAgentTurnOptions = {
      * Falls back to `buildCodingAgentGraphForSelection` when omitted.
      */
     readonly graph?: AbgGraphSpec;
+    readonly permissionSession?: PermissionSession;
 };
 
 export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Promise<ActiveCodingAgentTurn> {
@@ -131,7 +133,7 @@ async function startOwnedCodingAgentTurn(
         readonly execute: (owner: SessionRunOwner) => Promise<SessionRunOwnerReceipt>;
     },
 ): Promise<ActiveCodingAgentTurn> {
-    const approvals = createInteractiveApprovalBroker(options);
+    const approvals = createInteractiveApprovalBroker(options, options.permissionSession);
     const renderState: ProviderRenderState = { streamingText: false, streamingThinking: false, toolCount: 0, toolNames: [] };
     const { owner, mcpConnectionManager, overlayWiring } = await createInteractiveRunOwner(
         options,

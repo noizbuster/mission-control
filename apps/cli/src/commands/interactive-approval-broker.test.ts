@@ -1,8 +1,27 @@
 import type { AgentEvent, PermissionRequest } from '@mission-control/protocol';
-import { describe, expect, it } from 'vitest';
+import { PermissionSession } from '@mission-control/core';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
 
 describe('interactive approval broker', () => {
+    // Isolate the file-backed PermissionRuleStore so an "always" (persist:true) reply cannot leak
+    // into the user's real permission store or across tests.
+    let previousDataDir: string | undefined;
+    beforeEach(() => {
+        previousDataDir = process.env['MCTRL_DATA_DIR'];
+        process.env['MCTRL_DATA_DIR'] = mkdtempSync(join(tmpdir(), 'mctrl-broker-'));
+    });
+    afterEach(() => {
+        if (previousDataDir === undefined) {
+            delete process.env['MCTRL_DATA_DIR'];
+        } else {
+            process.env['MCTRL_DATA_DIR'] = previousDataDir;
+        }
+    });
+
     it('supports once replies without persisting a future allow rule', async () => {
         const broker = createBroker();
         const first = broker.requestPermission(patchRequest('permission_patch_once'));
@@ -58,11 +77,31 @@ describe('interactive approval broker', () => {
             reply: 'deny',
         });
     });
+
+    // Regression: a session-scoped "always" approval must survive broker recreation, because the
+    // interactive chat builds one broker per prompt turn over a single shared PermissionSession.
+    // Before the fix each turn made its own session and "this session" approvals vanished.
+    it('preserves a session-scoped always approval across brokers sharing a permission session', async () => {
+        const shared = new PermissionSession();
+        const turnOne = createInteractiveApprovalBroker(baseBrokerOptions(), shared);
+        const first = turnOne.requestPermission(patchRequest('permission_patch_session_shared'));
+        expect(turnOne.answer('session')).toBe(true);
+        await expect(first).resolves.toMatchObject({ status: 'allow' });
+
+        const turnTwo = createInteractiveApprovalBroker(baseBrokerOptions(), shared);
+        await expect(
+            turnTwo.requestPermission(patchRequest('permission_patch_session_shared')),
+        ).resolves.toMatchObject({ status: 'allow' });
+    });
 });
 
 function createBroker(events: AgentEvent[] = []) {
+    return createInteractiveApprovalBroker(baseBrokerOptions(events));
+}
+
+function baseBrokerOptions(events: AgentEvent[] = []) {
     let output = '';
-    return createInteractiveApprovalBroker({
+    return {
         workspaceRoot: '/workspace',
         sessionId: 'session_cli_permissions',
         modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
@@ -72,10 +111,10 @@ function createBroker(events: AgentEvent[] = []) {
             },
             getOutput: () => output,
         },
-        emitEvent: (event) => {
+        emitEvent: (event: AgentEvent) => {
             events.push(event);
         },
-    });
+    };
 }
 
 function patchRequest(id: string): PermissionRequest {

@@ -19,12 +19,17 @@ type PendingApproval = {
     readonly resolve: (decision: PermissionDecision) => void;
 };
 
-export function createInteractiveApprovalBroker(options: InteractiveToolOptions): InteractiveApprovalBroker {
-    const level: ApprovalLevel = options.approvalLevel ?? 'safe';
-    const permissionSession = new PermissionSession({
-        builtInRules: approvalLevelRules(level),
-        persistedRuleStore: new PermissionRuleStore(),
-    });
+export function createInteractiveApprovalBroker(
+    options: InteractiveToolOptions,
+    sharedPermissionSession?: PermissionSession,
+): InteractiveApprovalBroker {
+    // A shared session lets session-scoped "always" approvals survive across prompt turns.
+    const permissionSession =
+        sharedPermissionSession ??
+        new PermissionSession({
+            builtInRules: approvalLevelRules(options.approvalLevel ?? 'safe'),
+            persistedRuleStore: new PermissionRuleStore(),
+        });
     let pending: PendingApproval | undefined;
     let cancelledReason: string | undefined;
     const queuedAnswers: string[] = [];

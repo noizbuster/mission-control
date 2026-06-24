@@ -411,6 +411,7 @@ async function runResumeAction(
             ...(coding.requestUserQuestion !== undefined ? { requestUserQuestion: coding.requestUserQuestion } : {}),
             ...(coding.abgOverlayController !== undefined ? { abgOverlayController: coding.abgOverlayController } : {}),
             ...(coding.pricingTable !== undefined ? { pricingTable: coding.pricingTable } : {}),
+            ...(coding.permissionSession !== undefined ? { permissionSession: coding.permissionSession } : {}),
         }),
     );
 }

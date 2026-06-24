@@ -6,6 +6,8 @@ import {
     discoverSkills,
     discoverWorkflows,
     type JsonlSessionEventStore,
+    PermissionRuleStore,
+    PermissionSession,
     PluginManager,
     type ProviderAdapter,
     registerBuiltinWorkflows,
@@ -18,6 +20,7 @@ import { createAbgOverlayController } from './abg-overlay-controller.js';
 import { DEFAULT_ABG_OVERLAY_PREFS, loadAbgOverlayPrefs } from './abg-overlay-prefs-store.js';
 import { createAbgOverlayStore } from './abg-overlay-state.js';
 import type { ApprovalLevel } from './approval-level.js';
+import { approvalLevelRules } from './approval-level.js';
 import { parseChatLine } from './chat-commands.js';
 import { createInkChatBridge, type InkChatBridge, type InkChatBridgeOptions } from './ink-chat-bridge.js';
 import { createInkChatInput } from './ink-chat-input.js';
@@ -171,6 +174,11 @@ export async function runInteractiveChatSession(
     let currentProvider = options.resolveProviderForSelection?.(currentModelProviderSelection) ?? options.provider;
     let currentSessionStore = options.sessionStore;
     let currentApprovalLevel: ApprovalLevel | undefined = options.initialApprovalLevel;
+    // Shared across turns so session-scoped "always" approvals and the active level survive turn boundaries.
+    const sharedPermissionSession = new PermissionSession({
+        builtInRules: approvalLevelRules(currentApprovalLevel ?? 'safe'),
+        persistedRuleStore: new PermissionRuleStore(),
+    });
     let sessionDisplayName: string | undefined;
     const sessionDisplayNameController = {
         current: () => sessionDisplayName,
@@ -381,6 +389,7 @@ export async function runInteractiveChatSession(
                         ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
                         ...(pricingTableForSession.length > 0 ? { pricingTable: pricingTableForSession } : {}),
                         ...(currentApprovalLevel !== undefined ? { approvalLevel: currentApprovalLevel } : {}),
+                        permissionSession: sharedPermissionSession,
                         ...(inkBridge !== undefined
                             ? {
                                   selectApprovalLevel: (currentLevel?: ApprovalLevel) =>
@@ -439,6 +448,7 @@ export async function runInteractiveChatSession(
             currentSessionStore = result.sessionStore ?? currentSessionStore;
             if (result.approvalLevel !== undefined) {
                 currentApprovalLevel = result.approvalLevel;
+                sharedPermissionSession.replaceBuiltInRules(approvalLevelRules(currentApprovalLevel));
                 inkBridge?.setApprovalLevel(currentApprovalLevel);
                 await options.persistApprovalLevel?.(currentApprovalLevel);
             }

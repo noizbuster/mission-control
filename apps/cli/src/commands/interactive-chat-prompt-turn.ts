@@ -9,6 +9,7 @@ import {
     ProviderTurnRunner,
     prependProjectContextMessages,
     type SdkModelResolver,
+    type PermissionSession,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
@@ -32,6 +33,7 @@ export type PromptTurnContext = {
     readonly pricingTable?: PricingTable;
     readonly approvalLevel?: ApprovalLevel;
     readonly graph?: AbgGraphSpec;
+    readonly permissionSession?: PermissionSession;
 };
 
 export async function startPromptTurn(
@@ -132,6 +134,7 @@ export async function startPromptTurn(
         ...(coding.pricingTable !== undefined ? { pricingTable: coding.pricingTable } : {}),
         ...(coding.approvalLevel !== undefined ? { approvalLevel: coding.approvalLevel } : {}),
         ...(coding.graph !== undefined ? { graph: coding.graph } : {}),
+        ...(coding.permissionSession !== undefined ? { permissionSession: coding.permissionSession } : {}),
     });
 }
 
