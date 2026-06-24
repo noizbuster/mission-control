@@ -41,7 +41,11 @@ describe('ink chat bridge Ctrl+C with partial input clears buffer', () => {
 
         handleInput(core, 'c', makeKey({ ctrl: true }));
 
-        expect(nextEvent(core)).toEqual({ type: 'interrupt', interruptedPartialInput: true });
+        expect(nextEvent(core)).toEqual({
+            type: 'interrupt',
+            interruptedPartialInput: true,
+            source: 'ctrl-c',
+        });
         expect(core.inputBuffer).toBe('');
         expect(core.cursorPosition).toBe(0);
     });
@@ -52,11 +56,19 @@ describe('ink chat bridge Ctrl+C with partial input clears buffer', () => {
         handleInput(core, 'hello', makeKey());
         handleInput(core, 'c', makeKey({ ctrl: true }));
 
-        expect(nextEvent(core)).toEqual({ type: 'interrupt', interruptedPartialInput: true });
+        expect(nextEvent(core)).toEqual({
+            type: 'interrupt',
+            interruptedPartialInput: true,
+            source: 'ctrl-c',
+        });
 
         handleInput(core, 'c', makeKey({ ctrl: true }));
 
-        expect(nextEvent(core)).toEqual({ type: 'interrupt', interruptedPartialInput: false });
+        expect(nextEvent(core)).toEqual({
+            type: 'interrupt',
+            interruptedPartialInput: false,
+            source: 'ctrl-c',
+        });
         expect(core.inputBuffer).toBe('');
     });
 });
@@ -67,7 +79,11 @@ describe('ink chat bridge Ctrl+D exit and forward-delete', () => {
 
         handleInput(core, 'd', makeKey({ ctrl: true }));
 
-        expect(nextEvent(core)).toEqual({ type: 'interrupt', interruptedPartialInput: false });
+        expect(nextEvent(core)).toEqual({
+            type: 'interrupt',
+            interruptedPartialInput: false,
+            source: 'ctrl-c',
+        });
     });
 
     it('does not append d to the input buffer when Ctrl+D is pressed on an empty buffer', () => {

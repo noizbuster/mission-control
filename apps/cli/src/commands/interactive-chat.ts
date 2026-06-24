@@ -317,6 +317,11 @@ export async function runInteractiveChatSession(
                     chatOutput.write('\nPress Ctrl+C twice to exit\n');
                     continue;
                 }
+                // ESC-sourced interrupts are stop-only: they never count
+                // toward the "press twice to exit" exit path that Ctrl+C owns.
+                if (event.source === 'esc') {
+                    continue;
+                }
                 if (pendingInterrupt && event.interruptedPartialInput !== true) {
                     chatOutput.write('\n');
                     break;

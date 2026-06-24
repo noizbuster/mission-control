@@ -10,6 +10,7 @@ type ScriptedChatEvent =
     | {
           readonly type: 'interrupt';
           readonly interruptedPartialInput?: boolean;
+          readonly source?: 'ctrl-c' | 'esc';
       };
 
 export function createScriptedChatInput(events: readonly ScriptedChatEvent[], delayMs = 50) {

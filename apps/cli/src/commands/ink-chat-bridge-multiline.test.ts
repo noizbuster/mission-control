@@ -100,3 +100,57 @@ describe('ink chat bridge Shift+Enter multi-line input', () => {
         expect(core.inputBuffer).toBe('draft\n');
     });
 });
+
+describe('ink chat bridge Alt+Enter multi-line input', () => {
+    // Alt+Enter (`\x1b\r`) reaches handleInput with key.return=true and
+    // key.meta=true after Ink's parser strips the escape prefix. This is the
+    // reliable cross-terminal multi-line trigger — Shift+Enter only fires on
+    // kitty-protocol terminals.
+
+    it('appends a newline on Alt+Enter with an empty buffer', () => {
+        const core = createInkChatBridgeCore();
+
+        handleInput(core, '\r', makeKey({ meta: true, return: true }));
+
+        expect(core.inputBuffer).toBe('\n');
+        expect(core.eventQueue.length).toBe(0);
+    });
+
+    it('appends a newline and preserves buffered text on Alt+Enter', () => {
+        const core = createInkChatBridgeCore();
+
+        handleInput(core, 'hello\r', makeKey({ meta: true, return: true }));
+
+        expect(core.inputBuffer).toBe('hello\n');
+        expect(core.eventQueue.length).toBe(0);
+    });
+
+    it('submits a multi-line buffer after Alt+Enter then plain Enter', () => {
+        const core = createInkChatBridgeCore();
+
+        handleInput(core, 'hello\r', makeKey({ meta: true, return: true }));
+        expect(core.inputBuffer).toBe('hello\n');
+
+        handleInput(core, 'world\r', makeKey({ return: true }));
+        expect(core.inputBuffer).toBe('');
+        expect(nextEvent(core)).toEqual({ type: 'line', value: 'hello\nworld' });
+    });
+
+    it('still submits single-line input on plain Enter without alt', () => {
+        const core = createInkChatBridgeCore();
+
+        handleInput(core, 'hello\r', makeKey({ return: true }));
+
+        expect(core.inputBuffer).toBe('');
+        expect(nextEvent(core)).toEqual({ type: 'line', value: 'hello' });
+    });
+
+    it('echoes multi-line user input to outputText on submit', () => {
+        const core = createInkChatBridgeCore();
+
+        handleInput(core, 'line one\r', makeKey({ meta: true, return: true }));
+        handleInput(core, 'line two\r', makeKey({ return: true }));
+
+        expect(core.outputText).toBe('You: line one\nline two\n');
+    });
+});

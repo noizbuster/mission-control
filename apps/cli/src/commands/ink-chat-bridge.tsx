@@ -31,7 +31,7 @@ import { AbgOverlay, type AbgOverlayTab } from '../components/AbgOverlay.js';
 import { getCachedBlocks, Markdown } from '../components/markdown/Markdown.js';
 import { darkTheme, type TerminalMarkdownTheme } from '../components/markdown/theme.js';
 import { StatusBar } from '../components/StatusBar.js';
-import { useSpinnerFrame } from '../components/spinner.js';
+import { resolveSpinnerMode, useSpinnerFrame } from '../components/spinner.js';
 import { ToolCard } from '../components/ToolCard.js';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
 import type { ApprovalLevel } from './approval-level.js';
@@ -48,6 +48,7 @@ import {
     reduceSlashCommandMenuSelection,
     reduceWorkflowCommandMenuSelection,
     resolveSlashCommandMenuSubmission,
+    resolveWorkflowCommandMenuInsertText,
     resolveWorkflowCommandMenuSubmission,
     type SlashCommandMenuState,
 } from './interactive-chat-command-menu.js';
@@ -704,7 +705,7 @@ export function handleSuspendRequest(core: InkChatBridgeCore): void {
  */
 export function handleCtrlDRequest(core: InkChatBridgeCore): void {
     if (core.inputBuffer.length === 0) {
-        enqueueEvent(core, { type: 'interrupt', interruptedPartialInput: false });
+        enqueueEvent(core, { type: 'interrupt', interruptedPartialInput: false, source: 'ctrl-c' });
         return;
     }
     if (core.cursorPosition < core.inputBuffer.length) {
@@ -762,14 +763,20 @@ export function handleImagePasteRequest(core: InkChatBridgeCore): void {
 }
 
 /**
- * Double-Esc action resolver. The default is `'none'` so that mashing Esc on
- * an empty prompt never enqueues an `interrupt` event (which the main loop
- * treats as a Ctrl+C-style exit signal). Esc's only built-in job is to
- * interrupt the active run while generating and to clear a non-empty input
- * buffer; exit is exclusively Ctrl+C. Users who want `/tree` or `/fork` on
- * double-Esc can opt in via `MCTRL_DOUBLE_ESC_ACTION=tree|fork`.
+ * Double-Esc action resolver. The default is `'interrupt'` so a stuck run
+ * (one that hangs outside the streaming state, where `generating` is false
+ * but `activeTurn` is still alive) can be force-stopped by mashing Esc.
+ *
+ * This is safe because ESC-sourced interrupts are tagged `source: 'esc'`,
+ * and the main chat loop treats them as stop-only: they interrupt the active
+ * turn or no-op when idle, but never trigger the "press twice to exit"
+ * exit path that Ctrl+C owns. Exit is exclusively Ctrl+C.
+ *
+ * Opt-in alternatives: `MCTRL_DOUBLE_ESC_ACTION=tree` enqueues `/tree`,
+ * `=fork` enqueues `/fork`, `=none` disables double-Esc entirely (single-Esc
+ * still interrupts an active run and clears a non-empty input buffer).
  */
-function resolveDoubleEscAction(): 'tree' | 'fork' | 'none' {
+function resolveDoubleEscAction(): 'tree' | 'fork' | 'interrupt' | 'none' {
     const action = process.env[DOUBLE_ESC_ACTION_ENV];
     if (action === 'tree') {
         return 'tree';
@@ -777,7 +784,10 @@ function resolveDoubleEscAction(): 'tree' | 'fork' | 'none' {
     if (action === 'fork') {
         return 'fork';
     }
-    return 'none';
+    if (action === 'none') {
+        return 'none';
+    }
+    return 'interrupt';
 }
 
 function handleEscKey(core: InkChatBridgeCore): void {
@@ -786,7 +796,7 @@ function handleEscKey(core: InkChatBridgeCore): void {
     // a reliable stop mechanism while work is in progress.
     if (core.generating) {
         core.lastEscTimestamp = undefined;
-        enqueueEvent(core, { type: 'interrupt', interruptedPartialInput: false });
+        enqueueEvent(core, { type: 'interrupt', interruptedPartialInput: false, source: 'esc' });
         publishSnapshot(core);
         return;
     }
@@ -812,8 +822,14 @@ function handleEscKey(core: InkChatBridgeCore): void {
         core.lastEscTimestamp = undefined;
         if (action === 'tree') {
             enqueueEvent(core, { type: 'line', value: '/tree' });
-        } else {
+        } else if (action === 'fork') {
             enqueueEvent(core, { type: 'line', value: '/fork' });
+        } else {
+            // action === 'interrupt': unlike the single-Esc path this fires
+            // regardless of `generating`, covering runs stuck outside streaming.
+            // Tagged `source: 'esc'` so the main loop treats it as stop-only
+            // and never as an exit candidate.
+            enqueueEvent(core, { type: 'interrupt', interruptedPartialInput: false, source: 'esc' });
         }
         publishSnapshot(core);
         return;
@@ -879,6 +895,7 @@ export function handleInput(core: InkChatBridgeCore, input: string, key: Key): v
         enqueueEvent(core, {
             type: 'interrupt',
             interruptedPartialInput: hadPartialInput,
+            source: 'ctrl-c',
         });
         if (hadPartialInput) {
             core.inputBuffer = '';
@@ -926,16 +943,19 @@ export function handleInput(core: InkChatBridgeCore, input: string, key: Key): v
         return;
     }
     if (key.upArrow) {
-        if (core.inputBuffer.startsWith('/')) {
+        // Suppress prefix/autocomplete menus while recalling history, else a recalled
+        // `/` or `#` entry would hijack the next arrow and block multi-step recall.
+        const historyOwnsArrows = isNavigatingChatInputHistory(core.history);
+        if (!historyOwnsArrows && core.inputBuffer.startsWith('/')) {
             core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[A', core.inputBuffer);
-        } else if (core.inputBuffer.startsWith('#')) {
+        } else if (!historyOwnsArrows && core.inputBuffer.startsWith('#')) {
             core.menuState = reduceWorkflowCommandMenuSelection(
                 core.menuState,
                 '\u001b[A',
                 core.inputBuffer,
                 core.workflowNames,
             );
-        } else if (core.fileAutocomplete.open) {
+        } else if (!historyOwnsArrows && core.fileAutocomplete.open) {
             core.fileAutocomplete = navigateFileAutocompleteUp(core.fileAutocomplete);
         } else {
             const result = navigateChatInputHistoryUp(core.history, core.inputBuffer);
@@ -949,16 +969,17 @@ export function handleInput(core: InkChatBridgeCore, input: string, key: Key): v
         return;
     }
     if (key.downArrow) {
-        if (core.inputBuffer.startsWith('/')) {
+        const historyOwnsArrows = isNavigatingChatInputHistory(core.history);
+        if (!historyOwnsArrows && core.inputBuffer.startsWith('/')) {
             core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[B', core.inputBuffer);
-        } else if (core.inputBuffer.startsWith('#')) {
+        } else if (!historyOwnsArrows && core.inputBuffer.startsWith('#')) {
             core.menuState = reduceWorkflowCommandMenuSelection(
                 core.menuState,
                 '\u001b[B',
                 core.inputBuffer,
                 core.workflowNames,
             );
-        } else if (core.fileAutocomplete.open) {
+        } else if (!historyOwnsArrows && core.fileAutocomplete.open) {
             core.fileAutocomplete = navigateFileAutocompleteDown(core.fileAutocomplete);
         } else {
             const result = navigateChatInputHistoryDown(core.history, core.inputBuffer);
@@ -1012,7 +1033,21 @@ export function handleInput(core: InkChatBridgeCore, input: string, key: Key): v
         publishSnapshot(core);
         return;
     }
-    if (!key.shift && (key.return || input.includes('\r') || input.includes('\n'))) {
+    // Alt+Enter (`\x1b\r`) reaches us as `key.return=true, key.meta=true` after
+    // Ink's parser strips the escape prefix. Reliable cross-terminal multi-line
+    // trigger; Shift+Enter only fires on kitty-protocol terminals.
+    if (key.meta && (key.return || input.includes('\r'))) {
+        const textBeforeReturn = input.split(/[\r\n]/)[0] ?? '';
+        if (textBeforeReturn.length > 0) {
+            insertAtCursor(core, textBeforeReturn);
+            core.menuState = createSlashCommandMenuState();
+        }
+        insertAtCursor(core, '\n');
+        refreshFileAutocomplete(core);
+        publishSnapshot(core);
+        return;
+    }
+    if (!key.shift && !key.meta && (key.return || input.includes('\r') || input.includes('\n'))) {
         const textBeforeReturn = input.split(/[\r\n]/)[0] ?? '';
         if (textBeforeReturn.length > 0 && !key.ctrl && !key.meta) {
             insertAtCursor(core, textBeforeReturn);
@@ -1023,6 +1058,20 @@ export function handleInput(core: InkChatBridgeCore, input: string, key: Key): v
             refreshFileAutocomplete(core);
             publishSnapshot(core);
             return;
+        }
+        // Complete the selected workflow into the buffer instead of submitting,
+        // so the user can type the prompt. The trailing space closes the menu,
+        // making the next Enter submit the full line.
+        if (core.inputBuffer.startsWith('#')) {
+            const insertText = resolveWorkflowCommandMenuInsertText(core.inputBuffer, core.menuState, core.workflowNames);
+            if (insertText !== undefined) {
+                core.inputBuffer = insertText;
+                core.cursorPosition = core.inputBuffer.length;
+                core.menuState = createSlashCommandMenuState();
+                refreshFileAutocomplete(core);
+                publishSnapshot(core);
+                return;
+            }
         }
         let value = core.inputBuffer;
         if (core.inputBuffer.startsWith('/')) {
@@ -1500,6 +1549,7 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                     generating={snapshot.generating}
                     toolOutputExpanded={snapshot.toolOutputExpanded}
                 />
+                <StatusSeparator state="awaiting_input" />
                 <Box flexDirection="column" marginTop={1} paddingX={1}>
                     <Text bold color="yellow" inverse>
                         {' Approval Required '}
@@ -1538,6 +1588,7 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                     generating={snapshot.generating}
                     toolOutputExpanded={snapshot.toolOutputExpanded}
                 />
+                <StatusSeparator state="awaiting_input" />
                 <Box flexDirection="column" marginTop={1} paddingX={1}>
                     <Text bold color="magenta" inverse>
                         {' Question '}
@@ -1811,7 +1862,7 @@ function ChatRoot({ bridge, statusBarProps }: ChatRootProps) {
                 </Box>
             ) : null}
             <Box flexDirection="column" marginTop={1}>
-                <Text dimColor>{'-'.repeat(process.stdout.columns ?? 80)}</Text>
+                <StatusSeparator state={resolveSeparatorState(snapshot)} />
                 <Text>
                     <Text color="cyan">{'>'}</Text> {snapshot.inputBuffer.slice(0, snapshot.cursorPosition)}
                     <Text backgroundColor="white" color="black">
@@ -2252,7 +2303,13 @@ const blockPrefix: Record<ChatBlock['kind'], string> = {
 const thinkingTheme: TerminalMarkdownTheme = { ...darkTheme, defaultTextStyle: { italic: true, dimColor: true } };
 
 function terminalContentWidth(): number {
-    return Math.max(1, process.stdout.columns ?? 80);
+    // Subtract 1 from the terminal width to prevent lines from filling the
+    // last column. Lines that fill every column (e.g. the StatusSeparator's
+    // ─ run, or a markdown table border) trigger implicit autowrap on some
+    // terminals/tmux/screen configurations. The resulting phantom line
+    // desyncs Ink's line counting from the actual visible line count,
+    // scattering characters across the screen on every re-render.
+    return Math.max(1, (process.stdout.columns ?? 80) - 1);
 }
 
 /** Join a block's lines into one markdown document, stripping the prefix from the first line only. */
@@ -2452,10 +2509,7 @@ export function selectTrailingBlocks(
         if (lineCount + block.lines.length > lineBudget) {
             const remaining = lineBudget - lineCount;
             const isMarkdownBlock = block.kind === 'assistant' || block.kind === 'thinking';
-            // Markdown-rendered blocks must stay intact: tail-slicing mid-block
-            // can split a code fence or orphan a heading, so the whole block is
-            // dropped and earlier blocks fill the budget. Non-markdown blocks
-            // keep the original tail-slice behavior, marked `truncated`.
+            // Non-markdown blocks are tail-sliced to fill the remaining budget.
             if (remaining > 0 && !isMarkdownBlock) {
                 const truncatedBlock: ChatBlock = { ...block, lines: block.lines.slice(-remaining), truncated: true };
                 return {
@@ -2463,6 +2517,14 @@ export function selectTrailingBlocks(
                     windowed: [truncatedBlock, ...blocks.slice(index + 1)],
                     truncatedTop: true,
                 };
+            }
+            // Markdown blocks stay intact (tail-slicing splits code fences),
+            // so they are dropped and earlier blocks fill the budget — except
+            // when this is the most recent block. Dropping it would return an
+            // empty window, blanking the whole output mid-stream. Force-include
+            // it whole; the terminal scrolls to keep recent content visible.
+            if (lineCount === 0) {
+                return { startIdx: index, windowed: [block], truncatedTop: index > 0 };
             }
             return { startIdx: index + 1, windowed: blocks.slice(index + 1), truncatedTop: index >= 0 };
         }
@@ -2565,4 +2627,91 @@ function formatSelectionLabel(props: InkChatBridgeOptions): string {
         parts.push(`session: ${props.sessionID}`);
     }
     return parts.join(' | ');
+}
+
+const SEPARATOR_LIGHT = '\u2500'; // ─ light horizontal
+const SEPARATOR_HEAVY = '\u2501'; // ━ heavy horizontal
+const SEPARATOR_INTERVAL_MS = 80;
+const SEPARATOR_COMET_LENGTH = 8;
+const SEPARATOR_COMET_STEP = 2;
+// Awaiting-input pulse: N frames bright, N frames dim, repeating (~3 Hz at 80 ms).
+const SEPARATOR_PULSE_HALF = 2;
+
+export type SeparatorState = 'running' | 'awaiting_input' | 'idle';
+
+export function resolveSeparatorState(snapshot: BridgeSnapshot): SeparatorState {
+    if (snapshot.generating) {
+        return 'running';
+    }
+    if (snapshot.approvalActive || snapshot.questionActive) {
+        return 'awaiting_input';
+    }
+    return 'idle';
+}
+
+export function buildSeparatorLine(
+    state: SeparatorState,
+    animated: boolean,
+    frame: number,
+    width: number,
+): { readonly text: string; readonly color: string | undefined; readonly dimColor: boolean } {
+    if (state === 'idle') {
+        return { text: SEPARATOR_LIGHT.repeat(width), color: undefined, dimColor: true };
+    }
+    if (state === 'running') {
+        if (!animated) {
+            return { text: SEPARATOR_HEAVY.repeat(width), color: 'yellow', dimColor: false };
+        }
+        const span = width + SEPARATOR_COMET_LENGTH;
+        const head = ((frame * SEPARATOR_COMET_STEP) % span) - SEPARATOR_COMET_LENGTH;
+        let line = '';
+        for (let i = 0; i < width; i += 1) {
+            line += i >= head && i < head + SEPARATOR_COMET_LENGTH ? SEPARATOR_HEAVY : SEPARATOR_LIGHT;
+        }
+        return { text: line, color: 'yellow', dimColor: false };
+    }
+    if (!animated) {
+        return { text: SEPARATOR_HEAVY.repeat(width), color: 'magenta', dimColor: false };
+    }
+    const bright = frame % (SEPARATOR_PULSE_HALF * 2) < SEPARATOR_PULSE_HALF;
+    return {
+        text: (bright ? SEPARATOR_HEAVY : SEPARATOR_LIGHT).repeat(width),
+        color: 'magenta',
+        dimColor: !bright,
+    };
+}
+
+/**
+ * Animated boundary between the output and input areas. The line weight, color,
+ * and (when animation is enabled) motion encode the chat state:
+ *   running         — yellow, a bright "comet" sweeps left→right while the agent works
+ *   awaiting_input  — magenta, a slow pulse while an approval/question decision is pending
+ *   idle            — dim, static (calm; no re-renders, respects terminal selection)
+ *
+ * Animation is gated by `MCTRL_SPINNER=animate`, the same knob as the braille
+ * spinner, because every animated frame drives an Ink redraw that disrupts
+ * terminal mouse text selection. In the default static mode the three states
+ * remain distinguishable via color and line weight (heavy vs light).
+ */
+function StatusSeparator({ state }: { readonly state: SeparatorState }): React.ReactElement {
+    const animated = resolveSpinnerMode() === 'animate';
+    const [frame, setFrame] = useState(0);
+    useEffect(() => {
+        if (!animated || state === 'idle') {
+            return;
+        }
+        const timer = setInterval(() => {
+            setFrame((current) => current + 1);
+        }, SEPARATOR_INTERVAL_MS);
+        return () => {
+            clearInterval(timer);
+        };
+    }, [animated, state]);
+    const width = Math.max(1, (process.stdout.columns ?? 80) - 1);
+    const { text, color, dimColor } = buildSeparatorLine(state, animated, frame, width);
+    return (
+        <Text {...(color !== undefined ? { color } : {})} {...(dimColor ? { dimColor: true } : {})}>
+            {text}
+        </Text>
+    );
 }

@@ -16,7 +16,8 @@ export type KeyboardShortcut = { readonly key: string; readonly action: string }
  */
 export const KEYBOARD_SHORTCUTS: readonly KeyboardShortcut[] = [
     { key: 'Enter', action: 'Send message' },
-    { key: 'Shift+Enter', action: 'Insert newline (multi-line input)' },
+    { key: 'Shift+Enter', action: 'Insert newline (kitty-protocol terminals)' },
+    { key: 'Alt+Enter', action: 'Insert newline (any terminal)' },
     { key: 'Backspace', action: 'Delete character before cursor' },
     { key: '\u2191/\u2193', action: 'Navigate input history (or slash command menu)' },
     { key: 'Ctrl+\u2190', action: 'Move cursor left by one word' },
@@ -33,7 +34,11 @@ export const KEYBOARD_SHORTCUTS: readonly KeyboardShortcut[] = [
     { key: 'Home', action: 'Jump to top of scrollback' },
     { key: 'End', action: 'Jump to bottom of scrollback' },
     { key: 'Ctrl+C', action: 'Interrupt (press twice to exit)' },
-    { key: 'Esc', action: 'Interrupt active run / clear input (double-Esc: /tree or /fork via MCTRL_DOUBLE_ESC_ACTION)' },
+    {
+        key: 'Esc',
+        action:
+            'Interrupt active run / clear input (double-Esc force-stops stuck runs; never exits)',
+    },
     { key: 'Ctrl+D', action: 'Exit on empty input / forward-delete on non-empty' },
     { key: 'Ctrl+Z', action: 'Suspend to background (POSIX)' },
     { key: 'Ctrl+G', action: 'Toggle ABG monitoring overlay' },
