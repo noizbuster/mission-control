@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
     createSlashCommandMenuState,
     createSlashCommandMenuView,
+    createWorkflowCommandMenuView,
     reduceSlashCommandMenuSelection,
+    reduceWorkflowCommandMenuSelection,
     resolveSlashCommandMenuSubmission,
+    resolveWorkflowCommandMenuInsertText,
 } from './interactive-chat-command-menu.js';
 import {
     deleteTerminalChatInputCharacterBeforeCursor,
@@ -256,5 +259,24 @@ describe('interactive chat command menu', () => {
         expect(terminalModifiedKeyEnableSequence).toContain('\u001b[>4;2m');
         expect(terminalModifiedKeyDisableSequence).toContain('\u001b[<u');
         expect(terminalModifiedKeyDisableSequence).toContain('\u001b[>4;0m');
+    });
+
+    it('returns the untrimmed workflow insertText (with trailing space) for the selected choice', () => {
+        const workflows = ['default', 'planner', 'runner'];
+        const initial = createSlashCommandMenuState();
+
+        expect(resolveWorkflowCommandMenuInsertText('#', initial, workflows)).toBe('#default ');
+
+        const down = reduceWorkflowCommandMenuSelection(initial, '\u001b[B', '#', workflows);
+        expect(resolveWorkflowCommandMenuInsertText('#', down, workflows)).toBe('#planner ');
+
+        const downAgain = reduceWorkflowCommandMenuSelection(down, '\u001b[B', '#', workflows);
+        expect(resolveWorkflowCommandMenuInsertText('#', downAgain, workflows)).toBe('#runner ');
+    });
+
+    it('returns undefined when the workflow menu is closed or has no selection', () => {
+        expect(resolveWorkflowCommandMenuInsertText('#planner ', createSlashCommandMenuState(), ['planner'])).toBeUndefined();
+        expect(resolveWorkflowCommandMenuInsertText('plain', createSlashCommandMenuState(), ['planner'])).toBeUndefined();
+        expect(resolveWorkflowCommandMenuInsertText('#zzz', createSlashCommandMenuState(), ['planner'])).toBeUndefined();
     });
 });

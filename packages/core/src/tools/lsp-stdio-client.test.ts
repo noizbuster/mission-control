@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { encodeLspMessage, LspMessageDecoder, StdioLspClient, type LspTransport } from './lsp-stdio-client.js';
+import { encodeLspMessage, LspMessageDecoder, type LspTransport, StdioLspClient } from './lsp-stdio-client.js';
 import { ToolExecutionError } from './tool-registry-types.js';
 
 const WORKSPACE_ROOT = '/workspace';
@@ -284,7 +284,12 @@ describe('StdioLspClient', () => {
             transport.emit({
                 jsonrpc: '2.0',
                 id: request.id,
-                result: [{ uri: 'file:///workspace/src/other.ts', range: { start: { line: 9, character: 2 }, end: { line: 9, character: 8 } } }],
+                result: [
+                    {
+                        uri: 'file:///workspace/src/other.ts',
+                        range: { start: { line: 9, character: 2 }, end: { line: 9, character: 8 } },
+                    },
+                ],
             });
             expect(await definitionPromise).toEqual([{ uri: 'file:///workspace/src/other.ts', line: 9, character: 2 }]);
         } finally {
@@ -309,7 +314,9 @@ describe('StdioLspClient', () => {
                     },
                 ],
             });
-            expect(await definitionPromise).toEqual([{ uri: 'file:///workspace/src/linked.ts', line: 1, character: 0 }]);
+            expect(await definitionPromise).toEqual([
+                { uri: 'file:///workspace/src/linked.ts', line: 1, character: 0 },
+            ]);
         } finally {
             await safeShutdown(client, transport);
         }

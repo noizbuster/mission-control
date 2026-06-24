@@ -1,13 +1,10 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { EventEmitter } from 'node:events';
 import { createProviderPromptKeypressState, createProviderPromptView } from './auth-provider-keypress.js';
-import {
-    createTerminalModelSelectorFromStreams,
-    renderModelSelectorLines,
-} from './interactive-chat-model-selector.js';
 import type { ModelChoice } from './interactive-chat-model.js';
+import { createTerminalModelSelectorFromStreams, renderModelSelectorLines } from './interactive-chat-model-selector.js';
 import { terminalDisplayWidth } from './terminal-text.js';
+import { EventEmitter } from 'node:events';
 
 describe('terminal model selector renderer', () => {
     it('truncates rendered picker lines to the terminal width', () => {

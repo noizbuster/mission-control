@@ -34,9 +34,10 @@ function formatPromptMessage(message: string, options: AuthPromptOptions | undef
     if (options?.defaultValue === undefined || options.defaultValue.length === 0) {
         return message;
     }
-    const source = options.defaultValueSource !== undefined && options.defaultValueSource.length > 0
-        ? options.defaultValueSource
-        : 'default';
+    const source =
+        options.defaultValueSource !== undefined && options.defaultValueSource.length > 0
+            ? options.defaultValueSource
+            : 'default';
     const preview = options.defaultValuePreview;
     if (preview !== undefined && preview.length > 0) {
         return `${message} (${preview}, press Enter to use ${source})`;

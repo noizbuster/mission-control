@@ -4,9 +4,9 @@ import {
     createProviderPromptView,
     reduceProviderPromptKeypress,
 } from './auth-provider-keypress.js';
-import type { TerminalInputStream, TerminalOutputStream } from './interactive-chat-terminal-read.js';
 import type { ChatOutput, ModelSelector } from './interactive-chat.js';
 import type { ModelChoice } from './interactive-chat-model.js';
+import type { TerminalInputStream, TerminalOutputStream } from './interactive-chat-terminal-read.js';
 import { truncateTerminalText } from './terminal-text.js';
 import { stdin, stdout } from 'node:process';
 

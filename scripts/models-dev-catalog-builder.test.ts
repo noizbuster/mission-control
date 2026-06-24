@@ -93,7 +93,7 @@ describe('models-dev-catalog-builder pricing extraction', () => {
             p: {
                 name: 'P',
                 models: {
-                    'fractional': {
+                    fractional: {
                         name: 'Frac',
                         cost: { input: 0.574, output: 1.721 },
                     },
@@ -114,9 +114,9 @@ describe('models-dev-catalog-builder pricing extraction', () => {
             p: {
                 name: 'P',
                 models: {
-                    'neg': { name: 'N', cost: { input: -1, output: 5 } },
-                    'nan': { name: 'NaN', cost: { input: Number.NaN, output: 5 } },
-                    'ok': { name: 'OK', cost: { input: 1, output: 5 } },
+                    neg: { name: 'N', cost: { input: -1, output: 5 } },
+                    nan: { name: 'NaN', cost: { input: Number.NaN, output: 5 } },
+                    ok: { name: 'OK', cost: { input: 1, output: 5 } },
                 },
             },
         });

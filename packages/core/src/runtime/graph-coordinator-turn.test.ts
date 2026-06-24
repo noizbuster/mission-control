@@ -207,8 +207,7 @@ describe('mapGraphTurnResult', () => {
         });
         expect(failed).toMatchObject({
             errorCode: 'tool_failed',
-            reason:
-                'ABG run failed on a non-retryable tool settlement: llm-actor — command_failed: command failed: ls biome*',
+            reason: 'ABG run failed on a non-retryable tool settlement: llm-actor — command_failed: command failed: ls biome*',
         });
     });
 });

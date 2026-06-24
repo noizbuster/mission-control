@@ -14,9 +14,7 @@ function node(nodeId: string, status: VisualGraphNode['status'], isActive = fals
 
 describe('visual-graph renderVisualGraph', () => {
     it('returns collapsed=true when node count exceeds maxNodes', () => {
-        const nodes = Array.from({ length: VISUAL_GRAPH_MAX_NODES + 1 }, (_, i) =>
-            node(`n${i}`, 'idle' as const),
-        );
+        const nodes = Array.from({ length: VISUAL_GRAPH_MAX_NODES + 1 }, (_, i) => node(`n${i}`, 'idle' as const));
         const result = renderVisualGraph({ nodes, edges: [] });
         expect(result.collapsed).toBe(true);
         expect(result.lines).toEqual([]);

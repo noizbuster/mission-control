@@ -13,7 +13,7 @@
  *   loop's full session orchestration.
  */
 
-import type { PricingTable, AgentModelLookup } from '@mission-control/core';
+import type { AgentModelLookup, PricingTable } from '@mission-control/core';
 import {
     type AbgGraphRunResult,
     type AgentRuntime,

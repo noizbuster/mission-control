@@ -1,6 +1,6 @@
+import { resolveMissionControlDataDir } from '@mission-control/core';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { resolveMissionControlDataDir } from '@mission-control/core';
 
 const INPUT_HISTORY_FILENAME = 'input-history.json';
 const MAX_ENTRIES = 1000;

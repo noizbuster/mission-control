@@ -40,9 +40,7 @@
         "id": "delegate-wave",
         "kind": "parallel",
         "label": "Fan out task() delegation per wave task",
-        "children": [
-          "delegate-worker"
-        ],
+        "children": ["delegate-worker"],
         "config": {
           "fanOutKey": "wave.tasks",
           "completionKey": "delegate.complete"
@@ -52,9 +50,7 @@
         "id": "delegate-worker",
         "kind": "llm",
         "label": "Single task() delegation",
-        "capabilities": [
-          "task"
-        ],
+        "capabilities": ["task"],
         "config": {
           "systemPrompt": "Execute the delegated sub-task via the task tool."
         }
@@ -82,12 +78,7 @@
         "id": "final-verification-wave",
         "kind": "parallel",
         "label": "Final verification wave — F1-F4 parallel critics",
-        "children": [
-          "f1",
-          "f2",
-          "f3",
-          "f4"
-        ],
+        "children": ["f1", "f2", "f3", "f4"],
         "config": {
           "completionKey": "final.verdict"
         }

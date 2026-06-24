@@ -18,10 +18,10 @@ import {
     registerFileEditTool,
     registerFilePatchTool,
     registerFileWriteTool,
+    registerFullParityTaskTool,
     registerGlobTool,
     registerNamespacedMcpTools,
     registerSkillTool,
-    registerFullParityTaskTool,
     registerWebfetchTool,
     registerWebSearchTool,
     type SdkModelResolver,
@@ -33,8 +33,8 @@ import {
 } from '@mission-control/core';
 import type { AbgNodeModelOptions, ModelProviderSelection, PermissionRequest } from '@mission-control/protocol';
 import { type AgentEvent, type ToolCall, ToolResultSchema } from '@mission-control/protocol';
-import { cliAllowsAction } from './cli-permission-policy.js';
 import type { ApprovalLevel } from './approval-level.js';
+import { cliAllowsAction } from './cli-permission-policy.js';
 import type { InteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { renderToolPreview } from './interactive-coding-tool-preview.js';

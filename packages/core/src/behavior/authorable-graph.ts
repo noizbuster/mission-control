@@ -12,19 +12,14 @@ export type AuthorableAbgGraph = AbgGraphSpec & {
     readonly compiledRules: readonly CompiledAbgRule[];
 };
 
-export function createAuthorableAbgGraph(
-    input: unknown,
-    agentModelLookup?: AgentModelLookup,
-): AuthorableAbgGraph {
+export function createAuthorableAbgGraph(input: unknown, agentModelLookup?: AgentModelLookup): AuthorableAbgGraph {
     const parsed = AbgGraphSpecSchema.safeParse(input);
     if (!parsed.success) {
         throw new AbgGraphValidationError('invalid ABG graph spec', parsed.error.issues.length);
     }
     assertRuleReferences(parsed.data);
     const resolved =
-        agentModelLookup !== undefined
-            ? resolveGraphAgentModels(parsed.data, agentModelLookup)
-            : parsed.data;
+        agentModelLookup !== undefined ? resolveGraphAgentModels(parsed.data, agentModelLookup) : parsed.data;
     const graph = {
         ...resolved,
         nodes: resolved.nodes.map((node) => ({ ...node })),

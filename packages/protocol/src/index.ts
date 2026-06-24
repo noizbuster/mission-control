@@ -143,6 +143,21 @@ export {
     RunStatusSchema,
 } from './mission-run.js';
 export {
+    type Mode,
+    type ModeDeclaration,
+    ModeDeclarationSchema,
+    ModeSchema,
+} from './mode.js';
+export {
+    POLICY_EFFECTS,
+    type PolicyEffect,
+    type PolicyEffectRule,
+    PolicyEffectRuleSchema,
+    type PolicyEffectRuleSet,
+    PolicyEffectRuleSetSchema,
+    PolicyEffectSchema,
+} from './permission-rule.js';
+export {
     PLUGIN_DISCOVERY_DIAGNOSTIC_SEVERITIES,
     type PluginContextSource,
     PluginContextSourceSchema,
@@ -163,21 +178,6 @@ export {
     type PluginToolDefinition,
     PluginToolDefinitionSchema,
 } from './plugin.js';
-export {
-    type Mode,
-    type ModeDeclaration,
-    ModeDeclarationSchema,
-    ModeSchema,
-} from './mode.js';
-export {
-    POLICY_EFFECTS,
-    type PolicyEffect,
-    type PolicyEffectRule,
-    PolicyEffectRuleSchema,
-    type PolicyEffectRuleSet,
-    PolicyEffectRuleSetSchema,
-    PolicyEffectSchema,
-} from './permission-rule.js';
 export {
     type BudgetConfig,
     BudgetConfigSchema,

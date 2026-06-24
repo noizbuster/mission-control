@@ -1,7 +1,7 @@
 import { defaultModelProviderSelection, getRuntimeModelProviderCatalog } from '@mission-control/config';
 import {
-    AgentRuntime,
     type AgentModelLookup,
+    AgentRuntime,
     type CommandExecutionRequest,
     type CommandExecutionResult,
     createCodingAgentNodeRegistry,
@@ -12,14 +12,15 @@ import {
     PluginManager,
     type ProviderAdapter,
     registerBuiltinWorkflows,
-    type SdkModelResolver,
     resolveUserConfigDir,
+    type SdkModelResolver,
     WorkflowRegistry,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AbgNodeModelOptions, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
 import { type AgentUIRenderer, InkRenderer, JsonRenderer, PlainRenderer } from '../ui/renderers.js';
+import { loadPersistedApprovalLevel, savePersistedApprovalLevel } from './approval-level-store.js';
 import { splitCommandParts } from './chat-command-parts.js';
 import type { NonInteractiveAutomationPolicy } from './cli-runtime-options.js';
 import { createCliRuntimeOptions } from './cli-runtime-options.js';
@@ -28,10 +29,6 @@ import { type ChatInput, type ChatOutput, type ModelSelector, runInteractiveChat
 import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
 import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
 import { loadPricingTable } from './pricing-table-store.js';
-import {
-    loadPersistedApprovalLevel,
-    savePersistedApprovalLevel,
-} from './approval-level-store.js';
 import { createCliProviderForSelection } from './provider-factory.js';
 import { readGraphFile, validateGraphModelOptions, validateModelProviderSelection } from './run-agent-graph.js';
 import {
@@ -123,9 +120,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                 persistModelProviderSelection: async (selection) => {
                     await authStore.setDefaultSelection(selection);
                 },
-                ...(persistedApprovalLevel !== undefined
-                    ? { initialApprovalLevel: persistedApprovalLevel }
-                    : {}),
+                ...(persistedApprovalLevel !== undefined ? { initialApprovalLevel: persistedApprovalLevel } : {}),
                 persistApprovalLevel: async (level) => {
                     await savePersistedApprovalLevel(level);
                 },
@@ -488,8 +483,7 @@ async function buildAgentModelLookup(workspaceRoot: string): Promise<AgentModelL
     const index = new Map<string, AbgNodeModelOptions>();
     for (const agent of result.agents) {
         if (agent.model === undefined || agent.disabled === true) continue;
-        const resolved =
-            typeof agent.model === 'string' ? parseAgentModelString(agent.model) : agent.model;
+        const resolved = typeof agent.model === 'string' ? parseAgentModelString(agent.model) : agent.model;
         if (resolved !== undefined) {
             index.set(agent.name, resolved);
         }

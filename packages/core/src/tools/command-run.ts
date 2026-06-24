@@ -43,7 +43,8 @@ export async function createCommandRunToolRegistration(
     const limiter = new CommandRunLimiter();
     return {
         name: 'command.run',
-        description: 'Run a command. Safe commands (pwd, whoami, hostname) run without asking. All other commands prompt the user for approval (Allow once / Always allow / Deny).',
+        description:
+            'Run a command. Safe commands (pwd, whoami, hostname) run without asking. All other commands prompt the user for approval (Allow once / Always allow / Deny).',
         capabilityClasses: ['command.run'],
         parametersJsonSchema: commandRunParametersJsonSchema(),
         inputSchema: commandRunInputSchema,
@@ -101,11 +102,10 @@ async function runCommandTool(
             ]);
         }
         if (output.status === 'failed') {
-            throw commandRunFailure(
-                'command_failed',
-                commandFailedMessage(output, options.maxModelOutputChars),
-                [started, commandEvent('command.failed', context.toolCallId, metadataForOutput(output, 'failed'))],
-            );
+            throw commandRunFailure('command_failed', commandFailedMessage(output, options.maxModelOutputChars), [
+                started,
+                commandEvent('command.failed', context.toolCallId, metadataForOutput(output, 'failed')),
+            ]);
         }
         return output;
     } finally {

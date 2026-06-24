@@ -23,7 +23,10 @@ import { applyMode } from './mode-application.js';
 
 const NOW = '2026-06-22T00:00:00.000Z';
 
-function configString(node: { readonly config?: Readonly<Record<string, unknown>> | undefined } | undefined, key: string): string | undefined {
+function configString(
+    node: { readonly config?: Readonly<Record<string, unknown>> | undefined } | undefined,
+    key: string,
+): string | undefined {
     const value = node?.config?.[key];
     return typeof value === 'string' ? value : undefined;
 }

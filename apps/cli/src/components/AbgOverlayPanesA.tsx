@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink';
 import type { AbgOverlayState } from '../commands/abg-overlay-state.js';
-import { renderVisualGraph, type VisualGraphEdge, type VisualGraphNode, type VisualGraphRow } from './visual-graph.js';
 import { useSpinnerFrame } from './spinner.js';
+import { renderVisualGraph, type VisualGraphEdge, type VisualGraphNode, type VisualGraphRow } from './visual-graph.js';
 
 export interface PaneProps {
     readonly state: AbgOverlayState;
@@ -242,7 +242,11 @@ export function GraphPane({ state }: PaneProps): React.ReactElement {
                                         <Text dimColor> ({status})</Text>
                                     </Box>
                                     {outgoing.map((edge) => (
-                                        <Box key={`${nodeId}-${edge.source}-${edge.target}`} flexDirection="row" marginLeft={4}>
+                                        <Box
+                                            key={`${nodeId}-${edge.source}-${edge.target}`}
+                                            flexDirection="row"
+                                            marginLeft={4}
+                                        >
                                             <Text dimColor>└→</Text>
                                             <Text dimColor> {edge.target}</Text>
                                             {edge.condition !== undefined ? (
@@ -308,11 +312,7 @@ export function NodesPane({ state }: PaneProps): React.ReactElement {
                     const glyph = statusGlyph(status);
                     return (
                         <Box key={nodeId} flexDirection="row">
-                            {color !== undefined ? (
-                                <Text color={color}>{glyph}</Text>
-                            ) : (
-                                <Text dimColor>{glyph}</Text>
-                            )}
+                            {color !== undefined ? <Text color={color}>{glyph}</Text> : <Text dimColor>{glyph}</Text>}
                             <Text> </Text>
                             <Text>{truncate(nodeId, 10)}</Text>
                             <Text> </Text>

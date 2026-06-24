@@ -1,10 +1,6 @@
-import {
-    AbgGraphSpecSchema,
-    WorkflowSpecSchema,
-    type PolicyEffectRuleSet,
-} from '@mission-control/protocol';
+import { AbgGraphSpecSchema, type PolicyEffectRuleSet, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { readFile } from 'node:fs/promises';
+import { evaluateRules } from '../permissions/rule-evaluator.js';
 import {
     createPlannerWorkflowGraph,
     PLANNER_READONLY_MODE,
@@ -12,7 +8,7 @@ import {
     PLANNER_READONLY_POLICIES,
     PLANNER_WORKFLOW_GRAPH_ID,
 } from './planner-workflow-graph.js';
-import { evaluateRules } from '../permissions/rule-evaluator.js';
+import { readFile } from 'node:fs/promises';
 
 const workflowJsonPath = `${process.cwd()}/examples/abg/planner.workflow.json`;
 
@@ -42,9 +38,7 @@ describe('createPlannerWorkflowGraph', () => {
 
     it('routes from assess-ambiguity to exactly 3 ambiguity paths (clear, unclear, on-the-fence)', () => {
         const graph = createPlannerWorkflowGraph();
-        const targets = graph.edges
-            .filter((edge) => edge.source === 'assess-ambiguity')
-            .map((edge) => edge.target);
+        const targets = graph.edges.filter((edge) => edge.source === 'assess-ambiguity').map((edge) => edge.target);
         const uniqueTargets = new Set(targets);
 
         expect(uniqueTargets.size).toBe(3);

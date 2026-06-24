@@ -21,10 +21,7 @@ export function projectToolOutcomes(events: readonly AgentEvent[]): readonly Too
     const outcomes = new Map<string, ToolOutcomeProjection>();
     for (const event of events) {
         const toolId =
-            event.toolResult?.toolCallId ??
-            event.taskId ??
-            graphToolEventToolCallId(event) ??
-            event.abg?.nodeId;
+            event.toolResult?.toolCallId ?? event.taskId ?? graphToolEventToolCallId(event) ?? event.abg?.nodeId;
         if (toolId === undefined) {
             continue;
         }

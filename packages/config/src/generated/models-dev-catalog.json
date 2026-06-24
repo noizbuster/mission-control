@@ -13,9 +13,7 @@
         {
           "id": "apiKey",
           "label": "302AI_API_KEY",
-          "env": [
-            "302AI_API_KEY"
-          ],
+          "env": ["302AI_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -517,9 +515,7 @@
         {
           "id": "apiKey",
           "label": "ABACUS_API_KEY",
-          "env": [
-            "ABACUS_API_KEY"
-          ],
+          "env": ["ABACUS_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -861,9 +857,7 @@
         {
           "id": "apiKey",
           "label": "ABLIT_KEY",
-          "env": [
-            "ABLIT_KEY"
-          ],
+          "env": ["ABLIT_KEY"],
           "secret": true,
           "required": true
         }
@@ -885,9 +879,7 @@
         {
           "id": "apiKey",
           "label": "AIHUBMIX_API_KEY",
-          "env": [
-            "AIHUBMIX_API_KEY"
-          ],
+          "env": ["AIHUBMIX_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -1154,9 +1146,7 @@
         {
           "id": "apiKey",
           "label": "DASHSCOPE_API_KEY",
-          "env": [
-            "DASHSCOPE_API_KEY"
-          ],
+          "env": ["DASHSCOPE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -1428,9 +1418,7 @@
         {
           "id": "apiKey",
           "label": "DASHSCOPE_API_KEY",
-          "env": [
-            "DASHSCOPE_API_KEY"
-          ],
+          "env": ["DASHSCOPE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -1862,9 +1850,7 @@
         {
           "id": "apiKey",
           "label": "ALIBABA_CODING_PLAN_API_KEY",
-          "env": [
-            "ALIBABA_CODING_PLAN_API_KEY"
-          ],
+          "env": ["ALIBABA_CODING_PLAN_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -1936,9 +1922,7 @@
         {
           "id": "apiKey",
           "label": "ALIBABA_CODING_PLAN_API_KEY",
-          "env": [
-            "ALIBABA_CODING_PLAN_API_KEY"
-          ],
+          "env": ["ALIBABA_CODING_PLAN_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -2010,9 +1994,7 @@
         {
           "id": "apiKey",
           "label": "ALIBABA_TOKEN_PLAN_API_KEY",
-          "env": [
-            "ALIBABA_TOKEN_PLAN_API_KEY"
-          ],
+          "env": ["ALIBABA_TOKEN_PLAN_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -2104,36 +2086,28 @@
         {
           "id": "region",
           "label": "AWS region",
-          "env": [
-            "AWS_REGION"
-          ],
+          "env": ["AWS_REGION"],
           "secret": false,
           "required": true
         },
         {
           "id": "accessKeyId",
           "label": "AWS access key ID",
-          "env": [
-            "AWS_ACCESS_KEY_ID"
-          ],
+          "env": ["AWS_ACCESS_KEY_ID"],
           "secret": true,
           "required": true
         },
         {
           "id": "secretAccessKey",
           "label": "AWS secret access key",
-          "env": [
-            "AWS_SECRET_ACCESS_KEY"
-          ],
+          "env": ["AWS_SECRET_ACCESS_KEY"],
           "secret": true,
           "required": true
         },
         {
           "id": "bearerToken",
           "label": "AWS Bedrock bearer token",
-          "env": [
-            "AWS_BEARER_TOKEN_BEDROCK"
-          ],
+          "env": ["AWS_BEARER_TOKEN_BEDROCK"],
           "secret": true,
           "required": false
         }
@@ -2625,9 +2599,7 @@
         {
           "id": "apiKey",
           "label": "AMBIENT_API_KEY",
-          "env": [
-            "AMBIENT_API_KEY"
-          ],
+          "env": ["AMBIENT_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -2654,9 +2626,7 @@
         {
           "id": "apiKey",
           "label": "ANTHROPIC_API_KEY",
-          "env": [
-            "ANTHROPIC_API_KEY"
-          ],
+          "env": ["ANTHROPIC_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -2793,9 +2763,7 @@
         {
           "id": "apiKey",
           "label": "ANYAPI_API_KEY",
-          "env": [
-            "ANYAPI_API_KEY"
-          ],
+          "env": ["ANYAPI_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -2962,9 +2930,7 @@
         {
           "id": "apiKey",
           "label": "ATOMIC_CHAT_API_KEY",
-          "env": [
-            "ATOMIC_CHAT_API_KEY"
-          ],
+          "env": ["ATOMIC_CHAT_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -3006,9 +2972,7 @@
         {
           "id": "apiKey",
           "label": "AURIKO_API_KEY",
-          "env": [
-            "AURIKO_API_KEY"
-          ],
+          "env": ["AURIKO_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -3100,18 +3064,14 @@
         {
           "id": "resourceName",
           "label": "Azure resource name",
-          "env": [
-            "AZURE_RESOURCE_NAME"
-          ],
+          "env": ["AZURE_RESOURCE_NAME"],
           "secret": false,
           "required": true
         },
         {
           "id": "apiKey",
           "label": "Azure API key",
-          "env": [
-            "AZURE_API_KEY"
-          ],
+          "env": ["AZURE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -3643,18 +3603,14 @@
         {
           "id": "resourceName",
           "label": "Azure Cognitive Services resource name",
-          "env": [
-            "AZURE_COGNITIVE_SERVICES_RESOURCE_NAME"
-          ],
+          "env": ["AZURE_COGNITIVE_SERVICES_RESOURCE_NAME"],
           "secret": false,
           "required": true
         },
         {
           "id": "apiKey",
           "label": "Azure Cognitive Services API key",
-          "env": [
-            "AZURE_COGNITIVE_SERVICES_API_KEY"
-          ],
+          "env": ["AZURE_COGNITIVE_SERVICES_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -4151,9 +4107,7 @@
         {
           "id": "apiKey",
           "label": "BAILING_API_TOKEN",
-          "env": [
-            "BAILING_API_TOKEN"
-          ],
+          "env": ["BAILING_API_TOKEN"],
           "secret": true,
           "required": true
         }
@@ -4180,9 +4134,7 @@
         {
           "id": "apiKey",
           "label": "BASETEN_API_KEY",
-          "env": [
-            "BASETEN_API_KEY"
-          ],
+          "env": ["BASETEN_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -4269,9 +4221,7 @@
         {
           "id": "apiKey",
           "label": "BERGET_API_KEY",
-          "env": [
-            "BERGET_API_KEY"
-          ],
+          "env": ["BERGET_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -4323,9 +4273,7 @@
         {
           "id": "apiKey",
           "label": "CEREBRAS_API_KEY",
-          "env": [
-            "CEREBRAS_API_KEY"
-          ],
+          "env": ["CEREBRAS_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -4357,9 +4305,7 @@
         {
           "id": "apiKey",
           "label": "CHUTES_API_KEY",
-          "env": [
-            "CHUTES_API_KEY"
-          ],
+          "env": ["CHUTES_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -4571,9 +4517,7 @@
         {
           "id": "apiKey",
           "label": "CLARIFAI_PAT",
-          "env": [
-            "CLARIFAI_PAT"
-          ],
+          "env": ["CLARIFAI_PAT"],
           "secret": true,
           "required": true
         }
@@ -4650,9 +4594,7 @@
         {
           "id": "apiKey",
           "label": "CLAUDINIO_API_KEY",
-          "env": [
-            "CLAUDINIO_API_KEY"
-          ],
+          "env": ["CLAUDINIO_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -4674,9 +4616,7 @@
         {
           "id": "apiKey",
           "label": "CLOUDFERRO_SHERLOCK_API_KEY",
-          "env": [
-            "CLOUDFERRO_SHERLOCK_API_KEY"
-          ],
+          "env": ["CLOUDFERRO_SHERLOCK_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -4718,27 +4658,21 @@
         {
           "id": "apiToken",
           "label": "Cloudflare API token",
-          "env": [
-            "CLOUDFLARE_API_TOKEN"
-          ],
+          "env": ["CLOUDFLARE_API_TOKEN"],
           "secret": true,
           "required": true
         },
         {
           "id": "accountId",
           "label": "Cloudflare account ID",
-          "env": [
-            "CLOUDFLARE_ACCOUNT_ID"
-          ],
+          "env": ["CLOUDFLARE_ACCOUNT_ID"],
           "secret": false,
           "required": true
         },
         {
           "id": "gatewayId",
           "label": "Cloudflare gateway ID",
-          "env": [
-            "CLOUDFLARE_GATEWAY_ID"
-          ],
+          "env": ["CLOUDFLARE_GATEWAY_ID"],
           "secret": false,
           "required": true
         }
@@ -5135,18 +5069,14 @@
         {
           "id": "accountId",
           "label": "Cloudflare account ID",
-          "env": [
-            "CLOUDFLARE_ACCOUNT_ID"
-          ],
+          "env": ["CLOUDFLARE_ACCOUNT_ID"],
           "secret": false,
           "required": true
         },
         {
           "id": "apiKey",
           "label": "Cloudflare API key",
-          "env": [
-            "CLOUDFLARE_API_KEY"
-          ],
+          "env": ["CLOUDFLARE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -5263,9 +5193,7 @@
         {
           "id": "apiKey",
           "label": "COHERE_API_KEY",
-          "env": [
-            "COHERE_API_KEY"
-          ],
+          "env": ["COHERE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -5342,9 +5270,7 @@
         {
           "id": "apiKey",
           "label": "CORTECS_API_KEY",
-          "env": [
-            "CORTECS_API_KEY"
-          ],
+          "env": ["CORTECS_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -5611,9 +5537,7 @@
         {
           "id": "apiKey",
           "label": "CROF_API_KEY",
-          "env": [
-            "CROF_API_KEY"
-          ],
+          "env": ["CROF_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -5735,18 +5659,14 @@
         {
           "id": "host",
           "label": "Databricks host",
-          "env": [
-            "DATABRICKS_HOST"
-          ],
+          "env": ["DATABRICKS_HOST"],
           "secret": false,
           "required": true
         },
         {
           "id": "token",
           "label": "Databricks token",
-          "env": [
-            "DATABRICKS_TOKEN"
-          ],
+          "env": ["DATABRICKS_TOKEN"],
           "secret": true,
           "required": true
         }
@@ -5888,9 +5808,7 @@
         {
           "id": "apiKey",
           "label": "DEEPINFRA_API_KEY",
-          "env": [
-            "DEEPINFRA_API_KEY"
-          ],
+          "env": ["DEEPINFRA_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -6102,9 +6020,7 @@
         {
           "id": "apiKey",
           "label": "DEEPSEEK_API_KEY",
-          "env": [
-            "DEEPSEEK_API_KEY"
-          ],
+          "env": ["DEEPSEEK_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -6141,9 +6057,7 @@
         {
           "id": "apiKey",
           "label": "DIGITALOCEAN_ACCESS_TOKEN",
-          "env": [
-            "DIGITALOCEAN_ACCESS_TOKEN"
-          ],
+          "env": ["DIGITALOCEAN_ACCESS_TOKEN"],
           "secret": true,
           "required": true
         }
@@ -6550,9 +6464,7 @@
         {
           "id": "apiKey",
           "label": "DINFERENCE_API_KEY",
-          "env": [
-            "DINFERENCE_API_KEY"
-          ],
+          "env": ["DINFERENCE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -6594,9 +6506,7 @@
         {
           "id": "apiKey",
           "label": "DRUN_API_KEY",
-          "env": [
-            "DRUN_API_KEY"
-          ],
+          "env": ["DRUN_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -6628,9 +6538,7 @@
         {
           "id": "apiKey",
           "label": "EVROC_API_KEY",
-          "env": [
-            "EVROC_API_KEY"
-          ],
+          "env": ["EVROC_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -6712,9 +6620,7 @@
         {
           "id": "apiKey",
           "label": "FASTROUTER_API_KEY",
-          "env": [
-            "FASTROUTER_API_KEY"
-          ],
+          "env": ["FASTROUTER_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -6806,9 +6712,7 @@
         {
           "id": "apiKey",
           "label": "FIREPASS_API_KEY",
-          "env": [
-            "FIREPASS_API_KEY"
-          ],
+          "env": ["FIREPASS_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -6830,9 +6734,7 @@
         {
           "id": "apiKey",
           "label": "FIREWORKS_API_KEY",
-          "env": [
-            "FIREWORKS_API_KEY"
-          ],
+          "env": ["FIREWORKS_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -6914,9 +6816,7 @@
         {
           "id": "apiKey",
           "label": "FREEMODEL_API_KEY",
-          "env": [
-            "FREEMODEL_API_KEY"
-          ],
+          "env": ["FREEMODEL_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -6978,9 +6878,7 @@
         {
           "id": "apiKey",
           "label": "FRIENDLI_TOKEN",
-          "env": [
-            "FRIENDLI_TOKEN"
-          ],
+          "env": ["FRIENDLI_TOKEN"],
           "secret": true,
           "required": true
         }
@@ -7027,9 +6925,7 @@
         {
           "id": "apiKey",
           "label": "FROGBOT_API_KEY",
-          "env": [
-            "FROGBOT_API_KEY"
-          ],
+          "env": ["FROGBOT_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -7176,9 +7072,7 @@
         {
           "id": "apiKey",
           "label": "GITHUB_TOKEN",
-          "env": [
-            "GITHUB_TOKEN"
-          ],
+          "env": ["GITHUB_TOKEN"],
           "secret": true,
           "required": true
         }
@@ -7305,9 +7199,7 @@
         {
           "id": "apiKey",
           "label": "GITHUB_TOKEN",
-          "env": [
-            "GITHUB_TOKEN"
-          ],
+          "env": ["GITHUB_TOKEN"],
           "secret": true,
           "required": true
         }
@@ -7599,9 +7491,7 @@
         {
           "id": "apiKey",
           "label": "GITLAB_TOKEN",
-          "env": [
-            "GITLAB_TOKEN"
-          ],
+          "env": ["GITLAB_TOKEN"],
           "secret": true,
           "required": true
         }
@@ -7703,9 +7593,7 @@
         {
           "id": "apiKey",
           "label": "GMICLOUD_API_KEY",
-          "env": [
-            "GMICLOUD_API_KEY"
-          ],
+          "env": ["GMICLOUD_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -7762,11 +7650,7 @@
         {
           "id": "apiKey",
           "label": "Google API key",
-          "env": [
-            "GOOGLE_API_KEY",
-            "GOOGLE_GENERATIVE_AI_API_KEY",
-            "GEMINI_API_KEY"
-          ],
+          "env": ["GOOGLE_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -7893,27 +7777,21 @@
         {
           "id": "project",
           "label": "Google Vertex project",
-          "env": [
-            "GOOGLE_VERTEX_PROJECT"
-          ],
+          "env": ["GOOGLE_VERTEX_PROJECT"],
           "secret": false,
           "required": true
         },
         {
           "id": "location",
           "label": "Google Vertex location",
-          "env": [
-            "GOOGLE_VERTEX_LOCATION"
-          ],
+          "env": ["GOOGLE_VERTEX_LOCATION"],
           "secret": false,
           "required": true
         },
         {
           "id": "applicationCredentials",
           "label": "Google application credentials",
-          "env": [
-            "GOOGLE_APPLICATION_CREDENTIALS"
-          ],
+          "env": ["GOOGLE_APPLICATION_CREDENTIALS"],
           "secret": false,
           "required": true
         }
@@ -8140,27 +8018,21 @@
         {
           "id": "project",
           "label": "Google Vertex project",
-          "env": [
-            "GOOGLE_VERTEX_PROJECT"
-          ],
+          "env": ["GOOGLE_VERTEX_PROJECT"],
           "secret": false,
           "required": true
         },
         {
           "id": "location",
           "label": "Google Vertex location",
-          "env": [
-            "GOOGLE_VERTEX_LOCATION"
-          ],
+          "env": ["GOOGLE_VERTEX_LOCATION"],
           "secret": false,
           "required": true
         },
         {
           "id": "applicationCredentials",
           "label": "Google application credentials",
-          "env": [
-            "GOOGLE_APPLICATION_CREDENTIALS"
-          ],
+          "env": ["GOOGLE_APPLICATION_CREDENTIALS"],
           "secret": false,
           "required": true
         }
@@ -8242,9 +8114,7 @@
         {
           "id": "apiKey",
           "label": "GROQ_API_KEY",
-          "env": [
-            "GROQ_API_KEY"
-          ],
+          "env": ["GROQ_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -8396,9 +8266,7 @@
         {
           "id": "apiKey",
           "label": "HELICONE_API_KEY",
-          "env": [
-            "HELICONE_API_KEY"
-          ],
+          "env": ["HELICONE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -8865,9 +8733,7 @@
         {
           "id": "apiKey",
           "label": "HPC_AI_API_KEY",
-          "env": [
-            "HPC_AI_API_KEY"
-          ],
+          "env": ["HPC_AI_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -8899,9 +8765,7 @@
         {
           "id": "apiKey",
           "label": "HF_TOKEN",
-          "env": [
-            "HF_TOKEN"
-          ],
+          "env": ["HF_TOKEN"],
           "secret": true,
           "required": true
         }
@@ -9038,9 +8902,7 @@
         {
           "id": "apiKey",
           "label": "IFLOW_API_KEY",
-          "env": [
-            "IFLOW_API_KEY"
-          ],
+          "env": ["IFLOW_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -9127,9 +8989,7 @@
         {
           "id": "apiKey",
           "label": "INCEPTION_API_KEY",
-          "env": [
-            "INCEPTION_API_KEY"
-          ],
+          "env": ["INCEPTION_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -9156,9 +9016,7 @@
         {
           "id": "apiKey",
           "label": "INCEPTRON_API_KEY",
-          "env": [
-            "INCEPTRON_API_KEY"
-          ],
+          "env": ["INCEPTRON_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -9195,9 +9053,7 @@
         {
           "id": "apiKey",
           "label": "INFERENCE_API_KEY",
-          "env": [
-            "INFERENCE_API_KEY"
-          ],
+          "env": ["INFERENCE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -9259,9 +9115,7 @@
         {
           "id": "apiKey",
           "label": "IOINTELLIGENCE_API_KEY",
-          "env": [
-            "IOINTELLIGENCE_API_KEY"
-          ],
+          "env": ["IOINTELLIGENCE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -9363,9 +9217,7 @@
         {
           "id": "apiKey",
           "label": "JIEKOU_API_KEY",
-          "env": [
-            "JIEKOU_API_KEY"
-          ],
+          "env": ["JIEKOU_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -9687,9 +9539,7 @@
         {
           "id": "apiKey",
           "label": "KILO_API_KEY",
-          "env": [
-            "KILO_API_KEY"
-          ],
+          "env": ["KILO_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -11431,9 +11281,7 @@
         {
           "id": "apiKey",
           "label": "KIMI_API_KEY",
-          "env": [
-            "KIMI_API_KEY"
-          ],
+          "env": ["KIMI_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -11465,9 +11313,7 @@
         {
           "id": "apiKey",
           "label": "KUAE_API_KEY",
-          "env": [
-            "KUAE_API_KEY"
-          ],
+          "env": ["KUAE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -11489,9 +11335,7 @@
         {
           "id": "apiKey",
           "label": "LILAC_API_KEY",
-          "env": [
-            "LILAC_API_KEY"
-          ],
+          "env": ["LILAC_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -11528,9 +11372,7 @@
         {
           "id": "apiKey",
           "label": "LLAMA_API_KEY",
-          "env": [
-            "LLAMA_API_KEY"
-          ],
+          "env": ["LLAMA_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -11582,9 +11424,7 @@
         {
           "id": "apiKey",
           "label": "LLMGATEWAY_API_KEY",
-          "env": [
-            "LLMGATEWAY_API_KEY"
-          ],
+          "env": ["LLMGATEWAY_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -12556,9 +12396,7 @@
         {
           "id": "apiKey",
           "label": "LMSTUDIO_API_KEY",
-          "env": [
-            "LMSTUDIO_API_KEY"
-          ],
+          "env": ["LMSTUDIO_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -12590,9 +12428,7 @@
         {
           "id": "apiKey",
           "label": "LUCIDQUERY_API_KEY",
-          "env": [
-            "LUCIDQUERY_API_KEY"
-          ],
+          "env": ["LUCIDQUERY_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -12619,9 +12455,7 @@
         {
           "id": "apiKey",
           "label": "MEGANOVA_API_KEY",
-          "env": [
-            "MEGANOVA_API_KEY"
-          ],
+          "env": ["MEGANOVA_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -12733,9 +12567,7 @@
         {
           "id": "apiKey",
           "label": "MERGE_GATEWAY_API_KEY",
-          "env": [
-            "MERGE_GATEWAY_API_KEY"
-          ],
+          "env": ["MERGE_GATEWAY_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -13167,9 +12999,7 @@
         {
           "id": "apiKey",
           "label": "MINIMAX_API_KEY",
-          "env": [
-            "MINIMAX_API_KEY"
-          ],
+          "env": ["MINIMAX_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -13221,9 +13051,7 @@
         {
           "id": "apiKey",
           "label": "MINIMAX_API_KEY",
-          "env": [
-            "MINIMAX_API_KEY"
-          ],
+          "env": ["MINIMAX_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -13275,9 +13103,7 @@
         {
           "id": "apiKey",
           "label": "MINIMAX_API_KEY",
-          "env": [
-            "MINIMAX_API_KEY"
-          ],
+          "env": ["MINIMAX_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -13329,9 +13155,7 @@
         {
           "id": "apiKey",
           "label": "MINIMAX_API_KEY",
-          "env": [
-            "MINIMAX_API_KEY"
-          ],
+          "env": ["MINIMAX_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -13383,9 +13207,7 @@
         {
           "id": "apiKey",
           "label": "MISTRAL_API_KEY",
-          "env": [
-            "MISTRAL_API_KEY"
-          ],
+          "env": ["MISTRAL_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -13552,9 +13374,7 @@
         {
           "id": "apiKey",
           "label": "MIXLAYER_API_KEY",
-          "env": [
-            "MIXLAYER_API_KEY"
-          ],
+          "env": ["MIXLAYER_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -13596,9 +13416,7 @@
         {
           "id": "apiKey",
           "label": "MOARK_API_KEY",
-          "env": [
-            "MOARK_API_KEY"
-          ],
+          "env": ["MOARK_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -13625,9 +13443,7 @@
         {
           "id": "apiKey",
           "label": "MODELSCOPE_API_KEY",
-          "env": [
-            "MODELSCOPE_API_KEY"
-          ],
+          "env": ["MODELSCOPE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -13679,9 +13495,7 @@
         {
           "id": "apiKey",
           "label": "MOONSHOT_API_KEY",
-          "env": [
-            "MOONSHOT_API_KEY"
-          ],
+          "env": ["MOONSHOT_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -13733,9 +13547,7 @@
         {
           "id": "apiKey",
           "label": "MOONSHOT_API_KEY",
-          "env": [
-            "MOONSHOT_API_KEY"
-          ],
+          "env": ["MOONSHOT_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -13787,9 +13599,7 @@
         {
           "id": "apiKey",
           "label": "MORPH_API_KEY",
-          "env": [
-            "MORPH_API_KEY"
-          ],
+          "env": ["MORPH_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -13821,9 +13631,7 @@
         {
           "id": "apiKey",
           "label": "NANO_GPT_API_KEY",
-          "env": [
-            "NANO_GPT_API_KEY"
-          ],
+          "env": ["NANO_GPT_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -16925,9 +16733,7 @@
         {
           "id": "apiKey",
           "label": "NEARAI_API_KEY",
-          "env": [
-            "NEARAI_API_KEY"
-          ],
+          "env": ["NEARAI_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -17129,9 +16935,7 @@
         {
           "id": "apiKey",
           "label": "NEBIUS_API_KEY",
-          "env": [
-            "NEBIUS_API_KEY"
-          ],
+          "env": ["NEBIUS_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -17303,9 +17107,7 @@
         {
           "id": "apiKey",
           "label": "NEURALWATT_API_KEY",
-          "env": [
-            "NEURALWATT_API_KEY"
-          ],
+          "env": ["NEURALWATT_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -17392,9 +17194,7 @@
         {
           "id": "apiKey",
           "label": "NOVA_API_KEY",
-          "env": [
-            "NOVA_API_KEY"
-          ],
+          "env": ["NOVA_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -17421,9 +17221,7 @@
         {
           "id": "apiKey",
           "label": "NOVITA_API_KEY",
-          "env": [
-            "NOVITA_API_KEY"
-          ],
+          "env": ["NOVITA_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -17960,9 +17758,7 @@
         {
           "id": "apiKey",
           "label": "NVIDIA_API_KEY",
-          "env": [
-            "NVIDIA_API_KEY"
-          ],
+          "env": ["NVIDIA_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -18444,9 +18240,7 @@
         {
           "id": "apiKey",
           "label": "OLLAMA_API_KEY",
-          "env": [
-            "OLLAMA_API_KEY"
-          ],
+          "env": ["OLLAMA_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -18663,9 +18457,7 @@
         {
           "id": "apiKey",
           "label": "OPENAI_API_KEY",
-          "env": [
-            "OPENAI_API_KEY"
-          ],
+          "env": ["OPENAI_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -18942,9 +18734,7 @@
         {
           "id": "apiKey",
           "label": "OPENCODE_API_KEY",
-          "env": [
-            "OPENCODE_API_KEY"
-          ],
+          "env": ["OPENCODE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -19296,9 +19086,7 @@
         {
           "id": "apiKey",
           "label": "OPENCODE_API_KEY",
-          "env": [
-            "OPENCODE_API_KEY"
-          ],
+          "env": ["OPENCODE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -19400,9 +19188,7 @@
         {
           "id": "apiKey",
           "label": "OPENROUTER_API_KEY",
-          "env": [
-            "OPENROUTER_API_KEY"
-          ],
+          "env": ["OPENROUTER_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -21124,9 +20910,7 @@
         {
           "id": "apiKey",
           "label": "ORCAROUTER_API_KEY",
-          "env": [
-            "ORCAROUTER_API_KEY"
-          ],
+          "env": ["ORCAROUTER_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -21548,9 +21332,7 @@
         {
           "id": "apiKey",
           "label": "OVHCLOUD_API_KEY",
-          "env": [
-            "OVHCLOUD_API_KEY"
-          ],
+          "env": ["OVHCLOUD_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -21642,9 +21424,7 @@
         {
           "id": "apiKey",
           "label": "PERPLEXITY_API_KEY",
-          "env": [
-            "PERPLEXITY_API_KEY"
-          ],
+          "env": ["PERPLEXITY_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -21681,9 +21461,7 @@
         {
           "id": "apiKey",
           "label": "PERPLEXITY_API_KEY",
-          "env": [
-            "PERPLEXITY_API_KEY"
-          ],
+          "env": ["PERPLEXITY_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -21790,9 +21568,7 @@
         {
           "id": "apiKey",
           "label": "POE_API_KEY",
-          "env": [
-            "POE_API_KEY"
-          ],
+          "env": ["POE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -22494,9 +22270,7 @@
         {
           "id": "apiKey",
           "label": "POOLSIDE_API_KEY",
-          "env": [
-            "POOLSIDE_API_KEY"
-          ],
+          "env": ["POOLSIDE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -22523,18 +22297,14 @@
         {
           "id": "apiKey",
           "label": "Privatemode API key",
-          "env": [
-            "PRIVATEMODE_API_KEY"
-          ],
+          "env": ["PRIVATEMODE_API_KEY"],
           "secret": true,
           "required": true
         },
         {
           "id": "endpoint",
           "label": "Privatemode endpoint",
-          "env": [
-            "PRIVATEMODE_ENDPOINT"
-          ],
+          "env": ["PRIVATEMODE_ENDPOINT"],
           "secret": false,
           "required": true
         }
@@ -22576,9 +22346,7 @@
         {
           "id": "apiKey",
           "label": "QIHANG_API_KEY",
-          "env": [
-            "QIHANG_API_KEY"
-          ],
+          "env": ["QIHANG_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -22640,9 +22408,7 @@
         {
           "id": "apiKey",
           "label": "QINIU_API_KEY",
-          "env": [
-            "QINIU_API_KEY"
-          ],
+          "env": ["QINIU_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -23114,9 +22880,7 @@
         {
           "id": "apiKey",
           "label": "REGOLO_API_KEY",
-          "env": [
-            "REGOLO_API_KEY"
-          ],
+          "env": ["REGOLO_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -23198,9 +22962,7 @@
         {
           "id": "apiKey",
           "label": "REQUESTY_API_KEY",
-          "env": [
-            "REQUESTY_API_KEY"
-          ],
+          "env": ["REQUESTY_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -23407,9 +23169,7 @@
         {
           "id": "apiKey",
           "label": "ROUTING_RUN_API_KEY",
-          "env": [
-            "ROUTING_RUN_API_KEY"
-          ],
+          "env": ["ROUTING_RUN_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -23556,9 +23316,7 @@
         {
           "id": "apiKey",
           "label": "AICORE_SERVICE_KEY",
-          "env": [
-            "AICORE_SERVICE_KEY"
-          ],
+          "env": ["AICORE_SERVICE_KEY"],
           "secret": true,
           "required": true
         }
@@ -23705,9 +23463,7 @@
         {
           "id": "apiKey",
           "label": "SARVAM_API_KEY",
-          "env": [
-            "SARVAM_API_KEY"
-          ],
+          "env": ["SARVAM_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -23734,9 +23490,7 @@
         {
           "id": "apiKey",
           "label": "SCALEWAY_API_KEY",
-          "env": [
-            "SCALEWAY_API_KEY"
-          ],
+          "env": ["SCALEWAY_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -23833,9 +23587,7 @@
         {
           "id": "apiKey",
           "label": "SILICONFLOW_API_KEY",
-          "env": [
-            "SILICONFLOW_API_KEY"
-          ],
+          "env": ["SILICONFLOW_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -24232,9 +23984,7 @@
         {
           "id": "apiKey",
           "label": "SILICONFLOW_CN_API_KEY",
-          "env": [
-            "SILICONFLOW_CN_API_KEY"
-          ],
+          "env": ["SILICONFLOW_CN_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -24661,18 +24411,14 @@
         {
           "id": "account",
           "label": "Snowflake account",
-          "env": [
-            "SNOWFLAKE_ACCOUNT"
-          ],
+          "env": ["SNOWFLAKE_ACCOUNT"],
           "secret": false,
           "required": true
         },
         {
           "id": "pat",
           "label": "Snowflake Cortex PAT",
-          "env": [
-            "SNOWFLAKE_CORTEX_PAT"
-          ],
+          "env": ["SNOWFLAKE_CORTEX_PAT"],
           "secret": true,
           "required": true
         }
@@ -24744,9 +24490,7 @@
         {
           "id": "apiKey",
           "label": "STACKIT_API_KEY",
-          "env": [
-            "STACKIT_API_KEY"
-          ],
+          "env": ["STACKIT_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -24803,9 +24547,7 @@
         {
           "id": "apiKey",
           "label": "STEPFUN_API_KEY",
-          "env": [
-            "STEPFUN_API_KEY"
-          ],
+          "env": ["STEPFUN_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -24842,9 +24584,7 @@
         {
           "id": "apiKey",
           "label": "STEPFUN_API_KEY",
-          "env": [
-            "STEPFUN_API_KEY"
-          ],
+          "env": ["STEPFUN_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -24871,9 +24611,7 @@
         {
           "id": "apiKey",
           "label": "SUBMODEL_INSTAGEN_ACCESS_KEY",
-          "env": [
-            "SUBMODEL_INSTAGEN_ACCESS_KEY"
-          ],
+          "env": ["SUBMODEL_INSTAGEN_ACCESS_KEY"],
           "secret": true,
           "required": true
         }
@@ -24935,9 +24673,7 @@
         {
           "id": "apiKey",
           "label": "SYNTHETIC_API_KEY",
-          "env": [
-            "SYNTHETIC_API_KEY"
-          ],
+          "env": ["SYNTHETIC_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -25119,9 +24855,7 @@
         {
           "id": "apiKey",
           "label": "TENCENT_CODING_PLAN_API_KEY",
-          "env": [
-            "TENCENT_CODING_PLAN_API_KEY"
-          ],
+          "env": ["TENCENT_CODING_PLAN_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -25178,9 +24912,7 @@
         {
           "id": "apiKey",
           "label": "TENCENT_TOKENHUB_API_KEY",
-          "env": [
-            "TENCENT_TOKENHUB_API_KEY"
-          ],
+          "env": ["TENCENT_TOKENHUB_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -25202,9 +24934,7 @@
         {
           "id": "apiKey",
           "label": "THEGRIDAI_API_KEY",
-          "env": [
-            "THEGRIDAI_API_KEY"
-          ],
+          "env": ["THEGRIDAI_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -25266,9 +24996,7 @@
         {
           "id": "apiKey",
           "label": "TOGETHER_API_KEY",
-          "env": [
-            "TOGETHER_API_KEY"
-          ],
+          "env": ["TOGETHER_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -25385,9 +25113,7 @@
         {
           "id": "apiKey",
           "label": "UMANS_AI_CODING_PLAN_API_KEY",
-          "env": [
-            "UMANS_AI_CODING_PLAN_API_KEY"
-          ],
+          "env": ["UMANS_AI_CODING_PLAN_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -25429,9 +25155,7 @@
         {
           "id": "apiKey",
           "label": "UPSTAGE_API_KEY",
-          "env": [
-            "UPSTAGE_API_KEY"
-          ],
+          "env": ["UPSTAGE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -25463,9 +25187,7 @@
         {
           "id": "apiKey",
           "label": "V0_API_KEY",
-          "env": [
-            "V0_API_KEY"
-          ],
+          "env": ["V0_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -25497,9 +25219,7 @@
         {
           "id": "apiKey",
           "label": "VENICE_API_KEY",
-          "env": [
-            "VENICE_API_KEY"
-          ],
+          "env": ["VENICE_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -25871,9 +25591,7 @@
         {
           "id": "apiKey",
           "label": "AI_GATEWAY_API_KEY",
-          "env": [
-            "AI_GATEWAY_API_KEY"
-          ],
+          "env": ["AI_GATEWAY_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -27145,9 +26863,7 @@
         {
           "id": "apiKey",
           "label": "VIVGRID_API_KEY",
-          "env": [
-            "VIVGRID_API_KEY"
-          ],
+          "env": ["VIVGRID_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -27229,9 +26945,7 @@
         {
           "id": "apiKey",
           "label": "VULTR_API_KEY",
-          "env": [
-            "VULTR_API_KEY"
-          ],
+          "env": ["VULTR_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -27283,9 +26997,7 @@
         {
           "id": "apiKey",
           "label": "WAFER_API_KEY",
-          "env": [
-            "WAFER_API_KEY"
-          ],
+          "env": ["WAFER_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -27337,9 +27049,7 @@
         {
           "id": "apiKey",
           "label": "WANDB_API_KEY",
-          "env": [
-            "WANDB_API_KEY"
-          ],
+          "env": ["WANDB_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -27446,9 +27156,7 @@
         {
           "id": "apiKey",
           "label": "XAI_API_KEY",
-          "env": [
-            "XAI_API_KEY"
-          ],
+          "env": ["XAI_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -27505,9 +27213,7 @@
         {
           "id": "apiKey",
           "label": "XIAOMI_API_KEY",
-          "env": [
-            "XIAOMI_API_KEY"
-          ],
+          "env": ["XIAOMI_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -27549,9 +27255,7 @@
         {
           "id": "apiKey",
           "label": "XIAOMI_API_KEY",
-          "env": [
-            "XIAOMI_API_KEY"
-          ],
+          "env": ["XIAOMI_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -27608,9 +27312,7 @@
         {
           "id": "apiKey",
           "label": "XIAOMI_API_KEY",
-          "env": [
-            "XIAOMI_API_KEY"
-          ],
+          "env": ["XIAOMI_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -27667,9 +27369,7 @@
         {
           "id": "apiKey",
           "label": "XIAOMI_API_KEY",
-          "env": [
-            "XIAOMI_API_KEY"
-          ],
+          "env": ["XIAOMI_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -27726,9 +27426,7 @@
         {
           "id": "apiKey",
           "label": "XPERSONA_API_KEY",
-          "env": [
-            "XPERSONA_API_KEY"
-          ],
+          "env": ["XPERSONA_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -27755,9 +27453,7 @@
         {
           "id": "apiKey",
           "label": "ZHIPU_API_KEY",
-          "env": [
-            "ZHIPU_API_KEY"
-          ],
+          "env": ["ZHIPU_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -27839,9 +27535,7 @@
         {
           "id": "apiKey",
           "label": "ZHIPU_API_KEY",
-          "env": [
-            "ZHIPU_API_KEY"
-          ],
+          "env": ["ZHIPU_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -27888,9 +27582,7 @@
         {
           "id": "apiKey",
           "label": "ZENMUX_API_KEY",
-          "env": [
-            "ZENMUX_API_KEY"
-          ],
+          "env": ["ZENMUX_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -28387,9 +28079,7 @@
         {
           "id": "apiKey",
           "label": "ZHIPU_API_KEY",
-          "env": [
-            "ZHIPU_API_KEY"
-          ],
+          "env": ["ZHIPU_API_KEY"],
           "secret": true,
           "required": true
         }
@@ -28466,9 +28156,7 @@
         {
           "id": "apiKey",
           "label": "ZHIPU_API_KEY",
-          "env": [
-            "ZHIPU_API_KEY"
-          ],
+          "env": ["ZHIPU_API_KEY"],
           "secret": true,
           "required": true
         }

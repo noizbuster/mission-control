@@ -31,9 +31,7 @@
         "id": "explore",
         "kind": "llm",
         "label": "Explore the codebase to ground the plan",
-        "capabilities": [
-          "read"
-        ],
+        "capabilities": ["read"],
         "config": {
           "systemPrompt": "Explore the relevant codebase areas to ground the plan in real structure. Set explore.complete when exploration is done.",
           "outputKey": "explore.complete"
@@ -43,9 +41,7 @@
         "id": "research",
         "kind": "llm",
         "label": "Research best practices for an unclear request",
-        "capabilities": [
-          "read"
-        ],
+        "capabilities": ["read"],
         "config": {
           "systemPrompt": "Research best practices and prior art to make the unclear request plannable. Set research.complete when research is done.",
           "outputKey": "research.complete"
@@ -73,9 +69,7 @@
         "id": "draft-plan",
         "kind": "llm",
         "label": "Draft the plan as .omo/plans/{slug}.md",
-        "capabilities": [
-          "read"
-        ],
+        "capabilities": ["read"],
         "config": {
           "systemPrompt": "Draft the plan as a .omo/plans/{slug}.md checklist with a TL;DR, ordered TODOs, and a Final Verification Wave. Set plan.drafted when the plan is written.",
           "outputKey": "plan.drafted"

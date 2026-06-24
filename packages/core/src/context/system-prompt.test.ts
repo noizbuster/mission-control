@@ -129,9 +129,7 @@ describe('assembleSystemPrompt', () => {
 
     it('renders workflows with multiple categories as a comma-separated list', () => {
         const prompt = assembleSystemPrompt({
-            workflows: [
-                { name: 'default', description: 'Fallback workflow.', categories: ['deep', 'quick', 'plan'] },
-            ],
+            workflows: [{ name: 'default', description: 'Fallback workflow.', categories: ['deep', 'quick', 'plan'] }],
         });
         expect(prompt).toContain('<categories>deep, quick, plan</categories>');
     });

@@ -150,17 +150,17 @@ function readSupervisorConfig(node: AbgNodeSpec): SupervisorConfig | undefined {
     if (config === undefined) {
         return { target: 'retry', maxAttempts: 2, baseDelayMs: 1000 };
     }
-    const target = typeof config['target'] === 'string' && config['target'].length > 0
-        ? config['target']
-        : 'retry';
+    const target = typeof config['target'] === 'string' && config['target'].length > 0 ? config['target'] : 'retry';
     const maxAttemptsRaw = config['maxAttempts'];
-    const maxAttempts = typeof maxAttemptsRaw === 'number' && Number.isFinite(maxAttemptsRaw) && maxAttemptsRaw >= 1
-        ? Math.trunc(maxAttemptsRaw)
-        : 2;
+    const maxAttempts =
+        typeof maxAttemptsRaw === 'number' && Number.isFinite(maxAttemptsRaw) && maxAttemptsRaw >= 1
+            ? Math.trunc(maxAttemptsRaw)
+            : 2;
     const baseDelayMsRaw = config['baseDelayMs'];
-    const baseDelayMs = typeof baseDelayMsRaw === 'number' && Number.isFinite(baseDelayMsRaw) && baseDelayMsRaw >= 0
-        ? baseDelayMsRaw
-        : 1000;
+    const baseDelayMs =
+        typeof baseDelayMsRaw === 'number' && Number.isFinite(baseDelayMsRaw) && baseDelayMsRaw >= 0
+            ? baseDelayMsRaw
+            : 1000;
     const maxDelayMs = config['maxDelayMs'];
     const escalationTarget = config['escalationTarget'];
     return {

@@ -1,7 +1,7 @@
 import type { ModelProviderCatalogEntry, ProviderAuthField } from '@mission-control/config';
 import type { ProviderCredential } from '@mission-control/protocol';
 import type { AuthCredentialArg } from '../args.js';
-import type { SaveProviderCredentialFieldInput, ProviderAuthStore } from '../auth-store.js';
+import type { ProviderAuthStore, SaveProviderCredentialFieldInput } from '../auth-store.js';
 import type { AuthPrompt, AuthPromptOptions } from './auth-prompts.js';
 import { maskSecretHint } from './auth-prompts.js';
 
@@ -52,13 +52,7 @@ export async function resolveProviderCredentialInput(
 
         let value: string | undefined;
         if (fieldPrompt !== undefined) {
-            value = await promptForFieldValue(
-                field,
-                fieldPrompt,
-                envValue,
-                existingValue,
-                environment,
-            );
+            value = await promptForFieldValue(field, fieldPrompt, envValue, existingValue, environment);
         } else {
             value = envValue ?? existingValue;
         }
@@ -108,9 +102,8 @@ async function promptForFieldValue(
         return value.length > 0 ? value : undefined;
     }
 
-    const defaultValueSource = envValue !== undefined
-        ? formatEnvironmentSource(field, environment)
-        : 'stored credential';
+    const defaultValueSource =
+        envValue !== undefined ? formatEnvironmentSource(field, environment) : 'stored credential';
     const defaultValuePreview = field.secret ? maskSecretHint(defaultValue) : defaultValue;
     const options: AuthPromptOptions = {
         defaultValue,

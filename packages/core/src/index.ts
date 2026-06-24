@@ -1,17 +1,17 @@
 export * from './abg-overlay/index.js';
-export * from './agents/index.js';
 export type { AgentRuntimeOptions, RunGraphOptions } from './agent-runtime.js';
 export { AgentRuntime } from './agent-runtime.js';
+export * from './agents/index.js';
 export { SubAgentRegistry } from './agents/registry.js';
 export type { SubAgent, SubAgentRunInput, SubAgentRunOutput } from './agents/sub-agent.js';
 export type { ApprovalTerminalState, ApprovalUpdateInput, PermissionDecisionResolver } from './approval-gate.js';
 export { PermissionGate, PermissionGateError } from './approval-gate.js';
 export type { ActionGraph, ActionGraphEdge, ActionGraphNode } from './behavior/action-graph.js';
 export { createActionGraph } from './behavior/action-graph.js';
-export type { AuthorableAbgGraph } from './behavior/authorable-graph.js';
-export { createAuthorableAbgGraph, resolveAbgNodeModel } from './behavior/authorable-graph.js';
 export type { AgentModelLookup } from './behavior/agent-model-resolver.js';
 export { resolveGraphAgentModels } from './behavior/agent-model-resolver.js';
+export type { AuthorableAbgGraph } from './behavior/authorable-graph.js';
+export { createAuthorableAbgGraph, resolveAbgNodeModel } from './behavior/authorable-graph.js';
 export type { BehaviorNode, BehaviorNodeType } from './behavior/behavior-node.js';
 export {
     type BudgetConfig,
@@ -29,13 +29,13 @@ export {
     resolvePricing,
     type TokenUsage,
 } from './behavior/budget/cost-ledger.js';
+export { BUILTIN_MODES, BUILTIN_WORKFLOWS, registerBuiltinWorkflows } from './behavior/builtin-workflows.js';
 export {
     CODING_AGENT_GRAPH_ID,
     type CodingAgentGraphOptions,
     createCodingAgentGraph,
 } from './behavior/coding-agent-graph.js';
 export { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry.js';
-export { BUILTIN_WORKFLOWS, BUILTIN_MODES, registerBuiltinWorkflows } from './behavior/builtin-workflows.js';
 export type { AbgGraphRunnerInput, AbgGraphRunResult } from './behavior/graph-runner.js';
 export { runAbgGraph } from './behavior/graph-runner.js';
 export { deriveAbgGraphSnapshot } from './behavior/graph-state.js';
@@ -140,10 +140,10 @@ export {
     createBlackboard,
 } from './memory/blackboard.js';
 export * from './memory/index.js';
-export * from './plugins/index.js';
 export { PermissionSession, type PermissionSessionOptions } from './permission/session.js';
 export { PermissionRuleStore, type PermissionRuleStoreOptions } from './permission/store.js';
 export { createAllowPermissionDecision, createDefaultPermissionDecision } from './permissions.js';
+export * from './plugins/index.js';
 export {
     FlatProviderBridgeError,
     type FlatProviderBridgeOptions,

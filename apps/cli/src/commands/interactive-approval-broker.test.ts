@@ -1,10 +1,10 @@
-import type { AgentEvent, PermissionRequest } from '@mission-control/protocol';
 import { PermissionSession } from '@mission-control/core';
+import type { AgentEvent, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
 
 describe('interactive approval broker', () => {
     // Isolate the file-backed PermissionRuleStore so an "always" (persist:true) reply cannot leak
@@ -89,9 +89,9 @@ describe('interactive approval broker', () => {
         await expect(first).resolves.toMatchObject({ status: 'allow' });
 
         const turnTwo = createInteractiveApprovalBroker(baseBrokerOptions(), shared);
-        await expect(
-            turnTwo.requestPermission(patchRequest('permission_patch_session_shared')),
-        ).resolves.toMatchObject({ status: 'allow' });
+        await expect(turnTwo.requestPermission(patchRequest('permission_patch_session_shared'))).resolves.toMatchObject(
+            { status: 'allow' },
+        );
     });
 });
 

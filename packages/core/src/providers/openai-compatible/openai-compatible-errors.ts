@@ -87,7 +87,6 @@ function extractReadableErrorMessage(raw: string): string {
         if (typeof directMessage === 'string') {
             return directMessage;
         }
-    } catch {
-    }
+    } catch {}
     return raw;
 }

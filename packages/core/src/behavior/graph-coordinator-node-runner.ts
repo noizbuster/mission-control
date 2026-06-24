@@ -249,8 +249,7 @@ async function runNode(
             }),
         );
     }
-    const hadOnlyRetryableToolFailures =
-        !failed && !blocked && retryableToolFailures > 0 && completedTools === 0;
+    const hadOnlyRetryableToolFailures = !failed && !blocked && retryableToolFailures > 0 && completedTools === 0;
     const hadProductiveToolUse = completedTools > 0;
     return {
         status: blocked ? 'blocked' : failed ? 'failed' : 'completed',

@@ -13,9 +13,9 @@
  */
 import { type PolicyEffectRuleSet, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { readFile } from 'node:fs/promises';
-import { materializeMission } from '../runtime/mission-run/mission-run-service.js';
 import { evaluateRules } from '../permissions/rule-evaluator.js';
+import { materializeMission } from '../runtime/mission-run/mission-run-service.js';
+import { readFile } from 'node:fs/promises';
 
 const workflowJsonPath = `${process.cwd()}/examples/abg/planner.workflow.json`;
 

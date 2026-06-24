@@ -17,9 +17,7 @@ describe('formatToolCountSummary', () => {
     });
 
     it('lists distinct names without a count suffix when each appears once', () => {
-        expect(formatToolCountSummary(['file.patch', 'bash.run', 'repo.read'])).toBe(
-            'file.patch, bash.run, repo.read',
-        );
+        expect(formatToolCountSummary(['file.patch', 'bash.run', 'repo.read'])).toBe('file.patch, bash.run, repo.read');
     });
 
     it('caps the displayed entries at five and appends a remainder hint', () => {

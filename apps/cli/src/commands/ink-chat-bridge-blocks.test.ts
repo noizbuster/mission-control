@@ -118,15 +118,16 @@ describe('parseMessageBlocks — tool block sticky classification', () => {
         expect(kinds(blocks)).toEqual(['system']);
     });
 
-    it('truncates a single long block to fit the line budget', () => {
+    it('tail-slices a single long non-markdown block to fit the line budget', () => {
         const lines: string[] = [];
         for (let i = 0; i < 100; i++) {
-            lines.push(`Assistant: line ${i}`);
+            lines.push(`system note ${i}`);
         }
         const output = lines.join('\n');
 
         const blocks = parseMessageBlocks(output);
         expect(blocks).toHaveLength(1);
+        expect(blocks[0]?.kind).toBe('system');
         expect(blocks[0]?.lines.length).toBe(100);
 
         // Simulate a 16-row terminal → budget = 16 - 8 = 8 lines
@@ -137,6 +138,8 @@ describe('parseMessageBlocks — tool block sticky classification', () => {
             expect(budget).toBe(8);
             const { windowed, truncatedTop } = selectTrailingBlocks(blocks, budget);
             expect(truncatedTop).toBe(true);
+            expect(windowed).toHaveLength(1);
+            expect(windowed[0]?.truncated).toBe(true);
             const totalLines = windowed.reduce((sum, block) => sum + block.lines.length, 0);
             expect(totalLines).toBeLessThanOrEqual(budget);
         } finally {
@@ -246,16 +249,36 @@ describe('parseMessageBlocks — markdown-unit preservation (T6)', () => {
         expect(truncatedTop).toBe(true);
     });
 
-    it('drops a whole markdown block when it alone exceeds the budget', () => {
+    it('shows a whole markdown block instead of blanking the window when it alone exceeds the budget', () => {
         const big: string[] = ['Assistant: '];
         for (let i = 0; i < 30; i++) big.push(`line ${i}`);
         const blocks = parseMessageBlocks(big.join('\n'));
         expect(blocks).toHaveLength(1);
         expect(blocks[0]?.kind).toBe('assistant');
 
-        const { windowed, truncatedTop } = selectTrailingBlocks(blocks, 8);
-        // Markdown block dropped whole (no partial slice that could split a fence).
+        const { windowed, truncatedTop, startIdx } = selectTrailingBlocks(blocks, 8);
+        // Regression guard: the window must never be empty when a block exists.
+        expect(windowed).toHaveLength(1);
+        expect(windowed[0]?.kind).toBe('assistant');
+        expect(windowed[0]?.lines.length).toBe(blocks[0]?.lines.length);
+        expect(windowed[0]?.truncated).toBeUndefined();
+        expect(startIdx).toBe(0);
+        expect(truncatedTop).toBe(false);
+    });
+
+    it('drops an overflowing markdown block whole only when a later block fills the budget', () => {
+        // [assistant(30 lines), system(1 line)], budget=1: the system block is
+        // the most recent and fills the budget, so the overflowing assistant
+        // block is dropped whole (markdown integrity) while the window stays
+        // non-empty.
+        const blocks: ChatBlock[] = [
+            { kind: 'assistant', lines: Array.from({ length: 30 }, (_v, i) => `line ${i}`) },
+            { kind: 'system', lines: ['system tail'] },
+        ];
+
+        const { windowed, truncatedTop } = selectTrailingBlocks(blocks, 1);
         expect(truncatedTop).toBe(true);
-        expect(windowed).toEqual([]);
+        expect(windowed).toHaveLength(1);
+        expect(windowed[0]?.kind).toBe('system');
     });
 });

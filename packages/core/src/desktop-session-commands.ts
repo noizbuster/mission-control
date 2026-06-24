@@ -7,6 +7,8 @@ import type {
     PermissionDecision,
     PermissionRequest,
 } from '@mission-control/protocol';
+import { createCodingAgentGraph } from './behavior/coding-agent-graph.js';
+import { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry.js';
 import {
     hasPendingDesktopApprovals,
     projectDesktopApprovalContinuationMessages,
@@ -18,17 +20,15 @@ import {
     settleDesktopApproval,
 } from './desktop-tool-approvals.js';
 import { type JsonlSessionEventIdFactory, JsonlSessionEventStore } from './memory/jsonl-session-event-store.js';
+import { wrapFlatProviderAsSdkModel } from './providers/ai-sdk/flat-provider-bridge.js';
 import { createProviderAuthStoreCredentialResolver } from './providers/provider-auth-resolver.js';
 import { createProviderAuthStore } from './providers/provider-auth-store.js';
 import { createProviderRouter } from './providers/provider-factory.js';
 import type { ProviderAdapter } from './providers/provider-turn-types.js';
-import type { RunCoordinatorPromptInput, RunCoordinatorReadMessages } from './runtime/run-coordinator.js';
-import { type SessionRunOwner, type SessionRunOwnerReceipt, SessionRunOwnerRegistry } from './runtime/run-owner.js';
-import type { RunCoordinatorTurnRunner } from './runtime/run-coordinator-types.js';
 import { createGraphTurnRunner } from './runtime/graph-coordinator-turn.js';
-import { createCodingAgentGraph } from './behavior/coding-agent-graph.js';
-import { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry.js';
-import { wrapFlatProviderAsSdkModel } from './providers/ai-sdk/flat-provider-bridge.js';
+import type { RunCoordinatorPromptInput, RunCoordinatorReadMessages } from './runtime/run-coordinator.js';
+import type { RunCoordinatorTurnRunner } from './runtime/run-coordinator-types.js';
+import { type SessionRunOwner, type SessionRunOwnerReceipt, SessionRunOwnerRegistry } from './runtime/run-owner.js';
 import type { CommandExecutionRequest, CommandExecutionResult } from './tools/command-run.js';
 import { registerCommandRunTool } from './tools/command-run.js';
 import { registerFileEditTool } from './tools/file-edit.js';

@@ -33,12 +33,7 @@ describe('runAgent owner prompt compaction replay', () => {
         // summary AND the seeded compacted conversation reach the model — is captured by checking
         // each is present in the request's messages.
         const messageBlobs = (requests[0]?.messages ?? []).map((message) => JSON.stringify(message));
-        const expectedVisible = [
-            'COMPACTION_SUMMARY_SHOULD_BE_VISIBLE',
-            'second task',
-            'second result',
-            'NEW_PROMPT',
-        ];
+        const expectedVisible = ['COMPACTION_SUMMARY_SHOULD_BE_VISIBLE', 'second task', 'second result', 'NEW_PROMPT'];
         for (const expected of expectedVisible) {
             expect(messageBlobs.some((blob) => blob.includes(expected))).toBe(true);
         }

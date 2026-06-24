@@ -79,9 +79,7 @@
     // Graph-level policies use { id, capability, decision }.
     // `decision` is one of: "allow" | "deny" | "requires_approval".
     // This is DISTINCT from mode policy rules (action/resource/effect) below.
-    "policies": [
-      { "id": "allow-search", "capability": "search", "decision": "allow" }
-    ]
+    "policies": [{ "id": "allow-search", "capability": "search", "decision": "allow" }]
   },
 
   // ----- Mode overlays (optional) -----------------------------------------

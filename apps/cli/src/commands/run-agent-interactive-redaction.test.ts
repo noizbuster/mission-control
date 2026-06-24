@@ -84,49 +84,51 @@ describe('interactive coding-agent redaction', () => {
         const commandPreview = await runAgent(
             parseArgs(['--session', 'session_cli_command_preview_redaction', '--engine', 'graph']),
             {
-            authStore: createEmptyAuthStore(),
-            chatInput: createScriptedChatInput([
-                { type: 'line', value: 'preview command tool arguments' },
-                { type: 'line', value: 'n' },
-                { type: 'interrupt' },
-            ]),
-            chatOutput: createBufferedChatOutput().output,
-            workspaceRoot,
-            commandExecutor: fakeSecretCommandExecutor(secret),
-            provider: createDeterministicProvider([
-                {
-                    kind: 'tool_call_completed',
-                    toolCallId: 'command_preview_secret',
-                    toolName: 'command.run',
-                    argumentsJson: JSON.stringify({
-                        command: 'pnpm',
-                        args: ['exec', 'vitest', 'run', `${secret}.test.ts`],
-                    }),
-                },
-                { kind: 'response_completed', content: 'preview command' },
-            ]),
-        });
+                authStore: createEmptyAuthStore(),
+                chatInput: createScriptedChatInput([
+                    { type: 'line', value: 'preview command tool arguments' },
+                    { type: 'line', value: 'n' },
+                    { type: 'interrupt' },
+                ]),
+                chatOutput: createBufferedChatOutput().output,
+                workspaceRoot,
+                commandExecutor: fakeSecretCommandExecutor(secret),
+                provider: createDeterministicProvider([
+                    {
+                        kind: 'tool_call_completed',
+                        toolCallId: 'command_preview_secret',
+                        toolName: 'command.run',
+                        argumentsJson: JSON.stringify({
+                            command: 'pnpm',
+                            args: ['exec', 'vitest', 'run', `${secret}.test.ts`],
+                        }),
+                    },
+                    { kind: 'response_completed', content: 'preview command' },
+                ]),
+            },
+        );
         const patchPreview = await runAgent(
             parseArgs(['--session', 'session_cli_patch_preview_redaction', '--engine', 'graph']),
             {
-            authStore: createEmptyAuthStore(),
-            chatInput: createScriptedChatInput([
-                { type: 'line', value: 'preview patch tool arguments' },
-                { type: 'line', value: 'n' },
-                { type: 'interrupt' },
-            ]),
-            chatOutput: createBufferedChatOutput().output,
-            workspaceRoot,
-            provider: createDeterministicProvider([
-                {
-                    kind: 'tool_call_completed',
-                    toolCallId: 'patch_preview_secret',
-                    toolName: 'file.patch',
-                    argumentsJson: JSON.stringify({ patch: addFilePatch('.preview-secret.txt', secret) }),
-                },
-                { kind: 'response_completed', content: 'preview patch' },
-            ]),
-        });
+                authStore: createEmptyAuthStore(),
+                chatInput: createScriptedChatInput([
+                    { type: 'line', value: 'preview patch tool arguments' },
+                    { type: 'line', value: 'n' },
+                    { type: 'interrupt' },
+                ]),
+                chatOutput: createBufferedChatOutput().output,
+                workspaceRoot,
+                provider: createDeterministicProvider([
+                    {
+                        kind: 'tool_call_completed',
+                        toolCallId: 'patch_preview_secret',
+                        toolName: 'file.patch',
+                        argumentsJson: JSON.stringify({ patch: addFilePatch('.preview-secret.txt', secret) }),
+                    },
+                    { kind: 'response_completed', content: 'preview patch' },
+                ]),
+            },
+        );
 
         // Then
         const previewOutput = `${commandPreview}\n${patchPreview}`;

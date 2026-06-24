@@ -304,6 +304,28 @@ export function resolveWorkflowCommandMenuSubmission(
     );
 }
 
+/**
+ * Raw (untrimmed) insertText of the workflow menu's selected choice.
+ *
+ * Returns `undefined` when the menu is closed or has no selection. Unlike
+ * {@link resolveWorkflowCommandMenuSubmission} the trailing space is kept, so a
+ * caller can drop the value into the input buffer and let the user keep typing
+ * the prompt argument; that trailing space also closes the menu (a token with a
+ * space is rejected by `readCommandQuery`), so the next Enter submits normally.
+ */
+export function resolveWorkflowCommandMenuInsertText(
+    line: string,
+    state: SlashCommandMenuState,
+    workflows: readonly string[],
+): string | undefined {
+    const view = createWorkflowCommandMenuView(line, state, workflowCommandChoices(workflows).length, workflows);
+    if (!view.open) {
+        return undefined;
+    }
+    const selectedChoice = view.visibleChoices[view.selectedIndex - view.startIndex];
+    return selectedChoice?.insertText;
+}
+
 export function formatSlashCommandMenuLines(view: SlashCommandMenuView, columns: number): readonly string[] {
     const header = truncateTerminalText(`Commands${view.query.length > 0 ? ` matching "${view.query}"` : ''}`, columns);
     if (view.empty) {

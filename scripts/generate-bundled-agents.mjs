@@ -14,8 +14,8 @@
  *
  * Run: `node scripts/generate-bundled-agents.mjs`
  */
-import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
-import { dirname, join, basename, resolve } from 'node:path';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));

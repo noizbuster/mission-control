@@ -16,8 +16,8 @@
 
 import { type EvalWorkerInbound, type EvalWorkerOutbound, parseEvalWorkerOutbound } from './eval-worker-protocol.js';
 import { EVAL_WORKER_SOURCE } from './eval-worker-source.js';
-import { Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
+import { Worker } from 'node:worker_threads';
 
 const OUTPUT_CAP = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 30_000;

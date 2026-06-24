@@ -10,9 +10,9 @@ import type { ModelMessage } from 'ai';
 import type { ProjectInstructionResource } from '../context/project-context-messages.js';
 import type { SystemPromptEnvironment } from '../context/system-prompt.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
+import type { AgentModelLookup } from './agent-model-resolver.js';
 import type { PricingTable } from './budget/cost-ledger.js';
 import { runBoundedAbgGraph } from './graph-coordinator.js';
-import type { AgentModelLookup } from './agent-model-resolver.js';
 import type { AbgNodeRegistry } from './node-registry.js';
 import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node.js';
 

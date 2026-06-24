@@ -1,3 +1,4 @@
+import type { PermissionSession } from '@mission-control/core';
 import {
     type AskUserQuestionRequest,
     type CommandExecutionRequest,
@@ -36,11 +37,10 @@ import {
     type RunState,
     readRefreshMsFromEnv,
 } from './abg-overlay-state.js';
+import type { ApprovalLevel } from './approval-level.js';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
 import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
-import type { PermissionSession } from '@mission-control/core';
 import type { ChatOutput } from './interactive-chat-io.js';
-import type { ApprovalLevel } from './approval-level.js';
 import { parseFileWriteOutput } from './interactive-coding-file-write-preview.js';
 import { parseFileEditOutput, parseFilePatchOutput, renderToolPreview } from './interactive-coding-tool-preview.js';
 import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools.js';
@@ -134,7 +134,12 @@ async function startOwnedCodingAgentTurn(
     },
 ): Promise<ActiveCodingAgentTurn> {
     const approvals = createInteractiveApprovalBroker(options, options.permissionSession);
-    const renderState: ProviderRenderState = { streamingText: false, streamingThinking: false, toolCount: 0, toolNames: [] };
+    const renderState: ProviderRenderState = {
+        streamingText: false,
+        streamingThinking: false,
+        toolCount: 0,
+        toolNames: [],
+    };
     const { owner, mcpConnectionManager, overlayWiring } = await createInteractiveRunOwner(
         options,
         approvals,
@@ -198,7 +203,9 @@ async function createInteractiveRunOwner(
     // flat loop used, so approval/blocking semantics are preserved.
     const graphSpec = options.graph ?? buildCodingAgentGraphForSelection(options.modelProviderSelection);
     const overlayWiring =
-        options.abgOverlayController !== undefined ? wireAbgOverlay(options.abgOverlayController, graphSpec) : undefined;
+        options.abgOverlayController !== undefined
+            ? wireAbgOverlay(options.abgOverlayController, graphSpec)
+            : undefined;
     const extraObservers: ReadonlyArray<(signal: AbgSignal) => void> =
         overlayWiring !== undefined ? [overlayWiring.observer] : [];
     const onSignal = interactiveGraphStreamSignal(options.output, renderState, options.workspaceRoot, extraObservers);
@@ -880,7 +887,13 @@ export function wireAbgOverlay(controller: AbgOverlayController, graphSpec?: Abg
             target: edge.target,
             ...(edge.condition !== undefined ? { condition: edge.condition } : {}),
         }));
-        pending = { ...pending, activeGraphId: graphSpec.id, graphStatus: 'active', nodes: seedNodes, graphEdges: seedEdges };
+        pending = {
+            ...pending,
+            activeGraphId: graphSpec.id,
+            graphStatus: 'active',
+            nodes: seedNodes,
+            graphEdges: seedEdges,
+        };
         pendingSnapshot = { ...pendingSnapshot, ...pending };
         dirty = true;
         commitToStore();
@@ -937,21 +950,37 @@ export function wireAbgOverlay(controller: AbgOverlayController, graphSpec?: Abg
         commitToStore();
         const settleState = runSettleState(event.type);
         if (settleState === undefined) return;
-        let pendingApprovalsPatch: readonly { approvalId: string; requestId: string; policyDecision: 'prompt'; state: 'pending'; subject: { kind: 'tool'; id: string }; requestedAt: string; reason?: string }[] | undefined;
+        let pendingApprovalsPatch:
+            | readonly {
+                  approvalId: string;
+                  requestId: string;
+                  policyDecision: 'prompt';
+                  state: 'pending';
+                  subject: { kind: 'tool'; id: string };
+                  requestedAt: string;
+                  reason?: string;
+              }[]
+            | undefined;
         if (event.type === 'run.blocked') {
-            const evt = event as { toolCallId?: string; approvalId?: string; run?: { toolCallId?: string; reason?: string } };
+            const evt = event as {
+                toolCallId?: string;
+                approvalId?: string;
+                run?: { toolCallId?: string; reason?: string };
+            };
             const toolCallId = evt.toolCallId ?? evt.run?.toolCallId;
             const reason = evt.run?.reason ?? event.message;
             if (toolCallId !== undefined) {
-                pendingApprovalsPatch = [{
-                    approvalId: evt.approvalId ?? toolCallId,
-                    requestId: toolCallId,
-                    policyDecision: 'prompt',
-                    state: 'pending',
-                    subject: { kind: 'tool', id: toolCallId },
-                    requestedAt: event.timestamp,
-                    ...(reason !== undefined ? { reason } : {}),
-                }];
+                pendingApprovalsPatch = [
+                    {
+                        approvalId: evt.approvalId ?? toolCallId,
+                        requestId: toolCallId,
+                        policyDecision: 'prompt',
+                        state: 'pending',
+                        subject: { kind: 'tool', id: toolCallId },
+                        requestedAt: event.timestamp,
+                        ...(reason !== undefined ? { reason } : {}),
+                    },
+                ];
             }
         } else if (settleState === 'running' || settleState === 'completed' || settleState === 'failed') {
             pendingApprovalsPatch = [];

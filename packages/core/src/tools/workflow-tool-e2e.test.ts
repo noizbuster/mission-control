@@ -12,12 +12,12 @@
  * This crosses workflow discovery (JSON parsing), registry construction, tool registration,
  * and the real tool invocation pipeline — none of which the unit tests exercise together.
  */
-import { WorkflowSpecSchema, type WorkflowSpec } from '@mission-control/protocol';
+import { type WorkflowSpec, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { readFile } from 'node:fs/promises';
-import { ToolRegistry } from './tool-registry.js';
 import { WorkflowRegistry } from '../workflows/workflow-registry.js';
+import { ToolRegistry } from './tool-registry.js';
 import { createWorkflowToolRegistration } from './workflow-tool/workflow-tool.js';
+import { readFile } from 'node:fs/promises';
 
 async function loadSpec(filePath: string): Promise<WorkflowSpec> {
     const contents = await readFile(filePath, 'utf8');

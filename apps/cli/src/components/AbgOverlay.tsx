@@ -184,7 +184,9 @@ function FooterHint({ narrow }: { narrow: boolean }): React.ReactElement {
     }
     return (
         <Box marginTop={1}>
-            <Text dimColor>1-8 tabs | Tab cycle | ↑↓ scroll | g cycle graph | Ctrl+G/Esc close | r refresh | t live | c clear</Text>
+            <Text dimColor>
+                1-8 tabs | Tab cycle | ↑↓ scroll | g cycle graph | Ctrl+G/Esc close | r refresh | t live | c clear
+            </Text>
         </Box>
     );
 }

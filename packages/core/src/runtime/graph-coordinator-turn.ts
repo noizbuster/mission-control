@@ -23,12 +23,12 @@ import type {
 } from '@mission-control/protocol';
 import { ProtocolErrorCodeSchema } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
-import type { ProjectInstructionResource } from '../context/project-context-messages.js';
-import type { SystemPromptEnvironment } from '../context/system-prompt.js';
 import type { PricingTable } from '../behavior/budget/cost-ledger.js';
 import { type AbgGraphRunResult, runAbgGraph } from '../behavior/graph-runner.js';
 import type { AbgNodeRegistry } from '../behavior/node-registry.js';
 import type { LlmActorModel } from '../behavior/nodes/llm-actor/llm-actor-node.js';
+import type { ProjectInstructionResource } from '../context/project-context-messages.js';
+import type { SystemPromptEnvironment } from '../context/system-prompt.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import type { RunCoordinatorProviderTurnResult } from './run-coordinator-lifecycle.js';
 import type { RunCoordinatorTurnRunner } from './run-coordinator-types.js';
@@ -226,9 +226,9 @@ export function agentMessagesToSeedModelMessages(messages: readonly AgentMessage
     return seed;
 }
 
-function toolResultOutputFor(message: Extract<AgentMessage, { readonly role: 'tool' }>):
-    | { readonly type: 'text'; readonly value: string }
-    | { readonly type: 'error-text'; readonly value: string } {
+function toolResultOutputFor(
+    message: Extract<AgentMessage, { readonly role: 'tool' }>,
+): { readonly type: 'text'; readonly value: string } | { readonly type: 'error-text'; readonly value: string } {
     if (message.status === 'failed') {
         const error = message.error;
         return { type: 'error-text', value: error?.message ?? 'tool failed' };

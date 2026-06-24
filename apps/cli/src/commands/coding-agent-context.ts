@@ -12,9 +12,9 @@
  *    per-turn `prependProjectContextMessages` precedent) but could be cached upstream.
  */
 import {
+    loadProjectResources,
     type ProjectInstructionResource,
     type ProjectResource,
-    loadProjectResources,
     ProjectTrustStore,
     type SystemPromptEnvironment,
 } from '@mission-control/core';

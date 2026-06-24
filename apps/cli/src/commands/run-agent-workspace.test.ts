@@ -34,9 +34,7 @@ describe('resolveWorkspaceRoot', () => {
         const { writeFile } = await import('node:fs/promises');
         await writeFile(filePath, 'nope', 'utf8');
 
-        expect(() => resolveWorkspaceRoot(filePath)).toThrow(
-            '--workspace path does not exist or is not a directory',
-        );
+        expect(() => resolveWorkspaceRoot(filePath)).toThrow('--workspace path does not exist or is not a directory');
         await rm(dir, { recursive: true, force: true });
     });
 

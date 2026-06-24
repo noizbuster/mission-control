@@ -56,7 +56,9 @@ export function projectApprovalContinuationTranscript(
     return deduplicateToolMessagesByToolCallId(messages);
 }
 
-function deduplicateToolMessagesByToolCallId(messages: readonly SequencedAgentMessage[]): readonly SequencedAgentMessage[] {
+function deduplicateToolMessagesByToolCallId(
+    messages: readonly SequencedAgentMessage[],
+): readonly SequencedAgentMessage[] {
     const lastIndexOfToolCallId = new Map<string, number>();
     messages.forEach((entry, index) => {
         if (entry.message.role === 'tool') {
@@ -265,7 +267,10 @@ function flushPendingToolResults(
     }
 }
 
-function flushAllPendingToolResults(messages: SequencedAgentMessage[], pending: Map<string, SequencedAgentMessage>): void {
+function flushAllPendingToolResults(
+    messages: SequencedAgentMessage[],
+    pending: Map<string, SequencedAgentMessage>,
+): void {
     for (const buffered of pending.values()) {
         messages.push(buffered);
     }

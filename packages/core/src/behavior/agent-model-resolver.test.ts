@@ -1,6 +1,6 @@
 import type { AbgGraphSpec, AbgNodeModelOptions } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { resolveGraphAgentModels, type AgentModelLookup } from './agent-model-resolver.js';
+import { type AgentModelLookup, resolveGraphAgentModels } from './agent-model-resolver.js';
 
 const baseGraph: AbgGraphSpec = {
     id: 'test',

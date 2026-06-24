@@ -11,10 +11,7 @@
       "outputs": ["{projectRoot}/dist"],
       "options": {
         "cwd": "packages/core",
-        "commands": [
-          "node ../../scripts/generate-bundled-agents.mjs",
-          "tsc -p tsconfig.json"
-        ],
+        "commands": ["node ../../scripts/generate-bundled-agents.mjs", "tsc -p tsconfig.json"],
         "parallel": false
       }
     },

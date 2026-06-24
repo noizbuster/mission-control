@@ -3,7 +3,6 @@
 // that folds into that state. Splitting would scatter tightly-coupled symbols the plan
 // requires to live together (todos 2-9 all import from this one path).
 
-import { redactCredentialText } from '../providers/credential-resolver.js';
 import type {
     AbgGraphSnapshot,
     AbgGraphStatus,
@@ -13,6 +12,7 @@ import type {
     AgentEvent,
     ApprovalRecord,
 } from '@mission-control/protocol';
+import { redactCredentialText } from '../providers/credential-resolver.js';
 
 export type RunState = 'idle' | 'running' | 'completed' | 'failed' | 'interrupted' | 'blocked_on_approval';
 

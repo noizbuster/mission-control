@@ -163,16 +163,16 @@ export {
     getCategory,
 } from './task/category-catalog.js';
 export {
+    batchTaskItemSchema,
     type ChildSpawnRequest,
     type ChildSpawnResult,
     type CreateFullParityTaskToolOptions,
-    batchTaskItemSchema,
     createFullParityTaskToolRegistration,
     type TaskToolBackgroundHandle,
-    taskToolBaseObjectSchema,
     type TaskToolParams,
     type TaskToolResult,
     type TaskToolRuntime,
+    taskToolBaseObjectSchema,
 } from './task/task-tool.js';
 export {
     type CreateTaskToolInput,
@@ -191,8 +191,8 @@ export {
     type TaskToolSpawnContext,
 } from './task-tool-factory.js';
 export {
-    type FullParityTaskToolOptions,
     createFullParityTaskToolRegistrationForCli,
+    type FullParityTaskToolOptions,
     registerFullParityTaskTool,
 } from './task-tool-full-parity-factory.js';
 export { type TodoItem, type TodoWriteInput, todoWriteToolRegistration } from './todowrite-tool.js';

@@ -1,8 +1,8 @@
 import type { ToolCall } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { ChatOutput } from './interactive-chat-io.js';
 import { renderToolPreview } from './interactive-coding-tool-preview.js';
 import { createBufferedChatOutput } from './run-agent-chat-test-support.js';
-import type { ChatOutput } from './interactive-chat-io.js';
 import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -22,11 +22,11 @@
  * hatches. LSP positions are 0-indexed line/character; the flat `LspClient` types stay 0-indexed.
  */
 import type { ProtocolError } from '@mission-control/protocol';
-import { spawn } from 'node:child_process';
-import type { ChildProcess } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
 import type { LspClient, LspDiagnostic, LspHover, LspLocation } from './lsp-tool.js';
 import { ToolExecutionError } from './tool-registry-types.js';
+import type { ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 
 // ---------------------------------------------------------------------------
 // Options + injectable seams
@@ -224,7 +224,8 @@ function mapLocation(entry: unknown): LspLocation | undefined {
     const targetUriField = entry['targetUri'];
     const rangeField = entry['range'];
     const targetRangeField = entry['targetRange'];
-    const uri = typeof uriField === 'string' ? uriField : typeof targetUriField === 'string' ? targetUriField : undefined;
+    const uri =
+        typeof uriField === 'string' ? uriField : typeof targetUriField === 'string' ? targetUriField : undefined;
     const range = isRecord(rangeField) ? rangeField : isRecord(targetRangeField) ? targetRangeField : undefined;
     const start = isRecord(range) ? range['start'] : undefined;
     const position = readPosition(start);

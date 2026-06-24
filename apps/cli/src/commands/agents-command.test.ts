@@ -1,11 +1,6 @@
 import type { AgentDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import {
-    formatAgentDetails,
-    formatAgentsList,
-    parseAgentsCommand,
-    parseAgentsSlashLine,
-} from './agents-command.js';
+import { formatAgentDetails, formatAgentsList, parseAgentsCommand, parseAgentsSlashLine } from './agents-command.js';
 
 describe('parseAgentsCommand', () => {
     describe('required TDD cases', () => {

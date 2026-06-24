@@ -81,7 +81,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         result.lastPolicyDecision,
                     );
                     break;
-                case 'failed':
+                case 'failed': {
                     // A terminal tool-settlement failure (a `command_not_allowed` under
                     // `haltOnFailedToolSettlement`) is non-retryable: the model cannot fix it by
                     // re-running, so fail the run immediately instead of consuming the retry
@@ -114,6 +114,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         `ABG node retry limit exhausted: ${result.node.id}`,
                         terminalErrorFromSignal(result.lastSignal),
                     );
+                }
                 case 'blocked': {
                     // A node settled as blocked — currently only the LLMActor approval-block
                     // short-circuit reaches here. Surface the toolCallId/reason off the terminal
@@ -246,7 +247,10 @@ function hasField<T extends string>(value: object, field: T): value is Record<T,
  * `tool_approval_blocked` object the actor builds; `in`/`typeof` narrowing recovers the fields
  * without a cast. Returns empty for non-approval-block signals.
  */
-function approvalBlockContext(signal: AbgSignal | undefined): { readonly toolCallId?: string; readonly reason?: string } {
+function approvalBlockContext(signal: AbgSignal | undefined): {
+    readonly toolCallId?: string;
+    readonly reason?: string;
+} {
     if (signal === undefined || signal.type !== 'failure') {
         return {};
     }

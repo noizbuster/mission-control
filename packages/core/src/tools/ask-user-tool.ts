@@ -8,8 +8,8 @@ import {
     askUserOutputSchema,
     askUserParametersJsonSchema,
 } from './ask-user-schemas.js';
-import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types.js';
 import { ToolRegistry } from './tool-registry.js';
+import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types.js';
 
 export type { AskUserInput, AskUserOutput, AskUserQuestionRequest, AskUserToolOptions } from './ask-user-schemas.js';
 export { askUserInputSchema, askUserOutputSchema, askUserParametersJsonSchema } from './ask-user-schemas.js';

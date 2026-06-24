@@ -18,17 +18,12 @@ import type { AbgGraphSpec, AbgNodeModelOptions } from '@mission-control/protoco
 
 export type AgentModelLookup = (agentName: string) => AbgNodeModelOptions | undefined;
 
-export function resolveGraphAgentModels(
-    graph: AbgGraphSpec,
-    lookup: AgentModelLookup,
-): AbgGraphSpec {
+export function resolveGraphAgentModels(graph: AbgGraphSpec, lookup: AgentModelLookup): AbgGraphSpec {
     const defaultsAgent = graph.defaults?.agent;
     const defaultsModelMissing = graph.defaults?.model === undefined;
     const resolveDefaults = defaultsAgent !== undefined && defaultsModelMissing;
 
-    const nodesToResolve = graph.nodes.filter(
-        (node) => node.agent !== undefined && node.model === undefined,
-    );
+    const nodesToResolve = graph.nodes.filter((node) => node.agent !== undefined && node.model === undefined);
 
     if (!resolveDefaults && nodesToResolve.length === 0) {
         return graph;

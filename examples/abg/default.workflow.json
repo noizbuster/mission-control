@@ -140,16 +140,16 @@
         "description": "context memory loaded",
         "when": { "kind": "blackboard.value.equals", "key": "memory.loaded", "value": true }
       },
-        {
-          "id": "plan-ready",
-          "description": "todo plan produced",
-          "when": { "kind": "blackboard.key.exists", "key": "plan.ready" }
-        },
-        {
-          "id": "wave-complete",
-          "description": "delegation wave finished",
-          "when": { "kind": "blackboard.key.exists", "key": "delegate.complete" }
-        },
+      {
+        "id": "plan-ready",
+        "description": "todo plan produced",
+        "when": { "kind": "blackboard.key.exists", "key": "plan.ready" }
+      },
+      {
+        "id": "wave-complete",
+        "description": "delegation wave finished",
+        "when": { "kind": "blackboard.key.exists", "key": "delegate.complete" }
+      },
       {
         "id": "critic-passed",
         "description": "verify-wave critic approved results",
@@ -160,16 +160,16 @@
         "description": "verify-wave critic rejected results",
         "when": { "kind": "blackboard.value.equals", "key": "critic.passed", "value": false }
       },
-        {
-          "id": "supervisor-retry",
-          "description": "supervisor decided to retry delegation",
-          "when": { "kind": "blackboard.value.equals", "key": "supervisor.action", "value": "retry" }
-        },
-        {
-          "id": "supervisor-escalated",
-          "description": "supervisor escalated after exhausting retries",
-          "when": { "kind": "blackboard.key.exists", "key": "supervisor.escalated" }
-        },
+      {
+        "id": "supervisor-retry",
+        "description": "supervisor decided to retry delegation",
+        "when": { "kind": "blackboard.value.equals", "key": "supervisor.action", "value": "retry" }
+      },
+      {
+        "id": "supervisor-escalated",
+        "description": "supervisor escalated after exhausting retries",
+        "when": { "kind": "blackboard.key.exists", "key": "supervisor.escalated" }
+      },
       {
         "id": "clarify-loop",
         "description": "clarification collected — re-classify intent",

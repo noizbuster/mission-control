@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
     AGENT_SOURCES,
-    AGENT_TIERS,
     AGENT_THINKING_LEVELS,
+    AGENT_TIERS,
+    type AgentDefinition,
     AgentDefinitionSchema,
     AgentListSchema,
     AgentSourceSchema,
     AgentThinkingLevelSchema,
     AgentTierSchema,
-    type AgentDefinition,
 } from './agent.js';
 
 const minimalValid: AgentDefinition = {
@@ -108,9 +108,7 @@ describe('AgentDefinitionSchema', () => {
     });
 
     it('rejects an unknown top-level field (strict mode)', () => {
-        expect(() =>
-            AgentDefinitionSchema.parse({ ...minimalValid, permissions: ['read'] }),
-        ).toThrow();
+        expect(() => AgentDefinitionSchema.parse({ ...minimalValid, permissions: ['read'] })).toThrow();
     });
 
     it('parses pathPolicies with valid PolicyEffectRule entries', () => {
@@ -160,9 +158,7 @@ describe('AgentDefinitionSchema', () => {
     });
 
     it('rejects a model object missing modelID', () => {
-        expect(() =>
-            AgentDefinitionSchema.parse({ ...minimalValid, model: { providerID: 'anthropic' } }),
-        ).toThrow();
+        expect(() => AgentDefinitionSchema.parse({ ...minimalValid, model: { providerID: 'anthropic' } })).toThrow();
     });
 
     it('rejects a model object with an unknown field (strict nested object)', () => {

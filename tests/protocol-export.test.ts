@@ -41,7 +41,6 @@ import {
     PermissionRuleSchema,
     PermissionStatusSchema,
     PLUGIN_DISCOVERY_DIAGNOSTIC_SEVERITIES,
-    POLICY_EFFECTS,
     PluginContextSourceSchema,
     PluginDescriptorSchema,
     PluginDiscoveryDiagnosticSchema,
@@ -50,6 +49,7 @@ import {
     PluginNodeDefinitionSchema,
     PluginSubAgentSchema,
     PluginToolDefinitionSchema,
+    POLICY_EFFECTS,
     PolicyEffectRuleSchema,
     PolicyEffectRuleSetSchema,
     PolicyEffectSchema,
@@ -299,9 +299,7 @@ describe('protocol public exports', () => {
             }).provides.mcp,
         ).toBe(true);
         expect(() => PluginManifestSchema.parse({ version: '1.0.0' })).toThrow();
-        expect(
-            PluginDescriptorSchema.shape.rootPath,
-        ).toBeDefined();
+        expect(PluginDescriptorSchema.shape.rootPath).toBeDefined();
         expect(
             PluginDiscoveryDiagnosticSchema.parse({
                 pluginName: 'broken',
@@ -324,9 +322,7 @@ describe('protocol public exports', () => {
                 inputSchema: {},
             }).capability,
         ).toBe('read');
-        expect(
-            PluginNodeDefinitionSchema.parse({ kind: 'my-node' }).runner,
-        ).toBe('llm');
+        expect(PluginNodeDefinitionSchema.parse({ kind: 'my-node' }).runner).toBe('llm');
         expect(
             PluginContextSourceSchema.parse({
                 key: 'docs',

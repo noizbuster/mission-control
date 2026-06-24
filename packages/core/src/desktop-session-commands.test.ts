@@ -288,7 +288,11 @@ function stepwiseProvider(): ProviderAdapter {
                     kind: 'tool_call_completed',
                     requestId: request.requestId,
                     sequence: 1,
-                    toolCall: { toolCallId: patch.toolCallId, toolName: patch.toolName, argumentsJson: patch.argumentsJson },
+                    toolCall: {
+                        toolCallId: patch.toolCallId,
+                        toolName: patch.toolName,
+                        argumentsJson: patch.argumentsJson,
+                    },
                 };
                 yield {
                     kind: 'response_completed',
@@ -299,7 +303,12 @@ function stepwiseProvider(): ProviderAdapter {
                         role: 'assistant',
                         content: 'approval required',
                         providerToolCalls: [
-                            { providerID: 'local', toolCallId: patch.toolCallId, toolName: patch.toolName, argumentsJson: patch.argumentsJson },
+                            {
+                                providerID: 'local',
+                                toolCallId: patch.toolCallId,
+                                toolName: patch.toolName,
+                                argumentsJson: patch.argumentsJson,
+                            },
                         ],
                     },
                     finishReason: 'tool_calls',
@@ -315,7 +324,11 @@ function stepwiseProvider(): ProviderAdapter {
                     kind: 'tool_call_completed',
                     requestId: request.requestId,
                     sequence: 1,
-                    toolCall: { toolCallId: command.toolCallId, toolName: command.toolName, argumentsJson: command.argumentsJson },
+                    toolCall: {
+                        toolCallId: command.toolCallId,
+                        toolName: command.toolName,
+                        argumentsJson: command.argumentsJson,
+                    },
                 };
                 yield {
                     kind: 'response_completed',
@@ -326,7 +339,12 @@ function stepwiseProvider(): ProviderAdapter {
                         role: 'assistant',
                         content: 'approval required',
                         providerToolCalls: [
-                            { providerID: 'local', toolCallId: command.toolCallId, toolName: command.toolName, argumentsJson: command.argumentsJson },
+                            {
+                                providerID: 'local',
+                                toolCallId: command.toolCallId,
+                                toolName: command.toolName,
+                                argumentsJson: command.argumentsJson,
+                            },
                         ],
                     },
                     finishReason: 'tool_calls',

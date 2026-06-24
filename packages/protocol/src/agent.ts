@@ -41,12 +41,7 @@ export const AgentDefinitionSchema = z
 
         tools: z.array(z.string()).optional(),
         spawns: z.union([z.array(z.string()), z.literal('*')]).optional(),
-        model: z
-            .union([
-                z.string(),
-                z.object({ providerID: z.string(), modelID: z.string() }).strict(),
-            ])
-            .optional(),
+        model: z.union([z.string(), z.object({ providerID: z.string(), modelID: z.string() }).strict()]).optional(),
         thinkingLevel: AgentThinkingLevelSchema.optional(),
         output: z.record(z.string(), z.unknown()).optional(),
         blocking: z.boolean().optional(),

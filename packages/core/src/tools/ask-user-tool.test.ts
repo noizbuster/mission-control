@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-    type AskUserInput,
-    type AskUserQuestionRequest,
-    createAskUserToolRegistration,
-} from './ask-user-tool.js';
+import { type AskUserInput, type AskUserQuestionRequest, createAskUserToolRegistration } from './ask-user-tool.js';
 import type { ToolExecutionContext } from './tool-registry-types.js';
 
 function createContext(): ToolExecutionContext {
@@ -264,9 +260,7 @@ describe('createAskUserToolRegistration', () => {
                 requestUserQuestion: () => Promise.resolve(''),
             });
 
-            expect(registration.toModelOutput?.({ answer: 'Theme: Dark\nLang: EN' })).toBe(
-                'Theme: Dark\nLang: EN',
-            );
+            expect(registration.toModelOutput?.({ answer: 'Theme: Dark\nLang: EN' })).toBe('Theme: Dark\nLang: EN');
         });
     });
 

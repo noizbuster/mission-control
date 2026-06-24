@@ -22,11 +22,11 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import type { LspDiagnostic } from './lsp-tool.js';
-import { decodeLspFrame, encodeLspMessage, StdioLspClient } from './lsp-stdio-client.js';
 import type { LspTransport, LspTransportFactory, StdioLspClientDeps } from './lsp-stdio-client.js';
-import { spawn, spawnSync } from 'node:child_process';
+import { decodeLspFrame, encodeLspMessage, StdioLspClient } from './lsp-stdio-client.js';
+import type { LspDiagnostic } from './lsp-tool.js';
 import type { ChildProcess } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -44,63 +44,75 @@ describe.skipIf(!SERVER_AVAILABLE)('StdioLspClient against the real typescript-l
         await Promise.all(pending.map((workspace) => rm(workspace, { recursive: true, force: true })));
     });
 
-    it('returns hover info for a known symbol', async () => {
-        // Given: a temp TS file with a typed string binding
-        const { root, uri } = await writeFixture('hover.ts', HOVER_TS);
+    it(
+        'returns hover info for a known symbol',
+        async () => {
+            // Given: a temp TS file with a typed string binding
+            const { root, uri } = await writeFixture('hover.ts', HOVER_TS);
 
-        // When: asking for hover over the `greeting` identifier (line 0, char 6)
-        const client = await createClient(root);
-        try {
-            const hover = await client.hover(uri, 0, 6);
+            // When: asking for hover over the `greeting` identifier (line 0, char 6)
+            const client = await createClient(root);
+            try {
+                const hover = await client.hover(uri, 0, 6);
 
-            // Then: the server returns type info mentioning the symbol name
-            expect(hover).toBeDefined();
-            expect(hover?.contents.length).toBeGreaterThan(0);
-            expect(hover?.contents).toContain('greeting');
-        } finally {
-            await client.shutdown();
-        }
-    }, TEST_TIMEOUT_MS);
+                // Then: the server returns type info mentioning the symbol name
+                expect(hover).toBeDefined();
+                expect(hover?.contents.length).toBeGreaterThan(0);
+                expect(hover?.contents).toContain('greeting');
+            } finally {
+                await client.shutdown();
+            }
+        },
+        TEST_TIMEOUT_MS,
+    );
 
-    it('reports diagnostics for a file with a type error', async () => {
-        // Given: a temp TS file with a number/string type mismatch
-        const { root, uri } = await writeFixture('diag.ts', DIAG_TS);
+    it(
+        'reports diagnostics for a file with a type error',
+        async () => {
+            // Given: a temp TS file with a number/string type mismatch
+            const { root, uri } = await writeFixture('diag.ts', DIAG_TS);
 
-        // When: opening the document (via hover) then waiting for the pushed
-        // diagnostics. The capability-advertising transport is required because
-        // the default client omits `textDocument.publishDiagnostics` (see header).
-        const client = await createClient(root, { createTransport: publishDiagnosticsTransport });
-        try {
-            await client.hover(uri, 0, 6);
-            const diagnostics = await waitForDiagnostics(client, uri);
+            // When: opening the document (via hover) then waiting for the pushed
+            // diagnostics. The capability-advertising transport is required because
+            // the default client omits `textDocument.publishDiagnostics` (see header).
+            const client = await createClient(root, { createTransport: publishDiagnosticsTransport });
+            try {
+                await client.hover(uri, 0, 6);
+                const diagnostics = await waitForDiagnostics(client, uri);
 
-            // Then: at least one error-severity diagnostic is reported
-            expect(diagnostics.length).toBeGreaterThan(0);
-            const errors = diagnostics.filter((diag) => diag.severity === 'error');
-            expect(errors.length).toBeGreaterThan(0);
-        } finally {
-            await client.shutdown();
-        }
-    }, TEST_TIMEOUT_MS);
+                // Then: at least one error-severity diagnostic is reported
+                expect(diagnostics.length).toBeGreaterThan(0);
+                const errors = diagnostics.filter((diag) => diag.severity === 'error');
+                expect(errors.length).toBeGreaterThan(0);
+            } finally {
+                await client.shutdown();
+            }
+        },
+        TEST_TIMEOUT_MS,
+    );
 
-    it('resolves definition of a referenced symbol to its declaration', async () => {
-        // Given: a temp TS file where `greet` is declared on line 0 then called on line 3
-        const { root, uri } = await writeFixture('def.ts', DEFINITION_TS);
+    it(
+        'resolves definition of a referenced symbol to its declaration',
+        async () => {
+            // Given: a temp TS file where `greet` is declared on line 0 then called on line 3
+            const { root, uri } = await writeFixture('def.ts', DEFINITION_TS);
 
-        // When: asking for definition at the `greet` call site (line 3, char 16)
-        const client = await createClient(root);
-        try {
-            const locations = await client.definition(uri, 3, 16);
+            // When: asking for definition at the `greet` call site (line 3, char 16)
+            const client = await createClient(root);
+            try {
+                const locations = await client.definition(uri, 3, 16);
 
-            // Then: exactly one location, in the same file, on the declaration line (0)
-            expect(locations).toHaveLength(1);
-            const location = locations[0];
-            expect(location?.uri).toBe(uri);
-            expect(location?.line).toBe(0);
-        } finally {
-            await client.shutdown();
-        }
-    }, TEST_TIMEOUT_MS);
+                // Then: exactly one location, in the same file, on the declaration line (0)
+                expect(locations).toHaveLength(1);
+                const location = locations[0];
+                expect(location?.uri).toBe(uri);
+                expect(location?.line).toBe(0);
+            } finally {
+                await client.shutdown();
+            }
+        },
+        TEST_TIMEOUT_MS,
+    );
 });
 
 // ---------------------------------------------------------------------------
@@ -119,7 +131,10 @@ const DEFINITION_TS = [
     '',
 ].join('\n');
 
-async function writeFixture(filename: string, content: string): Promise<{ readonly root: string; readonly uri: string }> {
+async function writeFixture(
+    filename: string,
+    content: string,
+): Promise<{ readonly root: string; readonly uri: string }> {
     const root = await mkdtemp(join(tmpdir(), 'mctrl-lsp-'));
     workspaces.push(root);
     await writeFile(join(root, filename), content, 'utf8');

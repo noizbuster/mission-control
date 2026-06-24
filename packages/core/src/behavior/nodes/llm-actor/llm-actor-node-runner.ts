@@ -71,7 +71,11 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
     const hasOutputKey = readStringConfig(node, 'outputKey') !== undefined;
     const hasCapabilities = (node.capabilities ?? []).length > 0;
     const suppressTools = hasOutputKey && !hasCapabilities;
-    const advertisedTools = suppressTools ? [] : (context.toolRegistry !== undefined ? context.toolRegistry.advertise() : []);
+    const advertisedTools = suppressTools
+        ? []
+        : context.toolRegistry !== undefined
+          ? context.toolRegistry.advertise()
+          : [];
     const advertisements = advertisedTools;
     const toolSnippets = advertisements.map((advertisement) => ({
         name: advertisement.name,
@@ -105,9 +109,10 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
     // reads it so the `tool.completed`/`tool.failed` emits carry the true status/output/error
     // (coding-step replay parity with the flat path). Fresh per turn — no stale entries leak.
     const settlementLedger = createAbgToolSettlementLedger();
-    const tools = suppressTools || context.toolRegistry === undefined
-        ? undefined
-        : bridgeAdvertisementsToAiSdk(context.toolRegistry, advertisedTools, {
+    const tools =
+        suppressTools || context.toolRegistry === undefined
+            ? undefined
+            : bridgeAdvertisementsToAiSdk(context.toolRegistry, advertisedTools, {
                   settlementLedger,
                   // Forward the tool's own events (file.diff.applied, ...) into the graph stream so
                   // the graph surfaces the same rich tool events the flat loop's settleToolCalls does.
@@ -174,9 +179,7 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         blackboard.appendMessages(turnResult.responseMessages);
         const outputKey = readStringConfig(node, 'outputKey');
         if (outputKey !== undefined && !loopActive) {
-            const outputValue = turnResult.text.length > 0
-                ? extractOutputValue(turnResult.text, outputKey)
-                : true;
+            const outputValue = turnResult.text.length > 0 ? extractOutputValue(turnResult.text, outputKey) : true;
             blackboard.set(outputKey, outputValue);
             yield createAbgEmitSignal({
                 graphId: context.graphId,

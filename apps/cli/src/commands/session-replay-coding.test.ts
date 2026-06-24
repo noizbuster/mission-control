@@ -42,9 +42,7 @@ describe('session replay coding projection', () => {
         // Then
         const runEventTypes = runEvents.map((event) => event.type);
         const replayEventTypes = eventRecords(replayRecords).map((event) => event.type);
-        expect(replayEventTypes).toEqual(
-            expect.arrayContaining(runEventTypes),
-        );
+        expect(replayEventTypes).toEqual(expect.arrayContaining(runEventTypes));
         expect(codingStepRecords(replayRecords)).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ kind: 'provider.tool_call', toolCallId: 'session_patch_call' }),

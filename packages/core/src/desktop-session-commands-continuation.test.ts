@@ -117,7 +117,9 @@ describe('desktop session command approval continuation', () => {
             // The graph surfaces provider errors as `llm.error` emits (log events) and `node.failed`
             // boundary events, not flat-path `model.call.failed`. Asserting the trailing run.failed
             // plus the error-bearing log event keeps the test engine-agnostic.
-            expect(replay.events.some((event) => isGraphLlmErrorWithMessage(event, 'provider continuation failed'))).toBe(true);
+            expect(
+                replay.events.some((event) => isGraphLlmErrorWithMessage(event, 'provider continuation failed')),
+            ).toBe(true);
         } finally {
             await rm(dataDir, { recursive: true, force: true });
             await rm(workspaceRoot, { recursive: true, force: true });
