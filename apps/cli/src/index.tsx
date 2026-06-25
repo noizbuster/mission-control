@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --experimental-ffi
 import { parseArgs } from './args.js';
 import { runAuthCommand } from './commands/auth.js';
 import { runMcpCommand } from './commands/mcp.js';

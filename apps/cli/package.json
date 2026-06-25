@@ -15,7 +15,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "sh -c 'while [ \"${1:-}\" = \"--\" ]; do shift; done; pnpm build >/dev/null && node dist/index.js \"$@\"' --",
+    "dev": "sh -c 'while [ \"${1:-}\" = \"--\" ]; do shift; done; pnpm build >/dev/null && node --experimental-ffi dist/index.js \"$@\"' --",
     "test": "sh -c 'cd ../.. && while [ \"${1:-}\" = \"--\" ]; do shift; done; vitest run --reporter verbose \"$@\"' --",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
