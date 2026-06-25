@@ -29,7 +29,7 @@
     "@types/node": "^26.0.0",
     "diff": "^9.0.0",
     "nx": "23.0.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.1-rc",
     "vitest": "^4.1.9"
   }
 }
