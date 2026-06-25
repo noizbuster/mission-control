@@ -33,8 +33,10 @@
  */
 
 import type { CliRenderer, KeyEvent, PasteEvent, ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
+import { useKeymap } from '@opentui/keymap/react';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { PaletteOpenContext } from '../platform/keymap/palette-open-context.js';
 import { AbgOverlay, type AbgOverlayTab } from '../components/AbgOverlay.js';
 import { ChatInputTextarea } from '../components/ChatInputTextarea.js';
 import { ChatTranscript } from '../components/ChatTranscript.js';
@@ -44,11 +46,29 @@ import { Separator, type SeparatorState } from '../components/Separator.js';
 import { StatusBar } from '../components/StatusBar.js';
 import { resolveSpinnerMode, useSpinnerFrame } from '../components/spinner.js';
 import { ToolCard } from '../components/ToolCard.js';
+import {
+    buildDiffViewerModel,
+    collectDiffEntries,
+    DiffViewerOverlay,
+    moveLine,
+    nextFile,
+    nextHunk,
+    prevFile,
+    prevHunk,
+    type DiffEntry,
+    type DiffViewerModel,
+} from '../platform/keymap/diff-viewer.js';
 import { createKeyEventAdapter, type InkKeyShape } from '../platform/key-event-adapter.js';
 // Re-exported so bridge tests can import InkKeyShape from the same module they
 // import handleInput / createOpenTuiChatBridgeCore from (the Ink Key dependency).
 export type { InkKeyShape } from '../platform/key-event-adapter.js';
 import { createClipboardService } from '../platform/clipboard-service.js';
+import {
+    decodePasteBytes,
+    evaluatePaste,
+    makeMarker,
+    PasteMarkerStore,
+} from '../platform/keymap/bracketed-paste.js';
 import { mountOpenTui } from '../platform/opentui-renderer.js';
 import { toOpenTuiColor, toOpenTuiAttributes } from '../platform/opentui-types.js';
 import { copy, type Toast } from '../platform/selection-copy.js';
@@ -207,6 +227,9 @@ type BridgeSnapshot = {
     readonly abgOverlayActiveTab: number;
     readonly abgOverlayScrollOffset: number;
     readonly abgOverlayLiveOutput: boolean;
+    readonly diffViewerActive: boolean;
+    readonly diffViewerEntries: readonly DiffEntry[];
+    readonly diffViewerCursor: number;
     readonly approvalLevel: ApprovalLevel | undefined;
 };
 
@@ -312,6 +335,11 @@ export type OpenTuiChatBridgeCore = {
     history: ChatInputHistory;
     lastEscTimestamp: number | undefined;
     submitting: boolean;
+    // Bracketed-paste marker store (T13): keyed full content for collapsed
+    // `[Paste #N]` markers. Separate from inputBuffer (the textarea mirror) —
+    // NOT a shadow text buffer. `pasteCounter` allocates marker ids.
+    pasteStore: PasteMarkerStore;
+    pasteCounter: number;
     abgOverlayActive: boolean;
     abgOverlayActiveTab: number;
     abgOverlayScrollOffset: number;
@@ -319,6 +347,9 @@ export type OpenTuiChatBridgeCore = {
     abgOverlayController: AbgOverlayController | undefined;
     abgOverlayUnsubscribe: (() => void) | undefined;
     abgOverlayRefreshTimer: ReturnType<typeof setInterval> | undefined;
+    diffViewerActive: boolean;
+    diffViewerEntries: readonly DiffEntry[];
+    diffViewerCursor: number;
     approvalLevel: ApprovalLevel | undefined;
 };
 
@@ -332,6 +363,17 @@ type ChatRootProps = {
         readonly handleContentChange: (text: string) => void;
         readonly handleTextareaKeyDown: (key: KeyEvent, textareaRef: TextareaRef, scrollboxRef: ScrollboxRef) => void;
         readonly handlePaste: (event: PasteEvent, textareaRef: TextareaRef) => void;
+    readonly emitOutput: (text: string) => void;
+    /** Replace `core.outputText` (the VIEW) entirely; the durable JSONL log is never touched. */
+    readonly replaceOutputText: (text: string) => void;
+    readonly onModelCycleSelect: (selection: ModelProviderSelection) => void;
+        /**
+         * Enqueue a slash-command line into the chat submit stream — the SAME
+         * `parseChatLine -> runChatAction` resolution path a typed `/tree`
+         * takes. Used by the session-tree keyboard nav (T12) so the keys reach
+         * the existing session-nav resolution without a separate hook.
+         */
+        readonly submitLine: (text: string) => void;
         readonly abgOverlayController?: AbgOverlayController;
     };
     readonly statusBarProps?: OpenTuiChatBridgeOptions;
@@ -388,6 +430,9 @@ export function publishSnapshot(core: OpenTuiChatBridgeCore): void {
         abgOverlayActiveTab: core.abgOverlayActiveTab,
         abgOverlayScrollOffset: core.abgOverlayScrollOffset,
         abgOverlayLiveOutput: core.abgOverlayLiveOutput,
+        diffViewerActive: core.diffViewerActive,
+        diffViewerEntries: core.diffViewerEntries,
+        diffViewerCursor: core.diffViewerCursor,
         approvalLevel: core.approvalLevel,
     };
     for (const listener of core.listeners) {
@@ -518,6 +563,9 @@ export function createOpenTuiChatBridgeCore(options?: {
             abgOverlayActiveTab: 0,
             abgOverlayScrollOffset: 0,
             abgOverlayLiveOutput: false,
+            diffViewerActive: false,
+            diffViewerEntries: [],
+            diffViewerCursor: 0,
             approvalLevel: initialApprovalLevel,
         },
         unmountFn: undefined,
@@ -555,6 +603,8 @@ export function createOpenTuiChatBridgeCore(options?: {
         history,
         lastEscTimestamp: undefined,
         submitting: false,
+        pasteStore: new PasteMarkerStore(),
+        pasteCounter: 0,
         abgOverlayActive: false,
         abgOverlayActiveTab: 0,
         abgOverlayScrollOffset: 0,
@@ -562,6 +612,9 @@ export function createOpenTuiChatBridgeCore(options?: {
         abgOverlayController: undefined,
         abgOverlayUnsubscribe: undefined,
         abgOverlayRefreshTimer: undefined,
+        diffViewerActive: false,
+        diffViewerEntries: [],
+        diffViewerCursor: 0,
         approvalLevel: initialApprovalLevel,
     };
 }
@@ -818,7 +871,7 @@ export function bridgeSubmit(core: OpenTuiChatBridgeCore, textareaRef: TextareaR
                         return;
                     }
                 }
-                let value = captured;
+                let value = core.pasteStore.expand(captured);
                 if (captured.startsWith('/')) {
                     const resolved = resolveSlashCommandMenuSubmission(captured, core.menuState);
                     if (resolved !== captured) {
@@ -830,12 +883,29 @@ export function bridgeSubmit(core: OpenTuiChatBridgeCore, textareaRef: TextareaR
                         value = resolved;
                     }
                 }
+                // `/diff` opens the full-screen diff viewer overlay (T14). It is
+                // a view-only command resolved entirely within the bridge — it
+                // does not enqueue a line or echo to outputText (slash commands
+                // are system commands, not conversation).
+                if (value === '/diff') {
+                    core.diffViewerEntries = collectDiffEntries(core.outputText);
+                    core.diffViewerCursor = 0;
+                    core.diffViewerActive = true;
+                    textareaRef.current?.clear();
+                    core.pasteStore.clear();
+                    core.inputBuffer = '';
+                    core.menuState = createSlashCommandMenuState();
+                    core.fileAutocomplete = createFileAutocompleteState();
+                    publishSnapshot(core);
+                    return;
+                }
                 enqueueEvent(core, { type: 'line', value });
                 core.history = recordSubmittedPrompt(core.history, value);
-                if (!value.startsWith('/')) {
+                if (!captured.startsWith('/')) {
                     core.outputText += `You: ${value}\n`;
                 }
                 textareaRef.current?.clear();
+                core.pasteStore.clear();
                 core.inputBuffer = '';
                 core.menuState = createSlashCommandMenuState();
                 core.fileAutocomplete = createFileAutocompleteState();
@@ -847,8 +917,30 @@ export function bridgeSubmit(core: OpenTuiChatBridgeCore, textareaRef: TextareaR
     }, 0);
 }
 
-/** Real terminal text paste is handled natively by the textarea; image paste is the Ctrl+V chord below. */
-function bridgePaste(_core: OpenTuiChatBridgeCore, _event: PasteEvent, _textareaRef: TextareaRef): void {
+/**
+ * Bracketed-paste marker collapse (T13). Small pastes are inserted literally by
+ * the native textarea (this handler does nothing). Marker-sized pastes (> 10
+ * lines OR > 1000 chars) are collapsed: `preventDefault()` suppresses the
+ * native insertion (the opentui paste flow only runs `handlePaste` when
+ * `!event.defaultPrevented`), and the marker `[Paste #N, +M lines]` is inserted
+ * via `textareaRef.insertText` (which fires `onContentChange` →
+ * `bridgeContentChange`, so `core.inputBuffer` stays mirrored — no shadow
+ * buffer). The full content is stored keyed by id; `bridgeSubmit` expands it.
+ *
+ * Exported so the paste flow is unit-testable against a fake `PasteEvent` +
+ * recording textarea, matching the other exported bridge handlers.
+ */
+export function bridgePaste(core: OpenTuiChatBridgeCore, event: PasteEvent, textareaRef: TextareaRef): void {
+    const text = decodePasteBytes(event.bytes);
+    const decision = evaluatePaste(text);
+    if (decision.kind === 'literal') {
+        return; // native textarea handles the literal insertion
+    }
+    event.preventDefault();
+    core.pasteCounter += 1;
+    const id = core.pasteCounter;
+    core.pasteStore.store(id, text);
+    textareaRef.current?.insertText(makeMarker(id, decision.lineCount, decision.charCount));
 }
 
 /**
@@ -1106,6 +1198,10 @@ export function handleInput(core: OpenTuiChatBridgeCore, input: string, key: Ink
     }
     if (core.abgOverlayActive) {
         handleAbgOverlayInput(core, input, key);
+        return;
+    }
+    if (core.diffViewerActive && !(key.ctrl && input === 'c')) {
+        handleDiffViewerInput(core, input, key);
         return;
     }
     // Ctrl+C is routed here unconditionally by ChatRoot's useKeyboard (exit-critical),
@@ -1505,6 +1601,43 @@ function handleAbgOverlayInput(core: OpenTuiChatBridgeCore, input: string, key: 
     }
 }
 
+/**
+ * Diff viewer overlay key handler (T14). Reaches the global `useKeyboard` sink
+ * (like the other overlays) because `diffViewerActive` blurs the textarea. Nav
+ * keys (`j`/`k`, arrows, `]`/`[`, `n`/`p`) drive the cursor through the pure
+ * navigation reducers; `esc`/`q` close + return focus to the textarea. Does NOT
+ * bind Ctrl+C — that stays on the global sink (exit/interrupt contract).
+ */
+function handleDiffViewerInput(core: OpenTuiChatBridgeCore, input: string, key: InkKeyShape): void {
+    if (key.escape || input === 'q') {
+        core.diffViewerActive = false;
+        core.diffViewerEntries = [];
+        core.diffViewerCursor = 0;
+        publishSnapshot(core);
+        return;
+    }
+    if (core.diffViewerEntries.length === 0) {
+        return;
+    }
+    const model = buildDiffViewerModel(core.diffViewerEntries);
+    if (input === 'j' || key.downArrow) {
+        core.diffViewerCursor = moveLine(model, core.diffViewerCursor, 1);
+    } else if (input === 'k' || key.upArrow) {
+        core.diffViewerCursor = moveLine(model, core.diffViewerCursor, -1);
+    } else if (input === ']') {
+        core.diffViewerCursor = nextHunk(model, core.diffViewerCursor);
+    } else if (input === '[') {
+        core.diffViewerCursor = prevHunk(model, core.diffViewerCursor);
+    } else if (input === 'n') {
+        core.diffViewerCursor = nextFile(model, core.diffViewerCursor);
+    } else if (input === 'p') {
+        core.diffViewerCursor = prevFile(model, core.diffViewerCursor);
+    } else {
+        return;
+    }
+    publishSnapshot(core);
+}
+
 function AgentSpinner({ text }: { readonly text: string }): React.ReactNode {
     const { glyph } = useSpinnerFrame();
     return (
@@ -1552,19 +1685,192 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
         snapshot.approvalActive ||
         snapshot.questionActive ||
         snapshot.abgOverlayActive ||
-        snapshot.renameModeActive;
+        snapshot.renameModeActive ||
+        snapshot.diffViewerActive;
+
+    const paletteState = useContext(PaletteOpenContext);
+    const paletteOpenRef = useRef(false);
+    useEffect(() => {
+        paletteOpenRef.current = paletteState !== null && paletteState.open;
+    }, [paletteState]);
 
     useKeyboard((key) => {
+        const isCtrlC = key.ctrl && key.name === 'c';
+        // When the command palette is open, preventDefault keeps printable
+        // filter keys off the focused textarea (T8 double-handle fix). The
+        // palette's own useKeyboard handler (separate EventEmitter listener)
+        // still receives the key and updates the filter query.
+        if (paletteOpenRef.current && !isCtrlC) {
+            key.preventDefault();
+            return;
+        }
         // Ctrl+C is exit-critical: always route through the global sink so the
         // "press twice to exit" contract holds even during the textarea's
         // startup focus race. Other keys early-return when the textarea owns them.
-        const isCtrlC = key.ctrl && key.name === 'c';
         if (textareaRef.current?.focused && !isCtrlC) {
             return;
         }
         const adapted = keyAdapter.consume(key);
         bridge.handleInput(adapted.input, adapted.key);
     });
+
+    // Register the keymap managed textarea layer (T3): routes input.* commands
+    // through the keymap via lower-level composition (NOT registerManagedTextareaLayer)
+    // and adds a custom chat.submit command wrapping bridgeSubmit (IME-safe).
+    // Dynamically imported to keep @opentui/keymap/addons/opentui (and the
+    // transitive @opentui/core native FFI) out of the --no-tui module graph.
+    const keymap = useKeymap();
+    useEffect(() => {
+        let disposed = false;
+        let cleanup: (() => void) | undefined;
+        void import('../platform/keymap/keymap-managed-layer.js').then(
+            ({ registerChatSubmitLayer, registerManagedTextareaComposition }) => {
+                if (disposed) return;
+                const offComposition = registerManagedTextareaComposition(keymap, renderer);
+                const submitHandler = (): void => bridge.handleSubmit(textareaRef);
+                const offSubmit = registerChatSubmitLayer(keymap, renderer, submitHandler);
+                cleanup = (): void => {
+                    offSubmit();
+                    offComposition();
+                };
+            },
+        );
+        return (): void => {
+            disposed = true;
+            cleanup?.();
+        };
+    }, [keymap, renderer, bridge]);
+
+    // Register the messages.* scroll + copy layer (T10): fine-grained scroll
+    // (line/half-page/first/last) + copy-last-assistant-message. SESSION-scoped
+    // (enabled: () => true, NOT textarea-gated) so the chords fire regardless of
+    // input focus. getLastAssistantText reads bridge.getSnapshot() at dispatch
+    // time (not at registration) so it always sees the current outputText.
+    useEffect(() => {
+        let disposed = false;
+        let cleanup: (() => void) | undefined;
+        void import('../platform/keymap/messages-scroll.js').then(({ registerMessagesScrollLayer }) => {
+            if (disposed) return;
+            cleanup = registerMessagesScrollLayer(keymap, {
+                scrollboxRef,
+                clipboardService,
+                getLastAssistantText: () => extractLastAssistantText(bridge.getSnapshot().outputText),
+            });
+        });
+        return (): void => {
+            disposed = true;
+            cleanup?.();
+        };
+    }, [keymap, clipboardService, bridge]);
+
+    // Register the model-shortcuts layer (T11): F2/Shift+F2 recent-model-cycle
+    // (frecency) + <leader>1..9 quick-switch to favorited model slots. SESSION-
+    // scoped (enabled: () => true). T11 ADDS these alongside Ctrl+P; it does NOT
+    // reassign the documented Ctrl+P/Shift+Ctrl+P cycle. selectModel routes
+    // through bridge.onModelCycleSelect — the same selection path handleModelCycle
+    // (Ctrl+P) uses — read at dispatch time. Dynamically imported so the keymap
+    // stays out of the --no-tui module graph.
+    useEffect(() => {
+        let disposed = false;
+        let cleanup: (() => void) | undefined;
+        void import('../platform/keymap/model-favorites.js').then(
+            ({ ModelFrecency, ModelFavorites, registerModelShortcutsLayer }) => {
+                if (disposed) return;
+                cleanup = registerModelShortcutsLayer(keymap, {
+                    frecency: new ModelFrecency(),
+                    favorites: new ModelFavorites(),
+                    getModelSelections: () =>
+                        bridge.getSnapshot().modelCycleChoices.map((choice) => choice.selection),
+                    getCurrentSelection: () => {
+                        const snap = bridge.getSnapshot();
+                        return snap.modelCycleChoices[snap.modelCycleIndex]?.selection;
+                    },
+                    selectModel: (selection) => {
+                        bridge.onModelCycleSelect?.(selection);
+                    },
+                    emitNotice: (text) => {
+                        bridge.emitOutput(`${text}\n`);
+                    },
+                });
+            },
+        );
+        return (): void => {
+            disposed = true;
+            cleanup?.();
+        };
+    }, [keymap, bridge]);
+
+    // Register the session-shortcuts layer (T12): session-tree keyboard nav
+    // (up/right/left/<leader>down), prompt stash (in-memory LIFO), and the
+    // queued-prompts view (<leader>q). SESSION-scoped (enabled: () => true,
+    // priority -100 — below the managed textarea layer so bare up/right/left
+    // yield to input editing while the textarea is focused). The session-tree
+    // keys route to the SAME resolution path as `/tree` (bridge.submitLine
+    // enqueues the slash line → parseChatLine → runChatAction); directional
+    // leaf selection needs a session-tree reader wired from interactive-chat
+    // (out of this lane), so each direction surfaces the tree via `/tree`. The
+    // stash captures/restores the textarea draft exactly (text + cursor);
+    // queued-prompts renders a documented empty-state (the workflow drain-lane
+    // queue is not observable from the interactive TUI — verified).
+    useEffect(() => {
+        let disposed = false;
+        let cleanup: (() => void) | undefined;
+        void import('../platform/keymap/session-shortcuts.js').then(
+            ({ registerSessionShortcutsLayer }) => {
+                if (disposed) return;
+                cleanup = registerSessionShortcutsLayer(keymap, {
+                    navigateSessionTree: () => bridge.submitLine('/tree'),
+                    captureInput: () => ({
+                        text: textareaRef.current?.plainText ?? '',
+                        cursor: textareaRef.current?.cursorOffset ?? 0,
+                    }),
+                    clearInput: () => {
+                        textareaRef.current?.clear();
+                        bridge.handleContentChange('');
+                    },
+                    restoreInput: (entry) => {
+                        const textarea = textareaRef.current;
+                        if (textarea !== null) {
+                            textarea.setText(entry.text);
+                            textarea.cursorOffset = entry.cursor;
+                        }
+                        bridge.handleContentChange(entry.text);
+                    },
+                    emitNotice: (text) => {
+                        bridge.emitOutput(text);
+                    },
+                });
+            },
+        );
+        return (): void => {
+            disposed = true;
+            cleanup?.();
+        };
+    }, [keymap, bridge]);
+
+    // Register the message undo/redo layer (T15): leader+u hides the last
+    // You/Assistant exchange from the outputText VIEW (non-destructive — the
+    // durable JSONL log is untouched); leader+r restores it. SESSION-scoped
+    // (enabled: () => true). Undo during `generating` is a no-op; single-level.
+    useEffect(() => {
+        let disposed = false;
+        let cleanup: (() => void) | undefined;
+        void import('../platform/keymap/message-undo-redo.js').then(({ registerMessageUndoRedoLayer }) => {
+            if (disposed) return;
+            cleanup = registerMessageUndoRedoLayer(keymap, {
+                getOutputText: () => bridge.getSnapshot().outputText,
+                replaceOutputText: (text) => bridge.replaceOutputText(text),
+                isGenerating: () => bridge.getSnapshot().generating,
+                emitNotice: (text) => {
+                    bridge.emitOutput(text);
+                },
+            });
+        });
+        return (): void => {
+            disposed = true;
+            cleanup?.();
+        };
+    }, [keymap, bridge]);
 
     const handleSubmit = (): void => bridge.handleSubmit(textareaRef);
     const handleContentChange = (text: string): void => bridge.handleContentChange(text);
@@ -1848,6 +2154,17 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
         );
     }
 
+    if (snapshot.diffViewerActive) {
+        const diffModel = buildDiffViewerModel(snapshot.diffViewerEntries);
+        return (
+            <DiffViewerOverlay
+                entries={snapshot.diffViewerEntries}
+                model={diffModel}
+                cursor={snapshot.diffViewerCursor}
+            />
+        );
+    }
+
     const showSlashMenu = snapshot.inputBuffer.startsWith('/');
     const showWorkflowMenu = snapshot.inputBuffer.startsWith('#');
     const menuView = showSlashMenu
@@ -2018,6 +2335,18 @@ export async function createOpenTuiChatBridge(options?: OpenTuiChatBridgeOptions
 
     const getSnapshot = (): BridgeSnapshot => core.snapshot;
 
+    let emitOutputScheduled = false;
+    const emitOutput = (text: string): void => {
+        core.outputText += text;
+        if (!emitOutputScheduled) {
+            emitOutputScheduled = true;
+            setTimeout(() => {
+                emitOutputScheduled = false;
+                publishSnapshot(core);
+            }, 16);
+        }
+    };
+
     const internalBridge: ChatRootProps['bridge'] = {
         subscribe,
         getSnapshot,
@@ -2027,6 +2356,14 @@ export async function createOpenTuiChatBridge(options?: OpenTuiChatBridgeOptions
         handleTextareaKeyDown: (key, textareaRef, scrollboxRef) =>
             bridgeTextareaKeyDown(core, key, textareaRef, scrollboxRef),
         handlePaste: (event, textareaRef) => bridgePaste(core, event, textareaRef),
+        emitOutput,
+        replaceOutputText: (text) => replaceCoreOutputText(core, text),
+        onModelCycleSelect: (selection) => {
+            core.onModelCycleSelect?.(selection);
+        },
+        submitLine: (text) => {
+            enqueueEvent(core, { type: 'line', value: text });
+        },
         ...(core.abgOverlayController !== undefined ? { abgOverlayController: core.abgOverlayController } : {}),
     };
 
@@ -2047,13 +2384,19 @@ export async function createOpenTuiChatBridge(options?: OpenTuiChatBridgeOptions
     // non-TUI CLI runs (plain/JSON) never load the renderer. Resolved here
     // (right before mounting) and threaded into ChatRoot via props.
     const { useKeyboard, useRenderer } = await import('@opentui/react');
+    // The keymap provider is dynamically imported for the same reason:
+    // @opentui/keymap/opentui transitively pulls the native @opentui/core
+    // backend. Lazy-loading here keeps it out of the --no-tui module graph.
+    const { ChatKeymapProvider } = await import('../platform/keymap/keymap-provider.js');
     const mountResult = await mountOpenTui(
-        <ChatRoot
-            bridge={internalBridge}
-            useKeyboard={useKeyboard}
-            useRenderer={useRenderer}
-            {...(statusBarProps !== undefined ? { statusBarProps } : {})}
-        />,
+        <ChatKeymapProvider useRenderer={useRenderer}>
+            <ChatRoot
+                bridge={internalBridge}
+                useKeyboard={useKeyboard}
+                useRenderer={useRenderer}
+                {...(statusBarProps !== undefined ? { statusBarProps } : {})}
+            />
+        </ChatKeymapProvider>,
     );
     core.unmountFn = mountResult.unmount;
     const titleWasSet = setTerminalTitle(`mission-control \u2014 ${options?.sessionID ?? 'session'}`);
@@ -2066,18 +2409,6 @@ export async function createOpenTuiChatBridge(options?: OpenTuiChatBridgeOptions
         return new Promise<ChatInputEvent>((resolve) => {
             core.eventWaiters.push(resolve);
         });
-    };
-
-    let emitOutputScheduled = false;
-    const emitOutput = (text: string): void => {
-        core.outputText += text;
-        if (!emitOutputScheduled) {
-            emitOutputScheduled = true;
-            setTimeout(() => {
-                emitOutputScheduled = false;
-                publishSnapshot(core);
-            }, 16);
-        }
     };
 
     const replaceOutputText = (text: string): void => replaceCoreOutputText(core, text);
@@ -2387,6 +2718,18 @@ function joinBlockText(lines: readonly string[], prefix: string): string {
     const rest = lines.slice(1);
     const strippedFirst = prefix.length > 0 && first.startsWith(prefix) ? first.slice(prefix.length) : first;
     return rest.length === 0 ? strippedFirst : [strippedFirst, ...rest].join('\n');
+}
+
+/** Extract the last `Assistant:` block text from outputText; empty when none exists (for messages.copy). */
+export function extractLastAssistantText(outputText: string): string {
+    const blocks = parseMessageBlocks(outputText);
+    for (let i = blocks.length - 1; i >= 0; i--) {
+        const block = blocks[i];
+        if (block?.kind === 'assistant') {
+            return joinBlockText(block.lines, blockPrefix.assistant);
+        }
+    }
+    return '';
 }
 
 function MarkdownPanel({
