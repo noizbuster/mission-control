@@ -109,6 +109,20 @@ Input now splits across two sinks. Raw editing is native; the bridge intercepts 
 
 Raw editing (printable input, backspace, arrow movement, word-move, the real cursor, Enter-submit, and IME composition) never reaches the bridge. It is native `TextareaRenderable` behavior.
 
+### Resolved Chord Conflicts
+
+Four chords have a documented app-action meaning that collides with the textarea's native editing defaults. The conflict is resolved by giving the app layer the bare chord and moving the input-layer equivalent onto a non-colliding chord, then excluding the bare chord from the managed textarea binding set (`EXCLUDED_TEXTAREA_CHORDS` in `keymap-managed-layer.ts`, applied via `filterTextareaBindings`). The `platform/keymap/chord-conflicts.test.ts` contract pins these exact values against future drift.
+
+| Bare chord (app layer owns it) | App action | Input-layer equivalent (restored) |
+|---|---|---|
+| `ctrl+e` | `editor_open` (external editor) | `input_line_end` = `ctrl+shift+e` |
+| `ctrl+z` | `terminal_suspend` (SIGTSTP) | `input_undo` = `ctrl+-`, `input_redo` = `ctrl+.` |
+| `home` / `end` | transcript scroll-to-top / -bottom | `input_buffer_home` = `ctrl+shift+home`, `input_buffer_end` = `ctrl+shift+end` |
+| `ctrl+p` | `model_cycle` (unchanged) | palette is `alt+x`, not `ctrl+p` |
+| `ctrl+g` | `abg_overlay_toggle` | `messages_first` is `ctrl+shift+home`, not `ctrl+g` — no collision |
+
+`messages_first` (`ctrl+shift+home`) and `input_buffer_home` (`ctrl+shift+home`) intentionally share a chord; layer priority resolves it (`input.*` at default priority wins while the textarea is focused; `messages.*` at priority `-100` wins while it is blurred). The default chords live in `keybind.ts` (`Definitions`) and are rebindable end-to-end via the T17 config loader (`keybinds.json`); `/hotkeys` is registry-driven (T17) and auto-reflects any rebind. `Ctrl+C` is the one exception: it is hardcoded, routes through the global `useKeyboard` sink, and is deliberately absent from the registry (see the Ctrl+C anti-pattern).
+
 ### Output Rendering
 
 The output text is parsed into `ChatBlock` objects by `parseMessageBlocks()`. Each block has a `kind` that routes to a dedicated renderer:

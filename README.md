@@ -77,6 +77,17 @@ Workspace trust is controlled interactively with `/trust` (trust the current wor
 
 The chat command surface is mixed: normal prompts can run through the deterministic local provider, OpenAI Responses, Anthropic Messages, Google Gemini, or the OpenAI-compatible adapter family for OpenRouter, Groq, DeepSeek, and Mistral when credentials are configured. Skill loading is real — the `SKILL.md` body becomes the next user prompt — but the default `local/local-echo` provider does not call tools, so a real tool-calling provider is required for loaded skills to drive agentic behavior.
 
+## Keyboard Shortcuts
+
+Interactive chat chords are defined in the keybind registry (`apps/cli/src/platform/keymap/keybind.ts`) and rebindable via a `keybinds.json` config file. `/hotkeys` lists every binding grouped by namespace and auto-reflects any rebind. A few chords are resolved against the textarea's native editing defaults so both the app action and the editing behavior survive:
+
+- `Ctrl+E` opens the external editor (input line-end is `Ctrl+Shift+E`).
+- `Ctrl+Z` suspends the terminal (undo/redo are `Ctrl+-` / `Ctrl+.`).
+- `Home` / `End` scroll the transcript (buffer-home/end are `Ctrl+Shift+Home` / `Ctrl+Shift+End`).
+- `Ctrl+P` cycles the model (the command palette is `Alt+X`).
+- `Ctrl+G` toggles the ABG monitoring overlay.
+- `Ctrl+C` (twice) interrupts or exits; it is hardcoded and routes through the global keyboard sink, not the keybind registry.
+
 ## Built-in Workflows
 
 Four built-in workflows ship with the workflow runtime. The first three are graph files discovered from `examples/abg/`; autopilot is a mode overlay, not a standalone graph.
