@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseChatLine } from './chat-commands.js';
-import { formatHelpText, KEYBOARD_SHORTCUTS, runHelpAction } from './interactive-chat-help-action.js';
+import { formatHelpText, runHelpAction } from './interactive-chat-help-action.js';
+import { Keybinds } from '../platform/keymap/keybind.js';
 
 type CapturingOutput = {
     readonly write: (text: string) => void;
@@ -71,6 +72,16 @@ describe('formatHelpText', () => {
         expect(shortDescriptionIndex).toBe(longDescriptionIndex);
     });
 
+    it('renders the keyboard section from the keybind registry', () => {
+        const text = formatHelpText([{ id: '/test', description: 'Test' }]);
+
+        // Registry-sourced chords (same source as /hotkeys).
+        expect(text).toContain('Ctrl+P');
+        expect(text).toContain('Ctrl+R');
+        expect(text).toContain('Enter');
+        expect(text).toContain('PgUp');
+    });
+
     it('ends with a newline so the next prompt starts on a fresh line', () => {
         const text = formatHelpText([{ id: '/test', description: 'Test' }]);
 
@@ -78,37 +89,14 @@ describe('formatHelpText', () => {
     });
 });
 
-describe('KEYBOARD_SHORTCUTS', () => {
-    it('includes all core implemented shortcuts', () => {
-        const keys = KEYBOARD_SHORTCUTS.map((shortcut) => shortcut.key);
+describe('formatHelpText keyboard section reflects keybind overrides', () => {
+    it('shows F2 for model_cycle when overridden', () => {
+        const text = formatHelpText([], Keybinds.parse({ model_cycle: 'f2' }));
+        const lines = text.split('\n');
+        const modelCycleLine = lines.find((line) => line.includes('Cycle to next model'));
 
-        expect(keys).toContain('Enter');
-        expect(keys).toContain('Shift+Enter');
-        expect(keys).toContain('Ctrl+C');
-        expect(keys).toContain('Ctrl+D');
-        expect(keys).toContain('Ctrl+Z');
-        expect(keys).toContain('Ctrl+\u2190');
-        expect(keys).toContain('Ctrl+\u2192');
-        expect(keys).toContain('\u2191/\u2193');
-        expect(keys).toContain('Backspace');
-    });
-
-    it('includes all wave-2 and wave-5 implemented shortcuts', () => {
-        const keys = KEYBOARD_SHORTCUTS.map((shortcut) => shortcut.key);
-
-        expect(keys).toContain('Ctrl+P');
-        expect(keys).toContain('Shift+Ctrl+P');
-        expect(keys).toContain('Ctrl+T');
-        expect(keys).toContain('Ctrl+O');
-        expect(keys).toContain('Ctrl+E');
-        expect(keys).toContain('Ctrl+R');
-        expect(keys).toContain('Ctrl+V');
-        expect(keys).toContain('PgUp');
-        expect(keys).toContain('PgDn');
-        expect(keys).toContain('Home');
-        expect(keys).toContain('End');
-        expect(keys).toContain('Esc');
-        expect(keys).toContain('Ctrl+G');
+        expect(modelCycleLine).toContain('F2');
+        expect(modelCycleLine).not.toContain('Ctrl+P');
     });
 });
 
