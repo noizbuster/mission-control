@@ -687,6 +687,7 @@ export type MarkdownProps = {
     readonly width: number;
     readonly streaming?: boolean;
     readonly theme?: TerminalMarkdownTheme;
+    readonly selectable?: boolean;
 };
 
 function inkStyleToOpenTuiProps(style: InkTextStyle) {
@@ -715,11 +716,11 @@ function LineView({ line }: { readonly line: RenderLine }): React.ReactNode {
     );
 }
 
-export function Markdown({ text, width, streaming, theme }: MarkdownProps): React.ReactNode {
+export function Markdown({ text, width, streaming, theme, selectable }: MarkdownProps): React.ReactNode {
     const resolvedTheme = theme ?? darkTheme;
     const blocks = getCachedBlocks(text, width, streaming ?? false, resolvedTheme);
     return (
-        <box flexDirection="column">
+        <box flexDirection="column" {...(selectable !== undefined ? { selectable } : {})}>
             {blocks.map((block, blockIndex) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: block order is stable for cached input
                 <box key={blockIndex} flexDirection="column">

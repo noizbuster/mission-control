@@ -1,6 +1,28 @@
-import type { InkKeyShape } from './opentui-chat-bridge.js';
+/**
+ * Test seam: Ctrl+C still flows through the exported `handleInput` global sink
+ * (exit-critical, routed there unconditionally); Ctrl+D moved to the exported
+ * `bridgeTextareaKeyDown` (forward-delete via textarea `deleteChar`, or an
+ * interrupt when the buffer is empty). Typing is mirrored via
+ * `bridgeContentChange`. Buffer clearing on Ctrl+C is the textarea's
+ * responsibility (Esc path), so these tests assert the enqueued interrupt +
+ * `interruptedPartialInput` flag and the textarea's recorded `deleteChar`.
+ */
 import { describe, expect, it } from 'vitest';
-import { createOpenTuiChatBridgeCore, handleInput, type OpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
+import {
+    bridgeContentChange,
+    bridgeTextareaKeyDown,
+    createOpenTuiChatBridgeCore,
+    handleInput,
+    type OpenTuiChatBridgeCore,
+} from './opentui-chat-bridge.js';
+import type { InkKeyShape } from './opentui-chat-bridge.js';
+import {
+    asScrollboxRef,
+    asTextareaRef,
+    createRecordingScrollbox,
+    createRecordingTextarea,
+    makeKeyEvent,
+} from './opentui-chat-bridge-test-support.js';
 
 function makeKey(overrides: Partial<InkKeyShape> = {}): InkKeyShape {
     return {
@@ -32,12 +54,10 @@ function nextEvent(core: OpenTuiChatBridgeCore): unknown {
     return core.eventQueue.shift();
 }
 
-describe('ink chat bridge Ctrl+C with partial input clears buffer', () => {
-    it('enqueues interrupt with interruptedPartialInput=true and clears the buffer when Ctrl+C is pressed with text', () => {
+describe('opentui bridge Ctrl+C interrupt via handleInput', () => {
+    it('enqueues an interrupt with interruptedPartialInput=true when the buffer has text', () => {
         const core = createOpenTuiChatBridgeCore();
-
-        handleInput(core, 'hello', makeKey());
-        expect(core.inputBuffer).toBe('hello');
+        bridgeContentChange(core, 'hello');
 
         handleInput(core, 'c', makeKey({ ctrl: true }));
 
@@ -46,21 +66,10 @@ describe('ink chat bridge Ctrl+C with partial input clears buffer', () => {
             interruptedPartialInput: true,
             source: 'ctrl-c',
         });
-        expect(core.inputBuffer).toBe('');
-        expect(core.cursorPosition).toBe(0);
     });
 
-    it('allows a second Ctrl+C on the now-empty buffer to enqueue an exit interrupt', () => {
+    it('enqueues an interrupt with interruptedPartialInput=false when the buffer is empty', () => {
         const core = createOpenTuiChatBridgeCore();
-
-        handleInput(core, 'hello', makeKey());
-        handleInput(core, 'c', makeKey({ ctrl: true }));
-
-        expect(nextEvent(core)).toEqual({
-            type: 'interrupt',
-            interruptedPartialInput: true,
-            source: 'ctrl-c',
-        });
 
         handleInput(core, 'c', makeKey({ ctrl: true }));
 
@@ -69,15 +78,43 @@ describe('ink chat bridge Ctrl+C with partial input clears buffer', () => {
             interruptedPartialInput: false,
             source: 'ctrl-c',
         });
-        expect(core.inputBuffer).toBe('');
+    });
+
+    it('allows a second Ctrl+C on the now-empty buffer to enqueue another exit interrupt', () => {
+        const core = createOpenTuiChatBridgeCore();
+        bridgeContentChange(core, 'hello');
+
+        handleInput(core, 'c', makeKey({ ctrl: true }));
+        expect(nextEvent(core)).toEqual({
+            type: 'interrupt',
+            interruptedPartialInput: true,
+            source: 'ctrl-c',
+        });
+
+        // Buffer is still mirrored as 'hello' (Ctrl+C does not clear it; the
+        // textarea/Esc path owns clearing). The exit-counting in the main loop
+        // keys off interruptedPartialInput, so a real second press arrives with
+        // an empty buffer once the textarea has cleared.
+        bridgeContentChange(core, '');
+        handleInput(core, 'c', makeKey({ ctrl: true }));
+        expect(nextEvent(core)).toEqual({
+            type: 'interrupt',
+            interruptedPartialInput: false,
+            source: 'ctrl-c',
+        });
     });
 });
 
-describe('ink chat bridge Ctrl+D exit and forward-delete', () => {
+describe('opentui bridge Ctrl+D exit and forward-delete via bridgeTextareaKeyDown', () => {
     it('enqueues an interrupt event when the buffer is empty and Ctrl+D is pressed', () => {
         const core = createOpenTuiChatBridgeCore();
 
-        handleInput(core, 'd', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(
+            core,
+            makeKeyEvent('d', { ctrl: true }),
+            asTextareaRef(createRecordingTextarea()),
+            asScrollboxRef(createRecordingScrollbox()),
+        );
 
         expect(nextEvent(core)).toEqual({
             type: 'interrupt',
@@ -86,62 +123,64 @@ describe('ink chat bridge Ctrl+D exit and forward-delete', () => {
         });
     });
 
-    it('does not append d to the input buffer when Ctrl+D is pressed on an empty buffer', () => {
+    it('is a no-op (no delete, no event) when the buffer is non-empty and the cursor is at the end', () => {
         const core = createOpenTuiChatBridgeCore();
+        const textarea = createRecordingTextarea('hello');
 
-        handleInput(core, 'd', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(
+            core,
+            makeKeyEvent('d', { ctrl: true }),
+            asTextareaRef(textarea),
+            asScrollboxRef(createRecordingScrollbox()),
+        );
 
-        expect(core.inputBuffer).toBe('');
-        expect(core.cursorPosition).toBe(0);
-    });
-
-    it('is a no-op when the buffer is non-empty and the cursor is at the end', () => {
-        const core = createOpenTuiChatBridgeCore();
-
-        handleInput(core, 'hello', makeKey());
-        expect(core.inputBuffer).toBe('hello');
-        expect(core.cursorPosition).toBe(5);
-
-        handleInput(core, 'd', makeKey({ ctrl: true }));
-
-        expect(core.inputBuffer).toBe('hello');
-        expect(core.cursorPosition).toBe(5);
+        expect(textarea.deleteCharCount).toBe(1);
+        expect(textarea.plainText).toBe('hello');
         expect(nextEvent(core)).toBeUndefined();
     });
 
-    it('forward-deletes the character at the cursor (cursor mid-buffer)', () => {
+    it('forward-deletes the character at the cursor via textarea deleteChar (cursor mid-buffer)', () => {
         const core = createOpenTuiChatBridgeCore();
+        const textarea = createRecordingTextarea('hello', 2);
 
-        handleInput(core, 'hello', makeKey());
-        core.cursorPosition = 2;
+        bridgeTextareaKeyDown(
+            core,
+            makeKeyEvent('d', { ctrl: true }),
+            asTextareaRef(textarea),
+            asScrollboxRef(createRecordingScrollbox()),
+        );
 
-        handleInput(core, 'd', makeKey({ ctrl: true }));
-
-        expect(core.inputBuffer).toBe('helo');
-        expect(core.cursorPosition).toBe(2);
+        expect(textarea.deleteCharCount).toBe(1);
+        expect(textarea.plainText).toBe('helo');
         expect(nextEvent(core)).toBeUndefined();
     });
 
-    it('forward-deletes the first character when the cursor is at position 0', () => {
+    it('forward-deletes the first character when the cursor is at offset 0', () => {
         const core = createOpenTuiChatBridgeCore();
+        const textarea = createRecordingTextarea('hello', 0);
 
-        handleInput(core, 'hello', makeKey());
-        core.cursorPosition = 0;
+        bridgeTextareaKeyDown(
+            core,
+            makeKeyEvent('d', { ctrl: true }),
+            asTextareaRef(textarea),
+            asScrollboxRef(createRecordingScrollbox()),
+        );
 
-        handleInput(core, 'd', makeKey({ ctrl: true }));
-
-        expect(core.inputBuffer).toBe('ello');
-        expect(core.cursorPosition).toBe(0);
+        expect(textarea.plainText).toBe('ello');
         expect(nextEvent(core)).toBeUndefined();
     });
 
-    it('still appends d to the input buffer when ctrl is not held (regression)', () => {
+    it('calls preventDefault on the Ctrl+D KeyEvent', () => {
         const core = createOpenTuiChatBridgeCore();
+        const key = makeKeyEvent('d', { ctrl: true });
 
-        handleInput(core, 'd', makeKey());
+        bridgeTextareaKeyDown(
+            core,
+            key,
+            asTextareaRef(createRecordingTextarea()),
+            asScrollboxRef(createRecordingScrollbox()),
+        );
 
-        expect(core.inputBuffer).toBe('d');
-        expect(core.cursorPosition).toBe(1);
-        expect(nextEvent(core)).toBeUndefined();
+        expect(key.defaultPrevented).toBe(true);
     });
 });

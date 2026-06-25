@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-    type ChatBlock,
-    getMessageWindowLineBudget,
-    parseMessageBlocks,
-    selectTrailingBlocks,
-} from './opentui-chat-bridge.js';
+import { type ChatBlock, parseMessageBlocks } from './opentui-chat-bridge.js';
 
 function kinds(blocks: readonly ChatBlock[]): readonly string[] {
     return blocks.map((block) => block.kind);
@@ -117,35 +112,6 @@ describe('parseMessageBlocks — tool block sticky classification', () => {
 
         expect(kinds(blocks)).toEqual(['system']);
     });
-
-    it('tail-slices a single long non-markdown block to fit the line budget', () => {
-        const lines: string[] = [];
-        for (let i = 0; i < 100; i++) {
-            lines.push(`system note ${i}`);
-        }
-        const output = lines.join('\n');
-
-        const blocks = parseMessageBlocks(output);
-        expect(blocks).toHaveLength(1);
-        expect(blocks[0]?.kind).toBe('system');
-        expect(blocks[0]?.lines.length).toBe(100);
-
-        // Simulate a 16-row terminal → budget = 16 - 10 = 6 lines
-        const original = process.stdout.rows;
-        Object.defineProperty(process.stdout, 'rows', { value: 16, configurable: true });
-        try {
-            const budget = getMessageWindowLineBudget();
-            expect(budget).toBe(6);
-            const { windowed, truncatedTop } = selectTrailingBlocks(blocks, budget);
-            expect(truncatedTop).toBe(true);
-            expect(windowed).toHaveLength(1);
-            expect(windowed[0]?.truncated).toBe(true);
-            const totalLines = windowed.reduce((sum, block) => sum + block.lines.length, 0);
-            expect(totalLines).toBeLessThanOrEqual(budget);
-        } finally {
-            Object.defineProperty(process.stdout, 'rows', { value: original, configurable: true });
-        }
-    });
 });
 
 // Reconstruct the MessageBlock join contract (strip prefix from line 0, join with \n)
@@ -219,65 +185,5 @@ describe('parseMessageBlocks — markdown-unit preservation (T6)', () => {
 
         expect(kinds(blocks)).toEqual(['assistant']);
         expect(joinedMarkdown(blocks[0] as ChatBlock, 'Assistant: ')).toBe('# Title\n\nbody text');
-    });
-
-    it('marks truncated non-markdown blocks and drops whole markdown blocks for budget', () => {
-        // System lines come FIRST so they form a standalone system block (system
-        // lines following an assistant line are correctly absorbed as continuation).
-        // An overflowing system block gets tail-sliced + marked `truncated`; an
-        // overflowing markdown (assistant/thinking) block gets dropped whole.
-        const blocks = parseMessageBlocks(
-            ['system note one', 'system note two', 'system note three', 'Assistant: short answer'].join('\n'),
-        );
-        expect(kinds(blocks)).toEqual(['system', 'assistant']);
-
-        const original = process.stdout.rows;
-        Object.defineProperty(process.stdout, 'rows', { value: 16, configurable: true });
-        try {
-            // budget = 6; system (3 lines) + assistant (1 line) = 4 ≤ 6, no truncation.
-            const { truncatedTop, windowed } = selectTrailingBlocks(blocks, getMessageWindowLineBudget());
-            expect(truncatedTop).toBe(false);
-            expect(windowed).toHaveLength(2);
-        } finally {
-            Object.defineProperty(process.stdout, 'rows', { value: original, configurable: true });
-        }
-
-        // Budget 2: assistant(1) fits, system(3) overflows and is tail-sliced.
-        const { windowed, truncatedTop } = selectTrailingBlocks(blocks, 2);
-        const sys = windowed.find((b) => b.kind === 'system');
-        expect(sys?.truncated).toBe(true);
-        expect(truncatedTop).toBe(true);
-    });
-
-    it('tail-slices a markdown block to fit the budget instead of overflowing the viewport', () => {
-        const big: string[] = ['Assistant: '];
-        for (let i = 0; i < 30; i++) big.push(`line ${i}`);
-        const blocks = parseMessageBlocks(big.join('\n'));
-        expect(blocks).toHaveLength(1);
-        expect(blocks[0]?.kind).toBe('assistant');
-
-        const { windowed, truncatedTop, startIdx } = selectTrailingBlocks(blocks, 8);
-        expect(windowed).toHaveLength(1);
-        expect(windowed[0]?.kind).toBe('assistant');
-        expect(windowed[0]?.lines.length).toBe(8);
-        expect(windowed[0]?.truncated).toBe(true);
-        expect(startIdx).toBe(0);
-        expect(truncatedTop).toBe(false);
-    });
-
-    it('drops an overflowing markdown block whole only when a later block fills the budget', () => {
-        // [assistant(30 lines), system(1 line)], budget=1: the system block is
-        // the most recent and fills the budget, so the overflowing assistant
-        // block is dropped whole (markdown integrity) while the window stays
-        // non-empty.
-        const blocks: ChatBlock[] = [
-            { kind: 'assistant', lines: Array.from({ length: 30 }, (_v, i) => `line ${i}`) },
-            { kind: 'system', lines: ['system tail'] },
-        ];
-
-        const { windowed, truncatedTop } = selectTrailingBlocks(blocks, 1);
-        expect(truncatedTop).toBe(true);
-        expect(windowed).toHaveLength(1);
-        expect(windowed[0]?.kind).toBe('system');
     });
 });

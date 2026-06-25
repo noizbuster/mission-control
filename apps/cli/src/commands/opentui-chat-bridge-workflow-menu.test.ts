@@ -1,108 +1,129 @@
-import type { InkKeyShape } from './opentui-chat-bridge.js';
-import { describe, expect, it } from 'vitest';
-import { createOpenTuiChatBridgeCore, handleInput, type OpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
+/**
+ * Test seam: `#`-workflow menu completion lives across the exported
+ * `bridgeContentChange` (mirrors typed text + refreshes menus) and
+ * `bridgeTextareaKeyDown` (Up/Down navigation) / `bridgeSubmit` (Enter
+ * completion + final submission). `bridgeSubmit` is IME-double-deferred
+ * (nested setTimeout), so these tests flush it with fake timers. They assert
+ * the textarea was rewritten via `setText` / a `{type:'line'}` event — NOT
+ * `core.inputBuffer` as the editing source of truth.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+    bridgeContentChange,
+    bridgeSubmit,
+    bridgeTextareaKeyDown,
+    createOpenTuiChatBridgeCore,
+} from './opentui-chat-bridge.js';
+import {
+    asScrollboxRef,
+    asTextareaRef,
+    createRecordingScrollbox,
+    createRecordingTextarea,
+    makeKeyEvent,
+    type RecordingTextarea,
+} from './opentui-chat-bridge-test-support.js';
 
-function makeKey(overrides: Partial<InkKeyShape> = {}): InkKeyShape {
-    return {
-        upArrow: false,
-        downArrow: false,
-        leftArrow: false,
-        rightArrow: false,
-        pageDown: false,
-        pageUp: false,
-        home: false,
-        end: false,
-        return: false,
-        escape: false,
-        ctrl: false,
-        shift: false,
-        tab: false,
-        backspace: false,
-        delete: false,
-        meta: false,
-        super: false,
-        hyper: false,
-        capsLock: false,
-        numLock: false,
-        ...overrides,
-    };
+function flushSubmit(): void {
+    vi.runAllTimers();
 }
 
-function nextEvent(core: OpenTuiChatBridgeCore): unknown {
-    return core.eventQueue.shift();
+function setup(workflowNames: readonly string[] = [], typed = '') {
+    const core = createOpenTuiChatBridgeCore();
+    core.workflowNames = workflowNames;
+    const textarea = createRecordingTextarea();
+    // The textarea is the source of truth; seed it natively, then mirror.
+    textarea.type(typed);
+    bridgeContentChange(core, typed);
+    const textareaRef = asTextareaRef(textarea);
+    const scrollboxRef = asScrollboxRef(createRecordingScrollbox());
+    return { core, textarea, textareaRef, scrollboxRef };
 }
 
-describe('ink chat bridge workflow menu completion', () => {
-    it('completes the selected workflow into the buffer on Enter without submitting', () => {
-        const core = createOpenTuiChatBridgeCore();
-        core.workflowNames = ['default', 'planner', 'runner'];
+describe('opentui bridge workflow menu completion', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
 
-        handleInput(core, '#', makeKey());
-        handleInput(core, '', makeKey({ downArrow: true }));
-        handleInput(core, '\r', makeKey({ return: true }));
+    it('completes the selected workflow into the textarea on Enter without submitting', () => {
+        const { core, textarea, textareaRef, scrollboxRef } = setup(['default', 'planner', 'runner'], '#');
 
-        expect(core.inputBuffer).toBe('#planner ');
-        expect(core.cursorPosition).toBe('#planner '.length);
-        expect(nextEvent(core)).toBeUndefined();
+        bridgeTextareaKeyDown(core, makeKeyEvent('down'), textareaRef, scrollboxRef);
+        bridgeTextareaKeyDown(core, makeKeyEvent('return'), textareaRef, scrollboxRef);
+        flushSubmit();
+
+        expect(textarea.setTextCalls).toEqual(['#planner ']);
+        expect(textarea.gotoBufferEndCount).toBe(1);
+        expect(core.eventQueue.shift()).toBeUndefined();
     });
 
     it('keeps the default (first) workflow when Enter is pressed without arrow navigation', () => {
-        const core = createOpenTuiChatBridgeCore();
-        core.workflowNames = ['planner', 'runner'];
+        const { core, textarea, textareaRef, scrollboxRef } = setup(['planner', 'runner'], '#');
 
-        handleInput(core, '#', makeKey());
-        handleInput(core, '\r', makeKey({ return: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('return'), textareaRef, scrollboxRef);
+        flushSubmit();
 
-        expect(core.inputBuffer).toBe('#planner ');
-        expect(nextEvent(core)).toBeUndefined();
+        expect(textarea.setTextCalls).toEqual(['#planner ']);
+        expect(core.eventQueue.shift()).toBeUndefined();
     });
 
     it('submits the full line on a second Enter after the user types the prompt', () => {
-        const core = createOpenTuiChatBridgeCore();
-        core.workflowNames = ['planner'];
+        const { core, textarea, textareaRef, scrollboxRef } = setup(['planner'], '#');
 
-        handleInput(core, '#', makeKey());
-        handleInput(core, '\r', makeKey({ return: true }));
-        expect(core.inputBuffer).toBe('#planner ');
+        bridgeTextareaKeyDown(core, makeKeyEvent('return'), textareaRef, scrollboxRef);
+        flushSubmit();
+        expect(textarea.setTextCalls).toEqual(['#planner ']);
 
-        handleInput(core, 'ship it', makeKey());
-        handleInput(core, '\r', makeKey({ return: true }));
+        // User types the prompt past the completed workflow name.
+        textarea.type('#planner ship it');
+        bridgeContentChange(core, '#planner ship it');
+        bridgeTextareaKeyDown(core, makeKeyEvent('return'), textareaRef, scrollboxRef);
+        flushSubmit();
 
-        expect(nextEvent(core)).toEqual({ type: 'line', value: '#planner ship it' });
-        expect(core.inputBuffer).toBe('');
+        expect(core.eventQueue.shift()).toEqual({ type: 'line', value: '#planner ship it' });
     });
 
     it('submits directly when the prompt was already typed past the workflow name', () => {
-        const core = createOpenTuiChatBridgeCore();
-        core.workflowNames = ['planner'];
+        const { core, textareaRef, scrollboxRef } = setup(['planner'], '#planner ship it');
 
-        handleInput(core, '#planner ship it', makeKey());
-        handleInput(core, '\r', makeKey({ return: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('return'), textareaRef, scrollboxRef);
+        flushSubmit();
 
-        expect(nextEvent(core)).toEqual({ type: 'line', value: '#planner ship it' });
+        expect(core.eventQueue.shift()).toEqual({ type: 'line', value: '#planner ship it' });
     });
 
     it('lets the user filter with a partial query before completing', () => {
-        const core = createOpenTuiChatBridgeCore();
-        core.workflowNames = ['default', 'planner', 'runner'];
+        const { core, textarea, textareaRef, scrollboxRef } = setup(['default', 'planner', 'runner'], '#pl');
 
-        handleInput(core, '#pl', makeKey());
-        handleInput(core, '\r', makeKey({ return: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('return'), textareaRef, scrollboxRef);
+        flushSubmit();
 
-        expect(core.inputBuffer).toBe('#planner ');
-        expect(nextEvent(core)).toBeUndefined();
+        expect(textarea.setTextCalls).toEqual(['#planner ']);
+        expect(core.eventQueue.shift()).toBeUndefined();
     });
 
     it('completes the highlighted choice after navigating up', () => {
+        const { core, textarea, textareaRef, scrollboxRef } = setup(['default', 'planner', 'runner'], '#');
+
+        bridgeTextareaKeyDown(core, makeKeyEvent('down'), textareaRef, scrollboxRef);
+        bridgeTextareaKeyDown(core, makeKeyEvent('down'), textareaRef, scrollboxRef);
+        bridgeTextareaKeyDown(core, makeKeyEvent('up'), textareaRef, scrollboxRef);
+        bridgeTextareaKeyDown(core, makeKeyEvent('return'), textareaRef, scrollboxRef);
+        flushSubmit();
+
+        expect(textarea.setTextCalls).toEqual(['#planner ']);
+    });
+
+    it('does not rewrite the textarea when bridgeSubmit is given an empty buffer', () => {
+        const textarea: RecordingTextarea = createRecordingTextarea();
         const core = createOpenTuiChatBridgeCore();
-        core.workflowNames = ['default', 'planner', 'runner'];
 
-        handleInput(core, '#', makeKey());
-        handleInput(core, '', makeKey({ downArrow: true }));
-        handleInput(core, '', makeKey({ downArrow: true }));
-        handleInput(core, '', makeKey({ upArrow: true }));
-        handleInput(core, '\r', makeKey({ return: true }));
+        bridgeSubmit(core, asTextareaRef(textarea));
+        flushSubmit();
 
-        expect(core.inputBuffer).toBe('#planner ');
+        expect(textarea.calls.filter((c) => c.method === 'setText')).toEqual([]);
+        expect(core.eventQueue.shift()).toBeUndefined();
     });
 });

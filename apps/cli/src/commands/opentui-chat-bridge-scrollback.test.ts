@@ -1,108 +1,105 @@
-import type { InkKeyShape } from './opentui-chat-bridge.js';
+/**
+ * Test seam: after todos 4-7 keyboard scroll (Home/End/PgUp/PgDn) lives in the
+ * exported `bridgeTextareaKeyDown`, which forwards to `scrollboxRef.current`
+ * (`scrollTo`/`scrollBy`). The removed `core.scrollOffset` field no longer
+ * exists. These tests drive `bridgeTextareaKeyDown` with a recording scrollbox
+ * ref and assert the recorded `scrollTo`/`scrollBy` calls — NOT `core.scrollOffset`.
+ */
+import type { ScrollBoxRenderable } from '@opentui/core';
+import type { RefObject } from 'react';
 import { describe, expect, it } from 'vitest';
-import { createOpenTuiChatBridgeCore, handleInput } from './opentui-chat-bridge.js';
+import { bridgeTextareaKeyDown, createOpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
+import {
+    asScrollboxRef,
+    asTextareaRef,
+    createRecordingScrollbox,
+    createRecordingTextarea,
+    makeKeyEvent,
+} from './opentui-chat-bridge-test-support.js';
 
-const SCROLL_PAGE_SIZE = 10;
+const halfPage = (): number => Math.floor((process.stdout.rows ?? 24) / 2);
 
-function makeKey(overrides: Partial<InkKeyShape> = {}): InkKeyShape {
-    return {
-        upArrow: false,
-        downArrow: false,
-        leftArrow: false,
-        rightArrow: false,
-        pageDown: false,
-        pageUp: false,
-        home: false,
-        end: false,
-        return: false,
-        escape: false,
-        ctrl: false,
-        shift: false,
-        tab: false,
-        backspace: false,
-        delete: false,
-        meta: false,
-        super: false,
-        hyper: false,
-        capsLock: false,
-        numLock: false,
-        ...overrides,
-    };
-}
-
-describe('ink chat bridge PgUp/PgDn/Home/End scrollback navigation', () => {
-    it('starts with scrollOffset at 0', () => {
+describe('opentui bridge Home/End/PgUp/PgDn scrollback via bridgeTextareaKeyDown', () => {
+    it('scrolls the scrollbox to the top (0) on Home', () => {
         const core = createOpenTuiChatBridgeCore();
+        const scrollbox = createRecordingScrollbox(100);
 
-        expect(core.scrollOffset).toBe(0);
+        bridgeTextareaKeyDown(core, makeKeyEvent('home'), asTextareaRef(createRecordingTextarea()), asScrollboxRef(scrollbox));
+
+        expect(scrollbox.scrollToCalls).toEqual([0]);
     });
 
-    it('increases scrollOffset by the page size on PgUp', () => {
+    it('scrolls the scrollbox to scrollHeight on End', () => {
         const core = createOpenTuiChatBridgeCore();
+        const scrollbox = createRecordingScrollbox(240);
 
-        handleInput(core, '', makeKey({ pageUp: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('end'), asTextareaRef(createRecordingTextarea()), asScrollboxRef(scrollbox));
 
-        expect(core.scrollOffset).toBe(SCROLL_PAGE_SIZE);
+        expect(scrollbox.scrollToCalls).toEqual([240]);
     });
 
-    it('decreases scrollOffset by the page size on PgDn', () => {
+    it('scrolls backward by half a page on PgUp', () => {
         const core = createOpenTuiChatBridgeCore();
-        handleInput(core, '', makeKey({ pageUp: true }));
-        handleInput(core, '', makeKey({ pageUp: true }));
+        const scrollbox = createRecordingScrollbox();
 
-        handleInput(core, '', makeKey({ pageDown: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('pageup'), asTextareaRef(createRecordingTextarea()), asScrollboxRef(scrollbox));
 
-        expect(core.scrollOffset).toBe(SCROLL_PAGE_SIZE);
+        expect(scrollbox.scrollByCalls).toEqual([-halfPage()]);
     });
 
-    it('clamps scrollOffset to 0 when PgDn is pressed at the bottom', () => {
+    it('scrolls forward by half a page on PgDn', () => {
         const core = createOpenTuiChatBridgeCore();
+        const scrollbox = createRecordingScrollbox();
 
-        handleInput(core, '', makeKey({ pageDown: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('pagedown'), asTextareaRef(createRecordingTextarea()), asScrollboxRef(scrollbox));
 
-        expect(core.scrollOffset).toBe(0);
+        expect(scrollbox.scrollByCalls).toEqual([halfPage()]);
     });
 
-    it('jumps to the top on Home by setting a large scrollOffset', () => {
+    it('accumulates repeated PgUp/PgDn as separate scrollBy calls', () => {
         const core = createOpenTuiChatBridgeCore();
+        const scrollbox = createRecordingScrollbox();
+        const textareaRef = asTextareaRef(createRecordingTextarea());
+        const scrollboxRef = asScrollboxRef(scrollbox);
 
-        handleInput(core, '', makeKey({ home: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('pageup'), textareaRef, scrollboxRef);
+        bridgeTextareaKeyDown(core, makeKeyEvent('pageup'), textareaRef, scrollboxRef);
+        bridgeTextareaKeyDown(core, makeKeyEvent('pagedown'), textareaRef, scrollboxRef);
 
-        expect(core.scrollOffset).toBe(Number.MAX_SAFE_INTEGER);
+        expect(scrollbox.scrollByCalls).toEqual([-halfPage(), -halfPage(), halfPage()]);
     });
 
-    it('jumps to the bottom on End by resetting scrollOffset to 0', () => {
+    it('jumping Home then End records both scrollTo calls in order', () => {
         const core = createOpenTuiChatBridgeCore();
-        handleInput(core, '', makeKey({ pageUp: true }));
-        handleInput(core, '', makeKey({ pageUp: true }));
+        const scrollbox = createRecordingScrollbox(300);
+        const textareaRef = asTextareaRef(createRecordingTextarea());
+        const scrollboxRef = asScrollboxRef(scrollbox);
 
-        handleInput(core, '', makeKey({ end: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('home'), textareaRef, scrollboxRef);
+        bridgeTextareaKeyDown(core, makeKeyEvent('end'), textareaRef, scrollboxRef);
 
-        expect(core.scrollOffset).toBe(0);
+        expect(scrollbox.scrollToCalls).toEqual([0, 300]);
     });
 
-    it('returns to 0 after multiple PgUp presses followed by End', () => {
+    it('calls preventDefault on the KeyEvent for each scroll key', () => {
         const core = createOpenTuiChatBridgeCore();
-        handleInput(core, '', makeKey({ pageUp: true }));
-        handleInput(core, '', makeKey({ pageUp: true }));
-        handleInput(core, '', makeKey({ pageUp: true }));
+        const textareaRef = asTextareaRef(createRecordingTextarea());
+        const scrollboxRef = asScrollboxRef(createRecordingScrollbox());
 
-        expect(core.scrollOffset).toBe(SCROLL_PAGE_SIZE * 3);
-
-        handleInput(core, '', makeKey({ end: true }));
-
-        expect(core.scrollOffset).toBe(0);
+        for (const name of ['home', 'end', 'pageup', 'pagedown'] as const) {
+            const key = makeKeyEvent(name);
+            bridgeTextareaKeyDown(core, key, textareaRef, scrollboxRef);
+            expect(key.defaultPrevented).toBe(true);
+        }
     });
 
-    it('reflects scrollOffset changes in the published snapshot', () => {
+    it('is a no-op on the scrollbox when the scrollbox ref is unattached (current is null)', () => {
         const core = createOpenTuiChatBridgeCore();
+        // Real optional-chained behavior: a null current must not throw.
+        const scrollboxRef: RefObject<ScrollBoxRenderable | null> = { current: null };
 
-        handleInput(core, '', makeKey({ pageUp: true }));
-
-        expect(core.snapshot.scrollOffset).toBe(SCROLL_PAGE_SIZE);
-
-        handleInput(core, '', makeKey({ end: true }));
-
-        expect(core.snapshot.scrollOffset).toBe(0);
+        expect(() => {
+            bridgeTextareaKeyDown(core, makeKeyEvent('pageup'), asTextareaRef(createRecordingTextarea()), scrollboxRef);
+        }).not.toThrow();
     });
 });

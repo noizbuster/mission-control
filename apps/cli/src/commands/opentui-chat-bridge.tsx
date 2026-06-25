@@ -32,10 +32,12 @@
  * normal output/menu/input area until a selection is made or cancelled.
  */
 
-import type { KeyEvent } from '@opentui/core';
+import type { CliRenderer, KeyEvent, PasteEvent, ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { AbgOverlay, type AbgOverlayTab } from '../components/AbgOverlay.js';
+import { ChatInputTextarea } from '../components/ChatInputTextarea.js';
+import { ChatTranscript } from '../components/ChatTranscript.js';
 import { getCachedBlocks, Markdown } from '../components/markdown/Markdown.js';
 import { darkTheme, type TerminalMarkdownTheme } from '../components/markdown/theme.js';
 import { Separator, type SeparatorState } from '../components/Separator.js';
@@ -46,8 +48,10 @@ import { createKeyEventAdapter, type InkKeyShape } from '../platform/key-event-a
 // Re-exported so bridge tests can import InkKeyShape from the same module they
 // import handleInput / createOpenTuiChatBridgeCore from (the Ink Key dependency).
 export type { InkKeyShape } from '../platform/key-event-adapter.js';
+import { createClipboardService } from '../platform/clipboard-service.js';
 import { mountOpenTui } from '../platform/opentui-renderer.js';
 import { toOpenTuiColor, toOpenTuiAttributes } from '../platform/opentui-types.js';
+import { copy, type Toast } from '../platform/selection-copy.js';
 
 /**
  * opentui `useKeyboard` hook signature. Resolved dynamically inside
@@ -56,6 +60,15 @@ import { toOpenTuiColor, toOpenTuiAttributes } from '../platform/opentui-types.j
  * graph for non-TUI CLI runs.
  */
 type UseKeyboardHook = (handler: (key: KeyEvent) => void) => void;
+
+/**
+ * opentui `useRenderer` hook signature. Resolved from the same dynamic
+ * `@opentui/react` import as `useKeyboard` and threaded into `ChatRoot`, which
+ * calls it to obtain the live `CliRenderer` for the OSC52 clipboard service and
+ * the copy-on-mouseup selection handler. Threading (rather than a static
+ * import) keeps `@opentui/react` out of the eager module graph for non-TUI runs.
+ */
+type UseRendererHook = () => CliRenderer;
 import type { AbgOverlayController } from './abg-overlay-controller.js';
 import type { ApprovalLevel } from './approval-level.js';
 import {
@@ -190,7 +203,6 @@ type BridgeSnapshot = {
     readonly renameModeActive: boolean;
     readonly renameBuffer: string;
     readonly historyNavigation: { readonly position: number; readonly total: number } | null;
-    readonly scrollOffset: number;
     readonly abgOverlayActive: boolean;
     readonly abgOverlayActiveTab: number;
     readonly abgOverlayScrollOffset: number;
@@ -298,10 +310,8 @@ export type OpenTuiChatBridgeCore = {
     renameBuffer: string;
     onRenameSubmit: ((name: string) => void) | undefined;
     history: ChatInputHistory;
-    scrollOffset: number;
     lastEscTimestamp: number | undefined;
-    cjkCompositionBuffer: string;
-    cjkCompositionTimer: ReturnType<typeof setTimeout> | undefined;
+    submitting: boolean;
     abgOverlayActive: boolean;
     abgOverlayActiveTab: number;
     abgOverlayScrollOffset: number;
@@ -318,18 +328,20 @@ type ChatRootProps = {
         readonly subscribe: (listener: () => void) => () => void;
         readonly getSnapshot: () => BridgeSnapshot;
         readonly handleInput: (input: string, key: InkKeyShape) => void;
+        readonly handleSubmit: (textareaRef: TextareaRef) => void;
+        readonly handleContentChange: (text: string) => void;
+        readonly handleTextareaKeyDown: (key: KeyEvent, textareaRef: TextareaRef, scrollboxRef: ScrollboxRef) => void;
+        readonly handlePaste: (event: PasteEvent, textareaRef: TextareaRef) => void;
         readonly abgOverlayController?: AbgOverlayController;
     };
     readonly statusBarProps?: OpenTuiChatBridgeOptions;
     readonly useKeyboard: UseKeyboardHook;
+    readonly useRenderer: UseRendererHook;
 };
 
 const slashMenuMaxVisibleChoices = 5;
 const modelPickerMaxVisibleChoices = 10;
 const fileAutocompleteMaxVisibleChoices = 8;
-const SCROLL_PAGE_SIZE = 10;
-const SCROLLBACK_VIEWPORT_HEIGHT = 20;
-const SCROLL_TOP_OFFSET = Number.MAX_SAFE_INTEGER;
 const WHITESPACE_PATTERN = /\s/u;
 const DOUBLE_ESC_WINDOW_MS = 500;
 const DOUBLE_ESC_ACTION_ENV = 'MCTRL_DOUBLE_ESC_ACTION';
@@ -372,7 +384,6 @@ export function publishSnapshot(core: OpenTuiChatBridgeCore): void {
         renameModeActive: core.renameModeActive,
         renameBuffer: core.renameBuffer,
         historyNavigation,
-        scrollOffset: core.scrollOffset,
         abgOverlayActive: core.abgOverlayActive,
         abgOverlayActiveTab: core.abgOverlayActiveTab,
         abgOverlayScrollOffset: core.abgOverlayScrollOffset,
@@ -391,73 +402,6 @@ function enqueueEvent(core: OpenTuiChatBridgeCore, event: ChatInputEvent): void 
         return;
     }
     core.eventQueue.push(event);
-}
-
-/** Ctrl+Left semantics: skip whitespace leftward, then skip the word's chars. */
-function computeWordBoundaryLeft(buffer: string, cursor: number): number {
-    let pos = cursor;
-    while (pos > 0 && isWhitespaceChar(buffer[pos - 1] ?? '')) {
-        pos -= 1;
-    }
-    while (pos > 0 && !isWhitespaceChar(buffer[pos - 1] ?? '')) {
-        pos -= 1;
-    }
-    return pos;
-}
-
-/** Ctrl+Right semantics: skip the word's chars rightward, then skip whitespace. */
-function computeWordBoundaryRight(buffer: string, cursor: number): number {
-    let pos = cursor;
-    const length = buffer.length;
-    while (pos < length && !isWhitespaceChar(buffer[pos] ?? '')) {
-        pos += 1;
-    }
-    while (pos < length && isWhitespaceChar(buffer[pos] ?? '')) {
-        pos += 1;
-    }
-    return pos;
-}
-
-function isWhitespaceChar(value: string): boolean {
-    return WHITESPACE_PATTERN.test(value);
-}
-
-function insertAtCursor(core: OpenTuiChatBridgeCore, text: string): void {
-    core.inputBuffer = `${core.inputBuffer.slice(0, core.cursorPosition)}${text}${core.inputBuffer.slice(core.cursorPosition)}`;
-    core.cursorPosition += text.length;
-}
-
-const CJK_BUFFER_MS = 50;
-
-const CJK_RANGES: readonly { readonly start: number; readonly end: number }[] = [
-    { start: 0x1100, end: 0x11ff }, // Hangul Jamo
-    { start: 0x3130, end: 0x318f }, // Hangul Compatibility Jamo
-    { start: 0xac00, end: 0xd7af }, // Hangul Syllables
-    { start: 0x3040, end: 0x309f }, // Hiragana
-    { start: 0x30a0, end: 0x30ff }, // Katakana
-    { start: 0x4e00, end: 0x9fff }, // CJK Unified Ideographs
-    { start: 0x3400, end: 0x4dbf }, // CJK Extension A
-    { start: 0xf900, end: 0xfaff }, // CJK Compatibility Ideographs
-];
-
-export function isCjkChar(char: string): boolean {
-    const code = char.charCodeAt(0);
-    return CJK_RANGES.some((range) => code >= range.start && code <= range.end);
-}
-
-function flushCjkBuffer(core: OpenTuiChatBridgeCore): void {
-    if (core.cjkCompositionBuffer.length === 0) {
-        return;
-    }
-    insertAtCursor(core, core.cjkCompositionBuffer);
-    core.cjkCompositionBuffer = '';
-    if (core.cjkCompositionTimer !== undefined) {
-        clearTimeout(core.cjkCompositionTimer);
-        core.cjkCompositionTimer = undefined;
-    }
-    core.menuState = createSlashCommandMenuState();
-    refreshFileAutocomplete(core);
-    publishSnapshot(core);
 }
 
 function readActiveFilePrefix(buffer: string): string | undefined {
@@ -484,18 +428,29 @@ function refreshFileAutocomplete(core: OpenTuiChatBridgeCore): void {
     core.fileAutocomplete = updateFileAutocomplete(core.fileAutocomplete, prefix, core.workspaceRoot);
 }
 
-function applyFileAutocompleteCompletion(core: OpenTuiChatBridgeCore): boolean {
+function applyFileAutocompleteCompletion(
+    core: OpenTuiChatBridgeCore,
+    textareaRef: React.RefObject<TextareaRenderable | null>,
+): boolean {
     const completed = buildFileAutocompleteCompletion(core.fileAutocomplete);
     if (completed === undefined) {
         return false;
     }
-    const atSuffix = `@${core.fileAutocomplete.prefix}`;
-    if (!core.inputBuffer.endsWith(atSuffix)) {
+    const textarea = textareaRef.current;
+    if (textarea === null) {
         return false;
     }
-    const before = core.inputBuffer.slice(0, core.inputBuffer.length - atSuffix.length);
-    core.inputBuffer = `${before}@${completed}`;
-    core.cursorPosition = core.inputBuffer.length;
+    const text = textarea.plainText;
+    const atSuffix = `@${core.fileAutocomplete.prefix}`;
+    if (!text.endsWith(atSuffix)) {
+        return false;
+    }
+    const before = text.slice(0, text.length - atSuffix.length);
+    // The textarea is authoritative: rewrite through it (never core.inputBuffer buffer-end).
+    const next = `${before}@${completed}`;
+    textarea.setText(next);
+    textarea.gotoBufferEnd();
+    core.inputBuffer = next;
     return true;
 }
 
@@ -559,7 +514,6 @@ export function createOpenTuiChatBridgeCore(options?: {
             renameModeActive: false,
             renameBuffer: '',
             historyNavigation: null,
-            scrollOffset: 0,
             abgOverlayActive: false,
             abgOverlayActiveTab: 0,
             abgOverlayScrollOffset: 0,
@@ -599,10 +553,8 @@ export function createOpenTuiChatBridgeCore(options?: {
         renameBuffer: '',
         onRenameSubmit: undefined,
         history,
-        scrollOffset: 0,
         lastEscTimestamp: undefined,
-        cjkCompositionBuffer: '',
-        cjkCompositionTimer: undefined,
+        submitting: false,
         abgOverlayActive: false,
         abgOverlayActiveTab: 0,
         abgOverlayScrollOffset: 0,
@@ -722,71 +674,6 @@ export function handleSuspendRequest(core: OpenTuiChatBridgeCore): void {
 }
 
 /**
- * Handle Ctrl+D (EOT): on an empty buffer, enqueue an interrupt event so the
- * main chat loop exits (same shape as the second Ctrl+C). On a non-empty
- * buffer, forward-delete the character at the cursor (Emacs-style); no-op when
- * the cursor is already at the end.
- */
-export function handleCtrlDRequest(core: OpenTuiChatBridgeCore): void {
-    if (core.inputBuffer.length === 0) {
-        enqueueEvent(core, { type: 'interrupt', interruptedPartialInput: false, source: 'ctrl-c' });
-        return;
-    }
-    if (core.cursorPosition < core.inputBuffer.length) {
-        core.inputBuffer = `${core.inputBuffer.slice(0, core.cursorPosition)}${core.inputBuffer.slice(core.cursorPosition + 1)}`;
-        core.menuState = createSlashCommandMenuState();
-        refreshFileAutocomplete(core);
-        publishSnapshot(core);
-    }
-}
-
-/**
- * Handle Ctrl+E: open the current input buffer in an external editor
- * ($VISUAL or $EDITOR). Writes the buffer to a temp file, blocks on the
- * editor via `spawnSync` (`stdio: 'inherit'` so the editor owns the
- * terminal), reads the edited content back, replaces the buffer, and
- * moves the cursor to the end. The temp file is always cleaned up in
- * `finally`. If no editor is configured, writes a guidance message.
- */
-export function handleExternalEditorRequest(core: OpenTuiChatBridgeCore): void {
-    const editor = editorControls.resolveEditor();
-    if (editor === undefined) {
-        core.outputText += NO_EDITOR_MESSAGE;
-        publishSnapshot(core);
-        return;
-    }
-    const tempPath = join(tmpdir(), `mctrl-edit-${Date.now()}.md`);
-    writeFileSync(tempPath, core.inputBuffer, 'utf-8');
-    try {
-        editorControls.runEditor(editor, tempPath);
-        const edited = readFileSync(tempPath, 'utf-8');
-        core.inputBuffer = edited;
-        core.cursorPosition = edited.length;
-        core.menuState = createSlashCommandMenuState();
-        refreshFileAutocomplete(core);
-        publishSnapshot(core);
-    } finally {
-        unlinkSync(tempPath);
-    }
-}
-
-/**
- * Handle Ctrl+V: attempt to read a clipboard image and insert its file path
- * into the input buffer. If no image is available or no clipboard tool is
- * installed, silently no-op (the user may have pressed Ctrl+V without an
- * image in the clipboard). On success, inserts the temp file path followed
- * by a space at the cursor position.
- */
-export function handleImagePasteRequest(core: OpenTuiChatBridgeCore): void {
-    const result = clipboardImageControls.readClipboardImage();
-    if (result === undefined) {
-        return;
-    }
-    insertAtCursor(core, `${result.path} `);
-    publishSnapshot(core);
-}
-
-/**
  * Double-Esc action resolver. The default is `'interrupt'` so a stuck run
  * (one that hangs outside the streaming state, where `generating` is false
  * but `activeTurn` is still alive) can be force-stopped by mashing Esc.
@@ -875,6 +762,327 @@ function handleModelCycle(core: OpenTuiChatBridgeCore, direction: 1 | -1): void 
     publishSnapshot(core);
 }
 
+type TextareaRef = React.RefObject<TextareaRenderable | null>;
+type ScrollboxRef = React.RefObject<ScrollBoxRenderable | null>;
+
+/**
+ * Mirror the textarea's authoritative text into the bridge core and refresh the
+ * derived menus. The textarea owns the buffer; this only keeps the mirror (used
+ * by slash/workflow menu views and history-bounds reads) in sync.
+ *
+ * Exported so unit tests can drive the onContentChange entry point directly
+ * against a fake `TextareaLike` ref (see opentui-chat-bridge-test-support.ts).
+ */
+export function bridgeContentChange(core: OpenTuiChatBridgeCore, text: string): void {
+    core.inputBuffer = text;
+    core.menuState = createSlashCommandMenuState();
+    refreshFileAutocomplete(core);
+    publishSnapshot(core);
+}
+
+/**
+ * IME-safe submit. plainText is snapshotted synchronously before the double-defer
+ * so a Ctrl+C during the defer window (which clears the textarea) cannot enqueue
+ * an empty `{type:'line'}`. A `submitting` guard blocks a fast double-Enter.
+ * The `#`-workflow complete-into-buffer case returns WITHOUT enqueuing a line.
+ *
+ * Exported so unit tests can drive the onSubmit entry point directly against a
+ * fake `TextareaLike` ref (see opentui-chat-bridge-test-support.ts).
+ */
+export function bridgeSubmit(core: OpenTuiChatBridgeCore, textareaRef: TextareaRef): void {
+    const captured = textareaRef.current?.plainText ?? '';
+    if (core.submitting) {
+        return;
+    }
+    core.submitting = true;
+    setTimeout(() => {
+        setTimeout(() => {
+            try {
+                if (captured.trim() === '') {
+                    return;
+                }
+                if (core.fileAutocomplete.open && applyFileAutocompleteCompletion(core, textareaRef)) {
+                    refreshFileAutocomplete(core);
+                    publishSnapshot(core);
+                    return;
+                }
+                if (captured.startsWith('#')) {
+                    const insertText = resolveWorkflowCommandMenuInsertText(captured, core.menuState, core.workflowNames);
+                    if (insertText !== undefined) {
+                        textareaRef.current?.setText(insertText);
+                        textareaRef.current?.gotoBufferEnd();
+                        core.inputBuffer = insertText;
+                        core.menuState = createSlashCommandMenuState();
+                        refreshFileAutocomplete(core);
+                        publishSnapshot(core);
+                        return;
+                    }
+                }
+                let value = captured;
+                if (captured.startsWith('/')) {
+                    const resolved = resolveSlashCommandMenuSubmission(captured, core.menuState);
+                    if (resolved !== captured) {
+                        value = resolved;
+                    }
+                } else if (captured.startsWith('#')) {
+                    const resolved = resolveWorkflowCommandMenuSubmission(captured, core.menuState, core.workflowNames);
+                    if (resolved !== captured) {
+                        value = resolved;
+                    }
+                }
+                enqueueEvent(core, { type: 'line', value });
+                core.history = recordSubmittedPrompt(core.history, value);
+                if (!value.startsWith('/')) {
+                    core.outputText += `You: ${value}\n`;
+                }
+                textareaRef.current?.clear();
+                core.inputBuffer = '';
+                core.menuState = createSlashCommandMenuState();
+                core.fileAutocomplete = createFileAutocompleteState();
+                publishSnapshot(core);
+            } finally {
+                core.submitting = false;
+            }
+        }, 0);
+    }, 0);
+}
+
+/** Real terminal text paste is handled natively by the textarea; image paste is the Ctrl+V chord below. */
+function bridgePaste(_core: OpenTuiChatBridgeCore, _event: PasteEvent, _textareaRef: TextareaRef): void {
+}
+
+/**
+ * All input-area keys route through here (textarea focused). Each handled chord
+ * calls `key.preventDefault()` FIRST so the textarea's native binding is
+ * suppressed before the logic runs. Up/Down history recall only preventDefaults
+ * at the buffer bounds; otherwise the native cursor move wins.
+ *
+ * Exported so unit tests can drive the textarea onKeyDown entry point directly
+ * against a fake `KeyEvent` plus recording `TextareaLike`/scrollbox refs (see
+ * opentui-chat-bridge-test-support.ts).
+ */
+export function bridgeTextareaKeyDown(
+    core: OpenTuiChatBridgeCore,
+    key: KeyEvent,
+    textareaRef: TextareaRef,
+    scrollboxRef: ScrollboxRef,
+): void {
+    const plainText = (): string => textareaRef.current?.plainText ?? core.inputBuffer;
+
+    // Plain Enter submits via onKeyDown (fires before the textarea keyBinding
+    // lookup). Redundant safety net: the keyBindings reorder in
+    // ChatInputTextarea already makes return→submit win, but this guarantees a
+    // submit even if a future opentui version changes the keyBinding merge.
+    if (key.name === 'return' && !key.ctrl && !key.meta && !key.shift) {
+        key.preventDefault();
+        bridgeSubmit(core, textareaRef);
+        return;
+    }
+
+    // Tab completes the active file-autocomplete selection (restored from the
+    // pre-refactor handleInput; Enter-on-autocomplete also completes via
+    // bridgeSubmit).
+    if (key.name === 'tab' && core.fileAutocomplete.open) {
+        key.preventDefault();
+        if (applyFileAutocompleteCompletion(core, textareaRef)) {
+            refreshFileAutocomplete(core);
+            publishSnapshot(core);
+        }
+        return;
+    }
+
+    // Ctrl+C is handled by the global useKeyboard sink (handleInput), not here,
+    // to avoid a double-enqueue race.
+
+    if (key.name === 'escape') {
+        key.preventDefault();
+        if (core.generating) {
+            core.lastEscTimestamp = undefined;
+            enqueueEvent(core, { type: 'interrupt', interruptedPartialInput: false, source: 'esc' });
+            publishSnapshot(core);
+            return;
+        }
+        if (core.fileAutocomplete.open) {
+            core.fileAutocomplete = createFileAutocompleteState();
+            publishSnapshot(core);
+            return;
+        }
+        if (plainText().length > 0) {
+            textareaRef.current?.clear();
+            core.inputBuffer = '';
+            core.menuState = createSlashCommandMenuState();
+            core.fileAutocomplete = createFileAutocompleteState();
+            publishSnapshot(core);
+            return;
+        }
+        handleEscKey(core);
+        return;
+    }
+
+    if (key.ctrl) {
+        if (key.name === 'g') {
+            key.preventDefault();
+            core.abgOverlayActive = !core.abgOverlayActive;
+            publishSnapshot(core);
+            return;
+        }
+        if (key.name === 'z') {
+            key.preventDefault();
+            handleSuspendRequest(core);
+            return;
+        }
+        if (key.name === 'd') {
+            key.preventDefault();
+            if (plainText().length === 0) {
+                enqueueEvent(core, { type: 'interrupt', interruptedPartialInput: false, source: 'ctrl-c' });
+            } else {
+                textareaRef.current?.deleteChar();
+            }
+            return;
+        }
+        if (key.name === 't') {
+            key.preventDefault();
+            core.showThinking = !core.showThinking;
+            publishSnapshot(core);
+            return;
+        }
+        if (key.name === 'o') {
+            key.preventDefault();
+            core.toolOutputExpanded = !core.toolOutputExpanded;
+            publishSnapshot(core);
+            return;
+        }
+        if (key.name === 'p') {
+            key.preventDefault();
+            handleModelCycle(core, key.shift ? -1 : 1);
+            return;
+        }
+        if (key.name === 'e') {
+            key.preventDefault();
+            const editor = editorControls.resolveEditor();
+            if (editor === undefined) {
+                core.outputText += NO_EDITOR_MESSAGE;
+                publishSnapshot(core);
+                return;
+            }
+            const tempPath = join(tmpdir(), `mctrl-edit-${Date.now()}.md`);
+            writeFileSync(tempPath, plainText(), 'utf-8');
+            try {
+                editorControls.runEditor(editor, tempPath);
+                const edited = readFileSync(tempPath, 'utf-8');
+                textareaRef.current?.setText(edited);
+                textareaRef.current?.gotoBufferEnd();
+                core.inputBuffer = edited;
+                core.menuState = createSlashCommandMenuState();
+                refreshFileAutocomplete(core);
+                publishSnapshot(core);
+            } finally {
+                unlinkSync(tempPath);
+            }
+            return;
+        }
+        if (key.name === 'r') {
+            key.preventDefault();
+            core.renameModeActive = true;
+            core.renameBuffer = '';
+            publishSnapshot(core);
+            return;
+        }
+        if (key.name === 'v') {
+            key.preventDefault();
+            const result = clipboardImageControls.readClipboardImage();
+            if (result === undefined) {
+                return;
+            }
+            textareaRef.current?.insertText(`${result.path} `);
+            publishSnapshot(core);
+            return;
+        }
+    }
+
+    if (key.name === 'home') {
+        key.preventDefault();
+        scrollboxRef.current?.scrollTo(0);
+        return;
+    }
+    if (key.name === 'end') {
+        key.preventDefault();
+        const scrollHeight = scrollboxRef.current?.scrollHeight ?? 0;
+        scrollboxRef.current?.scrollTo(scrollHeight);
+        return;
+    }
+    if (key.name === 'pageup') {
+        key.preventDefault();
+        const half = Math.floor((process.stdout.rows ?? 24) / 2);
+        scrollboxRef.current?.scrollBy(-half);
+        return;
+    }
+    if (key.name === 'pagedown') {
+        key.preventDefault();
+        const half = Math.floor((process.stdout.rows ?? 24) / 2);
+        scrollboxRef.current?.scrollBy(half);
+        return;
+    }
+
+    if (key.name === 'up' || key.name === 'down') {
+        const direction: 'up' | 'down' = key.name;
+        const buffer = plainText();
+        const cursorOffset = textareaRef.current?.cursorOffset ?? 0;
+        const atBound = direction === 'up' ? cursorOffset === 0 : cursorOffset === buffer.length;
+        const historyOwnsArrows = isNavigatingChatInputHistory(core.history);
+        const slashMenuOpen = buffer.startsWith('/');
+        const workflowMenuOpen = buffer.startsWith('#');
+
+        const recallHistory = historyOwnsArrows || (atBound && !slashMenuOpen && !workflowMenuOpen && !core.fileAutocomplete.open);
+        if (recallHistory) {
+            key.preventDefault();
+            const result =
+                direction === 'up'
+                    ? navigateChatInputHistoryUp(core.history, buffer)
+                    : navigateChatInputHistoryDown(core.history, buffer);
+            core.history = result.history;
+            textareaRef.current?.setText(result.input);
+            textareaRef.current?.gotoBufferEnd();
+            core.inputBuffer = result.input;
+            core.menuState = createSlashCommandMenuState();
+            refreshFileAutocomplete(core);
+            publishSnapshot(core);
+            return;
+        }
+
+        if (slashMenuOpen) {
+            key.preventDefault();
+            core.menuState = reduceSlashCommandMenuSelection(
+                core.menuState,
+                direction === 'up' ? '\u001b[A' : '\u001b[B',
+                buffer,
+            );
+            publishSnapshot(core);
+            return;
+        }
+        if (workflowMenuOpen) {
+            key.preventDefault();
+            core.menuState = reduceWorkflowCommandMenuSelection(
+                core.menuState,
+                direction === 'up' ? '\u001b[A' : '\u001b[B',
+                buffer,
+                core.workflowNames,
+            );
+            publishSnapshot(core);
+            return;
+        }
+        if (core.fileAutocomplete.open) {
+            key.preventDefault();
+            core.fileAutocomplete =
+                direction === 'up'
+                    ? navigateFileAutocompleteUp(core.fileAutocomplete)
+                    : navigateFileAutocompleteDown(core.fileAutocomplete);
+            publishSnapshot(core);
+            return;
+        }
+    }
+}
+
 export function handleInput(core: OpenTuiChatBridgeCore, input: string, key: InkKeyShape): void {
     if (core.approvalActive) {
         handleApprovalInput(core, input, key);
@@ -896,274 +1104,23 @@ export function handleInput(core: OpenTuiChatBridgeCore, input: string, key: Ink
         handleRenameInput(core, input, key);
         return;
     }
-    if (key.ctrl && input === 'g') {
-        flushCjkBuffer(core);
-        core.abgOverlayActive = !core.abgOverlayActive;
-        publishSnapshot(core);
-        return;
-    }
-    const isCjkPrintable = input !== '' && !key.ctrl && !key.meta && isCjkChar(input);
-    if (!isCjkPrintable) {
-        flushCjkBuffer(core);
-    }
     if (core.abgOverlayActive) {
         handleAbgOverlayInput(core, input, key);
         return;
     }
-    if (key.escape || input === '\u001b') {
-        handleEscKey(core);
-        return;
-    }
+    // Ctrl+C is routed here unconditionally by ChatRoot's useKeyboard (exit-critical),
+    // so the exit contract holds even when the textarea is focused or mid-focus-race.
     if (key.ctrl && input === 'c') {
-        const hadPartialInput = core.inputBuffer.length > 0;
         enqueueEvent(core, {
             type: 'interrupt',
-            interruptedPartialInput: hadPartialInput,
+            interruptedPartialInput: core.inputBuffer.length > 0,
             source: 'ctrl-c',
         });
-        if (hadPartialInput) {
-            core.inputBuffer = '';
-            core.cursorPosition = 0;
-            core.menuState = createSlashCommandMenuState();
-            core.fileAutocomplete = createFileAutocompleteState();
-            publishSnapshot(core);
-        }
         return;
     }
-    if (key.ctrl && input === 'z') {
-        handleSuspendRequest(core);
-        return;
-    }
-    if (key.ctrl && input === 'd') {
-        handleCtrlDRequest(core);
-        return;
-    }
-    if (key.ctrl && input === 't') {
-        core.showThinking = !core.showThinking;
-        publishSnapshot(core);
-        return;
-    }
-    if (key.ctrl && input === 'o') {
-        core.toolOutputExpanded = !core.toolOutputExpanded;
-        publishSnapshot(core);
-        return;
-    }
-    if (key.ctrl && input === 'p') {
-        handleModelCycle(core, key.shift ? -1 : 1);
-        return;
-    }
-    if (key.ctrl && input === 'e') {
-        handleExternalEditorRequest(core);
-        return;
-    }
-    if (key.ctrl && input === 'r') {
-        core.renameModeActive = true;
-        core.renameBuffer = '';
-        publishSnapshot(core);
-        return;
-    }
-    if (key.ctrl && input === 'v') {
-        handleImagePasteRequest(core);
-        return;
-    }
-    if (key.upArrow) {
-        // Suppress prefix/autocomplete menus while recalling history, else a recalled
-        // `/` or `#` entry would hijack the next arrow and block multi-step recall.
-        const historyOwnsArrows = isNavigatingChatInputHistory(core.history);
-        if (!historyOwnsArrows && core.inputBuffer.startsWith('/')) {
-            core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[A', core.inputBuffer);
-        } else if (!historyOwnsArrows && core.inputBuffer.startsWith('#')) {
-            core.menuState = reduceWorkflowCommandMenuSelection(
-                core.menuState,
-                '\u001b[A',
-                core.inputBuffer,
-                core.workflowNames,
-            );
-        } else if (!historyOwnsArrows && core.fileAutocomplete.open) {
-            core.fileAutocomplete = navigateFileAutocompleteUp(core.fileAutocomplete);
-        } else {
-            const result = navigateChatInputHistoryUp(core.history, core.inputBuffer);
-            core.history = result.history;
-            core.inputBuffer = result.input;
-            core.cursorPosition = result.input.length;
-            core.menuState = createSlashCommandMenuState();
-            refreshFileAutocomplete(core);
-        }
-        publishSnapshot(core);
-        return;
-    }
-    if (key.downArrow) {
-        const historyOwnsArrows = isNavigatingChatInputHistory(core.history);
-        if (!historyOwnsArrows && core.inputBuffer.startsWith('/')) {
-            core.menuState = reduceSlashCommandMenuSelection(core.menuState, '\u001b[B', core.inputBuffer);
-        } else if (!historyOwnsArrows && core.inputBuffer.startsWith('#')) {
-            core.menuState = reduceWorkflowCommandMenuSelection(
-                core.menuState,
-                '\u001b[B',
-                core.inputBuffer,
-                core.workflowNames,
-            );
-        } else if (!historyOwnsArrows && core.fileAutocomplete.open) {
-            core.fileAutocomplete = navigateFileAutocompleteDown(core.fileAutocomplete);
-        } else {
-            const result = navigateChatInputHistoryDown(core.history, core.inputBuffer);
-            core.history = result.history;
-            core.inputBuffer = result.input;
-            core.cursorPosition = result.input.length;
-            core.menuState = createSlashCommandMenuState();
-            refreshFileAutocomplete(core);
-        }
-        publishSnapshot(core);
-        return;
-    }
-    if (key.pageUp) {
-        core.scrollOffset += SCROLL_PAGE_SIZE;
-        publishSnapshot(core);
-        return;
-    }
-    if (key.pageDown) {
-        core.scrollOffset = Math.max(0, core.scrollOffset - SCROLL_PAGE_SIZE);
-        publishSnapshot(core);
-        return;
-    }
-    if (key.home) {
-        core.scrollOffset = SCROLL_TOP_OFFSET;
-        publishSnapshot(core);
-        return;
-    }
-    if (key.end) {
-        core.scrollOffset = 0;
-        publishSnapshot(core);
-        return;
-    }
-    if (key.ctrl && key.leftArrow) {
-        core.cursorPosition = computeWordBoundaryLeft(core.inputBuffer, core.cursorPosition);
-        publishSnapshot(core);
-        return;
-    }
-    if (key.ctrl && key.rightArrow) {
-        core.cursorPosition = computeWordBoundaryRight(core.inputBuffer, core.cursorPosition);
-        publishSnapshot(core);
-        return;
-    }
-    if (key.shift && (key.return || input.includes('\r') || input.includes('\n'))) {
-        const textBeforeReturn = input.split(/[\r\n]/)[0] ?? '';
-        if (textBeforeReturn.length > 0 && !key.ctrl && !key.meta) {
-            insertAtCursor(core, textBeforeReturn);
-            core.menuState = createSlashCommandMenuState();
-        }
-        insertAtCursor(core, '\n');
-        refreshFileAutocomplete(core);
-        publishSnapshot(core);
-        return;
-    }
-    // Alt+Enter (`\x1b\r`) reaches us as `key.return=true, key.meta=true` after
-    // Ink's parser strips the escape prefix. Reliable cross-terminal multi-line
-    // trigger; Shift+Enter only fires on kitty-protocol terminals.
-    if (key.meta && (key.return || input.includes('\r'))) {
-        const textBeforeReturn = input.split(/[\r\n]/)[0] ?? '';
-        if (textBeforeReturn.length > 0) {
-            insertAtCursor(core, textBeforeReturn);
-            core.menuState = createSlashCommandMenuState();
-        }
-        insertAtCursor(core, '\n');
-        refreshFileAutocomplete(core);
-        publishSnapshot(core);
-        return;
-    }
-    if (!key.shift && !key.meta && (key.return || input.includes('\r') || input.includes('\n'))) {
-        const textBeforeReturn = input.split(/[\r\n]/)[0] ?? '';
-        if (textBeforeReturn.length > 0 && !key.ctrl && !key.meta) {
-            insertAtCursor(core, textBeforeReturn);
-            core.menuState = createSlashCommandMenuState();
-        }
-        refreshFileAutocomplete(core);
-        if (core.fileAutocomplete.open && applyFileAutocompleteCompletion(core)) {
-            refreshFileAutocomplete(core);
-            publishSnapshot(core);
-            return;
-        }
-        // Complete the selected workflow into the buffer instead of submitting,
-        // so the user can type the prompt. The trailing space closes the menu,
-        // making the next Enter submit the full line.
-        if (core.inputBuffer.startsWith('#')) {
-            const insertText = resolveWorkflowCommandMenuInsertText(core.inputBuffer, core.menuState, core.workflowNames);
-            if (insertText !== undefined) {
-                core.inputBuffer = insertText;
-                core.cursorPosition = core.inputBuffer.length;
-                core.menuState = createSlashCommandMenuState();
-                refreshFileAutocomplete(core);
-                publishSnapshot(core);
-                return;
-            }
-        }
-        let value = core.inputBuffer;
-        if (core.inputBuffer.startsWith('/')) {
-            const resolved = resolveSlashCommandMenuSubmission(core.inputBuffer, core.menuState);
-            if (resolved !== core.inputBuffer) {
-                value = resolved;
-            }
-        } else if (core.inputBuffer.startsWith('#')) {
-            const resolved = resolveWorkflowCommandMenuSubmission(core.inputBuffer, core.menuState, core.workflowNames);
-            if (resolved !== core.inputBuffer) {
-                value = resolved;
-            }
-        }
-        enqueueEvent(core, { type: 'line', value });
-        core.inputBuffer = '';
-        core.cursorPosition = 0;
-        core.menuState = createSlashCommandMenuState();
-        core.fileAutocomplete = createFileAutocompleteState();
-        core.history = recordSubmittedPrompt(core.history, value);
-        if (!value.startsWith('/')) {
-            core.outputText += `You: ${value}\n`;
-        }
-        publishSnapshot(core);
-        return;
-    }
-    if (key.tab && core.fileAutocomplete.open) {
-        if (applyFileAutocompleteCompletion(core)) {
-            refreshFileAutocomplete(core);
-        }
-        publishSnapshot(core);
-        return;
-    }
-    if (key.escape && core.fileAutocomplete.open) {
-        core.fileAutocomplete = createFileAutocompleteState();
-        publishSnapshot(core);
-        return;
-    }
-    if (key.backspace) {
-        if (core.cursorPosition > 0) {
-            core.inputBuffer = `${core.inputBuffer.slice(0, core.cursorPosition - 1)}${core.inputBuffer.slice(core.cursorPosition)}`;
-            core.cursorPosition -= 1;
-            core.menuState = createSlashCommandMenuState();
-            refreshFileAutocomplete(core);
-            publishSnapshot(core);
-        }
-        return;
-    }
-    if (input !== '' && !key.ctrl && !key.meta) {
-        if (isCjkChar(input)) {
-            core.cjkCompositionBuffer += input;
-            if (core.cjkCompositionTimer !== undefined) {
-                clearTimeout(core.cjkCompositionTimer);
-            }
-            core.cjkCompositionTimer = setTimeout(() => {
-                core.cjkCompositionTimer = undefined;
-                flushCjkBuffer(core);
-            }, CJK_BUFFER_MS);
-            publishSnapshot(core);
-        } else {
-            if (core.cjkCompositionBuffer.length > 0) {
-                flushCjkBuffer(core);
-            }
-            insertAtCursor(core, input);
-            core.menuState = createSlashCommandMenuState();
-            refreshFileAutocomplete(core);
-            publishSnapshot(core);
-        }
-    }
+    // Editing/chord/scroll/history keys route through handleTextareaKeyDown
+    // (the textarea's onKeyDown) while the textarea is focused. This global sink
+    // only runs for overlay modes, when the textarea is blurred.
 }
 
 const approvalOptions = [
@@ -1460,17 +1417,17 @@ function handleAbgOverlayInput(core: OpenTuiChatBridgeCore, input: string, key: 
         return;
     }
     if (key.pageUp) {
-        core.abgOverlayScrollOffset += SCROLL_PAGE_SIZE;
+        core.abgOverlayScrollOffset += 10;
         publishSnapshot(core);
         return;
     }
     if (key.pageDown) {
-        core.abgOverlayScrollOffset = Math.max(0, core.abgOverlayScrollOffset - SCROLL_PAGE_SIZE);
+        core.abgOverlayScrollOffset = Math.max(0, core.abgOverlayScrollOffset - 10);
         publishSnapshot(core);
         return;
     }
     if (key.home) {
-        core.abgOverlayScrollOffset = SCROLL_TOP_OFFSET;
+        core.abgOverlayScrollOffset = Number.MAX_SAFE_INTEGER;
         publishSnapshot(core);
         return;
     }
@@ -1558,13 +1515,61 @@ function AgentSpinner({ text }: { readonly text: string }): React.ReactNode {
     );
 }
 
-function ChatRoot({ bridge, statusBarProps, useKeyboard }: ChatRootProps): React.ReactNode {
+const clipboardToast: Toast = {
+    show(message: string): void {
+        process.stderr.write(`${message}\n`);
+    },
+    error(err: unknown): void {
+        process.stderr.write(`clipboard error: ${String(err)}\n`);
+    },
+};
+
+function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRootProps): React.ReactNode {
     const snapshot = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
     const keyAdapter = useMemo(() => createKeyEventAdapter(), []);
+    const textareaRef = useRef<TextareaRenderable>(null);
+    const scrollboxRef = useRef<ScrollBoxRenderable>(null);
+
+    const renderer = useRenderer();
+    const clipboardService = useMemo(() => createClipboardService(renderer), [renderer]);
+    const handleMouseUp = (): void => {
+        // OSC52 is emitted by opentui's native core; tmux needs
+        // `set -g set-allow-passthrough on`. Surface the unsupported case over
+        // stderr instead of silently no-op'ing when the user had a selection.
+        if (!clipboardService.isOsc52Supported()) {
+            const selectedText = renderer.getSelection()?.getSelectedText() ?? '';
+            if (selectedText.length > 0) {
+                process.stderr.write('clipboard copy not supported in this terminal; OSC52 unavailable\n');
+            }
+            return;
+        }
+        copy(renderer, clipboardToast, clipboardService);
+    };
+
+    const anyOverlayActive =
+        snapshot.modelPickerActive ||
+        snapshot.levelPickerActive ||
+        snapshot.approvalActive ||
+        snapshot.questionActive ||
+        snapshot.abgOverlayActive ||
+        snapshot.renameModeActive;
+
     useKeyboard((key) => {
+        // Ctrl+C is exit-critical: always route through the global sink so the
+        // "press twice to exit" contract holds even during the textarea's
+        // startup focus race. Other keys early-return when the textarea owns them.
+        const isCtrlC = key.ctrl && key.name === 'c';
+        if (textareaRef.current?.focused && !isCtrlC) {
+            return;
+        }
         const adapted = keyAdapter.consume(key);
         bridge.handleInput(adapted.input, adapted.key);
     });
+
+    const handleSubmit = (): void => bridge.handleSubmit(textareaRef);
+    const handleContentChange = (text: string): void => bridge.handleContentChange(text);
+    const handleTextareaKeyDown = (key: KeyEvent): void => bridge.handleTextareaKeyDown(key, textareaRef, scrollboxRef);
+    const handlePaste = (event: PasteEvent): void => bridge.handlePaste(event, textareaRef);
 
     const messageBlocks = parseMessageBlocks(snapshot.outputText);
 
@@ -1573,7 +1578,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard }: ChatRootProps): React
             <box flexDirection="column">
                 <MessageWindow
                     blocks={messageBlocks}
-                    scrollOffset={snapshot.scrollOffset}
+                    scrollboxRef={scrollboxRef}
                     generating={snapshot.generating}
                     toolOutputExpanded={snapshot.toolOutputExpanded}
                 />
@@ -1618,7 +1623,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard }: ChatRootProps): React
             <box flexDirection="column">
                 <MessageWindow
                     blocks={messageBlocks}
-                    scrollOffset={snapshot.scrollOffset}
+                    scrollboxRef={scrollboxRef}
                     generating={snapshot.generating}
                     toolOutputExpanded={snapshot.toolOutputExpanded}
                 />
@@ -1707,7 +1712,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard }: ChatRootProps): React
             <box flexDirection="column">
                 <MessageWindow
                     blocks={messageBlocks}
-                    scrollOffset={snapshot.scrollOffset}
+                    scrollboxRef={scrollboxRef}
                     generating={snapshot.generating}
                     toolOutputExpanded={snapshot.toolOutputExpanded}
                 />
@@ -1745,7 +1750,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard }: ChatRootProps): React
             <box flexDirection="column">
                 <MessageWindow
                     blocks={messageBlocks}
-                    scrollOffset={snapshot.scrollOffset}
+                    scrollboxRef={scrollboxRef}
                     generating={snapshot.generating}
                     toolOutputExpanded={snapshot.toolOutputExpanded}
                 />
@@ -1861,11 +1866,12 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard }: ChatRootProps): React
             : null;
 
     return (
-        <box flexDirection="column">
+        // biome-ignore lint/a11y/noStaticElementInteractions: terminal UI; the root box is the mouse-drag selection surface and has no DOM a11y role
+        <box flexDirection="column" onMouseUp={handleMouseUp}>
             <Banner {...(statusBarProps !== undefined ? { statusBarProps } : {})} />
             <MessageWindow
                 blocks={messageBlocks}
-                scrollOffset={snapshot.scrollOffset}
+                scrollboxRef={scrollboxRef}
                 generating={snapshot.generating}
                 toolOutputExpanded={snapshot.toolOutputExpanded}
             />
@@ -1920,32 +1926,20 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard }: ChatRootProps): React
             ) : null}
             <box flexDirection="column" marginTop={1}>
                 <Separator state={resolveSeparatorState(snapshot)} />
-                <box flexDirection="row">
-                    <text fg="#00ffff">{'>'}</text>
-                    <text> {snapshot.inputBuffer.slice(0, snapshot.cursorPosition)}</text>
-                    <text bg="#ffffff" fg="#000000">
-                        {'\u2588'}
-                    </text>
-                    <text>{snapshot.inputBuffer.slice(snapshot.cursorPosition)}</text>
-                    {snapshot.historyNavigation !== null ? (
-                        <text {...toOpenTuiAttributes({ dimColor: true })}>
-                            {' '}
-                            {`[history ${snapshot.historyNavigation.position}/${snapshot.historyNavigation.total} — ↑/↓ to recall, Enter to use]`}
-                        </text>
-                    ) : snapshot.inputBuffer.length === 0 ? (
-                        snapshot.generating ? (
-                            <text {...toOpenTuiAttributes({ dimColor: true })}>
-                                {' '}
-                                Press Esc to stop, or wait for the response…
-                            </text>
-                        ) : (
-                            <text {...toOpenTuiAttributes({ dimColor: true })}>
-                                {' '}
-                                Type a message, / for commands, # for workflows, or Ctrl+C twice to exit
-                            </text>
-                        )
-                    ) : null}
-                </box>
+                <ChatInputTextarea
+                    textareaRef={textareaRef}
+                    focused={!anyOverlayActive}
+                    onSubmit={handleSubmit}
+                    onContentChange={handleContentChange}
+                    onCursorChange={() => {}}
+                    onKeyDown={handleTextareaKeyDown}
+                    onPaste={handlePaste}
+                    placeholder={
+                        snapshot.generating
+                            ? 'Press Esc to stop, or wait for the response…'
+                            : 'Type a message, / for commands, # for workflows, or Ctrl+C twice to exit'
+                    }
+                />
             </box>
             {statusBarProps !== undefined ? (
                 <box marginTop={1}>
@@ -2028,6 +2022,11 @@ export async function createOpenTuiChatBridge(options?: OpenTuiChatBridgeOptions
         subscribe,
         getSnapshot,
         handleInput: (input, key) => handleInput(core, input, key),
+        handleSubmit: (textareaRef) => bridgeSubmit(core, textareaRef),
+        handleContentChange: (text) => bridgeContentChange(core, text),
+        handleTextareaKeyDown: (key, textareaRef, scrollboxRef) =>
+            bridgeTextareaKeyDown(core, key, textareaRef, scrollboxRef),
+        handlePaste: (event, textareaRef) => bridgePaste(core, event, textareaRef),
         ...(core.abgOverlayController !== undefined ? { abgOverlayController: core.abgOverlayController } : {}),
     };
 
@@ -2047,11 +2046,12 @@ export async function createOpenTuiChatBridge(options?: OpenTuiChatBridgeOptions
     // Dynamic import keeps @opentui/react out of the eager module graph so
     // non-TUI CLI runs (plain/JSON) never load the renderer. Resolved here
     // (right before mounting) and threaded into ChatRoot via props.
-    const { useKeyboard } = await import('@opentui/react');
+    const { useKeyboard, useRenderer } = await import('@opentui/react');
     const mountResult = await mountOpenTui(
         <ChatRoot
             bridge={internalBridge}
             useKeyboard={useKeyboard}
+            useRenderer={useRenderer}
             {...(statusBarProps !== undefined ? { statusBarProps } : {})}
         />,
     );
@@ -2423,7 +2423,13 @@ function MarkdownPanel({
                 ))}
             </box>
             <box flexDirection="column" flexGrow={1}>
-                <Markdown text={text} width={width} theme={theme} {...(streaming ? { streaming: true } : {})} />
+                <Markdown
+                    text={text}
+                    width={width}
+                    theme={theme}
+                    selectable={true}
+                    {...(streaming ? { streaming: true } : {})}
+                />
             </box>
         </box>
     );
@@ -2445,7 +2451,7 @@ function MessageBlock({
             <box flexDirection="column">
                 {block.lines.map((line, index) => (
                     // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
-                    <text key={`sys-${index}`} {...toOpenTuiAttributes({ dimColor: true })}>
+                    <text key={`sys-${index}`} selectable {...toOpenTuiAttributes({ dimColor: true })}>
                         {line}
                     </text>
                 ))}
@@ -2523,6 +2529,7 @@ function MessageBlock({
                     const content = prefix.length > 0 && line.startsWith(prefix) ? line.slice(prefix.length) : line;
                     return (
                         <text
+                            selectable
                             // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
                             key={`line-${index}`}
                             {...(isError ? { fg: '#ff0000' } : {})}
@@ -2556,137 +2563,34 @@ function readToolBlockTitle(lines: readonly string[]): string | undefined {
     return undefined;
 }
 
-// banner(2) + spinner(2) + separator(1) + input+hint(2) + statusbar(2) + margin(1) ≈ 10
-const MESSAGE_WINDOW_CHROME_LINES = 10;
-const MESSAGE_WINDOW_FALLBACK_ROWS = 24;
-const MESSAGE_WINDOW_MIN_LINES = 5;
-
-export function getMessageWindowLineBudget(): number {
-    const rows = process.stdout.rows ?? MESSAGE_WINDOW_FALLBACK_ROWS;
-    return Math.max(MESSAGE_WINDOW_MIN_LINES, rows - MESSAGE_WINDOW_CHROME_LINES);
-}
-
-export function selectTrailingBlocks(
-    blocks: readonly ChatBlock[],
-    lineBudget: number,
-): { readonly startIdx: number; readonly windowed: readonly ChatBlock[]; readonly truncatedTop: boolean } {
-    if (blocks.length === 0) return { startIdx: 0, windowed: [], truncatedTop: false };
-    let lineCount = 0;
-    let startIdx = blocks.length - 1;
-    for (let index = blocks.length - 1; index >= 0; index -= 1) {
-        const block = blocks[index];
-        if (block === undefined) continue;
-        if (lineCount + block.lines.length > lineBudget) {
-            const remaining = lineBudget - lineCount;
-            const isMarkdownBlock = block.kind === 'assistant' || block.kind === 'thinking';
-            // Non-markdown blocks are tail-sliced to fill the remaining budget.
-            if (remaining > 0 && !isMarkdownBlock) {
-                const truncatedBlock: ChatBlock = { ...block, lines: block.lines.slice(-remaining), truncated: true };
-                return {
-                    startIdx: index,
-                    windowed: [truncatedBlock, ...blocks.slice(index + 1)],
-                    truncatedTop: true,
-                };
-            }
-            // Markdown blocks stay intact (tail-slicing splits code fences),
-            // so they are dropped and earlier blocks fill the budget — except
-            // when this is the most recent block. Dropping it would return an
-            // empty window, blanking the whole output mid-stream.
-            //
-            // But force-including a block TALLER than the budget overflows the
-            // viewport, which triggers Ink's clearTerminal (\x1B[2J\x1B[3J\x1B[H)
-            // on EVERY render during streaming — the \x1B[3J destroys the entire
-            // scrollback buffer, making the screen "disappear." Tail-slice the
-            // block to fit the budget instead. The streaming markdown healer
-            // (streamBlocks + remend) handles the resulting partial content.
-            if (lineCount === 0) {
-                if (block.lines.length > lineBudget) {
-                    const truncatedBlock: ChatBlock = {
-                        ...block,
-                        lines: block.lines.slice(-lineBudget),
-                        truncated: true,
-                    };
-                    return { startIdx: index, windowed: [truncatedBlock], truncatedTop: index > 0 };
-                }
-                return { startIdx: index, windowed: [block], truncatedTop: index > 0 };
-            }
-            return { startIdx: index + 1, windowed: blocks.slice(index + 1), truncatedTop: index >= 0 };
-        }
-        lineCount += block.lines.length;
-        startIdx = index;
-    }
-    return { startIdx, windowed: blocks.slice(startIdx), truncatedTop: startIdx > 0 };
-}
-
 function MessageWindow({
     blocks,
-    scrollOffset,
+    scrollboxRef,
     generating,
     toolOutputExpanded,
 }: {
     readonly blocks: readonly ChatBlock[];
-    readonly scrollOffset: number;
+    readonly scrollboxRef: React.RefObject<ScrollBoxRenderable | null>;
     readonly generating: boolean;
     readonly toolOutputExpanded: boolean;
 }): React.ReactNode {
-    const total = blocks.length;
-    if (total === 0) {
+    // No JS-side windowing: opentui's ScrollBoxRenderable renders only visible
+    // children, and stickyScroll (in ChatTranscript) pins streaming to the
+    // bottom. Imperative Home/End/PgUp/PgDn reach the scrollbox via scrollboxRef.
+    if (blocks.length === 0) {
         return <></>;
     }
-    const lineBudget = getMessageWindowLineBudget();
-    const lastIndex = total - 1;
-
-    if (scrollOffset <= 0) {
-        const { startIdx, windowed, truncatedTop } = selectTrailingBlocks(blocks, lineBudget);
-        const hidden = startIdx;
-        const showTruncationHint = hidden > 0 || truncatedTop;
-        return (
-            <>
-                {showTruncationHint ? (
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>
-                        {`[\u2191 earlier output hidden \u2014 PgUp to scroll]`}
-                    </text>
-                ) : null}
-                {windowed.map((block, index) => {
-                    const globalIndex = startIdx + index;
-                    const streaming = generating && globalIndex === lastIndex;
-                    return (
-                        // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
-                        <MessageBlock
-                            key={`msg-${block.kind}-${globalIndex}`}
-                            block={block}
-                            toolOutputExpanded={toolOutputExpanded}
-                            {...(streaming ? { isStreaming: true } : {})}
-                        />
-                    );
-                })}
-            </>
-        );
-    }
-
-    const clampedOffset = Math.min(scrollOffset, total);
-    const endIdx = total - clampedOffset;
-    const startIdx = Math.max(0, endIdx - Math.min(SCROLLBACK_VIEWPORT_HEIGHT, lineBudget));
-    const windowed = blocks.slice(startIdx, endIdx);
+    const lastIndex = blocks.length - 1;
     return (
-        <>
-            <text {...toOpenTuiAttributes({ dimColor: true })}>
-                {`[scroll ${endIdx}/${total} \u2014 PgUp/PgDn to navigate, End to jump to bottom]`}
-            </text>
-            {windowed.map((block, index) => {
-                const globalIndex = startIdx + index;
-                const streaming = generating && globalIndex === lastIndex;
+        <ChatTranscript scrollboxRef={scrollboxRef}>
+            {blocks.map((block, index) => {
+                const streaming = generating && index === lastIndex;
                 return (
                     // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
-                    <MessageBlock
-                        key={`msg-${block.kind}-${globalIndex}`}
-                        block={block}
-                        toolOutputExpanded={toolOutputExpanded}
-                        {...(streaming ? { isStreaming: true } : {})}
-                    />
+                    <MessageBlock key={`msg-${block.kind}-${index}`} block={block} toolOutputExpanded={toolOutputExpanded} {...(streaming ? { isStreaming: true } : {})} />
                 );
             })}
-        </>
+        </ChatTranscript>
     );
 }
 

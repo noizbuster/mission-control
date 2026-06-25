@@ -1,34 +1,20 @@
+/**
+ * Test seam: Ctrl+P / Shift+Ctrl+P (model cycling) lives in the exported
+ * `bridgeTextareaKeyDown`, which delegates to the internal `handleModelCycle`.
+ * Drives the chord via a fake KeyEvent and asserts `core.modelCycleIndex`,
+ * `core.onModelCycleSelect`, and the snapshot. Raw character input is native.
+ */
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import type { InkKeyShape } from './opentui-chat-bridge.js';
 import { describe, expect, it, vi } from 'vitest';
-import { createOpenTuiChatBridgeCore, handleInput, type OpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
+import { bridgeTextareaKeyDown, createOpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
 import type { ModelChoice } from './interactive-chat-model.js';
-
-function makeKey(overrides: Partial<InkKeyShape> = {}): InkKeyShape {
-    return {
-        upArrow: false,
-        downArrow: false,
-        leftArrow: false,
-        rightArrow: false,
-        pageDown: false,
-        pageUp: false,
-        home: false,
-        end: false,
-        return: false,
-        escape: false,
-        ctrl: false,
-        shift: false,
-        tab: false,
-        backspace: false,
-        delete: false,
-        meta: false,
-        super: false,
-        hyper: false,
-        capsLock: false,
-        numLock: false,
-        ...overrides,
-    };
-}
+import {
+    asScrollboxRef,
+    asTextareaRef,
+    createRecordingScrollbox,
+    createRecordingTextarea,
+    makeKeyEvent,
+} from './opentui-chat-bridge-test-support.js';
 
 function makeModelChoice(id: string, providerID: string, modelID: string): ModelChoice {
     return {
@@ -40,7 +26,14 @@ function makeModelChoice(id: string, providerID: string, modelID: string): Model
     };
 }
 
-describe('ink chat bridge Ctrl+P model cycling', () => {
+function setup() {
+    const core = createOpenTuiChatBridgeCore();
+    const textareaRef = asTextareaRef(createRecordingTextarea());
+    const scrollboxRef = asScrollboxRef(createRecordingScrollbox());
+    return { core, textareaRef, scrollboxRef };
+}
+
+describe('opentui bridge Ctrl+P model cycling via bridgeTextareaKeyDown', () => {
     it('initializes modelCycleChoices empty and modelCycleIndex at 0', () => {
         const core = createOpenTuiChatBridgeCore();
 
@@ -51,58 +44,58 @@ describe('ink chat bridge Ctrl+P model cycling', () => {
     });
 
     it('is a no-op with an empty model cycle list', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
         core.modelCycleChoices = [];
 
-        handleInput(core, 'p', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('p', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(core.modelCycleIndex).toBe(0);
     });
 
     it('is a no-op with a single model in the cycle list', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
         core.modelCycleChoices = [makeModelChoice('a', 'p1', 'm1')];
 
-        handleInput(core, 'p', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('p', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(core.modelCycleIndex).toBe(0);
     });
 
     it('cycles forward from index 0 to 1 with two models', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
         core.modelCycleChoices = [makeModelChoice('a', 'p1', 'm1'), makeModelChoice('b', 'p1', 'm2')];
 
-        handleInput(core, 'p', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('p', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(core.modelCycleIndex).toBe(1);
         expect(core.snapshot.modelCycleIndex).toBe(1);
     });
 
     it('wraps forward past the end (0 -> 1 -> 0) with two models', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
         core.modelCycleChoices = [makeModelChoice('a', 'p1', 'm1'), makeModelChoice('b', 'p1', 'm2')];
 
-        handleInput(core, 'p', makeKey({ ctrl: true }));
-        handleInput(core, 'p', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('p', { ctrl: true }), textareaRef, scrollboxRef);
+        bridgeTextareaKeyDown(core, makeKeyEvent('p', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(core.modelCycleIndex).toBe(0);
     });
 
     it('wraps backward from index 0 to 2 with three models on Shift+Ctrl+P', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
         core.modelCycleChoices = [
             makeModelChoice('a', 'p1', 'm1'),
             makeModelChoice('b', 'p1', 'm2'),
             makeModelChoice('c', 'p1', 'm3'),
         ];
 
-        handleInput(core, 'p', makeKey({ ctrl: true, shift: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('p', { ctrl: true, shift: true }), textareaRef, scrollboxRef);
 
         expect(core.modelCycleIndex).toBe(2);
     });
 
     it('cycles backward from index 1 to 0 with three models on Shift+Ctrl+P', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
         core.modelCycleChoices = [
             makeModelChoice('a', 'p1', 'm1'),
             makeModelChoice('b', 'p1', 'm2'),
@@ -110,51 +103,50 @@ describe('ink chat bridge Ctrl+P model cycling', () => {
         ];
         core.modelCycleIndex = 1;
 
-        handleInput(core, 'p', makeKey({ ctrl: true, shift: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('p', { ctrl: true, shift: true }), textareaRef, scrollboxRef);
 
         expect(core.modelCycleIndex).toBe(0);
     });
 
     it('invokes onModelCycleSelect with the selected ModelProviderSelection', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
         core.modelCycleChoices = [makeModelChoice('a', 'p1', 'm1'), makeModelChoice('b', 'p1', 'm2')];
         const onSelect = vi.fn();
         core.onModelCycleSelect = onSelect;
 
-        handleInput(core, 'p', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('p', { ctrl: true }), textareaRef, scrollboxRef);
 
         const expected: ModelProviderSelection = { providerID: 'p1', modelID: 'm2' };
         expect(onSelect).toHaveBeenCalledExactlyOnceWith(expected);
     });
 
     it('does not invoke onModelCycleSelect when the cycle list has only one model', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
         core.modelCycleChoices = [makeModelChoice('a', 'p1', 'm1')];
         const onSelect = vi.fn();
         core.onModelCycleSelect = onSelect;
 
-        handleInput(core, 'p', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('p', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(onSelect).not.toHaveBeenCalled();
     });
 
-    it('appends p to the input buffer when ctrl is not held (regression)', () => {
-        const core = createOpenTuiChatBridgeCore();
-        core.modelCycleChoices = [makeModelChoice('a', 'p1', 'm1'), makeModelChoice('b', 'p1', 'm2')];
-
-        handleInput(core, 'p', makeKey());
-
-        expect(core.inputBuffer).toBe('p');
-        expect(core.cursorPosition).toBe(1);
-        expect(core.modelCycleIndex).toBe(0);
-    });
-
     it('does not enqueue a chat event on Ctrl+P', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
         core.modelCycleChoices = [makeModelChoice('a', 'p1', 'm1'), makeModelChoice('b', 'p1', 'm2')];
 
-        handleInput(core, 'p', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('p', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(core.eventQueue.shift()).toBeUndefined();
+    });
+
+    it('is a no-op on the cycle index for a plain p (no ctrl) — raw typing is native textarea behavior', () => {
+        const { core, textareaRef, scrollboxRef } = setup();
+        core.modelCycleChoices = [makeModelChoice('a', 'p1', 'm1'), makeModelChoice('b', 'p1', 'm2')];
+
+        bridgeTextareaKeyDown(core, makeKeyEvent('p'), textareaRef, scrollboxRef);
+
+        expect(core.modelCycleIndex).toBe(0);
+        expect(core.inputBuffer).toBe('');
     });
 });

@@ -1,6 +1,27 @@
+/**
+ * Test seam: idle Esc (double-Esc action, buffer-clear, generating-interrupt)
+ * moved to the exported `bridgeTextareaKeyDown`; overlay-mode Esc (model
+ * picker, rename) still flows through `handleInput` (the textarea is blurred
+ * while an overlay is active, so the global sink dispatches). Idle Esc reads
+ * the textarea's `plainText` (empty => double-Esc handler; non-empty =>
+ * textarea clear). `handleEscKey` uses `Date.now`, so the window tests spy on
+ * it directly (no fake timers — escape handling is synchronous).
+ */
 import type { InkKeyShape } from './opentui-chat-bridge.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createOpenTuiChatBridgeCore, handleInput, type OpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
+import {
+    bridgeTextareaKeyDown,
+    createOpenTuiChatBridgeCore,
+    handleInput,
+    type OpenTuiChatBridgeCore,
+} from './opentui-chat-bridge.js';
+import {
+    asScrollboxRef,
+    asTextareaRef,
+    createRecordingScrollbox,
+    createRecordingTextarea,
+    makeKeyEvent,
+} from './opentui-chat-bridge-test-support.js';
 
 const DOUBLE_ESC_ACTION_ENV = 'MCTRL_DOUBLE_ESC_ACTION';
 
@@ -34,31 +55,30 @@ function nextEvent(core: OpenTuiChatBridgeCore): unknown {
     return core.eventQueue.shift();
 }
 
-function pressEsc(core: OpenTuiChatBridgeCore): void {
-    handleInput(core, '', makeKey({ escape: true }));
+/** Idle Esc: routed through the textarea keyDown (textarea focused). */
+function pressEscIdle(
+    core: OpenTuiChatBridgeCore,
+    textareaRef = asTextareaRef(createRecordingTextarea()),
+    scrollboxRef = asScrollboxRef(createRecordingScrollbox()),
+): void {
+    bridgeTextareaKeyDown(core, makeKeyEvent('escape'), textareaRef, scrollboxRef);
 }
 
-describe('ink chat bridge double-Esc configurable action', () => {
+describe('opentui bridge double-Esc configurable action', () => {
     beforeEach(() => {
         vi.stubEnv(DOUBLE_ESC_ACTION_ENV, '');
     });
-
     afterEach(() => {
         vi.unstubAllEnvs();
         vi.restoreAllMocks();
     });
 
     describe('default action: interrupt (force-stop stuck runs)', () => {
-        // The default is `'interrupt'` so that mashing Esc on an empty prompt
-        // can force-stop a run that is stuck outside the streaming state. The
-        // main chat loop treats `source: 'esc'` interrupts as stop-only: they
-        // never trigger the "press twice to exit" path that Ctrl+C owns.
-
         it('records the timestamp on single Esc with an empty buffer', () => {
             vi.spyOn(Date, 'now').mockReturnValue(1_000);
             const core = createOpenTuiChatBridgeCore();
 
-            pressEsc(core);
+            pressEscIdle(core);
 
             expect(core.lastEscTimestamp).toBe(1_000);
             expect(nextEvent(core)).toBeUndefined();
@@ -68,8 +88,8 @@ describe('ink chat bridge double-Esc configurable action', () => {
             vi.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(1_100);
             const core = createOpenTuiChatBridgeCore();
 
-            pressEsc(core);
-            pressEsc(core);
+            pressEscIdle(core);
+            pressEscIdle(core);
 
             expect(nextEvent(core)).toEqual({
                 type: 'interrupt',
@@ -82,8 +102,8 @@ describe('ink chat bridge double-Esc configurable action', () => {
             vi.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(2_000);
             const core = createOpenTuiChatBridgeCore();
 
-            pressEsc(core);
-            pressEsc(core);
+            pressEscIdle(core);
+            pressEscIdle(core);
 
             expect(nextEvent(core)).toBeUndefined();
             expect(core.lastEscTimestamp).toBe(2_000);
@@ -96,9 +116,9 @@ describe('ink chat bridge double-Esc configurable action', () => {
                 .mockReturnValueOnce(1_200);
             const core = createOpenTuiChatBridgeCore();
 
-            pressEsc(core);
-            pressEsc(core);
-            pressEsc(core);
+            pressEscIdle(core);
+            pressEscIdle(core);
+            pressEscIdle(core);
 
             expect(nextEvent(core)).toEqual({
                 type: 'interrupt',
@@ -116,7 +136,7 @@ describe('ink chat bridge double-Esc configurable action', () => {
             vi.spyOn(Date, 'now').mockReturnValue(1_000);
             const core = createOpenTuiChatBridgeCore();
 
-            pressEsc(core);
+            pressEscIdle(core);
 
             expect(core.lastEscTimestamp).toBeUndefined();
             expect(nextEvent(core)).toBeUndefined();
@@ -127,11 +147,9 @@ describe('ink chat bridge double-Esc configurable action', () => {
             vi.spyOn(Date, 'now').mockReturnValue(1_000);
             const core = createOpenTuiChatBridgeCore();
 
-            pressEsc(core);
-            pressEsc(core);
-            pressEsc(core);
-            pressEsc(core);
-            pressEsc(core);
+            for (let i = 0; i < 5; i += 1) {
+                pressEscIdle(core);
+            }
 
             expect(nextEvent(core)).toBeUndefined();
             expect(core.lastEscTimestamp).toBeUndefined();
@@ -144,7 +162,7 @@ describe('ink chat bridge double-Esc configurable action', () => {
             vi.spyOn(Date, 'now').mockReturnValue(1_000);
             const core = createOpenTuiChatBridgeCore();
 
-            pressEsc(core);
+            pressEscIdle(core);
 
             expect(core.lastEscTimestamp).toBe(1_000);
             expect(nextEvent(core)).toBeUndefined();
@@ -155,8 +173,8 @@ describe('ink chat bridge double-Esc configurable action', () => {
             vi.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(2_000);
             const core = createOpenTuiChatBridgeCore();
 
-            pressEsc(core);
-            pressEsc(core);
+            pressEscIdle(core);
+            pressEscIdle(core);
 
             expect(nextEvent(core)).toBeUndefined();
             expect(core.lastEscTimestamp).toBe(2_000);
@@ -167,8 +185,8 @@ describe('ink chat bridge double-Esc configurable action', () => {
             vi.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(1_100);
             const core = createOpenTuiChatBridgeCore();
 
-            pressEsc(core);
-            pressEsc(core);
+            pressEscIdle(core);
+            pressEscIdle(core);
 
             expect(nextEvent(core)).toEqual({ type: 'line', value: '/tree' });
         });
@@ -178,8 +196,8 @@ describe('ink chat bridge double-Esc configurable action', () => {
             vi.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(1_100);
             const core = createOpenTuiChatBridgeCore();
 
-            pressEsc(core);
-            pressEsc(core);
+            pressEscIdle(core);
+            pressEscIdle(core);
 
             expect(nextEvent(core)).toEqual({ type: 'line', value: '/fork' });
         });
@@ -192,9 +210,9 @@ describe('ink chat bridge double-Esc configurable action', () => {
                 .mockReturnValueOnce(1_200);
             const core = createOpenTuiChatBridgeCore();
 
-            pressEsc(core);
-            pressEsc(core);
-            pressEsc(core);
+            pressEscIdle(core);
+            pressEscIdle(core);
+            pressEscIdle(core);
 
             expect(nextEvent(core)).toEqual({ type: 'line', value: '/tree' });
             expect(nextEvent(core)).toBeUndefined();
@@ -202,16 +220,16 @@ describe('ink chat bridge double-Esc configurable action', () => {
         });
     });
 
-    describe('idle-state Esc clears the input buffer', () => {
-        it('clears the input buffer on Esc with a non-empty buffer and skips double-Esc detection', () => {
+    describe('idle-state Esc clears the textarea buffer', () => {
+        it('clears the textarea (and mirrors core.inputBuffer) on Esc with a non-empty buffer and skips double-Esc detection', () => {
             const core = createOpenTuiChatBridgeCore();
+            const textarea = createRecordingTextarea('hello world');
             core.inputBuffer = 'hello world';
-            core.cursorPosition = 5;
 
-            pressEsc(core);
+            pressEscIdle(core, asTextareaRef(textarea), asScrollboxRef(createRecordingScrollbox()));
 
+            expect(textarea.clearCount).toBe(1);
             expect(core.inputBuffer).toBe('');
-            expect(core.cursorPosition).toBe(0);
             expect(core.lastEscTimestamp).toBeUndefined();
             expect(nextEvent(core)).toBeUndefined();
         });
@@ -225,7 +243,8 @@ describe('ink chat bridge double-Esc configurable action', () => {
             const previousTimestamp = 1_000;
             core.lastEscTimestamp = previousTimestamp;
 
-            pressEsc(core);
+            // Overlay active => textarea blurred => Esc arrives via handleInput.
+            handleInput(core, '', makeKey({ escape: true }));
 
             expect(core.lastEscTimestamp).toBe(previousTimestamp);
             expect(core.modelPickerActive).toBe(true);
@@ -237,12 +256,19 @@ describe('ink chat bridge double-Esc configurable action', () => {
             const onSubmit = vi.fn();
             core.onRenameSubmit = onSubmit;
 
-            handleInput(core, 'r', makeKey({ ctrl: true }));
+            // Enter rename via the textarea keyDown (Ctrl+R), then type via the
+            // overlay dispatch (handleInput while renameModeActive).
+            bridgeTextareaKeyDown(
+                core,
+                makeKeyEvent('r', { ctrl: true }),
+                asTextareaRef(createRecordingTextarea()),
+                asScrollboxRef(createRecordingScrollbox()),
+            );
             for (const ch of 'draft') {
                 handleInput(core, ch, makeKey());
             }
 
-            pressEsc(core);
+            handleInput(core, '', makeKey({ escape: true }));
 
             expect(core.renameModeActive).toBe(false);
             expect(core.renameBuffer).toBe('');
@@ -257,7 +283,7 @@ describe('ink chat bridge double-Esc configurable action', () => {
             const core = createOpenTuiChatBridgeCore();
             core.generating = true;
 
-            pressEsc(core);
+            pressEscIdle(core);
 
             expect(nextEvent(core)).toEqual({
                 type: 'interrupt',
@@ -272,8 +298,8 @@ describe('ink chat bridge double-Esc configurable action', () => {
             const core = createOpenTuiChatBridgeCore();
             core.generating = true;
 
-            pressEsc(core);
-            pressEsc(core);
+            pressEscIdle(core);
+            pressEscIdle(core);
 
             expect(nextEvent(core)).toEqual({
                 type: 'interrupt',
@@ -288,13 +314,13 @@ describe('ink chat bridge double-Esc configurable action', () => {
             expect(core.lastEscTimestamp).toBeUndefined();
         });
 
-        it('preserves the input buffer when interrupting an active run', () => {
+        it('preserves the textarea buffer when interrupting an active run', () => {
             const core = createOpenTuiChatBridgeCore();
             core.generating = true;
+            const textarea = createRecordingTextarea('partial');
             core.inputBuffer = 'partial';
-            core.cursorPosition = 3;
 
-            pressEsc(core);
+            pressEscIdle(core, asTextareaRef(textarea), asScrollboxRef(createRecordingScrollbox()));
 
             expect(nextEvent(core)).toEqual({
                 type: 'interrupt',
@@ -302,6 +328,7 @@ describe('ink chat bridge double-Esc configurable action', () => {
                 source: 'esc',
             });
             expect(core.inputBuffer).toBe('partial');
+            expect(textarea.clearCount).toBe(0);
         });
     });
 });

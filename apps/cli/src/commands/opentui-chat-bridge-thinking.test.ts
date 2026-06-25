@@ -1,38 +1,28 @@
-import type { InkKeyShape } from './opentui-chat-bridge.js';
+/**
+ * Test seam: Ctrl+T (thinking toggle) lives in the exported
+ * `bridgeTextareaKeyDown`. The bridge owns `core.showThinking`; raw character
+ * input is native textarea behavior (not asserted here). These tests drive
+ * `bridgeTextareaKeyDown` with a fake Ctrl+T KeyEvent and assert
+ * `core.showThinking` / `core.snapshot.showThinking` / `core.eventQueue`.
+ */
 import { describe, expect, it } from 'vitest';
-import { createOpenTuiChatBridgeCore, handleInput, type OpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
+import { bridgeTextareaKeyDown, createOpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
+import {
+    asScrollboxRef,
+    asTextareaRef,
+    createRecordingScrollbox,
+    createRecordingTextarea,
+    makeKeyEvent,
+} from './opentui-chat-bridge-test-support.js';
 
-function makeKey(overrides: Partial<InkKeyShape> = {}): InkKeyShape {
-    return {
-        upArrow: false,
-        downArrow: false,
-        leftArrow: false,
-        rightArrow: false,
-        pageDown: false,
-        pageUp: false,
-        home: false,
-        end: false,
-        return: false,
-        escape: false,
-        ctrl: false,
-        shift: false,
-        tab: false,
-        backspace: false,
-        delete: false,
-        meta: false,
-        super: false,
-        hyper: false,
-        capsLock: false,
-        numLock: false,
-        ...overrides,
-    };
+function setup() {
+    const core = createOpenTuiChatBridgeCore();
+    const textareaRef = asTextareaRef(createRecordingTextarea());
+    const scrollboxRef = asScrollboxRef(createRecordingScrollbox());
+    return { core, textareaRef, scrollboxRef };
 }
 
-function nextEvent(core: OpenTuiChatBridgeCore): unknown {
-    return core.eventQueue.shift();
-}
-
-describe('ink chat bridge Ctrl+T thinking toggle', () => {
+describe('opentui bridge Ctrl+T thinking toggle via bridgeTextareaKeyDown', () => {
     it('initializes showThinking to true', () => {
         const core = createOpenTuiChatBridgeCore();
 
@@ -41,45 +31,53 @@ describe('ink chat bridge Ctrl+T thinking toggle', () => {
     });
 
     it('toggles showThinking to false on Ctrl+T', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
 
-        handleInput(core, 't', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('t', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(core.showThinking).toBe(false);
     });
 
-    it('toggles showThinking back to true on second Ctrl+T', () => {
-        const core = createOpenTuiChatBridgeCore();
+    it('toggles showThinking back to true on a second Ctrl+T', () => {
+        const { core, textareaRef, scrollboxRef } = setup();
 
-        handleInput(core, 't', makeKey({ ctrl: true }));
-        handleInput(core, 't', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('t', { ctrl: true }), textareaRef, scrollboxRef);
+        bridgeTextareaKeyDown(core, makeKeyEvent('t', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(core.showThinking).toBe(true);
     });
 
     it('publishes the new showThinking value through the snapshot', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
 
-        handleInput(core, 't', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('t', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(core.snapshot.showThinking).toBe(false);
     });
 
     it('does not enqueue an event on Ctrl+T', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
 
-        handleInput(core, 't', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('t', { ctrl: true }), textareaRef, scrollboxRef);
 
-        expect(nextEvent(core)).toBeUndefined();
+        expect(core.eventQueue.shift()).toBeUndefined();
     });
 
-    it('appends t to the input buffer when ctrl is not held', () => {
-        const core = createOpenTuiChatBridgeCore();
+    it('calls preventDefault on the Ctrl+T KeyEvent', () => {
+        const { core, textareaRef, scrollboxRef } = setup();
+        const key = makeKeyEvent('t', { ctrl: true });
 
-        handleInput(core, 't', makeKey());
+        bridgeTextareaKeyDown(core, key, textareaRef, scrollboxRef);
 
-        expect(core.inputBuffer).toBe('t');
-        expect(core.cursorPosition).toBe(1);
+        expect(key.defaultPrevented).toBe(true);
+    });
+
+    it('is a no-op on showThinking for a plain t (no ctrl) — raw typing is native textarea behavior', () => {
+        const { core, textareaRef, scrollboxRef } = setup();
+
+        bridgeTextareaKeyDown(core, makeKeyEvent('t'), textareaRef, scrollboxRef);
+
         expect(core.showThinking).toBe(true);
+        expect(core.eventQueue.shift()).toBeUndefined();
     });
 });

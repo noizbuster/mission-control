@@ -1,156 +1,65 @@
-import type { InkKeyShape } from './opentui-chat-bridge.js';
-import { describe, expect, it } from 'vitest';
-import { createOpenTuiChatBridgeCore, handleInput, type OpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
+/**
+ * Test seam: Shift+Enter / Alt+Enter newline insertion is now NATIVE textarea
+ * behavior via the `ChatInputTextarea` keyBindings (`{return,shift,newline}`,
+ * `{return,submit}`, default `{return,meta,submit}`) — those bindings are
+ * covered headlessly in `components/ChatInputTextarea.test.tsx`. What remains
+ * testable at the bridge layer is that `bridgeSubmit` submits a multi-line
+ * `plainText` value intact (newlines preserved) and clears the textarea. These
+ * tests drive `bridgeSubmit` (IME-double-deferred, flushed with fake timers).
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { bridgeSubmit, createOpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
+import {
+    asTextareaRef,
+    createRecordingTextarea,
+} from './opentui-chat-bridge-test-support.js';
 
-function makeKey(overrides: Partial<InkKeyShape> = {}): InkKeyShape {
-    return {
-        upArrow: false,
-        downArrow: false,
-        leftArrow: false,
-        rightArrow: false,
-        pageDown: false,
-        pageUp: false,
-        home: false,
-        end: false,
-        return: false,
-        escape: false,
-        ctrl: false,
-        shift: false,
-        tab: false,
-        backspace: false,
-        delete: false,
-        meta: false,
-        super: false,
-        hyper: false,
-        capsLock: false,
-        numLock: false,
-        ...overrides,
-    };
-}
+describe('opentui bridge multi-line submit via bridgeSubmit', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
 
-function nextEvent(core: OpenTuiChatBridgeCore): unknown {
-    return core.eventQueue.shift();
-}
-
-describe('ink chat bridge Shift+Enter multi-line input', () => {
-    it('submits a multi-line buffer after Shift+Enter then plain Enter', () => {
+    it('submits a multi-line plainText value intact (newlines preserved) and clears the textarea', () => {
         const core = createOpenTuiChatBridgeCore();
+        const textarea = createRecordingTextarea('line one\nline two');
 
-        handleInput(core, 'hello\r', makeKey({ shift: true, return: true }));
-        expect(core.inputBuffer).toBe('hello\n');
+        bridgeSubmit(core, asTextareaRef(textarea));
+        vi.runAllTimers();
 
-        handleInput(core, 'world\r', makeKey({ return: true }));
+        expect(core.eventQueue.shift()).toEqual({ type: 'line', value: 'line one\nline two' });
+        expect(textarea.clearCount).toBe(1);
         expect(core.inputBuffer).toBe('');
-        expect(nextEvent(core)).toEqual({ type: 'line', value: 'hello\nworld' });
     });
 
-    it('still submits single-line input on plain Enter without shift', () => {
+    it('echoes the multi-line user input to outputText on submit', () => {
         const core = createOpenTuiChatBridgeCore();
 
-        handleInput(core, 'hello\r', makeKey({ return: true }));
-
-        expect(core.inputBuffer).toBe('');
-        expect(nextEvent(core)).toEqual({ type: 'line', value: 'hello' });
-    });
-
-    it('appends a newline on Shift+Enter with an empty buffer', () => {
-        const core = createOpenTuiChatBridgeCore();
-
-        handleInput(core, '\r', makeKey({ shift: true, return: true }));
-
-        expect(core.inputBuffer).toBe('\n');
-        expect(nextEvent(core)).toBeUndefined();
-    });
-
-    it('extracts leading text when Shift+Enter batches text and return without key.return', () => {
-        const core = createOpenTuiChatBridgeCore();
-
-        handleInput(core, 'hello\r', makeKey({ shift: true }));
-
-        expect(core.inputBuffer).toBe('hello\n');
-        expect(nextEvent(core)).toBeUndefined();
-    });
-
-    it('accumulates separate keystrokes before a Shift+Enter newline', () => {
-        const core = createOpenTuiChatBridgeCore();
-
-        handleInput(core, 'h', makeKey());
-        handleInput(core, 'i', makeKey());
-        handleInput(core, '\r', makeKey({ shift: true, return: true }));
-
-        expect(core.inputBuffer).toBe('hi\n');
-        expect(nextEvent(core)).toBeUndefined();
-    });
-
-    it('echoes multi-line user input to outputText on submit', () => {
-        const core = createOpenTuiChatBridgeCore();
-
-        handleInput(core, 'line one\r', makeKey({ shift: true, return: true }));
-        handleInput(core, 'line two\r', makeKey({ return: true }));
+        bridgeSubmit(core, asTextareaRef(createRecordingTextarea('line one\nline two')));
+        vi.runAllTimers();
 
         expect(core.outputText).toBe('You: line one\nline two\n');
     });
 
-    it('does not submit on Shift+Enter and leaves a pending line in the buffer', () => {
+    it('still submits single-line input intact', () => {
         const core = createOpenTuiChatBridgeCore();
 
-        handleInput(core, 'draft\r', makeKey({ shift: true, return: true }));
+        bridgeSubmit(core, asTextareaRef(createRecordingTextarea('hello')));
+        vi.runAllTimers();
 
-        expect(core.eventQueue.length).toBe(0);
-        expect(core.inputBuffer).toBe('draft\n');
-    });
-});
-
-describe('ink chat bridge Alt+Enter multi-line input', () => {
-    // Alt+Enter (`\x1b\r`) reaches handleInput with key.return=true and
-    // key.meta=true after Ink's parser strips the escape prefix. This is the
-    // reliable cross-terminal multi-line trigger — Shift+Enter only fires on
-    // kitty-protocol terminals.
-
-    it('appends a newline on Alt+Enter with an empty buffer', () => {
-        const core = createOpenTuiChatBridgeCore();
-
-        handleInput(core, '\r', makeKey({ meta: true, return: true }));
-
-        expect(core.inputBuffer).toBe('\n');
-        expect(core.eventQueue.length).toBe(0);
+        expect(core.eventQueue.shift()).toEqual({ type: 'line', value: 'hello' });
     });
 
-    it('appends a newline and preserves buffered text on Alt+Enter', () => {
+    it('does not submit an empty or whitespace-only plainText', () => {
         const core = createOpenTuiChatBridgeCore();
+        const textarea = createRecordingTextarea('   ');
 
-        handleInput(core, 'hello\r', makeKey({ meta: true, return: true }));
+        bridgeSubmit(core, asTextareaRef(textarea));
+        vi.runAllTimers();
 
-        expect(core.inputBuffer).toBe('hello\n');
-        expect(core.eventQueue.length).toBe(0);
-    });
-
-    it('submits a multi-line buffer after Alt+Enter then plain Enter', () => {
-        const core = createOpenTuiChatBridgeCore();
-
-        handleInput(core, 'hello\r', makeKey({ meta: true, return: true }));
-        expect(core.inputBuffer).toBe('hello\n');
-
-        handleInput(core, 'world\r', makeKey({ return: true }));
-        expect(core.inputBuffer).toBe('');
-        expect(nextEvent(core)).toEqual({ type: 'line', value: 'hello\nworld' });
-    });
-
-    it('still submits single-line input on plain Enter without alt', () => {
-        const core = createOpenTuiChatBridgeCore();
-
-        handleInput(core, 'hello\r', makeKey({ return: true }));
-
-        expect(core.inputBuffer).toBe('');
-        expect(nextEvent(core)).toEqual({ type: 'line', value: 'hello' });
-    });
-
-    it('echoes multi-line user input to outputText on submit', () => {
-        const core = createOpenTuiChatBridgeCore();
-
-        handleInput(core, 'line one\r', makeKey({ meta: true, return: true }));
-        handleInput(core, 'line two\r', makeKey({ return: true }));
-
-        expect(core.outputText).toBe('You: line one\nline two\n');
+        expect(core.eventQueue.shift()).toBeUndefined();
+        expect(core.outputText).toBe('');
     });
 });

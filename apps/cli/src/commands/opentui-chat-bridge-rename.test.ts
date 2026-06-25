@@ -1,6 +1,28 @@
+/**
+ * Test seam: Ctrl+R (enter rename mode) lives in the exported
+ * `bridgeTextareaKeyDown`; once `core.renameModeActive` is true the textarea is
+ * blurred and subsequent keystrokes (typing, Enter, Esc, Ctrl+C, Backspace)
+ * flow through the exported `handleInput`, which dispatches to the rename
+ * overlay handler. These tests enter rename via the textarea keyDown and then
+ * drive the rename buffer through `handleInput`. Raw character input at idle
+ * is native textarea behavior (not asserted).
+ */
 import type { InkKeyShape } from './opentui-chat-bridge.js';
 import { describe, expect, it, vi } from 'vitest';
-import { createOpenTuiChatBridgeCore, handleInput, type OpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
+import {
+    bridgeContentChange,
+    bridgeTextareaKeyDown,
+    createOpenTuiChatBridgeCore,
+    handleInput,
+    type OpenTuiChatBridgeCore,
+} from './opentui-chat-bridge.js';
+import {
+    asScrollboxRef,
+    asTextareaRef,
+    createRecordingScrollbox,
+    createRecordingTextarea,
+    makeKeyEvent,
+} from './opentui-chat-bridge-test-support.js';
 
 function makeKey(overrides: Partial<InkKeyShape> = {}): InkKeyShape {
     return {
@@ -32,15 +54,20 @@ function nextEvent(core: OpenTuiChatBridgeCore): unknown {
     return core.eventQueue.shift();
 }
 
-function enterRenameMode(core: OpenTuiChatBridgeCore): void {
-    handleInput(core, 'r', makeKey({ ctrl: true }));
+function enterRename(core: OpenTuiChatBridgeCore): void {
+    bridgeTextareaKeyDown(
+        core,
+        makeKeyEvent('r', { ctrl: true }),
+        asTextareaRef(createRecordingTextarea()),
+        asScrollboxRef(createRecordingScrollbox()),
+    );
 }
 
-describe('ink chat bridge Ctrl+R session rename', () => {
+describe('opentui bridge Ctrl+R session rename', () => {
     it('enters rename mode on Ctrl+R with an empty rename buffer', () => {
         const core = createOpenTuiChatBridgeCore();
 
-        handleInput(core, 'r', makeKey({ ctrl: true }));
+        enterRename(core);
 
         expect(core.renameModeActive).toBe(true);
         expect(core.renameBuffer).toBe('');
@@ -50,7 +77,7 @@ describe('ink chat bridge Ctrl+R session rename', () => {
 
     it('accumulates typed text into renameBuffer while in rename mode', () => {
         const core = createOpenTuiChatBridgeCore();
-        enterRenameMode(core);
+        enterRename(core);
 
         for (const ch of 'my-session') {
             handleInput(core, ch, makeKey());
@@ -64,7 +91,7 @@ describe('ink chat bridge Ctrl+R session rename', () => {
         const core = createOpenTuiChatBridgeCore();
         const onSubmit = vi.fn();
         core.onRenameSubmit = onSubmit;
-        enterRenameMode(core);
+        enterRename(core);
 
         for (const ch of 'my-session') {
             handleInput(core, ch, makeKey());
@@ -80,7 +107,7 @@ describe('ink chat bridge Ctrl+R session rename', () => {
         const core = createOpenTuiChatBridgeCore();
         const onSubmit = vi.fn();
         core.onRenameSubmit = onSubmit;
-        enterRenameMode(core);
+        enterRename(core);
 
         handleInput(core, 'name\r', makeKey({ return: true }));
 
@@ -92,7 +119,7 @@ describe('ink chat bridge Ctrl+R session rename', () => {
         const core = createOpenTuiChatBridgeCore();
         const onSubmit = vi.fn();
         core.onRenameSubmit = onSubmit;
-        enterRenameMode(core);
+        enterRename(core);
 
         for (const ch of 'draft') {
             handleInput(core, ch, makeKey());
@@ -108,7 +135,7 @@ describe('ink chat bridge Ctrl+R session rename', () => {
         const core = createOpenTuiChatBridgeCore();
         const onSubmit = vi.fn();
         core.onRenameSubmit = onSubmit;
-        enterRenameMode(core);
+        enterRename(core);
 
         for (const ch of 'draft') {
             handleInput(core, ch, makeKey());
@@ -122,7 +149,7 @@ describe('ink chat bridge Ctrl+R session rename', () => {
 
     it('does not enqueue an interrupt event on Ctrl+C while in rename mode', () => {
         const core = createOpenTuiChatBridgeCore();
-        enterRenameMode(core);
+        enterRename(core);
 
         handleInput(core, 'c', makeKey({ ctrl: true }));
 
@@ -131,7 +158,7 @@ describe('ink chat bridge Ctrl+R session rename', () => {
 
     it('removes the last char from renameBuffer on Backspace', () => {
         const core = createOpenTuiChatBridgeCore();
-        enterRenameMode(core);
+        enterRename(core);
 
         for (const ch of 'hello') {
             handleInput(core, ch, makeKey());
@@ -143,7 +170,7 @@ describe('ink chat bridge Ctrl+R session rename', () => {
 
     it('is a no-op on Backspace when renameBuffer is empty', () => {
         const core = createOpenTuiChatBridgeCore();
-        enterRenameMode(core);
+        enterRename(core);
 
         handleInput(core, '', makeKey({ backspace: true }));
 
@@ -154,37 +181,26 @@ describe('ink chat bridge Ctrl+R session rename', () => {
     it('enters rename mode from normal idle state (no terminal reverse-i-search conflict)', () => {
         const core = createOpenTuiChatBridgeCore();
 
-        handleInput(core, 'r', makeKey({ ctrl: true }));
+        enterRename(core);
 
         expect(core.renameModeActive).toBe(true);
         expect(core.inputBuffer).toBe('');
     });
 
-    it('does not clear the existing input buffer when entering rename mode', () => {
+    it('does not clear the mirrored input buffer when entering rename mode', () => {
         const core = createOpenTuiChatBridgeCore();
-        handleInput(core, 'hello', makeKey());
+        bridgeContentChange(core, 'hello');
 
-        handleInput(core, 'r', makeKey({ ctrl: true }));
+        enterRename(core);
 
         expect(core.renameModeActive).toBe(true);
         expect(core.inputBuffer).toBe('hello');
-        expect(core.cursorPosition).toBe(5);
-    });
-
-    it('appends r to the input buffer when ctrl is not held (regression)', () => {
-        const core = createOpenTuiChatBridgeCore();
-
-        handleInput(core, 'r', makeKey());
-
-        expect(core.inputBuffer).toBe('r');
-        expect(core.cursorPosition).toBe(1);
-        expect(core.renameModeActive).toBe(false);
     });
 
     it('does not enqueue an interrupt or line event on Ctrl+R', () => {
         const core = createOpenTuiChatBridgeCore();
 
-        handleInput(core, 'r', makeKey({ ctrl: true }));
+        enterRename(core);
 
         expect(nextEvent(core)).toBeUndefined();
     });
@@ -193,11 +209,25 @@ describe('ink chat bridge Ctrl+R session rename', () => {
         const core = createOpenTuiChatBridgeCore();
         const onSubmit = vi.fn();
         core.onRenameSubmit = onSubmit;
-        enterRenameMode(core);
+        enterRename(core);
 
         handleInput(core, '\r', makeKey({ return: true }));
 
         expect(onSubmit).not.toHaveBeenCalled();
         expect(core.renameModeActive).toBe(false);
+    });
+
+    it('is a no-op on renameModeActive for a plain r (no ctrl) at idle — raw typing is native', () => {
+        const core = createOpenTuiChatBridgeCore();
+
+        bridgeTextareaKeyDown(
+            core,
+            makeKeyEvent('r'),
+            asTextareaRef(createRecordingTextarea()),
+            asScrollboxRef(createRecordingScrollbox()),
+        );
+
+        expect(core.renameModeActive).toBe(false);
+        expect(core.inputBuffer).toBe('');
     });
 });

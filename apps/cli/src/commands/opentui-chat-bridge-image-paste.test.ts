@@ -1,119 +1,111 @@
-import type { InkKeyShape } from './opentui-chat-bridge.js';
+/**
+ * Test seam: Ctrl+V (clipboard image paste) lives in the exported
+ * `bridgeTextareaKeyDown`, which delegates to the exported
+ * `clipboardImageControls` (spyable) and inserts the path through the textarea
+ * ref (`insertText`). Drives Ctrl+V via a fake KeyEvent + recording
+ * `TextareaLike` and asserts `insertText` was called with the path (the
+ * textarea owns the buffer, range-replace semantics are native).
+ */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+    bridgeTextareaKeyDown,
     clipboardImageControls,
     createOpenTuiChatBridgeCore,
-    handleInput,
-    type OpenTuiChatBridgeCore,
 } from './opentui-chat-bridge.js';
+import {
+    asScrollboxRef,
+    asTextareaRef,
+    createRecordingScrollbox,
+    createRecordingTextarea,
+    makeKeyEvent,
+} from './opentui-chat-bridge-test-support.js';
 
-// Module-level mock: execSync throws so the real readClipboardImage
-// (invoked in the "tools not installed" case) returns undefined
-// regardless of the host platform's clipboard binaries.
-vi.mock('node:child_process', () => ({
-    execSync: vi.fn(() => {
-        throw new Error('spawn ENOENT');
-    }),
-    spawnSync: vi.fn(),
-}));
-
-function makeKey(overrides: Partial<InkKeyShape> = {}): InkKeyShape {
+// Partial mock: override execSync (used by readClipboardImage) to throw,
+// simulating missing clipboard binaries, while keeping the rest of
+// node:child_process (execFile, etc.) intact for transitive importers.
+vi.mock('node:child_process', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:child_process')>();
     return {
-        upArrow: false,
-        downArrow: false,
-        leftArrow: false,
-        rightArrow: false,
-        pageDown: false,
-        pageUp: false,
-        home: false,
-        end: false,
-        return: false,
-        escape: false,
-        ctrl: false,
-        shift: false,
-        tab: false,
-        backspace: false,
-        delete: false,
-        meta: false,
-        super: false,
-        hyper: false,
-        capsLock: false,
-        numLock: false,
-        ...overrides,
+        ...actual,
+        execSync: vi.fn(() => {
+            throw new Error('spawn ENOENT');
+        }),
     };
+});
+
+function scrollbox() {
+    return asScrollboxRef(createRecordingScrollbox());
 }
 
-function nextEvent(core: OpenTuiChatBridgeCore): unknown {
-    return core.eventQueue.shift();
-}
-
-describe('ink chat bridge Ctrl+V image paste', () => {
+describe('opentui bridge Ctrl+V image paste via bridgeTextareaKeyDown', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
 
-    it('inserts the clipboard image file path into the input buffer on Ctrl+V', () => {
+    it('inserts the clipboard image file path via textarea insertText on Ctrl+V', () => {
         vi.spyOn(clipboardImageControls, 'readClipboardImage').mockReturnValue({
             path: '/tmp/mctrl-paste-1234567890.png',
         });
         const core = createOpenTuiChatBridgeCore();
+        const textarea = createRecordingTextarea();
 
-        handleInput(core, 'v', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('v', { ctrl: true }), asTextareaRef(textarea), scrollbox());
 
-        expect(core.inputBuffer).toContain('/tmp/mctrl-paste-1234567890.png');
+        expect(textarea.insertTextCalls).toEqual(['/tmp/mctrl-paste-1234567890.png ']);
+        expect(textarea.plainText).toContain('/tmp/mctrl-paste-1234567890.png');
     });
 
-    it('inserts the path at the cursor position when the cursor is mid-buffer', () => {
+    it('inserts the path at the cursor offset via insertText (range-replace, not buffer-end rewrite)', () => {
         vi.spyOn(clipboardImageControls, 'readClipboardImage').mockReturnValue({
             path: '/tmp/img.png',
         });
         const core = createOpenTuiChatBridgeCore();
-        core.inputBuffer = 'hello world';
-        core.cursorPosition = 5;
+        // Cursor sits mid-buffer at offset 5; insertText inserts at cursorOffset.
+        const textarea = createRecordingTextarea('hello world', 5);
 
-        handleInput(core, 'v', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('v', { ctrl: true }), asTextareaRef(textarea), scrollbox());
 
-        expect(core.inputBuffer).toBe('hello/tmp/img.png  world');
-        expect(core.cursorPosition).toBe(5 + '/tmp/img.png '.length);
+        expect(textarea.insertTextCalls).toEqual(['/tmp/img.png ']);
+        expect(textarea.plainText).toBe('hello/tmp/img.png  world');
     });
 
-    it('leaves the input buffer unchanged when the clipboard has no image', () => {
+    it('leaves the textarea unchanged when the clipboard has no image', () => {
         vi.spyOn(clipboardImageControls, 'readClipboardImage').mockReturnValue(undefined);
         const core = createOpenTuiChatBridgeCore();
-        core.inputBuffer = 'existing text';
-        core.cursorPosition = 'existing text'.length;
+        const textarea = createRecordingTextarea('existing text');
 
-        handleInput(core, 'v', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('v', { ctrl: true }), asTextareaRef(textarea), scrollbox());
 
-        expect(core.inputBuffer).toBe('existing text');
-        expect(core.cursorPosition).toBe('existing text'.length);
+        expect(textarea.insertTextCalls).toEqual([]);
+        expect(textarea.plainText).toBe('existing text');
     });
 
     it('does not enqueue an event or write an error when no image is present', () => {
         vi.spyOn(clipboardImageControls, 'readClipboardImage').mockReturnValue(undefined);
         const core = createOpenTuiChatBridgeCore();
 
-        handleInput(core, 'v', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('v', { ctrl: true }), asTextareaRef(createRecordingTextarea()), scrollbox());
 
-        expect(nextEvent(core)).toBeUndefined();
+        expect(core.eventQueue.shift()).toBeUndefined();
         expect(core.outputText).toBe('');
-    });
-
-    it('still appends v to the input buffer when ctrl is not held', () => {
-        const core = createOpenTuiChatBridgeCore();
-
-        handleInput(core, 'v', makeKey());
-
-        expect(core.inputBuffer).toBe('v');
-        expect(core.cursorPosition).toBe(1);
     });
 
     it('returns undefined when clipboard tools are not installed (no crash)', () => {
         // execSync is mocked at module level to throw (simulating missing
-        // xclip/wl-paste/pngpaste). The real readClipboardImage must
-        // swallow that and return undefined.
+        // xclip/wl-paste/pngpaste). The real readClipboardImage must swallow
+        // that and return undefined.
         const result = clipboardImageControls.readClipboardImage();
 
         expect(result).toBeUndefined();
+    });
+
+    it('is a no-op on the buffer for a plain v (no ctrl) — raw typing is native textarea behavior', () => {
+        const core = createOpenTuiChatBridgeCore();
+        const textarea = createRecordingTextarea();
+
+        bridgeTextareaKeyDown(core, makeKeyEvent('v'), asTextareaRef(textarea), scrollbox());
+
+        expect(textarea.insertTextCalls).toEqual([]);
+        expect(core.eventQueue.shift()).toBeUndefined();
     });
 });

@@ -1,38 +1,26 @@
-import type { InkKeyShape } from './opentui-chat-bridge.js';
+/**
+ * Test seam: Ctrl+O (tool output expand/collapse toggle) lives in the exported
+ * `bridgeTextareaKeyDown`. Drives the toggle via a fake Ctrl+O KeyEvent and
+ * asserts `core.toolOutputExpanded` / snapshot / event queue.
+ */
 import { describe, expect, it } from 'vitest';
-import { createOpenTuiChatBridgeCore, handleInput, type OpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
+import { bridgeTextareaKeyDown, createOpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
+import {
+    asScrollboxRef,
+    asTextareaRef,
+    createRecordingScrollbox,
+    createRecordingTextarea,
+    makeKeyEvent,
+} from './opentui-chat-bridge-test-support.js';
 
-function makeKey(overrides: Partial<InkKeyShape> = {}): InkKeyShape {
-    return {
-        upArrow: false,
-        downArrow: false,
-        leftArrow: false,
-        rightArrow: false,
-        pageDown: false,
-        pageUp: false,
-        home: false,
-        end: false,
-        return: false,
-        escape: false,
-        ctrl: false,
-        shift: false,
-        tab: false,
-        backspace: false,
-        delete: false,
-        meta: false,
-        super: false,
-        hyper: false,
-        capsLock: false,
-        numLock: false,
-        ...overrides,
-    };
+function setup() {
+    const core = createOpenTuiChatBridgeCore();
+    const textareaRef = asTextareaRef(createRecordingTextarea());
+    const scrollboxRef = asScrollboxRef(createRecordingScrollbox());
+    return { core, textareaRef, scrollboxRef };
 }
 
-function nextEvent(core: OpenTuiChatBridgeCore): unknown {
-    return core.eventQueue.shift();
-}
-
-describe('ink chat bridge Ctrl+O tool output expand/collapse toggle', () => {
+describe('opentui bridge Ctrl+O tool output expand/collapse toggle via bridgeTextareaKeyDown', () => {
     it('initializes toolOutputExpanded to false', () => {
         const core = createOpenTuiChatBridgeCore();
 
@@ -41,45 +29,53 @@ describe('ink chat bridge Ctrl+O tool output expand/collapse toggle', () => {
     });
 
     it('toggles toolOutputExpanded to true on Ctrl+O', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
 
-        handleInput(core, 'o', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('o', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(core.toolOutputExpanded).toBe(true);
     });
 
-    it('toggles toolOutputExpanded back to false on second Ctrl+O', () => {
-        const core = createOpenTuiChatBridgeCore();
+    it('toggles toolOutputExpanded back to false on a second Ctrl+O', () => {
+        const { core, textareaRef, scrollboxRef } = setup();
 
-        handleInput(core, 'o', makeKey({ ctrl: true }));
-        handleInput(core, 'o', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('o', { ctrl: true }), textareaRef, scrollboxRef);
+        bridgeTextareaKeyDown(core, makeKeyEvent('o', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(core.toolOutputExpanded).toBe(false);
     });
 
     it('publishes the new toolOutputExpanded value through the snapshot', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
 
-        handleInput(core, 'o', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('o', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(core.snapshot.toolOutputExpanded).toBe(true);
     });
 
     it('does not enqueue an event on Ctrl+O', () => {
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
 
-        handleInput(core, 'o', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('o', { ctrl: true }), textareaRef, scrollboxRef);
 
-        expect(nextEvent(core)).toBeUndefined();
+        expect(core.eventQueue.shift()).toBeUndefined();
     });
 
-    it('appends o to the input buffer when ctrl is not held', () => {
-        const core = createOpenTuiChatBridgeCore();
+    it('calls preventDefault on the Ctrl+O KeyEvent', () => {
+        const { core, textareaRef, scrollboxRef } = setup();
+        const key = makeKeyEvent('o', { ctrl: true });
 
-        handleInput(core, 'o', makeKey());
+        bridgeTextareaKeyDown(core, key, textareaRef, scrollboxRef);
 
-        expect(core.inputBuffer).toBe('o');
-        expect(core.cursorPosition).toBe(1);
+        expect(key.defaultPrevented).toBe(true);
+    });
+
+    it('is a no-op on toolOutputExpanded for a plain o (no ctrl) — raw typing is native textarea behavior', () => {
+        const { core, textareaRef, scrollboxRef } = setup();
+
+        bridgeTextareaKeyDown(core, makeKeyEvent('o'), textareaRef, scrollboxRef);
+
         expect(core.toolOutputExpanded).toBe(false);
+        expect(core.eventQueue.shift()).toBeUndefined();
     });
 });

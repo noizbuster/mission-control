@@ -2,7 +2,20 @@ import type { InkKeyShape } from './opentui-chat-bridge.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createAbgOverlayController } from './abg-overlay-controller.js';
 import { createAbgOverlayStore } from './abg-overlay-state.js';
-import { createOpenTuiChatBridgeCore, handleInput, type OpenTuiChatBridgeCore } from './opentui-chat-bridge.js';
+import {
+    bridgeTextareaKeyDown,
+    createOpenTuiChatBridgeCore,
+    handleInput,
+    publishSnapshot,
+    type OpenTuiChatBridgeCore,
+} from './opentui-chat-bridge.js';
+import {
+    asScrollboxRef,
+    asTextareaRef,
+    createRecordingScrollbox,
+    createRecordingTextarea,
+    makeKeyEvent,
+} from './opentui-chat-bridge-test-support.js';
 
 function makeKey(overrides: Partial<InkKeyShape> = {}): InkKeyShape {
     return {
@@ -30,11 +43,20 @@ function makeKey(overrides: Partial<InkKeyShape> = {}): InkKeyShape {
     };
 }
 
+// Test seam: the Ctrl+G toggle moved to `bridgeTextareaKeyDown` (textarea
+// focused, idle). The tests below open the overlay DIRECTLY (set the flag +
+// publish) so the overlay-once-open behavior can be driven through `handleInput`
+// (the global sink that dispatches to the ABG overlay handler while the overlay
+// is active and the textarea is blurred). The idle Ctrl+G open/close path is
+// covered by the dedicated toggle tests that drive `bridgeTextareaKeyDown`.
 function openOverlay(core: OpenTuiChatBridgeCore): void {
-    handleInput(core, 'g', makeKey({ ctrl: true }));
+    core.abgOverlayActive = true;
+    publishSnapshot(core);
 }
 
 function closeOverlayViaCtrlG(core: OpenTuiChatBridgeCore): void {
+    // While the overlay is active the textarea is blurred, so Ctrl+G arrives via
+    // the global sink and the ABG overlay handler closes the overlay.
     handleInput(core, 'g', makeKey({ ctrl: true }));
 }
 
@@ -76,24 +98,28 @@ describe('ink chat bridge ABG overlay toggle', () => {
         expect(core.abgOverlayActive).toBe(false);
     });
 
-    it('flushes the CJK composition buffer before toggling the overlay on (Metis 2.1)', () => {
+    it('toggles the overlay open on Ctrl+G delivered to the textarea keyDown from idle', () => {
         const core = createOpenTuiChatBridgeCore();
-        core.cjkCompositionBuffer = '\u4F60\u597D';
 
-        handleInput(core, 'g', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(
+            core,
+            makeKeyEvent('g', { ctrl: true }),
+            asTextareaRef(createRecordingTextarea()),
+            asScrollboxRef(createRecordingScrollbox()),
+        );
 
-        expect(core.cjkCompositionBuffer).toBe('');
         expect(core.abgOverlayActive).toBe(true);
+        expect(core.snapshot.abgOverlayActive).toBe(true);
     });
 
-    it('flushes the CJK composition buffer before toggling the overlay off', () => {
+    it('toggles the overlay closed on a second Ctrl+G to the textarea keyDown', () => {
         const core = createOpenTuiChatBridgeCore();
-        openOverlay(core);
-        core.cjkCompositionBuffer = '\u4F60';
+        const textareaRef = asTextareaRef(createRecordingTextarea());
+        const scrollboxRef = asScrollboxRef(createRecordingScrollbox());
 
-        handleInput(core, 'g', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('g', { ctrl: true }), textareaRef, scrollboxRef);
+        bridgeTextareaKeyDown(core, makeKeyEvent('g', { ctrl: true }), textareaRef, scrollboxRef);
 
-        expect(core.cjkCompositionBuffer).toBe('');
         expect(core.abgOverlayActive).toBe(false);
     });
 });

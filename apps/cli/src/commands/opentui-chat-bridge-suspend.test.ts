@@ -1,47 +1,40 @@
-import type { InkKeyShape } from './opentui-chat-bridge.js';
+/**
+ * Test seam: Ctrl+Z (suspend) lives in the exported `bridgeTextareaKeyDown`,
+ * which delegates to the exported `suspendControls` (spyable). Drives Ctrl+Z
+ * via a fake KeyEvent and asserts the suspend signal / Windows message /
+ * event-queue invariants. Raw character input is native textarea behavior.
+ */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createOpenTuiChatBridgeCore, handleInput, type OpenTuiChatBridgeCore, suspendControls } from './opentui-chat-bridge.js';
+import {
+    bridgeTextareaKeyDown,
+    createOpenTuiChatBridgeCore,
+    suspendControls,
+} from './opentui-chat-bridge.js';
+import {
+    asScrollboxRef,
+    asTextareaRef,
+    createRecordingScrollbox,
+    createRecordingTextarea,
+    makeKeyEvent,
+} from './opentui-chat-bridge-test-support.js';
 
-function makeKey(overrides: Partial<InkKeyShape> = {}): InkKeyShape {
-    return {
-        upArrow: false,
-        downArrow: false,
-        leftArrow: false,
-        rightArrow: false,
-        pageDown: false,
-        pageUp: false,
-        home: false,
-        end: false,
-        return: false,
-        escape: false,
-        ctrl: false,
-        shift: false,
-        tab: false,
-        backspace: false,
-        delete: false,
-        meta: false,
-        super: false,
-        hyper: false,
-        capsLock: false,
-        numLock: false,
-        ...overrides,
-    };
+function setup() {
+    const core = createOpenTuiChatBridgeCore();
+    const textareaRef = asTextareaRef(createRecordingTextarea());
+    const scrollboxRef = asScrollboxRef(createRecordingScrollbox());
+    return { core, textareaRef, scrollboxRef };
 }
 
-function nextEvent(core: OpenTuiChatBridgeCore): unknown {
-    return core.eventQueue.shift();
-}
-
-describe('ink chat bridge Ctrl+Z suspend', () => {
+describe('opentui bridge Ctrl+Z suspend via bridgeTextareaKeyDown', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
 
     it('sends SIGTSTP to the current process on Ctrl+Z (POSIX)', () => {
         const killSpy = vi.spyOn(process, 'kill').mockReturnValue(true);
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
 
-        handleInput(core, 'z', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('z', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(killSpy).toHaveBeenCalledWith(process.pid, 'SIGTSTP');
     });
@@ -49,39 +42,50 @@ describe('ink chat bridge Ctrl+Z suspend', () => {
     it('writes an unsupported message on Ctrl+Z on Windows', () => {
         vi.spyOn(suspendControls, 'isWindowsPlatform').mockReturnValue(true);
         vi.spyOn(process, 'kill').mockReturnValue(true);
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
 
-        handleInput(core, 'z', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('z', { ctrl: true }), textareaRef, scrollboxRef);
 
         expect(core.outputText).toContain('Suspend not supported on Windows.');
     });
 
     it('does not enqueue an event on Ctrl+Z', () => {
         vi.spyOn(process, 'kill').mockReturnValue(true);
-        const core = createOpenTuiChatBridgeCore();
+        const { core, textareaRef, scrollboxRef } = setup();
 
-        handleInput(core, 'z', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('z', { ctrl: true }), textareaRef, scrollboxRef);
 
-        expect(nextEvent(core)).toBeUndefined();
+        expect(core.eventQueue.shift()).toBeUndefined();
     });
 
-    it('does not clear the input buffer on Ctrl+Z', () => {
+    it('does not clear the mirrored input buffer on Ctrl+Z', () => {
         vi.spyOn(process, 'kill').mockReturnValue(true);
         const core = createOpenTuiChatBridgeCore();
+        const textareaRef = asTextareaRef(createRecordingTextarea('hello'));
+        // Mirror the textarea text into the core (as bridgeContentChange would).
+        core.inputBuffer = 'hello';
 
-        handleInput(core, 'hello', makeKey());
-        handleInput(core, 'z', makeKey({ ctrl: true }));
+        bridgeTextareaKeyDown(core, makeKeyEvent('z', { ctrl: true }), textareaRef, asScrollboxRef(createRecordingScrollbox()));
 
         expect(core.inputBuffer).toBe('hello');
-        expect(core.cursorPosition).toBe(5);
     });
 
-    it('appends z to the input buffer when ctrl is not held', () => {
-        const core = createOpenTuiChatBridgeCore();
+    it('calls preventDefault on the Ctrl+Z KeyEvent', () => {
+        vi.spyOn(process, 'kill').mockReturnValue(true);
+        const { core, textareaRef, scrollboxRef } = setup();
+        const key = makeKeyEvent('z', { ctrl: true });
 
-        handleInput(core, 'z', makeKey());
+        bridgeTextareaKeyDown(core, key, textareaRef, scrollboxRef);
 
-        expect(core.inputBuffer).toBe('z');
-        expect(core.cursorPosition).toBe(1);
+        expect(key.defaultPrevented).toBe(true);
+    });
+
+    it('is a no-op on the buffer for a plain z (no ctrl) — raw typing is native textarea behavior', () => {
+        const { core, textareaRef, scrollboxRef } = setup();
+
+        bridgeTextareaKeyDown(core, makeKeyEvent('z'), textareaRef, scrollboxRef);
+
+        expect(core.inputBuffer).toBe('');
+        expect(core.eventQueue.shift()).toBeUndefined();
     });
 });
