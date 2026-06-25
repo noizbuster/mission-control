@@ -92,7 +92,7 @@ function parseAuthLogoutArgs(argv: readonly string[]): CliArgs {
 
 function createBaseArgs(command: AuthCliCommand): CliArgs {
     return {
-        mode: 'ink',
+        mode: 'tui',
         useNative: undefined,
         command,
         showHelp: false,

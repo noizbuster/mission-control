@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseChatLine } from './chat-commands.js';
-import { createInkChatBridgeCore, replaceCoreOutputText } from './ink-chat-bridge.js';
+import { createOpenTuiChatBridgeCore, replaceCoreOutputText } from './opentui-chat-bridge.js';
 import {
     createSlashCommandMenuState,
     createSlashCommandMenuView,
@@ -280,7 +280,7 @@ describe('undo then redo round-trip', () => {
 
 describe('bridge replaceCoreOutputText', () => {
     it('replaces core.outputText entirely', () => {
-        const core = createInkChatBridgeCore();
+        const core = createOpenTuiChatBridgeCore();
         core.outputText = 'line1\nline2\n';
 
         replaceCoreOutputText(core, 'replaced\n');
@@ -289,7 +289,7 @@ describe('bridge replaceCoreOutputText', () => {
     });
 
     it('publishes a fresh snapshot reflecting the new text', () => {
-        const core = createInkChatBridgeCore();
+        const core = createOpenTuiChatBridgeCore();
         core.outputText = 'original\n';
         const before = core.snapshot;
 
@@ -300,7 +300,7 @@ describe('bridge replaceCoreOutputText', () => {
     });
 
     it('emits then replace simulates the /undo display flow', () => {
-        const core = createInkChatBridgeCore();
+        const core = createOpenTuiChatBridgeCore();
         core.outputText += 'intro\n';
         core.outputText += 'You: hello\n';
         core.outputText += 'Assistant: hi\n';

@@ -22,10 +22,6 @@ import { createAbgOverlayStore } from './abg-overlay-state.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { approvalLevelRules } from './approval-level.js';
 import { parseChatLine } from './chat-commands.js';
-import { createInkChatBridge, type InkChatBridge, type InkChatBridgeOptions } from './ink-chat-bridge.js';
-import { createInkChatInput } from './ink-chat-input.js';
-import { createInkChatOutput } from './ink-chat-output.js';
-import { createInkModelSelector } from './ink-model-selector.js';
 import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
 import type { ChatActionResult } from './interactive-chat-action-result.js';
 import { runChatAction } from './interactive-chat-actions.js';
@@ -51,6 +47,14 @@ import { createSessionNavigationController } from './interactive-chat-session-na
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import {
+    createOpenTuiChatBridge,
+    type OpenTuiChatBridge,
+    type OpenTuiChatBridgeOptions,
+} from './opentui-chat-bridge.js';
+import { createOpenTuiChatInput } from './opentui-chat-input.js';
+import { createOpenTuiChatOutput } from './opentui-chat-output.js';
+import { createOpenTuiModelSelector } from './opentui-model-selector.js';
 import { loadPricingTable } from './pricing-table-store.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
@@ -92,23 +96,23 @@ export async function runInteractiveChatSession(
     runtime: AgentRuntime,
     options: InteractiveChatOptions,
 ): Promise<string> {
-    const useInk = options.input === undefined && process.stdin.isTTY === true;
-    type SessionBridgeOptions = Omit<InkChatBridgeOptions, 'providerID' | 'modelID' | 'variantID'> & {
+    const useTui = options.input === undefined && process.stdin.isTTY === true;
+    type SessionBridgeOptions = Omit<OpenTuiChatBridgeOptions, 'providerID' | 'modelID' | 'variantID'> & {
         providerID: string;
         modelID: string;
         variantID?: string;
         sessionDisplayName?: string;
     };
-    const initialHistoryEntries = useInk ? await loadInputHistoryEntries() : [];
-    const initialAbgOverlayPrefs = useInk ? await loadAbgOverlayPrefs() : undefined;
+    const initialHistoryEntries = useTui ? await loadInputHistoryEntries() : [];
+    const initialAbgOverlayPrefs = useTui ? await loadAbgOverlayPrefs() : undefined;
     const pricingTableForSession = await loadPricingTable();
-    let inkBridgeRef: InkChatBridge | undefined;
-    const abgOverlayController = useInk
+    let tuiBridgeRef: OpenTuiChatBridge | undefined;
+    const abgOverlayController = useTui
         ? createAbgOverlayController(createAbgOverlayStore(), {
-              readPrefsSnapshot: () => inkBridgeRef?.getAbgOverlayPrefsSnapshot() ?? DEFAULT_ABG_OVERLAY_PREFS,
+              readPrefsSnapshot: () => tuiBridgeRef?.getAbgOverlayPrefsSnapshot() ?? DEFAULT_ABG_OVERLAY_PREFS,
           })
         : undefined;
-    const bridgeOptions: SessionBridgeOptions | undefined = useInk
+    const bridgeOptions: SessionBridgeOptions | undefined = useTui
         ? {
               providerID: options.modelProviderSelection.providerID,
               modelID: options.modelProviderSelection.modelID,
@@ -124,11 +128,11 @@ export async function runInteractiveChatSession(
               ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
           }
         : undefined;
-    const inkBridge = useInk && bridgeOptions !== undefined ? createInkChatBridge(bridgeOptions) : undefined;
+    const tuiBridge = useTui && bridgeOptions !== undefined ? await createOpenTuiChatBridge(bridgeOptions) : undefined;
     const chatInput =
-        options.input ?? (inkBridge !== undefined ? createInkChatInput(inkBridge) : createTerminalChatInput());
+        options.input ?? (tuiBridge !== undefined ? createOpenTuiChatInput(tuiBridge) : createTerminalChatInput());
     const baseChatOutput =
-        options.output ?? (inkBridge !== undefined ? createInkChatOutput(inkBridge) : createTerminalChatOutput());
+        options.output ?? (tuiBridge !== undefined ? createOpenTuiChatOutput(tuiBridge) : createTerminalChatOutput());
     // Mirror of the conversation text for /undo and /redo. This is display-only;
     // the durable JSONL session log is never modified by undo/redo.
     let conversationText = '';
@@ -143,10 +147,10 @@ export async function runInteractiveChatSession(
     const undoRedoController = {
         // The Ink bridge echoes "You: ..." directly to core.outputText, bypassing
         // the conversationText mirror; prefer the bridge's full text when present.
-        readOutputText: () => inkBridge?.getOutput() ?? conversationText,
+        readOutputText: () => tuiBridge?.getOutput() ?? conversationText,
         replaceOutputText: (next: string) => {
             conversationText = next;
-            inkBridge?.replaceOutputText(next);
+            tuiBridge?.replaceOutputText(next);
         },
         getStack: () => undoRedoStack,
         setStack: (next: UndoRedoStack) => {
@@ -154,8 +158,8 @@ export async function runInteractiveChatSession(
         },
     };
     const selectModel =
-        inkBridge !== undefined
-            ? createInkModelSelector(inkBridge)
+        tuiBridge !== undefined
+            ? createOpenTuiModelSelector(tuiBridge)
             : suspendChatInputWhileSelectingModel(
                   options.selectModel ?? createTerminalModelSelector(chatOutput),
                   chatInput,
@@ -207,15 +211,15 @@ export async function runInteractiveChatSession(
                       ? { observeStoredEvent: options.observeStoredEvent }
                       : {}),
               });
-    const unregisterProcessCleanup = inkBridge === undefined ? registerProcessTerminalCleanup(chatInput) : undefined;
+    const unregisterProcessCleanup = tuiBridge === undefined ? registerProcessTerminalCleanup(chatInput) : undefined;
 
-    if (inkBridge !== undefined) {
-        inkBridgeRef = inkBridge;
+    if (tuiBridge !== undefined) {
+        tuiBridgeRef = tuiBridge;
         if (initialAbgOverlayPrefs !== undefined) {
-            inkBridge.applyAbgOverlayPrefs(initialAbgOverlayPrefs);
+            tuiBridge.applyAbgOverlayPrefs(initialAbgOverlayPrefs);
         }
-        inkBridge.setModelCycleChoices(modelChoices);
-        inkBridge.onModelCycleSelect = (selection) => {
+        tuiBridge.setModelCycleChoices(modelChoices);
+        tuiBridge.onModelCycleSelect = (selection) => {
             currentModelProviderSelection = selection;
             currentProvider = options.resolveProviderForSelection?.(selection) ?? currentProvider;
             if (bridgeOptions !== undefined) {
@@ -228,7 +232,7 @@ export async function runInteractiveChatSession(
                 }
             }
         };
-        inkBridge.onRenameSubmit = (name: string) => {
+        tuiBridge.onRenameSubmit = (name: string) => {
             sessionDisplayNameController.update(name);
         };
     }
@@ -274,7 +278,7 @@ export async function runInteractiveChatSession(
     registerBuiltinWorkflows(sessionWorkflowRegistry);
     await pluginManager.registerInto(sessionWorkflowRegistry);
     const knownWorkflowNames = new Set<string>(sessionWorkflowRegistry.names());
-    inkBridge?.setWorkflowNames(sessionWorkflowRegistry.names());
+    tuiBridge?.setWorkflowNames(sessionWorkflowRegistry.names());
     if (discoveredWorkflows.diagnostics.length > 0) {
         for (const diagnostic of discoveredWorkflows.diagnostics) {
             process.stderr.write(
@@ -284,7 +288,7 @@ export async function runInteractiveChatSession(
     }
 
     try {
-        if (!useInk) {
+        if (!useTui) {
             chatOutput.write('mission-control chat\n');
             chatOutput.write(formatModelProviderStatus(currentModelProviderSelection, { nodeMode: 'none' }));
             if (currentSessionId !== undefined && currentSessionStore !== undefined) {
@@ -360,8 +364,8 @@ export async function runInteractiveChatSession(
                 break;
             }
             let result: ChatActionResult;
-            if (inkBridge !== undefined) {
-                inkBridge.setGenerating(true);
+            if (tuiBridge !== undefined) {
+                tuiBridge.setGenerating(true);
             }
             try {
                 result = await runChatAction(
@@ -395,20 +399,20 @@ export async function runInteractiveChatSession(
                         ...(pricingTableForSession.length > 0 ? { pricingTable: pricingTableForSession } : {}),
                         ...(currentApprovalLevel !== undefined ? { approvalLevel: currentApprovalLevel } : {}),
                         permissionSession: sharedPermissionSession,
-                        ...(inkBridge !== undefined
+                        ...(tuiBridge !== undefined
                             ? {
                                   selectApprovalLevel: (currentLevel?: ApprovalLevel) =>
-                                      inkBridge
+                                      tuiBridge
                                           .showLevelPicker(currentLevel)
                                           .then((level): ApprovalLevel | undefined =>
                                               level !== undefined ? (level as ApprovalLevel) : undefined,
                                           ),
                               }
                             : {}),
-                        ...(inkBridge !== undefined
+                        ...(tuiBridge !== undefined
                             ? {
                                   requestUserQuestion: (request: AskUserQuestionRequest) =>
-                                      inkBridge.showQuestion(
+                                      tuiBridge.showQuestion(
                                           request.question,
                                           request.options.map((option) =>
                                               typeof option === 'string'
@@ -432,13 +436,13 @@ export async function runInteractiveChatSession(
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 chatOutput.write(`Error: ${message}\n`);
-                if (inkBridge !== undefined) {
-                    inkBridge.setGenerating(false);
+                if (tuiBridge !== undefined) {
+                    tuiBridge.setGenerating(false);
                 }
                 continue;
             }
-            if (inkBridge !== undefined) {
-                inkBridge.setGenerating(false);
+            if (tuiBridge !== undefined) {
+                tuiBridge.setGenerating(false);
             }
             if (!areModelProviderSelectionsEqual(currentModelProviderSelection, result.modelProviderSelection)) {
                 currentProvider =
@@ -454,7 +458,7 @@ export async function runInteractiveChatSession(
             if (result.approvalLevel !== undefined) {
                 currentApprovalLevel = result.approvalLevel;
                 sharedPermissionSession.replaceBuiltInRules(approvalLevelRules(currentApprovalLevel));
-                inkBridge?.setApprovalLevel(currentApprovalLevel);
+                tuiBridge?.setApprovalLevel(currentApprovalLevel);
                 await options.persistApprovalLevel?.(currentApprovalLevel);
             }
         }

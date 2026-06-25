@@ -1,7 +1,7 @@
 import { AgentRuntime } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { type AgentUIRenderer, InkRenderer, JsonRenderer, PlainRenderer } from './renderers.js';
+import { type AgentUIRenderer, JsonRenderer, PlainRenderer, TuiRenderer } from './renderers.js';
 
 const event: AgentEvent = {
     type: 'task.completed',
@@ -24,16 +24,16 @@ async function renderWith(renderer: AgentUIRenderer): Promise<string> {
 }
 
 describe('CLI renderers', () => {
-    it('ink plain and json renderers implement AgentUIRenderer', async () => {
-        const inkOutput = await renderWith(new InkRenderer());
+    it('tui plain and json renderers implement AgentUIRenderer', async () => {
+        const tuiOutput = await renderWith(new TuiRenderer());
         const plainOutput = await renderWith(new PlainRenderer());
         const jsonOutput = await renderWith(new JsonRenderer());
 
-        expect(inkOutput).toContain('event list');
-        expect(inkOutput).toContain('provider: local');
-        expect(inkOutput).toContain('model: local-echo');
-        expect(inkOutput).toContain('selection: local/local-echo');
-        expect(inkOutput).toContain('node mode: none');
+        expect(tuiOutput).toContain('event list');
+        expect(tuiOutput).toContain('provider: local');
+        expect(tuiOutput).toContain('model: local-echo');
+        expect(tuiOutput).toContain('selection: local/local-echo');
+        expect(tuiOutput).toContain('node mode: none');
         expect(plainOutput).toContain('provider: local');
         expect(plainOutput).toContain('model: local-echo');
         expect(plainOutput).toContain('selection: local/local-echo');

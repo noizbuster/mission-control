@@ -57,8 +57,8 @@ Scoped guidance:
 | --- | --- | --- |
 | CLI entry/help/version | `apps/cli/src/index.tsx` | `apps/cli/package.json` maps `mctrl` to `./dist/index.js`. |
 | CLI command flow | `apps/cli/src/commands/run-agent.ts` | Chat, JSON/JSONL, graph, provider, sidecar selection. |
-| CLI output | `apps/cli/src/ui/renderers.ts` | Plain, Ink, JSON renderer contracts. |
-| Interactive chat Ink bridge | `apps/cli/src/commands/ink-chat-bridge.tsx` | Ink React tree ↔ imperative chat loop bridge. |
+| CLI output | `apps/cli/src/ui/renderers.ts` | Plain, TUI (buffered summary), and JSON renderer contracts. |
+| Interactive chat opentui bridge | `apps/cli/src/commands/opentui-chat-bridge.tsx` | opentui React tree (`@opentui/react` over a koffi-loaded Zig core) ↔ imperative chat loop bridge. |
 | Desktop entry/UI | `apps/desktop/src/main.tsx`, `apps/desktop/src/App.tsx` | Browser-facing shell. |
 | Desktop client boundary | `apps/desktop/src/lib/agent-client.ts` | Mock and Tauri clients, Zod response parsing. |
 | Tauri native shell | `apps/desktop/src-tauri` | Command bridge and Rust session-log parsing. |
@@ -77,7 +77,7 @@ Scoped guidance:
 | Workflow protocol schemas | `packages/protocol/src/{workflow,category,mode,permission-rule,delivery}.ts` | `WorkflowSpecSchema`, `CategorySchema`, `ModeSchema`, `PolicyEffectRuleSchema`, `DELIVERY_MODES`. Workflow policy-gate rules use action/resource/effect. |
 | Workflow runtime foundations | see **Workflow Foundations** below | Permission rule algebra, `.omo/` persistence, Mission/Run store, drain-lane coordinator v2, context-source registry, continuation runtime, full-parity `task()` tool. |
 | Workflow invocation | `apps/cli/src/commands/chat-commands.ts`, `apps/cli/src/commands/interactive-chat-actions.ts` | `#name {prompt}` parsing and dispatch. `--workflow` non-interactive flag lives in `run-agent.ts`. See **Workflow Invocation** below. |
-| Interactive TUI | `apps/cli/src/commands/ink-chat-bridge.tsx` | Ink keyboard router, agent spinner, approval overlay, model picker. |
+| Interactive TUI | `apps/cli/src/commands/opentui-chat-bridge.tsx` | opentui keyboard router (KeyEvent adapter), agent spinner, approval overlay, model picker. |
 | Workflow tool | `packages/core/src/tools/workflow-tool/workflow-tool.ts` | `workflow(name, prompt)` tool; resolves via `WorkflowRegistry`, returns `started`/`not_found`. |
 | Modes + mode overlay | `packages/core/src/behavior/modes/` | `autopilotMode` declaration, `applyMode` pure transform (overlay + policy conversion + tool filter). |
 | Built-in workflow graphs | `examples/abg/{default,planner,runner}.workflow.json` | Reference graph instances; autopilot is a mode overlay, not a graph file. |

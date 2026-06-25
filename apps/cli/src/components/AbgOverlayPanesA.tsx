@@ -1,5 +1,7 @@
-import { Box, Text } from 'ink';
+/** @jsxImportSource @opentui/react */
+import type React from 'react';
 import type { AbgOverlayState } from '../commands/abg-overlay-state.js';
+import { toOpenTuiAttributes, toOpenTuiColor } from '../platform/opentui-types.js';
 import { useSpinnerFrame } from './spinner.js';
 import { renderVisualGraph, type VisualGraphEdge, type VisualGraphNode, type VisualGraphRow } from './visual-graph.js';
 
@@ -8,38 +10,41 @@ export interface PaneProps {
     readonly modelLabel: string;
 }
 
-function statusColor(status: string | undefined): string | undefined {
+const dimAttrs = toOpenTuiAttributes({ dimColor: true });
+const boldAttrs = toOpenTuiAttributes({ bold: true });
+
+function statusColorFg(status: string | undefined): string | undefined {
     switch (status) {
         case 'running':
-            return 'yellow';
+            return toOpenTuiColor('yellow');
         case 'succeeded':
         case 'active':
-            return 'green';
+            return toOpenTuiColor('green');
         case 'failed':
-            return 'red';
+            return toOpenTuiColor('red');
         case 'blocked':
-            return 'cyan';
+            return toOpenTuiColor('cyan');
         case 'cancelled':
-            return 'gray';
+            return toOpenTuiColor('gray');
         default:
             return undefined;
     }
 }
 
-function graphStatusColor(graphStatus: AbgOverlayState['graphStatus']): string {
+function graphStatusFg(graphStatus: AbgOverlayState['graphStatus']): string {
     switch (graphStatus) {
         case 'active':
-            return 'yellow';
+            return toOpenTuiColor('yellow') ?? '#ffff00';
         case 'completed':
-            return 'green';
+            return toOpenTuiColor('green') ?? '#00ff00';
         case 'failed':
-            return 'red';
+            return toOpenTuiColor('red') ?? '#ff0000';
         case 'blocked':
-            return 'cyan';
+            return toOpenTuiColor('cyan') ?? '#00ffff';
         case 'cancelled':
-            return 'gray';
+            return toOpenTuiColor('gray') ?? '#808080';
         default:
-            return 'dim';
+            return toOpenTuiColor('dim') ?? '#808080';
     }
 }
 
@@ -77,118 +82,124 @@ function isEmptyState(state: AbgOverlayState): boolean {
     );
 }
 
-export function OverviewPane({ state, modelLabel }: PaneProps): React.ReactElement {
+const cyanFg = toOpenTuiColor('cyan');
+const yellowFg = toOpenTuiColor('yellow');
+const redFg = toOpenTuiColor('red');
+const focusedStyle = cyanFg !== undefined ? { fg: cyanFg, bold: true } : { bold: true };
+
+export function OverviewPane({ state, modelLabel }: PaneProps): React.ReactNode {
     if (isEmptyState(state)) {
         return (
-            <Box flexDirection="column" marginTop={1}>
-                <Text dimColor>No active ABG run</Text>
-            </Box>
+            <box flexDirection="column" marginTop={1}>
+                <text {...dimAttrs}>No active ABG run</text>
+            </box>
         );
     }
 
     const graphId = state.focusedGraphId ?? state.activeGraphId ?? '(no graph)';
-    const statusColorValue = graphStatusColor(state.graphStatus);
+    const statusFgVal = graphStatusFg(state.graphStatus);
     const statusText = state.graphStatus ?? 'idle';
 
     const liveOutputLines = state.lastLiveDelta.split('\n').slice(-8);
     const knownGraphs = [...state.graphs.values()].sort((left, right) => left.graphId.localeCompare(right.graphId));
 
     return (
-        <Box flexDirection="column" marginTop={1}>
-            <Box flexDirection="row">
-                <Text bold>{truncate(graphId, 20)}</Text>
-                <Text> </Text>
-                <Text color={statusColorValue} bold>
+        <box flexDirection="column" marginTop={1}>
+            <box flexDirection="row">
+                <text {...boldAttrs}>{truncate(graphId, 20)}</text>
+                <text> </text>
+                <text {...(statusFgVal !== undefined ? { fg: statusFgVal } : {})} {...boldAttrs}>
                     [{statusText}]
-                </Text>
-                <Text> </Text>
-                <Text dimColor>{state.runState}</Text>
-                <Text> </Text>
-                <Text dimColor>{modelLabel}</Text>
-                <Text> </Text>
-                <Text dimColor>sidecar:{state.nativeSidecarStatus || 'unknown'}</Text>
-                <Text> </Text>
-                <Text dimColor>{formatCostSummary(state)}</Text>
-            </Box>
+                </text>
+                <text> </text>
+                <text {...dimAttrs}>{state.runState}</text>
+                <text> </text>
+                <text {...dimAttrs}>{modelLabel}</text>
+                <text> </text>
+                <text {...dimAttrs}>sidecar:{state.nativeSidecarStatus || 'unknown'}</text>
+                <text> </text>
+                <text {...dimAttrs}>{formatCostSummary(state)}</text>
+            </box>
             {knownGraphs.length > 1 ? (
-                <Box marginTop={1} flexDirection="column">
-                    <Text bold>
+                <box marginTop={1} flexDirection="column">
+                    <text {...boldAttrs}>
                         Graphs ({knownGraphs.length}){'  '}
-                        <Text dimColor>press 'g' to cycle focus</Text>
-                    </Text>
+                        <text {...dimAttrs}>press 'g' to cycle focus</text>
+                    </text>
                     {knownGraphs.map((summary) => {
                         const isFocused = summary.graphId === state.focusedGraphId;
-                        const color = graphStatusColor(summary.status);
+                        const color = graphStatusFg(summary.status);
+                        const graphFg = color !== toOpenTuiColor('dim') ? color : undefined;
                         return (
-                            <Box key={summary.graphId} flexDirection="row">
-                                <Text {...(isFocused ? { color: 'cyan', bold: true } : { dimColor: true })}>
+                            <box key={summary.graphId} flexDirection="row">
+                                <text {...(isFocused ? focusedStyle : dimAttrs)}>
                                     {isFocused ? '▸ ' : '  '}
-                                </Text>
-                                <Text {...(color !== 'dim' ? { color } : { dimColor: true })}>{summary.status}</Text>
-                                <Text> </Text>
-                                <Text {...(isFocused ? { bold: true } : {})}>{truncate(summary.graphId, 30)}</Text>
-                                <Text dimColor> events={summary.eventCount}</Text>
+                                </text>
+                                <text {...(graphFg !== undefined ? { fg: graphFg } : dimAttrs)}>{summary.status}</text>
+                                <text> </text>
+                                <text {...(isFocused ? boldAttrs : {})}>{truncate(summary.graphId, 30)}</text>
+                                <text {...dimAttrs}> events={summary.eventCount}</text>
                                 {summary.parentGraphId !== undefined ? (
-                                    <Text dimColor> ← {truncate(summary.parentGraphId, 20)}</Text>
+                                    <text {...dimAttrs}> ← {truncate(summary.parentGraphId, 20)}</text>
                                 ) : null}
-                            </Box>
+                            </box>
                         );
                     })}
-                </Box>
+                </box>
             ) : null}
             {state.lastError !== undefined ? (
-                <Box marginTop={1}>
-                    <Text color="red">Error: {state.lastError}</Text>
-                </Box>
+                <box marginTop={1}>
+                    <text {...(redFg !== undefined ? { fg: redFg } : {})}>Error: {state.lastError}</text>
+                </box>
             ) : null}
-            <Box flexDirection="column" marginTop={1}>
-                <Text bold>Live Output:</Text>
+            <box flexDirection="column" marginTop={1}>
+                <text {...boldAttrs}>Live Output:</text>
                 {liveOutputLines.map((line: string, idx: number) => (
                     // biome-ignore lint/suspicious/noArrayIndexKey: live output lines are append-only
-                    <Text key={idx} dimColor>
+                    <text key={idx} {...dimAttrs}>
                         {line}
-                    </Text>
+                    </text>
                 ))}
-            </Box>
-        </Box>
+            </box>
+        </box>
     );
 }
 
-function renderVisualRow(row: VisualGraphRow, idx: number, spinnerGlyph: string): React.ReactElement {
+function renderVisualRow(row: VisualGraphRow, idx: number, spinnerGlyph: string): React.ReactNode {
     if (row.kind === 'connector') {
         const text = row.segments.map((segment) => segment.text).join('');
         return (
-            <Text key={`vis-${idx}`} dimColor>
+            <text key={`vis-${idx}`} {...dimAttrs}>
                 {text}
-            </Text>
+            </text>
         );
     }
     return (
-        <Box key={`vis-${idx}`} flexDirection="row">
+        <box key={`vis-${idx}`} flexDirection="row">
             {row.segments.map((segment, segIdx) => {
-                const color = statusColor(segment.status);
+                const fg = statusColorFg(segment.status);
                 return (
-                    <Text
+                    <text
                         // biome-ignore lint/suspicious/noArrayIndexKey: segments are positional and stable per node row
                         key={`seg-${segIdx}`}
-                        {...(color !== undefined ? { color } : { dimColor: true })}
+                        {...(fg !== undefined ? { fg } : dimAttrs)}
                     >
                         {segment.text}
-                    </Text>
+                    </text>
                 );
             })}
-            {row.isActive ? <Text color="yellow"> {spinnerGlyph}</Text> : null}
-        </Box>
+            {row.isActive ? <text {...(yellowFg !== undefined ? { fg: yellowFg } : {})}> {spinnerGlyph}</text> : null}
+        </box>
     );
 }
 
-export function GraphPane({ state }: PaneProps): React.ReactElement {
+export function GraphPane({ state }: PaneProps): React.ReactNode {
     const { glyph: spinnerGlyph } = useSpinnerFrame();
     if (isEmptyState(state)) {
         return (
-            <Box flexDirection="column" marginTop={1}>
-                <Text dimColor>No active ABG run</Text>
-            </Box>
+            <box flexDirection="column" marginTop={1}>
+                <text {...dimAttrs}>No active ABG run</text>
+            </box>
         );
     }
 
@@ -211,120 +222,113 @@ export function GraphPane({ state }: PaneProps): React.ReactElement {
     const visual = renderVisualGraph({ nodes: visualNodes, edges: visualEdges });
 
     return (
-        <Box flexDirection="column" marginTop={1}>
-            <Text bold>{graphId}</Text>
+        <box flexDirection="column" marginTop={1}>
+            <text {...boldAttrs}>{graphId}</text>
             {!visual.collapsed ? (
-                <Box flexDirection="column" marginLeft={2}>
+                <box flexDirection="column" marginLeft={2}>
                     {visual.rows.map((row, idx) => renderVisualRow(row, idx, spinnerGlyph))}
-                </Box>
+                </box>
             ) : (
-                <Box flexDirection="column">
-                    <Text dimColor>(graph too wide — adjacency list)</Text>
+                <box flexDirection="column">
+                    <text {...dimAttrs}>(graph too wide — adjacency list)</text>
                     {nodes.length === 0 ? (
-                        <Box flexDirection="row" marginLeft={2}>
-                            <Text dimColor>(no nodes)</Text>
-                        </Box>
+                        <box flexDirection="row" marginLeft={2}>
+                            <text {...dimAttrs}>(no nodes)</text>
+                        </box>
                     ) : (
                         nodes.map(([nodeId, status]) => {
-                            const color = statusColor(status);
+                            const fg = statusColorFg(status);
                             const glyph = statusGlyph(status);
                             const outgoing = state.graphEdges.filter((e) => e.source === nodeId);
                             return (
-                                <Box key={nodeId} flexDirection="column" marginLeft={2}>
-                                    <Box flexDirection="row">
-                                        {color !== undefined ? (
-                                            <Text color={color}>{glyph}</Text>
-                                        ) : (
-                                            <Text dimColor>{glyph}</Text>
-                                        )}
-                                        <Text> </Text>
-                                        <Text>{nodeId}</Text>
-                                        <Text dimColor> ({status})</Text>
-                                    </Box>
+                                <box key={nodeId} flexDirection="column" marginLeft={2}>
+                                    <box flexDirection="row">
+                                        <text {...(fg !== undefined ? { fg } : dimAttrs)}>{glyph}</text>
+                                        <text> </text>
+                                        <text>{nodeId}</text>
+                                        <text {...dimAttrs}> ({status})</text>
+                                    </box>
                                     {outgoing.map((edge) => (
-                                        <Box
+                                        <box
                                             key={`${nodeId}-${edge.source}-${edge.target}`}
                                             flexDirection="row"
                                             marginLeft={4}
                                         >
-                                            <Text dimColor>└→</Text>
-                                            <Text dimColor> {edge.target}</Text>
+                                            <text {...dimAttrs}>└→</text>
+                                            <text {...dimAttrs}> {edge.target}</text>
                                             {edge.condition !== undefined ? (
-                                                <Text dimColor> [{truncate(edge.condition, 24)}]</Text>
+                                                <text {...dimAttrs}> [{truncate(edge.condition, 24)}]</text>
                                             ) : null}
-                                        </Box>
+                                        </box>
                                     ))}
-                                </Box>
+                                </box>
                             );
                         })
                     )}
-                </Box>
+                </box>
             )}
             {childGraphs.length > 0 ? (
-                <Box marginTop={1} flexDirection="column">
-                    <Text bold dimColor>
+                <box marginTop={1} flexDirection="column">
+                    <text {...boldAttrs} {...dimAttrs}>
                         Child Graphs ({childGraphs.length})
-                    </Text>
+                    </text>
                     {childGraphs.map((child) => {
-                        const color = graphStatusColor(child.status);
+                        const color = graphStatusFg(child.status);
+                        const childFg = color !== toOpenTuiColor('dim') ? color : undefined;
                         return (
-                            <Box key={child.graphId} flexDirection="row" marginLeft={2}>
-                                <Text dimColor>↳</Text>
-                                <Text> </Text>
-                                <Text {...(color !== 'dim' ? { color } : { dimColor: true })}>{child.status}</Text>
-                                <Text> </Text>
-                                <Text>{truncate(child.graphId, 30)}</Text>
-                                <Text dimColor> events={child.eventCount}</Text>
-                            </Box>
+                            <box key={child.graphId} flexDirection="row" marginLeft={2}>
+                                <text {...dimAttrs}>↳</text>
+                                <text> </text>
+                                <text {...(childFg !== undefined ? { fg: childFg } : dimAttrs)}>{child.status}</text>
+                                <text> </text>
+                                <text>{truncate(child.graphId, 30)}</text>
+                                <text {...dimAttrs}> events={child.eventCount}</text>
+                            </box>
                         );
                     })}
-                </Box>
+                </box>
             ) : null}
-        </Box>
+        </box>
     );
 }
 
-export function NodesPane({ state }: PaneProps): React.ReactElement {
+export function NodesPane({ state }: PaneProps): React.ReactNode {
     if (isEmptyState(state)) {
         return (
-            <Box flexDirection="column" marginTop={1}>
-                <Text dimColor>No active ABG run</Text>
-            </Box>
+            <box flexDirection="column" marginTop={1}>
+                <text {...dimAttrs}>No active ABG run</text>
+            </box>
         );
     }
 
     const nodes = [...state.nodes.entries()];
 
     return (
-        <Box flexDirection="column" marginTop={1}>
-            <Box flexDirection="row">
-                <Text bold>ID</Text>
-                <Text> </Text>
-                <Text bold>Status</Text>
-            </Box>
+        <box flexDirection="column" marginTop={1}>
+            <box flexDirection="row">
+                <text {...boldAttrs}>ID</text>
+                <text> </text>
+                <text {...boldAttrs}>Status</text>
+            </box>
             {nodes.length === 0 ? (
-                <Box flexDirection="row">
-                    <Text dimColor>(no nodes)</Text>
-                </Box>
+                <box flexDirection="row">
+                    <text {...dimAttrs}>(no nodes)</text>
+                </box>
             ) : (
                 nodes.map(([nodeId, status]) => {
-                    const color = statusColor(status);
+                    const fg = statusColorFg(status);
                     const glyph = statusGlyph(status);
                     return (
-                        <Box key={nodeId} flexDirection="row">
-                            {color !== undefined ? <Text color={color}>{glyph}</Text> : <Text dimColor>{glyph}</Text>}
-                            <Text> </Text>
-                            <Text>{truncate(nodeId, 10)}</Text>
-                            <Text> </Text>
-                            {color !== undefined ? (
-                                <Text color={color}>[{status}]</Text>
-                            ) : (
-                                <Text dimColor>[{status}]</Text>
-                            )}
-                        </Box>
+                        <box key={nodeId} flexDirection="row">
+                            <text {...(fg !== undefined ? { fg } : dimAttrs)}>{glyph}</text>
+                            <text> </text>
+                            <text>{truncate(nodeId, 10)}</text>
+                            <text> </text>
+                            <text {...(fg !== undefined ? { fg } : dimAttrs)}>[{status}]</text>
+                        </box>
                     );
                 })
             )}
-        </Box>
+        </box>
     );
 }

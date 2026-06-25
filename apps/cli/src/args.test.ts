@@ -4,13 +4,12 @@ import { parseArgs } from './args.js';
 describe('parseArgs', () => {
     it('parses all supported mctrl flags', () => {
         expect(parseArgs([])).toEqual({
-            mode: 'ink',
+            mode: 'tui',
             useNative: undefined,
             command: 'run',
             showHelp: false,
             showVersion: false,
         });
-        expect(parseArgs(['--ui', 'ink']).mode).toBe('ink');
         expect(parseArgs(['--no-tui']).mode).toBe('plain');
         expect(parseArgs(['--json']).mode).toBe('json');
         expect(parseArgs(['--jsonl']).mode).toBe('jsonl');
@@ -53,7 +52,7 @@ describe('parseArgs', () => {
         expect(() => parseArgs(['--engine', 'turbo'])).toThrow('--engine only supports graph');
         expect(() => parseArgs(['--engine', 'flat'])).toThrow('--engine only supports graph');
         expect(() => parseArgs(['--engine'])).toThrow('--engine requires a value');
-        // --engine graph without --prompt is valid in interactive (ink) mode — the prompt arrives via
+        // --engine graph without --prompt is valid in interactive (tui) mode — the prompt arrives via
         // the chat loop — but requires a prompt in the non-interactive modes (plain/json/jsonl).
         expect(parseArgs(['--engine', 'graph']).engine).toBe('graph');
         expect(() => parseArgs(['--no-tui', '--engine', 'graph'])).toThrow('--engine graph requires a prompt');

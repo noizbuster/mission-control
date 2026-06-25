@@ -6,20 +6,24 @@ import {
     type CommandExecutionResult,
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
+    createPersistentStore,
     discoverAgents,
     discoverWorkflows,
     PermissionGateError,
+    type PersistentMemoryStore,
     PluginManager,
     type ProviderAdapter,
     registerBuiltinWorkflows,
+    resolveMissionControlDataDir,
     resolveUserConfigDir,
     type SdkModelResolver,
+    TursoPersistentStore,
     WorkflowRegistry,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AbgNodeModelOptions, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
-import { type AgentUIRenderer, InkRenderer, JsonRenderer, PlainRenderer } from '../ui/renderers.js';
+import { type AgentUIRenderer, JsonRenderer, PlainRenderer, TuiRenderer } from '../ui/renderers.js';
 import { loadPersistedApprovalLevel, savePersistedApprovalLevel } from './approval-level-store.js';
 import { splitCommandParts } from './chat-command-parts.js';
 import type { NonInteractiveAutomationPolicy } from './cli-runtime-options.js';
@@ -75,6 +79,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     const provider = options.provider ?? createProvider(selectedModelProvider);
     const workspaceRoot = options.workspaceRoot ?? resolveWorkspaceRoot(args.workspacePath);
     const agentModelLookup = await buildAgentModelLookup(workspaceRoot);
+    const persistentStore = await createPersistentStore(resolveMissionControlDataDir());
     const runtime = new AgentRuntime(
         createCliRuntimeOptions({
             ...(args.useNative !== undefined ? { useNative: args.useNative } : {}),
@@ -85,6 +90,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             ...(options.nonInteractiveAutomationPolicy !== undefined
                 ? { nonInteractiveAutomationPolicy: options.nonInteractiveAutomationPolicy }
                 : {}),
+            ...(persistentStore !== undefined ? { persistentStore } : {}),
         }),
     );
     if (shouldRunChat) {
@@ -139,6 +145,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             }
             unsubscribeRuntimeEvents?.();
             await recorder.close();
+            closePersistentStore(persistentStore);
         }
     }
 
@@ -267,6 +274,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         } finally {
             await renderer.stop();
         }
+        closePersistentStore(persistentStore);
     }
     return renderer.getOutput();
 }
@@ -274,7 +282,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
 function shouldRunInteractiveChat(args: CliArgs, graph: AbgGraphSpec | undefined, options: RunAgentOptions): boolean {
     return (
         graph === undefined &&
-        args.mode === 'ink' &&
+        args.mode === 'tui' &&
         (options.chatInput !== undefined || (process.stdin.isTTY === true && process.stdout.isTTY === true))
     );
 }
@@ -403,6 +411,12 @@ function createProviderForSelection(selection: ModelProviderSelection, authStore
     return createCliProviderForSelection(selection, authStore);
 }
 
+function closePersistentStore(store: PersistentMemoryStore | undefined): void {
+    if (store instanceof TursoPersistentStore) {
+        store.close();
+    }
+}
+
 function createRenderer(mode: CliArgs['mode']): AgentUIRenderer {
     switch (mode) {
         case 'plain':
@@ -410,8 +424,8 @@ function createRenderer(mode: CliArgs['mode']): AgentUIRenderer {
         case 'json':
         case 'jsonl':
             return new JsonRenderer();
-        case 'ink':
-            return new InkRenderer();
+        case 'tui':
+            return new TuiRenderer();
         default:
             return assertNever(mode);
     }

@@ -20,7 +20,6 @@ export function createHelpText(): string {
         '  mctrl opens an interactive chat prompt; press Ctrl+C twice or /exit to exit.',
         '',
         'Options:',
-        '  --ui ink       Use Ink UI output',
         '  --no-tui       Use plain text output',
         '  --json         Emit legacy JSON Lines events',
         '  --jsonl        Emit JSON Lines events and persist a replayable session log',

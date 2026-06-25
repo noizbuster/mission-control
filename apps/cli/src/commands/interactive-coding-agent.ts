@@ -90,7 +90,7 @@ export type CodingAgentTurnOptions = {
      * into the interactive graph signal tap (single-slot `onSignal`, Metis 1.1), its
      * `onDurableEvent` settles `runState` on run-terminal events, and `dispose()` is invoked when the
      * turn settles so the coalescing flush timer is cleared. Injected by the host (todo 3 bridge)
-     * — NOT threaded through the InkChatBridge public surface (Metis 3.1).
+     * — NOT threaded through the OpenTuiChatBridge public surface (Metis 3.1).
      */
     readonly abgOverlayController?: AbgOverlayController;
     /** Operator-supplied pricing table; threaded to the graph so `CostLedger` emits `policy.budget.*`. */

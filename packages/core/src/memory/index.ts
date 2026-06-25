@@ -1,6 +1,19 @@
 export type { DataDirResolutionOptions } from './data-dir.js';
 export { missionControlDataDirEnvKey, resolveMissionControlDataDir } from './data-dir.js';
 export { InMemoryEventStore } from './in-memory-store.js';
+export {
+    type CreatePersistentStoreOptions,
+    createPersistentStore,
+    type PersistentStoreOpener,
+    type TursoAvailabilityProbe,
+} from './persistent-store-factory.js';
+export {
+    type MemoryEntry,
+    type MemoryNamespace,
+    type MemoryQuery,
+    type PersistentMemoryStore,
+    InMemoryPersistentStore,
+} from './persistent-memory-store.js';
 export type { JsonlSessionEventIdFactory, JsonlSessionEventStoreOpenOptions } from './jsonl-session-event-store.js';
 export { JsonlSessionEventStore, JsonlSessionEventStoreError } from './jsonl-session-event-store.js';
 export {
@@ -34,3 +47,4 @@ export type {
     SessionIndexStore,
     SessionIndexToolRecord,
 } from './session-index-types.js';
+export { isTursoAvailable, TursoPersistentStore } from './turso-persistent-store.js';

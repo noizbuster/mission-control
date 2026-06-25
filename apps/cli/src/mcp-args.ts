@@ -143,7 +143,7 @@ function parseMcpTestArgs(argv: readonly string[]): CliArgs {
 
 function createBaseArgs(command: McpCliCommand): CliArgs {
     return {
-        mode: 'ink',
+        mode: 'tui',
         useNative: undefined,
         command,
         showHelp: false,

@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 
 /**
  * Shared braille spinner primitives. Default mode is `'static'` (no interval, no re-renders)
- * because Ink's per-frame re-render writes ANSI redraw escapes to stdout and disrupts terminal
- * mouse text selection. `'animate'` restores the 80ms braille animation. Set via `MCTRL_SPINNER`.
+ * because the terminal renderer's per-frame re-render writes ANSI redraw escapes to stdout and
+ * disrupts terminal mouse text selection. `'animate'` restores the 80ms braille animation. Set
+ * via `MCTRL_SPINNER`.
  */
 export const SPINNER_FRAMES = [
     '\u280B',
@@ -30,7 +31,7 @@ export function resolveSpinnerMode(env: NodeJS.ProcessEnv = process.env): 'stati
  * Drive an animated spinner frame. Returns the current glyph and whether animation is active.
  * In `'static'` mode (the default) the glyph is fixed and no interval is scheduled, so callers
  * that embed the glyph in a dense layout (e.g. per-node graph rows) do not trigger per-frame
- * Ink redraws unless the operator opts in via `MCTRL_SPINNER=animate`.
+ * renderer redraws unless the operator opts in via `MCTRL_SPINNER=animate`.
  */
 export function useSpinnerFrame(): { readonly glyph: string; readonly animated: boolean } {
     const mode = resolveSpinnerMode();

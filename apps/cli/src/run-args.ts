@@ -6,7 +6,7 @@ type InitialRunArgs = {
 };
 
 export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): CliArgs {
-    let mode: CliMode = 'ink';
+    let mode: CliMode = 'tui';
     let jsonMode: 'json' | 'jsonl' | undefined;
     let useNative: boolean | undefined;
     let showHelp = false;
@@ -24,15 +24,6 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
     while (index < argv.length) {
         const current = argv[index];
         switch (current) {
-            case '--ui': {
-                const value = argv[index + 1];
-                if (value !== 'ink') {
-                    throw new Error('--ui only supports ink');
-                }
-                mode = 'ink';
-                index += 2;
-                break;
-            }
             case '--no-tui':
                 mode = 'plain';
                 index += 1;
@@ -159,13 +150,13 @@ function buildRunArgs(input: {
     if (input.workflowName !== undefined && input.graphPath !== undefined) {
         throw new Error('--workflow cannot be combined with --graph');
     }
-    if (input.workflowName !== undefined && input.prompt === undefined && input.mode !== 'ink') {
+    if (input.workflowName !== undefined && input.prompt === undefined && input.mode !== 'tui') {
         throw new Error('--workflow requires a prompt');
     }
-    // `--engine graph` drives the ABG graph. Without `--prompt` it is valid in the interactive (`ink`)
+    // `--engine graph` drives the ABG graph. Without `--prompt` it is valid in the interactive (`tui`)
     // mode — the prompt arrives via the chat loop — so only require a prompt for the explicitly
     // non-interactive modes (plain/json/jsonl), where no chat input exists to supply one.
-    if (input.engine === 'graph' && input.prompt === undefined && input.mode !== 'ink') {
+    if (input.engine === 'graph' && input.prompt === undefined && input.mode !== 'tui') {
         throw new Error('--engine graph requires a prompt');
     }
     const baseArgs = {

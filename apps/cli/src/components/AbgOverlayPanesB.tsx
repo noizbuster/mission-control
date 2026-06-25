@@ -1,6 +1,8 @@
+/** @jsxImportSource @opentui/react */
 import type { AbgToolOutcomeSnapshot, ApprovalRecord } from '@mission-control/protocol';
-import { Box, Text } from 'ink';
+import type React from 'react';
 import type { AbgOverlayState, RecentEvent } from '../commands/abg-overlay-state.js';
+import { toOpenTuiAttributes, toOpenTuiColor } from '../platform/opentui-types.js';
 
 export interface AbgOverlayPaneProps {
     readonly state: AbgOverlayState;
@@ -10,6 +12,9 @@ export interface CostPolicyPaneProps {
     readonly state: AbgOverlayState;
     readonly modelLabel?: string;
 }
+
+const dimAttrs = toOpenTuiAttributes({ dimColor: true });
+const boldAttrs = toOpenTuiAttributes({ bold: true });
 
 function truncate(text: string | undefined, max: number): string {
     if (text === undefined) return '';
@@ -43,80 +48,80 @@ function relativeTime(iso: string): string {
     return `${days}d ago`;
 }
 
-function statusGlyph(status: AbgToolOutcomeSnapshot['status']): { glyph: string; color: string } {
+function statusGlyph(status: AbgToolOutcomeSnapshot['status']): { glyph: string; fg: string | undefined } {
     switch (status) {
         case 'started':
-            return { glyph: '▶', color: 'yellow' };
+            return { glyph: '▶', fg: toOpenTuiColor('yellow') };
         case 'completed':
-            return { glyph: '✓', color: 'green' };
+            return { glyph: '✓', fg: toOpenTuiColor('green') };
         case 'failed':
-            return { glyph: '✗', color: 'red' };
+            return { glyph: '✗', fg: toOpenTuiColor('red') };
         default:
-            return { glyph: '?', color: 'dim' };
+            return { glyph: '?', fg: toOpenTuiColor('dim') };
     }
 }
 
-function approvalStateColor(state: ApprovalRecord['state']): string {
+function approvalStateFg(state: ApprovalRecord['state']): string | undefined {
     switch (state) {
         case 'pending':
-            return 'yellow';
+            return toOpenTuiColor('yellow');
         case 'approved':
-            return 'green';
+            return toOpenTuiColor('green');
         case 'denied':
-            return 'red';
+            return toOpenTuiColor('red');
         case 'expired':
         case 'cancelled':
-            return 'gray';
+            return toOpenTuiColor('gray');
         default:
-            return 'dim';
+            return toOpenTuiColor('dim');
     }
 }
 
-export function ToolsPane({ state }: AbgOverlayPaneProps): React.ReactElement {
+export function ToolsPane({ state }: AbgOverlayPaneProps): React.ReactNode {
     const outcomes = state.toolOutcomes;
     return (
-        <Box flexDirection="column" marginTop={1}>
+        <box flexDirection="column" marginTop={1}>
             {outcomes.length === 0 ? (
-                <Text dimColor>No tool calls yet</Text>
+                <text {...dimAttrs}>No tool calls yet</text>
             ) : (
                 outcomes.map((outcome: AbgToolOutcomeSnapshot, index: number) => {
-                    const { glyph, color } = statusGlyph(outcome.status);
+                    const { glyph, fg } = statusGlyph(outcome.status);
                     const toolId = truncate(outcome.toolId, 20);
                     const started = shortTime(outcome.startedAt);
                     const completed = shortTime(outcome.completedAt ?? outcome.failedAt);
                     const message = truncate(outcome.lastMessage, 60);
                     return (
                         // biome-ignore lint/suspicious/noArrayIndexKey: tool outcomes are append-only within a single overlay render
-                        <Box key={`${outcome.toolId}-${index}`} flexDirection="row">
-                            <Text dimColor>{toolId}</Text>
-                            <Text> </Text>
-                            <Text color={color} bold>
+                        <box key={`${outcome.toolId}-${index}`} flexDirection="row">
+                            <text {...dimAttrs}>{toolId}</text>
+                            <text> </text>
+                            <text {...(fg !== undefined ? { fg } : {})} {...boldAttrs}>
                                 {glyph}
-                            </Text>
-                            <Text> </Text>
-                            <Text dimColor>{started}</Text>
+                            </text>
+                            <text> </text>
+                            <text {...dimAttrs}>{started}</text>
                             {completed !== '' ? (
                                 <>
-                                    <Text dimColor> → </Text>
-                                    <Text dimColor>{completed}</Text>
+                                    <text {...dimAttrs}> → </text>
+                                    <text {...dimAttrs}>{completed}</text>
                                 </>
                             ) : null}
                             {message !== '' ? (
                                 <>
-                                    <Text> </Text>
-                                    <Text dimColor>{message}</Text>
+                                    <text> </text>
+                                    <text {...dimAttrs}>{message}</text>
                                 </>
                             ) : null}
-                        </Box>
+                        </box>
                     );
                 })
             )}
-            <Box marginTop={1}>
-                <Text dimColor>
+            <box marginTop={1}>
+                <text {...dimAttrs}>
                     live tool-start events arrive via graph signals; onToolSettlement does not fire for graph tools
-                </Text>
-            </Box>
-        </Box>
+                </text>
+            </box>
+        </box>
     );
 }
 
@@ -132,12 +137,12 @@ function timelineModelMessage(event: RecentEvent): string {
     return truncate(event.emitPayloadText ?? event.message, 60);
 }
 
-export function TimelinePane({ state }: AbgOverlayPaneProps): React.ReactElement {
+export function TimelinePane({ state }: AbgOverlayPaneProps): React.ReactNode {
     const events = state.recentEvents;
     return (
-        <Box flexDirection="column" marginTop={1}>
+        <box flexDirection="column" marginTop={1}>
             {events.length === 0 ? (
-                <Text dimColor>No timeline events</Text>
+                <text {...dimAttrs}>No timeline events</text>
             ) : (
                 events.map((event: RecentEvent, index: number) => {
                     const type = truncate(event.type, 24);
@@ -147,63 +152,63 @@ export function TimelinePane({ state }: AbgOverlayPaneProps): React.ReactElement
                     const modelMessage = timelineModelMessage(event);
                     return (
                         // biome-ignore lint/suspicious/noArrayIndexKey: timeline events are append-only and capped at 200
-                        <Box key={`${event.timestamp}-${event.type}-${index}`} flexDirection="row">
-                            <Text>{type}</Text>
-                            <Text dimColor> | </Text>
-                            <Text dimColor>{timestamp}</Text>
-                            <Text dimColor> | </Text>
-                            <Text>{taskGraph}</Text>
-                            <Text dimColor> | </Text>
-                            <Text>{nodeSignal}</Text>
-                            <Text dimColor> | </Text>
-                            <Text dimColor>{modelMessage}</Text>
-                        </Box>
+                        <box key={`${event.timestamp}-${event.type}-${index}`} flexDirection="row">
+                            <text>{type}</text>
+                            <text {...dimAttrs}> | </text>
+                            <text {...dimAttrs}>{timestamp}</text>
+                            <text {...dimAttrs}> | </text>
+                            <text>{taskGraph}</text>
+                            <text {...dimAttrs}> | </text>
+                            <text>{nodeSignal}</text>
+                            <text {...dimAttrs}> | </text>
+                            <text {...dimAttrs}>{modelMessage}</text>
+                        </box>
                     );
                 })
             )}
-        </Box>
+        </box>
     );
 }
 
-export function ApprovalsPane({ state }: AbgOverlayPaneProps): React.ReactElement {
+export function ApprovalsPane({ state }: AbgOverlayPaneProps): React.ReactNode {
     const approvals = state.pendingApprovals;
     return (
-        <Box flexDirection="column" marginTop={1}>
+        <box flexDirection="column" marginTop={1}>
             {approvals.length === 0 ? (
-                <Text dimColor>No pending approvals</Text>
+                <text {...dimAttrs}>No pending approvals</text>
             ) : (
                 approvals.map((approval: ApprovalRecord, index: number) => {
                     const approvalId = truncate(approval.approvalId, 16);
-                    const stateColor = approvalStateColor(approval.state);
+                    const stateFg = approvalStateFg(approval.state);
                     const subject = `${approval.subject.kind}:${approval.subject.id}`;
                     const reason = approval.reason !== undefined ? truncate(approval.reason, 60) : '';
                     const requested = relativeTime(approval.requestedAt);
                     return (
                         // biome-ignore lint/suspicious/noArrayIndexKey: pending approvals are append-only within a single overlay render
-                        <Box key={`${approval.approvalId}-${index}`} flexDirection="column">
-                            <Box flexDirection="row">
-                                <Text dimColor>{approvalId}</Text>
-                                <Text> </Text>
-                                <Text color={stateColor} bold>
+                        <box key={`${approval.approvalId}-${index}`} flexDirection="column">
+                            <box flexDirection="row">
+                                <text {...dimAttrs}>{approvalId}</text>
+                                <text> </text>
+                                <text {...(stateFg !== undefined ? { fg: stateFg } : {})} {...boldAttrs}>
                                     [{approval.state}]
-                                </Text>
-                                <Text> </Text>
-                                <Text>{subject}</Text>
-                            </Box>
+                                </text>
+                                <text> </text>
+                                <text>{subject}</text>
+                            </box>
                             {reason !== '' ? (
-                                <Box flexDirection="row">
-                                    <Text dimColor>reason: </Text>
-                                    <Text dimColor>{reason}</Text>
-                                </Box>
+                                <box flexDirection="row">
+                                    <text {...dimAttrs}>reason: </text>
+                                    <text {...dimAttrs}>{reason}</text>
+                                </box>
                             ) : null}
-                            <Box flexDirection="row">
-                                <Text dimColor>requested: {requested}</Text>
-                            </Box>
-                        </Box>
+                            <box flexDirection="row">
+                                <text {...dimAttrs}>requested: {requested}</text>
+                            </box>
+                        </box>
                     );
                 })
             )}
-        </Box>
+        </box>
     );
 }
 
@@ -225,7 +230,13 @@ function isPolicyEvent(event: RecentEvent): boolean {
     return false;
 }
 
-export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): React.ReactElement {
+function policyEventFg(eventType: string): string | undefined {
+    if (eventType === 'policy.budget.exceeded' || eventType === 'policy.blocked') return toOpenTuiColor('red');
+    if (eventType === 'policy.budget.warning') return toOpenTuiColor('yellow');
+    return undefined;
+}
+
+export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): React.ReactNode {
     const cost = state.costCents !== undefined ? `$${(state.costCents / 100).toFixed(2)}` : '$0.00';
     const inputTokens = state.inputTokens;
     const outputTokens = state.outputTokens;
@@ -233,66 +244,61 @@ export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): Reac
     const policyEvents = state.recentEvents.filter(isPolicyEvent);
     const hasWarning = policyEvents.some((event) => event.type === 'policy.budget.warning');
     const hasExceeded = policyEvents.some((event) => event.type === 'policy.budget.exceeded');
-    const costColor = hasExceeded ? 'red' : hasWarning ? 'yellow' : undefined;
+    const costFg = hasExceeded ? toOpenTuiColor('red') : hasWarning ? toOpenTuiColor('yellow') : undefined;
+    const redFg = toOpenTuiColor('red');
+    const yellowFg = toOpenTuiColor('yellow');
 
     return (
-        <Box flexDirection="column" marginTop={1}>
-            <Box flexDirection="column">
-                <Text bold>Cost Summary</Text>
-                {modelLabel !== undefined ? <Text dimColor>model: {modelLabel}</Text> : null}
-                <Box flexDirection="row">
-                    <Text {...(costColor !== undefined ? { color: costColor } : {})}>{cost}</Text>
-                    <Text> / </Text>
-                    <Text>{inputTokens} in</Text>
-                    <Text> / </Text>
-                    <Text>{outputTokens} out</Text>
-                </Box>
-                <Text dimColor>model calls: {modelCalls}</Text>
+        <box flexDirection="column" marginTop={1}>
+            <box flexDirection="column">
+                <text {...boldAttrs}>Cost Summary</text>
+                {modelLabel !== undefined ? <text {...dimAttrs}>model: {modelLabel}</text> : null}
+                <box flexDirection="row">
+                    <text {...(costFg !== undefined ? { fg: costFg } : {})}>{cost}</text>
+                    <text> / </text>
+                    <text>{inputTokens} in</text>
+                    <text> / </text>
+                    <text>{outputTokens} out</text>
+                </box>
+                <text {...dimAttrs}>model calls: {modelCalls}</text>
                 {hasExceeded ? (
-                    <Text bold color="red">
+                    <text {...(redFg !== undefined ? { fg: redFg } : {})} {...boldAttrs}>
                         BUDGET EXCEEDED
-                    </Text>
+                    </text>
                 ) : hasWarning ? (
-                    <Text bold color="yellow">
+                    <text {...(yellowFg !== undefined ? { fg: yellowFg } : {})} {...boldAttrs}>
                         approaching budget threshold
-                    </Text>
+                    </text>
                 ) : null}
-            </Box>
-            <Box marginTop={1} flexDirection="column">
-                <Text bold>Policy Events</Text>
+            </box>
+            <box marginTop={1} flexDirection="column">
+                <text {...boldAttrs}>Policy Events</text>
                 {policyEvents.length === 0 ? (
-                    <Text dimColor>No policy events</Text>
+                    <text {...dimAttrs}>No policy events</text>
                 ) : (
                     policyEvents.map((event: RecentEvent, index: number) => {
                         const type = truncate(event.type, 24);
                         const timestamp = event.timestamp !== '' ? shortTime(event.timestamp) : '';
                         const message = truncate(event.emitPayloadText ?? event.message, 60);
-                        const eventColor =
-                            event.type === 'policy.budget.exceeded'
-                                ? 'red'
-                                : event.type === 'policy.budget.warning'
-                                  ? 'yellow'
-                                  : event.type === 'policy.blocked'
-                                    ? 'red'
-                                    : undefined;
+                        const eventFg = policyEventFg(event.type);
                         return (
                             // biome-ignore lint/suspicious/noArrayIndexKey: policy events are append-only within a single overlay render
-                            <Box key={`policy-${event.timestamp}-${event.type}-${index}`} flexDirection="row">
-                                <Text {...(eventColor !== undefined ? { color: eventColor } : {})}>{type}</Text>
-                                <Text dimColor> </Text>
-                                <Text dimColor>{timestamp}</Text>
+                            <box key={`policy-${event.timestamp}-${event.type}-${index}`} flexDirection="row">
+                                <text {...(eventFg !== undefined ? { fg: eventFg } : {})}>{type}</text>
+                                <text {...dimAttrs}> </text>
+                                <text {...dimAttrs}>{timestamp}</text>
                                 {message !== '' ? (
                                     <>
-                                        <Text dimColor> </Text>
-                                        <Text dimColor>{message}</Text>
+                                        <text {...dimAttrs}> </text>
+                                        <text {...dimAttrs}>{message}</text>
                                     </>
                                 ) : null}
-                            </Box>
+                            </box>
                         );
                     })
                 )}
-            </Box>
-        </Box>
+            </box>
+        </box>
     );
 }
 
@@ -307,51 +313,53 @@ function formatBlackboardValue(value: unknown): string {
     }
 }
 
-function blackboardKeyColor(key: string): string | undefined {
-    if (key.startsWith('goal') || key.startsWith('goal_')) return 'cyan';
-    if (key.startsWith('hypothesis') || key.startsWith('hypothesis_')) return 'magenta';
-    if (key.startsWith('observation') || key.startsWith('observation_')) return 'blue';
-    if (key.startsWith('decision') || key.startsWith('decision_')) return 'green';
-    if (key.startsWith('critic')) return 'yellow';
-    if (key.startsWith('supervisor')) return 'red';
+function blackboardKeyFg(key: string): string | undefined {
+    if (key.startsWith('goal') || key.startsWith('goal_')) return toOpenTuiColor('cyan');
+    if (key.startsWith('hypothesis') || key.startsWith('hypothesis_')) return toOpenTuiColor('magenta');
+    if (key.startsWith('observation') || key.startsWith('observation_')) return toOpenTuiColor('blue');
+    if (key.startsWith('decision') || key.startsWith('decision_')) return toOpenTuiColor('green');
+    if (key.startsWith('critic')) return toOpenTuiColor('yellow');
+    if (key.startsWith('supervisor')) return toOpenTuiColor('red');
     return undefined;
 }
 
-export function BlackboardPane({ state }: AbgOverlayPaneProps): React.ReactElement {
+export function BlackboardPane({ state }: AbgOverlayPaneProps): React.ReactNode {
     const entries = [...state.blackboardEntries.entries()].sort(([left], [right]) => left.localeCompare(right));
     const recentMutations = state.recentEvents.filter(
         (event) => event.type === 'blackboard.set' || event.type === 'blackboard.delete',
     );
+    const greenFg = toOpenTuiColor('green');
+    const redFg = toOpenTuiColor('red');
 
     return (
-        <Box flexDirection="column" marginTop={1}>
-            <Box flexDirection="column">
-                <Text bold>Blackboard</Text>
-                <Text dimColor>working memory: {entries.length} entries</Text>
+        <box flexDirection="column" marginTop={1}>
+            <box flexDirection="column">
+                <text {...boldAttrs}>Blackboard</text>
+                <text {...dimAttrs}>working memory: {entries.length} entries</text>
                 {entries.length === 0 ? (
-                    <Text dimColor>
+                    <text {...dimAttrs}>
                         No blackboard entries — node runners (MemoryNode, LLMActor, Supervisor) will populate goals,
                         hypotheses, and observations here.
-                    </Text>
+                    </text>
                 ) : (
                     entries.map(([key, value]) => {
                         const valueText = truncate(formatBlackboardValue(value), 80);
-                        const keyColor = blackboardKeyColor(key);
+                        const keyFg = blackboardKeyFg(key);
                         return (
-                            <Box key={`bb-${key}`} flexDirection="row">
-                                <Text {...(keyColor !== undefined ? { color: keyColor } : {})} bold>
+                            <box key={`bb-${key}`} flexDirection="row">
+                                <text {...(keyFg !== undefined ? { fg: keyFg } : {})} {...boldAttrs}>
                                     {key}
-                                </Text>
-                                <Text dimColor> = </Text>
-                                <Text dimColor>{valueText}</Text>
-                            </Box>
+                                </text>
+                                <text {...dimAttrs}> = </text>
+                                <text {...dimAttrs}>{valueText}</text>
+                            </box>
                         );
                     })
                 )}
-            </Box>
+            </box>
             {recentMutations.length > 0 ? (
-                <Box marginTop={1} flexDirection="column">
-                    <Text bold>Recent Mutations</Text>
+                <box marginTop={1} flexDirection="column">
+                    <text {...boldAttrs}>Recent Mutations</text>
                     {recentMutations
                         .slice(-10)
                         .reverse()
@@ -359,18 +367,18 @@ export function BlackboardPane({ state }: AbgOverlayPaneProps): React.ReactEleme
                             const type = event.type === 'blackboard.set' ? 'set' : 'del';
                             const timestamp = event.timestamp !== '' ? shortTime(event.timestamp) : '';
                             const message = truncate(event.emitPayloadText ?? event.message, 60);
-                            const color = event.type === 'blackboard.set' ? 'green' : 'red';
+                            const mutFg = event.type === 'blackboard.set' ? greenFg : redFg;
                             return (
                                 // biome-ignore lint/suspicious/noArrayIndexKey: blackboard mutations are append-only within a render
-                                <Box key={`bb-mut-${event.timestamp}-${index}`} flexDirection="row">
-                                    <Text color={color}>{type}</Text>
-                                    <Text dimColor> {timestamp}</Text>
-                                    {message !== '' ? <Text dimColor> {message}</Text> : null}
-                                </Box>
+                                <box key={`bb-mut-${event.timestamp}-${index}`} flexDirection="row">
+                                    <text {...(mutFg !== undefined ? { fg: mutFg } : {})}>{type}</text>
+                                    <text {...dimAttrs}> {timestamp}</text>
+                                    {message !== '' ? <text {...dimAttrs}> {message}</text> : null}
+                                </box>
                             );
                         })}
-                </Box>
+                </box>
             ) : null}
-        </Box>
+        </box>
     );
 }

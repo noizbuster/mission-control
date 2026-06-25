@@ -36,6 +36,7 @@ import type { AbgTimelineEntry } from './behavior/timeline.js';
 import type { ProjectInstructionResource } from './context/project-context-messages.js';
 import type { SystemPromptEnvironment } from './context/system-prompt.js';
 import { EventBus } from './event-bus.js';
+import type { PersistentMemoryStore } from './memory/persistent-memory-store.js';
 import type { SidecarClient } from './native/sidecar-client.js';
 import { SessionEventLog } from './session-log.js';
 import type { ToolRegistry } from './tools/tool-registry.js';
@@ -83,6 +84,7 @@ export class AgentRuntime {
     private readonly bus = new EventBus<AgentEvent>();
     private readonly sidecarClient: SidecarClient;
     private readonly approvalGate: PermissionGate;
+    private readonly persistentStore: PersistentMemoryStore | undefined;
     private modelProviderSelection: ModelProviderSelection;
     private session: AgentSession | undefined;
     private promptTaskCounter = 0;
@@ -94,6 +96,7 @@ export class AgentRuntime {
         this.approvalGate = createRuntimeApprovalGate(options, (event) => {
             this.emit(event);
         });
+        this.persistentStore = options.persistentStore;
     }
 
     async start(): Promise<AgentSession> {
@@ -213,6 +216,10 @@ export class AgentRuntime {
     getTimeline(): readonly AbgTimelineEntry[] {
         ensureRuntimeSession(this.session);
         return this.log.getTimeline();
+    }
+
+    getPersistentStore(): PersistentMemoryStore | undefined {
+        return this.persistentStore;
     }
 
     private emit(event: AgentEvent): void {

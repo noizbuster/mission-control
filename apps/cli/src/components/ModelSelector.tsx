@@ -1,5 +1,7 @@
-import { Box, Text } from 'ink';
+/** @jsxImportSource @opentui/react */
+import type React from 'react';
 import type { ModelChoice } from '../commands/interactive-chat-model.js';
+import { toOpenTuiAttributes, toOpenTuiColor } from '../platform/opentui-types.js';
 
 export type ModelSelectorProps = {
     readonly choices: readonly ModelChoice[];
@@ -18,12 +20,14 @@ function filterChoices(choices: readonly ModelChoice[], query: string): readonly
     return choices.filter((choice) => choice.label.toLowerCase().includes(normalized));
 }
 
+const cyan = toOpenTuiColor('cyan');
+
 export function ModelSelector({
     choices,
     searchQuery,
     selectedIndex,
     visibleCount = DEFAULT_VISIBLE_COUNT,
-}: ModelSelectorProps): React.JSX.Element {
+}: ModelSelectorProps): React.ReactNode {
     const filtered = filterChoices(choices, searchQuery);
     const totalCount = filtered.length;
 
@@ -35,15 +39,17 @@ export function ModelSelector({
     const showStart = totalCount === 0 ? 0 : windowStart + 1;
     const showEnd = totalCount === 0 ? 0 : windowEnd;
 
+    const selectedStyle = cyan !== undefined ? { fg: cyan } : {};
+
     return (
-        <Box flexDirection="column">
+        <box flexDirection="column">
             {totalCount === 0 ? (
-                <Text dimColor>No models match</Text>
+                <text {...toOpenTuiAttributes({ dimColor: true })}>No models match</text>
             ) : (
                 <>
-                    <Text dimColor>
+                    <text {...toOpenTuiAttributes({ dimColor: true })}>
                         Showing {showStart}-{showEnd} of {totalCount}
-                    </Text>
+                    </text>
                     {visibleChoices.map((choice, visibleIndex) => {
                         const choiceIndex = windowStart + visibleIndex;
                         const isSelected = choiceIndex === selectedIndex;
@@ -52,22 +58,22 @@ export function ModelSelector({
                         const modelLabel = `${selection.providerID}/${selection.modelID}`;
 
                         return (
-                            <Text key={choice.id}>
+                            <text key={choice.id}>
                                 {isSelected ? (
-                                    <Text color="cyan" bold>
+                                    <text {...selectedStyle} {...toOpenTuiAttributes({ bold: true })}>
                                         {marker} {modelLabel}
-                                    </Text>
+                                    </text>
                                 ) : (
-                                    <Text dimColor>
+                                    <text {...toOpenTuiAttributes({ dimColor: true })}>
                                         {marker} {modelLabel}
-                                    </Text>
+                                    </text>
                                 )}
-                                <Text> {choice.label}</Text>
-                            </Text>
+                                <text> {choice.label}</text>
+                            </text>
                         );
                     })}
                 </>
             )}
-        </Box>
+        </box>
     );
 }

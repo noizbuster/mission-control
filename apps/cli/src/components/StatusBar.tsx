@@ -1,4 +1,5 @@
-import { Text } from 'ink';
+/** @jsxImportSource @opentui/react */
+import { toOpenTuiAttributes } from '../platform/opentui-types.js';
 import type { ApprovalLevel } from '../commands/approval-level.js';
 import { basename } from 'node:path';
 
@@ -43,6 +44,6 @@ export function formatStatus(props: StatusBarProps): string {
     return parts.join(' | ');
 }
 
-export function StatusBar(props: StatusBarProps): React.JSX.Element {
-    return <Text dimColor>{formatStatus(props)}</Text>;
+export function StatusBar(props: StatusBarProps): React.ReactNode {
+    return <text {...toOpenTuiAttributes({ dimColor: true })}>{formatStatus(props)}</text>;
 }

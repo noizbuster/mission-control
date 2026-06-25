@@ -1,4 +1,4 @@
-import { Box, Text } from 'ink';
+/** @jsxImportSource @opentui/react */
 
 export type ChatMessage = {
     readonly text: string;
@@ -14,15 +14,15 @@ function messagePrefix(role: ChatMessage['role']): string {
     return '';
 }
 
-export function MessageList({ messages }: MessageListProps): React.JSX.Element {
+export function MessageList({ messages }: MessageListProps): React.ReactNode {
     return (
-        <Box flexDirection="column">
+        <box flexDirection="column">
             {messages.map((message) => (
-                <Text key={`${message.role}-${message.text.slice(0, 16)}`}>
+                <text key={`${message.role}-${message.text.slice(0, 16)}`}>
                     {messagePrefix(message.role)}
                     {message.text}
-                </Text>
+                </text>
             ))}
-        </Box>
+        </box>
     );
 }

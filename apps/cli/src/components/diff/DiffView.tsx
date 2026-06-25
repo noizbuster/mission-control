@@ -1,5 +1,6 @@
-import { Box, Text } from 'ink';
+/** @jsxImportSource @opentui/react */
 import type React from 'react';
+import { toOpenTuiColor } from '../../platform/opentui-types.js';
 import type { DiffLine, DiffLineKind } from './render-diff.js';
 
 export type DiffViewProps = {
@@ -64,33 +65,29 @@ export function splitLineSpans(line: DiffLine): readonly TextSpan[] {
     return spans;
 }
 
-function DiffRow({ line, index }: { readonly line: DiffLine; readonly index: number }): React.JSX.Element {
+function DiffRow({ line, index }: { readonly line: DiffLine; readonly index: number }): React.ReactNode {
     const style = kindStyle(line.kind);
     const spans = splitLineSpans(line);
+    const fg = style.color !== undefined ? toOpenTuiColor(style.color) : undefined;
     return (
-        <Text {...style}>
-            {spans.map((span, segIndex) =>
-                span.inverse ? (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: index is stable per (line, segment)
-                    <Text key={`seg-${index}-${segIndex}`} inverse>
-                        {span.text}
-                    </Text>
-                ) : (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: index is stable per (line, segment)
-                    <Text key={`seg-${index}-${segIndex}`}>{span.text}</Text>
-                ),
-            )}
-        </Text>
+        <text {...(fg !== undefined ? { fg } : {})} {...(style.dimColor === true ? { dim: true } : {})}>
+            {spans.map((span, segIndex) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: index is stable per (line, segment)
+                <text key={`seg-${index}-${segIndex}`} {...(span.inverse ? { inverse: true } : {})}>
+                    {span.text}
+                </text>
+            ))}
+        </text>
     );
 }
 
-export function DiffView({ lines }: DiffViewProps): React.JSX.Element {
+export function DiffView({ lines }: DiffViewProps): React.ReactNode {
     return (
-        <Box flexDirection="column">
+        <box flexDirection="column">
             {lines.map((line, index) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: line order is stable for a given input
                 <DiffRow key={`diff-${index}`} line={line} index={index} />
             ))}
-        </Box>
+        </box>
     );
 }

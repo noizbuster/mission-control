@@ -133,7 +133,7 @@ export class PlainRenderer extends BufferedRenderer {
     }
 }
 
-export class InkRenderer extends BufferedRenderer {
+export class TuiRenderer extends BufferedRenderer {
     getOutput(): string {
         return `${[
             'mission-control',

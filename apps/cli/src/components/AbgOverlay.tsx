@@ -1,7 +1,8 @@
-import { Box, Text } from 'ink';
+/** @jsxImportSource @opentui/react */
 import { useSyncExternalStore } from 'react';
 import type { AbgOverlayState, AbgOverlayStore } from '../commands/abg-overlay-state.js';
 import { DEFAULT_REFRESH_MS } from '../commands/abg-overlay-state.js';
+import { toOpenTuiAttributes, toOpenTuiColor } from '../platform/opentui-types.js';
 import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA.js';
 import { ApprovalsPane, BlackboardPane, CostPolicyPane, TimelinePane, ToolsPane } from './AbgOverlayPanesB.js';
 
@@ -56,18 +57,23 @@ export interface AbgOverlayProps {
     readonly refreshMs?: number;
 }
 
-function statusColor(graphStatus: AbgOverlayState['graphStatus']): string {
+const dimAttrs = toOpenTuiAttributes({ dimColor: true });
+const boldAttrs = toOpenTuiAttributes({ bold: true });
+const cyanFg = toOpenTuiColor('cyan');
+const yellowFg = toOpenTuiColor('yellow');
+
+function statusColorFg(graphStatus: AbgOverlayState['graphStatus']): string | undefined {
     switch (graphStatus) {
         case 'active':
-            return 'yellow';
+            return toOpenTuiColor('yellow');
         case 'completed':
-            return 'green';
+            return toOpenTuiColor('green');
         case 'failed':
-            return 'red';
+            return toOpenTuiColor('red');
         case 'cancelled':
-            return 'gray';
+            return toOpenTuiColor('gray');
         default:
-            return 'dim';
+            return toOpenTuiColor('dim');
     }
 }
 
@@ -90,52 +96,53 @@ function Header({
     state: AbgOverlayState;
     modelLabel: string;
     refreshMs: number;
-}): React.ReactElement {
+}): React.ReactNode {
     const fps = Math.round(1000 / refreshMs);
+    const statusFg = statusColorFg(state.graphStatus);
     return (
-        <Box flexDirection="row" justifyContent="space-between">
-            <Box flexDirection="row">
-                <Text bold>{truncateGraphId(state.activeGraphId)}</Text>
-                <Text> </Text>
-                <Text color={statusColor(state.graphStatus)} bold>
+        <box flexDirection="row" justifyContent="space-between">
+            <box flexDirection="row">
+                <text {...boldAttrs}>{truncateGraphId(state.activeGraphId)}</text>
+                <text> </text>
+                <text {...(statusFg !== undefined ? { fg: statusFg } : {})} {...boldAttrs}>
                     [{state.graphStatus ?? 'idle'}]
-                </Text>
-                <Text> </Text>
-                <Text dimColor>{state.runState}</Text>
-            </Box>
-            <Box flexDirection="row">
-                <Text dimColor>{modelLabel}</Text>
-                <Text> </Text>
-                <Text dimColor>sidecar:{state.nativeSidecarStatus || 'unknown'}</Text>
-                <Text> </Text>
-                <Text dimColor>{formatCostSummary(state)}</Text>
-                <Text> </Text>
-                <Text dimColor>{fps}fps</Text>
-            </Box>
-        </Box>
+                </text>
+                <text> </text>
+                <text {...dimAttrs}>{state.runState}</text>
+            </box>
+            <box flexDirection="row">
+                <text {...dimAttrs}>{modelLabel}</text>
+                <text> </text>
+                <text {...dimAttrs}>sidecar:{state.nativeSidecarStatus || 'unknown'}</text>
+                <text> </text>
+                <text {...dimAttrs}>{formatCostSummary(state)}</text>
+                <text> </text>
+                <text {...dimAttrs}>{fps}fps</text>
+            </box>
+        </box>
     );
 }
 
-function TabStrip({ activeTab }: { activeTab: AbgOverlayTab }): React.ReactElement {
+function TabStrip({ activeTab }: { activeTab: AbgOverlayTab }): React.ReactNode {
     return (
-        <Box flexDirection="row">
+        <box flexDirection="row">
             {TABS.map((tab, index) => {
                 const isActive = tab === activeTab;
                 const label = TAB_LABELS[tab];
                 return (
-                    <Box key={tab} flexDirection="row">
-                        {index > 0 ? <Text dimColor> | </Text> : null}
+                    <box key={tab} flexDirection="row">
+                        {index > 0 ? <text {...dimAttrs}> | </text> : null}
                         {isActive ? (
-                            <Text color="cyan" bold>
+                            <text {...(cyanFg !== undefined ? { fg: cyanFg } : {})} {...boldAttrs}>
                                 {label}
-                            </Text>
+                            </text>
                         ) : (
-                            <Text dimColor>{label}</Text>
+                            <text {...dimAttrs}>{label}</text>
                         )}
-                    </Box>
+                    </box>
                 );
             })}
-        </Box>
+        </box>
     );
 }
 
@@ -147,7 +154,7 @@ function PaneBody({
     activeTab: AbgOverlayTab;
     state: AbgOverlayState;
     modelLabel: string;
-}): React.ReactElement {
+}): React.ReactNode {
     switch (activeTab) {
         case 'overview':
             return <OverviewPane state={state} modelLabel={modelLabel} />;
@@ -167,27 +174,29 @@ function PaneBody({
             return <BlackboardPane state={state} />;
         default:
             return (
-                <Box flexDirection="column" marginTop={1}>
-                    <Text dimColor>(unknown pane)</Text>
-                </Box>
+                <box flexDirection="column" marginTop={1}>
+                    <text {...dimAttrs}>(unknown pane)</text>
+                </box>
             );
     }
 }
 
-function FooterHint({ narrow }: { narrow: boolean }): React.ReactElement {
+function FooterHint({ narrow }: { narrow: boolean }): React.ReactNode {
     if (narrow) {
         return (
-            <Box marginTop={1}>
-                <Text color="yellow">Terminal too narrow for full overlay — widen to ≥100 cols for all panes</Text>
-            </Box>
+            <box marginTop={1}>
+                <text {...(yellowFg !== undefined ? { fg: yellowFg } : {})}>
+                    Terminal too narrow for full overlay — widen to ≥100 cols for all panes
+                </text>
+            </box>
         );
     }
     return (
-        <Box marginTop={1}>
-            <Text dimColor>
+        <box marginTop={1}>
+            <text {...dimAttrs}>
                 1-8 tabs | Tab cycle | ↑↓ scroll | g cycle graph | Ctrl+G/Esc close | r refresh | t live | c clear
-            </Text>
-        </Box>
+            </text>
+        </box>
     );
 }
 
@@ -197,28 +206,28 @@ export function AbgOverlay({
     scrollOffset: _scrollOffset,
     modelLabel,
     refreshMs = DEFAULT_REFRESH_MS,
-}: AbgOverlayProps): React.ReactElement {
+}: AbgOverlayProps): React.ReactNode {
     const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
     const cols = process.stdout.columns ?? 80;
     const narrow = shouldCollapseToOverview(cols);
 
     if (narrow) {
         return (
-            <Box flexDirection="column">
+            <box flexDirection="column">
                 <Header state={state} modelLabel={modelLabel} refreshMs={refreshMs} />
                 <TabStrip activeTab="overview" />
                 <PaneBody activeTab="overview" state={state} modelLabel={modelLabel} />
                 <FooterHint narrow={true} />
-            </Box>
+            </box>
         );
     }
 
     return (
-        <Box flexDirection="column">
+        <box flexDirection="column">
             <Header state={state} modelLabel={modelLabel} refreshMs={refreshMs} />
             <TabStrip activeTab={activeTab} />
             <PaneBody activeTab={activeTab} state={state} modelLabel={modelLabel} />
             <FooterHint narrow={false} />
-        </Box>
+        </box>
     );
 }

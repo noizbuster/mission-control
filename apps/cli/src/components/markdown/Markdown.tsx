@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 // allow: SIZE_OK — full markdown token coverage (19 block+inline variants, table
 // width math, LRU cache, wrapping) is mandated by T4 and the file boundary is
 // mandated by the task MUST NOT ("only edit Markdown.tsx and Markdown.test.tsx").
@@ -20,7 +21,7 @@
  * re-render of unchanged input returns the same instance.
  */
 
-import { Box, Text } from 'ink';
+import { toOpenTuiAttributes, toOpenTuiColor } from '../../platform/opentui-types.js';
 import type { Token, Tokens } from 'marked';
 import { marked } from 'marked';
 import type React from 'react';
@@ -688,36 +689,46 @@ export type MarkdownProps = {
     readonly theme?: TerminalMarkdownTheme;
 };
 
-function LineView({ line }: { readonly line: RenderLine }): React.JSX.Element {
+function inkStyleToOpenTuiProps(style: InkTextStyle) {
+    const fg = style.color !== undefined ? toOpenTuiColor(style.color) : undefined;
+    const bg = style.backgroundColor !== undefined ? toOpenTuiColor(style.backgroundColor) : undefined;
+    return {
+        ...(fg !== undefined ? { fg } : {}),
+        ...(bg !== undefined ? { bg } : {}),
+        ...toOpenTuiAttributes(style),
+    };
+}
+
+function LineView({ line }: { readonly line: RenderLine }): React.ReactNode {
     if (line.length === 0) {
-        return <Text> </Text>;
+        return <text> </text>;
     }
     return (
-        <Text>
+        <text>
             {line.map((run, index) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: run order is stable for a given line
-                <Text key={index} {...run.style}>
+                <text key={index} {...inkStyleToOpenTuiProps(run.style)}>
                     {run.href ? buildOsc8Hyperlink(run.href, run.text) : run.text}
-                </Text>
+                </text>
             ))}
-        </Text>
+        </text>
     );
 }
 
-export function Markdown({ text, width, streaming, theme }: MarkdownProps): React.JSX.Element {
+export function Markdown({ text, width, streaming, theme }: MarkdownProps): React.ReactNode {
     const resolvedTheme = theme ?? darkTheme;
     const blocks = getCachedBlocks(text, width, streaming ?? false, resolvedTheme);
     return (
-        <Box flexDirection="column">
+        <box flexDirection="column">
             {blocks.map((block, blockIndex) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: block order is stable for cached input
-                <Box key={blockIndex} flexDirection="column">
+                <box key={blockIndex} flexDirection="column">
                     {block.lines.map((line, lineIndex) => (
                         // biome-ignore lint/suspicious/noArrayIndexKey: line order is stable within a block
                         <LineView key={lineIndex} line={line} />
                     ))}
-                </Box>
+                </box>
             ))}
-        </Box>
+        </box>
     );
 }

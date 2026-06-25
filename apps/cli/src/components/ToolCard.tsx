@@ -1,5 +1,6 @@
-import { Box, Text } from 'ink';
+/** @jsxImportSource @opentui/react */
 import type React from 'react';
+import { toOpenTuiAttributes, toOpenTuiColor } from '../platform/opentui-types.js';
 import { DiffView } from './diff/DiffView.js';
 import { renderDiff } from './diff/render-diff.js';
 
@@ -37,25 +38,26 @@ export function buildHeaderLabel(title: string | undefined, lineCount: number, e
  * `<DiffView>` (green/red/inverse highlighting) and other content as plain
  * yellow lines. When collapsed, only the header renders.
  */
-export function ToolCard({ lines, title, expanded }: ToolCardProps): React.JSX.Element {
+export function ToolCard({ lines, title, expanded }: ToolCardProps): React.ReactNode {
     const header = buildHeaderLabel(title, lines.length, expanded);
+    const yellow = toOpenTuiColor('yellow');
     return (
-        <Box flexDirection="column" borderStyle="round">
-            <Text bold color="yellow">
+        <box flexDirection="column" borderStyle="rounded">
+            <text {...toOpenTuiAttributes({ bold: true })} {...(yellow !== undefined ? { fg: yellow } : {})}>
                 {header}
-            </Text>
+            </text>
             {expanded ? (
                 hasDiffContent(lines) ? (
                     <DiffView lines={renderDiff(lines.join('\n'))} />
                 ) : (
                     lines.map((line, index) => (
                         // biome-ignore lint/suspicious/noArrayIndexKey: tool block lines are positional
-                        <Text key={`tool-${index}`} color="yellow">
+                        <text key={`tool-${index}`} {...(yellow !== undefined ? { fg: yellow } : {})}>
                             {line}
-                        </Text>
+                        </text>
                     ))
                 )
             ) : null}
-        </Box>
+        </box>
     );
 }

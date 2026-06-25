@@ -28,7 +28,7 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
                 if (argv[3] !== undefined) {
                     throw new Error(`Unsupported session replay argument: ${argv[3]}`);
                 }
-                return { ...createSessionArgs('session-replay'), mode: 'ink', sessionId, replayInteractive: true };
+                return { ...createSessionArgs('session-replay'), mode: 'tui', sessionId, replayInteractive: true };
             }
             if (argv[2] !== '--jsonl') {
                 throw new Error('session replay requires --jsonl for event output (or --interactive for TUI)');
@@ -66,7 +66,7 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
 
 function createSessionArgs(command: CliArgs['command']): CliArgs {
     return {
-        mode: 'ink',
+        mode: 'tui',
         useNative: undefined,
         command,
         showHelp: false,

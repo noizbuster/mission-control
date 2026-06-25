@@ -1,5 +1,6 @@
-import { Box, Text } from 'ink';
-import { createSlashCommandMenuView, formatSlashCommandMenuLines } from '../commands/interactive-chat-command-menu.js';
+/** @jsxImportSource @opentui/react */
+import { createSlashCommandMenuView } from '../commands/interactive-chat-command-menu.js';
+import { toOpenTuiColor } from '../platform/opentui-types.js';
 
 export type SlashCommandMenuProps = {
     readonly input: string;
@@ -8,19 +9,32 @@ export type SlashCommandMenuProps = {
 };
 
 const maxVisibleCommands = 5;
+const selectedBg = toOpenTuiColor('blue');
+const selectedFg = toOpenTuiColor('white');
 
-export function SlashCommandMenu({ input, selectedIndex }: SlashCommandMenuProps): React.ReactElement | null {
+export function SlashCommandMenu({ input, selectedIndex }: SlashCommandMenuProps): React.ReactNode {
     const view = createSlashCommandMenuView(input, { selectedIndex }, maxVisibleCommands);
     if (!view.open) {
         return null;
     }
-    const columns = process.stdout.columns ?? 80;
-    const lines = formatSlashCommandMenuLines(view, columns);
+    const header = view.query.length > 0 ? `Commands matching "${view.query}"` : 'Commands';
+    const selectedStyle =
+        selectedBg !== undefined && selectedFg !== undefined ? { bg: selectedBg, fg: selectedFg } : {};
     return (
-        <Box flexDirection="column">
-            {lines.map((line) => (
-                <Text key={line}>{line}</Text>
-            ))}
-        </Box>
+        <box flexDirection="column">
+            <text>{header}</text>
+            {view.empty ? (
+                <text>  no commands match</text>
+            ) : (
+                view.visibleChoices.map((choice, index) => {
+                    const selected = view.startIndex + index === view.selectedIndex;
+                    return (
+                        <text key={choice.id} {...(selected ? selectedStyle : {})}>
+                            {`${selected ? '>' : ' '} ${choice.id}  ${choice.description}`}
+                        </text>
+                    );
+                })
+            )}
+        </box>
     );
 }

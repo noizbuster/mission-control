@@ -1,5 +1,6 @@
-import { Box, Text } from 'ink';
+/** @jsxImportSource @opentui/react */
 import type React from 'react';
+import { toOpenTuiAttributes } from '../platform/opentui-types.js';
 
 export type ApprovalOption = {
     readonly key: string;
@@ -23,27 +24,27 @@ function truncate(value: string, maxLength: number): string {
     return `${value.slice(0, maxLength - 3)}...`;
 }
 
-export function ApprovalPrompt({ toolName, toolArguments, options, message }: ApprovalPromptProps): React.ReactElement {
+export function ApprovalPrompt({ toolName, toolArguments, options, message }: ApprovalPromptProps): React.ReactNode {
     return (
-        <Box flexDirection="column" paddingX={1}>
-            {message !== undefined ? <Text dimColor>{message}</Text> : null}
-            <Text>
-                <Text bold>Tool:</Text> {truncate(toolName, MAX_ARGS_LENGTH)}
-            </Text>
+        <box flexDirection="column" paddingX={1}>
+            {message !== undefined ? <text {...toOpenTuiAttributes({ dimColor: true })}>{message}</text> : null}
+            <text>
+                <text {...toOpenTuiAttributes({ bold: true })}>Tool:</text> {truncate(toolName, MAX_ARGS_LENGTH)}
+            </text>
             {toolArguments !== undefined ? (
-                <Text>
-                    <Text bold>Args:</Text> {truncate(toolArguments, MAX_ARGS_LENGTH)}
-                </Text>
+                <text>
+                    <text {...toOpenTuiAttributes({ bold: true })}>Args:</text> {truncate(toolArguments, MAX_ARGS_LENGTH)}
+                </text>
             ) : null}
-            <Box flexDirection="column" marginTop={1}>
+            <box flexDirection="column" marginTop={1}>
                 {options.map((option) => (
-                    <Text key={option.key}>
-                        <Text bold>[{option.key}]</Text> {option.label}
+                    <text key={option.key}>
+                        <text {...toOpenTuiAttributes({ bold: true })}>[{option.key}]</text> {option.label}
                         {' - '}
-                        <Text dimColor>{option.description}</Text>
-                    </Text>
+                        <text {...toOpenTuiAttributes({ dimColor: true })}>{option.description}</text>
+                    </text>
                 ))}
-            </Box>
-        </Box>
+            </box>
+        </box>
     );
 }

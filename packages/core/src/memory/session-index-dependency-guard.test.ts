@@ -3,6 +3,10 @@ import { z } from 'zod';
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
+// The forbidden list below blocks the legacy native-binding SQLite adapters only.
+// `@libsql/client` is the INTENTIONAL replacement for `better-sqlite3`: it ships prebuilt
+// binaries (no node-gyp), accepts an embedded `file:` URL, and powers TursoPersistentStore.
+// `drizzle-orm` is the typed query builder layered on top. Neither belongs on this list.
 const SQLITE_NODE_DEPENDENCIES = ['better-sqlite3', 'sqlite3', 'sql.js'] as const;
 const SQLITE_RUST_DEPENDENCIES = ['rusqlite', 'libsql'] as const;
 const SKIPPED_DIRS = new Set(['.git', '.nx', '.omo', 'dist', 'node_modules', 'target', 'temp']);
@@ -103,10 +107,13 @@ function cargoDependencyPattern(names: readonly string[]): RegExp {
 }
 
 function pnpmLockPattern(names: readonly string[]): RegExp {
-    return new RegExp(
-        `(^|\\n)\\s*(/${names.map(escapeRegExp).join('@|/')}@|${names.map(escapeRegExp).join('|')}:)`,
-        'u',
-    );
+    // Match only concrete package RESOLUTIONS (`  name@1.2.3:`), not peer-dependency range
+    // declarations (`      name: '>=7'`). drizzle-orm legitimately declares better-sqlite3,
+    // sqlite3, and sql.js as OPTIONAL peers (so it can drive them if a consumer installs one)
+    // without ever installing them; those declarations must not trip this guard. A real
+    // install of a forbidden package always produces a `name@<digit>` resolution entry, so
+    // anchoring on `@<digit>` keeps the guard's full protection with no false positives.
+    return new RegExp(`(^|\\n)\\s*(${names.map(escapeRegExp).join('|')})@\\d`, 'u');
 }
 
 function escapeRegExp(value: string): string {

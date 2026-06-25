@@ -1,7 +1,10 @@
+/** @jsxImportSource @opentui/react */
 import { type AgentEvent, type AgentEventEnvelope } from '@mission-control/protocol';
-import { Box, render, Text, useInput } from 'ink';
-import { useCallback, useState } from 'react';
+import { useKeyboard } from '@opentui/react';
+import { useState } from 'react';
 import { AbgOverlay } from '../components/AbgOverlay.js';
+import { toOpenTuiAttributes, toOpenTuiColor } from '../platform/opentui-types.js';
+import { type OpenTuiMountResult, mountOpenTui } from '../platform/opentui-renderer.js';
 import { createAbgOverlayStore, projectAgentEvent } from './abg-overlay-state.js';
 
 export type ReplayOverlayOptions = {
@@ -10,11 +13,16 @@ export type ReplayOverlayOptions = {
     readonly modelLabel?: string;
 };
 
+const dimAttrs = toOpenTuiAttributes({ dimColor: true });
+const boldAttrs = toOpenTuiAttributes({ bold: true });
+const magentaFg = toOpenTuiColor('magenta');
+
 export async function runReplayOverlay(options: ReplayOverlayOptions): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise<void>((resolve) => {
         const store = createAbgOverlayStore();
         let cursor = 0;
         let done = false;
+        let mountHandle: OpenTuiMountResult | undefined;
 
         const stepTo = (target: number): void => {
             const clamped = Math.max(0, Math.min(target, options.envelopes.length));
@@ -23,7 +31,6 @@ export async function runReplayOverlay(options: ReplayOverlayOptions): Promise<v
                 const snapshot = store.getSnapshot();
                 const next = { ...snapshot };
                 if (target < cursor) {
-                    // Reset to start and replay forward (simplest correct semantics).
                     Object.assign(next, resetStateForReplay());
                 }
                 for (let i = 0; i < clamped; i += 1) {
@@ -36,83 +43,84 @@ export async function runReplayOverlay(options: ReplayOverlayOptions): Promise<v
             });
         };
 
-        // Initialize cursor at the END so the user sees the final state immediately.
         stepTo(options.envelopes.length);
 
-        const ReplayRoot = (): React.ReactElement => {
+        const ReplayRoot = (): React.ReactNode => {
             const [activeTab, setActiveTab] = useState<0 | 1 | 2 | 3 | 4 | 5 | 6 | 7>(0);
             const [scrollOffset, setScrollOffset] = useState(0);
             const [liveOutput, setLiveOutput] = useState(true);
 
-            useInput((input, key) => {
-                if (input === 'q' || key.escape) {
+            useKeyboard((key) => {
+                if (key.name === 'q' || key.name === 'escape') {
                     if (!done) {
                         done = true;
-                        app.unmount();
+                        mountHandle?.unmount();
                         resolve();
                     }
                     return;
                 }
-                if (key.leftArrow) {
+                if (key.name === 'left') {
                     stepTo(cursor - 1);
                     return;
                 }
-                if (key.rightArrow) {
+                if (key.name === 'right') {
                     stepTo(cursor + 1);
                     return;
                 }
-                if (key.upArrow) {
+                if (key.name === 'up') {
                     setScrollOffset((offset) => offset + 1);
                     return;
                 }
-                if (key.downArrow) {
+                if (key.name === 'down') {
                     setScrollOffset((offset) => Math.max(0, offset - 1));
                     return;
                 }
-                if (input >= '1' && input <= '8') {
-                    setActiveTab((Number.parseInt(input, 10) - 1) as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7);
+                if (key.name >= '1' && key.name <= '8') {
+                    setActiveTab((Number.parseInt(key.name, 10) - 1) as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7);
                     setScrollOffset(0);
                     return;
                 }
-                if (input === 't') {
+                if (key.name === 't') {
                     setLiveOutput((value) => !value);
                     return;
                 }
-                if (input === '0') {
+                if (key.name === '0') {
                     stepTo(0);
                     return;
                 }
-                if (input === '$') {
+                if (key.name === '$') {
                     stepTo(options.envelopes.length);
                     return;
                 }
             });
 
             return (
-                <Box flexDirection="column">
-                    <Box>
-                        <Text bold color="magenta">
+                <box flexDirection="column">
+                    <box>
+                        <text {...(magentaFg !== undefined ? { fg: magentaFg } : {})} {...boldAttrs}>
                             [REPLAY]
-                        </Text>
-                        <Text dimColor> session={options.sessionId} </Text>
-                        <Text dimColor>
+                        </text>
+                        <text {...dimAttrs}> session={options.sessionId} </text>
+                        <text {...dimAttrs}>
                             event {cursor}/{options.envelopes.length}
-                        </Text>
-                    </Box>
+                        </text>
+                    </box>
                     <AbgOverlay
                         store={store}
                         activeTab={tabByIndex(activeTab)}
                         scrollOffset={scrollOffset}
                         modelLabel={options.modelLabel ?? 'replay'}
                     />
-                    <Box marginTop={1}>
-                        <Text dimColor>← → step | 0/$ jump | 1-8 tabs | ↑↓ scroll | t live | q/Esc quit</Text>
-                    </Box>
-                </Box>
+                    <box marginTop={1}>
+                        <text {...dimAttrs}>← → step | 0/$ jump | 1-8 tabs | ↑↓ scroll | t live | q/Esc quit</text>
+                    </box>
+                </box>
             );
         };
 
-        const app = render(<ReplayRoot />, { exitOnCtrlC: false });
+        void mountOpenTui(<ReplayRoot />).then((handle) => {
+            mountHandle = handle;
+        });
     });
 }
 

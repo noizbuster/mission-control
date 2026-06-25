@@ -12,7 +12,7 @@ export type ClearAction = { readonly kind: 'clear'; readonly sessionId?: string 
  * OLD session is NOT deleted — only the in-memory display (conversation mirror
  * + bridge output text) is cleared via the undo/redo controller's
  * {@link UndoRedoConversationController.replaceOutputText} seam, which is
- * already wired to call `inkBridge?.replaceOutputText(next)` in the chat loop.
+ * already wired to call `tuiBridge?.replaceOutputText(next)` in the chat loop.
  */
 export async function runClearAction(
     chatOutput: ChatOutput,

@@ -1,6 +1,7 @@
 import type { ModelProviderSelection, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import type { PendingApprovalBehavior, PermissionDecisionResolver } from './approval-gate.js';
 import type { ProjectContextMessageOptions } from './context/project-context-messages.js';
+import type { PersistentMemoryStore } from './memory/persistent-memory-store.js';
 import type { ProviderAdapter } from './providers/provider-turn-types.js';
 import type { ToolRegistry } from './tools/tool-registry.js';
 
@@ -23,4 +24,5 @@ export type AgentRuntimeOptions = {
     readonly createToolRegistry?: RuntimeToolRegistryFactory;
     readonly permissionDecisionResolver?: PermissionDecisionResolver;
     readonly pendingApprovalBehavior?: PendingApprovalBehavior;
+    readonly persistentStore?: PersistentMemoryStore;
 };

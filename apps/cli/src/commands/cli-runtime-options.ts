@@ -3,6 +3,7 @@ import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
     type LspClient,
+    type PersistentMemoryStore,
     ProjectTrustStore,
     type ProviderAdapter,
 } from '@mission-control/core';
@@ -19,6 +20,7 @@ type CliRuntimeOptionsInput = {
     readonly nonInteractiveAutomationPolicy?: NonInteractiveAutomationPolicy;
     /** LSP seam: inject a real `LspClient` to register the `lsp` tool. Default undefined (off). */
     readonly lspClient?: LspClient;
+    readonly persistentStore?: PersistentMemoryStore;
 };
 
 export function createCliRuntimeOptions(input: CliRuntimeOptionsInput): AgentRuntimeOptions {
@@ -49,6 +51,7 @@ export function createCliRuntimeOptions(input: CliRuntimeOptionsInput): AgentRun
                 workspaceRoot: input.workspaceRoot ?? process.cwd(),
             }),
         pendingApprovalBehavior: 'block',
+        ...(input.persistentStore !== undefined ? { persistentStore: input.persistentStore } : {}),
     };
 }
 export type { NonInteractiveAutomationPolicy };

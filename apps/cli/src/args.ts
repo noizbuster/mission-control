@@ -4,7 +4,7 @@ import { type McpKeyValueArg, type McpScope, parseMcpArgs } from './mcp-args.js'
 import { parseGraphArgs, parseRunArgs } from './run-args.js';
 import { parseSessionArgs } from './session-args.js';
 
-export type CliMode = 'ink' | 'plain' | 'json' | 'jsonl';
+export type CliMode = 'tui' | 'plain' | 'json' | 'jsonl';
 
 export type CliCommand =
     | 'run'
@@ -69,12 +69,11 @@ export type CliArgs = {
     readonly mcpScope?: McpScope;
     readonly mcpTimeoutMs?: number;
     readonly mcpEnabled?: boolean;
-    /** When true, `session replay` mounts the Ink overlay instead of dumping JSONL. */
+    /** When true, `session replay` mounts the opentui TUI overlay instead of dumping JSONL. */
     readonly replayInteractive?: boolean;
 };
 
 export const supportedCliFlags = [
-    '--ui',
     '--no-tui',
     '--json',
     '--jsonl',
@@ -96,7 +95,7 @@ export const supportedCliFlags = [
 
 function createBaseArgs(command: CliCommand): Omit<CliArgs, 'modelProviderSelection'> {
     return {
-        mode: 'ink',
+        mode: 'tui',
         useNative: undefined,
         command,
         showHelp: false,
