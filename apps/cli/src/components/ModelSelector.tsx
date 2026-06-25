@@ -58,7 +58,7 @@ export function ModelSelector({
                         const modelLabel = `${selection.providerID}/${selection.modelID}`;
 
                         return (
-                            <text key={choice.id}>
+                            <box key={choice.id} flexDirection="row">
                                 {isSelected ? (
                                     <text {...selectedStyle} {...toOpenTuiAttributes({ bold: true })}>
                                         {marker} {modelLabel}
@@ -69,7 +69,7 @@ export function ModelSelector({
                                     </text>
                                 )}
                                 <text> {choice.label}</text>
-                            </text>
+                            </box>
                         );
                     })}
                 </>

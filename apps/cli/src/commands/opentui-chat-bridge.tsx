@@ -1582,20 +1582,24 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard }: ChatRootProps): React
                     <text fg="#ffff00" {...toOpenTuiAttributes({ bold: true, inverse: true })}>
                         {' Approval Required '}
                     </text>
-                    <text>
-                        <text {...toOpenTuiAttributes({ bold: true })}>Tool:</text> {snapshot.approvalToolName}
-                    </text>
+                    <box flexDirection="row">
+                        <text {...toOpenTuiAttributes({ bold: true })}>Tool:</text>
+                        <text> {snapshot.approvalToolName}</text>
+                    </box>
                     <text {...toOpenTuiAttributes({ dimColor: true })}>{snapshot.approvalAction}</text>
                     <box flexDirection="column" marginTop={1}>
                         {approvalOptions.map((option, index) => {
                             const isSelected = index === snapshot.approvalSelectedIndex;
+                            const selectedBg = isSelected ? { bg: '#0000ff' } : {};
                             return (
-                                <text key={option.key} {...(isSelected ? { bg: '#0000ff' } : {})}>
-                                    {isSelected ? '> ' : '  '}
-                                    {option.label}
-                                    {'  '}
-                                    <text {...toOpenTuiAttributes({ dimColor: true })}>{option.description}</text>
-                                </text>
+                                <box key={option.key} flexDirection="row">
+                                    <text {...selectedBg}>
+                                        {isSelected ? '> ' : '  '}
+                                        {option.label}  </text>
+                                    <text {...toOpenTuiAttributes({ dimColor: true })} {...selectedBg}>
+                                        {option.description}
+                                    </text>
+                                </box>
                             );
                         })}
                     </box>
@@ -1630,12 +1634,13 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard }: ChatRootProps): React
                     {snapshot.questionCustomMode ? (
                         <>
                             <box marginTop={1}>
-                                <text>
-                                    <text fg="#ff00ff">{'>'}</text> {snapshot.questionCustomBuffer}
+                                <box flexDirection="row">
+                                    <text fg="#ff00ff">{'>'}</text>
+                                    <text> {snapshot.questionCustomBuffer}</text>
                                     <text bg="#ffffff" fg="#000000">
                                         {'\u2588'}
                                     </text>
-                                </text>
+                                </box>
                             </box>
                             <text {...toOpenTuiAttributes({ dimColor: true })}>
                                 Enter to submit, Esc to go back to options, Ctrl+C to cancel
@@ -1671,12 +1676,17 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard }: ChatRootProps): React
                                           const customIndex = snapshot.questionOptions.length;
                                           const isSelected = customIndex === snapshot.questionSelectedIndex;
                                           return (
-                                              <text {...(isSelected ? { bg: '#0000ff' } : {})}>
-                                                  {isSelected ? '> ' : '  '}
-                                                  <text {...toOpenTuiAttributes({ dimColor: true })}>
+                                              <box flexDirection="row">
+                                                  <text {...(isSelected ? { bg: '#0000ff' } : {})}>
+                                                      {isSelected ? '> ' : '  '}
+                                                  </text>
+                                                  <text
+                                                      {...toOpenTuiAttributes({ dimColor: true })}
+                                                      {...(isSelected ? { bg: '#0000ff' } : {})}
+                                                  >
                                                       Type custom answer...
                                                   </text>
-                                              </text>
+                                              </box>
                                           );
                                       })()}
                             </box>
@@ -1706,12 +1716,13 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard }: ChatRootProps): React
                         {' Rename Session '}
                     </text>
                     <text>Enter new session name:</text>
-                    <text>
-                        <text fg="#00ffff">{'>'}</text> {snapshot.renameBuffer}
+                    <box flexDirection="row">
+                        <text fg="#00ffff">{'>'}</text>
+                        <text> {snapshot.renameBuffer}</text>
                         <text bg="#ffffff" fg="#000000">
                             {'\u2588'}
                         </text>
-                    </text>
+                    </box>
                     <text {...toOpenTuiAttributes({ dimColor: true })}>Enter to confirm, Esc to cancel</text>
                 </box>
             </box>
@@ -1909,12 +1920,13 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard }: ChatRootProps): React
             ) : null}
             <box flexDirection="column" marginTop={1}>
                 <Separator state={resolveSeparatorState(snapshot)} />
-                <text>
-                    <text fg="#00ffff">{'>'}</text> {snapshot.inputBuffer.slice(0, snapshot.cursorPosition)}
+                <box flexDirection="row">
+                    <text fg="#00ffff">{'>'}</text>
+                    <text> {snapshot.inputBuffer.slice(0, snapshot.cursorPosition)}</text>
                     <text bg="#ffffff" fg="#000000">
                         {'\u2588'}
                     </text>
-                    {snapshot.inputBuffer.slice(snapshot.cursorPosition)}
+                    <text>{snapshot.inputBuffer.slice(snapshot.cursorPosition)}</text>
                     {snapshot.historyNavigation !== null ? (
                         <text {...toOpenTuiAttributes({ dimColor: true })}>
                             {' '}
@@ -1933,7 +1945,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard }: ChatRootProps): React
                             </text>
                         )
                     ) : null}
-                </text>
+                </box>
             </box>
             {statusBarProps !== undefined ? (
                 <box marginTop={1}>

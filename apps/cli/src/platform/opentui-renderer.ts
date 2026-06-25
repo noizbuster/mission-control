@@ -6,8 +6,8 @@
  *
  * Dynamic imports keep `@opentui/core` and `@opentui/react` out of the eager
  * module graph when the CLI runs in non-TUI mode (plain / JSON output). The
- * koffi FFI backend is selected automatically (T2 patch) when neither bun:ffi
- * nor node:ffi is available.
+ * native FFI backend is selected automatically by opentui: `bun:ffi` under Bun,
+ * or `node:ffi` under Node 26.3+ (requires `--experimental-ffi`).
  */
 
 import type { CliRenderer } from '@opentui/core';

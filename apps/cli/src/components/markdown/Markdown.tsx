@@ -704,14 +704,14 @@ function LineView({ line }: { readonly line: RenderLine }): React.ReactNode {
         return <text> </text>;
     }
     return (
-        <text>
+        <box flexDirection="row">
             {line.map((run, index) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: run order is stable for a given line
                 <text key={index} {...inkStyleToOpenTuiProps(run.style)}>
                     {run.href ? buildOsc8Hyperlink(run.href, run.text) : run.text}
                 </text>
             ))}
-        </text>
+        </box>
     );
 }
 

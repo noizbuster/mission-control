@@ -1,8 +1,8 @@
-// Smoke test: verify @opentui/core's createCliRenderer() boots on Node via the
-// koffi FFI backend (no Bun, no node:ffi). Exercises every layer the pnpm patch
-// wires up: native .so dlopen through koffi, native callbacks (log/event sink)
-// through koffi.register, and bun-ffi-structs struct packing through koffi's
-// ptr()/toArrayBuffer() (StyledChunkStruct.packList is on the text render path).
+// Smoke test: verify @opentui/core's createCliRenderer() boots on Node 26.3+ via
+// the native node:ffi backend. Exercises every layer the runtime uses: native .so
+// dlopen through node:ffi, native callbacks (log/event sink), and bun-ffi-structs
+// struct packing through node:ffi's ptr()/toArrayBuffer() (StyledChunkStruct.packList
+// is on the text render path).
 //
 // Run inside a real PTY so the renderer has a TTY to draw to:
 //   node --experimental-strip-types apps/cli/src/platform/smoke-opentui.ts
@@ -11,7 +11,7 @@
 
 import { createCliRenderer, TextRenderable } from '@opentui/core';
 
-const RENDER_TEXT = 'Hello from opentui+koffi!';
+const RENDER_TEXT = 'Hello from opentui+node:ffi!';
 const RENDER_MS = 500;
 
 async function main(): Promise<void> {
@@ -27,7 +27,7 @@ async function main(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, RENDER_MS));
 
     // Explicit success marker on stderr (stdout is owned by the rendered screen).
-    process.stderr.write('SMOKE OK: renderer created + rendered via koffi\n');
+    process.stderr.write('SMOKE OK: renderer created + rendered via node:ffi\n');
 
     renderer.destroy();
     process.exit(0);

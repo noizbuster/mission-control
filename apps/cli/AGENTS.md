@@ -2,17 +2,17 @@
 
 ## Overview
 
-`apps/cli` owns the `mctrl` command-line application: argument parsing, command orchestration, auth/model/session commands, terminal interaction, and interactive chat rendered via opentui (`@opentui/react` over a koffi-loaded native core).
+`apps/cli` owns the `mctrl` command-line application: argument parsing, command orchestration, auth/model/session commands, terminal interaction, and interactive chat rendered via opentui (`@opentui/react` over a node:ffi-loaded native core on Node 26.3+).
 
 The interactive chat uses `@opentui/react` + React 19 for terminal rendering, bridged to the existing imperative chat loop via `useSyncExternalStore`. The bridge pattern allows the imperative `runInteractiveChatSession` loop to stay unchanged while opentui owns all keyboard input and screen output.
 
 ## opentui Chat Architecture
 
-### Native core via koffi FFI
+### Native core via node:ffi (Node 26.3+)
 
-opentui ships a Zig native core (`libopentui.so` / `.dylib` / `.dll`) accessed through an FFI backend. opentui's reference backends target Bun (`bun:ffi`) and Node's experimental `node:ffi`; neither is available on a stock Node 22/24 runtime. `apps/cli/src/platform/koffi-ffi-backend.ts` adds a third backend, `createKoffiBackend`, that loads the shared library through [koffi](https://koffi.dev/). A pnpm patch (`patches/@opentui__core.patch`) wires `createKoffiBackend` into opentui's `loadBackend()` so the koffi path is selected automatically when neither `bun:ffi` nor `node:ffi` is present (the Node default). The patch also wraps each bound native symbol to coerce `bool`-typed args via `Boolean()` (koffi's `bool` is strict; bun/node accept `0|1`).
+opentui ships a Zig native core (`libopentui.so` / `.dylib` / `.dll`) accessed through an FFI backend. opentui's `loadBackend()` tries `bun:ffi` under Bun and `node:ffi` under Node, falling back to an unsupported backend on failure. With Node 26.3+, the `node:ffi` module is available and `createNodeBackend` handles dlopen, callbacks, and pointer arithmetic natively. No third-party FFI library or pnpm patch is required. Run the CLI with `--experimental-ffi` so `node:ffi` loads.
 
-The struct layer (`bun-ffi-structs`) is pure JavaScript — it computes offsets/sizes with arithmetic and packs into `ArrayBuffer` via `DataView`. Only its `ptr()` and `toArrayBuffer()` primitives touch native code, and both route through the same koffi backend. No per-struct koffi rewrite is needed.
+The struct layer (`bun-ffi-structs`) is pure JavaScript — it computes offsets/sizes with arithmetic and packs into `ArrayBuffer` via `DataView`. Only its `ptr()` and `toArrayBuffer()` primitives touch native code, and both route through the same node:ffi backend. No per-struct rewrite is needed.
 
 ### Bridge Pattern
 
@@ -173,7 +173,6 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | opentui ChatInput adapter | `src/commands/opentui-chat-input.ts` | Delegates to bridge.waitForEvent |
 | opentui ChatOutput adapter | `src/commands/opentui-chat-output.ts` | Delegates to bridge.emitOutput |
 | opentui components | `src/components/*.tsx` | TextInput, SlashCommandMenu, ModelSelector, MessageList, StatusBar, ApprovalPrompt. Each opentui-intrinsic file starts with the `@jsxImportSource @opentui/react` pragma. |
-| Native FFI backend | `src/platform/koffi-ffi-backend.ts` | `createKoffiBackend(koffi)` loads opentui's Zig core via koffi; wired in via `patches/@opentui__core.patch`. |
 | opentui renderer mount/unmount | `src/platform/opentui-renderer.ts` | `mountOpenTui(element)` dynamic-imports `createCliRenderer` + `createRoot`, returns `{ renderer, root, unmount }`. |
 | KeyEvent adapter | `src/platform/key-event-adapter.ts` | `createKeyEventAdapter` / `adaptKeyEvent`: opentui `KeyEvent` → Ink-compatible `{ input, key }`. Stateless, per-event. |
 | opentui type mappings | `src/platform/opentui-types.ts` | `toOpenTuiColor`, `toOpenTuiBorderStyle`, `toOpenTuiAttributes` (Ink color/flag → opentui `fg`/`bg`/`attributes`). |

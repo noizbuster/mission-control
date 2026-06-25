@@ -5,9 +5,6 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@opentui/core':
-    hash: a230102f0328ba9d4b3fe654aa4c7067740474f5c7fd444c86d812a4ca063af3
-    path: patches/@opentui__core.patch
   '@opentui/react':
     hash: f6390c536c950acf0c830de14b199ff10c3d2f274b1bb9acf4d1da4b0b364f8f
     path: patches/@opentui__react.patch
@@ -48,7 +45,7 @@ importers:
         version: link:../../packages/protocol
       '@opentui/core':
         specifier: ^0.4.2
-        version: 0.4.2(patch_hash=a230102f0328ba9d4b3fe654aa4c7067740474f5c7fd444c86d812a4ca063af3)(typescript@6.0.3)(web-tree-sitter@0.25.10)
+        version: 0.4.2(typescript@6.0.3)(web-tree-sitter@0.25.10)
       '@opentui/keymap':
         specifier: ^0.4.2
         version: 0.4.2(@opentui/react@0.4.2(patch_hash=f6390c536c950acf0c830de14b199ff10c3d2f274b1bb9acf4d1da4b0b364f8f)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@6.0.3)(web-tree-sitter@0.25.10)(ws@8.21.0))(react@19.2.7)(typescript@6.0.3)(web-tree-sitter@0.25.10)
@@ -64,9 +61,6 @@ importers:
       diff:
         specifier: ^9.0.0
         version: 9.0.0
-      koffi:
-        specifier: ^3.0.2
-        version: 3.0.2
       marked:
         specifier: ^18.0.5
         version: 18.0.5
@@ -457,76 +451,6 @@ packages:
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
-
-  '@koromix/koffi-darwin-arm64@3.0.2':
-    resolution: {integrity: sha512-OaL5EViEvsdbc8Ut90zY44AKF3mq6JBqkK/xLkGaSXcLsOJUsD+XaPAZb/WOWcKVg7On31wP+4hB7MwHQPdiUg==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@koromix/koffi-darwin-x64@3.0.2':
-    resolution: {integrity: sha512-ZkBKudZkIOy5yVcp8cUTFCrE5DSgxkcH26mUxV6m8JgUtvtps4iMIGAAZLSq5aouvQQKhbKpXtZ3YdzpcytM+g==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@koromix/koffi-freebsd-arm64@3.0.2':
-    resolution: {integrity: sha512-eVHMjYL6yMc7GOdH0juDVEYFU4D9Az6cqyI7+ytWwovwAjHNtf96S17Ag/aI2qs7WVCoHceKDdMUATzs5grvMw==}
-    cpu: [arm64]
-    os: [freebsd]
-
-  '@koromix/koffi-freebsd-ia32@3.0.2':
-    resolution: {integrity: sha512-qiSkR5fF/oa8MIukjsXMmFPC/FWGfUtw3ee+jgURg0R+Tuhlvqlfh50W4rQ0Y0faITJcF+3wmCI6WSt7p4iCkA==}
-    cpu: [ia32]
-    os: [freebsd]
-
-  '@koromix/koffi-freebsd-x64@3.0.2':
-    resolution: {integrity: sha512-RDqoD8tBiRoe1C/lZEdMWETKk2dTR298XgJ9PBXbw2ETMVpIX+ci++X+j+4e7J3kVldxHLdFCykNei6d1wmhTA==}
-    cpu: [x64]
-    os: [freebsd]
-
-  '@koromix/koffi-linux-arm64@3.0.2':
-    resolution: {integrity: sha512-zIm5NlzFuxt4f6mDjwTDgfzu8oZngcALTmOkWbp7HSeWdjQeiy8JRaSOEpfzlIlqWoPxhRUX5Yniqkt8564VnA==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@koromix/koffi-linux-ia32@3.0.2':
-    resolution: {integrity: sha512-Le3JxJswxBhO3OeeSWA400/v2sTPwTWz/IIc6ARc4SbTGUcz2jm6jXXQviW01r5OvCQ+w2Q2T4PxP+eaRa2+fQ==}
-    cpu: [ia32]
-    os: [linux]
-
-  '@koromix/koffi-linux-loong64@3.0.2':
-    resolution: {integrity: sha512-TiPOFy4OX0tLhKwL6oSOhDIhwd5b48x7nxCBT8u6IW+nLXMIo2j+jla1h9niQ8HVGknGOzu48k55KVl0YMsaew==}
-    cpu: [loong64]
-    os: [linux]
-
-  '@koromix/koffi-linux-riscv64@3.0.2':
-    resolution: {integrity: sha512-U44szVAHW4WKTV0s6K6rjeZEURJ0CFHbZC0Ik3lpzvEidbOu8dTft7OGNr4hhBvx/XaeLMCCebPLBoYZZNW2Dg==}
-    cpu: [riscv64]
-    os: [linux]
-
-  '@koromix/koffi-linux-x64@3.0.2':
-    resolution: {integrity: sha512-bm4qT+e59KWn4V/jK8uF1RV2k0/JJvmGPUj4qCJ3E9663H+6ZLqz1rpCdgXSEA95f5CNR3RWcgjQwxgKO9xFtQ==}
-    cpu: [x64]
-    os: [linux]
-
-  '@koromix/koffi-openbsd-ia32@3.0.2':
-    resolution: {integrity: sha512-tUu2LMSyeCSe1DbJKZrjGOKRQzDhj/RAw4rVdlHXlU/B26sdyKZjEwE3GxVlYDdEBX4FiYYmoVuG3BwGWSefCw==}
-    cpu: [ia32]
-    os: [openbsd]
-
-  '@koromix/koffi-openbsd-x64@3.0.2':
-    resolution: {integrity: sha512-o4QZwsKIQvlMSIJaCXsu8d2sz4bbKEJrZhmnCeT/SKEU1VEiegmDn/I6DYrg5mOMDC15GWlUP1qP6AsVlrxqXA==}
-    cpu: [x64]
-    os: [openbsd]
-
-  '@koromix/koffi-win32-ia32@3.0.2':
-    resolution: {integrity: sha512-Yz/iP2xLaq8t3TFy5+f2Oww7rBpXgZ4YRexdYffSm2EwcnDeCtPudQSjIiKyEBdvDsU2vQetTrxyqDHStXXocw==}
-    cpu: [ia32]
-    os: [win32]
-
-  '@koromix/koffi-win32-x64@3.0.2':
-    resolution: {integrity: sha512-zozoHzvSi61jch4sKqFi3ATsDC7lviFthoivzPKVk4VeJvFeSdqueKoYGHNXEzfhIXn9Y5K85l9a59nwfutkUA==}
-    cpu: [x64]
-    os: [win32]
 
   '@libsql/client@0.17.4':
     resolution: {integrity: sha512-lYayFWasDV78A+TjlEhr6ubb3odBV6OHjb+wdp8VQcyWWAEIjuwbCHaraEUS4m4yWoo0BvZo96It4VdzZRmRWw==}
@@ -1492,9 +1416,6 @@ packages:
   jsonc-parser@3.3.1:
     resolution: {integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==}
 
-  koffi@3.0.2:
-    resolution: {integrity: sha512-YS4sGzlVMhFNNkKbkB3tcLKJxH9WGP3jHTxi4Eyx+ieMRKVz4K2i+6rebYr9ngHN36jhIW6YXnxkzBeOQ51lsw==}
-
   libsql@0.5.29:
     resolution: {integrity: sha512-8lMP8iMgiBzzoNbAPQ59qdVcj6UaE/Vnm+fiwX4doX4Narook0a4GPKWBEv+CR8a1OwbfkgL18uBfBjWdF0Fzg==}
     cpu: [x64, arm64, wasm32, arm]
@@ -2341,48 +2262,6 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
-  '@koromix/koffi-darwin-arm64@3.0.2':
-    optional: true
-
-  '@koromix/koffi-darwin-x64@3.0.2':
-    optional: true
-
-  '@koromix/koffi-freebsd-arm64@3.0.2':
-    optional: true
-
-  '@koromix/koffi-freebsd-ia32@3.0.2':
-    optional: true
-
-  '@koromix/koffi-freebsd-x64@3.0.2':
-    optional: true
-
-  '@koromix/koffi-linux-arm64@3.0.2':
-    optional: true
-
-  '@koromix/koffi-linux-ia32@3.0.2':
-    optional: true
-
-  '@koromix/koffi-linux-loong64@3.0.2':
-    optional: true
-
-  '@koromix/koffi-linux-riscv64@3.0.2':
-    optional: true
-
-  '@koromix/koffi-linux-x64@3.0.2':
-    optional: true
-
-  '@koromix/koffi-openbsd-ia32@3.0.2':
-    optional: true
-
-  '@koromix/koffi-openbsd-x64@3.0.2':
-    optional: true
-
-  '@koromix/koffi-win32-ia32@3.0.2':
-    optional: true
-
-  '@koromix/koffi-win32-x64@3.0.2':
-    optional: true
-
   '@libsql/client@0.17.4':
     dependencies:
       '@libsql/core': 0.17.4
@@ -2534,7 +2413,7 @@ snapshots:
   '@opentui/core-win32-x64@0.4.2':
     optional: true
 
-  '@opentui/core@0.4.2(patch_hash=a230102f0328ba9d4b3fe654aa4c7067740474f5c7fd444c86d812a4ca063af3)(typescript@6.0.3)(web-tree-sitter@0.25.10)':
+  '@opentui/core@0.4.2(typescript@6.0.3)(web-tree-sitter@0.25.10)':
     dependencies:
       bun-ffi-structs: 0.2.3(typescript@6.0.3)
       diff: 9.0.0
@@ -2556,7 +2435,7 @@ snapshots:
 
   '@opentui/keymap@0.4.2(@opentui/react@0.4.2(patch_hash=f6390c536c950acf0c830de14b199ff10c3d2f274b1bb9acf4d1da4b0b364f8f)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@6.0.3)(web-tree-sitter@0.25.10)(ws@8.21.0))(react@19.2.7)(typescript@6.0.3)(web-tree-sitter@0.25.10)':
     dependencies:
-      '@opentui/core': 0.4.2(patch_hash=a230102f0328ba9d4b3fe654aa4c7067740474f5c7fd444c86d812a4ca063af3)(typescript@6.0.3)(web-tree-sitter@0.25.10)
+      '@opentui/core': 0.4.2(typescript@6.0.3)(web-tree-sitter@0.25.10)
     optionalDependencies:
       '@opentui/react': 0.4.2(patch_hash=f6390c536c950acf0c830de14b199ff10c3d2f274b1bb9acf4d1da4b0b364f8f)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@6.0.3)(web-tree-sitter@0.25.10)(ws@8.21.0)
       react: 19.2.7
@@ -2566,7 +2445,7 @@ snapshots:
 
   '@opentui/react@0.4.2(patch_hash=f6390c536c950acf0c830de14b199ff10c3d2f274b1bb9acf4d1da4b0b364f8f)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@6.0.3)(web-tree-sitter@0.25.10)(ws@8.21.0)':
     dependencies:
-      '@opentui/core': 0.4.2(patch_hash=a230102f0328ba9d4b3fe654aa4c7067740474f5c7fd444c86d812a4ca063af3)(typescript@6.0.3)(web-tree-sitter@0.25.10)
+      '@opentui/core': 0.4.2(typescript@6.0.3)(web-tree-sitter@0.25.10)
       react: 19.2.7
       react-devtools-core: 7.0.1
       react-reconciler: 0.33.0(react@19.2.7)
@@ -3189,23 +3068,6 @@ snapshots:
   json5@2.2.3: {}
 
   jsonc-parser@3.3.1: {}
-
-  koffi@3.0.2:
-    optionalDependencies:
-      '@koromix/koffi-darwin-arm64': 3.0.2
-      '@koromix/koffi-darwin-x64': 3.0.2
-      '@koromix/koffi-freebsd-arm64': 3.0.2
-      '@koromix/koffi-freebsd-ia32': 3.0.2
-      '@koromix/koffi-freebsd-x64': 3.0.2
-      '@koromix/koffi-linux-arm64': 3.0.2
-      '@koromix/koffi-linux-ia32': 3.0.2
-      '@koromix/koffi-linux-loong64': 3.0.2
-      '@koromix/koffi-linux-riscv64': 3.0.2
-      '@koromix/koffi-linux-x64': 3.0.2
-      '@koromix/koffi-openbsd-ia32': 3.0.2
-      '@koromix/koffi-openbsd-x64': 3.0.2
-      '@koromix/koffi-win32-ia32': 3.0.2
-      '@koromix/koffi-win32-x64': 3.0.2
 
   libsql@0.5.29:
     dependencies:

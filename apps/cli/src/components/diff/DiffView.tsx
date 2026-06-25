@@ -69,15 +69,19 @@ function DiffRow({ line, index }: { readonly line: DiffLine; readonly index: num
     const style = kindStyle(line.kind);
     const spans = splitLineSpans(line);
     const fg = style.color !== undefined ? toOpenTuiColor(style.color) : undefined;
+    const rowStyle = {
+        ...(fg !== undefined ? { fg } : {}),
+        ...(style.dimColor === true ? { dim: true } : {}),
+    };
     return (
-        <text {...(fg !== undefined ? { fg } : {})} {...(style.dimColor === true ? { dim: true } : {})}>
+        <box flexDirection="row">
             {spans.map((span, segIndex) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: index is stable per (line, segment)
-                <text key={`seg-${index}-${segIndex}`} {...(span.inverse ? { inverse: true } : {})}>
+                <text key={`seg-${index}-${segIndex}`} {...rowStyle} {...(span.inverse ? { inverse: true } : {})}>
                     {span.text}
                 </text>
             ))}
-        </text>
+        </box>
     );
 }
 

@@ -122,10 +122,10 @@ export function OverviewPane({ state, modelLabel }: PaneProps): React.ReactNode 
             </box>
             {knownGraphs.length > 1 ? (
                 <box marginTop={1} flexDirection="column">
-                    <text {...boldAttrs}>
-                        Graphs ({knownGraphs.length}){'  '}
+                    <box flexDirection="row">
+                        <text {...boldAttrs}>{`Graphs (${knownGraphs.length})  `}</text>
                         <text {...dimAttrs}>press 'g' to cycle focus</text>
-                    </text>
+                    </box>
                     {knownGraphs.map((summary) => {
                         const isFocused = summary.graphId === state.focusedGraphId;
                         const color = graphStatusFg(summary.status);

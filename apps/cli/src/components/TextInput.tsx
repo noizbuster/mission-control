@@ -14,11 +14,11 @@ const defaultPrefix = '> ';
 export function TextInput({ value, placeholder, prefix = defaultPrefix }: TextInputProps): React.ReactNode {
     const showPlaceholder = value.length === 0 && placeholder !== undefined;
     return (
-        <text>
-            {prefix}
+        <box flexDirection="row">
+            <text>{prefix}</text>
             <text {...toOpenTuiAttributes({ dimColor: showPlaceholder })}>
                 {showPlaceholder ? placeholder : value}
             </text>
-        </text>
+        </box>
     );
 }

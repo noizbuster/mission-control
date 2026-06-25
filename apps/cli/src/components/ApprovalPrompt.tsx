@@ -28,21 +28,23 @@ export function ApprovalPrompt({ toolName, toolArguments, options, message }: Ap
     return (
         <box flexDirection="column" paddingX={1}>
             {message !== undefined ? <text {...toOpenTuiAttributes({ dimColor: true })}>{message}</text> : null}
-            <text>
-                <text {...toOpenTuiAttributes({ bold: true })}>Tool:</text> {truncate(toolName, MAX_ARGS_LENGTH)}
-            </text>
+            <box flexDirection="row">
+                <text {...toOpenTuiAttributes({ bold: true })}>Tool:</text>
+                <text> {truncate(toolName, MAX_ARGS_LENGTH)}</text>
+            </box>
             {toolArguments !== undefined ? (
-                <text>
-                    <text {...toOpenTuiAttributes({ bold: true })}>Args:</text> {truncate(toolArguments, MAX_ARGS_LENGTH)}
-                </text>
+                <box flexDirection="row">
+                    <text {...toOpenTuiAttributes({ bold: true })}>Args:</text>
+                    <text> {truncate(toolArguments, MAX_ARGS_LENGTH)}</text>
+                </box>
             ) : null}
             <box flexDirection="column" marginTop={1}>
                 {options.map((option) => (
-                    <text key={option.key}>
-                        <text {...toOpenTuiAttributes({ bold: true })}>[{option.key}]</text> {option.label}
-                        {' - '}
+                    <box key={option.key} flexDirection="row">
+                        <text {...toOpenTuiAttributes({ bold: true })}>[{option.key}]</text>
+                        <text> {option.label} - </text>
                         <text {...toOpenTuiAttributes({ dimColor: true })}>{option.description}</text>
-                    </text>
+                    </box>
                 ))}
             </box>
         </box>
