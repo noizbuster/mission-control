@@ -21,11 +21,18 @@
  * re-render of unchanged input returns the same instance.
  */
 
-import { toOpenTuiAttributes, toOpenTuiColor } from '../../platform/opentui-types.js';
 import type { Token, Tokens } from 'marked';
 import { marked } from 'marked';
 import type React from 'react';
+import { useSyncExternalStore } from 'react';
 import wrapAnsi from 'wrap-ansi';
+import { toOpenTuiAttributes, toOpenTuiColor } from '../../platform/opentui-types.js';
+// MUST come after ./theme.js: the module graph highlight -> tree-sitter-highlighter
+// -> render-cache -> theme -> highlight is circular. Loading render-cache first
+// (via the import above) ensures theme.ts body runs AFTER highlight.ts finishes,
+// so darkTheme.highlightCode resolves to the real function instead of undefined.
+import { getHighlightVersion, subscribeHighlight } from './highlight.js';
+import { getCachedBlocks } from './render-cache.js';
 import { streamBlocks } from './stream.js';
 import type { InkTextStyle, TerminalMarkdownTheme } from './theme.js';
 import { darkTheme } from './theme.js';
@@ -224,12 +231,6 @@ export function reflowRuns(runs: readonly InlineRun[], width: number): readonly 
         output.push(...wrapSegment(segment, effectiveWidth));
     }
     return output.length === 0 ? [[]] : output;
-}
-
-/** Cache key derived from the full input tuple. Stable for identical inputs. */
-export function renderCacheKey(text: string, width: number, streaming: boolean, theme: TerminalMarkdownTheme): string {
-    const tag = theme === darkTheme ? 'd' : 'c';
-    return `${tag}:${streaming ? 1 : 0}:${width}:${text}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -643,41 +644,6 @@ export function buildBlocks(
     return tokenToBlocks(tokens, theme, width);
 }
 
-const RENDER_CACHE: Map<string, readonly RenderBlock[]> = new Map();
-const CACHE_LIMIT = 64;
-
-/** Clear the render cache. Intended for test isolation. */
-export function clearRenderCache(): void {
-    RENDER_CACHE.clear();
-}
-
-/**
- * Return the rendered blocks for `(text, width, streaming, theme)`, caching the
- * result in a 64-entry LRU keyed on the full input tuple. A repeat call with
- * unchanged input returns the SAME array instance (referential equality).
- */
-export function getCachedBlocks(
-    text: string,
-    width: number,
-    streaming: boolean,
-    theme: TerminalMarkdownTheme,
-): readonly RenderBlock[] {
-    const key = renderCacheKey(text, width, streaming, theme);
-    const cached = RENDER_CACHE.get(key);
-    if (cached) {
-        RENDER_CACHE.delete(key);
-        RENDER_CACHE.set(key, cached);
-        return cached;
-    }
-    const blocks = buildBlocks(text, width, streaming, theme);
-    RENDER_CACHE.set(key, blocks);
-    if (RENDER_CACHE.size > CACHE_LIMIT) {
-        const oldest = RENDER_CACHE.keys().next().value;
-        if (oldest !== undefined) RENDER_CACHE.delete(oldest);
-    }
-    return blocks;
-}
-
 // ---------------------------------------------------------------------------
 // React component.
 // ---------------------------------------------------------------------------
@@ -716,9 +682,21 @@ function LineView({ line }: { readonly line: RenderLine }): React.ReactNode {
     );
 }
 
+/**
+ * Subscribe the calling component to tree-sitter async-fill notifications.
+ * Returns the current highlight version; the component re-renders whenever the
+ * version bumps (i.e. when an async highlight fill lands and the render LRU is
+ * invalidated via `clearRenderCache`). The third `getServerSnapshot` arg keeps
+ * React 19 SSR/noop renders happy.
+ */
+export function useHighlightVersion(): number {
+    return useSyncExternalStore(subscribeHighlight, getHighlightVersion, getHighlightVersion);
+}
+
 export function Markdown({ text, width, streaming, theme, selectable }: MarkdownProps): React.ReactNode {
+    useHighlightVersion();
     const resolvedTheme = theme ?? darkTheme;
-    const blocks = getCachedBlocks(text, width, streaming ?? false, resolvedTheme);
+    const blocks = getCachedBlocks(text, width, streaming ?? false, resolvedTheme, buildBlocks);
     return (
         <box flexDirection="column" {...(selectable !== undefined ? { selectable } : {})}>
             {blocks.map((block, blockIndex) => (

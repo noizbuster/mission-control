@@ -1,13 +1,14 @@
+import type { FiletypeParserOptions, SimpleHighlight, SyntaxStyle, TextChunk, TreeSitterClient } from '@opentui/core';
+import { RGBA } from '@opentui/core';
 import { marked } from 'marked';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InlineRun } from './Markdown.js';
 import {
+    buildBlocks,
     buildOsc8Hyperlink,
     buildTableBorder,
     classifyHeading,
-    clearRenderCache,
     computeTableColumnWidths,
-    getCachedBlocks,
     linkFallbackSuffix,
     listItemMarker,
     longestWordWidth,
@@ -17,7 +18,57 @@ import {
     renderInlineToRuns,
     stripMailto,
 } from './Markdown.js';
+import { clearRenderCache, getCachedBlocks } from './render-cache.js';
 import { darkTheme } from './theme.js';
+import { type HighlighterRuntime, resetHighlighterForTest, setHighlighterRuntime } from './tree-sitter-highlighter.js';
+
+/**
+ * Build a fully-mocked HighlighterRuntime returning canned colored TextChunks,
+ * so no opentui worker, native core, or network is touched. Mirrors the proven
+ * pattern in tree-sitter-highlighter.test.ts; RGBA / rgbToHex stay real so
+ * colored-chunk assertions exercise the real decode path.
+ */
+function createMockHighlighterRuntime(chunks: readonly TextChunk[]): HighlighterRuntime {
+    const mockClient = {
+        setDataPath: vi.fn((): Promise<void> => Promise.resolve()),
+        highlightOnce: vi.fn(
+            (): Promise<{ highlights?: SimpleHighlight[]; warning?: string; error?: string }> =>
+                Promise.resolve({ highlights: [] }),
+        ),
+    } as unknown as TreeSitterClient;
+    return {
+        getClient: () => mockClient,
+        destroyClient: (): Promise<void> => Promise.resolve(),
+        buildSyntaxStyle: () => ({ destroy: vi.fn() }) as unknown as SyntaxStyle,
+        resolveDataPath: () => '/tmp/mctrl-test-data-dir',
+        registerParsers: (_parsers: readonly FiletypeParserOptions[]) => {},
+        toTextChunks: () => [...chunks],
+        filetypeFromInfoString: (infoString: string) => (infoString === 'ts' ? 'typescript' : undefined),
+    };
+}
+
+/**
+ * Flush pending microtasks until the async fill chain (init -> highlightOnce ->
+ * process) settles. Mirrors tree-sitter-highlighter.test.ts.
+ */
+async function flushPending(rounds = 20): Promise<void> {
+    for (let i = 0; i < rounds; i++) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+}
+
+beforeEach(() => {
+    clearRenderCache();
+    resetHighlighterForTest();
+    setHighlighterRuntime(
+        createMockHighlighterRuntime([{ __isChunk: true, text: 'const x: number = 1;', fg: RGBA.fromHex('#c792ea') }]),
+    );
+});
+
+afterEach(() => {
+    resetHighlighterForTest();
+    clearRenderCache();
+});
 
 /** Lex a one-paragraph markdown string and return its inline runs. */
 function inlineRuns(md: string): readonly InlineRun[] {
@@ -249,27 +300,27 @@ describe('getCachedBlocks LRU cache', () => {
     });
 
     it('returns the same instance for unchanged input', () => {
-        const first = getCachedBlocks('# Hi\n\nbody text', 40, false, darkTheme);
-        const second = getCachedBlocks('# Hi\n\nbody text', 40, false, darkTheme);
+        const first = getCachedBlocks('# Hi\n\nbody text', 40, false, darkTheme, buildBlocks);
+        const second = getCachedBlocks('# Hi\n\nbody text', 40, false, darkTheme, buildBlocks);
         expect(second).toBe(first);
     });
 
     it('returns a different instance when width changes', () => {
-        const at40 = getCachedBlocks('# Hi', 40, false, darkTheme);
-        const at60 = getCachedBlocks('# Hi', 60, false, darkTheme);
+        const at40 = getCachedBlocks('# Hi', 40, false, darkTheme, buildBlocks);
+        const at60 = getCachedBlocks('# Hi', 60, false, darkTheme, buildBlocks);
         expect(at60).not.toBe(at40);
     });
 
     it('rebuilds after the cache is cleared', () => {
-        const first = getCachedBlocks('# Hi', 40, false, darkTheme);
+        const first = getCachedBlocks('# Hi', 40, false, darkTheme, buildBlocks);
         clearRenderCache();
-        const rebuilt = getCachedBlocks('# Hi', 40, false, darkTheme);
+        const rebuilt = getCachedBlocks('# Hi', 40, false, darkTheme, buildBlocks);
         expect(rebuilt).not.toBe(first);
     });
 
     it('distinguishes streaming from non-streaming for the same text', () => {
-        const live = getCachedBlocks('# Hi', 40, true, darkTheme);
-        const full = getCachedBlocks('# Hi', 40, false, darkTheme);
+        const live = getCachedBlocks('# Hi', 40, true, darkTheme, buildBlocks);
+        const full = getCachedBlocks('# Hi', 40, false, darkTheme, buildBlocks);
         expect(live).not.toBe(full);
     });
 });
@@ -280,14 +331,16 @@ describe('Markdown component', () => {
     });
 
     it('renders a heading + paragraph fixture without throwing', () => {
-        expect(() => Markdown({ text: '# Title\n\nSome **bold** text.', width: 40 })).not.toThrow();
+        expect(() =>
+            getCachedBlocks('# Title\n\nSome **bold** text.', 40, false, darkTheme, buildBlocks),
+        ).not.toThrow();
     });
 
     it('renders a malformed 1-cell table at width=20 without throwing', () => {
-        expect(() => Markdown({ text: '| A |\n| --- |\n| 1 |', width: 20 })).not.toThrow();
+        expect(() => getCachedBlocks('| A |\n| --- |\n| 1 |', 20, false, darkTheme, buildBlocks)).not.toThrow();
     });
 
-    it('renders a combined fixture (heading, paragraph, list, code, table, blockquote, hr) without throwing', () => {
+    it('renders a combined fixture (heading, paragraph, list, code, table, blockquote, hr) without throwing', async () => {
         const md = [
             '# Heading',
             '',
@@ -308,24 +361,27 @@ describe('Markdown component', () => {
             '',
             '---',
         ].join('\n');
-        expect(() => Markdown({ text: md, width: 60 })).not.toThrow();
+        expect(() => getCachedBlocks(md, 60, false, darkTheme, buildBlocks)).not.toThrow();
+        await flushPending();
     });
 });
 
 describe('renderCodeBlock token highlighting', () => {
-    it('emits per-token colored runs when the theme highlightCode slot is wired', () => {
+    it('emits per-token colored runs after the async tree-sitter fill lands', async () => {
+        renderCodeBlock('const x: number = 1;', 'ts', darkTheme, 40);
+        await flushPending();
         const block = renderCodeBlock('const x: number = 1;', 'ts', darkTheme, 40);
         const bodyRuns = block.lines.slice(1, -1).flat();
-        const colors = new Set(bodyRuns.map((run) => run.style.color));
-        expect(colors.has('magenta')).toBe(true);
-        expect(colors.size).toBeGreaterThan(1);
+        const coloredRuns = bodyRuns.filter((run) => run.style.color !== undefined && run.style.color.startsWith('#'));
+        expect(coloredRuns.length).toBeGreaterThan(0);
     });
 });
 
 describe('streaming-mode block splitting integration', () => {
-    it('lexes each stream block independently and produces renderable blocks', () => {
-        expect(() => getCachedBlocks('# Hi\n\n```ts\nconst x', 40, true, darkTheme)).not.toThrow();
-        const blocks = getCachedBlocks('# Hi\n\n```ts\nconst x', 40, true, darkTheme);
+    it('lexes each stream block independently and produces renderable blocks', async () => {
+        expect(() => getCachedBlocks('# Hi\n\n```ts\nconst x', 40, true, darkTheme, buildBlocks)).not.toThrow();
+        const blocks = getCachedBlocks('# Hi\n\n```ts\nconst x', 40, true, darkTheme, buildBlocks);
         expect(blocks.length).toBeGreaterThan(0);
+        await flushPending();
     });
 });
