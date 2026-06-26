@@ -2,7 +2,7 @@
 import type { TextareaRenderable, ScrollBoxRenderable } from '@opentui/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { createRef } from 'react';
-import type { OpenTuiChatBridge } from './opentui-chat-bridge.js';
+import type { OpenTuiChatBridge } from './chat-tui-types.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { createChatStore, type ChatStore } from './chat-store.js';
 import type { StatusBarProps } from '../components/StatusBar.js';

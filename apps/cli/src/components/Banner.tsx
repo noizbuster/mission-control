@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/react */
-import type { OpenTuiChatBridgeOptions } from '../commands/opentui-chat-bridge.js';
+import type { OpenTuiChatBridgeOptions } from '../commands/chat-tui-types.js';
 
 // Rendered outside core.outputText so it cannot accumulate as ghost text when
 // the scrollback grows past the terminal viewport (root cause of the stacking

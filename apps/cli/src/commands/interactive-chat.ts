@@ -49,7 +49,7 @@ import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 import { createChatTui, type ChatTuiOptions } from './create-chat-tui.js';
-import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './opentui-chat-bridge.js';
+import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './chat-tui-types.js';
 import { loadPricingTable } from './pricing-table-store.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };

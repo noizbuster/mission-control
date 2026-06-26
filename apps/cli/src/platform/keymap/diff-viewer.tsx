@@ -31,7 +31,7 @@
  */
 
 import type React from 'react';
-import { type ChatBlock, parseMessageBlocks } from '../../commands/opentui-chat-bridge.js';
+import { type ChatBlock, parseMessageBlocks } from '../../commands/chat-blocks.js';
 import { DiffView } from '../../components/diff/DiffView.js';
 import { type DiffLine, renderDiff } from '../../components/diff/render-diff.js';
 import { hasDiffContent } from '../../components/ToolCard.js';
