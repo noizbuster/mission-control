@@ -6,7 +6,8 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { InlineRun, RenderLine } from './Markdown.js';
-import { clearRenderCache, getCachedBlocks, reflowRuns } from './Markdown.js';
+import { buildBlocks, reflowRuns } from './Markdown.js';
+import { clearRenderCache, getCachedBlocks } from './render-cache.js';
 import { darkTheme } from './theme.js';
 
 /** Visible terminal width of a string, counting East Asian Wide chars as 2. */
@@ -57,7 +58,7 @@ describe('wrapping hardening', () => {
         const width = 20;
         const paragraph =
             'The quick brown fox jumps over the lazy dog while a second sentence extends past the narrow column boundary.';
-        const blocks = getCachedBlocks(paragraph, width, false, darkTheme);
+        const blocks = getCachedBlocks(paragraph, width, false, darkTheme, buildBlocks);
         const lines = blocks.flatMap((block) => block.lines);
         expect(lines.length).toBeGreaterThan(1);
         for (const line of lines) {
@@ -100,7 +101,7 @@ describe('CJK double-width wrapping', () => {
     it('wraps CJK via getCachedBlocks (full lexer path) without overflow', () => {
         const width = 24;
         const md = `Assistant: ${'日本語のテスト'.repeat(5)}`;
-        const blocks = getCachedBlocks(md, width, false, darkTheme);
+        const blocks = getCachedBlocks(md, width, false, darkTheme, buildBlocks);
         const lines = blocks.flatMap((block) => block.lines);
         expect(lines.length).toBeGreaterThan(1);
         for (const line of lines) {
@@ -144,8 +145,8 @@ describe('narrow-terminal rendering (width=20)', () => {
             '',
             '> a quoted line that wraps',
         ].join('\n');
-        expect(() => getCachedBlocks(md, 20, false, darkTheme)).not.toThrow();
-        const blocks = getCachedBlocks(md, 20, false, darkTheme);
+        expect(() => getCachedBlocks(md, 20, false, darkTheme, buildBlocks)).not.toThrow();
+        const blocks = getCachedBlocks(md, 20, false, darkTheme, buildBlocks);
         expect(blocks.length).toBeGreaterThan(0);
     });
 
@@ -156,7 +157,7 @@ describe('narrow-terminal rendering (width=20)', () => {
             '- list item one',
             '- list item two with more text',
         ].join('\n');
-        const blocks = getCachedBlocks(md, 20, false, darkTheme);
+        const blocks = getCachedBlocks(md, 20, false, darkTheme, buildBlocks);
         const lines = blocks.flatMap((block) => block.lines);
         for (const line of lines) {
             expect(lineVisibleWidth(line)).toBeLessThanOrEqual(20);
@@ -167,8 +168,8 @@ describe('narrow-terminal rendering (width=20)', () => {
         // 4 columns at width 20 cannot fit (border overhead alone is 13), so the
         // renderer must fall back to the raw markdown source instead of crashing.
         const md = '| Name | Age | City | Role |\n| --- | --- | --- | --- |\n| x | 1 | y | z |';
-        expect(() => getCachedBlocks(md, 20, false, darkTheme)).not.toThrow();
-        const blocks = getCachedBlocks(md, 20, false, darkTheme);
+        expect(() => getCachedBlocks(md, 20, false, darkTheme, buildBlocks)).not.toThrow();
+        const blocks = getCachedBlocks(md, 20, false, darkTheme, buildBlocks);
         expect(blocks.length).toBeGreaterThan(0);
     });
 });

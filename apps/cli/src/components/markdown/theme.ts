@@ -58,6 +58,7 @@ export type TerminalMarkdownTheme = {
     readonly underline: InkTextStyle;
     readonly codeBlockIndent?: string;
     readonly highlightCode?: HighlightCodeSlot;
+    readonly cacheKeyTag?: string;
 };
 
 /** Element style keys mirrored from pi's `MarkdownTheme` (excludes layout/slots). */
@@ -99,6 +100,7 @@ export const darkTheme: TerminalMarkdownTheme = {
     underline: { underline: true },
     codeBlockIndent: '  ',
     highlightCode,
+    cacheKeyTag: 'd',
 };
 
 /** Color-free fallback theme: semantic styling only, no color/backgroundColor. */

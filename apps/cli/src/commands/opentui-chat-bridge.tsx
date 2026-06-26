@@ -40,7 +40,8 @@ import { PaletteOpenContext } from '../platform/keymap/palette-open-context.js';
 import { AbgOverlay, type AbgOverlayTab } from '../components/AbgOverlay.js';
 import { ChatInputTextarea } from '../components/ChatInputTextarea.js';
 import { ChatTranscript } from '../components/ChatTranscript.js';
-import { getCachedBlocks, Markdown } from '../components/markdown/Markdown.js';
+import { buildBlocks, Markdown, useHighlightVersion } from '../components/markdown/Markdown.js';
+import { getCachedBlocks } from '../components/markdown/render-cache.js';
 import { darkTheme, type TerminalMarkdownTheme } from '../components/markdown/theme.js';
 import { Separator, type SeparatorState } from '../components/Separator.js';
 import { StatusBar } from '../components/StatusBar.js';
@@ -2747,12 +2748,13 @@ function MarkdownPanel({
     readonly streaming?: boolean;
     readonly marginTop?: number;
 }): React.ReactNode {
+    useHighlightVersion();
     const width = Math.max(1, terminalContentWidth() - barWidth);
     // Match the bar height to the exact rendered line count: getCachedBlocks
     // returns the same IR <Markdown> will render (cache hit), so summing block
     // lines yields a bar that spans the full content height. An empty bar Box
     // does not reliably flex-stretch across multi-block markdown.
-    const rendered = getCachedBlocks(text, width, streaming ?? false, theme);
+    const rendered = getCachedBlocks(text, width, streaming ?? false, theme, buildBlocks);
     const barRows = rendered.reduce((sum, block) => sum + block.lines.length, 0);
     const barBg = toOpenTuiColor(barColor);
     return (
