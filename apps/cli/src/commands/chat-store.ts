@@ -18,12 +18,19 @@ import {
     navigateFileAutocompleteUp,
     updateFileAutocomplete,
 } from './interactive-chat-file-autocomplete.js';
-import { type ProviderPromptKeypressState, createProviderPromptKeypressState } from './auth-provider-keypress.js';
+import {
+    type ProviderPromptKeypressState,
+    createProviderPromptKeypressState,
+    reduceProviderPromptKeypress,
+} from './auth-provider-keypress.js';
 import {
     type ChatInputHistory,
     createChatInputHistory,
     createChatInputHistoryFromEntries,
     isNavigatingChatInputHistory,
+    navigateChatInputHistoryDown,
+    navigateChatInputHistoryUp,
+    recordSubmittedPrompt,
 } from './interactive-chat-input-history.js';
 import { type QuestionOption, normalizeQuestionOptions } from './question-types.js';
 import type { DiffEntry } from '../platform/keymap/diff-viewer.js';
@@ -94,6 +101,21 @@ const EMIT_COALESCE_MS = 16;
 const CURSOR_UP = '\u001b[A';
 const CURSOR_DOWN = '\u001b[B';
 const APPROVAL_LEVEL_DEFAULT_INDEX = 1;
+
+export const APPROVAL_OPTIONS = [
+    { key: 'once', label: 'Allow once', description: 'allow this request only' },
+    { key: 'session', label: 'Allow session', description: 'allow for this session only' },
+    { key: 'always', label: 'Always allow', description: 'allow all future matching requests (persisted)' },
+    { key: 'deny', label: 'Deny', description: 'block this request' },
+] as const;
+
+export const APPROVAL_LEVEL_PICKER_ENTRIES: readonly { readonly id: string; readonly label: string; readonly desc: string }[] = [
+    { id: 'verbose', label: 'verbose', desc: 'Ask for every tool call, including reads' },
+    { id: 'safe', label: 'safe', desc: 'Auto-approve reads and webfetch; ask before modifications' },
+    { id: 'aggressive', label: 'aggressive', desc: 'Auto-approve reads, edits, webfetch, subagent; ask before bash' },
+    { id: 'reckless', label: 'reckless', desc: 'Auto-approve everything; only bash asks before execution' },
+    { id: 'yolo', label: 'yolo', desc: 'Auto-approve everything including subagent (use with caution)' },
+];
 
 function readActiveFilePrefix(buffer: string): string | undefined {
     if (buffer.startsWith('/') || buffer.startsWith('#')) {
@@ -387,6 +409,188 @@ export class ChatStore {
             this.state.modelCycleIndex = 0;
         }
         this.publish();
+    }
+
+    toggleShowThinking(): void {
+        this.state.showThinking = !this.state.showThinking;
+        this.publish();
+    }
+
+    toggleToolOutputExpanded(): void {
+        this.state.toolOutputExpanded = !this.state.toolOutputExpanded;
+        this.publish();
+    }
+
+    toggleAbgOverlay(): void {
+        this.state.overlayMode = this.state.overlayMode === 'abg' ? 'none' : 'abg';
+        this.publish();
+    }
+
+    cycleModel(direction: 1 | -1): void {
+        const choices = this.state.modelCycleChoices;
+        if (choices.length <= 1) return;
+        this.state.modelCycleIndex =
+            (this.state.modelCycleIndex + direction + choices.length) % choices.length;
+        const choice = choices[this.state.modelCycleIndex];
+        if (choice !== undefined) {
+            this.onModelCycleSelect?.(choice.selection);
+        }
+        this.publish();
+    }
+
+    recallHistory(direction: 'up' | 'down', currentBuffer: string): string {
+        const result =
+            direction === 'up'
+                ? navigateChatInputHistoryUp(this.state.history, currentBuffer)
+                : navigateChatInputHistoryDown(this.state.history, currentBuffer);
+        this.state.history = result.history;
+        this.state.inputMirror = result.input;
+        this.state.menuState = createSlashCommandMenuState();
+        this.refreshFileAutocomplete();
+        this.publish();
+        return result.input;
+    }
+
+    navigateApproval(direction: 1 | -1): void {
+        const count = APPROVAL_OPTIONS.length;
+        this.state.approvalSelectedIndex =
+            (this.state.approvalSelectedIndex + direction + count) % count;
+        this.publish();
+    }
+
+    confirmApproval(): void {
+        const selected = APPROVAL_OPTIONS[this.state.approvalSelectedIndex];
+        this.state.overlayMode = 'none';
+        this.publish();
+        if (selected !== undefined) {
+            this.enqueueEvent({ type: 'line', value: selected.key });
+        }
+    }
+
+    denyApproval(): void {
+        this.state.approvalSelectedIndex = APPROVAL_OPTIONS.length - 1;
+        this.state.overlayMode = 'none';
+        this.publish();
+        this.enqueueEvent({ type: 'line', value: 'deny' });
+    }
+
+    navigateQuestion(direction: 1 | -1): void {
+        const total = this.state.questionMultiple
+            ? this.state.questionOptions.length
+            : this.state.questionOptions.length + 1;
+        this.state.questionSelectedIndex =
+            (this.state.questionSelectedIndex + direction + total) % total;
+        this.publish();
+    }
+
+    toggleQuestionOption(): void {
+        const index = this.state.questionSelectedIndex;
+        if (index >= this.state.questionOptions.length) return;
+        const next = new Set(this.state.questionSelectedIndices);
+        if (next.has(index)) {
+            next.delete(index);
+        } else {
+            next.add(index);
+        }
+        this.state.questionSelectedIndices = next;
+        this.publish();
+    }
+
+    enterQuestionCustomMode(): void {
+        this.state.questionCustomMode = true;
+        this.state.questionCustomBuffer = '';
+        this.publish();
+    }
+
+    appendQuestionCustom(text: string): void {
+        this.state.questionCustomBuffer += text;
+        this.publish();
+    }
+
+    deleteQuestionCustomChar(): void {
+        if (this.state.questionCustomBuffer.length === 0) return;
+        this.state.questionCustomBuffer = this.state.questionCustomBuffer.slice(0, -1);
+        this.publish();
+    }
+
+    exitQuestionCustomMode(): void {
+        this.state.questionCustomMode = false;
+        this.state.questionCustomBuffer = '';
+        this.publish();
+    }
+
+    updateModelPickerKeypress(rawInput: string): void {
+        const promptChoices = this.state.modelPickerChoices.map((choice) => ({
+            id: choice.id,
+            name: choice.label,
+        }));
+        this.state.modelPickerKeypress = reduceProviderPromptKeypress(
+            this.state.modelPickerKeypress,
+            rawInput,
+            promptChoices,
+        );
+        this.publish();
+    }
+
+    navigateLevelPicker(direction: 1 | -1): void {
+        const count = APPROVAL_LEVELS.length;
+        this.state.levelPickerSelectedIndex =
+            (this.state.levelPickerSelectedIndex + direction + count) % count;
+        this.publish();
+    }
+
+    appendRenameChar(text: string): void {
+        this.state.renameBuffer += text;
+        this.publish();
+    }
+
+    deleteRenameChar(): void {
+        if (this.state.renameBuffer.length === 0) return;
+        this.state.renameBuffer = this.state.renameBuffer.slice(0, -1);
+        this.publish();
+    }
+
+    cancelRename(): void {
+        this.state.overlayMode = 'none';
+        this.state.renameBuffer = '';
+        this.publish();
+    }
+
+    submitLine(value: string): void {
+        this.enqueueEvent({ type: 'line', value });
+        this.state.history = recordSubmittedPrompt(this.state.history, value);
+        if (!value.startsWith('/')) {
+            this.state.outputText += `You: ${value}\n`;
+        }
+        this.state.pasteStore.clear();
+        this.state.inputMirror = '';
+        this.state.menuState = createSlashCommandMenuState();
+        this.state.fileAutocomplete = createFileAutocompleteState();
+        this.publish();
+    }
+
+    openDiffViewer(entries: readonly DiffEntry[]): void {
+        this.state.diffViewerEntries = entries;
+        this.state.diffViewerCursor = 0;
+        this.state.overlayMode = 'diff-viewer';
+        this.publish();
+    }
+
+    sendInterrupt(source: 'esc' | 'ctrl-c'): void {
+        this.enqueueEvent({ type: 'interrupt', interruptedPartialInput: false, source });
+        this.publish();
+    }
+
+    sendSlashCommand(command: string): void {
+        this.enqueueEvent({ type: 'line', value: command });
+        this.publish();
+    }
+
+    registerPaste(text: string): number {
+        this.state.pasteCounter += 1;
+        const id = this.state.pasteCounter;
+        this.state.pasteStore.store(id, text);
+        return id;
     }
 
     private publish(): void {

@@ -39,7 +39,7 @@ import { useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore 
 import { PaletteOpenContext } from '../platform/keymap/palette-open-context.js';
 import { AbgOverlay, type AbgOverlayTab } from '../components/AbgOverlay.js';
 import { ChatInputTextarea } from '../components/ChatInputTextarea.js';
-import { ChatTranscript } from '../components/ChatTranscript.js';
+import { ChatTranscriptScrollbox } from '../components/ChatTranscript.js';
 import { buildBlocks, Markdown, useHighlightVersion } from '../components/markdown/Markdown.js';
 import { getCachedBlocks } from '../components/markdown/render-cache.js';
 import { darkTheme, type TerminalMarkdownTheme } from '../components/markdown/theme.js';
@@ -2697,7 +2697,7 @@ function MessageWindow({
     }
     const lastIndex = blocks.length - 1;
     return (
-        <ChatTranscript scrollboxRef={scrollboxRef}>
+        <ChatTranscriptScrollbox scrollboxRef={scrollboxRef}>
             {blocks.map((block, index) => {
                 const streaming = generating && index === lastIndex;
                 return (
@@ -2705,7 +2705,7 @@ function MessageWindow({
                     <MessageBlock key={`msg-${block.kind}-${index}`} block={block} toolOutputExpanded={toolOutputExpanded} {...(streaming ? { isStreaming: true } : {})} />
                 );
             })}
-        </ChatTranscript>
+        </ChatTranscriptScrollbox>
     );
 }
 

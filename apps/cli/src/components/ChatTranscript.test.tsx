@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MacOSScrollAccel, type ScrollBoxRenderable } from '@opentui/core';
 import type { RefObject } from 'react';
-import { chatTranscriptScrollOptions, ChatTranscript } from './ChatTranscript.js';
+import { chatTranscriptScrollOptions, ChatTranscriptScrollbox } from './ChatTranscript.js';
 
 describe('chatTranscriptScrollOptions', () => {
     it('builds the native scrollbox config with sticky-bottom macOS acceleration', () => {
@@ -29,18 +29,18 @@ describe('chatTranscriptScrollOptions', () => {
     });
 });
 
-describe('ChatTranscript component', () => {
+describe('ChatTranscriptScrollbox component', () => {
     it('is a callable React component', () => {
-        expect(typeof ChatTranscript).toBe('function');
+        expect(typeof ChatTranscriptScrollbox).toBe('function');
     });
 
     it('does not throw when constructed with children and a scrollbox ref', () => {
         const scrollboxRef: RefObject<ScrollBoxRenderable | null> = { current: null };
         expect(() => {
             void (
-                <ChatTranscript scrollboxRef={scrollboxRef}>
+                <ChatTranscriptScrollbox scrollboxRef={scrollboxRef}>
                     <text>hello</text>
-                </ChatTranscript>
+                </ChatTranscriptScrollbox>
             );
         }).not.toThrow();
     });
@@ -49,9 +49,9 @@ describe('ChatTranscript component', () => {
         const scrollboxRef: RefObject<ScrollBoxRenderable | null> = { current: null };
         expect(() => {
             void (
-                <ChatTranscript scrollboxRef={scrollboxRef} maxHeight={10}>
+                <ChatTranscriptScrollbox scrollboxRef={scrollboxRef} maxHeight={10}>
                     {null}
-                </ChatTranscript>
+                </ChatTranscriptScrollbox>
             );
         }).not.toThrow();
     });
