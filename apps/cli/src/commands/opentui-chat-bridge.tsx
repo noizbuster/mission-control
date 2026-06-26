@@ -102,6 +102,8 @@ import {
     createSlashCommandMenuState,
     createSlashCommandMenuView,
     createWorkflowCommandMenuView,
+    isSlashCommandMenuOpen,
+    isWorkflowCommandMenuOpen,
     reduceSlashCommandMenuSelection,
     reduceWorkflowCommandMenuSelection,
     resolveSlashCommandMenuSubmission,
@@ -129,6 +131,7 @@ import {
 } from './interactive-chat-input-history.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
 import type { ModelChoice } from './interactive-chat-model.js';
+import { terminalDisplayWidth } from './terminal-text.js';
 import { execSync, spawnSync } from 'node:child_process';
 import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -1123,8 +1126,8 @@ export function bridgeTextareaKeyDown(
         const cursorOffset = textareaRef.current?.cursorOffset ?? 0;
         const atBound = direction === 'up' ? cursorOffset === 0 : cursorOffset === buffer.length;
         const historyOwnsArrows = isNavigatingChatInputHistory(core.history);
-        const slashMenuOpen = buffer.startsWith('/');
-        const workflowMenuOpen = buffer.startsWith('#');
+        const slashMenuOpen = isSlashCommandMenuOpen(buffer);
+        const workflowMenuOpen = isWorkflowCommandMenuOpen(buffer);
 
         const recallHistory = historyOwnsArrows || (atBound && !slashMenuOpen && !workflowMenuOpen && !core.fileAutocomplete.open);
         if (recallHistory) {
@@ -1419,6 +1422,13 @@ function handleModelPickerInput(core: OpenTuiChatBridgeCore, input: string, key:
         publishSnapshot(core);
         return;
     }
+    if (key.escape) {
+        core.modelPickerActive = false;
+        core.modelPickerResolve?.(undefined);
+        core.modelPickerResolve = undefined;
+        publishSnapshot(core);
+        return;
+    }
     if (key.return || input.includes('\r') || input.includes('\n')) {
         const promptChoices = core.modelPickerChoices.map((choice) => ({
             id: choice.id,
@@ -1439,6 +1449,8 @@ function handleModelPickerInput(core: OpenTuiChatBridgeCore, input: string, key:
         rawInput = '\u001b[A';
     } else if (key.downArrow) {
         rawInput = '\u001b[B';
+    } else if (key.backspace) {
+        rawInput = '\u007f';
     }
     const promptChoices = core.modelPickerChoices.map((choice) => ({
         id: choice.id,
@@ -1452,6 +1464,13 @@ const APPROVAL_LEVEL_PICKER_COUNT = 5;
 
 function handleLevelPickerInput(core: OpenTuiChatBridgeCore, input: string, key: InkKeyShape): void {
     if (key.ctrl && input === 'c') {
+        core.levelPickerActive = false;
+        core.levelPickerResolve?.(undefined);
+        core.levelPickerResolve = undefined;
+        publishSnapshot(core);
+        return;
+    }
+    if (key.escape) {
         core.levelPickerActive = false;
         core.levelPickerResolve?.(undefined);
         core.levelPickerResolve = undefined;
@@ -2097,30 +2116,39 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
         );
         return (
             <box flexDirection="column">
-                <text fg="#00ffff" {...toOpenTuiAttributes({ bold: true })}>
-                    Select model
-                </text>
-                <text {...toOpenTuiAttributes({ dimColor: true })}>{`Search: ${view.searchQuery}`}</text>
-                {view.totalCount === 0 ? (
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>No models match</text>
-                ) : (
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>
-                        {`Showing ${view.startIndex + 1}-${view.endIndex} of ${view.totalCount}`}
+                <MessageWindow
+                    blocks={messageBlocks}
+                    scrollboxRef={scrollboxRef}
+                    generating={snapshot.generating}
+                    toolOutputExpanded={snapshot.toolOutputExpanded}
+                />
+                <Separator state="awaiting_input" />
+                <box flexDirection="column" marginTop={1} paddingX={1}>
+                    <text fg="#00ffff" {...toOpenTuiAttributes({ bold: true, inverse: true })}>
+                        {' Select model '}
                     </text>
-                )}
-                {view.visibleChoices.map((choice, index) => {
-                    const globalIndex = view.startIndex + index;
-                    const isSelected = globalIndex === view.selectedIndex;
-                    return (
-                        <text key={choice.id} {...(isSelected ? { bg: '#0000ff' } : {})}>
-                            {isSelected ? '> ' : '  '}
-                            {globalIndex + 1}. {choice.name}
+                    <text {...toOpenTuiAttributes({ dimColor: true })}>{`Search: ${view.searchQuery}`}</text>
+                    {view.totalCount === 0 ? (
+                        <text {...toOpenTuiAttributes({ dimColor: true })}>No models match</text>
+                    ) : (
+                        <text {...toOpenTuiAttributes({ dimColor: true })}>
+                            {`Showing ${view.startIndex + 1}-${view.endIndex} of ${view.totalCount}`}
                         </text>
-                    );
-                })}
-                <text {...toOpenTuiAttributes({ dimColor: true })}>
-                    Use Up/Down, type to search, Enter to select, Ctrl+C to cancel
-                </text>
+                    )}
+                    {view.visibleChoices.map((choice, index) => {
+                        const globalIndex = view.startIndex + index;
+                        const isSelected = globalIndex === view.selectedIndex;
+                        return (
+                            <text key={choice.id} {...(isSelected ? { bg: '#0000ff' } : {})}>
+                                {isSelected ? '> ' : '  '}
+                                {globalIndex + 1}. {choice.name}
+                            </text>
+                        );
+                    })}
+                    <text {...toOpenTuiAttributes({ dimColor: true })}>
+                        {'Up/Down to navigate, type to search, Backspace to delete, Enter to select, Ctrl+C to cancel'}
+                    </text>
+                </box>
             </box>
         );
     }
@@ -2202,38 +2230,73 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
             ) : null}
             {menuView !== null && menuView.open ? (
                 <box flexDirection="column" marginTop={1}>
+                    <text fg="#00ffff" {...toOpenTuiAttributes({ bold: true })}>
+                        {showSlashMenu
+                            ? menuView.query.length > 0
+                                ? ` Commands matching "${menuView.query}" `
+                                : ` Commands (${menuView.totalCount}) `
+                            : menuView.query.length > 0
+                              ? ` Workflows matching "${menuView.query}" `
+                              : ` Workflows (${menuView.totalCount}) `}
+                    </text>
                     {menuView.empty ? (
-                        <text {...toOpenTuiAttributes({ dimColor: true })}> no commands match</text>
+                        <text {...toOpenTuiAttributes({ dimColor: true })}> no matches</text>
                     ) : (
-                        menuView.visibleChoices.map((choice, index) => {
-                            const globalIndex = menuView.startIndex + index;
-                            const isSelected = globalIndex === menuView.selectedIndex;
-                            return (
-                                <text key={choice.id} {...(isSelected ? { bg: '#0000ff' } : {})}>
-                                    {isSelected ? '> ' : '  '}
-                                    {choice.id.padEnd(13)} {choice.description}
-                                </text>
+                        (() => {
+                            const idWidth = Math.max(
+                                8,
+                                ...menuView.visibleChoices.map((c) => terminalDisplayWidth(c.id)),
                             );
-                        })
+                            return menuView.visibleChoices.map((choice, index) => {
+                                const globalIndex = menuView.startIndex + index;
+                                const isSelected = globalIndex === menuView.selectedIndex;
+                                const selectedBg = isSelected ? { bg: '#0000ff' } : {};
+                                const padding = ' '.repeat(Math.max(0, idWidth - terminalDisplayWidth(choice.id)));
+                                const pickerMarker = choice.opensPicker === true ? ' \u2026' : '';
+                                return (
+                                    <box key={choice.id} flexDirection="row">
+                                        <text {...selectedBg}>
+                                            {isSelected ? '> ' : '  '}
+                                            {choice.id}
+                                            {padding}
+                                            {pickerMarker} {' '}
+                                        </text>
+                                        <text {...toOpenTuiAttributes({ dimColor: true })} {...selectedBg}>
+                                            {choice.description}
+                                        </text>
+                                    </box>
+                                );
+                            });
+                        })()
                     )}
+                    <text {...toOpenTuiAttributes({ dimColor: true })}>
+                        Up/Down to navigate, Enter to select, Esc to close
+                    </text>
                 </box>
             ) : null}
             {fileView?.open ? (
                 <box flexDirection="column" marginTop={1}>
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>{`Files matching @${fileView.prefix}`}</text>
+                    <text fg="#00ffff" {...toOpenTuiAttributes({ bold: true })}>
+                        {fileView.totalCount > 0
+                            ? ` Files matching @${fileView.prefix} (${fileView.totalCount}) `
+                            : ` Files matching @${fileView.prefix} `}
+                    </text>
                     {fileView.empty ? (
                         <text {...toOpenTuiAttributes({ dimColor: true })}> no files match</text>
                     ) : (
                         fileView.visibleMatches.map((match, index) => {
                             const globalIndex = fileView.startIndex + index;
                             const isSelected = globalIndex === fileView.selectedIndex;
+                            const selectedBg = isSelected ? { bg: '#0000ff' } : {};
                             const marker = match.isDirectory ? '/' : ' ';
                             return (
-                                <text key={match.name} {...(isSelected ? { bg: '#0000ff' } : {})}>
-                                    {isSelected ? '> ' : '  '}
-                                    {marker}
-                                    {match.name}
-                                </text>
+                                <box key={match.name} flexDirection="row">
+                                    <text {...selectedBg}>
+                                        {isSelected ? '> ' : '  '}
+                                        {marker}
+                                        {match.name}
+                                    </text>
+                                </box>
                             );
                         })
                     )}

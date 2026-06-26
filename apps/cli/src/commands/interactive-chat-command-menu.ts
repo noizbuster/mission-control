@@ -5,6 +5,7 @@ export type SlashCommandMenuChoice = {
     readonly id: string;
     readonly insertText: string;
     readonly description: string;
+    readonly opensPicker?: boolean;
 };
 
 export type SlashCommandMenuState = {
@@ -29,11 +30,13 @@ export const slashCommandChoices = [
         id: '/model',
         insertText: '/model',
         description: 'Open the model and variant picker',
+        opensPicker: true,
     },
     {
         id: '/model pick',
         insertText: '/model pick',
         description: 'Open the model picker',
+        opensPicker: true,
     },
     {
         id: '/model list',
@@ -129,6 +132,7 @@ export const slashCommandChoices = [
         id: '/approval',
         insertText: '/approval ',
         description: 'Show or set approval level (verbose/safe/aggressive/reckless/yolo)',
+        opensPicker: true,
     },
     {
         id: '/approval verbose',
@@ -194,6 +198,14 @@ export const slashCommandChoices = [
 
 export function createSlashCommandMenuState(): SlashCommandMenuState {
     return { selectedIndex: 0 };
+}
+
+export function isSlashCommandMenuOpen(line: string): boolean {
+    return readCommandQuery(line, '/') !== undefined;
+}
+
+export function isWorkflowCommandMenuOpen(line: string): boolean {
+    return readCommandQuery(line, '#') !== undefined;
 }
 
 export function workflowCommandChoices(workflows: readonly string[]): readonly SlashCommandMenuChoice[] {

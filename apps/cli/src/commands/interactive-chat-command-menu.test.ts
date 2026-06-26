@@ -3,10 +3,14 @@ import {
     createSlashCommandMenuState,
     createSlashCommandMenuView,
     createWorkflowCommandMenuView,
+    isSlashCommandMenuOpen,
+    isWorkflowCommandMenuOpen,
     reduceSlashCommandMenuSelection,
     reduceWorkflowCommandMenuSelection,
     resolveSlashCommandMenuSubmission,
     resolveWorkflowCommandMenuInsertText,
+    slashCommandChoices,
+    type SlashCommandMenuChoice,
 } from './interactive-chat-command-menu.js';
 import {
     deleteTerminalChatInputCharacterBeforeCursor,
@@ -278,5 +282,46 @@ describe('interactive chat command menu', () => {
         expect(resolveWorkflowCommandMenuInsertText('#planner ', createSlashCommandMenuState(), ['planner'])).toBeUndefined();
         expect(resolveWorkflowCommandMenuInsertText('plain', createSlashCommandMenuState(), ['planner'])).toBeUndefined();
         expect(resolveWorkflowCommandMenuInsertText('#zzz', createSlashCommandMenuState(), ['planner'])).toBeUndefined();
+    });
+
+    it('reports the slash menu open only while the command token has no whitespace', () => {
+        expect(isSlashCommandMenuOpen('/')).toBe(true);
+        expect(isSlashCommandMenuOpen('/mod')).toBe(true);
+        expect(isSlashCommandMenuOpen('/exit')).toBe(true);
+
+        expect(isSlashCommandMenuOpen('/new ')).toBe(false);
+        expect(isSlashCommandMenuOpen('/model pick')).toBe(false);
+        expect(isSlashCommandMenuOpen('/approval\n')).toBe(false);
+        expect(isSlashCommandMenuOpen('/cmd\t')).toBe(false);
+        expect(isSlashCommandMenuOpen('plain text')).toBe(false);
+    });
+
+    it('reports the workflow menu open only while the command token has no whitespace', () => {
+        expect(isWorkflowCommandMenuOpen('#')).toBe(true);
+        expect(isWorkflowCommandMenuOpen('#default')).toBe(true);
+        expect(isWorkflowCommandMenuOpen('#planner ')).toBe(false);
+        expect(isWorkflowCommandMenuOpen('plain')).toBe(false);
+    });
+
+    it('marks /approval, /model, and /model pick as opening a secondary picker', () => {
+        const find = (id: string): SlashCommandMenuChoice | undefined =>
+            slashCommandChoices.find((c) => c.id === id);
+        expect(find('/approval')?.opensPicker).toBe(true);
+        expect(find('/model')?.opensPicker).toBe(true);
+        expect(find('/model pick')?.opensPicker).toBe(true);
+    });
+
+    it('does not mark plain commands as opening a picker', () => {
+        const find = (id: string): SlashCommandMenuChoice | undefined =>
+            slashCommandChoices.find((c) => c.id === id);
+        expect(find('/exit')?.opensPicker).not.toBe(true);
+        expect(find('/help')?.opensPicker).not.toBe(true);
+        expect(find('/sessions')?.opensPicker).not.toBe(true);
+    });
+
+    it('surfaces the opensPicker flag through the slash menu view', () => {
+        const view = createSlashCommandMenuView('/approval', createSlashCommandMenuState(), 10);
+        const approval = view.visibleChoices.find((c) => c.id === '/approval');
+        expect(approval?.opensPicker).toBe(true);
     });
 });

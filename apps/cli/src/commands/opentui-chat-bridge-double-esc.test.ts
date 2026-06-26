@@ -236,7 +236,7 @@ describe('opentui bridge double-Esc configurable action', () => {
     });
 
     describe('mode interactions (Esc never reaches double-Esc handler)', () => {
-        it('does not trigger double-Esc handling when the model picker is active', () => {
+        it('does not trigger double-Esc handling when the model picker is active (Esc cancels picker)', () => {
             vi.stubEnv(DOUBLE_ESC_ACTION_ENV, 'tree');
             const core = createOpenTuiChatBridgeCore();
             core.modelPickerActive = true;
@@ -247,7 +247,7 @@ describe('opentui bridge double-Esc configurable action', () => {
             handleInput(core, '', makeKey({ escape: true }));
 
             expect(core.lastEscTimestamp).toBe(previousTimestamp);
-            expect(core.modelPickerActive).toBe(true);
+            expect(core.modelPickerActive).toBe(false);
             expect(nextEvent(core)).toBeUndefined();
         });
 
