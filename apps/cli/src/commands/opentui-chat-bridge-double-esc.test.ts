@@ -21,7 +21,7 @@ import {
     createRecordingScrollbox,
     createRecordingTextarea,
     makeKeyEvent,
-} from './opentui-chat-bridge-test-support.js';
+} from './chat-test-support.js';
 
 const DOUBLE_ESC_ACTION_ENV = 'MCTRL_DOUBLE_ESC_ACTION';
 

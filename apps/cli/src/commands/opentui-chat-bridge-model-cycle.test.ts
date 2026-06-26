@@ -14,7 +14,7 @@ import {
     createRecordingScrollbox,
     createRecordingTextarea,
     makeKeyEvent,
-} from './opentui-chat-bridge-test-support.js';
+} from './chat-test-support.js';
 
 function makeModelChoice(id: string, providerID: string, modelID: string): ModelChoice {
     return {

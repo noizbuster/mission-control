@@ -17,7 +17,7 @@ import {
     createRecordingScrollbox,
     createRecordingTextarea,
     makeKeyEvent,
-} from './opentui-chat-bridge-test-support.js';
+} from './chat-test-support.js';
 
 function recallSetup(initial = '', cursorOffset?: number) {
     const core = createOpenTuiChatBridgeCore();

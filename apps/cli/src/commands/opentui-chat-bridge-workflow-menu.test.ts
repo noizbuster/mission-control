@@ -21,7 +21,7 @@ import {
     createRecordingTextarea,
     makeKeyEvent,
     type RecordingTextarea,
-} from './opentui-chat-bridge-test-support.js';
+} from './chat-test-support.js';
 
 function flushSubmit(): void {
     vi.runAllTimers();

@@ -34,7 +34,7 @@ import {
     asTextareaRef,
     createRecordingTextarea,
     type RecordingTextarea,
-} from '../../commands/opentui-chat-bridge-test-support.js';
+} from '../../commands/chat-test-support.js';
 import { Keybinds } from './keybind.js';
 import {
     CHAT_SUBMIT_COMMAND,

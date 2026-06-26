@@ -6,6 +6,8 @@
 
 The interactive chat uses `@opentui/react` + React 19 for terminal rendering, bridged to the existing imperative chat loop via `useSyncExternalStore`. The bridge pattern allows the imperative `runInteractiveChatSession` loop to stay unchanged while opentui owns all keyboard input and screen output.
 
+A reactive-store migration is superseding the legacy monolithic `opentui-chat-bridge.tsx`. The new architecture splits the bridge into: a `ChatStore` reactive store (`chat-store.ts`), a background agent-runner state machine (`chat-agent-runner.ts`), a testable mount factory (`create-chat-tui.tsx`), and pure React components (`ChatApp`, `ChatInputArea`, `OverlayPanels`) that read the store snapshot and use native opentui props (`fg`/`bg`/`attributes`) directly. The old Ink-prop translation shims (`opentui-types.ts`, `opentui-chat-input.ts`, `opentui-chat-output.ts`, `opentui-model-selector.ts`) have been removed. The legacy bridge file is retained until `interactive-chat.ts`, `create-chat-tui.tsx`, `Banner.tsx`, and `diff-viewer.tsx` no longer import its types.
+
 ## opentui Chat Architecture
 
 ### Native core via node:ffi (Node 26.3+)
@@ -70,7 +72,7 @@ opentui's lowercase intrinsics (`<text>`, `<box>`, `<span>`, ...) collide with R
 /** @jsxImportSource @opentui/react */
 ```
 
-opentui's `jsx-runtime.d.ts` re-exports `jsx`/`jsxs`/`Fragment` from `react/jsx-runtime` at runtime (zero behavior change) but loads opentui's own JSX namespace at type time, where intrinsics override the inherited DOM types cleanly. Under this pragma, `JSX.Element` is `React.ReactNode` (not `ReactElement`), so opentui-pragmatic component return types must be annotated `: React.ReactNode`. Ink color/attribute props (`color`, `backgroundColor`, `bold`, `dimColor`, `inverse`) do not exist on opentui intrinsics; they translate to `fg`/`bg`/`attributes` via `toOpenTuiColor` / `toOpenTuiAttributes` (`src/platform/opentui-types.ts`).
+opentui's `jsx-runtime.d.ts` re-exports `jsx`/`jsxs`/`Fragment` from `react/jsx-runtime` at runtime (zero behavior change) but loads opentui's own JSX namespace at type time, where intrinsics override the inherited DOM types cleanly. Under this pragma, `JSX.Element` is `React.ReactNode` (not `ReactElement`), so opentui-pragmatic component return types must be annotated `: React.ReactNode`. Ink color/attribute props (`color`, `backgroundColor`, `bold`, `dimColor`, `inverse`) do not exist on opentui intrinsics; components use native opentui props (`fg`/`bg`/`attributes`) directly. The legacy `toOpenTuiColor` / `toOpenTuiAttributes` shims (`src/platform/opentui-types.ts`) have been removed.
 
 ### Core State (OpenTuiChatBridgeCore)
 
@@ -209,17 +211,16 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 
 | Task | Location | Notes |
 | --- | --- | --- |
-| opentui bridge (core state, input, render) | `src/commands/opentui-chat-bridge.tsx` | Heart of the interactive chat. `/** @jsxImportSource @opentui/react */` pragma on line 1. |
-| opentui model selector adapter | `src/commands/opentui-model-selector.ts` | Maps bridge.showModelPicker to ModelSelector |
-| opentui ChatInput adapter | `src/commands/opentui-chat-input.ts` | Delegates to bridge.waitForEvent |
-| opentui ChatOutput adapter | `src/commands/opentui-chat-output.ts` | Delegates to bridge.emitOutput |
-| opentui components | `src/components/*.tsx` | ChatInputTextarea (native `<textarea>` wrapper), ChatTranscript (native `<scrollbox>`), Markdown, DiffView, ToolCard, StatusBar, Separator. Each opentui-intrinsic file starts with the `@jsxImportSource @opentui/react` pragma. |
-| Bridge input handlers + test seams | `src/commands/opentui-chat-bridge.tsx` | `bridgeTextareaKeyDown` / `bridgeSubmit` / `bridgeContentChange` (exported so tests can drive them against recording refs); `handleInput` is overlay-routing only. |
-| Bridge test support | `src/commands/opentui-chat-bridge-test-support.ts` | `TextareaLike`, `createRecordingTextarea`, `createRecordingScrollbox`, `makeKeyEvent`, `asTextareaRef` / `asScrollboxRef`. |
+| Chat reactive store | `src/commands/chat-store.ts` | `ChatStore` owns all chat UI state (output, input mirror, overlays, menus, history, event queue) behind a `useSyncExternalStore` contract. `createChatStore` factory; 16ms-coalesced `emitOutput`; overlay-mode state machine; `waitForEvent`/`enqueueEvent` event queue. |
+| Background agent runner | `src/commands/chat-agent-runner.ts` | `startChatAgentRunner` replaces the imperative `for(;;)` loop with an async state machine over the store event queue; preserves the G1-G10 sequential guarantees. `createStoreChatOutput` adapts the store to the `ChatOutput` interface. |
+| TUI mount factory | `src/commands/create-chat-tui.tsx` | `createChatTui(options)` builds a `ChatStore`, dynamic-imports the renderer + keymap provider + `ChatApp`, mounts the tree, returns an `OpenTuiChatBridge` handle. `createChatTuiHandle(store, unmountFn)` is the testable seam that constructs the handle without the native renderer. |
+| Chat block parsing | `src/commands/chat-blocks.ts` | `parseMessageBlocks` splits `outputText` into `ChatBlock` records (user/assistant/thinking/error/tool/system). |
+| opentui chat bridge (LEGACY, being phased out) | `src/commands/opentui-chat-bridge.tsx` | Heart of the legacy interactive chat. Still exported: the `OpenTuiChatBridge` / `OpenTuiChatBridgeOptions` type contracts (now satisfied by `createChatTuiHandle`), `parseMessageBlocks`/`ChatBlock` (also in `chat-blocks.ts`), `InkKeyShape` (also in `key-event-adapter.ts`), `bridgeTextareaKeyDown`/`bridgeSubmit`/`bridgeContentChange`, and the `AgentSpinner`/overlay handlers. Retained until `interactive-chat.ts`, `create-chat-tui.tsx`, `Banner.tsx`, and `diff-viewer.tsx` no longer import its types. |
+| Chat test support | `src/commands/chat-test-support.ts` | `TextareaLike`, `createRecordingTextarea`, `createRecordingScrollbox`, `makeKeyEvent`, `asTextareaRef` / `asScrollboxRef`. |
+| opentui components | `src/components/*.tsx` | `ChatApp` (root), `ChatInputArea`, `OverlayPanels` (approval/question/model/level/rename), `ChatInputTextarea` (native `<textarea>`), `ChatTranscript` (native `<scrollbox>`), `SlashMenuPanel`, `FileAutocompletePanel`, `Banner`, `StatusBar`, `Separator`, plus `markdown/` and `diff/`. Components consume the `ChatStore` snapshot and use native opentui props (`fg`/`bg`/`attributes`) directly. Each opentui-intrinsic file starts with the `@jsxImportSource @opentui/react` pragma. |
 | Clipboard copy | `src/platform/clipboard-service.ts`, `src/platform/selection-copy.ts` | OSC52 clipboard service plus mouseup selection-copy; `isOsc52Supported()` gates the stderr fallback. |
 | opentui renderer mount/unmount | `src/platform/opentui-renderer.ts` | `mountOpenTui(element)` dynamic-imports `createCliRenderer` + `createRoot`, returns `{ renderer, root, unmount }`. |
-| KeyEvent adapter | `src/platform/key-event-adapter.ts` | `createKeyEventAdapter` / `adaptKeyEvent`: opentui `KeyEvent` → Ink-compatible `{ input, key }`. Stateless, per-event. |
-| opentui type mappings | `src/platform/opentui-types.ts` | `toOpenTuiColor`, `toOpenTuiBorderStyle`, `toOpenTuiAttributes` (Ink color/flag → opentui `fg`/`bg`/`attributes`). |
+| KeyEvent adapter | `src/platform/key-event-adapter.ts` | `createKeyEventAdapter` / `adaptKeyEvent`: opentui `KeyEvent` → Ink-compatible `{ input, key }`. Stateless, per-event. Also exports `InkKeyShape`. |
 | Markdown renderer | `src/components/markdown/Markdown.tsx` | opentui-native markdown: token walker → IR (`InlineRun`/`RenderLine`/`RenderBlock`) → `<box>`/`<text>`. Pure helpers (`getCachedBlocks`, `reflowRuns`, `renderInlineToRuns`, `computeTableColumnWidths`) are exported for unit tests. 64-entry LRU cache. |
 | Markdown theme | `src/components/markdown/theme.ts` | `darkTheme` (14 element styles + `highlightCode` slot), `noColorTheme`. `InkTextStyle` = subset of opentui `<text>` props. |
 | Markdown streaming healer | `src/components/markdown/stream.ts` | `streamBlocks` heals incomplete markdown (open `**`, ```` ``` ```` fence) via `remend` and splits live input into renderable blocks. Never throws. |
@@ -241,8 +242,8 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | Runtime catalog | `packages/config/src/models-dev-runtime.ts` | Fetches models.dev with 5min disk cache |
 | Output modes | `src/ui/renderers.ts` | Plain, TUI (buffered summary), and JSON renderer contracts. |
 | CLI package targets | `package.json`, `project.json` | `tsc` build, verbose Vitest, Nx `cli:*` targets. |
-| Agent spinner | `src/commands/opentui-chat-bridge.tsx` (AgentSpinner) | Braille spinner (`⠋⠙⠹…`) at 80ms; shows "Thinking…" / "Running X…" via `ChatOutput.setAgentStatus`. |
-| Approval overlay | `src/commands/opentui-chat-bridge.tsx` (handleApprovalInput) | Arrow-key Up/Down/Enter/Ctrl+C navigation; `ChatOutput.showApproval`/`hideApproval`. |
+| Agent spinner | `src/components/ChatApp.tsx` (`AgentSpinner`) | Braille spinner (`⠋⠙⠹…`) at 80ms; shows "Thinking…" / "Running X…" via `store.setAgentStatus`. A legacy copy remains in `opentui-chat-bridge.tsx`. |
+| Approval overlay | `src/components/OverlayPanels.tsx` (`ApprovalOverlay`) | Arrow-key Up/Down/Enter/Ctrl+C navigation over the `ChatStore`; `store.showApproval`/`hideApproval`. Legacy `handleApprovalInput` retained in `opentui-chat-bridge.tsx`. |
 | ChatOutput extensions | `src/commands/interactive-chat-io.ts` | Optional `setAgentStatus`/`clearAgentStatus`/`showApproval`/`hideApproval` methods. |
 | Workspace resolution | `src/commands/run-agent.ts` (`resolveWorkspaceRoot`, `detectWorkspaceRoot`) | `--workspace <path>` flag wins, then `MCTRL_WORKSPACE` env var, then `.git`/workspaces heuristic walking up from `process.cwd()`. |
 | StatusBar render surface | `src/components/StatusBar.tsx` | Renders provider/model/variant/project/branch/session; `formatStatus` is exported for unit tests. |
@@ -268,7 +269,7 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 - User input echoed to outputText uses `You: ` prefix so `parseMessageBlocks` can classify it.
 - Error messages use `Error: ` prefix for the same reason.
 - Slash commands that start with `/` are NOT echoed to outputText (they're system commands, not conversation).
-- The `controlsPrompt` flag is set to `true` in `opentui-chat-input.ts` so the imperative loop calls `renderPrompt()` (no-op) instead of writing `> ` to outputText. The prompt is rendered by ChatRoot's input area.
+- The `controlsPrompt` flag is set to `true` on the opentui `ChatOutput` (see `interactive-chat-io.ts`) so the imperative loop calls `renderPrompt()` (no-op) instead of writing `> ` to outputText. The prompt is rendered by `ChatApp`'s input area.
 
 ## Tests
 

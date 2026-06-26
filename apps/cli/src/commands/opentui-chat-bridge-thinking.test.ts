@@ -13,7 +13,7 @@ import {
     createRecordingScrollbox,
     createRecordingTextarea,
     makeKeyEvent,
-} from './opentui-chat-bridge-test-support.js';
+} from './chat-test-support.js';
 
 function setup() {
     const core = createOpenTuiChatBridgeCore();

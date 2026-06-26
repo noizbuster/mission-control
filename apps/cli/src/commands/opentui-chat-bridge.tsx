@@ -720,7 +720,7 @@ type ScrollboxRef = React.RefObject<ScrollBoxRenderable | null>;
  * by slash/workflow menu views and history-bounds reads) in sync.
  *
  * Exported so unit tests can drive the onContentChange entry point directly
- * against a fake `TextareaLike` ref (see opentui-chat-bridge-test-support.ts).
+ * against a fake `TextareaLike` ref (see chat-test-support.ts).
  */
 export function bridgeContentChange(core: OpenTuiChatBridgeCore, text: string): void {
     core.inputBuffer = text;
@@ -736,7 +736,7 @@ export function bridgeContentChange(core: OpenTuiChatBridgeCore, text: string): 
  * The `#`-workflow complete-into-buffer case returns WITHOUT enqueuing a line.
  *
  * Exported so unit tests can drive the onSubmit entry point directly against a
- * fake `TextareaLike` ref (see opentui-chat-bridge-test-support.ts).
+ * fake `TextareaLike` ref (see chat-test-support.ts).
  */
 export function bridgeSubmit(core: OpenTuiChatBridgeCore, textareaRef: TextareaRef): void {
     const captured = textareaRef.current?.plainText ?? '';
@@ -847,7 +847,7 @@ export function bridgePaste(core: OpenTuiChatBridgeCore, event: PasteEvent, text
  *
  * Exported so unit tests can drive the textarea onKeyDown entry point directly
  * against a fake `KeyEvent` plus recording `TextareaLike`/scrollbox refs (see
- * opentui-chat-bridge-test-support.ts).
+ * chat-test-support.ts).
  */
 export function bridgeTextareaKeyDown(
     core: OpenTuiChatBridgeCore,

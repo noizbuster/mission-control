@@ -18,7 +18,7 @@ import {
     createRecordingScrollbox,
     createRecordingTextarea,
     makeKeyEvent,
-} from './opentui-chat-bridge-test-support.js';
+} from './chat-test-support.js';
 
 // Partial mock: override execSync (used by readClipboardImage) to throw,
 // simulating missing clipboard binaries, while keeping the rest of

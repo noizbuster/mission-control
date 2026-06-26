@@ -10,7 +10,7 @@
  * leader.
  *
  * A minimal recording scrollbox + fake clipboard are defined inline (NOT from
- * `opentui-chat-bridge-test-support.ts`) because that module value-imports
+ * `chat-test-support.ts`) because that module value-imports
  * `KeyEvent` from `@opentui/core` (native FFI), which is unavailable in the
  * headless test environment.
  *

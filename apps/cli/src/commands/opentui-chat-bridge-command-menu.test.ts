@@ -15,7 +15,7 @@ import {
     createRecordingScrollbox,
     createRecordingTextarea,
     makeKeyEvent,
-} from './opentui-chat-bridge-test-support.js';
+} from './chat-test-support.js';
 
 describe('opentui bridge command menu arrow behavior', () => {
     it('recalls history on Up after the slash menu closes from a trailing space', () => {

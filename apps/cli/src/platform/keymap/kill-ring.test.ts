@@ -7,7 +7,7 @@
  * yank-pop (alt+y) are all single-chord, so no leader addon is needed.
  *
  * A minimal recording editor is defined inline (NOT from
- * `opentui-chat-bridge-test-support.ts`) because that module value-imports
+ * `chat-test-support.ts`) because that module value-imports
  * `KeyEvent` from `@opentui/core` (native FFI), which is unavailable in the
  * headless test environment. The recording editor implements the same
  * `KillRingEditor` surface the production layer drives on the focused

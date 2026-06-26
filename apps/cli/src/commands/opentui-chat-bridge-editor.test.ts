@@ -20,7 +20,7 @@ import {
     createRecordingTextarea,
     makeKeyEvent,
     type RecordingTextarea,
-} from './opentui-chat-bridge-test-support.js';
+} from './chat-test-support.js';
 
 function mockEditorReturning(content: string): {
     spy: ReturnType<typeof vi.spyOn>;

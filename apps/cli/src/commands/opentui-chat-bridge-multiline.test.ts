@@ -12,7 +12,7 @@ import { bridgeSubmit, createOpenTuiChatBridgeCore } from './opentui-chat-bridge
 import {
     asTextareaRef,
     createRecordingTextarea,
-} from './opentui-chat-bridge-test-support.js';
+} from './chat-test-support.js';
 
 describe('opentui bridge multi-line submit via bridgeSubmit', () => {
     beforeEach(() => {

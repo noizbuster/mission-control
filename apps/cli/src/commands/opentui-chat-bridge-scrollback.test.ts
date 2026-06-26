@@ -15,7 +15,7 @@ import {
     createRecordingScrollbox,
     createRecordingTextarea,
     makeKeyEvent,
-} from './opentui-chat-bridge-test-support.js';
+} from './chat-test-support.js';
 
 const halfPage = (): number => Math.floor((process.stdout.rows ?? 24) / 2);
 
