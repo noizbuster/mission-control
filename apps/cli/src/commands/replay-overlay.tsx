@@ -3,7 +3,6 @@ import { type AgentEvent, type AgentEventEnvelope } from '@mission-control/proto
 import { useKeyboard } from '@opentui/react';
 import { useState } from 'react';
 import { AbgOverlay } from '../components/AbgOverlay.js';
-import { toOpenTuiAttributes, toOpenTuiColor } from '../platform/opentui-types.js';
 import { type OpenTuiMountResult, mountOpenTui } from '../platform/opentui-renderer.js';
 import { createAbgOverlayStore, projectAgentEvent } from './abg-overlay-state.js';
 
@@ -13,9 +12,9 @@ export type ReplayOverlayOptions = {
     readonly modelLabel?: string;
 };
 
-const dimAttrs = toOpenTuiAttributes({ dimColor: true });
-const boldAttrs = toOpenTuiAttributes({ bold: true });
-const magentaFg = toOpenTuiColor('magenta');
+const dimAttrs = { dim: true };
+const boldAttrs = { bold: true };
+const magentaFg = '#ff00ff';
 
 export async function runReplayOverlay(options: ReplayOverlayOptions): Promise<void> {
     return new Promise<void>((resolve) => {

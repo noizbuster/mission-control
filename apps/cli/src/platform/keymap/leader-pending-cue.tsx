@@ -26,7 +26,6 @@
  */
 import { usePendingSequence } from '@opentui/keymap/react';
 import type { ReactNode } from 'react';
-import { toOpenTuiAttributes, toOpenTuiColor } from '../opentui-types.js';
 
 export function LeaderPendingCue(): ReactNode {
     const sequence = usePendingSequence();
@@ -34,8 +33,8 @@ export function LeaderPendingCue(): ReactNode {
     const label = sequence.map((part) => part.display).join(' ');
     // A trailing ellipsis signals "waiting for the next key". Dim gray keeps
     // it unobtrusive (matches StatusBar's dim treatment).
-    const fg = toOpenTuiColor('gray');
-    const attributes = toOpenTuiAttributes({ dimColor: true });
+    const fg = '#808080';
+    const attributes = { dim: true };
     // Absolute positioning: the cue floats as an overlay so it renders
     // regardless of how the opentui root stacks its flex children (ChatRoot
     // fills the screen with flexGrow, which would squeeze an in-flow sibling

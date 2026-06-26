@@ -35,7 +35,6 @@ import { type ChatBlock, parseMessageBlocks } from '../../commands/opentui-chat-
 import { DiffView } from '../../components/diff/DiffView.js';
 import { type DiffLine, renderDiff } from '../../components/diff/render-diff.js';
 import { hasDiffContent } from '../../components/ToolCard.js';
-import { toOpenTuiAttributes } from '../opentui-types.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -268,13 +267,13 @@ export function DiffViewerOverlay({ entries, model, cursor }: DiffViewerOverlayP
     const currentEntryIndex = entries.length === 0 ? -1 : entryIndexAt(model, cursor);
     return (
         <box flexDirection="column" paddingTop={1} paddingX={1}>
-            <text fg="#00ffff" {...toOpenTuiAttributes({ bold: true, inverse: true })}>
+            <text fg="#00ffff" {...{ bold: true, inverse: true }}>
                 {' Diff Viewer '}
             </text>
             {entries.length === 0 ? (
                 <>
                     <text marginTop={1}>No file diffs in this session yet.</text>
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>Press Esc or q to close.</text>
+                    <text {...{ dim: true }}>Press Esc or q to close.</text>
                 </>
             ) : (
                 <>
@@ -286,7 +285,7 @@ export function DiffViewerOverlay({ entries, model, cursor }: DiffViewerOverlayP
                                 <box key={`dventry-${index}`} flexDirection="column">
                                     <text
                                         {...(isCurrent ? { bg: '#0000ff' } : {})}
-                                        {...toOpenTuiAttributes({ bold: true })}
+                                        {...{ bold: true }}
                                     >
                                         {isCurrent ? '> ' : '  '}
                                         {entry.title}
@@ -297,11 +296,11 @@ export function DiffViewerOverlay({ entries, model, cursor }: DiffViewerOverlayP
                         })}
                     </box>
                     <box marginTop={1}>
-                        <text {...toOpenTuiAttributes({ dimColor: true })}>
+                        <text {...{ dim: true }}>
                             {`File ${currentEntryIndex + 1}/${entries.length} \u00b7 Line ${cursor + 1}/${model.totalLines}`}
                         </text>
                     </box>
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>
+                    <text {...{ dim: true }}>
                         {'j/k move \u00b7 ]/[ hunk \u00b7 n/p file \u00b7 Esc/q close'}
                     </text>
                 </>

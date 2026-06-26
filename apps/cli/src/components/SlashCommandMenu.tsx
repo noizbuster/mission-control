@@ -1,6 +1,5 @@
 /** @jsxImportSource @opentui/react */
 import { createSlashCommandMenuView } from '../commands/interactive-chat-command-menu.js';
-import { toOpenTuiColor } from '../platform/opentui-types.js';
 
 export type SlashCommandMenuProps = {
     readonly input: string;
@@ -9,8 +8,8 @@ export type SlashCommandMenuProps = {
 };
 
 const maxVisibleCommands = 5;
-const selectedBg = toOpenTuiColor('blue');
-const selectedFg = toOpenTuiColor('white');
+const selectedBg = '#0000ff';
+const selectedFg = '#ffffff';
 
 export function SlashCommandMenu({ input, selectedIndex }: SlashCommandMenuProps): React.ReactNode {
     const view = createSlashCommandMenuView(input, { selectedIndex }, maxVisibleCommands);

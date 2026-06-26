@@ -2,7 +2,6 @@
 import { useSyncExternalStore } from 'react';
 import type { AbgOverlayState, AbgOverlayStore } from '../commands/abg-overlay-state.js';
 import { DEFAULT_REFRESH_MS } from '../commands/abg-overlay-state.js';
-import { toOpenTuiAttributes, toOpenTuiColor } from '../platform/opentui-types.js';
 import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA.js';
 import { ApprovalsPane, BlackboardPane, CostPolicyPane, TimelinePane, ToolsPane } from './AbgOverlayPanesB.js';
 
@@ -57,23 +56,23 @@ export interface AbgOverlayProps {
     readonly refreshMs?: number;
 }
 
-const dimAttrs = toOpenTuiAttributes({ dimColor: true });
-const boldAttrs = toOpenTuiAttributes({ bold: true });
-const cyanFg = toOpenTuiColor('cyan');
-const yellowFg = toOpenTuiColor('yellow');
+const dimAttrs = { dim: true };
+const boldAttrs = { bold: true };
+const cyanFg = '#00ffff';
+const yellowFg = '#ffff00';
 
 function statusColorFg(graphStatus: AbgOverlayState['graphStatus']): string | undefined {
     switch (graphStatus) {
         case 'active':
-            return toOpenTuiColor('yellow');
+            return '#ffff00';
         case 'completed':
-            return toOpenTuiColor('green');
+            return '#00ff00';
         case 'failed':
-            return toOpenTuiColor('red');
+            return '#ff0000';
         case 'cancelled':
-            return toOpenTuiColor('gray');
+            return '#808080';
         default:
-            return toOpenTuiColor('dim');
+            return '#808080';
     }
 }
 

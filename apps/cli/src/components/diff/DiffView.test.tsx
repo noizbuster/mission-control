@@ -2,24 +2,24 @@ import { describe, expect, it } from 'vitest';
 import { type DiffKindStyle, DiffView, kindStyle, splitLineSpans, type TextSpan } from './DiffView.js';
 import type { DiffLine } from './render-diff.js';
 
-describe('kindStyle per-kind Ink styling', () => {
+describe('kindStyle per-kind styling', () => {
     it('styles added lines green', () => {
-        expect(kindStyle('added')).toEqual({ color: 'green' });
+        expect(kindStyle('added')).toEqual({ fg: '#00ff00' });
     });
 
     it('styles removed lines red', () => {
-        expect(kindStyle('removed')).toEqual({ color: 'red' });
+        expect(kindStyle('removed')).toEqual({ fg: '#ff0000' });
     });
 
     it('dims context lines', () => {
         const style = kindStyle('context') satisfies DiffKindStyle;
-        expect(style.dimColor).toBe(true);
-        expect(style.color).toBeUndefined();
+        expect(style.dim).toBe(true);
+        expect(style.fg).toBeUndefined();
     });
 
     it('styles hunk and meta lines cyan', () => {
-        expect(kindStyle('hunk')).toEqual({ color: 'cyan' });
-        expect(kindStyle('meta')).toEqual({ color: 'cyan' });
+        expect(kindStyle('hunk')).toEqual({ fg: '#00ffff' });
+        expect(kindStyle('meta')).toEqual({ fg: '#00ffff' });
     });
 });
 

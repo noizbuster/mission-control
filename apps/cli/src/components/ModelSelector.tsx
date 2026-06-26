@@ -1,7 +1,6 @@
 /** @jsxImportSource @opentui/react */
 import type React from 'react';
 import type { ModelChoice } from '../commands/interactive-chat-model.js';
-import { toOpenTuiAttributes, toOpenTuiColor } from '../platform/opentui-types.js';
 
 export type ModelSelectorProps = {
     readonly choices: readonly ModelChoice[];
@@ -20,7 +19,7 @@ function filterChoices(choices: readonly ModelChoice[], query: string): readonly
     return choices.filter((choice) => choice.label.toLowerCase().includes(normalized));
 }
 
-const cyan = toOpenTuiColor('cyan');
+const cyan = '#00ffff';
 
 export function ModelSelector({
     choices,
@@ -44,10 +43,10 @@ export function ModelSelector({
     return (
         <box flexDirection="column">
             {totalCount === 0 ? (
-                <text {...toOpenTuiAttributes({ dimColor: true })}>No models match</text>
+                <text {...{ dim: true }}>No models match</text>
             ) : (
                 <>
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>
+                    <text {...{ dim: true }}>
                         Showing {showStart}-{showEnd} of {totalCount}
                     </text>
                     {visibleChoices.map((choice, visibleIndex) => {
@@ -60,11 +59,11 @@ export function ModelSelector({
                         return (
                             <box key={choice.id} flexDirection="row">
                                 {isSelected ? (
-                                    <text {...selectedStyle} {...toOpenTuiAttributes({ bold: true })}>
+                                    <text {...selectedStyle} {...{ bold: true }}>
                                         {marker} {modelLabel}
                                     </text>
                                 ) : (
-                                    <text {...toOpenTuiAttributes({ dimColor: true })}>
+                                    <text {...{ dim: true }}>
                                         {marker} {modelLabel}
                                     </text>
                                 )}

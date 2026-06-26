@@ -2,7 +2,6 @@
 import type { AbgToolOutcomeSnapshot, ApprovalRecord } from '@mission-control/protocol';
 import type React from 'react';
 import type { AbgOverlayState, RecentEvent } from '../commands/abg-overlay-state.js';
-import { toOpenTuiAttributes, toOpenTuiColor } from '../platform/opentui-types.js';
 
 export interface AbgOverlayPaneProps {
     readonly state: AbgOverlayState;
@@ -13,8 +12,8 @@ export interface CostPolicyPaneProps {
     readonly modelLabel?: string;
 }
 
-const dimAttrs = toOpenTuiAttributes({ dimColor: true });
-const boldAttrs = toOpenTuiAttributes({ bold: true });
+const dimAttrs = { dim: true };
+const boldAttrs = { bold: true };
 
 function truncate(text: string | undefined, max: number): string {
     if (text === undefined) return '';
@@ -51,29 +50,29 @@ function relativeTime(iso: string): string {
 function statusGlyph(status: AbgToolOutcomeSnapshot['status']): { glyph: string; fg: string | undefined } {
     switch (status) {
         case 'started':
-            return { glyph: '▶', fg: toOpenTuiColor('yellow') };
+            return { glyph: '▶', fg: '#ffff00' };
         case 'completed':
-            return { glyph: '✓', fg: toOpenTuiColor('green') };
+            return { glyph: '✓', fg: '#00ff00' };
         case 'failed':
-            return { glyph: '✗', fg: toOpenTuiColor('red') };
+            return { glyph: '✗', fg: '#ff0000' };
         default:
-            return { glyph: '?', fg: toOpenTuiColor('dim') };
+            return { glyph: '?', fg: '#808080' };
     }
 }
 
 function approvalStateFg(state: ApprovalRecord['state']): string | undefined {
     switch (state) {
         case 'pending':
-            return toOpenTuiColor('yellow');
+            return '#ffff00';
         case 'approved':
-            return toOpenTuiColor('green');
+            return '#00ff00';
         case 'denied':
-            return toOpenTuiColor('red');
+            return '#ff0000';
         case 'expired':
         case 'cancelled':
-            return toOpenTuiColor('gray');
+            return '#808080';
         default:
-            return toOpenTuiColor('dim');
+            return '#808080';
     }
 }
 
@@ -231,8 +230,8 @@ function isPolicyEvent(event: RecentEvent): boolean {
 }
 
 function policyEventFg(eventType: string): string | undefined {
-    if (eventType === 'policy.budget.exceeded' || eventType === 'policy.blocked') return toOpenTuiColor('red');
-    if (eventType === 'policy.budget.warning') return toOpenTuiColor('yellow');
+    if (eventType === 'policy.budget.exceeded' || eventType === 'policy.blocked') return '#ff0000';
+    if (eventType === 'policy.budget.warning') return '#ffff00';
     return undefined;
 }
 
@@ -244,9 +243,9 @@ export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): Reac
     const policyEvents = state.recentEvents.filter(isPolicyEvent);
     const hasWarning = policyEvents.some((event) => event.type === 'policy.budget.warning');
     const hasExceeded = policyEvents.some((event) => event.type === 'policy.budget.exceeded');
-    const costFg = hasExceeded ? toOpenTuiColor('red') : hasWarning ? toOpenTuiColor('yellow') : undefined;
-    const redFg = toOpenTuiColor('red');
-    const yellowFg = toOpenTuiColor('yellow');
+    const costFg = hasExceeded ? '#ff0000' : hasWarning ? '#ffff00' : undefined;
+    const redFg = '#ff0000';
+    const yellowFg = '#ffff00';
 
     return (
         <box flexDirection="column" marginTop={1}>
@@ -314,12 +313,12 @@ function formatBlackboardValue(value: unknown): string {
 }
 
 function blackboardKeyFg(key: string): string | undefined {
-    if (key.startsWith('goal') || key.startsWith('goal_')) return toOpenTuiColor('cyan');
-    if (key.startsWith('hypothesis') || key.startsWith('hypothesis_')) return toOpenTuiColor('magenta');
-    if (key.startsWith('observation') || key.startsWith('observation_')) return toOpenTuiColor('blue');
-    if (key.startsWith('decision') || key.startsWith('decision_')) return toOpenTuiColor('green');
-    if (key.startsWith('critic')) return toOpenTuiColor('yellow');
-    if (key.startsWith('supervisor')) return toOpenTuiColor('red');
+    if (key.startsWith('goal') || key.startsWith('goal_')) return '#00ffff';
+    if (key.startsWith('hypothesis') || key.startsWith('hypothesis_')) return '#ff00ff';
+    if (key.startsWith('observation') || key.startsWith('observation_')) return '#0000ff';
+    if (key.startsWith('decision') || key.startsWith('decision_')) return '#00ff00';
+    if (key.startsWith('critic')) return '#ffff00';
+    if (key.startsWith('supervisor')) return '#ff0000';
     return undefined;
 }
 
@@ -328,8 +327,8 @@ export function BlackboardPane({ state }: AbgOverlayPaneProps): React.ReactNode 
     const recentMutations = state.recentEvents.filter(
         (event) => event.type === 'blackboard.set' || event.type === 'blackboard.delete',
     );
-    const greenFg = toOpenTuiColor('green');
-    const redFg = toOpenTuiColor('red');
+    const greenFg = '#00ff00';
+    const redFg = '#ff0000';
 
     return (
         <box flexDirection="column" marginTop={1}>

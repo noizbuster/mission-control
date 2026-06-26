@@ -1,6 +1,5 @@
 /** @jsxImportSource @opentui/react */
 import type React from 'react';
-import { toOpenTuiColor } from '../../platform/opentui-types.js';
 import type { DiffLine, DiffLineKind } from './render-diff.js';
 
 export type DiffViewProps = {
@@ -12,16 +11,16 @@ export type DiffViewProps = {
  * `context` -> dim, `hunk`/`meta` -> cyan. Exposed for unit testing.
  */
 export type DiffKindStyle = {
-    readonly color?: string;
-    readonly dimColor?: boolean;
+    readonly fg?: string;
+    readonly dim?: boolean;
 };
 
 const KIND_STYLE: Readonly<Record<DiffLineKind, DiffKindStyle>> = {
-    added: { color: 'green' },
-    removed: { color: 'red' },
-    context: { dimColor: true },
-    hunk: { color: 'cyan' },
-    meta: { color: 'cyan' },
+    added: { fg: '#00ff00' },
+    removed: { fg: '#ff0000' },
+    context: { dim: true },
+    hunk: { fg: '#00ffff' },
+    meta: { fg: '#00ffff' },
 };
 
 export function kindStyle(kind: DiffLineKind): DiffKindStyle {
@@ -68,10 +67,10 @@ export function splitLineSpans(line: DiffLine): readonly TextSpan[] {
 function DiffRow({ line, index }: { readonly line: DiffLine; readonly index: number }): React.ReactNode {
     const style = kindStyle(line.kind);
     const spans = splitLineSpans(line);
-    const fg = style.color !== undefined ? toOpenTuiColor(style.color) : undefined;
+    const fg = style.fg;
     const rowStyle = {
         ...(fg !== undefined ? { fg } : {}),
-        ...(style.dimColor === true ? { dim: true } : {}),
+        ...(style.dim === true ? { dim: true } : {}),
     };
     return (
         <box flexDirection="row">

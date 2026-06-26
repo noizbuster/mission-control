@@ -50,9 +50,6 @@ import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 import { createChatTui, type ChatTuiOptions } from './create-chat-tui.js';
 import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './opentui-chat-bridge.js';
-import { createOpenTuiChatInput } from './opentui-chat-input.js';
-import { createOpenTuiChatOutput } from './opentui-chat-output.js';
-import { createOpenTuiModelSelector } from './opentui-model-selector.js';
 import { loadPricingTable } from './pricing-table-store.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
@@ -128,10 +125,32 @@ export async function runInteractiveChatSession(
         : undefined;
     const tuiBridge =
         useTui && bridgeOptions !== undefined ? await createChatTui(bridgeOptions as ChatTuiOptions) : undefined;
-    const chatInput =
-        options.input ?? (tuiBridge !== undefined ? createOpenTuiChatInput(tuiBridge) : createTerminalChatInput());
-    const baseChatOutput =
-        options.output ?? (tuiBridge !== undefined ? createOpenTuiChatOutput(tuiBridge) : createTerminalChatOutput());
+    const chatInput: ChatInput =
+        options.input ??
+        (tuiBridge !== undefined
+            ? {
+                  read: () => tuiBridge.waitForEvent(),
+                  close: () => tuiBridge.unmount(),
+                  suspend: () => {},
+                  resume: () => {},
+                  controlsPrompt: true,
+                  renderPrompt: () => {},
+              }
+            : createTerminalChatInput());
+    const baseChatOutput: ChatOutput =
+        options.output ??
+        (tuiBridge !== undefined
+            ? {
+                  write: (text) => tuiBridge.emitOutput(text),
+                  getOutput: () => tuiBridge.getOutput(),
+                  setAgentStatus: (text) => tuiBridge.setAgentStatus(text),
+                  clearAgentStatus: () => tuiBridge.clearAgentStatus(),
+                  isShowThinking: () => tuiBridge.isShowThinking(),
+                  isToolOutputExpanded: () => tuiBridge.isToolOutputExpanded(),
+                  showApproval: (toolName, action) => tuiBridge.showApproval(toolName, action),
+                  hideApproval: () => tuiBridge.hideApproval(),
+              }
+            : createTerminalChatOutput());
     // Mirror of the conversation text for /undo and /redo. This is display-only;
     // the durable JSONL session log is never modified by undo/redo.
     let conversationText = '';
@@ -156,9 +175,9 @@ export async function runInteractiveChatSession(
             undoRedoStack = next;
         },
     };
-    const selectModel =
+    const selectModel: ModelSelector =
         tuiBridge !== undefined
-            ? createOpenTuiModelSelector(tuiBridge)
+            ? (choices) => tuiBridge.showModelPicker(choices)
             : suspendChatInputWhileSelectingModel(
                   options.selectModel ?? createTerminalModelSelector(chatOutput),
                   chatInput,

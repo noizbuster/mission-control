@@ -71,7 +71,6 @@ import {
     PasteMarkerStore,
 } from '../platform/keymap/bracketed-paste.js';
 import { mountOpenTui } from '../platform/opentui-renderer.js';
-import { toOpenTuiColor, toOpenTuiAttributes } from '../platform/opentui-types.js';
 import { copy, type Toast } from '../platform/selection-copy.js';
 
 /**
@@ -1556,7 +1555,7 @@ function AgentSpinner({ text }: { readonly text: string }): React.ReactNode {
     return (
         <box marginTop={1}>
             <text fg="#ffff00">{glyph} </text>
-            <text {...toOpenTuiAttributes({ dimColor: true })}>{text}</text>
+            <text {...{ dim: true }}>{text}</text>
         </box>
     );
 }
@@ -1803,14 +1802,14 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                 />
                 <Separator state="awaiting_input" />
                 <box flexDirection="column" marginTop={1} paddingX={1}>
-                    <text fg="#ffff00" {...toOpenTuiAttributes({ bold: true, inverse: true })}>
+                    <text fg="#ffff00" {...{ bold: true, inverse: true }}>
                         {' Approval Required '}
                     </text>
                     <box flexDirection="row">
-                        <text {...toOpenTuiAttributes({ bold: true })}>Tool:</text>
+                        <text {...{ bold: true }}>Tool:</text>
                         <text> {snapshot.approvalToolName}</text>
                     </box>
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>{snapshot.approvalAction}</text>
+                    <text {...{ dim: true }}>{snapshot.approvalAction}</text>
                     <box flexDirection="column" marginTop={1}>
                         {approvalOptions.map((option, index) => {
                             const isSelected = index === snapshot.approvalSelectedIndex;
@@ -1820,7 +1819,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                                     <text {...selectedBg}>
                                         {isSelected ? '> ' : '  '}
                                         {option.label}  </text>
-                                    <text {...toOpenTuiAttributes({ dimColor: true })} {...selectedBg}>
+                                    <text {...{ dim: true }} {...selectedBg}>
                                         {option.description}
                                     </text>
                                 </box>
@@ -1828,7 +1827,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                         })}
                     </box>
                     <box marginTop={1}>
-                        <text {...toOpenTuiAttributes({ dimColor: true })}>
+                        <text {...{ dim: true }}>
                             Up/Down to navigate, Enter to select, Ctrl+C to deny
                         </text>
                     </box>
@@ -1848,11 +1847,11 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                 />
                 <Separator state="awaiting_input" />
                 <box flexDirection="column" marginTop={1} paddingX={1}>
-                    <text fg="#ff00ff" {...toOpenTuiAttributes({ bold: true, inverse: true })}>
+                    <text fg="#ff00ff" {...{ bold: true, inverse: true }}>
                         {' Question '}
                     </text>
                     {snapshot.questionHeader.length > 0 ? (
-                        <text {...toOpenTuiAttributes({ bold: true })}>{snapshot.questionHeader}</text>
+                        <text {...{ bold: true }}>{snapshot.questionHeader}</text>
                     ) : null}
                     <text>{snapshot.questionText}</text>
                     {snapshot.questionCustomMode ? (
@@ -1866,7 +1865,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                                     </text>
                                 </box>
                             </box>
-                            <text {...toOpenTuiAttributes({ dimColor: true })}>
+                            <text {...{ dim: true }}>
                                 Enter to submit, Esc to go back to options, Ctrl+C to cancel
                             </text>
                         </>
@@ -1887,7 +1886,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                                                 {option.label}
                                             </text>
                                             {option.description !== undefined ? (
-                                                <text {...toOpenTuiAttributes({ dimColor: true })}>
+                                                <text {...{ dim: true }}>
                                                     {`    ${option.description}`}
                                                 </text>
                                             ) : null}
@@ -1905,7 +1904,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                                                       {isSelected ? '> ' : '  '}
                                                   </text>
                                                   <text
-                                                      {...toOpenTuiAttributes({ dimColor: true })}
+                                                      {...{ dim: true }}
                                                       {...(isSelected ? { bg: '#0000ff' } : {})}
                                                   >
                                                       Type custom answer...
@@ -1914,7 +1913,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                                           );
                                       })()}
                             </box>
-                            <text {...toOpenTuiAttributes({ dimColor: true })}>
+                            <text {...{ dim: true }}>
                                 {snapshot.questionMultiple
                                     ? 'Up/Down to navigate, Space to toggle, Enter to submit, Esc to cancel'
                                     : 'Up/Down to navigate, Enter to select, Esc to cancel'}
@@ -1936,7 +1935,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                     toolOutputExpanded={snapshot.toolOutputExpanded}
                 />
                 <box flexDirection="column" marginTop={1} paddingX={1}>
-                    <text fg="#00ffff" {...toOpenTuiAttributes({ bold: true, inverse: true })}>
+                    <text fg="#00ffff" {...{ bold: true, inverse: true }}>
                         {' Rename Session '}
                     </text>
                     <text>Enter new session name:</text>
@@ -1947,7 +1946,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                             {'\u2588'}
                         </text>
                     </box>
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>Enter to confirm, Esc to cancel</text>
+                    <text {...{ dim: true }}>Enter to confirm, Esc to cancel</text>
                 </box>
             </box>
         );
@@ -1974,7 +1973,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                     toolOutputExpanded={snapshot.toolOutputExpanded}
                 />
                 <box flexDirection="column" marginTop={1} paddingX={1}>
-                    <text fg="#00ffff" {...toOpenTuiAttributes({ bold: true, inverse: true })}>
+                    <text fg="#00ffff" {...{ bold: true, inverse: true }}>
                         {' Select approval level '}
                     </text>
                     {levels.map((level, index) => {
@@ -1985,11 +1984,11 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                                     {isSelected ? '> ' : '  '}
                                     {level.label.padEnd(13)}
                                 </text>
-                                <text {...toOpenTuiAttributes({ dimColor: true })}>{level.desc}</text>
+                                <text {...{ dim: true }}>{level.desc}</text>
                             </box>
                         );
                     })}
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>
+                    <text {...{ dim: true }}>
                         {'Up/Down to navigate, Enter to select, Ctrl+C to cancel'}
                     </text>
                 </box>
@@ -2017,14 +2016,14 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                 />
                 <Separator state="awaiting_input" />
                 <box flexDirection="column" marginTop={1} paddingX={1}>
-                    <text fg="#00ffff" {...toOpenTuiAttributes({ bold: true, inverse: true })}>
+                    <text fg="#00ffff" {...{ bold: true, inverse: true }}>
                         {' Select model '}
                     </text>
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>{`Search: ${view.searchQuery}`}</text>
+                    <text {...{ dim: true }}>{`Search: ${view.searchQuery}`}</text>
                     {view.totalCount === 0 ? (
-                        <text {...toOpenTuiAttributes({ dimColor: true })}>No models match</text>
+                        <text {...{ dim: true }}>No models match</text>
                     ) : (
-                        <text {...toOpenTuiAttributes({ dimColor: true })}>
+                        <text {...{ dim: true }}>
                             {`Showing ${view.startIndex + 1}-${view.endIndex} of ${view.totalCount}`}
                         </text>
                     )}
@@ -2038,7 +2037,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                             </text>
                         );
                     })}
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>
+                    <text {...{ dim: true }}>
                         {'Up/Down to navigate, type to search, Backspace to delete, Enter to select, Ctrl+C to cancel'}
                     </text>
                 </box>
@@ -2123,7 +2122,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
             ) : null}
             {menuView !== null && menuView.open ? (
                 <box flexDirection="column" marginTop={1}>
-                    <text fg="#00ffff" {...toOpenTuiAttributes({ bold: true })}>
+                    <text fg="#00ffff" {...{ bold: true }}>
                         {showSlashMenu
                             ? menuView.query.length > 0
                                 ? ` Commands matching "${menuView.query}" `
@@ -2133,7 +2132,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                               : ` Workflows (${menuView.totalCount}) `}
                     </text>
                     {menuView.empty ? (
-                        <text {...toOpenTuiAttributes({ dimColor: true })}> no matches</text>
+                        <text {...{ dim: true }}> no matches</text>
                     ) : (
                         (() => {
                             const idWidth = Math.max(
@@ -2154,7 +2153,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                                             {padding}
                                             {pickerMarker} {' '}
                                         </text>
-                                        <text {...toOpenTuiAttributes({ dimColor: true })} {...selectedBg}>
+                                        <text {...{ dim: true }} {...selectedBg}>
                                             {choice.description}
                                         </text>
                                     </box>
@@ -2162,20 +2161,20 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                             });
                         })()
                     )}
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>
+                    <text {...{ dim: true }}>
                         Up/Down to navigate, Enter to select, Esc to close
                     </text>
                 </box>
             ) : null}
             {fileView?.open ? (
                 <box flexDirection="column" marginTop={1}>
-                    <text fg="#00ffff" {...toOpenTuiAttributes({ bold: true })}>
+                    <text fg="#00ffff" {...{ bold: true }}>
                         {fileView.totalCount > 0
                             ? ` Files matching @${fileView.prefix} (${fileView.totalCount}) `
                             : ` Files matching @${fileView.prefix} `}
                     </text>
                     {fileView.empty ? (
-                        <text {...toOpenTuiAttributes({ dimColor: true })}> no files match</text>
+                        <text {...{ dim: true }}> no files match</text>
                     ) : (
                         fileView.visibleMatches.map((match, index) => {
                             const globalIndex = fileView.startIndex + index;
@@ -2193,7 +2192,7 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
                             );
                         })
                     )}
-                    <text {...toOpenTuiAttributes({ dimColor: true })}>
+                    <text {...{ dim: true }}>
                         Tab/Enter to complete, Up/Down to navigate, Esc to close
                     </text>
                 </box>
@@ -2546,7 +2545,7 @@ function MarkdownPanel({
     // does not reliably flex-stretch across multi-block markdown.
     const rendered = getCachedBlocks(text, width, streaming ?? false, theme, buildBlocks);
     const barRows = rendered.reduce((sum, block) => sum + block.lines.length, 0);
-    const barBg = toOpenTuiColor(barColor);
+    const barBg = barColor;
     return (
         <box flexDirection="row" {...(marginTop !== undefined ? { marginTop } : {})}>
             <box width={barWidth} flexDirection="column">
@@ -2586,7 +2585,7 @@ function MessageBlock({
             <box flexDirection="column">
                 {block.lines.map((line, index) => (
                     // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
-                    <text key={`sys-${index}`} selectable {...toOpenTuiAttributes({ dimColor: true })}>
+                    <text key={`sys-${index}`} selectable {...{ dim: true }}>
                         {line}
                     </text>
                 ))}
@@ -2619,7 +2618,7 @@ function MessageBlock({
             <MarkdownPanel
                 text={joined}
                 theme={thinkingTheme}
-                barColor="magenta"
+                barColor="#ff00ff"
                 barWidth={2}
                 marginTop={1}
                 {...(isStreaming ? { streaming: true } : {})}
@@ -2636,7 +2635,7 @@ function MessageBlock({
             <MarkdownPanel
                 text={joined}
                 theme={darkTheme}
-                barColor="green"
+                barColor="#00ff00"
                 barWidth={1}
                 {...(isStreaming ? { streaming: true } : {})}
             />
@@ -2646,7 +2645,7 @@ function MessageBlock({
     // user / error fallthrough
     const leftColor = blockLeftColor[block.kind];
     const isError = block.kind === 'error';
-    const leftBg = leftColor !== undefined ? toOpenTuiColor(leftColor) : undefined;
+    const leftBg = leftColor;
     return (
         <box flexDirection="row">
             {leftBg !== undefined ? (

@@ -1,7 +1,6 @@
 /** @jsxImportSource @opentui/react */
 import type React from 'react';
 import type { AbgOverlayState } from '../commands/abg-overlay-state.js';
-import { toOpenTuiAttributes, toOpenTuiColor } from '../platform/opentui-types.js';
 import { useSpinnerFrame } from './spinner.js';
 import { renderVisualGraph, type VisualGraphEdge, type VisualGraphNode, type VisualGraphRow } from './visual-graph.js';
 
@@ -10,22 +9,22 @@ export interface PaneProps {
     readonly modelLabel: string;
 }
 
-const dimAttrs = toOpenTuiAttributes({ dimColor: true });
-const boldAttrs = toOpenTuiAttributes({ bold: true });
+const dimAttrs = { dim: true };
+const boldAttrs = { bold: true };
 
 function statusColorFg(status: string | undefined): string | undefined {
     switch (status) {
         case 'running':
-            return toOpenTuiColor('yellow');
+            return '#ffff00';
         case 'succeeded':
         case 'active':
-            return toOpenTuiColor('green');
+            return '#00ff00';
         case 'failed':
-            return toOpenTuiColor('red');
+            return '#ff0000';
         case 'blocked':
-            return toOpenTuiColor('cyan');
+            return '#00ffff';
         case 'cancelled':
-            return toOpenTuiColor('gray');
+            return '#808080';
         default:
             return undefined;
     }
@@ -34,17 +33,17 @@ function statusColorFg(status: string | undefined): string | undefined {
 function graphStatusFg(graphStatus: AbgOverlayState['graphStatus']): string {
     switch (graphStatus) {
         case 'active':
-            return toOpenTuiColor('yellow') ?? '#ffff00';
+            return '#ffff00';
         case 'completed':
-            return toOpenTuiColor('green') ?? '#00ff00';
+            return '#00ff00';
         case 'failed':
-            return toOpenTuiColor('red') ?? '#ff0000';
+            return '#ff0000';
         case 'blocked':
-            return toOpenTuiColor('cyan') ?? '#00ffff';
+            return '#00ffff';
         case 'cancelled':
-            return toOpenTuiColor('gray') ?? '#808080';
+            return '#808080';
         default:
-            return toOpenTuiColor('dim') ?? '#808080';
+            return '#808080';
     }
 }
 
@@ -82,10 +81,10 @@ function isEmptyState(state: AbgOverlayState): boolean {
     );
 }
 
-const cyanFg = toOpenTuiColor('cyan');
-const yellowFg = toOpenTuiColor('yellow');
-const redFg = toOpenTuiColor('red');
-const focusedStyle = cyanFg !== undefined ? { fg: cyanFg, bold: true } : { bold: true };
+const cyanFg = '#00ffff';
+const yellowFg = '#ffff00';
+const redFg = '#ff0000';
+const focusedStyle = { fg: cyanFg, bold: true };
 
 export function OverviewPane({ state, modelLabel }: PaneProps): React.ReactNode {
     if (isEmptyState(state)) {
@@ -129,7 +128,7 @@ export function OverviewPane({ state, modelLabel }: PaneProps): React.ReactNode 
                     {knownGraphs.map((summary) => {
                         const isFocused = summary.graphId === state.focusedGraphId;
                         const color = graphStatusFg(summary.status);
-                        const graphFg = color !== toOpenTuiColor('dim') ? color : undefined;
+                        const graphFg = color !== '#808080' ? color : undefined;
                         return (
                             <box key={summary.graphId} flexDirection="row">
                                 <text {...(isFocused ? focusedStyle : dimAttrs)}>
@@ -274,7 +273,7 @@ export function GraphPane({ state }: PaneProps): React.ReactNode {
                     </text>
                     {childGraphs.map((child) => {
                         const color = graphStatusFg(child.status);
-                        const childFg = color !== toOpenTuiColor('dim') ? color : undefined;
+                        const childFg = color !== '#808080' ? color : undefined;
                         return (
                             <box key={child.graphId} flexDirection="row" marginLeft={2}>
                                 <text {...dimAttrs}>↳</text>

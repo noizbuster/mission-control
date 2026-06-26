@@ -42,7 +42,6 @@
 import type { Keymap, KeymapEvent } from '@opentui/keymap';
 import { useKeymap } from '@opentui/keymap/react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { toOpenTuiAttributes, toOpenTuiColor } from '../opentui-types.js';
 import { CommandMap } from './keybind.js';
 import type { OpenTuiKeymap } from './keymap-instance.js';
 import { BASE_MODE, useModeStack } from './mode-stack.js';
@@ -313,10 +312,10 @@ function WhichKeyWindow(props: {
     readonly currentMode: string;
 }): ReactNode {
     const { groups, layout, currentMode } = props;
-    const dimAttrs = toOpenTuiAttributes({ dimColor: true });
-    const accentFg = toOpenTuiColor('cyan');
-    const keyFg = toOpenTuiColor('yellow');
-    const borderColor = toOpenTuiColor('gray');
+    const dimAttrs = { dim: true };
+    const accentFg = '#00ffff';
+    const keyFg = '#ffff00';
+    const borderColor = '#808080';
     const absolute = layout === 'overlay';
     const next = nextLayout(layout);
 

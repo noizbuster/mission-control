@@ -1,5 +1,4 @@
 /** @jsxImportSource @opentui/react */
-import { toOpenTuiAttributes } from '../platform/opentui-types.js';
 
 export type TextInputProps = {
     readonly value: string;
@@ -16,7 +15,7 @@ export function TextInput({ value, placeholder, prefix = defaultPrefix }: TextIn
     return (
         <box flexDirection="row">
             <text>{prefix}</text>
-            <text {...toOpenTuiAttributes({ dimColor: showPlaceholder })}>
+            <text {...(showPlaceholder ? { dim: true } : {})}>
                 {showPlaceholder ? placeholder : value}
             </text>
         </box>

@@ -44,7 +44,6 @@ import { useKeymap } from '@opentui/keymap/react';
 import { useKeyboard } from '@opentui/react';
 import type { MutableRefObject, ReactNode } from 'react';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { toOpenTuiAttributes, toOpenTuiColor } from '../opentui-types.js';
 import { CommandMap } from './keybind.js';
 import type { OpenTuiKeymap } from './keymap-instance.js';
 import { PaletteOpenContext } from './palette-open-context.js';
@@ -315,10 +314,10 @@ function PaletteWindow(props: {
     );
     const visible = items.slice(startIndex, startIndex + PALETTE_VISIBLE_ROWS);
 
-    const headerFg = toOpenTuiColor('cyan');
-    const dimAttrs = toOpenTuiAttributes({ dimColor: true });
-    const selectedAttrs = toOpenTuiAttributes({ inverse: true });
-    const borderColor = toOpenTuiColor('gray');
+    const headerFg = '#00ffff';
+    const dimAttrs = { dim: true };
+    const selectedAttrs = { inverse: true };
+    const borderColor = '#808080';
 
     const rows: ReactNode[] = [];
     if (items.length === 0) {

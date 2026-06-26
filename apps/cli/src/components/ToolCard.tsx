@@ -1,6 +1,5 @@
 /** @jsxImportSource @opentui/react */
 import type React from 'react';
-import { toOpenTuiAttributes, toOpenTuiColor } from '../platform/opentui-types.js';
 import { DiffView } from './diff/DiffView.js';
 import { renderDiff } from './diff/render-diff.js';
 
@@ -40,10 +39,10 @@ export function buildHeaderLabel(title: string | undefined, lineCount: number, e
  */
 export function ToolCard({ lines, title, expanded }: ToolCardProps): React.ReactNode {
     const header = buildHeaderLabel(title, lines.length, expanded);
-    const yellow = toOpenTuiColor('yellow');
+    const yellow = '#ffff00';
     return (
         <box flexDirection="column" borderStyle="rounded">
-            <text {...toOpenTuiAttributes({ bold: true })} {...(yellow !== undefined ? { fg: yellow } : {})}>
+            <text {...{ bold: true }} {...(yellow !== undefined ? { fg: yellow } : {})}>
                 {header}
             </text>
             {expanded ? (

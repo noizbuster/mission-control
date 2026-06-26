@@ -1,7 +1,6 @@
 /** @jsxImportSource @opentui/react */
 import { useEffect, useState } from 'react';
 import { resolveSpinnerMode } from './spinner.js';
-import { toOpenTuiColor, toOpenTuiAttributes } from '../platform/opentui-types.js';
 
 export type SeparatorProps = {
     readonly state: SeparatorState;
@@ -84,9 +83,9 @@ export function Separator({ state, width }: SeparatorProps): React.ReactNode {
     }, [animated, state]);
     const columns = width ?? Math.max(1, (process.stdout.columns ?? 80) - 1);
     const { text, color, dimColor } = buildSeparatorLine(state, animated, frame, columns);
-    const resolvedFg = color !== undefined ? toOpenTuiColor(color) : undefined;
+    const resolvedFg = color === 'yellow' ? '#ffff00' : color === 'magenta' ? '#ff00ff' : undefined;
     return (
-        <text {...(resolvedFg !== undefined ? { fg: resolvedFg } : {})} {...toOpenTuiAttributes({ dimColor })}>
+        <text {...(resolvedFg !== undefined ? { fg: resolvedFg } : {})} {...(dimColor ? { dim: true } : {})}>
             {text}
         </text>
     );
