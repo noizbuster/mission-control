@@ -96,6 +96,14 @@ export type ChatStoreOptions = {
     readonly initialApprovalLevel?: ApprovalLevel;
 };
 
+export type AbgOverlayPrefsSnapshot = {
+    readonly activeTabIndex: number;
+    readonly scrollOffset: number;
+    readonly liveOutput: boolean;
+    readonly showThinking: boolean;
+    readonly toolOutputExpanded: boolean;
+};
+
 const WHITESPACE_PATTERN = /\s/u;
 const EMIT_COALESCE_MS = 16;
 const CURSOR_UP = '\u001b[A';
@@ -424,6 +432,25 @@ export class ChatStore {
     toggleAbgOverlay(): void {
         this.state.overlayMode = this.state.overlayMode === 'abg' ? 'none' : 'abg';
         this.publish();
+    }
+
+    applyAbgOverlayPrefs(prefs: AbgOverlayPrefsSnapshot): void {
+        this.state.abgOverlayActiveTab = prefs.activeTabIndex;
+        this.state.abgOverlayScrollOffset = prefs.scrollOffset;
+        this.state.abgOverlayLiveOutput = prefs.liveOutput;
+        this.state.showThinking = prefs.showThinking;
+        this.state.toolOutputExpanded = prefs.toolOutputExpanded;
+        this.publish();
+    }
+
+    getAbgOverlayPrefsSnapshot(): AbgOverlayPrefsSnapshot {
+        return {
+            activeTabIndex: this.state.abgOverlayActiveTab,
+            scrollOffset: this.state.abgOverlayScrollOffset,
+            liveOutput: this.state.abgOverlayLiveOutput,
+            showThinking: this.state.showThinking,
+            toolOutputExpanded: this.state.toolOutputExpanded,
+        };
     }
 
     cycleModel(direction: 1 | -1): void {
