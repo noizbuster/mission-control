@@ -1,4 +1,5 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import { closeTreeSitterClient } from '../components/markdown/highlight.js';
 import type { ModelSelector } from './interactive-chat.js';
 import type { ChatInput, ChatInputEvent } from './interactive-chat-io.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
@@ -35,6 +36,8 @@ export function registerProcessTerminalCleanup(input: ChatInput): () => void {
         }
         cleaned = true;
         input.close();
+        // Signal/exit handlers are sync, so we cannot await; the call is idempotent.
+        void closeTreeSitterClient();
     };
     const onSignal = () => {
         cleanup();

@@ -23,6 +23,7 @@ import {
 import type { AbgGraphSpec, AbgNodeModelOptions, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
+import { closeTreeSitterClient } from '../components/markdown/highlight.js';
 import { type AgentUIRenderer, JsonRenderer, PlainRenderer, TuiRenderer } from '../ui/renderers.js';
 import { loadPersistedApprovalLevel, savePersistedApprovalLevel } from './approval-level-store.js';
 import { splitCommandParts } from './chat-command-parts.js';
@@ -146,6 +147,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             unsubscribeRuntimeEvents?.();
             await recorder.close();
             closePersistentStore(persistentStore);
+            await closeTreeSitterClient();
         }
     }
 
@@ -275,6 +277,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             await renderer.stop();
         }
         closePersistentStore(persistentStore);
+        await closeTreeSitterClient();
     }
     return renderer.getOutput();
 }

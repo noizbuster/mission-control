@@ -16,6 +16,7 @@ import {
     WorkflowRegistry,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import { closeTreeSitterClient } from '../components/markdown/highlight.js';
 import { createAbgOverlayController } from './abg-overlay-controller.js';
 import { DEFAULT_ABG_OVERLAY_PREFS, loadAbgOverlayPrefs } from './abg-overlay-prefs-store.js';
 import { createAbgOverlayStore } from './abg-overlay-state.js';
@@ -467,6 +468,7 @@ export async function runInteractiveChatSession(
         activeTurn?.interrupt('force');
         abgOverlayController?.reset();
         chatInput.close();
+        await closeTreeSitterClient();
     }
 
     return chatOutput.getOutput?.() ?? '';
