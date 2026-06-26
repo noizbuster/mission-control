@@ -37,7 +37,7 @@ import { TREE_SITTER_PARSERS } from './parsers-config.js';
 import { clearRenderCache } from './render-cache.js';
 import { buildSyntaxRules } from './syntax-rules.js';
 import { textChunkToSpan } from './text-attributes.js';
-import type { InkTextStyle } from './theme.js';
+import type { TerminalTextStyle } from './theme.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,7 +73,7 @@ export interface HighlighterRuntime {
 // Module state
 // ---------------------------------------------------------------------------
 
-const NO_STYLE: InkTextStyle = {};
+const NO_STYLE: TerminalTextStyle = {};
 
 /** Monochrome fallback: one unstyled span per source line. */
 export function monochrome(code: string): readonly HighlightedLine[] {

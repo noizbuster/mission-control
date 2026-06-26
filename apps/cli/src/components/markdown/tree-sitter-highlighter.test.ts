@@ -94,9 +94,9 @@ async function flushPending(rounds = 20): Promise<void> {
 
 /** True when every span on every line lacks a `color` (monochrome). */
 function isMonochrome(
-    lines: readonly { readonly spans: ReadonlyArray<{ readonly style: { readonly color?: string } }> }[],
+    lines: readonly { readonly spans: ReadonlyArray<{ readonly style: { readonly fg?: string } }> }[],
 ): boolean {
-    return lines.every((line) => line.spans.every((span) => span.style.color === undefined));
+    return lines.every((line) => line.spans.every((span) => span.style.fg === undefined));
 }
 
 beforeEach(() => {
@@ -131,7 +131,7 @@ describe('highlightTreeSitter - sync entry point', () => {
 
         const second = highlightTreeSitter('const x', 'ts');
         expect(isMonochrome(second)).toBe(false);
-        expect(second[0]?.spans[0]?.style.color).toBe('#ff0000');
+        expect(second[0]?.spans[0]?.style.fg).toBe('#ff0000');
     });
 
     it('resolves the fence alias to a filetype and passes both to highlightOnce', async () => {
@@ -221,7 +221,7 @@ describe('chunksToLines - multiline split', () => {
         expect(result).toHaveLength(3);
         for (const line of result) {
             expect(line.spans).toHaveLength(1);
-            expect(line.spans[0]?.style.color).toBe('#82aaff');
+            expect(line.spans[0]?.style.fg).toBe('#82aaff');
         }
     });
 });

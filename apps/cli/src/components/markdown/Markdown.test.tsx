@@ -201,7 +201,7 @@ describe('buildOsc8Hyperlink + link helpers', () => {
 describe('renderInlineToRuns', () => {
     it('styles a codespan with the theme code style', () => {
         const runs = inlineRuns('`x`');
-        const codespan = runs.find((run) => run.style.backgroundColor === 'gray');
+        const codespan = runs.find((run) => run.style.bg === '#808080');
         expect(codespan).toBeDefined();
         expect(codespan?.text).toBe('x');
     });
@@ -217,7 +217,7 @@ describe('renderInlineToRuns', () => {
         const runs = inlineRuns('[label](https://example.com)');
         const last = runs[runs.length - 1];
         expect(last?.text).toBe(' (https://example.com)');
-        expect(last?.style.dimColor).toBe(true);
+        expect(last?.style.dim).toBe(true);
     });
 
     it('does not append a suffix when link text equals href', () => {
@@ -372,7 +372,7 @@ describe('renderCodeBlock token highlighting', () => {
         await flushPending();
         const block = renderCodeBlock('const x: number = 1;', 'ts', darkTheme, 40);
         const bodyRuns = block.lines.slice(1, -1).flat();
-        const coloredRuns = bodyRuns.filter((run) => run.style.color !== undefined && run.style.color.startsWith('#'));
+        const coloredRuns = bodyRuns.filter((run) => run.style.fg !== undefined && run.style.fg.startsWith('#'));
         expect(coloredRuns.length).toBeGreaterThan(0);
     });
 });

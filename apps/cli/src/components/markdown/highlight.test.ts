@@ -87,7 +87,7 @@ async function flushPending(rounds = 20): Promise<void> {
 
 /** True when every span on every line lacks a `color` (monochrome). */
 function isMonochrome(lines: readonly HighlightedLine[]): boolean {
-    return lines.every((line) => line.spans.every((span) => span.style.color === undefined));
+    return lines.every((line) => line.spans.every((span) => span.style.fg === undefined));
 }
 
 beforeEach(() => {
@@ -114,8 +114,8 @@ describe('highlightCode token coloring', () => {
         const xSpan = spans.find((span) => span.text.includes('x'));
         expect(constSpan).toBeDefined();
         expect(xSpan).toBeDefined();
-        expect(constSpan?.style.color).toBeTruthy();
-        expect(constSpan?.style.color).not.toBe(xSpan?.style.color);
+        expect(constSpan?.style.fg).toBeTruthy();
+        expect(constSpan?.style.fg).not.toBe(xSpan?.style.fg);
     });
 
     it('maps the keyword scope to a distinct color', async () => {
@@ -133,7 +133,7 @@ describe('highlightCode token coloring', () => {
 
         const spans = highlightCode('return x;', 'ts').flatMap((line) => line.spans);
         const keyword = spans.find((span) => span.text === 'return');
-        expect(keyword?.style.color).toBeTruthy();
+        expect(keyword?.style.fg).toBeTruthy();
     });
 });
 
@@ -146,7 +146,7 @@ describe('highlightCode fallbacks', () => {
         expect(lines.length).toBeGreaterThan(0);
         for (const line of lines) {
             for (const span of line.spans) {
-                expect(span.style.color).toBeUndefined();
+                expect(span.style.fg).toBeUndefined();
             }
         }
     });
@@ -216,7 +216,7 @@ describe('highlightCode line structure', () => {
         expect(lines.length).toBe(3);
         for (const line of lines) {
             expect(line.spans.length).toBe(1);
-            expect(line.spans[0]?.style.color).toBeUndefined();
+            expect(line.spans[0]?.style.fg).toBeUndefined();
         }
     });
 });
@@ -236,7 +236,7 @@ describe('highlightCode async fill', () => {
 
         const second = highlightCode('const x', 'ts');
         expect(isMonochrome(second)).toBe(false);
-        const colored = second.some((line) => line.spans.some((span) => span.style.color !== undefined));
+        const colored = second.some((line) => line.spans.some((span) => span.style.fg !== undefined));
         expect(colored).toBe(true);
     });
 

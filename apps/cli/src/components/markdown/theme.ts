@@ -1,67 +1,112 @@
 /**
- * Ink-native terminal markdown theme.
+ * opentui-native terminal markdown theme.
  *
- * Each style entry is a descriptor of Ink `<Text>` props (color, backgroundColor,
- * bold, italic, underline, strikethrough, dimColor, inverse) — never an ANSI
- * string-producing function. The markdown renderer (T4) spreads these onto
- * `<Text>` elements; the syntax highlighter (T5) fills the `highlightCode` slot.
- *
- * Key set mirrors the ANSI-string `MarkdownTheme` from the pi reference repo,
- * but each value is an Ink-style descriptor object instead of a `(text) => string`
- * ANSI function.
+ * Each style entry is a descriptor of opentui `<text>` styling. Boolean flags
+ * (`bold`, `underline`, ...) are authored as FLAT top-level props; a nested
+ * `attributes` object is also accepted for consumers that author it that way.
+ * The markdown renderer normalizes each descriptor into the numeric
+ * `attributes` bitmask opentui's `<text>` intrinsic expects before spreading
+ * (see `terminalStyleToTextProps` in `text-attributes.ts`). The syntax
+ * highlighter (T5) fills the `highlightCode` slot.
  */
 
 import type { HighlightedLine } from './highlight.js';
 import { highlightCode } from './highlight.js';
 
-/** Subset of Ink `<Text>` props that control character styling. */
-export type InkTextStyle = {
-    readonly color?: string;
-    readonly backgroundColor?: string;
-    readonly dimColor?: boolean;
+/**
+ * Boolean attribute flags shared by the flat top-level props and the nested
+ * `attributes` object. Named once so the two accepted shapes stay in sync.
+ */
+export type TextStyleAttributeFlags = {
     readonly bold?: boolean;
+    readonly dim?: boolean;
     readonly italic?: boolean;
+    readonly inverse?: boolean;
     readonly underline?: boolean;
     readonly strikethrough?: boolean;
-    readonly inverse?: boolean;
 };
 
 /**
- * Code-highlighting slot. Returns one {@link HighlightedLine} per source line,
- * each carrying per-token styled spans. The renderer maps each span to a styled
- * `<Text>` run. A missing slot means monochrome code blocks (no token coloring).
+ * opentui text style descriptor. `fg`/`bg` are hex strings. Boolean styling
+ * flags may be authored either as FLAT top-level props (`bold`, `underline`,
+ * ...) - the canonical, test-pinned form - or nested under an `attributes`
+ * object, retained for external consumers that author styles that way. The
+ * renderer normalizes both forms into the `TextAttributes` numeric bitmask.
  */
-export type HighlightCodeSlot = (code: string, lang?: string) => readonly HighlightedLine[];
+export type TerminalTextStyle = TextStyleAttributeFlags & {
+    readonly fg?: string;
+    readonly bg?: string;
+    readonly attributes?: TextStyleAttributeFlags;
+};
 
 /**
- * Theme mapping every markdown element to an Ink `<Text>` style descriptor.
- *
- * `defaultTextStyle` is the base style applied to all text unless overridden by
- * element-specific styling. `codeBlockIndent` is a layout prefix (string), not a
- * style. `highlightCode` is an optional function slot filled by T5.
+ * Deep-merge text styles. `fg`/`bg` use last-wins; boolean attribute flags
+ * combine additively so a bold base merged with an italic overlay yields both
+ * flags. Both the flat top-level props and any nested `attributes` object are
+ * read; the result is emitted in the canonical flat form so downstream
+ * spread-merges and `terminalStyleToTextProps` see a single shape.
  */
+export function mergeTextStyle(...styles: ReadonlyArray<TerminalTextStyle | undefined>): TerminalTextStyle {
+    let fg: string | undefined;
+    let bg: string | undefined;
+    const flags: {
+        bold?: boolean;
+        dim?: boolean;
+        italic?: boolean;
+        inverse?: boolean;
+        underline?: boolean;
+        strikethrough?: boolean;
+    } = {};
+    for (const style of styles) {
+        if (style === undefined) continue;
+        if (style.fg !== undefined) fg = style.fg;
+        if (style.bg !== undefined) bg = style.bg;
+        if (style.bold === true) flags.bold = true;
+        if (style.dim === true) flags.dim = true;
+        if (style.italic === true) flags.italic = true;
+        if (style.inverse === true) flags.inverse = true;
+        if (style.underline === true) flags.underline = true;
+        if (style.strikethrough === true) flags.strikethrough = true;
+        const nested = style.attributes;
+        if (nested !== undefined) {
+            if (nested.bold === true) flags.bold = true;
+            if (nested.dim === true) flags.dim = true;
+            if (nested.italic === true) flags.italic = true;
+            if (nested.inverse === true) flags.inverse = true;
+            if (nested.underline === true) flags.underline = true;
+            if (nested.strikethrough === true) flags.strikethrough = true;
+        }
+    }
+    return {
+        ...(fg !== undefined ? { fg } : {}),
+        ...(bg !== undefined ? { bg } : {}),
+        ...flags,
+    };
+}
+
+export type HighlightCodeSlot = (code: string, lang?: string) => readonly HighlightedLine[];
+
 export type TerminalMarkdownTheme = {
-    readonly defaultTextStyle?: InkTextStyle;
-    readonly heading: InkTextStyle;
-    readonly link: InkTextStyle;
-    readonly linkUrl: InkTextStyle;
-    readonly code: InkTextStyle;
-    readonly codeBlock: InkTextStyle;
-    readonly codeBlockBorder: InkTextStyle;
-    readonly quote: InkTextStyle;
-    readonly quoteBorder: InkTextStyle;
-    readonly hr: InkTextStyle;
-    readonly listBullet: InkTextStyle;
-    readonly bold: InkTextStyle;
-    readonly italic: InkTextStyle;
-    readonly strikethrough: InkTextStyle;
-    readonly underline: InkTextStyle;
+    readonly defaultTextStyle?: TerminalTextStyle;
+    readonly heading: TerminalTextStyle;
+    readonly link: TerminalTextStyle;
+    readonly linkUrl: TerminalTextStyle;
+    readonly code: TerminalTextStyle;
+    readonly codeBlock: TerminalTextStyle;
+    readonly codeBlockBorder: TerminalTextStyle;
+    readonly quote: TerminalTextStyle;
+    readonly quoteBorder: TerminalTextStyle;
+    readonly hr: TerminalTextStyle;
+    readonly listBullet: TerminalTextStyle;
+    readonly bold: TerminalTextStyle;
+    readonly italic: TerminalTextStyle;
+    readonly strikethrough: TerminalTextStyle;
+    readonly underline: TerminalTextStyle;
     readonly codeBlockIndent?: string;
     readonly highlightCode?: HighlightCodeSlot;
     readonly cacheKeyTag?: string;
 };
 
-/** Element style keys mirrored from pi's `MarkdownTheme` (excludes layout/slots). */
 export const THEME_STYLE_KEYS = [
     'heading',
     'link',
@@ -79,21 +124,19 @@ export const THEME_STYLE_KEYS = [
     'underline',
 ] as const satisfies readonly (keyof TerminalMarkdownTheme)[];
 
-/** Union of the element style keys enumerated by {@link THEME_STYLE_KEYS}. */
 export type ThemeStyleKey = (typeof THEME_STYLE_KEYS)[number];
 
-/** Default dark-palette theme. */
 export const darkTheme: TerminalMarkdownTheme = {
-    heading: { bold: true, color: 'cyan' },
-    link: { color: 'blue', underline: true },
-    linkUrl: { color: 'gray', dimColor: true },
-    code: { backgroundColor: 'gray' },
-    codeBlock: { backgroundColor: 'gray' },
-    codeBlockBorder: { color: 'gray', dimColor: true },
-    quote: { italic: true, dimColor: true },
-    quoteBorder: { color: 'magenta' },
-    hr: { dimColor: true },
-    listBullet: { color: 'yellow' },
+    heading: { bold: true, fg: '#00ffff' },
+    link: { fg: '#0000ff', underline: true },
+    linkUrl: { fg: '#808080', dim: true },
+    code: { bg: '#808080' },
+    codeBlock: { bg: '#808080' },
+    codeBlockBorder: { fg: '#808080', dim: true },
+    quote: { italic: true, dim: true },
+    quoteBorder: { fg: '#ff00ff' },
+    hr: { dim: true },
+    listBullet: { fg: '#ffff00' },
     bold: { bold: true },
     italic: { italic: true },
     strikethrough: { strikethrough: true },
@@ -103,7 +146,6 @@ export const darkTheme: TerminalMarkdownTheme = {
     cacheKeyTag: 'd',
 };
 
-/** Color-free fallback theme: semantic styling only, no color/backgroundColor. */
 export const noColorTheme: TerminalMarkdownTheme = {
     heading: { bold: true },
     link: { underline: true },

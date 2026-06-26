@@ -26,7 +26,6 @@ import { marked } from 'marked';
 import type React from 'react';
 import { useSyncExternalStore } from 'react';
 import wrapAnsi from 'wrap-ansi';
-import { toOpenTuiAttributes, toOpenTuiColor } from '../../platform/opentui-types.js';
 // MUST come after ./theme.js: the module graph highlight -> tree-sitter-highlighter
 // -> render-cache -> theme -> highlight is circular. Loading render-cache first
 // (via the import above) ensures theme.ts body runs AFTER highlight.ts finishes,
@@ -34,7 +33,8 @@ import { toOpenTuiAttributes, toOpenTuiColor } from '../../platform/opentui-type
 import { getHighlightVersion, subscribeHighlight } from './highlight.js';
 import { getCachedBlocks } from './render-cache.js';
 import { streamBlocks } from './stream.js';
-import type { InkTextStyle, TerminalMarkdownTheme } from './theme.js';
+import { terminalStyleToTextProps } from './text-attributes.js';
+import type { TerminalMarkdownTheme, TerminalTextStyle } from './theme.js';
 import { darkTheme } from './theme.js';
 
 /**
@@ -45,7 +45,7 @@ import { darkTheme } from './theme.js';
  */
 export type InlineRun = {
     readonly text: string;
-    readonly style: InkTextStyle;
+    readonly style: TerminalTextStyle;
     readonly href?: string;
 };
 
@@ -85,9 +85,9 @@ export function linkFallbackSuffix(href: string, text: string): string {
  * bold, h3-h6 = heading+bold with a visible `#`*depth prefix. The prefix is
  * only shown for depth >= 3 so h1/h2 read cleanly.
  */
-export function classifyHeading(depth: number): { readonly style: InkTextStyle; readonly prefix: string } {
+export function classifyHeading(depth: number): { readonly style: TerminalTextStyle; readonly prefix: string } {
     const underline = depth === 1;
-    const style: InkTextStyle = { bold: true, ...(underline ? { underline: true } : {}) };
+    const style: TerminalTextStyle = { bold: true, ...(underline ? { underline: true } : {}) };
     const prefix = depth >= 3 ? `${'#'.repeat(depth)} ` : '';
     return { style, prefix };
 }
@@ -237,7 +237,7 @@ export function reflowRuns(runs: readonly InlineRun[], width: number): readonly 
 // Pure inline rendering: tokens -> InlineRun[].
 // ---------------------------------------------------------------------------
 
-function textRun(text: string, style: InkTextStyle): InlineRun {
+function textRun(text: string, style: TerminalTextStyle): InlineRun {
     return { text, style };
 }
 
@@ -263,7 +263,7 @@ function tokenFallbackText(token: Token): string {
 export function renderInlineToRuns(
     tokens: readonly Token[],
     theme: TerminalMarkdownTheme,
-    baseStyle: InkTextStyle,
+    baseStyle: TerminalTextStyle,
 ): readonly InlineRun[] {
     const runs: InlineRun[] = [];
     for (const token of tokens) {
@@ -559,7 +559,7 @@ export function tokenToBlocks(
         switch (token.type) {
             case 'heading': {
                 const classified = classifyHeading(token.depth);
-                const headingStyle: InkTextStyle = { ...base, ...theme.heading, ...classified.style };
+                const headingStyle: TerminalTextStyle = { ...base, ...theme.heading, ...classified.style };
                 const runs: InlineRun[] = [];
                 if (classified.prefix !== '') runs.push(textRun(classified.prefix, headingStyle));
                 runs.push(...renderInlineToRuns(token.tokens ?? [], theme, headingStyle));
@@ -656,16 +656,6 @@ export type MarkdownProps = {
     readonly selectable?: boolean;
 };
 
-function inkStyleToOpenTuiProps(style: InkTextStyle) {
-    const fg = style.color !== undefined ? toOpenTuiColor(style.color) : undefined;
-    const bg = style.backgroundColor !== undefined ? toOpenTuiColor(style.backgroundColor) : undefined;
-    return {
-        ...(fg !== undefined ? { fg } : {}),
-        ...(bg !== undefined ? { bg } : {}),
-        ...toOpenTuiAttributes(style),
-    };
-}
-
 function LineView({ line }: { readonly line: RenderLine }): React.ReactNode {
     if (line.length === 0) {
         return <text> </text>;
@@ -674,7 +664,7 @@ function LineView({ line }: { readonly line: RenderLine }): React.ReactNode {
         <box flexDirection="row">
             {line.map((run, index) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: run order is stable for a given line
-                <text key={index} {...inkStyleToOpenTuiProps(run.style)}>
+                <text key={index} {...terminalStyleToTextProps(run.style)}>
                     {run.href ? buildOsc8Hyperlink(run.href, run.text) : run.text}
                 </text>
             ))}

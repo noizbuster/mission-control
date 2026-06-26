@@ -2510,7 +2510,7 @@ export async function createOpenTuiChatBridge(options?: OpenTuiChatBridgeOptions
 // under every element style so prose, headings, and list items all read italic
 // without losing their per-element coloring. Requires Markdown's defaultTextStyle
 // support (see tokenToBlocks in Markdown.tsx).
-const thinkingTheme: TerminalMarkdownTheme = { ...darkTheme, defaultTextStyle: { italic: true, dimColor: true } };
+const thinkingTheme: TerminalMarkdownTheme = { ...darkTheme, defaultTextStyle: { attributes: { italic: true, dim: true } } };
 
 function terminalContentWidth(): number {
     // Subtract 1 from the terminal width to prevent lines from filling the

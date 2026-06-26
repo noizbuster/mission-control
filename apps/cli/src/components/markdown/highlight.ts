@@ -20,10 +20,10 @@
  * `./tree-sitter-highlighter.ts` for the full orchestration.
  */
 
-import type { InkTextStyle } from './theme.js';
+import type { TerminalTextStyle } from './theme.js';
 
 /** One styled text fragment produced by the highlighter. */
-export type HighlightedSpan = { readonly text: string; readonly style: InkTextStyle };
+export type HighlightedSpan = { readonly text: string; readonly style: TerminalTextStyle };
 
 /** One source line's worth of styled spans. */
 export type HighlightedLine = { readonly spans: ReadonlyArray<HighlightedSpan> };

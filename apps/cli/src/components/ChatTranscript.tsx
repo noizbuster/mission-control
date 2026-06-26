@@ -64,7 +64,7 @@ const BLOCK_LEFT_HEX: Record<ChatBlock['kind'], string | undefined> = {
 
 const thinkingTheme: TerminalMarkdownTheme = {
     ...darkTheme,
-    defaultTextStyle: { italic: true, dimColor: true },
+    defaultTextStyle: { attributes: { italic: true, dim: true } },
 };
 
 function terminalContentWidth(): number {

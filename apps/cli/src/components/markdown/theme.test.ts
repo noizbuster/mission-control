@@ -18,12 +18,12 @@ describe('TerminalMarkdownTheme built-ins', () => {
         }
     });
 
-    it('darkTheme maps heading to bold cyan', () => {
-        expect(darkTheme.heading).toStrictEqual({ bold: true, color: 'cyan' });
+    it('darkTheme maps heading to bold cyan (hex)', () => {
+        expect(darkTheme.heading).toStrictEqual({ bold: true, fg: '#00ffff' });
     });
 
-    it('darkTheme marks inline code with a gray background', () => {
-        expect(darkTheme.code).toStrictEqual({ backgroundColor: 'gray' });
+    it('darkTheme marks inline code with a gray background (hex)', () => {
+        expect(darkTheme.code).toStrictEqual({ bg: '#808080' });
     });
 
     it('darkTheme exposes a non-empty codeBlockIndent prefix', () => {
@@ -43,11 +43,11 @@ describe('TerminalMarkdownTheme built-ins', () => {
 });
 
 describe('noColorTheme color-freedom', () => {
-    it('sets no color or backgroundColor on any element style', () => {
+    it('sets no fg or bg on any element style', () => {
         for (const key of THEME_STYLE_KEYS) {
             const style = noColorTheme[key];
-            expect(style.color, `${key}.color must be unset`).toBeUndefined();
-            expect(style.backgroundColor, `${key}.backgroundColor must be unset`).toBeUndefined();
+            expect(style.fg, `${key}.fg must be unset`).toBeUndefined();
+            expect(style.bg, `${key}.bg must be unset`).toBeUndefined();
         }
     });
 
