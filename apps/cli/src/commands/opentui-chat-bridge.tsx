@@ -132,66 +132,43 @@ import {
 import type { ChatInputEvent } from './interactive-chat-io.js';
 import type { ModelChoice } from './interactive-chat-model.js';
 import { terminalDisplayWidth } from './terminal-text.js';
-import { execSync, spawnSync } from 'node:child_process';
 import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import {
+    blockLeftColor,
+    blockPrefix,
+    type ChatBlock,
+    extractLastAssistantText,
+    joinBlockText,
+    parseMessageBlocks,
+    readToolBlockTitle,
+} from './chat-blocks.js';
+import { type QuestionOption, normalizeQuestionOptions } from './question-types.js';
+import { resolveSeparatorState } from './separator-state.js';
+import {
+    clipboardImageControls,
+    detectGitBranch,
+    editorControls,
+    NO_EDITOR_MESSAGE,
+    resetTerminalTitle,
+    setTerminalTitle,
+    SUSPEND_UNSUPPORTED_MESSAGE,
+    suspendControls,
+} from './terminal-controls.js';
+import { Banner } from '../components/Banner.js';
 
-/**
- * Terminal title via OSC 2 (`\x1b]2;<title>\x07`, BEL terminator).
- * Gated on `isTTY` (no escapes to pipes) and `MCTRL_DISABLE_TERMINAL_TITLE !== '1'`.
- */
-const TERMINAL_TITLE_ENABLE_ENV = 'MCTRL_ENABLE_TERMINAL_TITLE';
-const TERMINAL_TITLE_SET_PREFIX = '\x1b]2;';
-const TERMINAL_TITLE_SET_SUFFIX = '\x07';
-const TERMINAL_TITLE_RESET = '\x1b]2;\x07';
-
-function shouldManageTerminalTitle(): boolean {
-    return process.env[TERMINAL_TITLE_ENABLE_ENV] === '1' && process.stdout.isTTY === true;
-}
-
-export function setTerminalTitle(title: string): boolean {
-    if (!shouldManageTerminalTitle()) {
-        return false;
-    }
-    process.stderr.write(`${TERMINAL_TITLE_SET_PREFIX}${title}${TERMINAL_TITLE_SET_SUFFIX}`);
-    return true;
-}
-
-export function resetTerminalTitle(): boolean {
-    if (!shouldManageTerminalTitle()) {
-        return false;
-    }
-    process.stderr.write(TERMINAL_TITLE_RESET);
-    return true;
-}
-
-/**
- * Labeled option for the `ask_user` overlay. `description` renders as dim
- * subtext beneath the label. Mirrors `AskUserOption` without crossing the
- * package boundary for a TUI-only value.
- */
-export type QuestionOption = {
-    readonly label: string;
-    readonly description?: string;
+export { type ChatBlock, parseMessageBlocks, extractLastAssistantText };
+export { type QuestionOption, normalizeQuestionOptions };
+export { resolveSeparatorState };
+export {
+    clipboardImageControls,
+    detectGitBranch,
+    editorControls,
+    resetTerminalTitle,
+    setTerminalTitle,
+    suspendControls,
 };
-
-/**
- * Normalize legacy `string[]` or labeled `{ label, description? }` options.
- * The conditional `description` spread honors `exactOptionalPropertyTypes`
- * by never emitting an explicit `undefined`.
- */
-export function normalizeQuestionOptions(options: readonly (string | QuestionOption)[]): readonly QuestionOption[] {
-    return options.map((option) => {
-        if (typeof option === 'string') {
-            return { label: option };
-        }
-        return {
-            label: option.label,
-            ...(option.description !== undefined ? { description: option.description } : {}),
-        };
-    });
-}
 
 type BridgeSnapshot = {
     readonly inputBuffer: string;
@@ -630,90 +607,6 @@ export function createOpenTuiChatBridgeCore(options?: {
 export function replaceCoreOutputText(core: OpenTuiChatBridgeCore, text: string): void {
     core.outputText = text;
     publishSnapshot(core);
-}
-
-const SUSPEND_UNSUPPORTED_MESSAGE = 'Suspend not supported on Windows.\n';
-
-/**
- * Suspend signal controls. Exported as an object so unit tests can spy on
- * `isWindowsPlatform` (simulate Windows on a POSIX CI runner) and intercept
- * the real SIGTSTP via `vi.spyOn(process, 'kill')` without actually
- * suspending the test runner.
- */
-export const suspendControls = {
-    isWindowsPlatform(): boolean {
-        return process.platform === 'win32';
-    },
-    sendSuspendSignal(): void {
-        process.kill(process.pid, 'SIGTSTP');
-    },
-};
-
-const NO_EDITOR_MESSAGE = 'No editor set. Set $VISUAL or $EDITOR.\n';
-const VISUAL_ENV = 'VISUAL';
-const EDITOR_ENV = 'EDITOR';
-
-/**
- * External editor controls. Exported as an object so unit tests can mock
- * `resolveEditor` (simulate $VISUAL/$EDITOR presence/absence and priority)
- * and `runEditor` (intercept the real `spawnSync` so no editor is launched).
- */
-export const editorControls = {
-    resolveEditor(): string | undefined {
-        return process.env[VISUAL_ENV] ?? process.env[EDITOR_ENV];
-    },
-    runEditor(editor: string, filePath: string): void {
-        spawnSync(editor, [filePath], { stdio: 'inherit' });
-    },
-};
-
-const LINUX_CLIPBOARD_IMAGE_COMMANDS = ['xclip -selection clipboard -t image/png -o', 'wl-paste -t image/png'] as const;
-
-/**
- * Clipboard image paste controls. Exported so unit tests can spy on
- * `readClipboardImage` (simulate clipboard with image, without image, or
- * tool absence) without launching real platform clipboard binaries.
- *
- * Platform coverage: Linux X11 (xclip), Linux Wayland (wl-paste), macOS
- * (pngpaste). Windows and unknown platforms return undefined. On failure
- * (tool absent, clipboard has no image), returns undefined silently.
- */
-export const clipboardImageControls = {
-    readClipboardImage(): { readonly path: string } | undefined {
-        const tempPath = join(tmpdir(), `mctrl-paste-${Date.now()}.png`);
-        if (process.platform === 'linux') {
-            return readLinuxClipboardImage(tempPath);
-        }
-        if (process.platform === 'darwin') {
-            return readMacOSClipboardImage(tempPath);
-        }
-        return undefined;
-    },
-};
-
-function readLinuxClipboardImage(tempPath: string): { readonly path: string } | undefined {
-    for (const command of LINUX_CLIPBOARD_IMAGE_COMMANDS) {
-        try {
-            const buffer = execSync(command, { stdio: ['ignore', 'pipe', 'ignore'] });
-            if (buffer.length === 0) {
-                return undefined;
-            }
-            writeFileSync(tempPath, buffer);
-            return { path: tempPath };
-        } catch {
-            // Command not installed or clipboard has no image — try next tool.
-        }
-    }
-    return undefined;
-}
-
-function readMacOSClipboardImage(tempPath: string): { readonly path: string } | undefined {
-    try {
-        execSync(`pngpaste ${tempPath}`, { stdio: 'ignore' });
-        return { path: tempPath };
-    } catch {
-        return undefined;
-    }
 }
 
 /**
@@ -2340,36 +2233,6 @@ function ChatRoot({ bridge, statusBarProps, useKeyboard, useRenderer }: ChatRoot
  * events, `emitOutput()` to append chat output, `showModelPicker()` to open the
  * `/model` selection overlay, and `unmount()` to tear down.
  */
-/**
- * Detect the current git branch of `workspaceRoot` synchronously via `git rev-parse`.
- * Returns undefined when git is unavailable, the workspace is not a git repo,
- * or `HEAD` is detached (the rev-parse returns `HEAD` literally in that case).
- * Exported for unit tests; never throws.
- */
-export function detectGitBranch(workspaceRoot: string | undefined): string | undefined {
-    if (workspaceRoot === undefined) {
-        return undefined;
-    }
-    try {
-        const result = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-            cwd: workspaceRoot,
-            encoding: 'utf8',
-            stdio: ['ignore', 'pipe', 'ignore'],
-            timeout: 1000,
-        });
-        if (result.error !== undefined || result.status !== 0) {
-            return undefined;
-        }
-        const branch = (result.stdout ?? '').trim();
-        if (branch.length === 0 || branch === 'HEAD') {
-            return undefined;
-        }
-        return branch;
-    } catch {
-        return undefined;
-    }
-}
-
 export async function createOpenTuiChatBridge(options?: OpenTuiChatBridgeOptions): Promise<OpenTuiChatBridge> {
     const core = createOpenTuiChatBridgeCore({
         ...(options?.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
@@ -2644,121 +2507,6 @@ export async function createOpenTuiChatBridge(options?: OpenTuiChatBridgeOptions
     };
 }
 
-export type ChatBlock = {
-    readonly kind: 'user' | 'assistant' | 'error' | 'system' | 'tool' | 'thinking';
-    readonly lines: readonly string[];
-    /** Set when this block was tail-sliced or dropped for line budget (truncation marker). */
-    readonly truncated?: boolean;
-};
-
-const TOOL_LINE_PREFIXES: readonly string[] = [
-    'Applied patch: ',
-    'Applied edit: ',
-    'Created file: ',
-    'Replaced file: ',
-    'Command output for ',
-    'tool: ',
-    '[Ctrl+O to expand/collapse]',
-    'Edit preview for ',
-    'Patch preview for ',
-    'Command preview for ',
-    'Write preview for ',
-    'Replace preview for ',
-    'Create preview for ',
-];
-
-const TOOL_FAILURE_PATTERN = /^[A-Za-z][\w.-]* failed: /u;
-const TOOL_SUMMARY_PATTERN = /^\u2713 \d+ tools? /u;
-const THINKING_PREFIX = 'Thinking: ';
-
-function classifyLine(line: string): ChatBlock['kind'] {
-    if (line.startsWith('You: ')) return 'user';
-    if (line.startsWith('Assistant: ')) return 'assistant';
-    if (line.startsWith('Error: ')) return 'error';
-    if (line.startsWith(THINKING_PREFIX)) return 'thinking';
-    if (TOOL_FAILURE_PATTERN.test(line)) return 'tool';
-    if (TOOL_SUMMARY_PATTERN.test(line)) return 'tool';
-    if (TOOL_LINE_PREFIXES.some((prefix) => line.startsWith(prefix))) return 'tool';
-    return 'system';
-}
-
-function isStrongBoundary(kind: ChatBlock['kind']): boolean {
-    return kind === 'user' || kind === 'assistant' || kind === 'error' || kind === 'thinking';
-}
-
-/** Drop trailing empty lines so a block never ends on a blank (interior blanks survive as paragraph separators). */
-function trimTrailingEmptyLines(lines: readonly string[]): readonly string[] {
-    let end = lines.length;
-    while (end > 0 && (lines[end - 1] ?? '').length === 0) {
-        end -= 1;
-    }
-    return lines.slice(0, end);
-}
-
-export function parseMessageBlocks(outputText: string): readonly ChatBlock[] {
-    // Split without dropping empty lines: interior blanks are markdown paragraph
-    // separators and must survive so a joined assistant block reconstructs the
-    // original multi-paragraph text. Leading/trailing empties that would produce
-    // an empty block are trimmed at flush.
-    const rawLines = outputText.split('\n');
-    const blocks: ChatBlock[] = [];
-    let currentKind: ChatBlock['kind'] | undefined;
-    let currentLines: string[] = [];
-
-    const flush = (): void => {
-        if (currentKind !== undefined && currentLines.length > 0) {
-            const trimmed = trimTrailingEmptyLines(currentLines);
-            if (trimmed.length > 0) {
-                blocks.push({ kind: currentKind, lines: trimmed });
-            }
-        }
-        currentKind = undefined;
-        currentLines = [];
-    };
-
-    for (const line of rawLines) {
-        const classified = classifyLine(line);
-        // Continuation absorption keeps multi-line blocks together. Tool blocks
-        // absorb any non-strong-boundary line (unchanged). Assistant and thinking
-        // blocks absorb plain-text continuation + blank lines (system-classified)
-        // so a multi-paragraph message stays one block, but they do NOT absorb
-        // tool/user/error/thinking lines, which start new blocks instead.
-        const absorbable =
-            currentKind !== undefined &&
-            ((currentKind === 'tool' && !isStrongBoundary(classified)) ||
-                ((currentKind === 'assistant' || currentKind === 'thinking') && classified === 'system'));
-        if (absorbable) {
-            currentLines.push(line);
-            continue;
-        }
-        if (classified !== currentKind) {
-            flush();
-            currentKind = classified;
-        }
-        currentLines.push(line);
-    }
-    flush();
-    return blocks;
-}
-
-const blockLeftColor: Record<ChatBlock['kind'], string | undefined> = {
-    user: 'cyan',
-    assistant: 'green',
-    error: 'red',
-    system: undefined,
-    tool: 'yellow',
-    thinking: 'magenta',
-};
-
-const blockPrefix: Record<ChatBlock['kind'], string> = {
-    user: 'You: ',
-    assistant: 'Assistant: ',
-    error: 'Error: ',
-    system: '',
-    tool: '',
-    thinking: THINKING_PREFIX,
-};
-
 // Thinking blocks render as italic, dimmed markdown: defaultTextStyle layers
 // under every element style so prose, headings, and list items all read italic
 // without losing their per-element coloring. Requires Markdown's defaultTextStyle
@@ -2773,27 +2521,6 @@ function terminalContentWidth(): number {
     // desyncs Ink's line counting from the actual visible line count,
     // scattering characters across the screen on every re-render.
     return Math.max(1, (process.stdout.columns ?? 80) - 1);
-}
-
-/** Join a block's lines into one markdown document, stripping the prefix from the first line only. */
-function joinBlockText(lines: readonly string[], prefix: string): string {
-    if (lines.length === 0) return '';
-    const first = lines[0] ?? '';
-    const rest = lines.slice(1);
-    const strippedFirst = prefix.length > 0 && first.startsWith(prefix) ? first.slice(prefix.length) : first;
-    return rest.length === 0 ? strippedFirst : [strippedFirst, ...rest].join('\n');
-}
-
-/** Extract the last `Assistant:` block text from outputText; empty when none exists (for messages.copy). */
-export function extractLastAssistantText(outputText: string): string {
-    const blocks = parseMessageBlocks(outputText);
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        const block = blocks[i];
-        if (block?.kind === 'assistant') {
-            return joinBlockText(block.lines, blockPrefix.assistant);
-        }
-    }
-    return '';
 }
 
 function MarkdownPanel({
@@ -2951,26 +2678,6 @@ function MessageBlock({
     );
 }
 
-const TOOL_TITLE_PATTERN = /^(?:Edit|Patch|Command|Write|Replace|Create) preview for (\S+)/u;
-const TOOL_TITLE_PATTERN_2 = /^(?:Applied (?:patch|edit):|Created file:|Replaced file:|Command output for) (.+)$/u;
-
-function readToolBlockTitle(lines: readonly string[]): string | undefined {
-    for (const line of lines) {
-        const match1 = TOOL_TITLE_PATTERN.exec(line);
-        if (match1 !== null) {
-            return match1[1];
-        }
-        const match2 = TOOL_TITLE_PATTERN_2.exec(line);
-        if (match2 !== null) {
-            return match2[1];
-        }
-        if (line.startsWith('tool: ')) {
-            return line.slice(6);
-        }
-    }
-    return undefined;
-}
-
 function MessageWindow({
     blocks,
     scrollboxRef,
@@ -3002,39 +2709,3 @@ function MessageWindow({
     );
 }
 
-// Rendered outside core.outputText so it cannot accumulate as ghost text when
-// the scrollback grows past the terminal viewport (root cause of the stacking
-// bug). Provider/model/session info mirrors StatusBar props.
-function Banner({ statusBarProps }: { readonly statusBarProps?: OpenTuiChatBridgeOptions }): React.ReactNode {
-    if (statusBarProps === undefined) {
-        return <text {...toOpenTuiAttributes({ bold: true })}>{'mission-control chat'}</text>;
-    }
-    const selection = formatSelectionLabel(statusBarProps);
-    return (
-        <box flexDirection="column">
-            <text {...toOpenTuiAttributes({ bold: true })}>{'mission-control chat'}</text>
-            <text {...toOpenTuiAttributes({ dimColor: true })}>{selection}</text>
-        </box>
-    );
-}
-
-function formatSelectionLabel(props: OpenTuiChatBridgeOptions): string {
-    const parts = [`provider: ${props.providerID}`, `model: ${props.modelID}`];
-    if (props.variantID !== undefined) {
-        parts.push(`variant: ${props.variantID}`);
-    }
-    if (props.sessionID !== undefined) {
-        parts.push(`session: ${props.sessionID}`);
-    }
-    return parts.join(' | ');
-}
-
-export function resolveSeparatorState(snapshot: BridgeSnapshot): SeparatorState {
-    if (snapshot.generating) {
-        return 'running';
-    }
-    if (snapshot.approvalActive || snapshot.questionActive) {
-        return 'awaiting_input';
-    }
-    return 'idle';
-}
