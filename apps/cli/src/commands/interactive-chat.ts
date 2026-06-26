@@ -48,11 +48,8 @@ import { createSessionNavigationController } from './interactive-chat-session-na
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
-import {
-    createOpenTuiChatBridge,
-    type OpenTuiChatBridge,
-    type OpenTuiChatBridgeOptions,
-} from './opentui-chat-bridge.js';
+import { createChatTui, type ChatTuiOptions } from './create-chat-tui.js';
+import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './opentui-chat-bridge.js';
 import { createOpenTuiChatInput } from './opentui-chat-input.js';
 import { createOpenTuiChatOutput } from './opentui-chat-output.js';
 import { createOpenTuiModelSelector } from './opentui-model-selector.js';
@@ -129,7 +126,8 @@ export async function runInteractiveChatSession(
               ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
           }
         : undefined;
-    const tuiBridge = useTui && bridgeOptions !== undefined ? await createOpenTuiChatBridge(bridgeOptions) : undefined;
+    const tuiBridge =
+        useTui && bridgeOptions !== undefined ? await createChatTui(bridgeOptions as ChatTuiOptions) : undefined;
     const chatInput =
         options.input ?? (tuiBridge !== undefined ? createOpenTuiChatInput(tuiBridge) : createTerminalChatInput());
     const baseChatOutput =
