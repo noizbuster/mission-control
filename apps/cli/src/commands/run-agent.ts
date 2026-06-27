@@ -109,11 +109,12 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             const session = await runtime.start();
             didStart = true;
             const sessionStore = recorder.currentStore();
+            const interactiveSessionId = args.sessionId ?? recorder.currentSessionId();
             const persistedApprovalLevel = await loadPersistedApprovalLevel();
             return await runInteractiveChatSession(runtime, {
                 modelProviderSelection: selectedModelProvider,
                 provider,
-                sessionId: args.sessionId ?? recorder.currentSessionId() ?? session.id,
+                ...(interactiveSessionId !== undefined ? { sessionId: interactiveSessionId } : {}),
                 workspaceRoot,
                 modelChoices: await listAuthenticatedModelChoices(
                     authStore,
@@ -122,6 +123,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                 emitEvent: emitRuntimeEvent,
                 observeStoredEvent,
                 switchSessionStore: recorder.switchSession,
+                ensureSession: recorder.ensureSession,
                 ...(sessionStore !== undefined ? { sessionStore } : {}),
                 ...(options.provider === undefined ? { resolveProviderForSelection: createProvider } : {}),
                 persistModelProviderSelection: async (selection) => {

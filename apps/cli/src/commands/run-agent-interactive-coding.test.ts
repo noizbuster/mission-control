@@ -209,7 +209,7 @@ describe('runAgent interactive coding agent UX', () => {
                 { type: 'line', value: '/queue follow up after tools' },
                 { type: 'line', value: '/steer adjust the current run' },
                 { type: 'line', value: '/branch message_parent continue from this branch' },
-                { type: 'line', value: '/resume' },
+                { type: 'line', value: '/continue' },
                 { type: 'interrupt' },
                 { type: 'interrupt' },
             ]),

@@ -3,6 +3,7 @@ import { formatSkillInstructions, loadSkillBody, type Skill, type SkillToolOutpu
 import type { AbgGraphSpec, ModelProviderSelection } from '@mission-control/protocol';
 import type { ApprovalLevel } from './approval-level.js';
 import { APPROVAL_LEVEL_META } from './approval-level.js';
+import type { SessionPickerEntry } from './chat-store.js';
 import type { ChatLineAction, WorkflowInvocationAction } from './chat-commands.js';
 import type { ModelSelector } from './interactive-chat.js';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
@@ -58,6 +59,16 @@ export type CodingActionContext = PromptTurnContext & {
      */
     readonly undoRedo?: UndoRedoConversationController;
     readonly selectApprovalLevel?: (currentLevel?: ApprovalLevel) => Promise<ApprovalLevel | undefined>;
+    /**
+     * Workspace-filtered session catalog entries for `/session` (picker) and `/resume`
+     * (last-session). When omitted, both commands report that no sessions are available.
+     */
+    readonly listWorkspaceSessions?: () => Promise<readonly SessionPickerEntry[]>;
+    /**
+     * Opens the session-picker modal and resolves to the selected sessionId, or undefined
+     * when cancelled. Only available in TUI mode (wired to `tuiBridge.showSessionPicker`).
+     */
+    readonly selectSessionForAttach?: (entries: readonly SessionPickerEntry[]) => Promise<string | undefined>;
 };
 
 export async function runChatAction(
@@ -81,9 +92,17 @@ export async function runChatAction(
         case 'bash-display-only':
             return runBashDisplayOnlyAction(chatOutput, currentModelProviderSelection, coding, action);
         case 'queue':
+            if (coding.sessionId === undefined && coding.activeTurn === undefined) {
+                chatOutput.write('Start a prompt first (no active session).\n');
+                return actionResult(currentModelProviderSelection);
+            }
             emitPromptAdmission(chatOutput, coding, 'queue', action.prompt);
             return actionResult(currentModelProviderSelection, coding.activeTurn);
         case 'steer':
+            if (coding.sessionId === undefined && coding.activeTurn === undefined) {
+                chatOutput.write('Start a prompt first (no active session).\n');
+                return actionResult(currentModelProviderSelection);
+            }
             emitPromptAdmission(chatOutput, coding, 'steer', action.prompt);
             return actionResult(currentModelProviderSelection, coding.activeTurn);
         case 'branch':
@@ -95,16 +114,21 @@ export async function runChatAction(
                       action.entryId,
                       action.prompt,
                   )
-                : runSessionNavigationAction(chatOutput, coding, currentModelProviderSelection, () =>
-                      coding.sessionNavigation === undefined
-                          ? Promise.resolve(undefined)
-                          : coding.sessionNavigation.selectBranch({
-                                entryId: action.entryId,
-                                modelProviderSelection: currentModelProviderSelection,
-                            }),
+                : runSessionNavigationAction(
+                      chatOutput,
+                      coding,
+                      currentModelProviderSelection,
+                      () =>
+                          coding.sessionNavigation === undefined
+                              ? Promise.resolve(undefined)
+                              : coding.sessionNavigation.selectBranch({
+                                    entryId: action.entryId,
+                                    modelProviderSelection: currentModelProviderSelection,
+                                }),
+                      { requiresCurrentSession: true },
                   );
         case 'resume':
-            return runResumeAction(chatOutput, currentModelProviderSelection, coding);
+            return runResumeLastSessionAction(chatOutput, currentModelProviderSelection, coding);
         case 'new-session':
             return runSessionNavigationAction(chatOutput, coding, currentModelProviderSelection, () =>
                 coding.sessionNavigation === undefined
@@ -133,31 +157,46 @@ export async function runChatAction(
                     : coding.sessionNavigation.listSessions(),
             );
         case 'tree':
-            return runSessionNavigationAction(chatOutput, coding, currentModelProviderSelection, () =>
-                coding.sessionNavigation === undefined
-                    ? Promise.resolve(undefined)
-                    : coding.sessionNavigation.showTree({
-                          ...(action.sessionId !== undefined ? { sessionId: action.sessionId } : {}),
-                      }),
+            return runSessionNavigationAction(
+                chatOutput,
+                coding,
+                currentModelProviderSelection,
+                () =>
+                    coding.sessionNavigation === undefined
+                        ? Promise.resolve(undefined)
+                        : coding.sessionNavigation.showTree({
+                              ...(action.sessionId !== undefined ? { sessionId: action.sessionId } : {}),
+                          }),
+                { requiresCurrentSession: action.sessionId === undefined },
             );
         case 'fork':
-            return runSessionNavigationAction(chatOutput, coding, currentModelProviderSelection, () =>
-                coding.sessionNavigation === undefined
-                    ? Promise.resolve(undefined)
-                    : coding.sessionNavigation.forkSession({
-                          entryId: action.entryId,
-                          modelProviderSelection: currentModelProviderSelection,
-                          ...(action.sessionId !== undefined ? { sessionId: action.sessionId } : {}),
-                      }),
+            return runSessionNavigationAction(
+                chatOutput,
+                coding,
+                currentModelProviderSelection,
+                () =>
+                    coding.sessionNavigation === undefined
+                        ? Promise.resolve(undefined)
+                        : coding.sessionNavigation.forkSession({
+                              entryId: action.entryId,
+                              modelProviderSelection: currentModelProviderSelection,
+                              ...(action.sessionId !== undefined ? { sessionId: action.sessionId } : {}),
+                          }),
+                { requiresCurrentSession: true },
             );
         case 'clone':
-            return runSessionNavigationAction(chatOutput, coding, currentModelProviderSelection, () =>
-                coding.sessionNavigation === undefined
-                    ? Promise.resolve(undefined)
-                    : coding.sessionNavigation.cloneSession({
-                          modelProviderSelection: currentModelProviderSelection,
-                          ...(action.sessionId !== undefined ? { sessionId: action.sessionId } : {}),
-                      }),
+            return runSessionNavigationAction(
+                chatOutput,
+                coding,
+                currentModelProviderSelection,
+                () =>
+                    coding.sessionNavigation === undefined
+                        ? Promise.resolve(undefined)
+                        : coding.sessionNavigation.cloneSession({
+                              modelProviderSelection: currentModelProviderSelection,
+                              ...(action.sessionId !== undefined ? { sessionId: action.sessionId } : {}),
+                          }),
+                { requiresCurrentSession: true },
             );
         case 'compact':
             return runCompactAction(runtime, chatOutput, currentModelProviderSelection, coding, action.instructions);
@@ -224,14 +263,10 @@ export async function runChatAction(
         case 'invalid':
             chatOutput.write(`${action.message}\n`);
             return actionResult(currentModelProviderSelection, coding.activeTurn);
-        // TODO(T6): wire session-picker (open modal via coding.selectSessionForAttach)
-        // and continue (run the former approval-resume body). No-op stubs here
-        // only keep the runChatAction switch exhaustive for the widened union.
         case 'session-picker':
-            return actionResult(currentModelProviderSelection, coding.activeTurn);
-        // TODO(T6): wire continue (approval-resume dispatch).
+            return runSessionPickerAction(chatOutput, currentModelProviderSelection, coding);
         case 'continue':
-            return actionResult(currentModelProviderSelection, coding.activeTurn);
+            return runApprovalResumeAction(chatOutput, currentModelProviderSelection, coding);
         default:
             return assertNever(action);
     }
@@ -251,6 +286,58 @@ async function runPromptAction(
     return actionResult(
         modelProviderSelection,
         await startPromptTurn(runtime, chatOutput, prompt, modelProviderSelection, coding),
+    );
+}
+
+async function runSessionPickerAction(
+    chatOutput: ChatOutput,
+    modelProviderSelection: ModelProviderSelection,
+    coding: CodingActionContext,
+): Promise<ChatActionResult> {
+    if (coding.activeTurn !== undefined) {
+        chatOutput.write('Interrupt the active run before switching sessions\n');
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    if (coding.selectSessionForAttach === undefined) {
+        chatOutput.write('Session picker is unavailable in this chat mode\n');
+        return actionResult(modelProviderSelection);
+    }
+    const entries = coding.listWorkspaceSessions === undefined ? [] : await coding.listWorkspaceSessions();
+    if (entries.length === 0) {
+        chatOutput.write('No sessions found for this project.\n');
+        return actionResult(modelProviderSelection);
+    }
+    const selected = await coding.selectSessionForAttach(entries);
+    if (selected === undefined) {
+        chatOutput.write('Cancelled.\n');
+        return actionResult(modelProviderSelection);
+    }
+    return runSessionNavigationAction(chatOutput, coding, modelProviderSelection, () =>
+        coding.sessionNavigation === undefined
+            ? Promise.resolve(undefined)
+            : coding.sessionNavigation.switchSession({ sessionId: selected }),
+    );
+}
+
+async function runResumeLastSessionAction(
+    chatOutput: ChatOutput,
+    modelProviderSelection: ModelProviderSelection,
+    coding: CodingActionContext,
+): Promise<ChatActionResult> {
+    if (coding.activeTurn !== undefined) {
+        chatOutput.write('Interrupt the active run before switching sessions\n');
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    const entries = coding.listWorkspaceSessions === undefined ? [] : await coding.listWorkspaceSessions();
+    const target = entries.find((entry) => entry.sessionId !== coding.sessionId);
+    if (target === undefined) {
+        chatOutput.write('No previous session for this project.\n');
+        return actionResult(modelProviderSelection);
+    }
+    return runSessionNavigationAction(chatOutput, coding, modelProviderSelection, () =>
+        coding.sessionNavigation === undefined
+            ? Promise.resolve(undefined)
+            : coding.sessionNavigation.switchSession({ sessionId: target.sessionId }),
     );
 }
 
@@ -382,7 +469,7 @@ function emitResumeRequest(chatOutput: ChatOutput, coding: CodingActionContext, 
     chatOutput.write(`Resume requested for ${sessionId}\n`);
 }
 
-async function runResumeAction(
+async function runApprovalResumeAction(
     chatOutput: ChatOutput,
     modelProviderSelection: ModelProviderSelection,
     coding: CodingActionContext,

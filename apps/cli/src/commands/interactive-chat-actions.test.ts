@@ -5,6 +5,7 @@ import type { CodingActionContext } from './interactive-chat-actions.js';
 import { runChatAction } from './interactive-chat-actions.js';
 import type { SessionNavigationController } from './interactive-chat-session-navigation.js';
 import { SessionNavigationError } from './interactive-chat-session-navigation-store.js';
+import type { SessionPickerEntry } from './chat-store.js';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -574,9 +575,389 @@ describe('interactive chat actions', () => {
                 createCodingContext({ approvalLevel: 'reckless' }),
             );
 
-            expect(output.getOutput()).toContain('Approval level: reckless');
+        expect(output.getOutput()).toContain('Approval level: reckless');
+    });
+
+    describe('/session picker action', () => {
+        it('opens the picker, selects a session, and switches to it', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const switchSession = vi.fn(async ({ sessionId }: { readonly sessionId: string }) => ({
+                message: `Switched to session: ${sessionId}\n`,
+                sessionId,
+            }));
+            const navigation = createNavigationController({ switchSession });
+            const selectSessionForAttach = vi.fn(async () => 's_x');
+            const listWorkspaceSessions = vi.fn(async () => [pickerEntry('s_x', 'session x')]);
+
+            const result = await runChatAction(
+                runtime,
+                output,
+                { kind: 'session-picker' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ sessionNavigation: navigation, listWorkspaceSessions, selectSessionForAttach }),
+            );
+
+            expect(selectSessionForAttach).toHaveBeenCalledTimes(1);
+            expect(switchSession).toHaveBeenCalledWith({ sessionId: 's_x' });
+            expect(output.getOutput()).toContain('Switched to session: s_x');
+            expect(result.sessionId).toBe('s_x');
+        });
+
+        it('writes a cancellation message without switching when the picker is dismissed', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const switchSession = vi.fn(async () => ({ message: '', sessionId: '' }));
+            const navigation = createNavigationController({ switchSession });
+            const selectSessionForAttach = vi.fn(async () => undefined);
+            const listWorkspaceSessions = vi.fn(async () => [pickerEntry('s_x')]);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'session-picker' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ sessionNavigation: navigation, listWorkspaceSessions, selectSessionForAttach }),
+            );
+
+            expect(switchSession).not.toHaveBeenCalled();
+            expect(output.getOutput()).toContain('Cancelled.');
+        });
+
+        it('reports no sessions when the workspace list is empty', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const switchSession = vi.fn(async () => ({ message: '', sessionId: '' }));
+            const navigation = createNavigationController({ switchSession });
+            const selectSessionForAttach = vi.fn(async () => 's_x');
+            const listWorkspaceSessions = vi.fn(async () => []);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'session-picker' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ sessionNavigation: navigation, listWorkspaceSessions, selectSessionForAttach }),
+            );
+
+            expect(selectSessionForAttach).not.toHaveBeenCalled();
+            expect(switchSession).not.toHaveBeenCalled();
+            expect(output.getOutput()).toContain('No sessions found for this project.');
+        });
+
+        it('refuses switching while a run is active', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const navigation = createNavigationController();
+            const selectSessionForAttach = vi.fn(async () => 's_x');
+            const listWorkspaceSessions = vi.fn(async () => [pickerEntry('s_x')]);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'session-picker' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({
+                    activeTurn: fakeActiveTurn(),
+                    sessionNavigation: navigation,
+                    listWorkspaceSessions,
+                    selectSessionForAttach,
+                }),
+            );
+
+            expect(selectSessionForAttach).not.toHaveBeenCalled();
+            expect(output.getOutput()).toContain('Interrupt the active run before switching sessions');
         });
     });
+
+    describe('/resume last-session action', () => {
+        it('switches to the most recent workspace session excluding the current one', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const switchSession = vi.fn(async ({ sessionId }: { readonly sessionId: string }) => ({
+                message: `Switched to session: ${sessionId}\n`,
+                sessionId,
+            }));
+            const navigation = createNavigationController({ switchSession });
+            const listWorkspaceSessions = vi.fn(async () => [
+                pickerEntry('session_current'),
+                pickerEntry('session_prev'),
+            ]);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'resume' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({
+                    sessionNavigation: navigation,
+                    listWorkspaceSessions,
+                    sessionId: 'session_current',
+                }),
+            );
+
+            expect(switchSession).toHaveBeenCalledWith({ sessionId: 'session_prev' });
+            expect(output.getOutput()).toContain('Switched to session: session_prev');
+        });
+
+        it('reports no previous session when only the current one exists', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const switchSession = vi.fn(async () => ({ message: '', sessionId: '' }));
+            const navigation = createNavigationController({ switchSession });
+            const listWorkspaceSessions = vi.fn(async () => [pickerEntry('session_current')]);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'resume' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({
+                    sessionNavigation: navigation,
+                    listWorkspaceSessions,
+                    sessionId: 'session_current',
+                }),
+            );
+
+            expect(switchSession).not.toHaveBeenCalled();
+            expect(output.getOutput()).toContain('No previous session for this project.');
+        });
+
+        it('reports no previous session when the workspace list is empty', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const switchSession = vi.fn(async () => ({ message: '', sessionId: '' }));
+            const navigation = createNavigationController({ switchSession });
+            const listWorkspaceSessions = vi.fn(async () => []);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'resume' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({
+                    sessionNavigation: navigation,
+                    listWorkspaceSessions,
+                    sessionId: 'session_current',
+                }),
+            );
+
+            expect(switchSession).not.toHaveBeenCalled();
+            expect(output.getOutput()).toContain('No previous session for this project.');
+        });
+
+        it('refuses switching while a run is active', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const switchSession = vi.fn(async () => ({ message: '', sessionId: '' }));
+            const navigation = createNavigationController({ switchSession });
+            const listWorkspaceSessions = vi.fn(async () => [pickerEntry('session_prev')]);
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'resume' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({
+                    activeTurn: fakeActiveTurn(),
+                    sessionNavigation: navigation,
+                    listWorkspaceSessions,
+                    sessionId: 'session_current',
+                }),
+            );
+
+            expect(switchSession).not.toHaveBeenCalled();
+            expect(output.getOutput()).toContain('Interrupt the active run before switching sessions');
+        });
+    });
+
+    describe('/continue approval-resume action', () => {
+        it('emits a resume request while a run is active (parity with former /resume)', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const emitEvent = vi.fn();
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'continue' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({
+                    activeTurn: fakeActiveTurn(),
+                    emitEvent,
+                    sessionId: 'session_x',
+                }),
+            );
+
+            expect(output.getOutput()).toContain('Resume requested for session_x');
+        });
+
+        it('writes a resume request when idle without a full session', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const emitEvent = vi.fn();
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'continue' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ emitEvent, sessionId: 'session_x' }),
+            );
+
+            expect(output.getOutput()).toContain('Resume requested for session_x');
+        });
+    });
+
+    describe('session-less graceful guards', () => {
+        it('writes a graceful message for /tree in a session-less state without throwing', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const showTree = vi.fn(async () => ({ message: 'should not reach\n' }));
+            const navigation = createNavigationController({ showTree });
+            const coding: CodingActionContext = {
+                ...createCodingContext({ sessionNavigation: navigation }),
+                sessionId: undefined,
+            };
+
+            const result = await runChatAction(
+                runtime,
+                output,
+                { kind: 'tree' },
+                currentSelection,
+                async () => undefined,
+                [],
+                coding,
+            );
+
+            expect(showTree).not.toHaveBeenCalled();
+            expect(output.getOutput()).toContain('No active session yet — send a prompt first.');
+            expect(result).toEqual({ modelProviderSelection: currentSelection });
+        });
+
+        it('writes a graceful message for /fork in a session-less state', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const forkSession = vi.fn(async () => ({ message: '', sessionId: '' }));
+            const navigation = createNavigationController({ forkSession });
+            const coding: CodingActionContext = {
+                ...createCodingContext({ sessionNavigation: navigation }),
+                sessionId: undefined,
+            };
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'fork', entryId: 'entry_x' },
+                currentSelection,
+                async () => undefined,
+                [],
+                coding,
+            );
+
+            expect(forkSession).not.toHaveBeenCalled();
+            expect(output.getOutput()).toContain('No active session yet — send a prompt first.');
+        });
+
+        it('refuses /queue in a session-less idle state without enqueueing', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const emitEvent = vi.fn();
+            const coding: CodingActionContext = {
+                ...createCodingContext({ emitEvent }),
+                sessionId: undefined,
+            };
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'queue', prompt: 'hello' },
+                currentSelection,
+                async () => undefined,
+                [],
+                coding,
+            );
+
+            expect(emitEvent).not.toHaveBeenCalled();
+            expect(output.getOutput()).toContain('Start a prompt first (no active session).');
+        });
+
+        it('refuses /steer in a session-less idle state without enqueueing', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const emitEvent = vi.fn();
+            const coding: CodingActionContext = {
+                ...createCodingContext({ emitEvent }),
+                sessionId: undefined,
+            };
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'steer', prompt: 'hello' },
+                currentSelection,
+                async () => undefined,
+                [],
+                coding,
+            );
+
+            expect(emitEvent).not.toHaveBeenCalled();
+            expect(output.getOutput()).toContain('Start a prompt first (no active session).');
+        });
+
+        it('still enqueues /queue when an active turn exists', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const emitEvent = vi.fn();
+            const coding: CodingActionContext = {
+                ...createCodingContext({ emitEvent, activeTurn: fakeActiveTurn() }),
+                sessionId: undefined,
+            };
+
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'queue', prompt: 'follow up' },
+                currentSelection,
+                async () => undefined,
+                [],
+                coding,
+            );
+
+            expect(emitEvent).toHaveBeenCalled();
+            expect(output.getOutput()).toContain('Queued follow-up: follow up');
+        });
+    });
+});
+
+function pickerEntry(sessionId: string, label?: string): SessionPickerEntry {
+    return {
+        sessionId,
+        label: label ?? sessionId,
+        messageCount: 1,
+        status: 'completed',
+    };
+}
 });
 
 function fakeActiveTurn(): NonNullable<CodingActionContext['activeTurn']> {
@@ -639,6 +1020,12 @@ function createCodingContext(overrides: Partial<CodingActionContext> = {}): Codi
         ...(overrides.workflowRegistry !== undefined ? { workflowRegistry: overrides.workflowRegistry } : {}),
         ...(overrides.approvalLevel !== undefined ? { approvalLevel: overrides.approvalLevel } : {}),
         ...(overrides.selectApprovalLevel !== undefined ? { selectApprovalLevel: overrides.selectApprovalLevel } : {}),
+        ...(overrides.listWorkspaceSessions !== undefined
+            ? { listWorkspaceSessions: overrides.listWorkspaceSessions }
+            : {}),
+        ...(overrides.selectSessionForAttach !== undefined
+            ? { selectSessionForAttach: overrides.selectSessionForAttach }
+            : {}),
     };
 }
 

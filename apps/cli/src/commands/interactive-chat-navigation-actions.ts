@@ -22,10 +22,15 @@ export async function runSessionNavigationAction(
     coding: CodingActionContext,
     modelProviderSelection: ModelProviderSelection,
     action: () => Promise<SessionNavigationResult | undefined>,
+    options?: { readonly requiresCurrentSession?: boolean },
 ): Promise<ChatActionResult> {
     if (coding.activeTurn !== undefined) {
         chatOutput.write('Interrupt the active run before switching sessions\n');
         return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    if (options?.requiresCurrentSession === true && coding.sessionId === undefined) {
+        chatOutput.write('No active session yet — send a prompt first.\n');
+        return actionResult(modelProviderSelection);
     }
     if (coding.sessionNavigation === undefined) {
         chatOutput.write('Session navigation is unavailable in this chat mode\n');

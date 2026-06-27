@@ -45,7 +45,7 @@ describe('runAgent interactive session navigation repairs', () => {
             provider: createDeterministicProvider([]),
         });
 
-        expect(output).toContain('No durable session is active');
+        expect(output).toContain('No active session yet — send a prompt first.');
         expect(output).toContain('Started new session: session_navigation_live');
         expect(output).toContain('Session tree: session_navigation_live');
     });

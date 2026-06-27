@@ -23,6 +23,7 @@ import { createAbgOverlayStore } from './abg-overlay-state.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { approvalLevelRules } from './approval-level.js';
 import { parseChatLine } from './chat-commands.js';
+import type { SessionPickerEntry } from './chat-store.js';
 import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
 import type { ChatActionResult } from './interactive-chat-action-result.js';
 import { runChatAction } from './interactive-chat-actions.js';
@@ -44,6 +45,7 @@ import {
 } from './interactive-chat-loop-support.js';
 import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
 import { createTerminalModelSelector } from './interactive-chat-model-selector.js';
+import type { EnsuredSession } from './run-agent-session.js';
 import { createSessionNavigationController } from './interactive-chat-session-navigation.js';
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack.js';
@@ -51,6 +53,7 @@ import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 import { createChatTui, type ChatTuiOptions } from './create-chat-tui.js';
 import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './chat-tui-types.js';
 import { loadPricingTable } from './pricing-table-store.js';
+import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
 
@@ -75,6 +78,7 @@ export type InteractiveChatOptions = {
     readonly observeStoredEvent?: (event: AgentEvent) => void;
     readonly sessionStore?: JsonlSessionEventStore;
     readonly switchSessionStore?: (sessionId: string) => Promise<JsonlSessionEventStore>;
+    readonly ensureSession?: () => Promise<EnsuredSession>;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly persistModelProviderSelection?: (selection: ModelProviderSelection) => Promise<void>;
     readonly initialApprovalLevel?: ApprovalLevel;
@@ -381,6 +385,18 @@ export async function runInteractiveChatSession(
                 chatOutput.write('Exiting mission-control chat\n');
                 break;
             }
+            if (
+                currentSessionId === undefined &&
+                options.ensureSession !== undefined &&
+                (action.kind === 'prompt' ||
+                    action.kind === 'skill' ||
+                    action.kind === 'workflow' ||
+                    action.kind === 'bash')
+            ) {
+                const ensured = await options.ensureSession();
+                currentSessionId = ensured.sessionId;
+                currentSessionStore = ensured.store;
+            }
             let result: ChatActionResult;
             if (tuiBridge !== undefined) {
                 tuiBridge.setGenerating(true);
@@ -417,6 +433,23 @@ export async function runInteractiveChatSession(
                         ...(pricingTableForSession.length > 0 ? { pricingTable: pricingTableForSession } : {}),
                         ...(currentApprovalLevel !== undefined ? { approvalLevel: currentApprovalLevel } : {}),
                         permissionSession: sharedPermissionSession,
+                        listWorkspaceSessions: async () => {
+                            if (options.workspaceRoot === undefined) return [];
+                            const entries = await listSessionCatalogEntriesForWorkspace(options.workspaceRoot);
+                            return entries.map((entry) => ({
+                                sessionId: entry.sessionId,
+                                label: entry.name ?? entry.sessionId,
+                                ...(entry.updatedAt !== undefined ? { updatedAt: entry.updatedAt } : {}),
+                                messageCount: entry.messageCount,
+                                status: entry.status,
+                            }));
+                        },
+                        ...(tuiBridge !== undefined
+                            ? {
+                                  selectSessionForAttach: (entries: readonly SessionPickerEntry[]) =>
+                                      tuiBridge.showSessionPicker(entries),
+                              }
+                            : {}),
                         ...(tuiBridge !== undefined
                             ? {
                                   selectApprovalLevel: (currentLevel?: ApprovalLevel) =>

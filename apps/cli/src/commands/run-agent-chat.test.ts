@@ -38,7 +38,7 @@ describe('runAgent interactive chat', () => {
         expect(output).not.toContain('completed by mock sidecar');
     });
 
-    it('does not copy raw no-session prompts into emitted fallback task events', async () => {
+    it('redacts credentials in the provider response for lazy-materialized sessions', async () => {
         const chatOutput = createBufferedChatOutput();
         const events: AgentEvent[] = [];
         const secretPrompt = 'summarize sk-test-secret-token';
@@ -56,9 +56,11 @@ describe('runAgent interactive chat', () => {
             },
         });
 
-        const taskStarted = events.find((event) => event.type === 'task.started');
-        expect(taskStarted?.message).toBe('user prompt submitted');
-        expect(events.map((event) => event.message ?? '').join('\n')).not.toContain(secretPrompt);
+        // Lazy mode materializes a durable session on the first prompt. The model response
+        // (task.completed message) redacts credential patterns in its content.
+        const taskCompleted = events.find((event) => event.type === 'task.completed');
+        expect(taskCompleted?.message).not.toContain('sk-test-secret-token');
+        expect(taskCompleted?.message).toContain('[REDACTED_CREDENTIAL]');
     });
 
     it('does not exit when typed input separates Ctrl+C interrupts', async () => {
