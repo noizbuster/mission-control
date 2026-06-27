@@ -84,7 +84,5 @@ function parseSessionCommand(input: string): ChatLineAction {
     if (parts.tail.length > 0) {
         return { kind: 'invalid', message: '/session accepts at most one session id' };
     }
-    return parts.head.length === 0
-        ? { kind: 'session-picker' }
-        : { kind: 'session', sessionId: parts.head };
+    return parts.head.length === 0 ? { kind: 'session-picker' } : { kind: 'session', sessionId: parts.head };
 }
