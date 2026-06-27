@@ -224,6 +224,14 @@ export async function runChatAction(
         case 'invalid':
             chatOutput.write(`${action.message}\n`);
             return actionResult(currentModelProviderSelection, coding.activeTurn);
+        // TODO(T6): wire session-picker (open modal via coding.selectSessionForAttach)
+        // and continue (run the former approval-resume body). No-op stubs here
+        // only keep the runChatAction switch exhaustive for the widened union.
+        case 'session-picker':
+            return actionResult(currentModelProviderSelection, coding.activeTurn);
+        // TODO(T6): wire continue (approval-resume dispatch).
+        case 'continue':
+            return actionResult(currentModelProviderSelection, coding.activeTurn);
         default:
             return assertNever(action);
     }

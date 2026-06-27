@@ -162,7 +162,7 @@ describe('chat command parser', () => {
     it('parses session navigation commands with optional ids', () => {
         expect(parseChatLine('/new')).toEqual({ kind: 'new-session' });
         expect(parseChatLine('/new session_next')).toEqual({ kind: 'new-session', sessionId: 'session_next' });
-        expect(parseChatLine('/session')).toEqual({ kind: 'session' });
+        expect(parseChatLine('/session')).toEqual({ kind: 'session-picker' });
         expect(parseChatLine('/session session_prev')).toEqual({ kind: 'session', sessionId: 'session_prev' });
         expect(parseChatLine('/sessions')).toEqual({ kind: 'sessions' });
         expect(parseChatLine('/tree')).toEqual({ kind: 'tree' });
@@ -191,6 +191,27 @@ describe('chat command parser', () => {
             kind: 'fork',
             entryId: 'entry_leaf',
             sessionId: 'session_child',
+        });
+    });
+
+    it('parses /continue as a no-argument approval-resume command', () => {
+        expect(parseChatLine('/continue')).toEqual({ kind: 'continue' });
+        expect(parseChatLine('/continue resume the run')).toEqual({
+            kind: 'invalid',
+            message: '/continue does not accept arguments',
+        });
+    });
+
+    it('parses /resume unchanged (semantics move to last-session in T6)', () => {
+        expect(parseChatLine('/resume')).toEqual({ kind: 'resume' });
+    });
+
+    it('keeps /branch <id> <prompt> on the continue branch mode (N1 regression guard)', () => {
+        expect(parseChatLine('/branch msg_parent continue from this branch')).toEqual({
+            kind: 'branch',
+            mode: 'continue',
+            entryId: 'msg_parent',
+            prompt: 'continue from this branch',
         });
     });
 

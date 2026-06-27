@@ -8,7 +8,7 @@ export function parseSessionSlashCommand(command: string, input: string): ChatLi
         case 'clear':
             return parseOptionalSessionCommand('clear', 'clear', input);
         case 'session':
-            return parseOptionalSessionCommand('session', 'session', input);
+            return parseSessionCommand(input);
         case 'sessions':
             return parseNoArgumentSessionCommand('sessions', input);
         case 'tree':
@@ -77,4 +77,14 @@ function parseOptionalSessionCommand(
         return { kind: 'invalid', message: `/${command} accepts at most one session id` };
     }
     return parts.head.length === 0 ? { kind } : { kind, sessionId: parts.head };
+}
+
+function parseSessionCommand(input: string): ChatLineAction {
+    const parts = splitCommandParts(input);
+    if (parts.tail.length > 0) {
+        return { kind: 'invalid', message: '/session accepts at most one session id' };
+    }
+    return parts.head.length === 0
+        ? { kind: 'session-picker' }
+        : { kind: 'session', sessionId: parts.head };
 }

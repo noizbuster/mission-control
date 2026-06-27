@@ -34,6 +34,9 @@ export type ChatLineAction =
           readonly kind: 'resume';
       }
     | {
+          readonly kind: 'continue';
+      }
+    | {
           readonly kind: 'new-session';
           readonly sessionId?: string;
       }
@@ -44,6 +47,9 @@ export type ChatLineAction =
     | {
           readonly kind: 'session';
           readonly sessionId?: string;
+      }
+    | {
+          readonly kind: 'session-picker';
       }
     | {
           readonly kind: 'sessions';
@@ -214,6 +220,11 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
             return parsePromptCommand('steer', parts.tail);
         case 'resume':
             return parseNoArgumentCommand('resume', parts.tail);
+        // Metis N1: this top-level `kind: 'continue'` action (the /continue
+        // approval-resume command) is distinct from `branch.mode: 'continue'`
+        // (chat-commands.ts branch arm). Different fields, not a collision.
+        case 'continue':
+            return parseNoArgumentCommand('continue', parts.tail);
         case 'interrupt':
             return parseNoArgumentCommand('interrupt', parts.tail);
         case 'exit':
@@ -271,7 +282,7 @@ function parseBashInvocation(commandText: string, kind: 'bash' | 'bash-display-o
 }
 
 function parseNoArgumentCommand(
-    kind: 'resume' | 'sessions' | 'interrupt' | 'exit' | 'undo' | 'redo' | 'help' | 'hotkeys',
+    kind: 'resume' | 'continue' | 'sessions' | 'interrupt' | 'exit' | 'undo' | 'redo' | 'help' | 'hotkeys',
     input: string,
 ): ChatLineAction {
     if (input.length > 0) {
