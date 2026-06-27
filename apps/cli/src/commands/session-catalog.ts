@@ -1,4 +1,5 @@
 import {
+    normalizeWorkspaceRoot,
     ProjectTrustStore,
     type ReplayDiagnostic,
     resolveMissionControlDataDir,
@@ -15,7 +16,7 @@ import { deriveSessionCatalogProjection } from './session-catalog-projection.js'
 import { parseCliSessionId } from './session-id.js';
 import { type CliSessionLockState, readSessionLockState } from './session-lock-status.js';
 import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 export type CliSessionListStatus = AgentSnapshot['status'] | 'corrupt' | 'missing';
 export type CliSessionCatalogIndexState = 'derived' | 'jsonl' | 'corrupt';
@@ -57,6 +58,33 @@ export async function listSessionCatalogEntries(): Promise<readonly CliSessionCa
     }
     const entries = await Promise.all([...ids].map((sessionId) => readSessionCatalogEntry(sessionId, indexState)));
     return entries.sort(compareCatalogEntries);
+}
+
+// Both `entries[].cwd|trustedRoot` and `normalizedWorkspaceRoot` must be
+// realpath-resolved before calling; a naive `===` silently misses symlinks.
+export function filterCatalogEntriesByWorkspace(
+    entries: readonly CliSessionCatalogEntry[],
+    normalizedWorkspaceRoot: string,
+): readonly CliSessionCatalogEntry[] {
+    return entries.filter(
+        (entry) => entry.cwd === normalizedWorkspaceRoot || entry.trustedRoot === normalizedWorkspaceRoot,
+    );
+}
+
+export async function listSessionCatalogEntriesForWorkspace(
+    workspaceRoot: string,
+): Promise<readonly CliSessionCatalogEntry[]> {
+    const normalizedRoot = await normalizeWorkspaceRootWithFallback(workspaceRoot);
+    const entries = await listSessionCatalogEntries();
+    return filterCatalogEntriesByWorkspace(entries, normalizedRoot);
+}
+
+async function normalizeWorkspaceRootWithFallback(workspaceRoot: string): Promise<string> {
+    try {
+        return await normalizeWorkspaceRoot(workspaceRoot);
+    } catch {
+        return resolve(workspaceRoot);
+    }
 }
 
 export async function readSessionCatalogEntry(
