@@ -792,7 +792,7 @@ function emitTaskEvent(
 
 function formatBlockedRunMessage(reason: string, toolCallId?: string): string {
     const details = toolCallId === undefined ? '' : ` Pending tool call: ${toolCallId}.`;
-    return `Run blocked (resumable): ${reason}. Resume with /resume.${details}\n`;
+    return `Run blocked (resumable): ${reason}. Resume with /continue.${details}\n`;
 }
 
 function assertNeverReceipt(value: never): never {

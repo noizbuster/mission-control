@@ -55,7 +55,7 @@ export function slashBaseName(id: string): string {
  * Argument-less slash commands that surface in the palette. Pinned by the T8
  * task spec. Each is invokable bare (no required argument) and resolves in
  * `parseChatLine` via `parseNoArgumentCommand` (`exit`/`help`/`hotkeys`/
- * `interrupt`/`resume`) or `resolveUnreservedSlash` -> `parseSessionSlashCommand`
+ * `interrupt`/`resume`/`continue`) or `resolveUnreservedSlash` -> `parseSessionSlashCommand`
  * (`sessions`/`tree`) or `parseCompactCommand` (`compact`).
  *
  * `/compact` accepts OPTIONAL focus text and `/tree` accepts an OPTIONAL
@@ -70,6 +70,7 @@ export const PALETTE_SLASH_NAMES: ReadonlySet<string> = new Set<string>([
     'help',
     'hotkeys',
     'compact',
+    'continue',
     'interrupt',
     'resume',
     'sessions',

@@ -89,7 +89,7 @@ try {
 
     const resumedOutput = await runAgent(parseArgs(['--session', sessionId, '--model', 'local/local-echo']), {
         authStore: emptyAuthStore(authFilePath),
-        chatInput: scriptedInput([{ type: 'line', value: '/resume' }, { type: 'interrupt' }, { type: 'interrupt' }]),
+        chatInput: scriptedInput([{ type: 'line', value: '/continue' }, { type: 'interrupt' }, { type: 'interrupt' }]),
         chatOutput: bufferedOutput().output,
         workspaceRoot,
         commandExecutor: (request) => fakeBashExecutor(request, nestedRoot),

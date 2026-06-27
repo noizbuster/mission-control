@@ -56,7 +56,7 @@ export const slashCommandChoices = [
     {
         id: '/session',
         insertText: '/session ',
-        description: 'Show or switch the active session',
+        description: 'Open the session picker for this project (or switch by id)',
     },
     {
         id: '/sessions',
@@ -81,7 +81,12 @@ export const slashCommandChoices = [
     {
         id: '/resume',
         insertText: '/resume',
-        description: 'Resume pending work',
+        description: 'Resume the most recent session for this project',
+    },
+    {
+        id: '/continue',
+        insertText: '/continue',
+        description: 'Resume a blocked approval run',
     },
     {
         id: '/compact',

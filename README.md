@@ -65,7 +65,7 @@ node apps/cli/dist/index.js --no-tui
 
 `mctrl` opens a chat prompt by default. `/model opens a searchable model picker`, and `/model provider/model selects the model for the current chat only`. The selection updates the active chat model and does not persist credentials or auth defaults.
 
-Session navigation stays on the durable JSONL session surface: `/new [session-id]` starts a new durable session, `/session <session-id>` switches to an existing durable session, `/sessions` lists durable sessions, `/tree` shows the durable session tree and active leaf, `/branch <entry-id>` selects an existing branch leaf, `/branch <message-id> <prompt>` continues from a parent message in a new branch, `/fork <entry-id> [session-id]` forks from a tree entry into a new durable session, and `/clone [session-id]` clones the current durable session into a fresh one. `/compact` summarizes older session history into a durable compaction boundary event, keeping the session durable while reducing replay context. `/resume` resumes a blocked run that is waiting on an approval decision, re-entering the approval-blocked lifecycle.
+Session navigation stays on the durable JSONL session surface: `/new [session-id]` starts a new durable session, `/session <session-id>` switches to an existing durable session, `/sessions` lists durable sessions, `/tree` shows the durable session tree and active leaf, `/branch <entry-id>` selects an existing branch leaf, `/branch <message-id> <prompt>` continues from a parent message in a new branch, `/fork <entry-id> [session-id]` forks from a tree entry into a new durable session, and `/clone [session-id]` clones the current durable session into a fresh one. `/compact` summarizes older session history into a durable compaction boundary event, keeping the session durable while reducing replay context. `/session` with no argument opens a searchable picker of sessions previously opened in the current project (selecting one attaches to it). `/resume` resumes the most recent session for this project. `/continue` resumes a blocked run that is waiting on an approval decision, re-entering the approval-blocked lifecycle.
 
 Workspace trust is controlled interactively with `/trust` (trust the current workspace for project-local resources), `/trust status` (show the current trust decision), `/trust deny` (deny project-local resources for the workspace), and `/trust reset` (clear the trust decision). Trust decisions persist in the project trust store under the Mission Control data directory. `bash.run`, `file.edit`, and `file.write` are only available when the workspace is trusted; read-only tools work regardless of trust but still enforce workspace path guards.
 
@@ -201,6 +201,7 @@ Session storage:
 - Session event logs live at `sessions/<session-id>.jsonl`.
 - JSONL logs contain durable event envelopes with stable event ids, sequence numbers, causation/correlation ids, and replay cursors.
 - Use --json for transient JSON Lines rendering and --jsonl for JSON Lines rendering plus replayable session persistence.
+- Launching the interactive TUI without an explicit `--session <id>` creates no session artifacts (no `sessions/<session-id>.jsonl` or lock file) until the first prompt turn; non-interactive `--json`/`--jsonl` runs and an explicit `--session <id>` still create a session eagerly.
 
 Workspace selection:
 
@@ -278,7 +279,7 @@ Noninteractive JSON/JSONL run states:
 
 - `mctrl run "<prompt>" --no-tui` and `--json`/`--jsonl` modes run a single prompt through the coding-agent path with the full tool set.
 - Run receipts settle as `completed`, `failed`, `interrupted`, or `blocked_on_approval`.
-- `blocked_on_approval` means the run paused for an approval decision and can be resumed with `/resume` in interactive mode or by appending an approval decision to the session log.
+- `blocked_on_approval` means the run paused for an approval decision and can be resumed with `/continue` in interactive mode or by appending an approval decision to the session log.
 - `--jsonl` persists a replayable session log; `--json` emits transient JSON Lines without persistence.
 - Noninteractive runs do not auto-approve effectful tools; they block and wait for external approval.
 

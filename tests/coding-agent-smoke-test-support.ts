@@ -114,7 +114,7 @@ export function expectBlockedSmokeRunArtifacts(input: SmokeBlockedRunAssertions)
     expect(input.firstOutput).toContain('Command output for bash.run');
     expect(input.firstOutput).toContain(`stdout:\n${input.workspaceNestedRoot}`);
     expect(input.firstOutput).toContain(
-        'Run blocked (resumable): approval_denied: interactive CLI approval. Resume with /resume.',
+        'Run blocked (resumable): approval_denied: interactive CLI approval. Resume with /continue.',
     );
     expect(input.firstOutput).not.toContain('Task failed');
     expect(input.firstOutput).not.toContain('run failed');

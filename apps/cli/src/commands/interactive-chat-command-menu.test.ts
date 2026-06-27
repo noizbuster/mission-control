@@ -37,6 +37,7 @@ describe('interactive chat command menu', () => {
             '/model',
             '/model pick',
             '/model list',
+            '/resume',
             '/approval safe',
         ]);
 

@@ -71,7 +71,17 @@ describe('T8 slash-command palette mapping table', () => {
 
     it('registry-slash set EXACTLY equals the pinned argument-less commands', () => {
         expect(PALETTE_SLASH_NAMES).toEqual(
-            new Set<string>(['exit', 'help', 'hotkeys', 'compact', 'interrupt', 'resume', 'sessions', 'tree']),
+            new Set<string>([
+                'exit',
+                'help',
+                'hotkeys',
+                'compact',
+                'continue',
+                'interrupt',
+                'resume',
+                'sessions',
+                'tree',
+            ]),
         );
     });
 
