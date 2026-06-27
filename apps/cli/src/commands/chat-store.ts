@@ -611,24 +611,6 @@ export class ChatStore {
         this.publish();
     }
 
-    navigateSessionPicker(direction: 1 | -1): void {
-        const view = createSessionPickerView(
-            this.state.sessionPickerKeypress,
-            this.state.sessionPickerEntries,
-            Math.max(1, this.state.sessionPickerEntries.length),
-        );
-        if (view.totalCount <= 0) return;
-        const next = (view.selectedIndex + view.totalCount + direction) % view.totalCount;
-        this.state.sessionPickerKeypress = {
-            ...this.state.sessionPickerKeypress,
-            selectedIndex: next,
-            pendingEscape: '',
-            pendingNumberSelection: '',
-        };
-        this.state.sessionPickerSelectedIndex = next;
-        this.publish();
-    }
-
     updateSessionPickerSearch(rawInput: string): void {
         const promptChoices = this.state.sessionPickerEntries.map((entry) => ({
             id: entry.sessionId,

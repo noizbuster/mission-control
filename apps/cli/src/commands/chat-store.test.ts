@@ -384,36 +384,6 @@ describe('chat-store — session picker overlay', () => {
         expect(store.getSnapshot().overlayMode).toBe('none');
     });
 
-    it('navigateSessionPicker wraps within the full entry set', () => {
-        const store = createChatStore();
-        store.showSessionPicker([makeSessionEntry('s1'), makeSessionEntry('s2'), makeSessionEntry('s3')]);
-        expect(store.getSnapshot().sessionPickerKeypress.selectedIndex).toBe(0);
-        store.navigateSessionPicker(1);
-        expect(store.getSnapshot().sessionPickerKeypress.selectedIndex).toBe(1);
-        store.navigateSessionPicker(1);
-        expect(store.getSnapshot().sessionPickerKeypress.selectedIndex).toBe(2);
-        store.navigateSessionPicker(1);
-        expect(store.getSnapshot().sessionPickerKeypress.selectedIndex).toBe(0);
-        store.navigateSessionPicker(-1);
-        expect(store.getSnapshot().sessionPickerKeypress.selectedIndex).toBe(2);
-        store.hideSessionPicker();
-    });
-
-    it('navigateSessionPicker clamps within the search-narrowed view', () => {
-        const store = createChatStore();
-        store.showSessionPicker([
-            makeSessionEntry('alpha', 'Alpha session'),
-            makeSessionEntry('beta', 'Beta session'),
-            makeSessionEntry('alpha-2', 'Alpha second'),
-        ]);
-        store.updateSessionPickerSearch('alpha');
-        expect(store.getSnapshot().sessionPickerKeypress.searchQuery).toBe('alpha');
-        store.navigateSessionPicker(1);
-        store.navigateSessionPicker(1);
-        expect(store.getSnapshot().sessionPickerKeypress.selectedIndex).toBe(0);
-        store.hideSessionPicker();
-    });
-
     it('updateSessionPickerSearch narrows visible entries', () => {
         const store = createChatStore();
         const entries = [
@@ -432,7 +402,7 @@ describe('chat-store — session picker overlay', () => {
     it('confirmSessionPicker resolves the selected sessionId', async () => {
         const store = createChatStore();
         const promise = store.showSessionPicker([makeSessionEntry('s1'), makeSessionEntry('s2'), makeSessionEntry('s3')]);
-        store.navigateSessionPicker(1);
+        store.updateSessionPickerSearch('\u001b[B');
         store.confirmSessionPicker();
         expect(await promise).toBe('s2');
         expect(store.getSnapshot().overlayMode).toBe('none');
