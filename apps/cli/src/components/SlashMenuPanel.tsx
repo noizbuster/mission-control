@@ -41,34 +41,32 @@ export function SlashMenuPanel({ inputBuffer, menuState, workflowNames }: SlashM
         ? Math.max(8, ...view.visibleChoices.map((c) => terminalDisplayWidth(c.id)))
         : 8;
 
+    const items: readonly React.ReactNode[] = view.empty
+        ? [<text key="empty" attributes={TextAttributes.DIM}> no matches</text>]
+        : view.visibleChoices.map((choice, index) => {
+              const globalIndex = view.startIndex + index;
+              const isSelected = globalIndex === view.selectedIndex;
+              const padding = ' '.repeat(Math.max(0, idWidth - terminalDisplayWidth(choice.id)));
+              const pickerMarker = choice.opensPicker === true ? ' \u2026' : '';
+              const selectedBg = isSelected ? { bg: SELECTED_BG } : {};
+              const line = `${isSelected ? '> ' : '  '}${choice.id}${padding}${pickerMarker}  ${choice.description}`;
+              return (
+                  <box key={choice.id} height={1}>
+                      <text {...selectedBg}>{line}</text>
+                  </box>
+              );
+          });
+
     return (
-        <box flexDirection="column" marginTop={1}>
-            <text fg={HEADER_FG} attributes={TextAttributes.BOLD}>{header}</text>
-            {view.empty ? (
-                <text attributes={TextAttributes.DIM}> no matches</text>
-            ) : (
-                view.visibleChoices.map((choice, index) => {
-                    const globalIndex = view.startIndex + index;
-                    const isSelected = globalIndex === view.selectedIndex;
-                    const padding = ' '.repeat(Math.max(0, idWidth - terminalDisplayWidth(choice.id)));
-                    const pickerMarker = choice.opensPicker === true ? ' \u2026' : '';
-                    const selectedBg = isSelected ? { bg: SELECTED_BG } : {};
-                    return (
-                        <box key={choice.id} flexDirection="row">
-                            <text {...selectedBg}>
-                                {isSelected ? '> ' : '  '}
-                                {choice.id}
-                                {padding}
-                                {pickerMarker}{' '}
-                            </text>
-                            <text attributes={TextAttributes.DIM} {...selectedBg}>
-                                {choice.description}
-                            </text>
-                        </box>
-                    );
-                })
-            )}
-            <text attributes={TextAttributes.DIM}>Up/Down to navigate, Enter to select, Esc to close</text>
-        </box>
+        <>
+            <box height={1} />
+            <box height={1}>
+                <text fg={HEADER_FG} attributes={TextAttributes.BOLD}>{header}</text>
+            </box>
+            {items}
+            <box height={1}>
+                <text attributes={TextAttributes.DIM}>Up/Down to navigate, Enter to select, Esc to close</text>
+            </box>
+        </>
     );
 }
