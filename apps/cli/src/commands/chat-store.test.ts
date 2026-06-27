@@ -1,7 +1,13 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModelChoice } from './interactive-chat-model.js';
-import { createChatStore, type ChatStore } from './chat-store.js';
+import {
+    createChatStore,
+    createSessionPickerView,
+    type ChatStore,
+    type SessionPickerEntry,
+} from './chat-store.js';
+import { createProviderPromptKeypressState } from './auth-provider-keypress.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
 
 function makeSelection(providerID: string, modelID: string): ModelProviderSelection {
@@ -20,6 +26,15 @@ function makeChoice(id: string, selection?: ModelProviderSelection): ModelChoice
 
 function makeLineEvent(value: string): ChatInputEvent {
     return { type: 'line', value };
+}
+
+function makeSessionEntry(sessionId: string, label?: string): SessionPickerEntry {
+    return {
+        sessionId,
+        label: label ?? sessionId,
+        messageCount: 0,
+        status: 'idle',
+    };
 }
 
 describe('chat-store — subscribe / getSnapshot', () => {
@@ -330,5 +345,162 @@ describe('chat-store — onModelCycleSelect callback', () => {
         store.onModelCycleSelect?.(makeSelection('p', 'm'));
         expect(calls).toHaveLength(1);
         expect(calls[0]).toEqual({ providerID: 'p', modelID: 'm' });
+    });
+});
+
+describe('chat-store — session picker overlay', () => {
+    it('showSessionPicker sets overlayMode and returns a Promise', () => {
+        const store = createChatStore();
+        const entries = [makeSessionEntry('s1', 'Session 1'), makeSessionEntry('s2', 'Session 2')];
+        const promise = store.showSessionPicker(entries);
+        expect(promise).toBeInstanceOf(Promise);
+        const snapshot = store.getSnapshot();
+        expect(snapshot.overlayMode).toBe('session-picker');
+        expect(snapshot.sessionPickerEntries).toEqual(entries);
+        store.hideSessionPicker();
+    });
+
+    it('hideSessionPicker(sessionId) resolves the promise with that sessionId', async () => {
+        const store = createChatStore();
+        const promise = store.showSessionPicker([makeSessionEntry('s1'), makeSessionEntry('s2')]);
+        store.hideSessionPicker('s2');
+        const result = await promise;
+        expect(result).toBe('s2');
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+
+    it('hideSessionPicker() (cancel) resolves undefined', async () => {
+        const store = createChatStore();
+        const promise = store.showSessionPicker([makeSessionEntry('s1')]);
+        store.hideSessionPicker();
+        expect(await promise).toBeUndefined();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+
+    it('showSessionPicker with empty entries resolves undefined without opening overlay', async () => {
+        const store = createChatStore();
+        const result = await store.showSessionPicker([]);
+        expect(result).toBeUndefined();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+
+    it('navigateSessionPicker wraps within the full entry set', () => {
+        const store = createChatStore();
+        store.showSessionPicker([makeSessionEntry('s1'), makeSessionEntry('s2'), makeSessionEntry('s3')]);
+        expect(store.getSnapshot().sessionPickerKeypress.selectedIndex).toBe(0);
+        store.navigateSessionPicker(1);
+        expect(store.getSnapshot().sessionPickerKeypress.selectedIndex).toBe(1);
+        store.navigateSessionPicker(1);
+        expect(store.getSnapshot().sessionPickerKeypress.selectedIndex).toBe(2);
+        store.navigateSessionPicker(1);
+        expect(store.getSnapshot().sessionPickerKeypress.selectedIndex).toBe(0);
+        store.navigateSessionPicker(-1);
+        expect(store.getSnapshot().sessionPickerKeypress.selectedIndex).toBe(2);
+        store.hideSessionPicker();
+    });
+
+    it('navigateSessionPicker clamps within the search-narrowed view', () => {
+        const store = createChatStore();
+        store.showSessionPicker([
+            makeSessionEntry('alpha', 'Alpha session'),
+            makeSessionEntry('beta', 'Beta session'),
+            makeSessionEntry('alpha-2', 'Alpha second'),
+        ]);
+        store.updateSessionPickerSearch('alpha');
+        expect(store.getSnapshot().sessionPickerKeypress.searchQuery).toBe('alpha');
+        store.navigateSessionPicker(1);
+        store.navigateSessionPicker(1);
+        expect(store.getSnapshot().sessionPickerKeypress.selectedIndex).toBe(0);
+        store.hideSessionPicker();
+    });
+
+    it('updateSessionPickerSearch narrows visible entries', () => {
+        const store = createChatStore();
+        const entries = [
+            makeSessionEntry('s1', 'Feature work'),
+            makeSessionEntry('s2', 'Bug fix'),
+            makeSessionEntry('s3', 'Feature refactor'),
+        ];
+        store.showSessionPicker(entries);
+        store.updateSessionPickerSearch('feature');
+        const snapshot = store.getSnapshot();
+        const view = createSessionPickerView(snapshot.sessionPickerKeypress, snapshot.sessionPickerEntries, 10);
+        expect(view.filteredEntries.map((e) => e.sessionId)).toEqual(['s1', 's3']);
+        store.hideSessionPicker();
+    });
+
+    it('confirmSessionPicker resolves the selected sessionId', async () => {
+        const store = createChatStore();
+        const promise = store.showSessionPicker([makeSessionEntry('s1'), makeSessionEntry('s2'), makeSessionEntry('s3')]);
+        store.navigateSessionPicker(1);
+        store.confirmSessionPicker();
+        expect(await promise).toBe('s2');
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+
+    it('cancelSessionPicker resolves undefined', async () => {
+        const store = createChatStore();
+        const promise = store.showSessionPicker([makeSessionEntry('s1')]);
+        store.cancelSessionPicker();
+        expect(await promise).toBeUndefined();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+});
+
+describe('createSessionPickerView — pure view helper', () => {
+    it('returns all entries when searchQuery is empty', () => {
+        const state = createProviderPromptKeypressState();
+        const entries = [makeSessionEntry('s1', 'One'), makeSessionEntry('s2', 'Two')];
+        const view = createSessionPickerView(state, entries, 5);
+        expect(view.totalCount).toBe(2);
+        expect(view.filteredEntries.map((e) => e.sessionId)).toEqual(['s1', 's2']);
+    });
+
+    it('filters entries by searchQuery against sessionId and label', () => {
+        const state = { ...createProviderPromptKeypressState(), searchQuery: 'feat' };
+        const entries = [
+            makeSessionEntry('s1', 'Feature work'),
+            makeSessionEntry('s2', 'Bug fix'),
+            makeSessionEntry('feat-2', 'Refactor'),
+        ];
+        const view = createSessionPickerView(state, entries, 10);
+        expect(view.filteredEntries.map((e) => e.sessionId)).toEqual(['s1', 'feat-2']);
+    });
+
+    it('windows visible entries to maxVisible', () => {
+        const entries = Array.from({ length: 10 }, (_, i) => makeSessionEntry(`s${i}`, `Session ${i}`));
+        const state = createProviderPromptKeypressState();
+        const view = createSessionPickerView(state, entries, 3);
+        expect(view.visibleEntries).toHaveLength(3);
+        expect(view.startIndex).toBe(0);
+        expect(view.visibleEntries.map((e) => e.sessionId)).toEqual(['s0', 's1', 's2']);
+    });
+
+    it('clamps selectedIndex to filteredCount - 1', () => {
+        const entries = [
+            makeSessionEntry('s1', 'One'),
+            makeSessionEntry('s2', 'Two'),
+            makeSessionEntry('s3', 'Three'),
+        ];
+        const state = { ...createProviderPromptKeypressState(), selectedIndex: 5 };
+        const view = createSessionPickerView(state, entries, 10);
+        expect(view.selectedIndex).toBe(2);
+    });
+
+    it('clamps selectedIndex to 0 when the filtered set is empty', () => {
+        const state = { ...createProviderPromptKeypressState(), selectedIndex: 3 };
+        const view = createSessionPickerView(state, [], 5);
+        expect(view.selectedIndex).toBe(0);
+        expect(view.totalCount).toBe(0);
+        expect(view.visibleEntries).toEqual([]);
+    });
+
+    it('re-centers the window when the selection moves past the middle', () => {
+        const entries = Array.from({ length: 10 }, (_, i) => makeSessionEntry(`s${i}`, `Session ${i}`));
+        const state = { ...createProviderPromptKeypressState(), selectedIndex: 7 };
+        const view = createSessionPickerView(state, entries, 3);
+        expect(view.selectedIndex).toBe(7);
+        expect(view.startIndex).toBe(6);
+        expect(view.visibleEntries.map((e) => e.sessionId)).toEqual(['s6', 's7', 's8']);
     });
 });

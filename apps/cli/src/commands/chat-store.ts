@@ -21,6 +21,7 @@ import {
 import {
     type ProviderPromptKeypressState,
     createProviderPromptKeypressState,
+    filterProviderPromptChoices,
     reduceProviderPromptKeypress,
 } from './auth-provider-keypress.js';
 import {
@@ -44,7 +45,26 @@ export type ChatStoreOverlayMode =
     | 'question'
     | 'rename'
     | 'abg'
-    | 'diff-viewer';
+    | 'diff-viewer'
+    | 'session-picker';
+
+export type SessionPickerEntry = {
+    readonly sessionId: string;
+    readonly label: string;
+    readonly updatedAt?: string;
+    readonly messageCount: number;
+    readonly status: string;
+};
+
+export type SessionPickerView = {
+    readonly filteredEntries: readonly SessionPickerEntry[];
+    readonly visibleEntries: readonly SessionPickerEntry[];
+    readonly selectedIndex: number;
+    readonly startIndex: number;
+    readonly endIndex: number;
+    readonly totalCount: number;
+    readonly searchQuery: string;
+};
 
 export type ChatStoreState = {
     readonly outputText: string;
@@ -83,6 +103,10 @@ export type ChatStoreState = {
     readonly abgOverlayLiveOutput: boolean;
     readonly diffViewerEntries: readonly DiffEntry[];
     readonly diffViewerCursor: number;
+    readonly sessionPickerEntries: readonly SessionPickerEntry[];
+    readonly sessionPickerSelectedIndex: number;
+    readonly sessionPickerSearch: string;
+    readonly sessionPickerKeypress: ProviderPromptKeypressState;
     readonly historyNavigation: { readonly position: number; readonly total: number } | null;
 };
 
@@ -153,6 +177,7 @@ export class ChatStore {
     private modelPickerResolve: ((selection: ModelProviderSelection | undefined) => void) | undefined;
     private levelPickerResolve: ((level: string | undefined) => void) | undefined;
     private questionResolve: ((answer: string) => void) | undefined;
+    private sessionPickerResolve: ((sessionId: string | undefined) => void) | undefined;
     private emitScheduled = false;
 
     constructor(options?: ChatStoreOptions) {
@@ -198,6 +223,10 @@ export class ChatStore {
             abgOverlayLiveOutput: false,
             diffViewerEntries: [],
             diffViewerCursor: 0,
+            sessionPickerEntries: [],
+            sessionPickerSelectedIndex: 0,
+            sessionPickerSearch: '',
+            sessionPickerKeypress: createProviderPromptKeypressState(),
         };
         this.snapshot = this.buildSnapshot();
     }
@@ -252,6 +281,29 @@ export class ChatStore {
         this.state.overlayMode = 'none';
         this.publish();
         resolve?.(selection);
+    }
+
+    showSessionPicker(entries: readonly SessionPickerEntry[]): Promise<string | undefined> {
+        if (entries.length === 0) {
+            return Promise.resolve(undefined);
+        }
+        this.state.sessionPickerEntries = entries;
+        this.state.sessionPickerKeypress = createProviderPromptKeypressState();
+        this.state.sessionPickerSelectedIndex = 0;
+        this.state.sessionPickerSearch = '';
+        this.state.overlayMode = 'session-picker';
+        this.publish();
+        return new Promise<string | undefined>((resolve) => {
+            this.sessionPickerResolve = resolve;
+        });
+    }
+
+    hideSessionPicker(sessionId?: string): void {
+        const resolve = this.sessionPickerResolve;
+        this.sessionPickerResolve = undefined;
+        this.state.overlayMode = 'none';
+        this.publish();
+        resolve?.(sessionId);
     }
 
     showLevelPicker(currentLevel?: string): Promise<string | undefined> {
@@ -559,6 +611,57 @@ export class ChatStore {
         this.publish();
     }
 
+    navigateSessionPicker(direction: 1 | -1): void {
+        const view = createSessionPickerView(
+            this.state.sessionPickerKeypress,
+            this.state.sessionPickerEntries,
+            Math.max(1, this.state.sessionPickerEntries.length),
+        );
+        if (view.totalCount <= 0) return;
+        const next = (view.selectedIndex + view.totalCount + direction) % view.totalCount;
+        this.state.sessionPickerKeypress = {
+            ...this.state.sessionPickerKeypress,
+            selectedIndex: next,
+            pendingEscape: '',
+            pendingNumberSelection: '',
+        };
+        this.state.sessionPickerSelectedIndex = next;
+        this.publish();
+    }
+
+    updateSessionPickerSearch(rawInput: string): void {
+        const promptChoices = this.state.sessionPickerEntries.map((entry) => ({
+            id: entry.sessionId,
+            name: entry.label,
+        }));
+        this.state.sessionPickerKeypress = reduceProviderPromptKeypress(
+            this.state.sessionPickerKeypress,
+            rawInput,
+            promptChoices,
+        );
+        this.state.sessionPickerSelectedIndex = this.state.sessionPickerKeypress.selectedIndex;
+        this.state.sessionPickerSearch = this.state.sessionPickerKeypress.searchQuery;
+        this.publish();
+    }
+
+    confirmSessionPicker(): void {
+        const view = createSessionPickerView(
+            this.state.sessionPickerKeypress,
+            this.state.sessionPickerEntries,
+            Math.max(1, this.state.sessionPickerEntries.length),
+        );
+        const selected = view.filteredEntries[view.selectedIndex];
+        if (selected !== undefined) {
+            this.hideSessionPicker(selected.sessionId);
+        } else {
+            this.hideSessionPicker();
+        }
+    }
+
+    cancelSessionPicker(): void {
+        this.hideSessionPicker();
+    }
+
     navigateLevelPicker(direction: 1 | -1): void {
         const count = APPROVAL_LEVELS.length;
         this.state.levelPickerSelectedIndex =
@@ -644,6 +747,34 @@ export class ChatStore {
         }
         this.state.fileAutocomplete = updateFileAutocomplete(this.state.fileAutocomplete, prefix, this.workspaceRoot);
     }
+}
+
+export function createSessionPickerView(
+    state: ProviderPromptKeypressState,
+    entries: readonly SessionPickerEntry[],
+    maxVisibleEntries: number,
+): SessionPickerView {
+    const visibleLimit = Math.max(1, maxVisibleEntries);
+    const promptChoices = entries.map((entry) => ({ id: entry.sessionId, name: entry.label }));
+    const filteredChoices = filterProviderPromptChoices(promptChoices, state.searchQuery);
+    const filteredIds = new Set(filteredChoices.map((choice) => choice.id));
+    const filteredEntries = entries.filter((entry) => filteredIds.has(entry.sessionId));
+    const totalCount = filteredEntries.length;
+    const selectedIndex = totalCount <= 0 ? 0 : Math.min(Math.max(state.selectedIndex, 0), totalCount - 1);
+    const startIndex =
+        totalCount <= visibleLimit
+            ? 0
+            : Math.min(Math.max(selectedIndex - Math.floor(visibleLimit / 2), 0), totalCount - visibleLimit);
+    const endIndex = Math.min(totalCount, startIndex + visibleLimit);
+    return {
+        filteredEntries,
+        visibleEntries: filteredEntries.slice(startIndex, endIndex),
+        selectedIndex,
+        startIndex,
+        endIndex,
+        totalCount,
+        searchQuery: state.searchQuery,
+    };
 }
 
 export function createChatStore(options?: ChatStoreOptions): ChatStore {
