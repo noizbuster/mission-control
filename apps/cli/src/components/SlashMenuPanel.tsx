@@ -2,11 +2,13 @@
 import { TextAttributes } from '@opentui/core';
 import type * as React from 'react';
 import {
-    type SlashCommandMenuState,
     createSlashCommandMenuView,
     createWorkflowCommandMenuView,
+    type SlashCommandMenuState,
 } from '../commands/interactive-chat-command-menu.js';
 import { terminalDisplayWidth } from '../commands/terminal-text.js';
+import { OverlayFrame } from './OverlayFrame.js';
+import { SELECTED_BG } from './overlay-theme.js';
 
 export type SlashMenuPanelProps = {
     readonly inputBuffer: string;
@@ -15,8 +17,6 @@ export type SlashMenuPanelProps = {
 };
 
 const MAX_VISIBLE = 5;
-const SELECTED_BG = '#0000ff';
-const HEADER_FG = '#00ffff';
 
 export function SlashMenuPanel({ inputBuffer, menuState, workflowNames }: SlashMenuPanelProps): React.ReactNode {
     const isSlash = inputBuffer.startsWith('/');
@@ -34,15 +34,19 @@ export function SlashMenuPanel({ inputBuffer, menuState, workflowNames }: SlashM
             ? ` Commands matching "${view.query}" `
             : ` Commands (${view.totalCount}) `
         : view.query.length > 0
-            ? ` Workflows matching "${view.query}" `
-            : ` Workflows (${view.totalCount}) `;
+          ? ` Workflows matching "${view.query}" `
+          : ` Workflows (${view.totalCount}) `;
 
-    const idWidth = view.visibleChoices.length > 0
-        ? Math.max(8, ...view.visibleChoices.map((c) => terminalDisplayWidth(c.id)))
-        : 8;
+    const idWidth =
+        view.visibleChoices.length > 0 ? Math.max(8, ...view.visibleChoices.map((c) => terminalDisplayWidth(c.id))) : 8;
 
     const items: readonly React.ReactNode[] = view.empty
-        ? [<text key="empty" attributes={TextAttributes.DIM}> no matches</text>]
+        ? [
+              <text key="empty" attributes={TextAttributes.DIM}>
+                  {' '}
+                  no matches
+              </text>,
+          ]
         : view.visibleChoices.map((choice, index) => {
               const globalIndex = view.startIndex + index;
               const isSelected = globalIndex === view.selectedIndex;
@@ -58,15 +62,9 @@ export function SlashMenuPanel({ inputBuffer, menuState, workflowNames }: SlashM
           });
 
     return (
-        <>
+        <OverlayFrame variant="panel" title={header.trim()} footer="Up/Down to navigate, Enter to select, Esc to close">
             <box height={1} />
-            <box height={1}>
-                <text fg={HEADER_FG} attributes={TextAttributes.BOLD}>{header}</text>
-            </box>
             {items}
-            <box height={1}>
-                <text attributes={TextAttributes.DIM}>Up/Down to navigate, Enter to select, Esc to close</text>
-            </box>
-        </>
+        </OverlayFrame>
     );
 }

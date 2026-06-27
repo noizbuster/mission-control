@@ -2,29 +2,33 @@
 import { TextAttributes } from '@opentui/core';
 import type * as React from 'react';
 import {
-    type FileAutocompleteState,
     createFileAutocompleteView,
+    type FileAutocompleteState,
 } from '../commands/interactive-chat-file-autocomplete.js';
+import { OverlayFrame } from './OverlayFrame.js';
+import { SELECTED_BG } from './overlay-theme.js';
 
 export type FileAutocompletePanelProps = {
     readonly fileAutocomplete: FileAutocompleteState;
 };
 
 const MAX_VISIBLE = 8;
-const SELECTED_BG = '#0000ff';
-const HEADER_FG = '#00ffff';
 
 export function FileAutocompletePanel({ fileAutocomplete }: FileAutocompletePanelProps): React.ReactNode {
     const view = createFileAutocompleteView(fileAutocomplete, MAX_VISIBLE);
     if (!view.open) return null;
 
-    const header = view.totalCount > 0
-        ? ` Files matching @${view.prefix} (${view.totalCount}) `
-        : ` Files matching @${view.prefix} `;
+    const header =
+        view.totalCount > 0
+            ? ` Files matching @${view.prefix} (${view.totalCount}) `
+            : ` Files matching @${view.prefix} `;
 
     return (
-        <box flexDirection="column" marginTop={1}>
-            <text fg={HEADER_FG} attributes={TextAttributes.BOLD}>{header}</text>
+        <OverlayFrame
+            variant="panel"
+            title={header.trim()}
+            footer="Tab/Enter to complete, Up/Down to navigate, Esc to close"
+        >
             {view.empty ? (
                 <text attributes={TextAttributes.DIM}> no files match</text>
             ) : (
@@ -44,9 +48,6 @@ export function FileAutocompletePanel({ fileAutocomplete }: FileAutocompletePane
                     );
                 })
             )}
-            <text attributes={TextAttributes.DIM}>
-                Tab/Enter to complete, Up/Down to navigate, Esc to close
-            </text>
-        </box>
+        </OverlayFrame>
     );
 }

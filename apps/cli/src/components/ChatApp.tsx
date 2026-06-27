@@ -1,27 +1,29 @@
 /** @jsxImportSource @opentui/react */
 
-import { TextAttributes, type ScrollBoxRenderable, type TextareaRenderable } from '@opentui/core';
-import { useKeyboard, useRenderer } from '@opentui/react';
+import { type ScrollBoxRenderable, TextAttributes, type TextareaRenderable } from '@opentui/core';
 import { useKeymap } from '@opentui/keymap/react';
+import { useKeyboard, useRenderer } from '@opentui/react';
 import type * as React from 'react';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { extractLastAssistantText, parseMessageBlocks } from '../commands/chat-blocks.js';
+import type { ChatStore } from '../commands/chat-store.js';
+import { createClipboardService } from '../platform/clipboard-service.js';
 import { Banner } from './Banner.js';
-import { ChatTranscript } from './ChatTranscript.js';
 import { ChatInputArea } from './ChatInputArea.js';
-import { SlashMenuPanel } from './SlashMenuPanel.js';
+import { ChatTranscript } from './ChatTranscript.js';
 import { FileAutocompletePanel } from './FileAutocompletePanel.js';
-import { StatusBar, type StatusBarProps } from './StatusBar.js';
+import { OverlayFrame } from './OverlayFrame.js';
 import {
     ApprovalOverlay,
-    QuestionOverlay,
-    ModelPickerOverlay,
     LevelPickerOverlay,
+    ModelPickerOverlay,
+    QuestionOverlay,
     RenameOverlay,
     SessionPickerOverlay,
 } from './OverlayPanels.js';
-import type { ChatStore } from '../commands/chat-store.js';
-import { extractLastAssistantText, parseMessageBlocks } from '../commands/chat-blocks.js';
-import { createClipboardService } from '../platform/clipboard-service.js';
+import { ACCENTS } from './overlay-theme.js';
+import { SlashMenuPanel } from './SlashMenuPanel.js';
+import { StatusBar, type StatusBarProps } from './StatusBar.js';
 
 const SPINNER_FRAMES = '\u280b\u2819\u2839\u2838\u2834\u2826\u2827\u2807';
 
@@ -46,12 +48,7 @@ export type ChatAppProps = {
     readonly statusBarProps?: StatusBarProps;
 };
 
-export function ChatApp({
-    store,
-    textareaRef,
-    scrollboxRef,
-    statusBarProps,
-}: ChatAppProps): React.ReactNode {
+export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: ChatAppProps): React.ReactNode {
     const subscribe = useCallback((cb: () => void) => store.subscribe(cb), [store]);
     const getSnapshot = useCallback(() => store.getSnapshot(), [store]);
     const snapshot = useSyncExternalStore(subscribe, getSnapshot);
@@ -221,8 +218,7 @@ export function ChatApp({
                 cleanup = registerModelShortcutsLayer(keymap, {
                     frecency: new ModelFrecency(),
                     favorites: new ModelFavorites(),
-                    getModelSelections: () =>
-                        store.getSnapshot().modelCycleChoices.map((choice) => choice.selection),
+                    getModelSelections: () => store.getSnapshot().modelCycleChoices.map((choice) => choice.selection),
                     getCurrentSelection: () => {
                         const snap = store.getSnapshot();
                         return snap.modelCycleChoices[snap.modelCycleIndex]?.selection;
@@ -246,33 +242,31 @@ export function ChatApp({
     useEffect(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
-        void import('../platform/keymap/session-shortcuts.js').then(
-            ({ registerSessionShortcutsLayer }) => {
-                if (disposed) return;
-                cleanup = registerSessionShortcutsLayer(keymap, {
-                    navigateSessionTree: () => store.sendSlashCommand('/tree'),
-                    captureInput: () => ({
-                        text: textareaRef.current?.plainText ?? '',
-                        cursor: textareaRef.current?.cursorOffset ?? 0,
-                    }),
-                    clearInput: () => {
-                        textareaRef.current?.clear();
-                        store.setInputMirror('');
-                    },
-                    restoreInput: (entry) => {
-                        const textarea = textareaRef.current;
-                        if (textarea !== null) {
-                            textarea.setText(entry.text);
-                            textarea.cursorOffset = entry.cursor;
-                        }
-                        store.setInputMirror(entry.text);
-                    },
-                    emitNotice: (text) => {
-                        store.emitOutput(text);
-                    },
-                });
-            },
-        );
+        void import('../platform/keymap/session-shortcuts.js').then(({ registerSessionShortcutsLayer }) => {
+            if (disposed) return;
+            cleanup = registerSessionShortcutsLayer(keymap, {
+                navigateSessionTree: () => store.sendSlashCommand('/tree'),
+                captureInput: () => ({
+                    text: textareaRef.current?.plainText ?? '',
+                    cursor: textareaRef.current?.cursorOffset ?? 0,
+                }),
+                clearInput: () => {
+                    textareaRef.current?.clear();
+                    store.setInputMirror('');
+                },
+                restoreInput: (entry) => {
+                    const textarea = textareaRef.current;
+                    if (textarea !== null) {
+                        textarea.setText(entry.text);
+                        textarea.cursorOffset = entry.cursor;
+                    }
+                    store.setInputMirror(entry.text);
+                },
+                emitNotice: (text) => {
+                    store.emitOutput(text);
+                },
+            });
+        });
         return (): void => {
             disposed = true;
             cleanup?.();
@@ -369,15 +363,15 @@ export function ChatApp({
     if (snapshot.overlayMode === 'abg') {
         return (
             <box flexDirection="column" width="100%">
-                <box flexDirection="row" marginTop={1} paddingLeft={1} paddingRight={1}>
-                    <text fg="#00ffff" attributes={TextAttributes.BOLD}>{' ABG Overlay '}</text>
-                    <text attributes={TextAttributes.DIM}>{' (Ctrl+G or Esc to close)'}</text>
-                </box>
-                <box flexDirection="column" marginTop={1} paddingLeft={1} paddingRight={1}>
+                <OverlayFrame variant="view" title="ABG Overlay" hint="(Ctrl+G or Esc to close)">
                     <text attributes={TextAttributes.DIM}>{'Tab 0: Overview'}</text>
-                    <text attributes={TextAttributes.DIM}>{'The ABG monitoring overlay requires an active agent run.'}</text>
-                    <text attributes={TextAttributes.DIM}>{'Start a prompt to see real-time graph/node/tool/timeline data.'}</text>
-                </box>
+                    <text attributes={TextAttributes.DIM}>
+                        {'The ABG monitoring overlay requires an active agent run.'}
+                    </text>
+                    <text attributes={TextAttributes.DIM}>
+                        {'Start a prompt to see real-time graph/node/tool/timeline data.'}
+                    </text>
+                </OverlayFrame>
             </box>
         );
     }
@@ -386,17 +380,13 @@ export function ChatApp({
         const diffCount = snapshot.diffViewerEntries.length;
         return (
             <box flexDirection="column" width="100%">
-                <box flexDirection="row" marginTop={1} paddingLeft={1} paddingRight={1}>
-                    <text fg="#ffff00" attributes={TextAttributes.BOLD}>{' Diff Viewer '}</text>
-                    <text attributes={TextAttributes.DIM}>{' (Esc or q to close)'}</text>
-                </box>
-                <box flexDirection="column" marginTop={1} paddingLeft={1} paddingRight={1}>
+                <OverlayFrame variant="view" title="Diff Viewer" hint="(Esc or q to close)" accent={ACCENTS.approval}>
                     <text attributes={TextAttributes.DIM}>
                         {diffCount > 0
                             ? `${diffCount} diff entr${diffCount === 1 ? 'y' : 'ies'} staged for review.`
                             : 'No diff entries to display.'}
                     </text>
-                </box>
+                </OverlayFrame>
             </box>
         );
     }
@@ -407,11 +397,7 @@ export function ChatApp({
 
     return (
         <box flexDirection="column" width="100%">
-            {statusBarProps !== undefined ? (
-                <Banner statusBarProps={statusBarProps} />
-            ) : (
-                <Banner />
-            )}
+            {statusBarProps !== undefined ? <Banner statusBarProps={statusBarProps} /> : <Banner />}
             {transcript}
             {snapshot.agentStatusText.length > 0 ? (
                 <AgentSpinner text={snapshot.agentStatusText} />
@@ -427,9 +413,7 @@ export function ChatApp({
                     workflowNames={snapshot.workflowNames}
                 />
             ) : null}
-            {showFileAutocomplete ? (
-                <FileAutocompletePanel fileAutocomplete={snapshot.fileAutocomplete} />
-            ) : null}
+            {showFileAutocomplete ? <FileAutocompletePanel fileAutocomplete={snapshot.fileAutocomplete} /> : null}
             <ChatInputArea
                 store={store}
                 textareaRef={textareaRef}
@@ -440,9 +424,7 @@ export function ChatApp({
                 <box marginTop={1}>
                     <StatusBar
                         {...statusBarProps}
-                        {...(snapshot.approvalLevel !== undefined
-                            ? { approvalLevel: snapshot.approvalLevel }
-                            : {})}
+                        {...(snapshot.approvalLevel !== undefined ? { approvalLevel: snapshot.approvalLevel } : {})}
                     />
                 </box>
             ) : null}

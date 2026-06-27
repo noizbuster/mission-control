@@ -1,19 +1,18 @@
 /** @jsxImportSource @opentui/react */
 import { TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/react';
-import { useCallback, useSyncExternalStore } from 'react';
 import type * as React from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
+import { createProviderPromptView } from '../commands/auth-provider-keypress-view.js';
 import {
-    type ChatStore,
-    APPROVAL_OPTIONS,
     APPROVAL_LEVEL_PICKER_ENTRIES,
+    APPROVAL_OPTIONS,
+    type ChatStore,
     createSessionPickerView,
 } from '../commands/chat-store.js';
-import { createProviderPromptView } from '../commands/auth-provider-keypress-view.js';
-import { terminalDisplayWidth } from '../commands/terminal-text.js';
-import { Separator } from './Separator.js';
+import { OverlayFrame } from './OverlayFrame.js';
+import { ACCENTS, SELECTED_BG } from './overlay-theme.js';
 
-const SELECTED_BG = '#0000ff';
 const MODEL_PICKER_MAX_VISIBLE = 10;
 
 function useStoreSnapshot(store: ChatStore) {
@@ -57,41 +56,35 @@ export function ApprovalOverlay({ store }: ApprovalOverlayProps): React.ReactNod
     });
 
     return (
-        <box flexDirection="column">
-            <Separator state="awaiting_input" />
-            <box flexDirection="column" marginTop={1} paddingLeft={1} paddingRight={1}>
-                <text fg="#ffff00" attributes={TextAttributes.BOLD | TextAttributes.INVERSE}>
-                    {' Approval Required '}
-                </text>
-                <box flexDirection="row">
-                    <text attributes={TextAttributes.BOLD}>Tool:</text>
-                    <text> {snapshot.approvalToolName}</text>
-                </box>
-                <text attributes={TextAttributes.DIM}>{snapshot.approvalAction}</text>
-                <box flexDirection="column" marginTop={1}>
-                    {APPROVAL_OPTIONS.map((option, index) => {
-                        const isSelected = index === snapshot.approvalSelectedIndex;
-                        const selectedBg = isSelected ? { bg: SELECTED_BG } : {};
-                        return (
-                            <box key={option.key} flexDirection="row">
-                                <text {...selectedBg}>
-                                    {isSelected ? '> ' : '  '}
-                                    {option.label} {' '}
-                                </text>
-                                <text attributes={TextAttributes.DIM} {...selectedBg}>
-                                    {option.description}
-                                </text>
-                            </box>
-                        );
-                    })}
-                </box>
-                <box marginTop={1}>
-                    <text attributes={TextAttributes.DIM}>
-                        Up/Down to navigate, Enter to select, Ctrl+C to deny
-                    </text>
-                </box>
+        <OverlayFrame
+            variant="modal"
+            title="Approval Required"
+            accent={ACCENTS.approval}
+            footer="Up/Down to navigate, Enter to select, Ctrl+C to deny"
+        >
+            <box flexDirection="row">
+                <text attributes={TextAttributes.BOLD}>Tool:</text>
+                <text> {snapshot.approvalToolName}</text>
             </box>
-        </box>
+            <text attributes={TextAttributes.DIM}>{snapshot.approvalAction}</text>
+            <box flexDirection="column" marginTop={1}>
+                {APPROVAL_OPTIONS.map((option, index) => {
+                    const isSelected = index === snapshot.approvalSelectedIndex;
+                    const selectedBg = isSelected ? { bg: SELECTED_BG } : {};
+                    return (
+                        <box key={option.key} flexDirection="row">
+                            <text {...selectedBg}>
+                                {isSelected ? '> ' : '  '}
+                                {option.label}{' '}
+                            </text>
+                            <text attributes={TextAttributes.DIM} {...selectedBg}>
+                                {option.description}
+                            </text>
+                        </box>
+                    );
+                })}
+            </box>
+        </OverlayFrame>
     );
 }
 
@@ -170,81 +163,77 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
         }
     });
 
+    const footerText = snapshot.questionMultiple
+        ? 'Up/Down to navigate, Space to toggle, Enter to submit, Esc to cancel'
+        : 'Up/Down to navigate, Enter to select, Esc to cancel';
+
     return (
-        <box flexDirection="column">
-            <Separator state="awaiting_input" />
-            <box flexDirection="column" marginTop={1} paddingLeft={1} paddingRight={1}>
-                <text fg="#ff00ff" attributes={TextAttributes.BOLD | TextAttributes.INVERSE}>
-                    {' Question '}
-                </text>
-                {snapshot.questionHeader.length > 0 ? (
-                    <text attributes={TextAttributes.BOLD}>{snapshot.questionHeader}</text>
-                ) : null}
-                <text>{snapshot.questionText}</text>
-                {snapshot.questionCustomMode ? (
-                    <box marginTop={1}>
-                        <box flexDirection="row">
-                            <text fg="#ff00ff">{'>'}</text>
-                            <text> {snapshot.questionCustomBuffer}</text>
-                            <text bg="#ffffff" fg="#000000">{'\u2588'}</text>
-                        </box>
-                        <text attributes={TextAttributes.DIM}>
-                            Enter to submit, Esc to go back to options, Ctrl+C to cancel
+        <OverlayFrame
+            variant="modal"
+            title="Question"
+            accent={ACCENTS.question}
+            {...(snapshot.questionCustomMode ? {} : { footer: footerText })}
+        >
+            {snapshot.questionHeader.length > 0 ? (
+                <text attributes={TextAttributes.BOLD}>{snapshot.questionHeader}</text>
+            ) : null}
+            <text>{snapshot.questionText}</text>
+            {snapshot.questionCustomMode ? (
+                <box marginTop={1}>
+                    <box flexDirection="row">
+                        <text fg="#ff00ff">{'>'}</text>
+                        <text> {snapshot.questionCustomBuffer}</text>
+                        <text bg="#ffffff" fg="#000000">
+                            {'\u2588'}
                         </text>
                     </box>
-                ) : (
-                    <box flexDirection="column" marginTop={1}>
-                        {snapshot.questionOptions.map((option, index) => {
-                            const isCursor = index === snapshot.questionSelectedIndex;
-                            const prefix = snapshot.questionMultiple
-                                ? `${snapshot.questionSelectedIndices.has(index) ? '[x] ' : '[ ] '}`
-                                : '';
-                            return (
-                                // biome-ignore lint/suspicious/noArrayIndexKey: question options are positional within a single overlay render
-                                <box key={`q-opt-${index}-${option.label}`} flexDirection="column">
-                                    <text {...(isCursor ? { bg: SELECTED_BG } : {})}>
-                                        {isCursor ? '> ' : '  '}
-                                        {prefix}
-                                        {option.label}
-                                    </text>
-                                    {option.description !== undefined ? (
-                                        <text attributes={TextAttributes.DIM}>
-                                            {`    ${option.description}`}
-                                        </text>
-                                    ) : null}
-                                </box>
-                            );
-                        })}
-                        {snapshot.questionMultiple
-                            ? null
-                            : (() => {
-                                  const customIndex = snapshot.questionOptions.length;
-                                  const isSelected = customIndex === snapshot.questionSelectedIndex;
-                                  return (
-                                      <box flexDirection="row">
-                                          <text {...(isSelected ? { bg: SELECTED_BG } : {})}>
-                                              {isSelected ? '> ' : '  '}
-                                          </text>
-                                          <text
-                                              attributes={TextAttributes.DIM}
-                                              {...(isSelected ? { bg: SELECTED_BG } : {})}
-                                          >
-                                              Type custom answer...
-                                          </text>
-                                      </box>
-                                  );
-                              })()}
-                    </box>
-                )}
-                {!snapshot.questionCustomMode ? (
                     <text attributes={TextAttributes.DIM}>
-                        {snapshot.questionMultiple
-                            ? 'Up/Down to navigate, Space to toggle, Enter to submit, Esc to cancel'
-                            : 'Up/Down to navigate, Enter to select, Esc to cancel'}
+                        Enter to submit, Esc to go back to options, Ctrl+C to cancel
                     </text>
-                ) : null}
-            </box>
-        </box>
+                </box>
+            ) : (
+                <box flexDirection="column" marginTop={1}>
+                    {snapshot.questionOptions.map((option, index) => {
+                        const isCursor = index === snapshot.questionSelectedIndex;
+                        const prefix = snapshot.questionMultiple
+                            ? `${snapshot.questionSelectedIndices.has(index) ? '[x] ' : '[ ] '}`
+                            : '';
+                        return (
+                            // biome-ignore lint/suspicious/noArrayIndexKey: question options are positional within a single overlay render
+                            <box key={`q-opt-${index}-${option.label}`} flexDirection="column">
+                                <text {...(isCursor ? { bg: SELECTED_BG } : {})}>
+                                    {isCursor ? '> ' : '  '}
+                                    {prefix}
+                                    {option.label}
+                                </text>
+                                {option.description !== undefined ? (
+                                    <text attributes={TextAttributes.DIM}>{`    ${option.description}`}</text>
+                                ) : null}
+                            </box>
+                        );
+                    })}
+                    {snapshot.questionMultiple
+                        ? null
+                        : (() => {
+                              const customIndex = snapshot.questionOptions.length;
+                              const isSelected = customIndex === snapshot.questionSelectedIndex;
+                              return (
+                                  <box flexDirection="row">
+                                      <text {...(isSelected ? { bg: SELECTED_BG } : {})}>
+                                          {isSelected ? '> ' : '  '}
+                                      </text>
+                                      <text
+                                          attributes={TextAttributes.DIM}
+                                          {...(isSelected ? { bg: SELECTED_BG } : {})}
+                                      >
+                                          Type custom answer...
+                                      </text>
+                                  </box>
+                              );
+                          })()}
+                </box>
+            )}
+        </OverlayFrame>
     );
 }
 
@@ -286,42 +275,33 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): React.Re
         id: choice.id,
         name: choice.label,
     }));
-    const view = createProviderPromptView(
-        snapshot.modelPickerKeypress,
-        promptChoices,
-        MODEL_PICKER_MAX_VISIBLE,
-    );
+    const view = createProviderPromptView(snapshot.modelPickerKeypress, promptChoices, MODEL_PICKER_MAX_VISIBLE);
 
     return (
-        <box flexDirection="column">
-            <Separator state="awaiting_input" />
-            <box flexDirection="column" marginTop={1} paddingLeft={1} paddingRight={1}>
-                <text fg="#00ffff" attributes={TextAttributes.BOLD | TextAttributes.INVERSE}>
-                    {' Select model '}
-                </text>
-                <text attributes={TextAttributes.DIM}>{`Search: ${view.searchQuery}`}</text>
-                {view.totalCount === 0 ? (
-                    <text attributes={TextAttributes.DIM}>No models match</text>
-                ) : (
-                    <text attributes={TextAttributes.DIM}>
-                        {`Showing ${view.startIndex + 1}-${view.endIndex} of ${view.totalCount}`}
-                    </text>
-                )}
-                {view.visibleChoices.map((choice, index) => {
-                    const globalIndex = view.startIndex + index;
-                    const isSelected = globalIndex === view.selectedIndex;
-                    return (
-                        <text key={choice.id} {...(isSelected ? { bg: SELECTED_BG } : {})}>
-                            {isSelected ? '> ' : '  '}
-                            {globalIndex + 1}. {choice.name}
-                        </text>
-                    );
-                })}
+        <OverlayFrame
+            variant="modal"
+            title="Select model"
+            footer="Up/Down to navigate, type to search, Backspace to delete, Enter to select, Ctrl+C to cancel"
+        >
+            <text attributes={TextAttributes.DIM}>{`Search: ${view.searchQuery}`}</text>
+            {view.totalCount === 0 ? (
+                <text attributes={TextAttributes.DIM}>No models match</text>
+            ) : (
                 <text attributes={TextAttributes.DIM}>
-                    Up/Down to navigate, type to search, Backspace to delete, Enter to select, Ctrl+C to cancel
+                    {`Showing ${view.startIndex + 1}-${view.endIndex} of ${view.totalCount}`}
                 </text>
-            </box>
-        </box>
+            )}
+            {view.visibleChoices.map((choice, index) => {
+                const globalIndex = view.startIndex + index;
+                const isSelected = globalIndex === view.selectedIndex;
+                return (
+                    <text key={choice.id} {...(isSelected ? { bg: SELECTED_BG } : {})}>
+                        {isSelected ? '> ' : '  '}
+                        {globalIndex + 1}. {choice.name}
+                    </text>
+                );
+            })}
+        </OverlayFrame>
     );
 }
 
@@ -357,28 +337,24 @@ export function LevelPickerOverlay({ store }: LevelPickerOverlayProps): React.Re
     });
 
     return (
-        <box flexDirection="column">
-            <box flexDirection="column" marginTop={1} paddingLeft={1} paddingRight={1}>
-                <text fg="#00ffff" attributes={TextAttributes.BOLD | TextAttributes.INVERSE}>
-                    {' Select approval level '}
-                </text>
-                {APPROVAL_LEVEL_PICKER_ENTRIES.map((level, index) => {
-                    const isSelected = index === snapshot.levelPickerSelectedIndex;
-                    return (
-                        <box key={level.id} flexDirection="row">
-                            <text {...(isSelected ? { bg: SELECTED_BG } : {})}>
-                                {isSelected ? '> ' : '  '}
-                                {level.label.padEnd(13)}
-                            </text>
-                            <text attributes={TextAttributes.DIM}>{level.desc}</text>
-                        </box>
-                    );
-                })}
-                <text attributes={TextAttributes.DIM}>
-                    {'Up/Down to navigate, Enter to select, Ctrl+C to cancel'}
-                </text>
-            </box>
-        </box>
+        <OverlayFrame
+            variant="modal"
+            title="Select approval level"
+            footer="Up/Down to navigate, Enter to select, Ctrl+C to cancel"
+        >
+            {APPROVAL_LEVEL_PICKER_ENTRIES.map((level, index) => {
+                const isSelected = index === snapshot.levelPickerSelectedIndex;
+                return (
+                    <box key={level.id} flexDirection="row">
+                        <text {...(isSelected ? { bg: SELECTED_BG } : {})}>
+                            {isSelected ? '> ' : '  '}
+                            {level.label.padEnd(13)}
+                        </text>
+                        <text attributes={TextAttributes.DIM}>{level.desc}</text>
+                    </box>
+                );
+            })}
+        </OverlayFrame>
     );
 }
 
@@ -411,20 +387,16 @@ export function RenameOverlay({ store }: RenameOverlayProps): React.ReactNode {
     });
 
     return (
-        <box flexDirection="column">
-            <box flexDirection="column" marginTop={1} paddingLeft={1} paddingRight={1}>
-                <text fg="#00ffff" attributes={TextAttributes.BOLD | TextAttributes.INVERSE}>
-                    {' Rename Session '}
+        <OverlayFrame variant="modal" title="Rename Session" footer="Enter to confirm, Esc to cancel">
+            <text>Enter new session name:</text>
+            <box flexDirection="row">
+                <text fg="#00ffff">{'>'}</text>
+                <text> {snapshot.renameBuffer}</text>
+                <text bg="#ffffff" fg="#000000">
+                    {'\u2588'}
                 </text>
-                <text>Enter new session name:</text>
-                <box flexDirection="row">
-                    <text fg="#00ffff">{'>'}</text>
-                    <text> {snapshot.renameBuffer}</text>
-                    <text bg="#ffffff" fg="#000000">{'\u2588'}</text>
-                </box>
-                <text attributes={TextAttributes.DIM}>Enter to confirm, Esc to cancel</text>
             </box>
-        </box>
+        </OverlayFrame>
     );
 }
 
@@ -456,35 +428,30 @@ export function SessionPickerOverlay({ store }: SessionPickerOverlayProps): Reac
     );
 
     return (
-        <box flexDirection="column">
-            <Separator state="awaiting_input" />
-            <box flexDirection="column" marginTop={1} paddingLeft={1} paddingRight={1}>
-                <text fg="#00ffff" attributes={TextAttributes.BOLD | TextAttributes.INVERSE}>
-                    {' Select session '}
-                </text>
-                <text attributes={TextAttributes.DIM}>{`Search: ${view.searchQuery}`}</text>
-                {view.totalCount === 0 ? (
-                    <text attributes={TextAttributes.DIM}>No sessions match</text>
-                ) : (
-                    <text attributes={TextAttributes.DIM}>
-                        {`Showing ${view.startIndex + 1}-${view.endIndex} of ${view.totalCount}`}
-                    </text>
-                )}
-                {view.visibleEntries.map((entry, index) => {
-                    const globalIndex = view.startIndex + index;
-                    const isSelected = globalIndex === view.selectedIndex;
-                    return (
-                        <text key={entry.sessionId} {...(isSelected ? { bg: SELECTED_BG } : {})}>
-                            {isSelected ? '> ' : '  '}
-                            {`${entry.sessionId}  ${entry.label}`}
-                            {entry.updatedAt !== undefined ? `  (${entry.updatedAt})` : ''}
-                        </text>
-                    );
-                })}
+        <OverlayFrame
+            variant="modal"
+            title="Select session"
+            footer="Up/Down to navigate, type to search, Enter to attach, Ctrl+C to cancel"
+        >
+            <text attributes={TextAttributes.DIM}>{`Search: ${view.searchQuery}`}</text>
+            {view.totalCount === 0 ? (
+                <text attributes={TextAttributes.DIM}>No sessions match</text>
+            ) : (
                 <text attributes={TextAttributes.DIM}>
-                    Up/Down to navigate, type to search, Enter to attach, Ctrl+C to cancel
+                    {`Showing ${view.startIndex + 1}-${view.endIndex} of ${view.totalCount}`}
                 </text>
-            </box>
-        </box>
+            )}
+            {view.visibleEntries.map((entry, index) => {
+                const globalIndex = view.startIndex + index;
+                const isSelected = globalIndex === view.selectedIndex;
+                return (
+                    <text key={entry.sessionId} {...(isSelected ? { bg: SELECTED_BG } : {})}>
+                        {isSelected ? '> ' : '  '}
+                        {`${entry.sessionId}  ${entry.label}`}
+                        {entry.updatedAt !== undefined ? `  (${entry.updatedAt})` : ''}
+                    </text>
+                );
+            })}
+        </OverlayFrame>
     );
 }
