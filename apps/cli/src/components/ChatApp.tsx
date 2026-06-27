@@ -17,6 +17,7 @@ import {
     ModelPickerOverlay,
     LevelPickerOverlay,
     RenameOverlay,
+    SessionPickerOverlay,
 } from './OverlayPanels.js';
 import type { ChatStore } from '../commands/chat-store.js';
 import { extractLastAssistantText, parseMessageBlocks } from '../commands/chat-blocks.js';
@@ -352,6 +353,15 @@ export function ChatApp({
             <box flexDirection="column" width="100%">
                 {transcript}
                 <RenameOverlay store={store} />
+            </box>
+        );
+    }
+
+    if (snapshot.overlayMode === 'session-picker') {
+        return (
+            <box flexDirection="column" width="100%">
+                {transcript}
+                <SessionPickerOverlay store={store} />
             </box>
         );
     }

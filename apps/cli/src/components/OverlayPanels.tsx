@@ -7,6 +7,7 @@ import {
     type ChatStore,
     APPROVAL_OPTIONS,
     APPROVAL_LEVEL_PICKER_ENTRIES,
+    createSessionPickerView,
 } from '../commands/chat-store.js';
 import { createProviderPromptView } from '../commands/auth-provider-keypress-view.js';
 import { terminalDisplayWidth } from '../commands/terminal-text.js';
@@ -422,6 +423,67 @@ export function RenameOverlay({ store }: RenameOverlayProps): React.ReactNode {
                     <text bg="#ffffff" fg="#000000">{'\u2588'}</text>
                 </box>
                 <text attributes={TextAttributes.DIM}>Enter to confirm, Esc to cancel</text>
+            </box>
+        </box>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// SessionPickerOverlay
+// ---------------------------------------------------------------------------
+
+export type SessionPickerOverlayProps = { readonly store: ChatStore };
+
+export function SessionPickerOverlay({ store }: SessionPickerOverlayProps): React.ReactNode {
+    const snapshot = useStoreSnapshot(store);
+
+    useKeyboard((key) => {
+        if (key.name === 'return') {
+            store.confirmSessionPicker();
+            return;
+        }
+        if ((key.ctrl && key.name === 'c') || key.name === 'escape') {
+            store.cancelSessionPicker();
+            return;
+        }
+        store.updateSessionPickerSearch(key.sequence);
+    });
+
+    const view = createSessionPickerView(
+        snapshot.sessionPickerKeypress,
+        snapshot.sessionPickerEntries,
+        MODEL_PICKER_MAX_VISIBLE,
+    );
+
+    return (
+        <box flexDirection="column">
+            <Separator state="awaiting_input" />
+            <box flexDirection="column" marginTop={1} paddingLeft={1} paddingRight={1}>
+                <text fg="#00ffff" attributes={TextAttributes.BOLD | TextAttributes.INVERSE}>
+                    {' Select session '}
+                </text>
+                <text attributes={TextAttributes.DIM}>{`Search: ${view.searchQuery}`}</text>
+                {view.totalCount === 0 ? (
+                    <text attributes={TextAttributes.DIM}>No sessions match</text>
+                ) : (
+                    <text attributes={TextAttributes.DIM}>
+                        {`Showing ${view.startIndex + 1}-${view.endIndex} of ${view.totalCount}`}
+                    </text>
+                )}
+                {view.visibleEntries.map((entry, index) => {
+                    const globalIndex = view.startIndex + index;
+                    const isSelected = globalIndex === view.selectedIndex;
+                    return (
+                        <text key={entry.sessionId} {...(isSelected ? { bg: SELECTED_BG } : {})}>
+                            {isSelected ? '> ' : '  '}
+                            {`${entry.sessionId}  ${entry.label}`}
+                            {entry.updatedAt !== undefined ? `  (${entry.updatedAt})` : ''}
+                        </text>
+                    );
+                })}
+                <text attributes={TextAttributes.DIM}>
+                    Up/Down to navigate, type to search, Enter to attach, Ctrl+C to cancel
+                </text>
             </box>
         </box>
     );

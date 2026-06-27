@@ -1,6 +1,7 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
 import type { ApprovalLevel } from './approval-level.js';
+import type { SessionPickerEntry } from './chat-store.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
 import type { ModelChoice } from './interactive-chat-model.js';
 import type { QuestionOption } from './question-types.js';
@@ -12,6 +13,7 @@ export type OpenTuiChatBridge = {
     readonly replaceOutputText: (text: string) => void;
     readonly getOutput: () => string;
     readonly showModelPicker: (choices: readonly ModelChoice[]) => Promise<ModelProviderSelection | undefined>;
+    readonly showSessionPicker: (entries: readonly SessionPickerEntry[]) => Promise<string | undefined>;
     readonly showLevelPicker: (currentLevel?: string) => Promise<string | undefined>;
     readonly setApprovalLevel: (level: ApprovalLevel | undefined) => void;
     readonly setModelCycleChoices: (choices: readonly ModelChoice[]) => void;

@@ -31,6 +31,7 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Op
         replaceOutputText: (text) => store.replaceOutputText(text),
         getOutput: () => store.getOutput(),
         showModelPicker: (choices) => store.showModelPicker(choices),
+        showSessionPicker: (entries) => store.showSessionPicker(entries),
         showLevelPicker: (currentLevel?) => store.showLevelPicker(currentLevel),
         showApproval: (toolName, action) => store.showApproval(toolName, action),
         hideApproval: () => store.hideApproval(),
