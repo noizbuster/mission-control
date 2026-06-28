@@ -1,11 +1,12 @@
 /** @jsxImportSource @opentui/react */
-import type { TextareaRenderable, ScrollBoxRenderable } from '@opentui/core';
+
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import { createRef } from 'react';
-import type { OpenTuiChatBridge } from './chat-tui-types.js';
-import type { ApprovalLevel } from './approval-level.js';
-import { createChatStore, type ChatStore } from './chat-store.js';
 import type { StatusBarProps } from '../components/StatusBar.js';
+import type { ApprovalLevel } from './approval-level.js';
+import { type ChatStore, createChatStore } from './chat-store.js';
+import type { OpenTuiChatBridge } from './chat-tui-types.js';
 
 export type ChatTuiOptions = {
     readonly providerID: string;
@@ -44,6 +45,7 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Op
         setWorkflowNames: (names) => store.setWorkflowNames(names),
         setModelCycleChoices: (choices) => store.setModelCycleChoices(choices),
         setApprovalLevel: (level) => store.setApprovalLevel(level),
+        setSessionId: (id) => store.setSessionId(id),
         applyAbgOverlayPrefs: (prefs) => store.applyAbgOverlayPrefs(prefs),
         getAbgOverlayPrefsSnapshot: () => store.getAbgOverlayPrefsSnapshot(),
         get onModelCycleSelect(): ((selection: ModelProviderSelection) => void) | undefined {
@@ -77,9 +79,7 @@ export async function createChatTui(options: ChatTuiOptions): Promise<OpenTuiCha
         ...(options.initialHistoryEntries !== undefined
             ? { initialHistoryEntries: options.initialHistoryEntries }
             : {}),
-        ...(options.initialApprovalLevel !== undefined
-            ? { initialApprovalLevel: options.initialApprovalLevel }
-            : {}),
+        ...(options.initialApprovalLevel !== undefined ? { initialApprovalLevel: options.initialApprovalLevel } : {}),
     });
 
     const { useRenderer } = await import('@opentui/react');

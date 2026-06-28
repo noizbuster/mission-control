@@ -16,6 +16,7 @@ export type OpenTuiChatBridge = {
     readonly showSessionPicker: (entries: readonly SessionPickerEntry[]) => Promise<string | undefined>;
     readonly showLevelPicker: (currentLevel?: string) => Promise<string | undefined>;
     readonly setApprovalLevel: (level: ApprovalLevel | undefined) => void;
+    readonly setSessionId: (sessionId: string) => void;
     readonly setModelCycleChoices: (choices: readonly ModelChoice[]) => void;
     onModelCycleSelect: ((selection: ModelProviderSelection) => void) | undefined;
     onRenameSubmit: ((name: string) => void) | undefined;

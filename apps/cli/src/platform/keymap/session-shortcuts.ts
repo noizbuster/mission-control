@@ -151,6 +151,12 @@ export interface SessionShortcutsLayerOptions {
      * per-session instance owned by the layer.
      */
     readonly stash?: PromptStash;
+    /**
+     * Extra enabled gate (AND-ed with the default always-on). When false the
+     * layer's bindings (e.g. bare `up` -> session.tree.parent) stay dormant so
+     * they don't swallow keys that a modal overlay's useKeyboard should own.
+     */
+    readonly isEnabled?: () => boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -299,7 +305,7 @@ export function registerSessionShortcutsLayer<TTarget extends object, TEvent ext
 
     return keymap.registerLayer({
         priority: SESSION_SHORTCUTS_LAYER_PRIORITY,
-        enabled: () => true,
+        enabled: () => options.isEnabled?.() ?? true,
         commands,
         bindings: sessionShortcutBindings(),
     });

@@ -4,20 +4,17 @@ import type { KeyEvent, PasteEvent, ScrollBoxRenderable, TextareaRenderable } fr
 import { decodePasteBytes } from '@opentui/core';
 import type * as React from 'react';
 import { useCallback, useRef, useSyncExternalStore } from 'react';
-import { ChatInputTextarea } from './ChatInputTextarea.js';
-import { Separator } from './Separator.js';
 import type { ChatStore } from '../commands/chat-store.js';
-import { resolveSeparatorState } from '../commands/separator-state.js';
 import {
     isSlashCommandMenuOpen,
     isWorkflowCommandMenuOpen,
+    resolveSlashCommandMenuInsertText,
     resolveSlashCommandMenuSubmission,
     resolveWorkflowCommandMenuInsertText,
     resolveWorkflowCommandMenuSubmission,
 } from '../commands/interactive-chat-command-menu.js';
 import { buildFileAutocompleteCompletion } from '../commands/interactive-chat-file-autocomplete.js';
-import { evaluatePaste, makeMarker } from '../platform/keymap/bracketed-paste.js';
-import { collectDiffEntries } from '../platform/keymap/diff-viewer.js';
+import { resolveSeparatorState } from '../commands/separator-state.js';
 import {
     clipboardImageControls,
     editorControls,
@@ -25,6 +22,10 @@ import {
     SUSPEND_UNSUPPORTED_MESSAGE,
     suspendControls,
 } from '../commands/terminal-controls.js';
+import { evaluatePaste, makeMarker } from '../platform/keymap/bracketed-paste.js';
+import { collectDiffEntries } from '../platform/keymap/diff-viewer.js';
+import { ChatInputTextarea } from './ChatInputTextarea.js';
+import { Separator } from './Separator.js';
 import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -47,12 +48,7 @@ export type ChatInputAreaProps = {
     readonly focused: boolean;
 };
 
-export function ChatInputArea({
-    store,
-    textareaRef,
-    scrollboxRef,
-    focused,
-}: ChatInputAreaProps): React.ReactNode {
+export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: ChatInputAreaProps): React.ReactNode {
     const subscribe = useCallback((cb: () => void) => store.subscribe(cb), [store]);
     const getSnapshot = useCallback(() => store.getSnapshot(), [store]);
     const snapshot = useSyncExternalStore(subscribe, getSnapshot);
@@ -99,6 +95,16 @@ export function ChatInputArea({
                             snap.workflowNames,
                         );
                         if (insertText !== undefined) {
+                            textareaRef.current?.setText(insertText);
+                            textareaRef.current?.gotoBufferEnd();
+                            store.setInputMirror(insertText);
+                            return;
+                        }
+                    }
+
+                    if (captured.startsWith('/')) {
+                        const insertText = resolveSlashCommandMenuInsertText(captured, snap.menuState);
+                        if (insertText !== undefined && insertText.trimEnd() !== captured.trimEnd()) {
                             textareaRef.current?.setText(insertText);
                             textareaRef.current?.gotoBufferEnd();
                             store.setInputMirror(insertText);

@@ -109,6 +109,7 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
             }
             if (key.ctrl && key.name === 'c') {
                 store.resolveQuestion('');
+                store.sendInterrupt('ctrl-c');
                 return;
             }
             if (key.name === 'backspace') {
@@ -154,11 +155,17 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
             return;
         }
         if (key.name === 'escape') {
+            // ESC cancels the question AND aborts the run. resolveQuestion
+            // unblocks the ask_user tool (which is awaiting this promise); without
+            // it, sendInterrupt could not be processed because the runner is
+            // blocked on the same await.
             store.resolveQuestion('');
+            store.sendInterrupt('esc');
             return;
         }
         if (key.ctrl && key.name === 'c') {
             store.resolveQuestion('');
+            store.sendInterrupt('ctrl-c');
             return;
         }
     });

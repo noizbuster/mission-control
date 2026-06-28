@@ -19,10 +19,10 @@ describe('overlay-theme ACCENTS', () => {
 });
 
 describe('resolveOverlayChrome variant chrome flags', () => {
-    it('marks the modal variant inverse+separator+bold', () => {
+    it('marks the modal variant inverse+bold (no separator; the popup border delineates)', () => {
         const chrome = resolveOverlayChrome('modal');
         expect(chrome.inverse).toBe(true);
-        expect(chrome.separator).toBe(true);
+        expect(chrome.separator).toBe(false);
         expect(chrome.bold).toBe(true);
     });
 

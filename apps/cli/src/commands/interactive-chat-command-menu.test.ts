@@ -7,10 +7,11 @@ import {
     isWorkflowCommandMenuOpen,
     reduceSlashCommandMenuSelection,
     reduceWorkflowCommandMenuSelection,
+    resolveSlashCommandMenuInsertText,
     resolveSlashCommandMenuSubmission,
     resolveWorkflowCommandMenuInsertText,
-    slashCommandChoices,
     type SlashCommandMenuChoice,
+    slashCommandChoices,
 } from './interactive-chat-command-menu.js';
 import {
     deleteTerminalChatInputCharacterBeforeCursor,
@@ -280,9 +281,31 @@ describe('interactive chat command menu', () => {
     });
 
     it('returns undefined when the workflow menu is closed or has no selection', () => {
-        expect(resolveWorkflowCommandMenuInsertText('#planner ', createSlashCommandMenuState(), ['planner'])).toBeUndefined();
-        expect(resolveWorkflowCommandMenuInsertText('plain', createSlashCommandMenuState(), ['planner'])).toBeUndefined();
-        expect(resolveWorkflowCommandMenuInsertText('#zzz', createSlashCommandMenuState(), ['planner'])).toBeUndefined();
+        expect(
+            resolveWorkflowCommandMenuInsertText('#planner ', createSlashCommandMenuState(), ['planner']),
+        ).toBeUndefined();
+        expect(
+            resolveWorkflowCommandMenuInsertText('plain', createSlashCommandMenuState(), ['planner']),
+        ).toBeUndefined();
+        expect(
+            resolveWorkflowCommandMenuInsertText('#zzz', createSlashCommandMenuState(), ['planner']),
+        ).toBeUndefined();
+    });
+
+    it('returns the slash insertText (with a trailing space) for the selected choice', () => {
+        const initial = createSlashCommandMenuState();
+
+        expect(resolveSlashCommandMenuInsertText('/', initial)).toBe('/model ');
+        expect(resolveSlashCommandMenuInsertText('/mo', initial)).toBe('/model ');
+
+        const down = reduceSlashCommandMenuSelection(initial, '\u001b[B', '/');
+        expect(resolveSlashCommandMenuInsertText('/', down)).toBe('/model pick ');
+    });
+
+    it('returns undefined when the slash menu is closed or has no selection', () => {
+        expect(resolveSlashCommandMenuInsertText('/model ', createSlashCommandMenuState())).toBeUndefined();
+        expect(resolveSlashCommandMenuInsertText('plain', createSlashCommandMenuState())).toBeUndefined();
+        expect(resolveSlashCommandMenuInsertText('/zzz', createSlashCommandMenuState())).toBeUndefined();
     });
 
     it('reports the slash menu open only while the command token has no whitespace', () => {
@@ -305,16 +328,14 @@ describe('interactive chat command menu', () => {
     });
 
     it('marks /approval, /model, and /model pick as opening a secondary picker', () => {
-        const find = (id: string): SlashCommandMenuChoice | undefined =>
-            slashCommandChoices.find((c) => c.id === id);
+        const find = (id: string): SlashCommandMenuChoice | undefined => slashCommandChoices.find((c) => c.id === id);
         expect(find('/approval')?.opensPicker).toBe(true);
         expect(find('/model')?.opensPicker).toBe(true);
         expect(find('/model pick')?.opensPicker).toBe(true);
     });
 
     it('does not mark plain commands as opening a picker', () => {
-        const find = (id: string): SlashCommandMenuChoice | undefined =>
-            slashCommandChoices.find((c) => c.id === id);
+        const find = (id: string): SlashCommandMenuChoice | undefined => slashCommandChoices.find((c) => c.id === id);
         expect(find('/exit')?.opensPicker).not.toBe(true);
         expect(find('/help')?.opensPicker).not.toBe(true);
         expect(find('/sessions')?.opensPicker).not.toBe(true);

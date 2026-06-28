@@ -138,6 +138,7 @@ export const MESSAGES_SCROLL_LAYER_PRIORITY = -100;
 export function registerMessagesScrollLayer<TTarget extends object, TEvent extends KeymapEvent>(
     keymap: Keymap<TTarget, TEvent>,
     deps: MessagesScrollDeps,
+    options: { readonly isEnabled?: () => boolean } = {},
 ): () => void {
     const { scrollboxRef, clipboardService, getLastAssistantText } = deps;
 
@@ -207,7 +208,7 @@ export function registerMessagesScrollLayer<TTarget extends object, TEvent exten
 
     return keymap.registerLayer({
         priority: MESSAGES_SCROLL_LAYER_PRIORITY,
-        enabled: () => true,
+        enabled: () => options.isEnabled?.() ?? true,
         commands,
         bindings: messagesScrollBindings(),
     });

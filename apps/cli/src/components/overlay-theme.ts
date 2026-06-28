@@ -43,7 +43,7 @@ export type OverlayChrome = OverlayChromeFlags & {
 function flagsForVariant(variant: OverlayVariant): OverlayChromeFlags {
     switch (variant) {
         case 'modal':
-            return { inverse: true, separator: true, bold: true };
+            return { inverse: true, separator: false, bold: true };
         case 'panel':
             return { inverse: false, separator: false, bold: true };
         case 'view':

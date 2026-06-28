@@ -24,6 +24,8 @@ import type { ApprovalLevel } from './approval-level.js';
 import { approvalLevelRules } from './approval-level.js';
 import { parseChatLine } from './chat-commands.js';
 import type { SessionPickerEntry } from './chat-store.js';
+import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './chat-tui-types.js';
+import { type ChatTuiOptions, createChatTui } from './create-chat-tui.js';
 import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
 import type { ChatActionResult } from './interactive-chat-action-result.js';
 import { runChatAction } from './interactive-chat-actions.js';
@@ -45,14 +47,12 @@ import {
 } from './interactive-chat-loop-support.js';
 import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
 import { createTerminalModelSelector } from './interactive-chat-model-selector.js';
-import type { EnsuredSession } from './run-agent-session.js';
 import { createSessionNavigationController } from './interactive-chat-session-navigation.js';
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
-import { createChatTui, type ChatTuiOptions } from './create-chat-tui.js';
-import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './chat-tui-types.js';
 import { loadPricingTable } from './pricing-table-store.js';
+import type { EnsuredSession } from './run-agent-session.js';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
@@ -197,6 +197,7 @@ export async function runInteractiveChatSession(
     let turnCounter = 0;
     const inputPump = new ChatInputPump(chatInput);
     let currentSessionId = options.sessionId;
+    tuiBridge?.setSessionId(currentSessionId ?? '');
     let currentProvider = options.resolveProviderForSelection?.(currentModelProviderSelection) ?? options.provider;
     let currentSessionStore = options.sessionStore;
     let currentApprovalLevel: ApprovalLevel | undefined = options.initialApprovalLevel;
@@ -395,6 +396,7 @@ export async function runInteractiveChatSession(
             ) {
                 const ensured = await options.ensureSession();
                 currentSessionId = ensured.sessionId;
+                tuiBridge?.setSessionId(currentSessionId);
                 currentSessionStore = ensured.store;
             }
             let result: ChatActionResult;
@@ -505,6 +507,7 @@ export async function runInteractiveChatSession(
             currentModelProviderSelection = result.modelProviderSelection;
             activeTurn = result.activeTurn;
             currentSessionId = result.sessionId ?? currentSessionId;
+            tuiBridge?.setSessionId(currentSessionId ?? '');
             currentSessionStore = result.sessionStore ?? currentSessionStore;
             if (result.approvalLevel !== undefined) {
                 currentApprovalLevel = result.approvalLevel;

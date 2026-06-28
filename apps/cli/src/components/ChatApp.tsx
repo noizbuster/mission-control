@@ -7,6 +7,10 @@ import type * as React from 'react';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { extractLastAssistantText, parseMessageBlocks } from '../commands/chat-blocks.js';
 import type { ChatStore } from '../commands/chat-store.js';
+import {
+    resolveSlashCommandMenuInsertText,
+    resolveWorkflowCommandMenuInsertText,
+} from '../commands/interactive-chat-command-menu.js';
 import { createClipboardService } from '../platform/clipboard-service.js';
 import { Banner } from './Banner.js';
 import { ChatInputArea } from './ChatInputArea.js';
@@ -71,6 +75,32 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
                 setTimeout(() => {
                     try {
                         if (captured.trim() === '') return;
+                        const snap = store.getSnapshot();
+
+                        if (captured.startsWith('#')) {
+                            const insertText = resolveWorkflowCommandMenuInsertText(
+                                captured,
+                                snap.menuState,
+                                snap.workflowNames,
+                            );
+                            if (insertText !== undefined) {
+                                textareaRef.current?.setText(insertText);
+                                textareaRef.current?.gotoBufferEnd();
+                                store.setInputMirror(insertText);
+                                return;
+                            }
+                        }
+
+                        if (captured.startsWith('/')) {
+                            const insertText = resolveSlashCommandMenuInsertText(captured, snap.menuState);
+                            if (insertText !== undefined && insertText.trimEnd() !== captured.trimEnd()) {
+                                textareaRef.current?.setText(insertText);
+                                textareaRef.current?.gotoBufferEnd();
+                                store.setInputMirror(insertText);
+                                return;
+                            }
+                        }
+
                         store.submitLine(captured);
                         textareaRef.current?.clear();
                     } finally {
@@ -196,11 +226,15 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
         let cleanup: (() => void) | undefined;
         void import('../platform/keymap/messages-scroll.js').then(({ registerMessagesScrollLayer }) => {
             if (disposed) return;
-            cleanup = registerMessagesScrollLayer(keymap, {
-                scrollboxRef,
-                clipboardService: createClipboardService(renderer),
-                getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
-            });
+            cleanup = registerMessagesScrollLayer(
+                keymap,
+                {
+                    scrollboxRef,
+                    clipboardService: createClipboardService(renderer),
+                    getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
+                },
+                { isEnabled: () => store.getSnapshot().overlayMode === 'none' },
+            );
         });
         return (): void => {
             disposed = true;
@@ -244,28 +278,32 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
         let cleanup: (() => void) | undefined;
         void import('../platform/keymap/session-shortcuts.js').then(({ registerSessionShortcutsLayer }) => {
             if (disposed) return;
-            cleanup = registerSessionShortcutsLayer(keymap, {
-                navigateSessionTree: () => store.sendSlashCommand('/tree'),
-                captureInput: () => ({
-                    text: textareaRef.current?.plainText ?? '',
-                    cursor: textareaRef.current?.cursorOffset ?? 0,
-                }),
-                clearInput: () => {
-                    textareaRef.current?.clear();
-                    store.setInputMirror('');
+            cleanup = registerSessionShortcutsLayer(
+                keymap,
+                {
+                    navigateSessionTree: () => store.sendSlashCommand('/tree'),
+                    captureInput: () => ({
+                        text: textareaRef.current?.plainText ?? '',
+                        cursor: textareaRef.current?.cursorOffset ?? 0,
+                    }),
+                    clearInput: () => {
+                        textareaRef.current?.clear();
+                        store.setInputMirror('');
+                    },
+                    restoreInput: (entry) => {
+                        const textarea = textareaRef.current;
+                        if (textarea !== null) {
+                            textarea.setText(entry.text);
+                            textarea.cursorOffset = entry.cursor;
+                        }
+                        store.setInputMirror(entry.text);
+                    },
+                    emitNotice: (text) => {
+                        store.emitOutput(text);
+                    },
                 },
-                restoreInput: (entry) => {
-                    const textarea = textareaRef.current;
-                    if (textarea !== null) {
-                        textarea.setText(entry.text);
-                        textarea.cursorOffset = entry.cursor;
-                    }
-                    store.setInputMirror(entry.text);
-                },
-                emitNotice: (text) => {
-                    store.emitOutput(text);
-                },
-            });
+                { isEnabled: () => store.getSnapshot().overlayMode === 'none' },
+            );
         });
         return (): void => {
             disposed = true;
@@ -305,60 +343,6 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
             toolOutputExpanded={snapshot.toolOutputExpanded}
         />
     );
-
-    if (snapshot.overlayMode === 'approval') {
-        return (
-            <box flexDirection="column" width="100%">
-                {transcript}
-                <ApprovalOverlay store={store} />
-            </box>
-        );
-    }
-
-    if (snapshot.overlayMode === 'question') {
-        return (
-            <box flexDirection="column" width="100%">
-                {transcript}
-                <QuestionOverlay store={store} />
-            </box>
-        );
-    }
-
-    if (snapshot.overlayMode === 'model-picker') {
-        return (
-            <box flexDirection="column" width="100%">
-                {transcript}
-                <ModelPickerOverlay store={store} />
-            </box>
-        );
-    }
-
-    if (snapshot.overlayMode === 'level-picker') {
-        return (
-            <box flexDirection="column" width="100%">
-                {transcript}
-                <LevelPickerOverlay store={store} />
-            </box>
-        );
-    }
-
-    if (snapshot.overlayMode === 'rename') {
-        return (
-            <box flexDirection="column" width="100%">
-                {transcript}
-                <RenameOverlay store={store} />
-            </box>
-        );
-    }
-
-    if (snapshot.overlayMode === 'session-picker') {
-        return (
-            <box flexDirection="column" width="100%">
-                {transcript}
-                <SessionPickerOverlay store={store} />
-            </box>
-        );
-    }
 
     if (snapshot.overlayMode === 'abg') {
         return (
@@ -425,9 +409,58 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
                     <StatusBar
                         {...statusBarProps}
                         {...(snapshot.approvalLevel !== undefined ? { approvalLevel: snapshot.approvalLevel } : {})}
+                        {...(statusBarProps.sessionID === undefined && snapshot.sessionId.length > 0
+                            ? { sessionID: snapshot.sessionId }
+                            : {})}
                     />
                 </box>
             ) : null}
+            {snapshot.overlayMode === 'approval' ? (
+                <ModalPopup>
+                    <ApprovalOverlay store={store} />
+                </ModalPopup>
+            ) : null}
+            {snapshot.overlayMode === 'question' ? (
+                <ModalPopup>
+                    <QuestionOverlay store={store} />
+                </ModalPopup>
+            ) : null}
+            {snapshot.overlayMode === 'model-picker' ? (
+                <ModalPopup>
+                    <ModelPickerOverlay store={store} />
+                </ModalPopup>
+            ) : null}
+            {snapshot.overlayMode === 'level-picker' ? (
+                <ModalPopup>
+                    <LevelPickerOverlay store={store} />
+                </ModalPopup>
+            ) : null}
+            {snapshot.overlayMode === 'rename' ? (
+                <ModalPopup>
+                    <RenameOverlay store={store} />
+                </ModalPopup>
+            ) : null}
+            {snapshot.overlayMode === 'session-picker' ? (
+                <ModalPopup>
+                    <SessionPickerOverlay store={store} />
+                </ModalPopup>
+            ) : null}
+        </box>
+    );
+}
+
+function ModalPopup({ children }: { readonly children: React.ReactNode }): React.ReactNode {
+    return (
+        <box
+            position="absolute"
+            top={1}
+            left={2}
+            right={2}
+            backgroundColor="#0a0a0a"
+            borderStyle="single"
+            borderColor="#808080"
+        >
+            {children}
         </box>
     );
 }

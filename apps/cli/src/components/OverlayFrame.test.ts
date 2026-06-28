@@ -9,9 +9,9 @@ describe('OverlayFrame export shape', () => {
 });
 
 describe('OverlayFrame chrome wire-up contract', () => {
-    it('resolves modal chrome with separator so <Separator> renders first', () => {
+    it('resolves modal chrome inverse+bold (separator suppressed; popup border delineates)', () => {
         const chrome = resolveOverlayChrome('modal');
-        expect(chrome.separator).toBe(true);
+        expect(chrome.separator).toBe(false);
         expect(chrome.inverse).toBe(true);
         expect(chrome.bold).toBe(true);
     });

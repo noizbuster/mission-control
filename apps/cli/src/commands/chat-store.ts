@@ -2,28 +2,28 @@
 // matching initial-state literal are pure data tables dictated by the bridge
 // core contract, and every action mutates the same state object.
 import { type ModelProviderSelection } from '@mission-control/protocol';
-import { type ApprovalLevel, APPROVAL_LEVELS, isApprovalLevel } from './approval-level.js';
-import type { ChatInputEvent } from './interactive-chat-io.js';
-import type { ModelChoice } from './interactive-chat-model.js';
+import { PasteMarkerStore } from '../platform/keymap/bracketed-paste.js';
+import type { DiffEntry } from '../platform/keymap/diff-viewer.js';
+import { APPROVAL_LEVELS, type ApprovalLevel, isApprovalLevel } from './approval-level.js';
 import {
-    type SlashCommandMenuState,
+    createProviderPromptKeypressState,
+    filterProviderPromptChoices,
+    type ProviderPromptKeypressState,
+    reduceProviderPromptKeypress,
+} from './auth-provider-keypress.js';
+import {
     createSlashCommandMenuState,
     reduceSlashCommandMenuSelection,
     reduceWorkflowCommandMenuSelection,
+    type SlashCommandMenuState,
 } from './interactive-chat-command-menu.js';
 import {
-    type FileAutocompleteState,
     createFileAutocompleteState,
+    type FileAutocompleteState,
     navigateFileAutocompleteDown,
     navigateFileAutocompleteUp,
     updateFileAutocomplete,
 } from './interactive-chat-file-autocomplete.js';
-import {
-    type ProviderPromptKeypressState,
-    createProviderPromptKeypressState,
-    filterProviderPromptChoices,
-    reduceProviderPromptKeypress,
-} from './auth-provider-keypress.js';
 import {
     type ChatInputHistory,
     createChatInputHistory,
@@ -33,9 +33,9 @@ import {
     navigateChatInputHistoryUp,
     recordSubmittedPrompt,
 } from './interactive-chat-input-history.js';
-import { type QuestionOption, normalizeQuestionOptions } from './question-types.js';
-import type { DiffEntry } from '../platform/keymap/diff-viewer.js';
-import { PasteMarkerStore } from '../platform/keymap/bracketed-paste.js';
+import type { ChatInputEvent } from './interactive-chat-io.js';
+import type { ModelChoice } from './interactive-chat-model.js';
+import { normalizeQuestionOptions, type QuestionOption } from './question-types.js';
 
 export type ChatStoreOverlayMode =
     | 'none'
@@ -68,6 +68,7 @@ export type SessionPickerView = {
 
 export type ChatStoreState = {
     readonly outputText: string;
+    readonly sessionId: string;
     readonly inputMirror: string;
     readonly generating: boolean;
     readonly agentStatusText: string;
@@ -141,7 +142,11 @@ export const APPROVAL_OPTIONS = [
     { key: 'deny', label: 'Deny', description: 'block this request' },
 ] as const;
 
-export const APPROVAL_LEVEL_PICKER_ENTRIES: readonly { readonly id: string; readonly label: string; readonly desc: string }[] = [
+export const APPROVAL_LEVEL_PICKER_ENTRIES: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly desc: string;
+}[] = [
     { id: 'verbose', label: 'verbose', desc: 'Ask for every tool call, including reads' },
     { id: 'safe', label: 'safe', desc: 'Auto-approve reads and webfetch; ask before modifications' },
     { id: 'aggressive', label: 'aggressive', desc: 'Auto-approve reads, edits, webfetch, subagent; ask before bash' },
@@ -188,6 +193,7 @@ export class ChatStore {
                 : createChatInputHistory();
         this.state = {
             outputText: '',
+            sessionId: '',
             inputMirror: '',
             generating: false,
             agentStatusText: '',
@@ -384,6 +390,12 @@ export class ChatStore {
         this.publish();
     }
 
+    setSessionId(sessionId: string): void {
+        if (this.state.sessionId === sessionId) return;
+        this.state.sessionId = sessionId;
+        this.publish();
+    }
+
     enqueueEvent(event: ChatInputEvent): void {
         const waiter = this.eventWaiters.shift();
         if (waiter !== undefined) {
@@ -508,8 +520,7 @@ export class ChatStore {
     cycleModel(direction: 1 | -1): void {
         const choices = this.state.modelCycleChoices;
         if (choices.length <= 1) return;
-        this.state.modelCycleIndex =
-            (this.state.modelCycleIndex + direction + choices.length) % choices.length;
+        this.state.modelCycleIndex = (this.state.modelCycleIndex + direction + choices.length) % choices.length;
         const choice = choices[this.state.modelCycleIndex];
         if (choice !== undefined) {
             this.onModelCycleSelect?.(choice.selection);
@@ -532,8 +543,7 @@ export class ChatStore {
 
     navigateApproval(direction: 1 | -1): void {
         const count = APPROVAL_OPTIONS.length;
-        this.state.approvalSelectedIndex =
-            (this.state.approvalSelectedIndex + direction + count) % count;
+        this.state.approvalSelectedIndex = (this.state.approvalSelectedIndex + direction + count) % count;
         this.publish();
     }
 
@@ -557,8 +567,7 @@ export class ChatStore {
         const total = this.state.questionMultiple
             ? this.state.questionOptions.length
             : this.state.questionOptions.length + 1;
-        this.state.questionSelectedIndex =
-            (this.state.questionSelectedIndex + direction + total) % total;
+        this.state.questionSelectedIndex = (this.state.questionSelectedIndex + direction + total) % total;
         this.publish();
     }
 
@@ -646,8 +655,7 @@ export class ChatStore {
 
     navigateLevelPicker(direction: 1 | -1): void {
         const count = APPROVAL_LEVELS.length;
-        this.state.levelPickerSelectedIndex =
-            (this.state.levelPickerSelectedIndex + direction + count) % count;
+        this.state.levelPickerSelectedIndex = (this.state.levelPickerSelectedIndex + direction + count) % count;
         this.publish();
     }
 

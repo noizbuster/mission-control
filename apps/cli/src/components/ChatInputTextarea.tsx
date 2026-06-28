@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/react */
 
-import type { KeyEvent, MouseEvent, PasteEvent, TextareaRenderable } from '@opentui/core';
+import type { KeyEvent, PasteEvent, TextareaRenderable } from '@opentui/core';
 import { defaultTextareaKeyBindings } from '@opentui/core';
 import type * as React from 'react';
 
@@ -40,10 +40,6 @@ export function ChatInputTextarea({
         onKeyDown(key);
     };
 
-    const handleMouseDown = (event: MouseEvent): void => {
-        event.target?.focus();
-    };
-
     const cursorColor = disabled ? '#333333' : '#ffffff';
 
     return (
@@ -56,7 +52,6 @@ export function ChatInputTextarea({
                 textColor="#ffffff"
                 focusedBackgroundColor="#0a0a0a"
                 cursorColor={cursorColor}
-                onMouseDown={handleMouseDown}
                 onContentChange={handleContentChange}
                 onCursorChange={onCursorChange}
                 onKeyDown={handleKeyDown}

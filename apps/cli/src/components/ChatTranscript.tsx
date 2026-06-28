@@ -1,13 +1,8 @@
 /** @jsxImportSource @opentui/react */
-import { MacOSScrollAccel, TextAttributes, type ScrollAcceleration, type ScrollBoxRenderable } from '@opentui/core';
+import { MacOSScrollAccel, type ScrollAcceleration, type ScrollBoxRenderable, TextAttributes } from '@opentui/core';
 import type * as React from 'react';
-import {
-    type ChatBlock,
-    blockPrefix,
-    joinBlockText,
-    readToolBlockTitle,
-} from '../commands/chat-blocks.js';
-import { Markdown, buildBlocks, useHighlightVersion } from './markdown/Markdown.js';
+import { blockPrefix, type ChatBlock, joinBlockText, readToolBlockTitle } from '../commands/chat-blocks.js';
+import { buildBlocks, Markdown, useHighlightVersion } from './markdown/Markdown.js';
 import { getCachedBlocks } from './markdown/render-cache.js';
 import { darkTheme, type TerminalMarkdownTheme } from './markdown/theme.js';
 import { ToolCard } from './ToolCard.js';
@@ -45,7 +40,11 @@ export type ChatTranscriptScrollboxProps = {
     readonly maxHeight?: number;
 };
 
-export function ChatTranscriptScrollbox({ children, scrollboxRef, maxHeight }: ChatTranscriptScrollboxProps): React.ReactNode {
+export function ChatTranscriptScrollbox({
+    children,
+    scrollboxRef,
+    maxHeight,
+}: ChatTranscriptScrollboxProps): React.ReactNode {
     return (
         <scrollbox ref={scrollboxRef} {...chatTranscriptScrollOptions(maxHeight)}>
             {children}
@@ -218,14 +217,14 @@ export function ChatTranscript({
 }: ChatTranscriptProps): React.ReactNode {
     if (blocks.length === 0) {
         return (
-            <scrollbox ref={scrollboxRef} {...chatTranscriptScrollOptions()}>
+            <scrollbox ref={scrollboxRef} focusable={false} {...chatTranscriptScrollOptions()}>
                 <text attributes={TextAttributes.DIM}>{''}</text>
             </scrollbox>
         );
     }
     const lastIndex = blocks.length - 1;
     return (
-        <scrollbox ref={scrollboxRef} {...chatTranscriptScrollOptions()}>
+        <scrollbox ref={scrollboxRef} focusable={false} {...chatTranscriptScrollOptions()}>
             {blocks.map((block, index) => {
                 const streaming = generating && index === lastIndex;
                 return (

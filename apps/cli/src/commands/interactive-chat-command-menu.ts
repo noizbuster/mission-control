@@ -343,6 +343,29 @@ export function resolveWorkflowCommandMenuInsertText(
     return selectedChoice?.insertText;
 }
 
+/**
+ * Raw (untrimmed) insertText of the slash menu's selected choice, with a
+ * guaranteed trailing space so the menu closes (a token with a space is
+ * rejected by `readCommandQuery`).
+ *
+ * Returns `undefined` when the menu is closed or has no selection. Mirrors
+ * {@link resolveWorkflowCommandMenuInsertText}: a caller drops the value into
+ * the input buffer so the user can keep typing the argument (or press Enter
+ * again to submit) instead of submitting the partial command immediately.
+ */
+export function resolveSlashCommandMenuInsertText(line: string, state: SlashCommandMenuState): string | undefined {
+    const view = createSlashCommandMenuView(line, state, slashCommandChoices.length);
+    if (!view.open) {
+        return undefined;
+    }
+    const selectedChoice = view.visibleChoices[view.selectedIndex - view.startIndex];
+    if (selectedChoice === undefined) {
+        return undefined;
+    }
+    const text = selectedChoice.insertText;
+    return text.endsWith(' ') ? text : `${text} `;
+}
+
 export function formatSlashCommandMenuLines(view: SlashCommandMenuView, columns: number): readonly string[] {
     const header = truncateTerminalText(`Commands${view.query.length > 0 ? ` matching "${view.query}"` : ''}`, columns);
     if (view.empty) {

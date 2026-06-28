@@ -23,19 +23,19 @@
  * G10 Cleanup runs even on exception.
  */
 
-import type { AgentRuntime, ProviderAdapter, PermissionSession } from '@mission-control/core';
+import type { AgentRuntime, PermissionSession, ProviderAdapter } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import type { ChatStore } from './chat-store.js';
-import type { ChatInputEvent, ChatOutput } from './interactive-chat-io.js';
-import { maxChatPromptLength } from './interactive-chat-io.js';
-import { parseChatLine, type ChatLineAction, type ChatLineOptions } from './chat-commands.js';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
+import { closeTreeSitterClient } from '../components/markdown/highlight.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { approvalLevelRules } from './approval-level.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import { type ChatLineAction, type ChatLineOptions, parseChatLine } from './chat-commands.js';
+import type { ChatStore } from './chat-store.js';
 import { appendInputHistoryEntry } from './input-history-store.js';
-import { closeTreeSitterClient } from '../components/markdown/highlight.js';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
+import type { ChatInputEvent, ChatOutput } from './interactive-chat-io.js';
+import { maxChatPromptLength } from './interactive-chat-io.js';
 import type { ModelChoice } from './interactive-chat-model.js';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 
 const YIELD_BEFORE_READ_MS = 25;
 
@@ -58,10 +58,7 @@ export type AgentRunnerOptions = {
     readonly knownSkillNames?: ReadonlySet<string>;
     readonly knownWorkflowNames?: ReadonlySet<string>;
     readonly modelChoices?: readonly ModelChoice[];
-    readonly dispatchAction?: (
-        action: ChatLineAction,
-        context: DispatchActionContext,
-    ) => Promise<ChatActionResult>;
+    readonly dispatchAction?: (action: ChatLineAction, context: DispatchActionContext) => Promise<ChatActionResult>;
     readonly parseLine?: (value: string) => ChatLineAction;
     readonly appendHistory?: (value: string) => Promise<void>;
     readonly cleanup?: () => Promise<void>;
@@ -138,27 +135,23 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
     let currentModelProviderSelection = options.modelProviderSelection;
     let currentApprovalLevel: ApprovalLevel | undefined = options.initialApprovalLevel;
     let currentSessionId: string | undefined = options.sessionId;
+    if (currentSessionId !== undefined) {
+        store.setSessionId(currentSessionId);
+    }
 
     const parseLine: (value: string) => ChatLineAction =
         options.parseLine ??
         ((value: string) => {
             const parseOptions: ChatLineOptions = {
                 ...(options.modelChoices !== undefined ? { modelChoices: options.modelChoices } : {}),
-                ...(options.knownSkillNames !== undefined
-                    ? { knownSkillNames: options.knownSkillNames }
-                    : {}),
-                ...(options.knownWorkflowNames !== undefined
-                    ? { knownWorkflowNames: options.knownWorkflowNames }
-                    : {}),
+                ...(options.knownSkillNames !== undefined ? { knownSkillNames: options.knownSkillNames } : {}),
+                ...(options.knownWorkflowNames !== undefined ? { knownWorkflowNames: options.knownWorkflowNames } : {}),
                 ...(currentSessionId !== undefined ? { currentSessionId } : {}),
             };
             return parseChatLine(value, parseOptions);
         });
 
-    const dispatch: (
-        action: ChatLineAction,
-        context: DispatchActionContext,
-    ) => Promise<ChatActionResult> =
+    const dispatch: (action: ChatLineAction, context: DispatchActionContext) => Promise<ChatActionResult> =
         options.dispatchAction ??
         (async (action: ChatLineAction, _context: DispatchActionContext): Promise<ChatActionResult> => {
             if (action.kind === 'empty') {
@@ -176,8 +169,7 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
             await closeTreeSitterClient();
         });
 
-    const appendHistory: (value: string) => Promise<void> =
-        options.appendHistory ?? appendInputHistoryEntry;
+    const appendHistory: (value: string) => Promise<void> = options.appendHistory ?? appendInputHistoryEntry;
 
     function computeState(): AgentRunnerState {
         if (exiting) return 'exiting';
@@ -202,6 +194,7 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
         activeTurn = result.activeTurn;
         if (result.sessionId !== undefined) {
             currentSessionId = result.sessionId;
+            store.setSessionId(currentSessionId);
         }
         if (result.approvalLevel !== undefined && result.approvalLevel !== currentApprovalLevel) {
             currentApprovalLevel = result.approvalLevel;
