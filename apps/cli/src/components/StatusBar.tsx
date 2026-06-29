@@ -147,17 +147,3 @@ export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
         </box>
     );
 }
-
-/**
- * Transitional composition that stacks the two status lines. Retained only so
- * `ChatApp` keeps compiling until T5 rewires the layout to place them above and
- * below the prompt; T5 removes this shim.
- */
-export function StatusBar(props: StatusBarProps): React.ReactNode {
-    return (
-        <box flexDirection="column">
-            <TopStatusBar {...props} />
-            <BottomStatusBar {...props} />
-        </box>
-    );
-}

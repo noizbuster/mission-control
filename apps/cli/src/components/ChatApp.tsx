@@ -12,7 +12,6 @@ import {
     resolveWorkflowCommandMenuInsertText,
 } from '../commands/interactive-chat-command-menu.js';
 import { createClipboardService } from '../platform/clipboard-service.js';
-import { Banner } from './Banner.js';
 import { ChatInputArea } from './ChatInputArea.js';
 import { ChatTranscript } from './ChatTranscript.js';
 import { FileAutocompletePanel } from './FileAutocompletePanel.js';
@@ -27,7 +26,7 @@ import {
 } from './OverlayPanels.js';
 import { ACCENTS } from './overlay-theme.js';
 import { SlashMenuPanel } from './SlashMenuPanel.js';
-import { StatusBar, type StatusBarProps } from './StatusBar.js';
+import { BottomStatusBar, type StatusBarProps, TopStatusBar } from './StatusBar.js';
 
 const SPINNER_FRAMES = '\u280b\u2819\u2839\u2838\u2834\u2826\u2827\u2807';
 
@@ -381,7 +380,6 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
 
     return (
         <box flexDirection="column" width="100%">
-            {statusBarProps !== undefined ? <Banner statusBarProps={statusBarProps} /> : <Banner />}
             {transcript}
             {snapshot.agentStatusText.length > 0 ? (
                 <AgentSpinner text={snapshot.agentStatusText} />
@@ -398,6 +396,17 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
                 />
             ) : null}
             {showFileAutocomplete ? <FileAutocompletePanel fileAutocomplete={snapshot.fileAutocomplete} /> : null}
+            {statusBarProps !== undefined ? (
+                <TopStatusBar
+                    {...statusBarProps}
+                    {...(snapshot.contextTokensUsed !== undefined
+                        ? { contextTokensUsed: snapshot.contextTokensUsed }
+                        : {})}
+                    {...(snapshot.contextTokensMax !== undefined
+                        ? { contextTokensMax: snapshot.contextTokensMax }
+                        : {})}
+                />
+            ) : null}
             <ChatInputArea
                 store={store}
                 textareaRef={textareaRef}
@@ -405,15 +414,10 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
                 focused={!overlayActive}
             />
             {statusBarProps !== undefined ? (
-                <box marginTop={1}>
-                    <StatusBar
-                        {...statusBarProps}
-                        {...(snapshot.approvalLevel !== undefined ? { approvalLevel: snapshot.approvalLevel } : {})}
-                        {...(statusBarProps.sessionID === undefined && snapshot.sessionId.length > 0
-                            ? { sessionID: snapshot.sessionId }
-                            : {})}
-                    />
-                </box>
+                <BottomStatusBar
+                    {...statusBarProps}
+                    {...(snapshot.approvalLevel !== undefined ? { approvalLevel: snapshot.approvalLevel } : {})}
+                />
             ) : null}
             {snapshot.overlayMode === 'approval' ? (
                 <ModalPopup>

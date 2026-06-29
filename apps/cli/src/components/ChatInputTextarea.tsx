@@ -43,7 +43,7 @@ export function ChatInputTextarea({
     const cursorColor = disabled ? '#333333' : '#ffffff';
 
     return (
-        <box border={['left']} borderColor="#00ffff" flexGrow={1} width="100%">
+        <box backgroundColor="#0a0a0a" border={['left']} borderColor="#00ffff" flexGrow={1} width="100%">
             <textarea
                 ref={textareaRef}
                 width="100%"
