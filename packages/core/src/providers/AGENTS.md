@@ -13,6 +13,7 @@
 | Deterministic provider | `deterministic-provider.ts` | Offline tests and demos. |
 | Credential handling | `credential-resolver.ts` | Resolution, summaries, redaction classes. |
 | OpenAI adapter | `openai/` | Request mapping, transport, error normalization, event mapping. |
+| Model variants | `packages/config/src/model-variant-presets.ts`, each provider's `<provider>-request.ts` | Variant presets and model-capability matchers in config; per-provider `<provider>...ForVariant(modelID, variantID)` mapper plus `isConfigured<Provider>Variant` gate, next to `createRequestBody`. |
 | Mapping notes | `openai-responses-mapping.md` | Security and serialization rules for OpenAI Responses. |
 
 ## Conventions
@@ -23,6 +24,7 @@
 - OpenAI Responses requests default to `store: false`; preserve that unless the user explicitly changes retention behavior.
 - Live OpenAI smoke tests are opt-in only and must not be required for CI.
 - Provider turn events must preserve causation/correlation IDs and distinguish durable from ephemeral envelopes.
+- Each provider family owns a `<provider>...ForVariant(modelID, variantID)` mapper next to its `createRequestBody`, gated by an `isConfigured<Provider>Variant` catalog lookup that mirrors `openAIReasoningForVariant` and `isConfiguredOpenAIVariant` in `openai/openai-responses-request.ts`. A variant not configured for the selected model is silently dropped (the reasoning or thinking field is omitted from the request body), never thrown. OpenAI Responses maps `reasoning-*` to `reasoning.effort`, Anthropic Messages maps `thinking-*` to `thinking.budget_tokens` with a paired `max_tokens` override, Google Gemini maps `thinking-*` to `generationConfig.thinkingConfig.thinkingBudget`, and the OpenAI-compatible family maps `reasoning-*` to `reasoning.effort` (openrouter) or `reasoning_effort` (groq, mistral).
 
 ## Tests
 

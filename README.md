@@ -186,7 +186,37 @@ provider/model selection is scaffold metadata for observable control surfaces on
 
 credentials are used by implemented provider adapters only. For providers without execution adapters, credentials are used for scaffold configuration only. The OpenAI Responses adapter is implemented behind stored provider credentials, defaults requests to `store: false`, and the Anthropic, Google Gemini, and OpenAI-compatible adapters use the same provider-neutral streaming and redaction boundary. Raw secrets stay out of protocol events, JSONL logs, CLI output, desktop props/state snapshots, and error messages. Mission Control does not implement real LLM provider execution for providers without an adapter.
 
-The catalog also exposes the local provider/model variant `local/local-echo/default`. These variants are metadata for graph and event observability only.
+The catalog also exposes the local provider/model variant `local/local-echo/default`. For the deterministic local provider that variant stays metadata, since there is no real request body to shape. Real provider variants, covered in Model Variants below, map into the provider request body.
+
+## Model Variants
+
+A model selection can carry a reasoning or thinking variant using the `provider/model#variant` syntax. `anthropic/claude-sonnet-4-6#thinking-high` requests high-effort extended thinking on that Anthropic turn, and `openai/gpt-5#reasoning-high` asks OpenAI for high reasoning effort. Both the `/model provider/model#variant` chat command and the `--model provider/model#variant` flag accept the variant suffix.
+
+Per-provider variant support:
+
+| Provider | Adapter | Variant IDs | Request field | Model gate |
+| --- | --- | --- | --- | --- |
+| `openai` | OpenAI Responses | `reasoning-minimal`, `reasoning-low`, `reasoning-medium`, `reasoning-high`, plus `reasoning-none` and `reasoning-xhigh` on `gpt-5.4` and `gpt-5.5` | `reasoning.effort` | reasoning-capable model regex |
+| `anthropic` | Anthropic Messages | `thinking-off`, `thinking-low`, `thinking-medium`, `thinking-high` | `thinking.budget_tokens`, plus a paired `max_tokens` override that keeps `budget_tokens` below `max_tokens` | thinking-capable Claude model regex |
+| `google` | Google Gemini | `thinking-low`, `thinking-medium`, `thinking-high` (Gemini 2.5 Pro and Flash only) | `generationConfig.thinkingConfig.thinkingBudget` | Gemini 2.5 Pro/Flash regex, excludes flash-lite, image, tts, and nothink variants |
+| `openrouter` | OpenAI-compatible | `reasoning-low`, `reasoning-medium`, `reasoning-high` on reasoning-capable models | `reasoning.effort` | prefixed reasoning-model regex |
+| `groq` | OpenAI-compatible | `reasoning-none`, `reasoning-low`, `reasoning-medium`, `reasoning-high` on reasoning models | `reasoning_effort` | reasoning-model regex |
+| `mistral` | OpenAI-compatible | `reasoning-high` on `mistral-small-2603`, `mistral-small-latest`, and `mistral-medium-2604` only | `reasoning_effort` | exact model-ID list |
+
+Numeric variant budgets: Anthropic `thinking-low` sets `budget_tokens` to `8000` with `max_tokens` `9024`, `thinking-medium` uses `16000` and `17024`, `thinking-high` uses `32000` and `33024`. Gemini `thinking-low`, `thinking-medium`, and `thinking-high` set `thinkingBudget` to `2048`, `8192`, and `24576`. The Gemini high value is the safe cross-model cap; Flash tops out at `24576` and Pro at `32768`.
+
+Silent-drop policy: a variant that is not configured for the selected model is dropped at the provider boundary with no error. The runtime looks up the model's catalog entry, and when that entry has no matching variant preset the reasoning or thinking field is omitted from the request body. So `openai/gpt-4o-mini#reasoning-high` and `google/gemini-2.0-flash#thinking-high` both send a plain request with no reasoning or thinking field. A stale selection never turns into a hard failure.
+
+Each provider family owns its variant mapper. The mapper is a private function in that provider's `<provider>-request.ts` file, gated by an `isConfigured<Provider>Variant` catalog lookup that mirrors `openAIReasoningForVariant` and `isConfiguredOpenAIVariant` in `openai-responses-request.ts`. Presets and model-capability matchers live together in `packages/config/src/model-variant-presets.ts`.
+
+Deferred follow-ups:
+
+- Gemini 3.x uses a different vocabulary (`thinkingLevel` as an enum, not a token budget). Only 2.5 `thinkingBudget` is supported for now.
+- zai-coding-plan reasoning variants are deferred. The request parameter shape needs empirical confirmation before wiring it in.
+- The agent-frontmatter `thinkingLevel` field does not yet bridge to a variant ID. That is a separate concern.
+- The AI-SDK graph path (`ai-sdk/model-resolver.ts`) ignores `variantID`. It is tied to the graph-runner cutover.
+- DeepSeek and zai-coding-plan intentionally return no variants in v1. `deepseek-reasoner` is always-on reasoning, and the zai parameter shape is unvalidated.
+- Mistral reasoning is pinned to the dated IDs `mistral-small-2603` and `mistral-medium-2604`, plus `mistral-small-latest`. `mistral-medium-latest` is intentionally not whitelisted, so pick the dated ID for reasoning.
 
 ## Coding Agent Runtime
 
