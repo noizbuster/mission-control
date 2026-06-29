@@ -109,19 +109,35 @@ export function formatBottomStatus(props: StatusBarProps): BottomStatusShape {
 }
 
 /**
+ * Number of columns the row should fill. Matches the Separator component's
+ * width source (`process.stdout.columns`, read at render time so a store
+ * update after a resize recomputes the fill).
+ */
+function statusRowColumns(): number {
+    return process.stdout.columns ?? 80;
+}
+
+/**
  * Top status line: provider (dim) + model (bold) + ` - ` variant (default) on
  * the left; humanized context usage on the right, omitted when the max is
- * unknown. Full-width dark-navy background.
+ * unknown. The gap between the segments is filled with a dim horizontal rule
+ * (`─`) so the line reads as a continuous divider. Full-width dark-navy bg.
  */
 export function TopStatusBar(props: StatusBarProps): React.ReactNode {
     const { provider, model, variant, contextLabel } = formatTopStatus(props);
+    const leftText = `${provider} ${model}${variant !== undefined ? ` - ${variant}` : ''}`;
+    const fillCount = Math.max(
+        0,
+        statusRowColumns() - leftText.length - (contextLabel !== undefined ? contextLabel.length : 0),
+    );
     return (
-        <box backgroundColor={STATUS_LINE_BG} flexDirection="row" justifyContent="space-between">
+        <box backgroundColor={STATUS_LINE_BG} flexDirection="row">
             <text>
                 <span attributes={TextAttributes.DIM}>{provider}</span>{' '}
                 <span attributes={TextAttributes.BOLD}>{model}</span>
                 {variant !== undefined ? ` - ${variant}` : null}
             </text>
+            <text attributes={TextAttributes.DIM}>{'\u2500'.repeat(fillCount)}</text>
             {contextLabel !== undefined ? <text>{contextLabel}</text> : null}
         </box>
     );
@@ -129,20 +145,26 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
 
 /**
  * Bottom status line: approval indicator (colored by ramp; verbose and unknown
- * are dimmed) on the left; `project - branch (worktree)` on the right.
- * Full-width dark-navy background.
+ * are dimmed) on the left; `project - branch (worktree)` on the right. The gap
+ * between the segments is filled with a dim horizontal rule (`─`). Full-width
+ * dark-navy bg.
  */
 export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
     const { approvalLabel, approvalColor, projectLabel } = formatBottomStatus(props);
     const dimApproval = props.approvalLevel === undefined || props.approvalLevel === 'verbose';
+    const fillCount = Math.max(
+        0,
+        statusRowColumns() - approvalLabel.length - (projectLabel !== undefined ? projectLabel.length : 0),
+    );
     return (
-        <box backgroundColor={STATUS_LINE_BG} flexDirection="row" justifyContent="space-between">
+        <box backgroundColor={STATUS_LINE_BG} flexDirection="row">
             <text
                 {...(approvalColor !== undefined ? { fg: approvalColor } : {})}
                 {...(dimApproval ? { attributes: TextAttributes.DIM } : {})}
             >
                 {approvalLabel}
             </text>
+            <text attributes={TextAttributes.DIM}>{'\u2500'.repeat(fillCount)}</text>
             {projectLabel !== undefined ? <text>{projectLabel}</text> : null}
         </box>
     );

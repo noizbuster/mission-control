@@ -14,7 +14,6 @@ import {
     resolveWorkflowCommandMenuSubmission,
 } from '../commands/interactive-chat-command-menu.js';
 import { buildFileAutocompleteCompletion } from '../commands/interactive-chat-file-autocomplete.js';
-import { resolveSeparatorState } from '../commands/separator-state.js';
 import {
     clipboardImageControls,
     editorControls,
@@ -25,7 +24,6 @@ import {
 import { evaluatePaste, makeMarker } from '../platform/keymap/bracketed-paste.js';
 import { collectDiffEntries } from '../platform/keymap/diff-viewer.js';
 import { ChatInputTextarea } from './ChatInputTextarea.js';
-import { Separator } from './Separator.js';
 import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -339,15 +337,8 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
         textareaRef.current?.insertText(makeMarker(id, decision.lineCount, decision.charCount));
     };
 
-    const separatorState = resolveSeparatorState({
-        generating: snapshot.generating,
-        approvalActive: snapshot.overlayMode === 'approval',
-        questionActive: snapshot.overlayMode === 'question',
-    });
-
     return (
-        <box flexDirection="column" marginTop={1}>
-            <Separator state={separatorState} />
+        <box flexDirection="column">
             <ChatInputTextarea
                 textareaRef={textareaRef}
                 focused={focused}
