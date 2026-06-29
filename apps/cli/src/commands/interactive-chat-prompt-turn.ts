@@ -34,6 +34,7 @@ export type PromptTurnContext = {
     readonly approvalLevel?: ApprovalLevel;
     readonly graph?: AbgGraphSpec;
     readonly permissionSession?: PermissionSession;
+    readonly onUsage?: (inputTokens: number | undefined) => void;
 };
 
 export async function startPromptTurn(
@@ -135,6 +136,7 @@ export async function startPromptTurn(
         ...(coding.approvalLevel !== undefined ? { approvalLevel: coding.approvalLevel } : {}),
         ...(coding.graph !== undefined ? { graph: coding.graph } : {}),
         ...(coding.permissionSession !== undefined ? { permissionSession: coding.permissionSession } : {}),
+        ...(coding.onUsage !== undefined ? { onUsage: coding.onUsage } : {}),
     });
 }
 

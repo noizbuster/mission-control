@@ -443,6 +443,12 @@ export async function runInteractiveChatSession(
                         ...(pricingTableForSession.length > 0 ? { pricingTable: pricingTableForSession } : {}),
                         ...(currentApprovalLevel !== undefined ? { approvalLevel: currentApprovalLevel } : {}),
                         permissionSession: sharedPermissionSession,
+                        ...(tuiBridge !== undefined
+                            ? {
+                                  onUsage: (inputTokens: number | undefined) =>
+                                      tuiBridge.setContextTokensUsed(inputTokens),
+                              }
+                            : {}),
                         listWorkspaceSessions: async () => {
                             if (options.workspaceRoot === undefined) return [];
                             const entries = await listSessionCatalogEntriesForWorkspace(options.workspaceRoot);

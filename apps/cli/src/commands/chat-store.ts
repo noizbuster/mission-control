@@ -108,6 +108,8 @@ export type ChatStoreState = {
     readonly sessionPickerSelectedIndex: number;
     readonly sessionPickerSearch: string;
     readonly sessionPickerKeypress: ProviderPromptKeypressState;
+    readonly contextTokensUsed: number | undefined;
+    readonly contextTokensMax: number | undefined;
     readonly historyNavigation: { readonly position: number; readonly total: number } | null;
 };
 
@@ -233,6 +235,8 @@ export class ChatStore {
             sessionPickerSelectedIndex: 0,
             sessionPickerSearch: '',
             sessionPickerKeypress: createProviderPromptKeypressState(),
+            contextTokensUsed: undefined,
+            contextTokensMax: undefined,
         };
         this.snapshot = this.buildSnapshot();
     }
@@ -393,6 +397,16 @@ export class ChatStore {
     setSessionId(sessionId: string): void {
         if (this.state.sessionId === sessionId) return;
         this.state.sessionId = sessionId;
+        this.publish();
+    }
+
+    setContextTokensUsed(used: number | undefined): void {
+        this.state.contextTokensUsed = used;
+        this.publish();
+    }
+
+    setContextTokensMax(max: number | undefined): void {
+        this.state.contextTokensMax = max;
         this.publish();
     }
 

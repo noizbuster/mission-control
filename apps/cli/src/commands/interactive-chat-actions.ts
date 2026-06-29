@@ -507,6 +507,7 @@ async function runApprovalResumeAction(
             ...(coding.abgOverlayController !== undefined ? { abgOverlayController: coding.abgOverlayController } : {}),
             ...(coding.pricingTable !== undefined ? { pricingTable: coding.pricingTable } : {}),
             ...(coding.permissionSession !== undefined ? { permissionSession: coding.permissionSession } : {}),
+            ...(coding.onUsage !== undefined ? { onUsage: coding.onUsage } : {}),
         }),
     );
 }

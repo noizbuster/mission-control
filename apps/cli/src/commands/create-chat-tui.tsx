@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/react */
 
+import { getModelContextLimit } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import { createRef } from 'react';
@@ -47,6 +48,7 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Op
         setModelCycleChoices: (choices) => store.setModelCycleChoices(choices),
         setApprovalLevel: (level) => store.setApprovalLevel(level),
         setSessionId: (id) => store.setSessionId(id),
+        setContextTokensUsed: (used) => store.setContextTokensUsed(used),
         applyAbgOverlayPrefs: (prefs) => store.applyAbgOverlayPrefs(prefs),
         getAbgOverlayPrefsSnapshot: () => store.getAbgOverlayPrefsSnapshot(),
         get onModelCycleSelect(): ((selection: ModelProviderSelection) => void) | undefined {
@@ -82,6 +84,7 @@ export async function createChatTui(options: ChatTuiOptions): Promise<OpenTuiCha
             : {}),
         ...(options.initialApprovalLevel !== undefined ? { initialApprovalLevel: options.initialApprovalLevel } : {}),
     });
+    store.setContextTokensMax(getModelContextLimit(options.providerID, options.modelID));
 
     const { useRenderer } = await import('@opentui/react');
     const { ChatKeymapProvider } = await import('../platform/keymap/keymap-provider.js');

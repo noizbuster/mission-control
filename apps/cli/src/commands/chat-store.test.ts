@@ -1,14 +1,10 @@
-import type { ModelProviderSelection } from '@mission-control/protocol';
+import { extractUsageFromModelCallCompleted } from '@mission-control/core';
+import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ModelChoice } from './interactive-chat-model.js';
-import {
-    createChatStore,
-    createSessionPickerView,
-    type ChatStore,
-    type SessionPickerEntry,
-} from './chat-store.js';
 import { createProviderPromptKeypressState } from './auth-provider-keypress.js';
+import { type ChatStore, createChatStore, createSessionPickerView, type SessionPickerEntry } from './chat-store.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
+import type { ModelChoice } from './interactive-chat-model.js';
 
 function makeSelection(providerID: string, modelID: string): ModelProviderSelection {
     return { providerID, modelID };
@@ -323,6 +319,103 @@ describe('chat-store — status actions', () => {
     });
 });
 
+describe('chat-store — context token tracking', () => {
+    it('contextTokensUsed and contextTokensMax start undefined', () => {
+        const store = createChatStore();
+        const snapshot = store.getSnapshot();
+        expect(snapshot.contextTokensUsed).toBeUndefined();
+        expect(snapshot.contextTokensMax).toBeUndefined();
+    });
+
+    it('setContextTokensUsed updates the snapshot', () => {
+        const store = createChatStore();
+        store.setContextTokensUsed(12345);
+        expect(store.getSnapshot().contextTokensUsed).toBe(12345);
+    });
+
+    it('setContextTokensMax updates the snapshot', () => {
+        const store = createChatStore();
+        store.setContextTokensMax(200000);
+        expect(store.getSnapshot().contextTokensMax).toBe(200000);
+    });
+
+    it('setContextTokensUsed(undefined) clears the value', () => {
+        const store = createChatStore();
+        store.setContextTokensUsed(12345);
+        store.setContextTokensUsed(undefined);
+        expect(store.getSnapshot().contextTokensUsed).toBeUndefined();
+    });
+
+    it('publishing a new context value creates a new snapshot reference', () => {
+        const store = createChatStore();
+        const first = store.getSnapshot();
+        store.setContextTokensUsed(100);
+        const second = store.getSnapshot();
+        expect(second).not.toBe(first);
+        expect(second.contextTokensUsed).toBe(100);
+    });
+});
+
+describe('chat-store — model.call.completed usage seam', () => {
+    type FakeUsage = { inputTokens: number; outputTokens: number; totalTokens: number };
+
+    function modelCallCompleted(usage: FakeUsage | undefined): AgentEvent {
+        const base: AgentEvent = { type: 'model.call.completed', timestamp: '2026-06-30T00:00:00.000Z' };
+        if (usage === undefined) return base;
+        return {
+            ...base,
+            providerStreamChunk: {
+                kind: 'response_completed',
+                requestId: 'r1',
+                sequence: 1,
+                message: { messageId: 'm1', role: 'assistant', content: 'ok' },
+                finishReason: 'stop',
+                usage,
+            },
+        };
+    }
+
+    it('extractUsageFromModelCallCompleted returns inputTokens from the whole event', () => {
+        const event = modelCallCompleted({ inputTokens: 100, outputTokens: 50, totalTokens: 150 });
+        const result = extractUsageFromModelCallCompleted(event);
+        expect(result).toBeDefined();
+        expect(result?.inputTokens).toBe(100);
+    });
+
+    it('a model.call.completed event drives contextTokensUsed via the onUsage seam', () => {
+        const store = createChatStore();
+        const event = modelCallCompleted({ inputTokens: 100, outputTokens: 50, totalTokens: 150 });
+        const usage = extractUsageFromModelCallCompleted(event);
+        store.setContextTokensUsed(usage?.inputTokens);
+        expect(store.getSnapshot().contextTokensUsed).toBe(100);
+    });
+
+    it('two turns 100 then 250 yields the LATEST value (not a sum)', () => {
+        const store = createChatStore();
+        const first = modelCallCompleted({ inputTokens: 100, outputTokens: 50, totalTokens: 150 });
+        const second = modelCallCompleted({ inputTokens: 250, outputTokens: 80, totalTokens: 330 });
+        store.setContextTokensUsed(extractUsageFromModelCallCompleted(first)?.inputTokens);
+        store.setContextTokensUsed(extractUsageFromModelCallCompleted(second)?.inputTokens);
+        expect(store.getSnapshot().contextTokensUsed).toBe(250);
+    });
+
+    it('an event without usage leaves the previous value unchanged', () => {
+        const store = createChatStore();
+        store.setContextTokensUsed(100);
+        const eventWithoutUsage = modelCallCompleted(undefined);
+        const usage = extractUsageFromModelCallCompleted(eventWithoutUsage);
+        if (usage !== undefined) {
+            store.setContextTokensUsed(usage.inputTokens);
+        }
+        expect(store.getSnapshot().contextTokensUsed).toBe(100);
+    });
+
+    it('passing a non-model.call.completed event to extractUsageFromModelCallCompleted returns undefined', () => {
+        const wrongEvent: AgentEvent = { type: 'run.completed', timestamp: '2026-06-30T00:00:00.000Z' };
+        expect(extractUsageFromModelCallCompleted(wrongEvent)).toBeUndefined();
+    });
+});
+
 describe('chat-store — snapshot referential stability', () => {
     it('returns the same object reference until a mutation', () => {
         const store = createChatStore();
@@ -401,7 +494,11 @@ describe('chat-store — session picker overlay', () => {
 
     it('confirmSessionPicker resolves the selected sessionId', async () => {
         const store = createChatStore();
-        const promise = store.showSessionPicker([makeSessionEntry('s1'), makeSessionEntry('s2'), makeSessionEntry('s3')]);
+        const promise = store.showSessionPicker([
+            makeSessionEntry('s1'),
+            makeSessionEntry('s2'),
+            makeSessionEntry('s3'),
+        ]);
         store.updateSessionPickerSearch('\u001b[B');
         store.confirmSessionPicker();
         expect(await promise).toBe('s2');
@@ -447,11 +544,7 @@ describe('createSessionPickerView — pure view helper', () => {
     });
 
     it('clamps selectedIndex to filteredCount - 1', () => {
-        const entries = [
-            makeSessionEntry('s1', 'One'),
-            makeSessionEntry('s2', 'Two'),
-            makeSessionEntry('s3', 'Three'),
-        ];
+        const entries = [makeSessionEntry('s1', 'One'), makeSessionEntry('s2', 'Two'), makeSessionEntry('s3', 'Three')];
         const state = { ...createProviderPromptKeypressState(), selectedIndex: 5 };
         const view = createSessionPickerView(state, entries, 10);
         expect(view.selectedIndex).toBe(2);

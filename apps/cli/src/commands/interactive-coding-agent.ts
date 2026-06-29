@@ -5,6 +5,7 @@ import {
     type CommandExecutionResult,
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
+    extractUsageFromModelCallCompleted,
     type JsonlSessionEventStore,
     type LspClient,
     McpConnectionManager,
@@ -103,6 +104,11 @@ export type CodingAgentTurnOptions = {
      */
     readonly graph?: AbgGraphSpec;
     readonly permissionSession?: PermissionSession;
+    /**
+     * Latest single-turn input-token usage forwarded from `model.call.completed` durable events.
+     * Invoked only when usage is present on the event (non-cumulative snapshot).
+     */
+    readonly onUsage?: (inputTokens: number | undefined) => void;
 };
 
 export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Promise<ActiveCodingAgentTurn> {
@@ -237,6 +243,12 @@ async function createInteractiveRunOwner(
     // Render them to the TUI; observe for recording; settle the overlay's runState on run-terminal events.
     const onDurableEventHandler = (event: AgentEvent) => {
         renderInteractiveGraphDurableEvent(options.output, renderState, event);
+        if (event.type === 'model.call.completed') {
+            const usage = extractUsageFromModelCallCompleted(event);
+            if (usage !== undefined) {
+                options.onUsage?.(usage.inputTokens);
+            }
+        }
         options.observeStoredEvent?.(event);
         overlayWiring?.onDurableEvent(event);
     };
