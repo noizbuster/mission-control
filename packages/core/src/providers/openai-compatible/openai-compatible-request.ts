@@ -1,3 +1,4 @@
+import { modelProviderCatalog } from '@mission-control/config';
 import type {
     ProviderCredential,
     ProviderCredentialField,
@@ -86,12 +87,45 @@ function createRequestBody(
             retryable: false,
         });
     }
+    const reasoning = openAICompatibleReasoningForVariant(
+        request.providerID,
+        request.modelID,
+        request.variantID,
+    );
     return {
         model: request.modelID,
         messages: request.messages.map((message) => chatMessageForAgentMessage(message, request.providerID)),
         stream: true,
         ...(tools.length > 0 ? { tools } : {}),
+        ...(reasoning !== undefined ? reasoning : {}),
     };
+}
+
+function openAICompatibleReasoningForVariant(
+    providerID: string,
+    modelID: string,
+    variantID: string | undefined,
+): { readonly reasoning_effort?: string; readonly reasoning?: { readonly effort: string } } | undefined {
+    if (variantID === undefined || !isConfiguredOpenAICompatibleVariant(providerID, modelID, variantID)) {
+        return undefined;
+    }
+    const effort = variantID.replace('reasoning-', '');
+    switch (providerID) {
+        case 'openrouter':
+            return { reasoning: { effort } };
+        case 'groq':
+            return { reasoning_effort: effort };
+        case 'mistral':
+            return { reasoning_effort: 'high' };
+        default:
+            return undefined;
+    }
+}
+
+function isConfiguredOpenAICompatibleVariant(providerID: string, modelID: string, variantID: string): boolean {
+    const provider = modelProviderCatalog.find((entry) => entry.id === providerID);
+    const model = provider?.models.find((entry) => entry.id === modelID);
+    return (model?.variants ?? []).some((variant) => variant.id === variantID);
 }
 
 function chatMessageForAgentMessage(

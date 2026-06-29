@@ -37,6 +37,8 @@ export type OpenAICompatibleRequestBody = {
     readonly messages: readonly OpenAICompatibleChatMessage[];
     readonly stream: true;
     readonly tools?: readonly OpenAICompatibleTool[];
+    readonly reasoning_effort?: string;
+    readonly reasoning?: { readonly effort: string };
 };
 
 export type OpenAICompatibleTransportRequest = {
