@@ -37,6 +37,11 @@ export type AnthropicToolDefinition = {
     readonly input_schema: Readonly<Record<string, unknown>>;
 };
 
+export type AnthropicThinkingConfig = {
+    readonly type: 'enabled';
+    readonly budget_tokens: number;
+};
+
 export type AnthropicMessagesRequestBody = {
     readonly model: string;
     readonly max_tokens: number;
@@ -44,6 +49,7 @@ export type AnthropicMessagesRequestBody = {
     readonly system?: string;
     readonly messages: readonly AnthropicRequestMessage[];
     readonly tools?: readonly AnthropicToolDefinition[];
+    readonly thinking?: AnthropicThinkingConfig;
 };
 
 export type AnthropicMessagesTransportRequest = {

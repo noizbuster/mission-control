@@ -1,3 +1,4 @@
+import { modelProviderCatalog } from '@mission-control/config';
 import type { AgentMessage, ProviderCredential, ToolDefinition } from '@mission-control/protocol';
 import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver.js';
 import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
@@ -6,6 +7,7 @@ import {
     type AnthropicMessagesRequestBody,
     type AnthropicMessagesTransportRequest,
     type AnthropicRequestMessage,
+    type AnthropicThinkingConfig,
     type AnthropicToolDefinition,
     type AnthropicToolResultContentBlock,
     defaultAnthropicMaxTokens,
@@ -74,14 +76,43 @@ function createRequestBody(request: ProviderTurnRequest): AnthropicMessagesReque
     const system = systemPromptFromMessages(request.messages);
     const messages = anthropicMessagesFromAgentMessages(request.messages);
     const tools = (request.tools ?? []).map(anthropicToolForDefinition);
+    const mapped = anthropicThinkingForVariant(request.modelID, request.variantID);
     return {
         model: request.modelID,
-        max_tokens: defaultAnthropicMaxTokens,
+        max_tokens: mapped?.max_tokens ?? defaultAnthropicMaxTokens,
         stream: true,
         ...(system !== undefined ? { system } : {}),
         messages,
         ...(tools.length > 0 ? { tools } : {}),
+        ...(mapped?.thinking !== undefined ? { thinking: mapped.thinking } : {}),
     };
+}
+
+function anthropicThinkingForVariant(
+    modelID: string,
+    variantID: string | undefined,
+): { readonly thinking: AnthropicThinkingConfig; readonly max_tokens: number } | undefined {
+    if (variantID === undefined || !isConfiguredAnthropicVariant(modelID, variantID)) {
+        return undefined;
+    }
+    switch (variantID) {
+        case 'thinking-low':
+            return { thinking: { type: 'enabled', budget_tokens: 8000 }, max_tokens: 9024 };
+        case 'thinking-medium':
+            return { thinking: { type: 'enabled', budget_tokens: 16000 }, max_tokens: 17024 };
+        case 'thinking-high':
+            return { thinking: { type: 'enabled', budget_tokens: 32000 }, max_tokens: 33024 };
+        case 'thinking-off':
+            return undefined;
+        default:
+            return undefined;
+    }
+}
+
+function isConfiguredAnthropicVariant(modelID: string, variantID: string): boolean {
+    const anthropicProvider = modelProviderCatalog.find((provider) => provider.id === 'anthropic');
+    const model = anthropicProvider?.models.find((entry) => entry.id === modelID);
+    return (model?.variants ?? []).some((variant) => variant.id === variantID);
 }
 
 function systemPromptFromMessages(messages: readonly AgentMessage[]): string | undefined {
