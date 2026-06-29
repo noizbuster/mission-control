@@ -3,6 +3,8 @@ import modelsDevCatalogSnapshot from './generated/models-dev-catalog.json' with 
 import { variantsForGeneratedModel } from './model-variant-presets.js';
 import { generatedDefaultProviderCapability, generatedProviderCapabilities } from './provider-capabilities.js';
 
+export { getModelContextLimit } from './models-dev-runtime.js';
+
 export const appName = 'mission-control';
 export const cliCommandName = 'mctrl';
 export const sidecarBinaryName = 'mission-control-sidecar';

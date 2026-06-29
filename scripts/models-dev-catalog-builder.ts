@@ -9,9 +9,15 @@ export type ModelsDevRawCost = {
     readonly cache_write?: number;
 };
 
+export type ModelsDevRawLimit = {
+    readonly context?: number;
+    readonly output?: number;
+};
+
 export type ModelsDevRawModel = {
     readonly name?: string;
     readonly cost?: ModelsDevRawCost | null;
+    readonly limit?: ModelsDevRawLimit | null;
 };
 
 export type ModelsDevRawProvider = {
@@ -28,11 +34,17 @@ export type GeneratedCost = {
     readonly cacheReadCentsPerMillion?: number;
 };
 
+export type GeneratedLimit = {
+    readonly context?: number;
+    readonly output?: number;
+};
+
 export type GeneratedModel = {
     readonly id: string;
     readonly name: string;
     readonly status: 'active';
     readonly cost?: GeneratedCost;
+    readonly limit?: GeneratedLimit;
 };
 
 export type GeneratedProvider = {
@@ -116,11 +128,13 @@ function buildProvider(id: string, provider: ModelsDevRawProvider): GeneratedPro
     const models = Object.entries(provider.models ?? {})
         .map(([modelID, model]) => {
             const cost = buildCost(model.cost);
+            const limit = buildLimit(model.limit);
             return {
                 id: modelID,
                 name: model.name ?? modelID,
                 status: 'active' as const,
                 ...(cost !== undefined ? { cost } : {}),
+                ...(limit !== undefined ? { limit } : {}),
             };
         })
         .sort((left, right) => left.id.localeCompare(right.id));
@@ -154,6 +168,24 @@ function buildCost(cost: ModelsDevRawCost | null | undefined): GeneratedCost | u
         ...(typeof cacheRead === 'number' && Number.isFinite(cacheRead) && cacheRead >= 0
             ? { cacheReadCentsPerMillion: Math.round(cacheRead * 100) }
             : {}),
+    };
+}
+
+/** Validates finite non-negative context/output token limits. Drops invalid fields; undefined when none survive. */
+function buildLimit(limit: ModelsDevRawLimit | null | undefined): GeneratedLimit | undefined {
+    if (limit === null || limit === undefined) return undefined;
+    const context = limit.context;
+    const output = limit.output;
+    if (context !== undefined && (typeof context !== 'number' || !Number.isFinite(context) || context < 0)) {
+        return undefined;
+    }
+    if (output !== undefined && (typeof output !== 'number' || !Number.isFinite(output) || output < 0)) {
+        return undefined;
+    }
+    if (context === undefined && output === undefined) return undefined;
+    return {
+        ...(context !== undefined ? { context } : {}),
+        ...(output !== undefined ? { output } : {}),
     };
 }
 
@@ -191,11 +223,13 @@ function parseModels(providerID: string, models: Record<string, unknown>): Recor
                 throw new Error(`Models.dev model ${providerID}/${modelID} name must be a string`);
             }
             const cost = parseCost(model['cost']);
+            const limit = parseLimit(model['limit']);
             return [
                 modelID,
                 {
                     ...(name !== undefined ? { name } : {}),
                     ...(cost !== undefined ? { cost } : {}),
+                    ...(limit !== undefined ? { limit } : {}),
                 },
             ] as const;
         }),
@@ -217,6 +251,20 @@ function parseCost(value: unknown): ModelsDevRawCost | null | undefined {
     if (typeof output === 'number') result['output'] = output;
     if (typeof cacheRead === 'number') result['cache_read'] = cacheRead;
     if (typeof cacheWrite === 'number') result['cache_write'] = cacheWrite;
+    return result;
+}
+
+function parseLimit(value: unknown): ModelsDevRawLimit | null | undefined {
+    if (value === null) return null;
+    if (value === undefined) return undefined;
+    if (!isRecord(value)) {
+        throw new Error('Models.dev model limit must be an object');
+    }
+    const context = value['context'];
+    const output = value['output'];
+    const result: Record<string, number> = {};
+    if (typeof context === 'number') result['context'] = context;
+    if (typeof output === 'number') result['output'] = output;
     return result;
 }
 

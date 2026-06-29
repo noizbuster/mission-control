@@ -28,7 +28,7 @@ describe('config catalog constants', () => {
         const providerIDs = opencodeProviderCatalog.map((provider) => provider.id);
         const providerIDSet = new Set(providerIDs);
 
-        expect(opencodeProviderCatalog).toHaveLength(140);
+        expect(opencodeProviderCatalog).toHaveLength(146);
         expect(providerIDSet.size).toBe(providerIDs.length);
         expect(providerIDs).toEqual(
             expect.arrayContaining([
@@ -188,13 +188,10 @@ describe('config catalog constants', () => {
         expect(openRouterNonReasoning?.variants).toBeUndefined();
 
         const groqProvider = modelProviderCatalog.find((provider) => provider.id === 'groq');
-        const groqReasoning = groqProvider?.models.find((model) => model.id === 'qwen-qwq-32b');
-        expect(groqReasoning?.variants?.map((variant) => variant.id)).toEqual([
-            'reasoning-none',
-            'reasoning-low',
-            'reasoning-medium',
-            'reasoning-high',
-        ]);
+        // qwen-qwq-32b was dropped upstream; no live groq model matches the reasoning
+        // regex, so verify the non-reasoning path (the qwq matcher is covered above).
+        const groqNonReasoning = groqProvider?.models.find((model) => model.id === 'qwen/qwen3-32b');
+        expect(groqNonReasoning?.variants).toBeUndefined();
 
         const mistralProvider = modelProviderCatalog.find((provider) => provider.id === 'mistral');
         const mistralReasoning = mistralProvider?.models.find((model) => model.id === 'mistral-medium-2604');
@@ -246,7 +243,7 @@ describe('config catalog constants', () => {
         const capabilityCounts = capabilityStatusCounts(opencodeProviderCatalog);
         expect(capabilityCounts.executable).toBe(8);
         expect(capabilityCounts['auth-only']).toBe(1);
-        expect(capabilityCounts['model-discovery-only']).toBe(131);
+        expect(capabilityCounts['model-discovery-only']).toBe(137);
         expect(capabilityCounts.unsupported).toBe(0);
         expect(opencodeProviderCatalog.every((provider) => provider.capability.status.length > 0)).toBe(true);
     });

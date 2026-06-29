@@ -10,6 +10,10 @@ export type RawModelsDevModel = {
     readonly id: string;
     readonly name: string;
     readonly status?: string;
+    readonly limit?: {
+        readonly context?: number;
+        readonly output?: number;
+    };
 };
 
 export type RawModelsDevAuthField = {
@@ -42,6 +46,23 @@ export function getCachedModelsDevCatalog(): RawModelsDevCatalog | undefined {
 
 export function getVendoredModelsDevCatalog(): RawModelsDevCatalog {
     return modelsDevCatalogSnapshot;
+}
+
+/**
+ * Pure lookup over the vendored catalog: returns the context-window token limit
+ * for the given provider/model pair, or undefined when either is unknown or the
+ * upstream snapshot carries no limit for that model.
+ */
+export function getModelContextLimit(providerID: string, modelID: string): number | undefined {
+    const catalog = getVendoredModelsDevCatalog();
+    for (const provider of catalog.providers) {
+        if (provider.id !== providerID) continue;
+        for (const model of provider.models) {
+            if (model.id === modelID) return model.limit?.context;
+        }
+        return undefined;
+    }
+    return undefined;
 }
 
 /**
@@ -199,13 +220,32 @@ function buildModelsFromAPI(modelsValue: unknown): RawModelsDevModel[] {
     for (const [modelID, modelValue] of Object.entries(modelsValue)) {
         if (!isRecord(modelValue)) continue;
         const nameValue = modelValue['name'];
+        const limit = buildLimitFromAPI(modelValue['limit']);
         models.push({
             id: modelID,
             name: typeof nameValue === 'string' ? nameValue : modelID,
             status: 'active',
+            ...(limit !== undefined ? { limit } : {}),
         });
     }
     return models;
+}
+
+function buildLimitFromAPI(value: unknown): { readonly context?: number; readonly output?: number } | undefined {
+    if (!isRecord(value)) return undefined;
+    const context = value['context'];
+    const output = value['output'];
+    if (context !== undefined && (typeof context !== 'number' || !Number.isFinite(context) || context < 0)) {
+        return undefined;
+    }
+    if (output !== undefined && (typeof output !== 'number' || !Number.isFinite(output) || output < 0)) {
+        return undefined;
+    }
+    if (context === undefined && output === undefined) return undefined;
+    return {
+        ...(context !== undefined ? { context } : {}),
+        ...(output !== undefined ? { output } : {}),
+    };
 }
 
 function resolveAuthFieldsForProvider(providerID: string, env: readonly string[]): readonly RawModelsDevAuthField[] {
