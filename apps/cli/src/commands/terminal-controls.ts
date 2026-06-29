@@ -1,7 +1,7 @@
 import { execSync, spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 /**
  * Terminal title via OSC 2 (`\x1b]2;<title>\x07`, BEL terminator).
@@ -144,4 +144,66 @@ export function detectGitBranch(workspaceRoot: string | undefined): string | und
     } catch {
         return undefined;
     }
+}
+
+/**
+ * Module-private: run `git rev-parse <args>` synchronously in `workspaceRoot`
+ * with the same spawn options, 1s timeout, and never-throws contract as
+ * {@link detectGitBranch}. Returns the trimmed stdout, or `undefined` when git
+ * is unavailable, the workspace is not a git repo, the rev-parse exits non-zero,
+ * or the timeout trips.
+ */
+function runGitRevParse(workspaceRoot: string, args: readonly string[]): string | undefined {
+    try {
+        const result = spawnSync('git', ['rev-parse', ...args], {
+            cwd: workspaceRoot,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'ignore'],
+            timeout: 1000,
+        });
+        if (result.error !== undefined || result.status !== 0) {
+            return undefined;
+        }
+        const output = (result.stdout ?? '').trim();
+        return output.length > 0 ? output : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * Detect whether `workspaceRoot` is a linked git worktree (created via
+ * `git worktree add`) rather than the main checkout, and return the worktree's
+ * directory name.
+ *
+ * Detection compares `git rev-parse --git-dir` against `--git-common-dir`,
+ * both resolved to absolute paths. In a linked worktree `--git-dir` resolves to
+ * `<common>/.git/worktrees/<name>` while `--git-common-dir` resolves to the
+ * shared `<common>/.git`; in the main checkout (and in a submodule, whose own
+ * git dir IS its common dir) the two are identical. This avoids the `.git`
+ * file-versus-dir heuristic, which false-positives on git submodules: a
+ * submodule's `.git` is a file, but a submodule is NOT a linked worktree.
+ *
+ * `name` is the `basename` of `git rev-parse --show-toplevel` and is only
+ * populated when `isWorktree` is true. Returns
+ * `{ isWorktree: false, name: undefined }` on any error, non-git dir,
+ * undefined input, or timeout. Exported for unit tests; never throws.
+ */
+export function detectGitWorktree(workspaceRoot: string | undefined): {
+    readonly isWorktree: boolean;
+    readonly name: string | undefined;
+} {
+    if (workspaceRoot === undefined) {
+        return { isWorktree: false, name: undefined };
+    }
+    const gitDir = runGitRevParse(workspaceRoot, ['--git-dir']);
+    const commonDir = runGitRevParse(workspaceRoot, ['--git-common-dir']);
+    if (gitDir === undefined || commonDir === undefined) {
+        return { isWorktree: false, name: undefined };
+    }
+    if (resolve(workspaceRoot, gitDir) === resolve(workspaceRoot, commonDir)) {
+        return { isWorktree: false, name: undefined };
+    }
+    const topLevel = runGitRevParse(workspaceRoot, ['--show-toplevel']);
+    return { isWorktree: true, name: topLevel !== undefined ? basename(topLevel) : undefined };
 }

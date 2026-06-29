@@ -54,6 +54,7 @@ import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 import { loadPricingTable } from './pricing-table-store.js';
 import type { EnsuredSession } from './run-agent-session.js';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
+import { detectGitBranch, detectGitWorktree } from './terminal-controls.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
 
@@ -111,6 +112,11 @@ export async function runInteractiveChatSession(
               readPrefsSnapshot: () => tuiBridgeRef?.getAbgOverlayPrefsSnapshot() ?? DEFAULT_ABG_OVERLAY_PREFS,
           })
         : undefined;
+    // Resolve git branch + linked-worktree status once at TUI mount for the
+    // StatusBar. Gated to `useTui` so the synchronous git spawn never runs on
+    // the non-TUI plain/JSON paths (which pin exact output).
+    const gitBranch = useTui ? detectGitBranch(options.workspaceRoot) : undefined;
+    const gitWorktree = useTui ? detectGitWorktree(options.workspaceRoot) : undefined;
     const bridgeOptions: SessionBridgeOptions | undefined = useTui
         ? {
               providerID: options.modelProviderSelection.providerID,
@@ -120,6 +126,8 @@ export async function runInteractiveChatSession(
                   : {}),
               ...(options.sessionId !== undefined ? { sessionID: options.sessionId } : {}),
               ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
+              ...(gitBranch !== undefined ? { gitBranch } : {}),
+              ...(gitWorktree?.isWorktree ? { isWorktree: true } : {}),
               ...(initialHistoryEntries.length > 0 ? { initialHistoryEntries } : {}),
               ...(options.initialApprovalLevel !== undefined
                   ? { initialApprovalLevel: options.initialApprovalLevel }

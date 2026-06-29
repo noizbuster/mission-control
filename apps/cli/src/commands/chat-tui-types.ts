@@ -58,6 +58,7 @@ export type OpenTuiChatBridgeOptions = {
     readonly sessionID?: string;
     readonly workspaceRoot?: string;
     readonly gitBranch?: string;
+    readonly isWorktree?: boolean;
     readonly initialHistoryEntries?: readonly string[];
     readonly initialApprovalLevel?: ApprovalLevel;
     readonly abgOverlayController?: AbgOverlayController;

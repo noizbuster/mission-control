@@ -15,6 +15,7 @@ export type ChatTuiOptions = {
     readonly sessionID?: string;
     readonly workspaceRoot?: string;
     readonly gitBranch?: string;
+    readonly isWorktree?: boolean;
     readonly initialHistoryEntries?: readonly string[];
     readonly initialApprovalLevel?: ApprovalLevel;
 };
@@ -97,6 +98,7 @@ export async function createChatTui(options: ChatTuiOptions): Promise<OpenTuiCha
         ...(options.sessionID !== undefined ? { sessionID: options.sessionID } : {}),
         ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
         ...(options.gitBranch !== undefined ? { gitBranch: options.gitBranch } : {}),
+        ...(options.isWorktree ? { isWorktree: options.isWorktree } : {}),
     };
 
     const mountResult = await mountOpenTui(

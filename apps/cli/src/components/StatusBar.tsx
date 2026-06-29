@@ -10,6 +10,7 @@ export type StatusBarProps = {
     readonly sessionDisplayName?: string;
     readonly workspaceRoot?: string;
     readonly gitBranch?: string;
+    readonly isWorktree?: boolean;
     readonly approvalLevel?: ApprovalLevel;
 };
 
