@@ -43,6 +43,12 @@ export type GeminiGenerateContentRequestBody = {
         readonly parts: readonly GeminiTextPart[];
     };
     readonly tools?: readonly GeminiTool[];
+    readonly generationConfig?: {
+        readonly thinkingConfig?: {
+            readonly thinkingBudget?: number;
+            readonly includeThoughts?: boolean;
+        };
+    };
 };
 
 export type GeminiGenerateContentTransportRequest = {

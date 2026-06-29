@@ -1,3 +1,4 @@
+import { modelProviderCatalog } from '@mission-control/config';
 import type {
     AgentMessage,
     ProviderCredential,
@@ -80,11 +81,38 @@ function createRequestBody(request: ProviderTurnRequest): GeminiGenerateContentR
     const systemInstruction = systemInstructionFromMessages(request.messages);
     const contents = geminiContentsFromAgentMessages(request.messages);
     const functionDeclarations = (request.tools ?? []).map(geminiFunctionDeclarationForTool);
+    const generationConfig = geminiThinkingForVariant(request.modelID, request.variantID);
     return {
         contents,
         ...(systemInstruction !== undefined ? { systemInstruction } : {}),
         ...(functionDeclarations.length > 0 ? { tools: [{ functionDeclarations }] } : {}),
+        ...(generationConfig !== undefined ? { generationConfig } : {}),
     };
+}
+
+function geminiThinkingForVariant(
+    modelID: string,
+    variantID: string | undefined,
+): { readonly thinkingConfig: { readonly thinkingBudget: number; readonly includeThoughts: true } } | undefined {
+    if (variantID === undefined || !isConfiguredGeminiVariant(modelID, variantID)) {
+        return undefined;
+    }
+    switch (variantID) {
+        case 'thinking-low':
+            return { thinkingConfig: { thinkingBudget: 2048, includeThoughts: true } };
+        case 'thinking-medium':
+            return { thinkingConfig: { thinkingBudget: 8192, includeThoughts: true } };
+        case 'thinking-high':
+            return { thinkingConfig: { thinkingBudget: 24576, includeThoughts: true } };
+        default:
+            return undefined;
+    }
+}
+
+function isConfiguredGeminiVariant(modelID: string, variantID: string): boolean {
+    const googleProvider = modelProviderCatalog.find((provider) => provider.id === GOOGLE_PROVIDER_ID);
+    const model = googleProvider?.models.find((entry) => entry.id === modelID);
+    return (model?.variants ?? []).some((variant) => variant.id === variantID);
 }
 
 function systemInstructionFromMessages(
