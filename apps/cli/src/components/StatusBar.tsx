@@ -128,7 +128,7 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
     const leftText = `${provider} ${model}${variant !== undefined ? ` - ${variant}` : ''}`;
     const fillCount = Math.max(
         0,
-        statusRowColumns() - leftText.length - (contextLabel !== undefined ? contextLabel.length : 0),
+        statusRowColumns() - leftText.length - 1 - (contextLabel !== undefined ? contextLabel.length + 1 : 0),
     );
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row">
@@ -137,8 +137,9 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
                 <span attributes={TextAttributes.BOLD}>{model}</span>
                 {variant !== undefined ? ` - ${variant}` : null}
             </text>
+            <text>{' '}</text>
             <text attributes={TextAttributes.DIM}>{'\u2500'.repeat(fillCount)}</text>
-            {contextLabel !== undefined ? <text>{contextLabel}</text> : null}
+            {contextLabel !== undefined ? <text>{` ${contextLabel}`}</text> : null}
         </box>
     );
 }
@@ -154,7 +155,7 @@ export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
     const dimApproval = props.approvalLevel === undefined || props.approvalLevel === 'verbose';
     const fillCount = Math.max(
         0,
-        statusRowColumns() - approvalLabel.length - (projectLabel !== undefined ? projectLabel.length : 0),
+        statusRowColumns() - approvalLabel.length - 1 - (projectLabel !== undefined ? projectLabel.length + 1 : 0),
     );
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row">
@@ -164,8 +165,9 @@ export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
             >
                 {approvalLabel}
             </text>
+            <text>{' '}</text>
             <text attributes={TextAttributes.DIM}>{'\u2500'.repeat(fillCount)}</text>
-            {projectLabel !== undefined ? <text>{projectLabel}</text> : null}
+            {projectLabel !== undefined ? <text>{` ${projectLabel}`}</text> : null}
         </box>
     );
 }
