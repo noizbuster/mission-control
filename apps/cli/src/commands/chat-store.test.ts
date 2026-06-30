@@ -536,7 +536,7 @@ describe('chat-store — cycleModelVariant', () => {
         expect(lastCall?.variantID).toBeUndefined();
     });
 
-    it('emits a "No variants" notice and does not cycle when the model has no variants', () => {
+    it('emits a "No variants" transient notice and does not cycle when the model has no variants', () => {
         const store = createStoreWithCurrentChoice(NO_VARIANT_SELECTION);
         const calls: ModelProviderSelection[] = [];
         store.onModelCycleSelect = (selection) => {
@@ -546,7 +546,8 @@ describe('chat-store — cycleModelVariant', () => {
         store.cycleModelVariant(1);
         expect(calls).toHaveLength(0);
         expect(store.getSnapshot().currentModelVariantID).toBeUndefined();
-        expect(store.getOutput()).toContain('No variants for opencode/claude-fable-5');
+        expect(store.getSnapshot().transientNotice?.message).toBe('No variants for opencode/claude-fable-5');
+        expect(store.getOutput()).not.toContain('No variants for opencode/claude-fable-5');
     });
 
     it('emits a "Cycle variant" notice with the new selection', () => {
@@ -649,7 +650,8 @@ describe('chat-store — setModelSelection', () => {
 
         store.cycleModelVariant(1);
 
-        expect(store.getOutput()).toContain('No variants for other/other-model');
+        expect(store.getSnapshot().transientNotice?.message).toBe('No variants for other/other-model');
+        expect(store.getOutput()).not.toContain('No variants for other/other-model');
         expect(store.getOutput()).not.toContain('openai/gpt-5');
         expect(store.getSnapshot().modelCycleIndex).toBe(1);
     });

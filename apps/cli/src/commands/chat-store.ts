@@ -115,6 +115,7 @@ export type ChatStoreState = {
     readonly contextTokensUsed: number | undefined;
     readonly contextTokensMax: number | undefined;
     readonly historyNavigation: { readonly position: number; readonly total: number } | null;
+    readonly transientNotice: { readonly id: number; readonly message: string } | null;
 };
 
 type ChatStoreMutableState = {
@@ -190,6 +191,7 @@ export class ChatStore {
     private questionResolve: ((answer: string) => void) | undefined;
     private sessionPickerResolve: ((sessionId: string | undefined) => void) | undefined;
     private emitScheduled = false;
+    private transientNoticeCounter = 0;
 
     constructor(options?: ChatStoreOptions) {
         this.workspaceRoot = options?.workspaceRoot ?? process.cwd();
@@ -243,6 +245,7 @@ export class ChatStore {
             sessionPickerKeypress: createProviderPromptKeypressState(),
             contextTokensUsed: undefined,
             contextTokensMax: undefined,
+            transientNotice: null,
         };
         this.snapshot = this.buildSnapshot();
     }
@@ -596,14 +599,19 @@ export class ChatStore {
      * no variants; in that case a notice is emitted so the user knows the
      * chord fired but had no effect.
      */
+    showTransientNotice(message: string): void {
+        this.transientNoticeCounter += 1;
+        this.state.transientNotice = { id: this.transientNoticeCounter, message };
+        this.publish();
+    }
+
     cycleModelVariant(direction: 1 | -1): void {
         const baseSelection =
             this.state.currentModelSelection ?? this.state.modelCycleChoices[this.state.modelCycleIndex]?.selection;
         if (baseSelection === undefined) return;
         const variantChoices = createVariantChoices(baseSelection);
         if (variantChoices.length === 0) {
-            this.state.outputText += `No variants for ${baseSelection.providerID}/${baseSelection.modelID}\n`;
-            this.publish();
+            this.showTransientNotice(`No variants for ${baseSelection.providerID}/${baseSelection.modelID}`);
             return;
         }
         const variantIDs = variantChoices

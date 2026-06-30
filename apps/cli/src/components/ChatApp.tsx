@@ -78,6 +78,14 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
         };
     }, []);
 
+    const noticeId = snapshot.transientNotice?.id;
+    const noticeMessage = snapshot.transientNotice?.message;
+    useEffect(() => {
+        if (noticeId !== undefined && noticeMessage !== undefined) {
+            showToast(noticeMessage);
+        }
+    }, [noticeId, noticeMessage, showToast]);
+
     // Read-only mouse-up hook: when a drag-selection exists, surface the
     // keyboard-copy hint. The copy itself stays keyboard-only (Ctrl+D).
     const handleSelectionMouseUp = useCallback((): void => {
