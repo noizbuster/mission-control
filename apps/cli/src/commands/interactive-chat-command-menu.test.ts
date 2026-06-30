@@ -347,4 +347,34 @@ describe('interactive chat command menu', () => {
         const approval = view.visibleChoices.find((c) => c.id === '/approval');
         expect(approval?.opensPicker).toBe(true);
     });
+
+    it('ranks id prefix matches above description substring matches', () => {
+        const view = createSlashCommandMenuView('/ex', createSlashCommandMenuState(), 10);
+
+        expect(view.visibleChoices.length).toBeGreaterThan(0);
+        expect(view.visibleChoices[0]?.id).not.toBe('/export');
+        expect(view.visibleChoices.slice(0, 2).map((c) => c.id).sort()).toEqual(['/exit', '/export']);
+    });
+
+    it('selects the prefix-matched command by default so Enter submits it without arrow navigation', () => {
+        const state = createSlashCommandMenuState();
+        const view = createSlashCommandMenuView('/ex', state, 10);
+
+        expect(view.selectedIndex).toBe(0);
+        expect(view.visibleChoices[0]?.id).toBe('/exit');
+        expect(resolveSlashCommandMenuSubmission('/ex', state)).toBe('/exit');
+    });
+
+    it('ranks exact id match first when a query fully matches a command id', () => {
+        const view = createSlashCommandMenuView('/exit', createSlashCommandMenuState(), 10);
+
+        expect(view.visibleChoices[0]?.id).toBe('/exit');
+    });
+
+    it('orders prefix matches by their original list position (stable sort)', () => {
+        const view = createSlashCommandMenuView('/mo', createSlashCommandMenuState(), 10);
+        const ids = view.visibleChoices.map((choice) => choice.id);
+
+        expect(ids.slice(0, 3)).toEqual(['/model', '/model pick', '/model list']);
+    });
 });

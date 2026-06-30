@@ -402,6 +402,22 @@ function readCommandQuery(line: string, prefix: string): string | undefined {
     return commandToken.toLowerCase();
 }
 
+function escapeRegexPattern(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Lower rank = better query match. Prefix/exact id matches win so the closest command surfaces first. */
+function rankChoiceMatch(idWithoutPrefix: string, description: string, query: string): number {
+    if (idWithoutPrefix === query) return 0;
+    if (idWithoutPrefix.startsWith(query)) return 1;
+    const wordBoundary = new RegExp(`\\b${escapeRegexPattern(query)}`, 'u');
+    if (wordBoundary.test(idWithoutPrefix)) return 2;
+    if (idWithoutPrefix.includes(query)) return 3;
+    if (description.startsWith(query)) return 4;
+    if (wordBoundary.test(description)) return 5;
+    return 6;
+}
+
 function filterCommandChoices(
     query: string,
     choices: readonly SlashCommandMenuChoice[],
@@ -409,10 +425,25 @@ function filterCommandChoices(
     if (query.length === 0) {
         return choices;
     }
-    return choices.filter(
-        (choice) =>
-            choice.id.slice(1).toLowerCase().includes(query) || choice.description.toLowerCase().includes(query),
-    );
+    const ranked: Array<{ choice: SlashCommandMenuChoice; originalIndex: number; rank: number }> = [];
+    for (let originalIndex = 0; originalIndex < choices.length; originalIndex += 1) {
+        const choice = choices[originalIndex];
+        if (choice === undefined) continue;
+        const idWithoutPrefix = choice.id.slice(1).toLowerCase();
+        const description = choice.description.toLowerCase();
+        if (!idWithoutPrefix.includes(query) && !description.includes(query)) {
+            continue;
+        }
+        ranked.push({ choice, originalIndex, rank: rankChoiceMatch(idWithoutPrefix, description, query) });
+    }
+    ranked.sort((a, b) => {
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        const aIdLength = a.choice.id.length - 1;
+        const bIdLength = b.choice.id.length - 1;
+        if (aIdLength !== bIdLength) return aIdLength - bIdLength;
+        return a.originalIndex - b.originalIndex;
+    });
+    return ranked.map((entry) => entry.choice);
 }
 
 function clampSelection(selectedIndex: number, totalCount: number): number {
