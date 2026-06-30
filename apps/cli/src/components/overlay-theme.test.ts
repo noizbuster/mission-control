@@ -66,8 +66,8 @@ describe('resolveOverlayChrome headerFg accent resolution', () => {
 });
 
 describe('resolveOverlayChrome headerAttrs bitflag', () => {
-    it('composes BOLD | INVERSE only for the inverse modal variant', () => {
-        expect(resolveOverlayChrome('modal').headerAttrs).toBe(TextAttributes.BOLD | TextAttributes.INVERSE);
+    it('emits plain BOLD for the modal variant (no INVERSE; explicit fg/bg in OverlayFrame handles the swap)', () => {
+        expect(resolveOverlayChrome('modal').headerAttrs).toBe(TextAttributes.BOLD);
     });
 
     it('is plain BOLD for the non-inverse panel variant', () => {

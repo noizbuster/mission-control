@@ -80,11 +80,17 @@ function flagsForVariant(variant: OverlayVariant): OverlayChromeFlags {
 /**
  * Resolve the full chrome for an overlay variant. `accent` overrides the
  * default header foreground; when omitted the default accent is used.
- * `headerAttrs` starts at BOLD and gains INVERSE only for inverse variants.
+ *
+ * `headerAttrs` is plain BOLD for every variant. The `inverse` flag on the
+ * modal still marks its intent (a colour-swapped header), but the swap is
+ * realised in `<OverlayFrame>` via explicit `fg`/`bg` rather than SGR INVERSE:
+ * opentui's `<text>` with `fg` set and no `bg` plus `INVERSE` paints both the
+ * foreground and the background with the accent, hiding the title (e.g. the
+ * yellow "Approval Required" header on a yellow cell).
  */
 export function resolveOverlayChrome(variant: OverlayVariant, accent?: string): OverlayChrome {
     const flags = flagsForVariant(variant);
     const headerFg = accent ?? ACCENTS.default;
-    const headerAttrs = flags.inverse ? TextAttributes.BOLD | TextAttributes.INVERSE : TextAttributes.BOLD;
+    const headerAttrs = TextAttributes.BOLD;
     return { ...flags, headerFg, headerAttrs };
 }

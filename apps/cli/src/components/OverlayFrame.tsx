@@ -33,11 +33,18 @@ export function OverlayFrame({ variant, title, accent, hint, footer, children }:
     // opentui merges adjacent <text> siblings onto one row, so in overlays whose
     // body starts with a bare <text> the title visually merges with it — this is
     // the pre-existing original behavior, intentionally preserved.
+    //
+    // The modal title uses explicit fg/bg rather than SGR INVERSE: opentui's
+    // `<text>` with `fg` set and no `bg` plus `attributes=INVERSE` paints both
+    // the foreground and the background with the accent, hiding the title (the
+    // yellow "Approval Required" header was rendering as yellow-on-yellow).
+    // Black on the accent keeps contrast for every accent we ship (yellow,
+    // cyan, magenta, red are all bright enough to take black text).
     if (variant === 'modal') {
         return (
             <box flexDirection="column">
                 <box flexDirection="column" marginTop={1} paddingLeft={1} paddingRight={1}>
-                    <text fg={chrome.headerFg} attributes={chrome.headerAttrs}>{` ${title} `}</text>
+                    <text fg="#000000" bg={chrome.headerFg} attributes={TextAttributes.BOLD}>{` ${title} `}</text>
                     {children}
                     {footer ? <text attributes={TextAttributes.DIM}>{footer}</text> : null}
                 </box>
