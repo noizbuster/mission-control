@@ -258,10 +258,14 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
                 return;
             }
             if (key.name === 'v') {
+                const image = clipboardImageControls.readClipboardImage();
+                if (image !== undefined) {
+                    key.preventDefault();
+                    textareaRef.current?.insertText(`${image.path} `);
+                    return;
+                }
                 key.preventDefault();
-                const result = clipboardImageControls.readClipboardImage();
-                if (result === undefined) return;
-                textareaRef.current?.insertText(`${result.path} `);
+                store.cycleModelVariant(key.shift ? -1 : 1);
                 return;
             }
         }

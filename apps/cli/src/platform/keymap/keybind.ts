@@ -84,7 +84,7 @@ export const Definitions = {
     command_list: keybind('alt+x', 'Open command palette'),
     session_interrupt: keybind('escape', 'Interrupt current session'),
     terminal_suspend: keybind('ctrl+z', 'Suspend terminal'),
-    clipboard_paste_image: keybind('ctrl+v', 'Paste image from clipboard'),
+    clipboard_paste_image: keybind('ctrl+v', 'Paste image from clipboard (or cycle model variant when no image)'),
     editor_open: keybind('ctrl+e', 'Open external editor'),
     session_rename: keybind('ctrl+r', 'Rename session'),
     abg_overlay_toggle: keybind('ctrl+g', 'Toggle ABG monitoring overlay'),
