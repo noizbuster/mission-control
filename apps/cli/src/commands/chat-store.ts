@@ -34,7 +34,7 @@ import {
     recordSubmittedPrompt,
 } from './interactive-chat-input-history.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
-import type { ModelChoice } from './interactive-chat-model.js';
+import { createVariantChoices, type ModelChoice } from './interactive-chat-model.js';
 import { normalizeQuestionOptions, type QuestionOption } from './question-types.js';
 
 export type ChatStoreOverlayMode =
@@ -78,6 +78,8 @@ export type ChatStoreState = {
     readonly workflowNames: readonly string[];
     readonly modelCycleChoices: readonly ModelChoice[];
     readonly modelCycleIndex: number;
+    /** Reset to `undefined` by `cycleModel` when the base model changes. */
+    readonly currentModelVariantID: string | undefined;
     readonly menuState: SlashCommandMenuState;
     readonly fileAutocomplete: FileAutocompleteState;
     readonly history: ChatInputHistory;
@@ -205,6 +207,7 @@ export class ChatStore {
             workflowNames: [],
             modelCycleChoices: [],
             modelCycleIndex: 0,
+            currentModelVariantID: undefined,
             menuState: createSlashCommandMenuState(),
             fileAutocomplete: createFileAutocompleteState(),
             history,
@@ -535,10 +538,51 @@ export class ChatStore {
         const choices = this.state.modelCycleChoices;
         if (choices.length <= 1) return;
         this.state.modelCycleIndex = (this.state.modelCycleIndex + direction + choices.length) % choices.length;
+        this.state.currentModelVariantID = undefined;
         const choice = choices[this.state.modelCycleIndex];
         if (choice !== undefined) {
             this.onModelCycleSelect?.(choice.selection);
         }
+        this.publish();
+    }
+
+    /**
+     * Rotate the variant of the currently-selected base model through
+     * `[unset, ...availableVariants]`. The `unset` slot clears `variantID`
+     * from the selection (no variant shown). No-op when the current model has
+     * no variants; in that case a notice is emitted so the user knows the
+     * chord fired but had no effect.
+     */
+    cycleModelVariant(direction: 1 | -1): void {
+        const baseChoice = this.state.modelCycleChoices[this.state.modelCycleIndex];
+        if (baseChoice === undefined) return;
+        const baseSelection = baseChoice.selection;
+        const variantChoices = createVariantChoices(baseSelection);
+        if (variantChoices.length === 0) {
+            this.state.outputText += `No variants for ${baseSelection.providerID}/${baseSelection.modelID}\n`;
+            this.publish();
+            return;
+        }
+        const variantIDs = variantChoices
+            .map((choice) => choice.selection.variantID)
+            .filter((id): id is string => id !== undefined);
+        const rotation: readonly (string | undefined)[] = [undefined, ...variantIDs];
+        const currentIdx = rotation.indexOf(this.state.currentModelVariantID);
+        const safeIdx = currentIdx >= 0 ? currentIdx : 0;
+        const nextIdx = (safeIdx + direction + rotation.length) % rotation.length;
+        const nextVariantID = rotation[nextIdx];
+        this.state.currentModelVariantID = nextVariantID;
+        const newSelection: ModelProviderSelection = {
+            providerID: baseSelection.providerID,
+            modelID: baseSelection.modelID,
+            ...(nextVariantID !== undefined ? { variantID: nextVariantID } : {}),
+        };
+        this.onModelCycleSelect?.(newSelection);
+        const label =
+            nextVariantID === undefined
+                ? `${baseSelection.providerID}/${baseSelection.modelID} (variant: unset)`
+                : `${baseSelection.providerID}/${baseSelection.modelID}#${nextVariantID}`;
+        this.state.outputText += `Cycle variant: ${label}\n`;
         this.publish();
     }
 

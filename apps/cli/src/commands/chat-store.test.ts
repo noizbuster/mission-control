@@ -441,6 +441,119 @@ describe('chat-store — onModelCycleSelect callback', () => {
     });
 });
 
+describe('chat-store — cycleModelVariant', () => {
+    // Fixtures tied to the real catalog: openai/gpt-5 has 4 reasoning variants;
+    // opencode/claude-fable-5 has none.
+    const GPT5_SELECTION: ModelProviderSelection = { providerID: 'openai', modelID: 'gpt-5' };
+    const NO_VARIANT_SELECTION: ModelProviderSelection = {
+        providerID: 'opencode',
+        modelID: 'claude-fable-5',
+    };
+
+    function createStoreWithCurrentChoice(selection: ModelProviderSelection): ChatStore {
+        const store = createChatStore();
+        store.setModelCycleChoices([
+            makeChoice('current', selection),
+            makeChoice('other', { providerID: 'other', modelID: 'other-model' }),
+        ]);
+        return store;
+    }
+
+    it('starts at unset and advances forward through the rotation', () => {
+        const store = createStoreWithCurrentChoice(GPT5_SELECTION);
+        const calls: ModelProviderSelection[] = [];
+        store.onModelCycleSelect = (selection) => {
+            calls.push(selection);
+        };
+
+        store.cycleModelVariant(1);
+        expect(store.getSnapshot().currentModelVariantID).toBe('reasoning-minimal');
+        expect(calls).toEqual([{ providerID: 'openai', modelID: 'gpt-5', variantID: 'reasoning-minimal' }]);
+
+        store.cycleModelVariant(1);
+        expect(store.getSnapshot().currentModelVariantID).toBe('reasoning-low');
+    });
+
+    it('cycles backward from unset to the last variant (wrap)', () => {
+        const store = createStoreWithCurrentChoice(GPT5_SELECTION);
+        store.cycleModelVariant(-1);
+        expect(store.getSnapshot().currentModelVariantID).toBe('reasoning-high');
+    });
+
+    it('wraps forward from the last variant back to unset', () => {
+        const store = createStoreWithCurrentChoice(GPT5_SELECTION);
+        store.cycleModelVariant(1);
+        store.cycleModelVariant(1);
+        store.cycleModelVariant(1);
+        store.cycleModelVariant(1);
+        store.cycleModelVariant(1);
+        expect(store.getSnapshot().currentModelVariantID).toBeUndefined();
+    });
+
+    it('includes unset in the rotation: selecting unset clears variantID from the selection', () => {
+        const store = createStoreWithCurrentChoice(GPT5_SELECTION);
+        const calls: ModelProviderSelection[] = [];
+        store.onModelCycleSelect = (selection) => {
+            calls.push(selection);
+        };
+
+        store.cycleModelVariant(1);
+        store.cycleModelVariant(1);
+        store.cycleModelVariant(-1);
+        store.cycleModelVariant(-1);
+
+        expect(store.getSnapshot().currentModelVariantID).toBeUndefined();
+        const lastCall = calls.at(-1);
+        expect(lastCall).toEqual({ providerID: 'openai', modelID: 'gpt-5' });
+        expect(lastCall?.variantID).toBeUndefined();
+    });
+
+    it('emits a "No variants" notice and does not cycle when the model has no variants', () => {
+        const store = createStoreWithCurrentChoice(NO_VARIANT_SELECTION);
+        const calls: ModelProviderSelection[] = [];
+        store.onModelCycleSelect = (selection) => {
+            calls.push(selection);
+        };
+
+        store.cycleModelVariant(1);
+        expect(calls).toHaveLength(0);
+        expect(store.getSnapshot().currentModelVariantID).toBeUndefined();
+        expect(store.getOutput()).toContain('No variants for opencode/claude-fable-5');
+    });
+
+    it('emits a "Cycle variant" notice with the new selection', () => {
+        const store = createStoreWithCurrentChoice(GPT5_SELECTION);
+        store.cycleModelVariant(1);
+        expect(store.getOutput()).toContain('Cycle variant: openai/gpt-5#reasoning-minimal');
+
+        store.cycleModelVariant(-1);
+        expect(store.getOutput()).toContain('Cycle variant: openai/gpt-5 (variant: unset)');
+    });
+
+    it('is a no-op when modelCycleChoices is empty', () => {
+        const store = createChatStore();
+        const calls: ModelProviderSelection[] = [];
+        store.onModelCycleSelect = (selection) => {
+            calls.push(selection);
+        };
+
+        store.cycleModelVariant(1);
+        expect(calls).toHaveLength(0);
+        expect(store.getSnapshot().currentModelVariantID).toBeUndefined();
+    });
+
+    it('resets currentModelVariantID to unset when cycleModel switches the base model', () => {
+        const store = createStoreWithCurrentChoice(GPT5_SELECTION);
+        store.cycleModelVariant(1);
+        store.cycleModelVariant(1);
+        expect(store.getSnapshot().currentModelVariantID).toBe('reasoning-low');
+
+        store.cycleModel(1);
+        expect(store.getSnapshot().currentModelVariantID).toBeUndefined();
+        expect(store.getSnapshot().modelCycleIndex).toBe(1);
+    });
+});
+
 describe('chat-store — session picker overlay', () => {
     it('showSessionPicker sets overlayMode and returns a Promise', () => {
         const store = createChatStore();
