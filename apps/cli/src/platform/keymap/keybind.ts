@@ -131,6 +131,7 @@ export const Definitions = {
     messages_undo: keybind('<leader>u', 'Undo last message exchange'),
     messages_redo: keybind('<leader>r', 'Redo last undone message exchange'),
     messages_copy: keybind('<leader>y', 'Copy last assistant message'),
+    selection_copy: keybind('ctrl+d', 'Copy the current text selection to clipboard (when text is selected)'),
 
     // which-key
     which_key_toggle: keybind('ctrl+alt+k', 'Toggle which-key panel'),
@@ -242,6 +243,7 @@ export const CommandMap = {
     messages_undo: 'messages.undo',
     messages_redo: 'messages.redo',
     messages_copy: 'messages.copy',
+    selection_copy: 'selection.copy',
     which_key_toggle: 'which-key.toggle',
     which_key_layout_toggle: 'which-key.layout.toggle',
     input_move_left: 'input.move.left',

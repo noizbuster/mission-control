@@ -1,10 +1,11 @@
 /**
- * Messages scroll + copy-message keymap layer (T10).
+ * Messages scroll + copy keymap layer (T10).
  *
- * Registers fine-grained scroll commands (line / half-page / first / last) and
- * a copy-last-assistant-message command as a SESSION-level keymap layer that is
- * NOT textarea-gated (unlike input.* from T3/T4). These act on the transcript
- * scrollbox and clipboard regardless of whether the chat textarea is focused.
+ * Registers fine-grained scroll commands (line / half-page / first / last), a
+ * copy-last-assistant-message command, and a copy-current-selection command as a
+ * SESSION-level keymap layer that is NOT textarea-gated (unlike input.* from
+ * T3/T4). These act on the transcript scrollbox and clipboard regardless of
+ * whether the chat textarea is focused.
  *
  * Chord collision resolution (T2 learnings note 66): messages.first
  * (ctrl+shift+home) and messages.last (ctrl+shift+end) share their first chord
@@ -52,6 +53,10 @@ export interface MessagesScrollDeps {
     readonly clipboardService: ClipboardService;
     /** Returns the last `Assistant:` block text; empty when none exists. */
     readonly getLastAssistantText: () => string;
+    /** Returns the renderer's active drag-selection text, or '' when none. */
+    readonly getSelectionText: () => string;
+    /** Clears the renderer's active selection (called after a successful copy). */
+    readonly clearSelection: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +114,25 @@ export function messagesScrollBindings(
         for (const chord of expandToChords(keybinds[name])) {
             result.push({ key: chord, cmd });
         }
+    }
+    return result;
+}
+
+/**
+ * Build the chord→command binding for `selection_copy` from the keybind.ts
+ * registry. Registered in a SEPARATE high-priority, selection-gated layer (see
+ * {@link registerSelectionCopyLayer}) so the default `ctrl+d` preempts
+ * `input_delete` ONLY while a drag-selection is active; with no selection the
+ * chord falls through to the textarea layer and deletes a character as before.
+ */
+export function selectionCopyBindings(
+    keybinds: ReturnType<typeof Keybinds.parse> = Keybinds.parse({}),
+): readonly InputBinding[] {
+    const result: InputBinding[] = [];
+    const cmd = CommandMap.selection_copy;
+    if (cmd === undefined) return result;
+    for (const chord of expandToChords(keybinds.selection_copy)) {
+        result.push({ key: chord, cmd });
     }
     return result;
 }
@@ -211,5 +235,69 @@ export function registerMessagesScrollLayer<TTarget extends object, TEvent exten
         enabled: () => options.isEnabled?.() ?? true,
         commands,
         bindings: messagesScrollBindings(),
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Selection-copy layer (high priority, selection-gated)
+// ---------------------------------------------------------------------------
+
+/**
+ * Priority for the selection-copy layer. Higher than the managed textarea
+ * layer (T3, default priority 0) and the menu layer (200) so the default
+ * `ctrl+d` (which also binds `input_delete`) is captured for copy WHILE a
+ * drag-selection is active. With no selection the layer is disabled and
+ * `ctrl+d` falls through to the textarea layer (delete char) unchanged.
+ */
+export const SELECTION_COPY_LAYER_PRIORITY = 250;
+
+/**
+ * Register the selection-copy keymap layer: binds the `selection_copy` chord
+ * (default `ctrl+d`) to `selection.copy`, but ONLY while a drag-selection is
+ * active. This is what lets one easy chord copy a mouse-selected block without
+ * clobbering that chord's editing meaning (ctrl+d = delete char) when nothing
+ * is selected.
+ *
+ * Returns the layer disposer. Generic over the keymap's target/event types so
+ * the real keymap and the test keymap both satisfy it without casts.
+ */
+export function registerSelectionCopyLayer<TTarget extends object, TEvent extends KeymapEvent>(
+    keymap: Keymap<TTarget, TEvent>,
+    deps: MessagesScrollDeps,
+    options: { readonly isEnabled?: () => boolean } = {},
+): () => void {
+    const { clipboardService, getSelectionText, clearSelection } = deps;
+
+    const commands: readonly Command<TTarget, TEvent>[] = [
+        {
+            name: 'selection.copy',
+            desc: 'Copy selected text to clipboard',
+            run: () => {
+                const text = getSelectionText();
+                // No selection → hand the chord back (ctrl+d then deletes a char).
+                if (text.length === 0) return false;
+                // Avoid a silent no-op when OSC52 is unavailable (tmux needs passthrough).
+                if (!clipboardService.isOsc52Supported()) {
+                    process.stderr.write(
+                        '\r\nSelection copy needs OSC52 support. Use a modern terminal ' +
+                            '(iTerm2/Alacritty/Kitty/WezTerm/Windows Terminal); under tmux run ' +
+                            '`set -g set-allow-passthrough on`.\r\n',
+                    );
+                    return true;
+                }
+                void clipboardService.copyToClipboard(text).then((ok) => {
+                    if (ok) clearSelection();
+                });
+                return true;
+            },
+        },
+    ];
+
+    return keymap.registerLayer({
+        priority: SELECTION_COPY_LAYER_PRIORITY,
+        // Active only while a drag-selection exists AND no overlay is open.
+        enabled: () => getSelectionText().length > 0 && (options.isEnabled?.() ?? true),
+        commands,
+        bindings: selectionCopyBindings(),
     });
 }

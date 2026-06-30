@@ -27,6 +27,7 @@ import {
 import { ACCENTS } from './overlay-theme.js';
 import { SlashMenuPanel } from './SlashMenuPanel.js';
 import { BottomStatusBar, type StatusBarProps, TopStatusBar } from './StatusBar.js';
+import { Toast } from './Toast.js';
 
 const SPINNER_FRAMES = '\u280b\u2819\u2839\u2838\u2834\u2826\u2827\u2807';
 
@@ -58,6 +59,34 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
 
     const keymap = useKeymap();
     const renderer = useRenderer();
+
+    // Transient toast (e.g. the selection-copy hint). Local state — presentational,
+    // does not flow through ChatStore. Auto-dismisses; re-showing resets the timer.
+    const [toast, setToast] = useState<string | null>(null);
+    const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const showToast = useCallback((message: string): void => {
+        setToast(message);
+        if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => {
+            setToast(null);
+            toastTimerRef.current = null;
+        }, 3000);
+    }, []);
+    useEffect(() => {
+        return (): void => {
+            if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
+        };
+    }, []);
+
+    // Read-only mouse-up hook: when a drag-selection exists, surface the
+    // keyboard-copy hint. The copy itself stays keyboard-only (Ctrl+D).
+    const handleSelectionMouseUp = useCallback((): void => {
+        const selection = renderer.getSelection();
+        if (selection === null) return;
+        if (selection.getSelectedText().length === 0) return;
+        showToast('Copy selection: Ctrl+D');
+    }, [renderer, showToast]);
+
     const handleSubmitRef = useRef<() => void>(() => {});
     const submittingRef = useRef(false);
 
@@ -231,6 +260,34 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
                     scrollboxRef,
                     clipboardService: createClipboardService(renderer),
                     getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
+                    getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
+                    clearSelection: () => renderer.clearSelection(),
+                },
+                { isEnabled: () => store.getSnapshot().overlayMode === 'none' },
+            );
+        });
+        return (): void => {
+            disposed = true;
+            cleanup?.();
+        };
+    }, [keymap, renderer, scrollboxRef, store]);
+
+    // selection.copy layer: high-priority + selection-gated, so the default
+    // ctrl+d copies a drag-selection but still deletes a char when nothing is
+    // selected. Same OSC52 path + deps as the scroll layer above.
+    useEffect(() => {
+        let disposed = false;
+        let cleanup: (() => void) | undefined;
+        void import('../platform/keymap/messages-scroll.js').then(({ registerSelectionCopyLayer }) => {
+            if (disposed) return;
+            cleanup = registerSelectionCopyLayer(
+                keymap,
+                {
+                    scrollboxRef,
+                    clipboardService: createClipboardService(renderer),
+                    getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
+                    getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
+                    clearSelection: () => renderer.clearSelection(),
                 },
                 { isEnabled: () => store.getSnapshot().overlayMode === 'none' },
             );
@@ -379,7 +436,8 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
     const showFileAutocomplete = !showSlashMenu && !showWorkflowMenu && snapshot.fileAutocomplete.open;
 
     return (
-        <box flexDirection="column" width="100%" height="100%">
+        // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive, not a DOM element; mouse-up only surfaces the copy-hint toast.
+        <box flexDirection="column" width="100%" height="100%" onMouseUp={handleSelectionMouseUp}>
             {transcript}
             {snapshot.agentStatusText.length > 0 ? (
                 <AgentSpinner text={snapshot.agentStatusText} />
@@ -449,6 +507,7 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
                     <SessionPickerOverlay store={store} />
                 </ModalPopup>
             ) : null}
+            {toast !== null ? <Toast message={toast} /> : null}
         </box>
     );
 }

@@ -124,6 +124,23 @@ describe('T6 messages_first / input_buffer_home overlap is intentional (layer pr
     });
 });
 
+describe('selection_copy / input_delete overlap on ctrl+d is intentional (layer priority + selection gate)', () => {
+    // Both bind ctrl+d. Resolution: the selection-copy layer (priority 250,
+    // enabled only while a drag-selection exists) wins when text is selected;
+    // otherwise the managed textarea layer (priority 0) wins and ctrl+d deletes
+    // a char. Not a bug — pinned so a future rebind does not silently collapse
+    // the two into one behavior.
+    it('both selection_copy and input_delete bind ctrl+d', () => {
+        expect(expandToChords(defaults.selection_copy)).toContain('ctrl+d');
+        expect(expandToChords(defaults.input_delete)).toContain('ctrl+d');
+    });
+    it('selection_copy and input_delete are separate registry entries', () => {
+        const names = Object.keys(Keybinds.parse({})) as KeybindName[];
+        expect(names).toContain('selection_copy');
+        expect(names).toContain('input_delete');
+    });
+});
+
 describe('T6 EXCLUDED_TEXTAREA_CHORDS pins the four app-owned chords', () => {
     it('excludes ctrl+e so the app layer owns editor_open', () => {
         expect(EXCLUDED_TEXTAREA_CHORDS).toContain('ctrl+e');

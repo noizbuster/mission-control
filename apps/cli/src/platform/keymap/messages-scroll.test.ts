@@ -31,7 +31,12 @@ import { createTestKeymap } from '@opentui/keymap/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClipboardService } from '../clipboard-service.js';
 import { LEADER_TIMEOUT_MS, registerLeaderAddons } from './leader-addons.js';
-import { halfPageScrollDelta, registerMessagesScrollLayer, type ScrollboxLike } from './messages-scroll.js';
+import {
+    halfPageScrollDelta,
+    registerMessagesScrollLayer,
+    registerSelectionCopyLayer,
+    type ScrollboxLike,
+} from './messages-scroll.js';
 
 // ---------------------------------------------------------------------------
 // Inline test doubles (kept FFI-free)
@@ -62,31 +67,43 @@ interface FakeClipboard extends ClipboardService {
     readonly copied: string[];
 }
 
-function createFakeClipboard(): FakeClipboard {
+function createFakeClipboard(supported = true): FakeClipboard {
     const copied: string[] = [];
     return {
         copied,
         copyToClipboard(text: string): Promise<boolean> {
             copied.push(text);
-            return Promise.resolve(true);
+            return Promise.resolve(supported);
         },
         isOsc52Supported(): boolean {
-            return true;
+            return supported;
         },
     };
 }
 
 /** Build a deps bag around a recording scrollbox + fake clipboard + text provider. */
-function buildDeps(scrollHeight: number, lastAssistantText: string) {
+function buildDeps(
+    scrollHeight: number,
+    lastAssistantText: string,
+    selection: { text: string; osc52?: boolean } = { text: '' },
+) {
     const scrollbox = createRecordingScrollbox(scrollHeight);
-    const clipboard = createFakeClipboard();
+    const clipboard = createFakeClipboard(selection.osc52 ?? true);
+    const clearCalls: number[] = [];
+    const selectionState = { text: selection.text };
     return {
         scrollbox,
         clipboard,
+        clearCalls,
         deps: {
             scrollboxRef: { current: scrollbox as ScrollboxLike | null },
             clipboardService: clipboard,
             getLastAssistantText: () => lastAssistantText,
+            getSelectionText: () => selectionState.text,
+            clearSelection: () => {
+                clearCalls.push(1);
+                selectionState.text = '';
+            },
         },
     };
 }
@@ -262,6 +279,64 @@ describe('T10 messages.copy (leader+y)', () => {
 
         off();
         offLeader();
+        harness.cleanup();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// selection.copy layer (ctrl+d, selection-gated)
+// ---------------------------------------------------------------------------
+
+describe('selection.copy (ctrl+d, high-priority selection-gated layer)', () => {
+    it('copies the EXACT selection text and clears the selection on ctrl+d', async () => {
+        const harness = createTestKeymap({ defaultKeys: true });
+        harness.host.focus(harness.root);
+        const expected = 'selected block';
+        const { clipboard, clearCalls, deps } = buildDeps(100, '', { text: expected });
+        const off = registerSelectionCopyLayer(harness.keymap, deps);
+
+        harness.host.press('d', { ctrl: true });
+        // clearSelection runs in the copyToClipboard().then microtask.
+        await Promise.resolve();
+
+        expect(clipboard.copied).toEqual([expected]);
+        expect(clearCalls).toEqual([1]);
+
+        off();
+        harness.cleanup();
+    });
+
+    it('does NOT copy or clear on ctrl+d when there is no selection (layer disabled)', () => {
+        const harness = createTestKeymap({ defaultKeys: true });
+        harness.host.focus(harness.root);
+        const { clipboard, clearCalls, deps } = buildDeps(100, '');
+        const off = registerSelectionCopyLayer(harness.keymap, deps);
+
+        harness.host.press('d', { ctrl: true });
+
+        expect(clipboard.copied).toEqual([]);
+        expect(clearCalls).toEqual([]);
+
+        off();
+        harness.cleanup();
+    });
+
+    it('writes a stderr OSC52 notice and does NOT copy or clear when OSC52 is unsupported', () => {
+        const harness = createTestKeymap({ defaultKeys: true });
+        harness.host.focus(harness.root);
+        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const { clipboard, clearCalls, deps } = buildDeps(100, '', { text: 'block', osc52: false });
+        const off = registerSelectionCopyLayer(harness.keymap, deps);
+
+        harness.host.press('d', { ctrl: true });
+
+        expect(clipboard.copied).toEqual([]);
+        expect(clearCalls).toEqual([]);
+        const notice = stderrSpy.mock.calls.map((call) => String(call[0])).join('');
+        expect(notice).toContain('OSC52');
+
+        stderrSpy.mockRestore();
+        off();
         harness.cleanup();
     });
 });
