@@ -438,22 +438,25 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
     return (
         // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive, not a DOM element; mouse-up only surfaces the copy-hint toast.
         <box flexDirection="column" width="100%" height="100%" onMouseUp={handleSelectionMouseUp}>
-            {transcript}
-            {snapshot.agentStatusText.length > 0 ? (
-                <AgentSpinner text={snapshot.agentStatusText} />
-            ) : snapshot.generating ? (
-                <box marginTop={1} flexShrink={0}>
-                    <text fg="#ffff00">{'\u25cf Thinking...'}</text>
-                </box>
-            ) : null}
-            {showSlashMenu || showWorkflowMenu ? (
-                <SlashMenuPanel
-                    inputBuffer={snapshot.inputMirror}
-                    menuState={snapshot.menuState}
-                    workflowNames={snapshot.workflowNames}
-                />
-            ) : null}
-            {showFileAutocomplete ? <FileAutocompletePanel fileAutocomplete={snapshot.fileAutocomplete} /> : null}
+            <box flexDirection="column" flexGrow={1}>
+                {transcript}
+                {snapshot.agentStatusText.length > 0 ? (
+                    <AgentSpinner text={snapshot.agentStatusText} />
+                ) : snapshot.generating ? (
+                    <box marginTop={1} flexShrink={0}>
+                        <text fg="#ffff00">{'\u25cf Thinking...'}</text>
+                    </box>
+                ) : null}
+                {showSlashMenu || showWorkflowMenu ? (
+                    <SlashMenuPanel
+                        inputBuffer={snapshot.inputMirror}
+                        menuState={snapshot.menuState}
+                        workflowNames={snapshot.workflowNames}
+                    />
+                ) : null}
+                {showFileAutocomplete ? <FileAutocompletePanel fileAutocomplete={snapshot.fileAutocomplete} /> : null}
+                {toast !== null ? <Toast message={toast} /> : null}
+            </box>
             {statusBarProps !== undefined ? (
                 <TopStatusBar
                     {...statusBarProps}
@@ -507,7 +510,6 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
                     <SessionPickerOverlay store={store} />
                 </ModalPopup>
             ) : null}
-            {toast !== null ? <Toast message={toast} /> : null}
         </box>
     );
 }
