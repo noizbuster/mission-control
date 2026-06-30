@@ -174,6 +174,15 @@ describe('config catalog constants', () => {
         ]);
         expect(variantsForGeneratedModel('deepseek', 'deepseek-reasoner')).toBeUndefined();
         expect(variantsForGeneratedModel('zai-coding-plan', 'glm-4.6')).toBeUndefined();
+        expect(variantsForGeneratedModel('zai-coding-plan', 'glm-5.1')).toBeUndefined();
+        expect(variantsForGeneratedModel('zai-coding-plan', 'glm-5v-turbo')).toBeUndefined();
+        expect(variantsForGeneratedModel('zai-coding-plan', 'glm-5.2')?.map((variant) => variant.id)).toEqual([
+            'reasoning-minimal',
+            'reasoning-low',
+            'reasoning-medium',
+            'reasoning-high',
+            'reasoning-xhigh',
+        ]);
 
         const openRouterProvider = modelProviderCatalog.find((provider) => provider.id === 'openrouter');
         const openRouterReasoning = openRouterProvider?.models.find((model) => model.id === 'openai/gpt-5');

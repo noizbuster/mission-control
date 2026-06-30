@@ -202,8 +202,9 @@ Per-provider variant support:
 | `openrouter` | OpenAI-compatible | `reasoning-low`, `reasoning-medium`, `reasoning-high` on reasoning-capable models | `reasoning.effort` | prefixed reasoning-model regex |
 | `groq` | OpenAI-compatible | `reasoning-none`, `reasoning-low`, `reasoning-medium`, `reasoning-high` on reasoning models | `reasoning_effort` | reasoning-model regex |
 | `mistral` | OpenAI-compatible | `reasoning-high` on `mistral-small-2603`, `mistral-small-latest`, and `mistral-medium-2604` only | `reasoning_effort` | exact model-ID list |
+| `zai-coding-plan` | OpenAI-compatible | `reasoning-minimal`, `reasoning-low`, `reasoning-medium`, `reasoning-high`, `reasoning-xhigh` on GLM 5.2+ (base, air, turbo; vision excluded) | `thinking.type` (`enabled`/`disabled`) plus `reasoning_effort` (`high`/`max`); `reasoning-minimal` collapses to `thinking.type: disabled` | GLM 5.2+ regex, excludes vision SKUs |
 
-Numeric variant budgets: Anthropic `thinking-low` sets `budget_tokens` to `8000` with `max_tokens` `9024`, `thinking-medium` uses `16000` and `17024`, `thinking-high` uses `32000` and `33024`. Gemini `thinking-low`, `thinking-medium`, and `thinking-high` set `thinkingBudget` to `2048`, `8192`, and `24576`. The Gemini high value is the safe cross-model cap; Flash tops out at `24576` and Pro at `32768`.
+Numeric variant budgets: Anthropic `thinking-low` sets `budget_tokens` to `8000` with `max_tokens` `9024`, `thinking-medium` uses `16000` and `17024`, `thinking-high` uses `32000` and `33024`. Gemini `thinking-low`, `thinking-medium`, and `thinking-high` set `thinkingBudget` to `2048`, `8192`, and `24576`. The Gemini high value is the safe cross-model cap; Flash tops out at `24576` and Pro at `32768`. ZAI GLM-5.2 collapses the 5-tier effort set to 3 wire values: `reasoning-minimal` → `thinking:{type:"disabled"}`, `reasoning-low`/`reasoning-medium`/`reasoning-high` → `thinking:{type:"enabled"}` + `reasoning_effort:"high"`, `reasoning-xhigh` → `thinking:{type:"enabled"}` + `reasoning_effort:"max"`.
 
 Silent-drop policy: a variant that is not configured for the selected model is dropped at the provider boundary with no error. The runtime looks up the model's catalog entry, and when that entry has no matching variant preset the reasoning or thinking field is omitted from the request body. So `openai/gpt-4o-mini#reasoning-high` and `google/gemini-2.0-flash#thinking-high` both send a plain request with no reasoning or thinking field. A stale selection never turns into a hard failure.
 
@@ -212,10 +213,9 @@ Each provider family owns its variant mapper. The mapper is a private function i
 Deferred follow-ups:
 
 - Gemini 3.x uses a different vocabulary (`thinkingLevel` as an enum, not a token budget). Only 2.5 `thinkingBudget` is supported for now.
-- zai-coding-plan reasoning variants are deferred. The request parameter shape needs empirical confirmation before wiring it in.
 - The agent-frontmatter `thinkingLevel` field does not yet bridge to a variant ID. That is a separate concern.
 - The AI-SDK graph path (`ai-sdk/model-resolver.ts`) ignores `variantID`. It is tied to the graph-runner cutover.
-- DeepSeek and zai-coding-plan intentionally return no variants in v1. `deepseek-reasoner` is always-on reasoning, and the zai parameter shape is unvalidated.
+- DeepSeek intentionally returns no variants in v1. `deepseek-reasoner` is always-on reasoning.
 - Mistral reasoning is pinned to the dated IDs `mistral-small-2603` and `mistral-medium-2604`, plus `mistral-small-latest`. `mistral-medium-latest` is intentionally not whitelisted, so pick the dated ID for reasoning.
 
 ## Coding Agent Runtime

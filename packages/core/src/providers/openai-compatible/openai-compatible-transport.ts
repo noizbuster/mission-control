@@ -39,6 +39,7 @@ export type OpenAICompatibleRequestBody = {
     readonly tools?: readonly OpenAICompatibleTool[];
     readonly reasoning_effort?: string;
     readonly reasoning?: { readonly effort: string };
+    readonly thinking?: { readonly type: string };
 };
 
 export type OpenAICompatibleTransportRequest = {

@@ -81,6 +81,49 @@ describe('OpenAI-compatible provider reasoning variants', () => {
         expect(hasOwn(requests[0]?.body, 'reasoning_effort')).toBe(false);
     });
 
+    it.each([
+        ['reasoning-minimal', { thinking: { type: 'disabled' } }, false],
+        ['reasoning-low', { thinking: { type: 'enabled' }, reasoning_effort: 'high' }, true],
+        ['reasoning-medium', { thinking: { type: 'enabled' }, reasoning_effort: 'high' }, true],
+        ['reasoning-high', { thinking: { type: 'enabled' }, reasoning_effort: 'high' }, true],
+        ['reasoning-xhigh', { thinking: { type: 'enabled' }, reasoning_effort: 'max' }, true],
+    ] as const)(
+        'maps zai-coding-plan glm-5.2 %s into thinking toggle + reasoning_effort',
+        async (variantID, expectedBody, expectsEffort) => {
+            const requests: OpenAICompatibleTransportRequest[] = [];
+            const provider = createProviderWithRequests('zai-coding-plan', requests);
+
+            await collectChunks(
+                provider.streamTurn(
+                    turnRequest({ providerID: 'zai-coding-plan', modelID: 'glm-5.2', variantID }),
+                    providerContext(),
+                ),
+            );
+
+            expect(requests[0]?.body.thinking).toEqual(expectedBody.thinking);
+            if (expectsEffort) {
+                expect(requests[0]?.body.reasoning_effort).toBe(expectedBody.reasoning_effort);
+            } else {
+                expect(hasOwn(requests[0]?.body, 'reasoning_effort')).toBe(false);
+            }
+        },
+    );
+
+    it('silently drops reasoning variant on non-reasoning zai-coding-plan model (glm-4.6)', async () => {
+        const requests: OpenAICompatibleTransportRequest[] = [];
+        const provider = createProviderWithRequests('zai-coding-plan', requests);
+
+        await collectChunks(
+            provider.streamTurn(
+                turnRequest({ providerID: 'zai-coding-plan', modelID: 'glm-4.6', variantID: 'reasoning-high' }),
+                providerContext(),
+            ),
+        );
+
+        expect(hasOwn(requests[0]?.body, 'thinking')).toBe(false);
+        expect(hasOwn(requests[0]?.body, 'reasoning_effort')).toBe(false);
+    });
+
     it('silently drops stale reasoning variant on non-reasoning openrouter model', async () => {
         const requests: OpenAICompatibleTransportRequest[] = [];
         const provider = createProviderWithRequests('openrouter', requests);

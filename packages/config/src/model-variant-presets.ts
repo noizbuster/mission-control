@@ -49,6 +49,17 @@ const mistralReasoningVariants = [
     { id: 'reasoning-high', name: 'Reasoning High', status: 'active' },
 ] as const satisfies readonly ModelVariantPreset[];
 
+// GLM-5.2+ is the first GLM SKU that accepts `reasoning_effort` alongside a binary
+// `thinking:{type}` toggle (empirically confirmed via the oh-my-pi reference; pre-5.2
+// GLM only takes the binary toggle). 5-tier efforts matching the validated set.
+const zaiReasoningVariants = [
+    { id: 'reasoning-minimal', name: 'Reasoning Minimal', status: 'active' },
+    { id: 'reasoning-low', name: 'Reasoning Low', status: 'active' },
+    { id: 'reasoning-medium', name: 'Reasoning Medium', status: 'active' },
+    { id: 'reasoning-high', name: 'Reasoning High', status: 'active' },
+    { id: 'reasoning-xhigh', name: 'Reasoning XHigh', status: 'active' },
+] as const satisfies readonly ModelVariantPreset[];
+
 export function variantsForGeneratedModel(
     providerID: string,
     modelID: string,
@@ -69,6 +80,8 @@ export function variantsForGeneratedModel(
             return isGroqReasoningModel(modelID) ? groqReasoningVariants : undefined;
         case 'mistral':
             return isMistralReasoningModel(modelID) ? mistralReasoningVariants : undefined;
+        case 'zai-coding-plan':
+            return isZaiGlm52ReasoningModel(modelID) ? zaiReasoningVariants : undefined;
         default:
             return undefined;
     }
@@ -106,4 +119,14 @@ const MISTRAL_REASONING_MODEL_IDS: readonly string[] = [
 
 function isMistralReasoningModel(modelID: string): boolean {
     return MISTRAL_REASONING_MODEL_IDS.includes(modelID);
+}
+
+// GLM 5.2+ (base, air, turbo) accepts `reasoning_effort`; vision SKUs (glm-*v) do not.
+function isZaiGlm52ReasoningModel(modelID: string): boolean {
+    if (/^glm-\d+v/.test(modelID)) return false;
+    const match = /^glm-(\d+)(?:\.(\d+))?(?:[.-]|$)/.exec(modelID);
+    if (match === null) return false;
+    const major = Number(match[1]);
+    const minor = match[2] !== undefined ? Number(match[2]) : 0;
+    return major >= 6 || (major === 5 && minor >= 2);
 }
