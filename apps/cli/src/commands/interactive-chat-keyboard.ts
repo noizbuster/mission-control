@@ -2,8 +2,14 @@ export type TerminalKeyboardMode = {
     readonly modifiedKeysEnabled: boolean;
 };
 
-export const terminalModifiedKeyEnableSequence = '\u001b[>7u\u001b[?u\u001b[c\u001b[>4;2m';
-export const terminalModifiedKeyDisableSequence = '\u001b[<u\u001b[>4;0m';
+// xterm modifyOtherKeys mode 2 only — intentionally NOT the Kitty keyboard
+// protocol. While Kitty keyboard is active, terminals such as WezTerm forward
+// terminal-level shortcuts (Ctrl+Shift+C copy, Ctrl+Shift+V paste) into the
+// app, where we cannot honour them because we cannot read the X selection.
+// modifyOtherKeys 2 still gives us Shift+Enter (`\u001b[27;2;13~`) and
+// Ctrl+Arrows (`\u001b[1;5<dir>`), which is all this codebase needs.
+export const terminalModifiedKeyEnableSequence = '\u001b[>4;2m';
+export const terminalModifiedKeyDisableSequence = '\u001b[>4;0m';
 
 const escapeSequencePrefix = '\u001b[';
 const escapeReturnSequence = '\u001b\r';

@@ -260,10 +260,11 @@ describe('interactive chat command menu', () => {
         expect(block.text).toContain('\u001b[8C');
     });
 
-    it('emits terminal modified-key protocol toggles for distinguishing Shift+Enter from Enter', () => {
-        expect(terminalModifiedKeyEnableSequence).toContain('\u001b[>7u');
+    it('enables xterm modifyOtherKeys mode 2 without enabling the Kitty keyboard protocol so terminal copy/paste shortcuts still fire', () => {
         expect(terminalModifiedKeyEnableSequence).toContain('\u001b[>4;2m');
-        expect(terminalModifiedKeyDisableSequence).toContain('\u001b[<u');
+        expect(terminalModifiedKeyEnableSequence).not.toContain('\u001b[>7u');
+        expect(terminalModifiedKeyEnableSequence).not.toContain('\u001b[?u');
+        expect(terminalModifiedKeyEnableSequence).not.toContain('\u001b[c');
         expect(terminalModifiedKeyDisableSequence).toContain('\u001b[>4;0m');
     });
 
