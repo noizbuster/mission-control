@@ -14,12 +14,17 @@ import {
 } from './provider-turn-types.js';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
-const DEFAULT_RETRY_LIMIT = 2;
+const DEFAULT_RETRY_LIMIT = 7;
 const DEFAULT_TOOL_CALL_LOOP_LIMIT = 8;
+const DEFAULT_RETRY_BASE_DELAY_MS = 1_000;
+const DEFAULT_MAX_RETRY_DELAY_MS = 30_000;
 
 export class ProviderTurnRunner {
     private readonly options: Required<
-        Pick<ProviderTurnRunnerOptions, 'timeoutMs' | 'retryLimit' | 'toolCallLoopLimit'>
+        Pick<
+            ProviderTurnRunnerOptions,
+            'timeoutMs' | 'retryLimit' | 'toolCallLoopLimit' | 'retryBaseDelayMs' | 'maxRetryDelayMs'
+        >
     >;
     private readonly provider: ProviderTurnRunnerOptions['provider'];
     private readonly now: () => string;
@@ -33,6 +38,8 @@ export class ProviderTurnRunner {
             timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
             retryLimit: options.retryLimit ?? DEFAULT_RETRY_LIMIT,
             toolCallLoopLimit: options.toolCallLoopLimit ?? DEFAULT_TOOL_CALL_LOOP_LIMIT,
+            retryBaseDelayMs: options.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS,
+            maxRetryDelayMs: options.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS,
         };
     }
 
@@ -69,6 +76,7 @@ export class ProviderTurnRunner {
                     envelopes: state.durableEnvelopes,
                 };
             }
+            await sleepBeforeRetry(signal, attempt, this.options.retryBaseDelayMs, this.options.maxRetryDelayMs);
         }
 
         const error = unknownProviderError('provider retry loop ended unexpectedly');
@@ -239,4 +247,32 @@ function unknownProviderError(message: string): ProtocolError {
         message,
         retryable: false,
     };
+}
+
+function computeRetryDelayMs(retryNumber: number, baseMs: number, capMs: number): number {
+    if (retryNumber <= 1) return 0;
+    const exponent = retryNumber - 2;
+    const candidate = baseMs * 2 ** exponent;
+    return Math.min(capMs, candidate);
+}
+
+async function sleepBeforeRetry(signal: AbortSignal, attempt: number, baseMs: number, capMs: number): Promise<void> {
+    const delay = computeRetryDelayMs(attempt, baseMs, capMs);
+    if (delay <= 0) return;
+    await abortableSleep(delay, signal);
+}
+
+function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+        const onAbort = (): void => {
+            clearTimeout(timer);
+            resolve();
+        };
+        const timer = setTimeout(() => {
+            signal.removeEventListener('abort', onAbort);
+            resolve();
+        }, ms);
+        signal.addEventListener('abort', onAbort, { once: true });
+    });
 }

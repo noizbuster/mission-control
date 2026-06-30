@@ -258,6 +258,87 @@ describe('ProviderTurnRunner', () => {
         expect(result.envelopes.at(-1)?.event.message).toBe('recovered');
         expect(provider.attemptCount()).toBe(2);
     });
+
+    it('retries immediately on the first retry then applies exponential backoff up to the cap', async () => {
+        const provider = createDeterministicProvider([
+            [
+                {
+                    kind: 'response_failed',
+                    error: { code: 'provider_rate_limited', message: 'overloaded', retryable: true },
+                },
+            ],
+            [
+                {
+                    kind: 'response_failed',
+                    error: { code: 'provider_rate_limited', message: 'overloaded', retryable: true },
+                },
+            ],
+            [
+                {
+                    kind: 'response_failed',
+                    error: { code: 'provider_rate_limited', message: 'overloaded', retryable: true },
+                },
+            ],
+            [{ kind: 'response_completed', content: 'recovered' }],
+        ]);
+        const runner = new ProviderTurnRunner({
+            provider,
+            retryLimit: 5,
+            retryBaseDelayMs: 50,
+            maxRetryDelayMs: 200,
+        });
+
+        const start = Date.now();
+        const result = await runner.runTurn(turnInput('session_backoff', 'request_backoff'));
+        const elapsed = Date.now() - start;
+
+        expect(result).toMatchObject({ status: 'completed', attempts: 4 });
+        expect(provider.attemptCount()).toBe(4);
+        expect(elapsed).toBeGreaterThanOrEqual(140);
+    });
+
+    it('caps retry delay at maxRetryDelayMs', async () => {
+        const provider = createDeterministicProvider([
+            [
+                {
+                    kind: 'response_failed',
+                    error: { code: 'provider_rate_limited', message: 'overloaded', retryable: true },
+                },
+            ],
+            [
+                {
+                    kind: 'response_failed',
+                    error: { code: 'provider_rate_limited', message: 'overloaded', retryable: true },
+                },
+            ],
+            [
+                {
+                    kind: 'response_failed',
+                    error: { code: 'provider_rate_limited', message: 'overloaded', retryable: true },
+                },
+            ],
+            [
+                {
+                    kind: 'response_failed',
+                    error: { code: 'provider_rate_limited', message: 'overloaded', retryable: true },
+                },
+            ],
+            [{ kind: 'response_completed', content: 'recovered' }],
+        ]);
+        const runner = new ProviderTurnRunner({
+            provider,
+            retryLimit: 5,
+            retryBaseDelayMs: 100,
+            maxRetryDelayMs: 150,
+        });
+
+        const start = Date.now();
+        const result = await runner.runTurn(turnInput('session_backoff_cap', 'request_backoff_cap'));
+        const elapsed = Date.now() - start;
+
+        expect(result).toMatchObject({ status: 'completed', attempts: 5 });
+        expect(elapsed).toBeGreaterThanOrEqual(390);
+    });
 });
 
 async function openStore(sessionId: string): Promise<{

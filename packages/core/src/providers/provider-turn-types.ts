@@ -62,6 +62,8 @@ export type ProviderTurnRunnerOptions = {
     readonly timeoutMs?: number;
     readonly retryLimit?: number;
     readonly toolCallLoopLimit?: number;
+    readonly retryBaseDelayMs?: number;
+    readonly maxRetryDelayMs?: number;
 };
 
 export class ProviderTurnError extends Error {
