@@ -3,8 +3,8 @@ import { formatSkillInstructions, loadSkillBody, type Skill, type SkillToolOutpu
 import type { AbgGraphSpec, ModelProviderSelection } from '@mission-control/protocol';
 import type { ApprovalLevel } from './approval-level.js';
 import { APPROVAL_LEVEL_META } from './approval-level.js';
-import type { SessionPickerEntry } from './chat-store.js';
 import type { ChatLineAction, WorkflowInvocationAction } from './chat-commands.js';
+import type { SessionPickerEntry } from './chat-store.js';
 import type { ModelSelector } from './interactive-chat.js';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import { runBashAction, runBashDisplayOnlyAction } from './interactive-chat-bash-action.js';
@@ -151,6 +151,9 @@ export async function runChatAction(
                       : coding.sessionNavigation.switchSession({ sessionId: action.sessionId }),
             );
         case 'sessions':
+            if (coding.selectSessionForAttach !== undefined) {
+                return runSessionPickerAction(chatOutput, currentModelProviderSelection, coding);
+            }
             return runSessionNavigationAction(chatOutput, coding, currentModelProviderSelection, () =>
                 coding.sessionNavigation === undefined
                     ? Promise.resolve(undefined)

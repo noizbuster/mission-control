@@ -451,12 +451,14 @@ export function SessionPickerOverlay({ store }: SessionPickerOverlayProps): Reac
             {view.visibleEntries.map((entry, index) => {
                 const globalIndex = view.startIndex + index;
                 const isSelected = globalIndex === view.selectedIndex;
+                const titleText = entry.label.length > 0 ? entry.label : entry.sessionId;
+                const timestampText = entry.updatedAt ?? '';
                 return (
-                    <text key={entry.sessionId} {...(isSelected ? { bg: SELECTED_BG } : {})}>
-                        {isSelected ? '> ' : '  '}
-                        {`${entry.sessionId}  ${entry.label}`}
-                        {entry.updatedAt !== undefined ? `  (${entry.updatedAt})` : ''}
-                    </text>
+                    <box key={entry.sessionId} flexDirection="row" {...(isSelected ? { bg: SELECTED_BG } : {})}>
+                        <text>{isSelected ? '> ' : '  '}</text>
+                        <text flexGrow={1}>{titleText}</text>
+                        {timestampText.length > 0 ? <text attributes={TextAttributes.DIM}>{timestampText}</text> : null}
+                    </box>
                 );
             })}
         </OverlayFrame>

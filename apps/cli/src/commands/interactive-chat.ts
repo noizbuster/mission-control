@@ -408,7 +408,8 @@ export async function runInteractiveChatSession(
                 currentSessionStore = ensured.store;
             }
             let result: ChatActionResult;
-            if (tuiBridge !== undefined) {
+            const isPickerAction = action.kind === 'sessions' || action.kind === 'session-picker';
+            if (tuiBridge !== undefined && !isPickerAction) {
                 tuiBridge.setGenerating(true);
             }
             try {
