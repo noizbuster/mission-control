@@ -32,6 +32,7 @@ export type BottomStatusShape = {
     readonly approvalLabel: string;
     readonly approvalColor: string | undefined;
     readonly projectLabel: string | undefined;
+    readonly sessionID: string | undefined;
 };
 
 /**
@@ -63,7 +64,7 @@ export function approvalLevelColor(level: ApprovalLevel | undefined): string | u
 
 /**
  * Project / branch / worktree label for the bottom-right segment, e.g.
- * `mission-control - feature-x (worktree)`. `undefined` when no workspace is
+ * `mission-control:feature-x(worktree)`. `undefined` when no workspace is
  * known (the segment is omitted entirely).
  */
 function buildProjectLabel(
@@ -77,10 +78,10 @@ function buildProjectLabel(
     const dirLabel = basename(workspaceRoot) || workspaceRoot;
     let label = dirLabel;
     if (gitBranch !== undefined && gitBranch.length > 0) {
-        label = `${label} - ${gitBranch}`;
+        label = `${label}:${gitBranch}`;
     }
     if (isWorktree) {
-        label = `${label} (worktree)`;
+        label = `${label}(worktree)`;
     }
     return label;
 }
@@ -105,6 +106,7 @@ export function formatBottomStatus(props: StatusBarProps): BottomStatusShape {
         approvalLabel: props.approvalLevel ?? 'approval',
         approvalColor: approvalLevelColor(props.approvalLevel),
         projectLabel: buildProjectLabel(props.workspaceRoot, props.gitBranch, props.isWorktree),
+        sessionID: props.sessionID,
     };
 }
 
@@ -146,17 +148,18 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
 
 /**
  * Bottom status line: approval indicator (colored by ramp; verbose and unknown
- * are dimmed) on the left; `project - branch (worktree)` on the right. The gap
- * between the segments is filled with a dim horizontal rule (`─`). Full-width
+ * are dimmed) on the left; `project:branch(worktree)` followed by the raw
+ * session id on the right (each segment omitted when absent). The gap between
+ * the segments is filled with a dim horizontal rule (`─`). Full-width
  * dark-navy bg.
  */
 export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
-    const { approvalLabel, approvalColor, projectLabel } = formatBottomStatus(props);
+    const { approvalLabel, approvalColor, projectLabel, sessionID } = formatBottomStatus(props);
     const dimApproval = props.approvalLevel === undefined || props.approvalLevel === 'verbose';
-    const fillCount = Math.max(
-        0,
-        statusRowColumns() - approvalLabel.length - 1 - (projectLabel !== undefined ? projectLabel.length + 1 : 0),
-    );
+    const rightLength =
+        (projectLabel !== undefined ? projectLabel.length + 1 : 0) +
+        (sessionID !== undefined ? sessionID.length + 1 : 0);
+    const fillCount = Math.max(0, statusRowColumns() - approvalLabel.length - 1 - rightLength);
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
             <text
@@ -168,6 +171,7 @@ export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
             <text>{' '}</text>
             <text attributes={TextAttributes.DIM}>{'\u2500'.repeat(fillCount)}</text>
             {projectLabel !== undefined ? <text>{` ${projectLabel}`}</text> : null}
+            {sessionID !== undefined ? <text>{` ${sessionID}`}</text> : null}
         </box>
     );
 }

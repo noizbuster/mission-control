@@ -107,14 +107,14 @@ describe('formatBottomStatus', () => {
         expect(out.approvalColor).toBe(undefined);
     });
 
-    it('builds `project - branch (worktree)` when workspace, branch, and worktree are all present', () => {
+    it('builds `project:branch(worktree)` when workspace, branch, and worktree are all present', () => {
         const out = formatBottomStatus({
             ...baseProps,
             workspaceRoot: '/home/user/mission-control',
             gitBranch: 'feature-x',
             isWorktree: true,
         });
-        expect(out.projectLabel).toBe('mission-control - feature-x (worktree)');
+        expect(out.projectLabel).toBe('mission-control:feature-x(worktree)');
     });
 
     it('drops the worktree suffix for a normal checkout', () => {
@@ -124,7 +124,7 @@ describe('formatBottomStatus', () => {
             gitBranch: 'feature-x',
             isWorktree: false,
         });
-        expect(out.projectLabel).toBe('mission-control - feature-x');
+        expect(out.projectLabel).toBe('mission-control:feature-x');
     });
 
     it('shows just the project dir when no branch is known', () => {
@@ -141,7 +141,7 @@ describe('formatBottomStatus', () => {
             workspaceRoot: '/home/user/mission-control',
             isWorktree: true,
         });
-        expect(out.projectLabel).toBe('mission-control (worktree)');
+        expect(out.projectLabel).toBe('mission-control(worktree)');
     });
 
     it('omits the whole right segment when no workspace is known', () => {
@@ -152,5 +152,15 @@ describe('formatBottomStatus', () => {
     it('falls back to the full path when basename is empty (root path)', () => {
         const out = formatBottomStatus({ ...baseProps, workspaceRoot: '/' });
         expect(out.projectLabel).toBe('/');
+    });
+
+    it('surfaces the raw session id when provided', () => {
+        const out = formatBottomStatus({ ...baseProps, sessionID: 'session_abc123' });
+        expect(out.sessionID).toBe('session_abc123');
+    });
+
+    it('leaves the session id undefined when not provided', () => {
+        const out = formatBottomStatus(baseProps);
+        expect(out.sessionID).toBe(undefined);
     });
 });
