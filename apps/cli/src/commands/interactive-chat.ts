@@ -518,6 +518,8 @@ export async function runInteractiveChatSession(
                 if (result.persistModelProviderSelection === true) {
                     await options.persistModelProviderSelection?.(result.modelProviderSelection);
                 }
+                // Sync store so Ctrl+V variant cycling targets the new base.
+                tuiBridge?.setModelSelection(result.modelProviderSelection);
             }
             currentModelProviderSelection = result.modelProviderSelection;
             activeTurn = result.activeTurn;

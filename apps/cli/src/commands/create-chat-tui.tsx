@@ -46,6 +46,7 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Op
         isToolOutputExpanded: () => store.getSnapshot().toolOutputExpanded,
         setWorkflowNames: (names) => store.setWorkflowNames(names),
         setModelCycleChoices: (choices) => store.setModelCycleChoices(choices),
+        setModelSelection: (selection) => store.setModelSelection(selection),
         setApprovalLevel: (level) => store.setApprovalLevel(level),
         setSessionId: (id) => store.setSessionId(id),
         setContextTokensUsed: (used) => store.setContextTokensUsed(used),
@@ -85,6 +86,12 @@ export async function createChatTui(options: ChatTuiOptions): Promise<OpenTuiCha
         ...(options.initialApprovalLevel !== undefined ? { initialApprovalLevel: options.initialApprovalLevel } : {}),
     });
     store.setContextTokensMax(getModelContextLimit(options.providerID, options.modelID));
+    // Seed currentModelSelection so Ctrl+V variant cycling works pre-`/model`.
+    store.setModelSelection({
+        providerID: options.providerID,
+        modelID: options.modelID,
+        ...(options.variantID !== undefined ? { variantID: options.variantID } : {}),
+    });
 
     const { useRenderer } = await import('@opentui/react');
     const { ChatKeymapProvider } = await import('../platform/keymap/keymap-provider.js');

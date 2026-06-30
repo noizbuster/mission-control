@@ -78,7 +78,9 @@ export type ChatStoreState = {
     readonly workflowNames: readonly string[];
     readonly modelCycleChoices: readonly ModelChoice[];
     readonly modelCycleIndex: number;
-    /** Reset to `undefined` by `cycleModel` when the base model changes. */
+    /** Single source of truth for the live selection; `setModelSelection` keeps `modelCycleIndex` aligned when the base matches a cycle entry. */
+    readonly currentModelSelection: ModelProviderSelection | undefined;
+    /** Mirror of `currentModelSelection.variantID`; used by `cycleModelVariant` to find its rotation slot. */
     readonly currentModelVariantID: string | undefined;
     readonly menuState: SlashCommandMenuState;
     readonly fileAutocomplete: FileAutocompleteState;
@@ -207,6 +209,7 @@ export class ChatStore {
             workflowNames: [],
             modelCycleChoices: [],
             modelCycleIndex: 0,
+            currentModelSelection: undefined,
             currentModelVariantID: undefined,
             menuState: createSlashCommandMenuState(),
             fileAutocomplete: createFileAutocompleteState(),
@@ -494,7 +497,18 @@ export class ChatStore {
 
     setModelCycleChoices(choices: readonly ModelChoice[]): void {
         this.state.modelCycleChoices = choices;
-        if (this.state.modelCycleIndex >= choices.length) {
+        const liveBase = this.state.currentModelSelection;
+        const matchingIndex =
+            liveBase === undefined
+                ? -1
+                : choices.findIndex(
+                      (choice) =>
+                          choice.selection.providerID === liveBase.providerID &&
+                          choice.selection.modelID === liveBase.modelID,
+                  );
+        if (matchingIndex >= 0) {
+            this.state.modelCycleIndex = matchingIndex;
+        } else if (this.state.modelCycleIndex >= choices.length) {
             this.state.modelCycleIndex = 0;
         }
         this.publish();
@@ -534,16 +548,45 @@ export class ChatStore {
         };
     }
 
+    /**
+     * Single entry point for any path that picks a model (Ctrl+P cycle,
+     * F2/leader+N shortcut, `/model` picker, `/model provider/model` chat
+     * command, or the initial chat selection). Updates `currentModelSelection`,
+     * mirrors `currentModelVariantID`, re-aligns `modelCycleIndex` when the
+     * base matches a cycle entry, and forwards to `onModelCycleSelect` so the
+     * imperative loop's provider config tracks the same selection.
+     */
+    setModelSelection(selection: ModelProviderSelection): void {
+        this.state.currentModelSelection = selection;
+        this.state.currentModelVariantID = selection.variantID;
+        const matchingIndex = this.state.modelCycleChoices.findIndex(
+            (choice) =>
+                choice.selection.providerID === selection.providerID && choice.selection.modelID === selection.modelID,
+        );
+        if (matchingIndex >= 0) {
+            this.state.modelCycleIndex = matchingIndex;
+        }
+        this.onModelCycleSelect?.(selection);
+        this.publish();
+    }
+
     cycleModel(direction: 1 | -1): void {
         const choices = this.state.modelCycleChoices;
         if (choices.length <= 1) return;
-        this.state.modelCycleIndex = (this.state.modelCycleIndex + direction + choices.length) % choices.length;
-        this.state.currentModelVariantID = undefined;
-        const choice = choices[this.state.modelCycleIndex];
+        const nextIndex = (this.state.modelCycleIndex + direction + choices.length) % choices.length;
+        this.state.modelCycleIndex = nextIndex;
+        const choice = choices[nextIndex];
         if (choice !== undefined) {
-            this.onModelCycleSelect?.(choice.selection);
+            // Cycle strips any prior variant: re-publish a base-only selection
+            // so `currentModelVariantID` resets via `setModelSelection`.
+            const baseSelection: ModelProviderSelection = {
+                providerID: choice.selection.providerID,
+                modelID: choice.selection.modelID,
+            };
+            this.setModelSelection(baseSelection);
+        } else {
+            this.publish();
         }
-        this.publish();
     }
 
     /**
@@ -554,9 +597,9 @@ export class ChatStore {
      * chord fired but had no effect.
      */
     cycleModelVariant(direction: 1 | -1): void {
-        const baseChoice = this.state.modelCycleChoices[this.state.modelCycleIndex];
-        if (baseChoice === undefined) return;
-        const baseSelection = baseChoice.selection;
+        const baseSelection =
+            this.state.currentModelSelection ?? this.state.modelCycleChoices[this.state.modelCycleIndex]?.selection;
+        if (baseSelection === undefined) return;
         const variantChoices = createVariantChoices(baseSelection);
         if (variantChoices.length === 0) {
             this.state.outputText += `No variants for ${baseSelection.providerID}/${baseSelection.modelID}\n`;
@@ -571,13 +614,12 @@ export class ChatStore {
         const safeIdx = currentIdx >= 0 ? currentIdx : 0;
         const nextIdx = (safeIdx + direction + rotation.length) % rotation.length;
         const nextVariantID = rotation[nextIdx];
-        this.state.currentModelVariantID = nextVariantID;
         const newSelection: ModelProviderSelection = {
             providerID: baseSelection.providerID,
             modelID: baseSelection.modelID,
             ...(nextVariantID !== undefined ? { variantID: nextVariantID } : {}),
         };
-        this.onModelCycleSelect?.(newSelection);
+        this.setModelSelection(newSelection);
         const label =
             nextVariantID === undefined
                 ? `${baseSelection.providerID}/${baseSelection.modelID} (variant: unset)`

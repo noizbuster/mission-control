@@ -582,6 +582,113 @@ describe('chat-store — cycleModelVariant', () => {
     });
 });
 
+describe('chat-store — setModelSelection', () => {
+    // Fixtures tied to the real catalog: openai/gpt-5 has 4 reasoning variants.
+    const GPT5_SELECTION: ModelProviderSelection = { providerID: 'openai', modelID: 'gpt-5' };
+
+    function createStoreWithGpt5First(): ChatStore {
+        const store = createChatStore();
+        store.setModelCycleChoices([
+            makeChoice('gpt-5', GPT5_SELECTION),
+            makeChoice('other', { providerID: 'other', modelID: 'other-model' }),
+        ]);
+        return store;
+    }
+
+    it('updates currentModelSelection, currentModelVariantID, and re-aligns modelCycleIndex', () => {
+        const store = createStoreWithGpt5First();
+        const calls: ModelProviderSelection[] = [];
+        store.onModelCycleSelect = (selection) => {
+            calls.push(selection);
+        };
+
+        store.setModelSelection({ providerID: 'other', modelID: 'other-model', variantID: 'v1' });
+
+        const snap = store.getSnapshot();
+        expect(snap.currentModelSelection).toEqual({
+            providerID: 'other',
+            modelID: 'other-model',
+            variantID: 'v1',
+        });
+        expect(snap.currentModelVariantID).toBe('v1');
+        expect(snap.modelCycleIndex).toBe(1);
+        expect(calls).toEqual([{ providerID: 'other', modelID: 'other-model', variantID: 'v1' }]);
+    });
+
+    it('clears currentModelVariantID when selection has no variantID', () => {
+        const store = createStoreWithGpt5First();
+        store.setModelSelection({ providerID: 'openai', modelID: 'gpt-5', variantID: 'reasoning-low' });
+        expect(store.getSnapshot().currentModelVariantID).toBe('reasoning-low');
+
+        store.setModelSelection({ providerID: 'openai', modelID: 'gpt-5' });
+        expect(store.getSnapshot().currentModelVariantID).toBeUndefined();
+    });
+
+    it('leaves modelCycleIndex unchanged when the selection base is not in modelCycleChoices', () => {
+        const store = createStoreWithGpt5First();
+        expect(store.getSnapshot().modelCycleIndex).toBe(0);
+
+        store.setModelSelection({ providerID: 'unknown', modelID: 'mystery' });
+
+        expect(store.getSnapshot().currentModelSelection).toEqual({
+            providerID: 'unknown',
+            modelID: 'mystery',
+        });
+        expect(store.getSnapshot().modelCycleIndex).toBe(0);
+    });
+
+    it('cycleModelVariant targets the model selected via setModelSelection (the Ctrl+V bug repro)', () => {
+        // Bug repro: user is on gpt-5 (index 0), switches to "other" via a
+        // non-cycle path (F2/leader+N or `/model`), then presses Ctrl+V.
+        // Before the fix Ctrl+V read the stale index 0 and cycled gpt-5's
+        // variants. After the fix it must operate on "other".
+        const store = createStoreWithGpt5First();
+        // "other/other-model" has no variants in the real catalog, so the
+        // "No variants" notice should name that model, not openai/gpt-5.
+        store.setModelSelection({ providerID: 'other', modelID: 'other-model' });
+
+        store.cycleModelVariant(1);
+
+        expect(store.getOutput()).toContain('No variants for other/other-model');
+        expect(store.getOutput()).not.toContain('openai/gpt-5');
+        expect(store.getSnapshot().modelCycleIndex).toBe(1);
+    });
+
+    it('cycleModelVariant rotates the variant of a setModelSelection-selected model with variants', () => {
+        // Switch to anthropic/claude-opus-4-1 (has thinking-* variants) via a
+        // non-cycle path, then verify Ctrl+V rotates that model's variants.
+        const store = createChatStore();
+        store.setModelCycleChoices([
+            makeChoice('gpt-5', GPT5_SELECTION),
+            makeChoice('opus', { providerID: 'anthropic', modelID: 'claude-opus-4-1' }),
+        ]);
+        store.setModelSelection({ providerID: 'anthropic', modelID: 'claude-opus-4-1' });
+        expect(store.getSnapshot().modelCycleIndex).toBe(1);
+
+        store.cycleModelVariant(1);
+        expect(store.getSnapshot().currentModelVariantID).toBe('thinking-off');
+        expect(store.getSnapshot().currentModelSelection).toEqual({
+            providerID: 'anthropic',
+            modelID: 'claude-opus-4-1',
+            variantID: 'thinking-off',
+        });
+    });
+
+    it('setModelCycleChoices re-aligns modelCycleIndex to the current selection', () => {
+        const store = createChatStore();
+        store.setModelSelection({ providerID: 'openai', modelID: 'gpt-5' });
+        expect(store.getSnapshot().modelCycleIndex).toBe(0);
+
+        // Rebuild the choices list with gpt-5 NOT first; the store should
+        // re-find it on the next setModelCycleChoices call.
+        store.setModelCycleChoices([
+            makeChoice('other', { providerID: 'other', modelID: 'other-model' }),
+            makeChoice('gpt-5', GPT5_SELECTION),
+        ]);
+        expect(store.getSnapshot().modelCycleIndex).toBe(1);
+    });
+});
+
 describe('chat-store — session picker overlay', () => {
     it('showSessionPicker sets overlayMode and returns a Promise', () => {
         const store = createChatStore();

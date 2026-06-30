@@ -314,7 +314,7 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
                         return snap.modelCycleChoices[snap.modelCycleIndex]?.selection;
                     },
                     selectModel: (selection) => {
-                        store.onModelCycleSelect?.(selection);
+                        store.setModelSelection(selection);
                     },
                     emitNotice: (text) => {
                         store.emitOutput(text);

@@ -19,6 +19,8 @@ export type OpenTuiChatBridge = {
     readonly setSessionId: (sessionId: string) => void;
     readonly setContextTokensUsed: (used: number | undefined) => void;
     readonly setModelCycleChoices: (choices: readonly ModelChoice[]) => void;
+    /** Push a selection from any path; syncs the store's currentModelSelection and modelCycleIndex. */
+    readonly setModelSelection: (selection: ModelProviderSelection) => void;
     onModelCycleSelect: ((selection: ModelProviderSelection) => void) | undefined;
     onRenameSubmit: ((name: string) => void) | undefined;
     readonly setGenerating: (value: boolean) => void;

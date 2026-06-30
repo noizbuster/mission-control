@@ -190,6 +190,8 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
             result.modelProviderSelection.variantID !== currentModelProviderSelection.variantID
         ) {
             currentModelProviderSelection = result.modelProviderSelection;
+            // Sync store so Ctrl+V variant cycling targets the new base.
+            store.setModelSelection(currentModelProviderSelection);
         }
         activeTurn = result.activeTurn;
         if (result.sessionId !== undefined) {
