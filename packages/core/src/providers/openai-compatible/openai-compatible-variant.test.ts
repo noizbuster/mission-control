@@ -82,14 +82,11 @@ describe('OpenAI-compatible provider reasoning variants', () => {
     });
 
     it.each([
-        ['reasoning-minimal', { thinking: { type: 'disabled' } }, false],
-        ['reasoning-low', { thinking: { type: 'enabled' }, reasoning_effort: 'high' }, true],
-        ['reasoning-medium', { thinking: { type: 'enabled' }, reasoning_effort: 'high' }, true],
-        ['reasoning-high', { thinking: { type: 'enabled' }, reasoning_effort: 'high' }, true],
-        ['reasoning-xhigh', { thinking: { type: 'enabled' }, reasoning_effort: 'max' }, true],
+        ['reasoning-high', { thinking: { type: 'enabled' }, reasoning_effort: 'high' }],
+        ['reasoning-max', { thinking: { type: 'enabled' }, reasoning_effort: 'max' }],
     ] as const)(
         'maps zai-coding-plan glm-5.2 %s into thinking toggle + reasoning_effort',
-        async (variantID, expectedBody, expectsEffort) => {
+        async (variantID, expectedBody) => {
             const requests: OpenAICompatibleTransportRequest[] = [];
             const provider = createProviderWithRequests('zai-coding-plan', requests);
 
@@ -101,11 +98,7 @@ describe('OpenAI-compatible provider reasoning variants', () => {
             );
 
             expect(requests[0]?.body.thinking).toEqual(expectedBody.thinking);
-            if (expectsEffort) {
-                expect(requests[0]?.body.reasoning_effort).toBe(expectedBody.reasoning_effort);
-            } else {
-                expect(hasOwn(requests[0]?.body, 'reasoning_effort')).toBe(false);
-            }
+            expect(requests[0]?.body.reasoning_effort).toBe(expectedBody.reasoning_effort);
         },
     );
 

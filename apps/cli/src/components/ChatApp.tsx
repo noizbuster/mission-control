@@ -468,6 +468,15 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
             {statusBarProps !== undefined ? (
                 <TopStatusBar
                     {...statusBarProps}
+                    {...(snapshot.currentModelSelection?.providerID !== undefined
+                        ? { providerID: snapshot.currentModelSelection.providerID }
+                        : {})}
+                    {...(snapshot.currentModelSelection?.modelID !== undefined
+                        ? { modelID: snapshot.currentModelSelection.modelID }
+                        : {})}
+                    {...(snapshot.currentModelVariantID !== undefined
+                        ? { variantID: snapshot.currentModelVariantID }
+                        : {})}
                     {...(snapshot.contextTokensUsed !== undefined
                         ? { contextTokensUsed: snapshot.contextTokensUsed }
                         : {})}

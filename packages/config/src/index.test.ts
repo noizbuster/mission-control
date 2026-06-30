@@ -177,11 +177,8 @@ describe('config catalog constants', () => {
         expect(variantsForGeneratedModel('zai-coding-plan', 'glm-5.1')).toBeUndefined();
         expect(variantsForGeneratedModel('zai-coding-plan', 'glm-5v-turbo')).toBeUndefined();
         expect(variantsForGeneratedModel('zai-coding-plan', 'glm-5.2')?.map((variant) => variant.id)).toEqual([
-            'reasoning-minimal',
-            'reasoning-low',
-            'reasoning-medium',
             'reasoning-high',
-            'reasoning-xhigh',
+            'reasoning-max',
         ]);
 
         const openRouterProvider = modelProviderCatalog.find((provider) => provider.id === 'openrouter');

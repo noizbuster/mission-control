@@ -104,7 +104,6 @@ export async function createChatTui(options: ChatTuiOptions): Promise<OpenTuiCha
     const statusBarProps: StatusBarProps = {
         providerID: options.providerID,
         modelID: options.modelID,
-        ...(options.variantID !== undefined ? { variantID: options.variantID } : {}),
         ...(options.sessionID !== undefined ? { sessionID: options.sessionID } : {}),
         ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
         ...(options.gitBranch !== undefined ? { gitBranch: options.gitBranch } : {}),

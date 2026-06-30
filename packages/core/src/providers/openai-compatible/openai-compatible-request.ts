@@ -122,33 +122,10 @@ function openAICompatibleReasoningForVariant(
         case 'mistral':
             return { reasoning_effort: 'high' };
         case 'zai-coding-plan':
-            return zaiReasoningFragment(effort);
+            return { thinking: { type: 'enabled' }, reasoning_effort: effort };
         default:
             return undefined;
     }
-}
-
-// GLM-5.2+ co-emits a binary `thinking:{type}` toggle and a `reasoning_effort` scalar.
-// Effort collapse mirrors the empirically-validated oh-my-pi ZAI_GLM_52_REASONING_EFFORT_MAP:
-// minimal→disabled, low/medium/high→high, xhigh→max.
-const ZAI_REASONING_EFFORT_WIRE: Readonly<Record<string, string>> = {
-    minimal: 'none',
-    low: 'high',
-    medium: 'high',
-    high: 'high',
-    xhigh: 'max',
-};
-
-function zaiReasoningFragment(
-    effort: string,
-): { readonly thinking: { readonly type: 'enabled' }; readonly reasoning_effort: string } | {
-    readonly thinking: { readonly type: 'disabled' };
-} {
-    const wireEffort = ZAI_REASONING_EFFORT_WIRE[effort] ?? 'high';
-    if (wireEffort === 'none') {
-        return { thinking: { type: 'disabled' } };
-    }
-    return { thinking: { type: 'enabled' }, reasoning_effort: wireEffort };
 }
 
 function isConfiguredOpenAICompatibleVariant(providerID: string, modelID: string, variantID: string): boolean {

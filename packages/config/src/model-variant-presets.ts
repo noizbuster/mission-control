@@ -49,15 +49,13 @@ const mistralReasoningVariants = [
     { id: 'reasoning-high', name: 'Reasoning High', status: 'active' },
 ] as const satisfies readonly ModelVariantPreset[];
 
-// GLM-5.2+ is the first GLM SKU that accepts `reasoning_effort` alongside a binary
-// `thinking:{type}` toggle (empirically confirmed via the oh-my-pi reference; pre-5.2
-// GLM only takes the binary toggle). 5-tier efforts matching the validated set.
+// GLM-5.2+ co-emits a binary `thinking:{type:"enabled"}` toggle and a
+// `reasoning_effort` scalar. The Z.ai API only accepts `high` and `max` as
+// reasoning_effort values (empirically confirmed); pre-5.2 GLM takes only
+// the binary toggle and returns no variants.
 const zaiReasoningVariants = [
-    { id: 'reasoning-minimal', name: 'Reasoning Minimal', status: 'active' },
-    { id: 'reasoning-low', name: 'Reasoning Low', status: 'active' },
-    { id: 'reasoning-medium', name: 'Reasoning Medium', status: 'active' },
     { id: 'reasoning-high', name: 'Reasoning High', status: 'active' },
-    { id: 'reasoning-xhigh', name: 'Reasoning XHigh', status: 'active' },
+    { id: 'reasoning-max', name: 'Reasoning Max', status: 'active' },
 ] as const satisfies readonly ModelVariantPreset[];
 
 export function variantsForGeneratedModel(
