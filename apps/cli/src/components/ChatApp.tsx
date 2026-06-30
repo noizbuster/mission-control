@@ -38,7 +38,7 @@ function AgentSpinner({ text }: { readonly text: string }): React.ReactNode {
     }, []);
     const ch = SPINNER_FRAMES[frame] ?? SPINNER_FRAMES[0] ?? '';
     return (
-        <box marginTop={1}>
+        <box marginTop={1} flexShrink={0}>
             <text fg="#00ffff">{`${ch} ${text}`}</text>
         </box>
     );
@@ -379,12 +379,12 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
     const showFileAutocomplete = !showSlashMenu && !showWorkflowMenu && snapshot.fileAutocomplete.open;
 
     return (
-        <box flexDirection="column" width="100%">
+        <box flexDirection="column" width="100%" height="100%">
             {transcript}
             {snapshot.agentStatusText.length > 0 ? (
                 <AgentSpinner text={snapshot.agentStatusText} />
             ) : snapshot.generating ? (
-                <box marginTop={1}>
+                <box marginTop={1} flexShrink={0}>
                     <text fg="#ffff00">{'\u25cf Thinking...'}</text>
                 </box>
             ) : null}

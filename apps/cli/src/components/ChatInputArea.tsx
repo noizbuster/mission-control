@@ -342,7 +342,7 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
     };
 
     return (
-        <box flexDirection="column">
+        <box flexDirection="column" flexShrink={0}>
             <ChatInputTextarea
                 textareaRef={textareaRef}
                 focused={focused}

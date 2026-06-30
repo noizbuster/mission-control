@@ -131,7 +131,7 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
         statusRowColumns() - leftText.length - 1 - (contextLabel !== undefined ? contextLabel.length + 1 : 0),
     );
     return (
-        <box backgroundColor={STATUS_LINE_BG} flexDirection="row">
+        <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
             <text>
                 <span attributes={TextAttributes.DIM}>{provider}</span>{' '}
                 <span attributes={TextAttributes.BOLD}>{model}</span>
@@ -158,7 +158,7 @@ export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
         statusRowColumns() - approvalLabel.length - 1 - (projectLabel !== undefined ? projectLabel.length + 1 : 0),
     );
     return (
-        <box backgroundColor={STATUS_LINE_BG} flexDirection="row">
+        <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
             <text
                 {...(approvalColor !== undefined ? { fg: approvalColor } : {})}
                 {...(dimApproval ? { attributes: TextAttributes.DIM } : {})}
