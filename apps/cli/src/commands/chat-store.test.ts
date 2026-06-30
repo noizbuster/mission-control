@@ -219,6 +219,34 @@ describe('chat-store — question overlay', () => {
         expect(snapshot.questionMultiple).toBe(true);
         expect(snapshot.questionSelectedIndices).toEqual(new Set<number>());
     });
+
+    it('selectQuestionByClick resolves single-select immediately with the clicked label', async () => {
+        const store = createChatStore();
+        const promise = store.showQuestion('Continue?', ['yes', 'no']);
+        store.selectQuestionByClick(1);
+        expect(await promise).toBe('no');
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+
+    it('selectQuestionByClick toggles membership in multi-select without resolving', () => {
+        const store = createChatStore();
+        store.showQuestion('Pick', ['a', 'b'], { multiple: true });
+        store.selectQuestionByClick(0);
+        expect(store.getSnapshot().questionSelectedIndices).toEqual(new Set<number>([0]));
+        store.selectQuestionByClick(0);
+        expect(store.getSnapshot().questionSelectedIndices).toEqual(new Set<number>());
+        expect(store.getSnapshot().overlayMode).toBe('question');
+    });
+
+    it('selectQuestionByClick on the custom-answer row index enters custom mode', () => {
+        const store = createChatStore();
+        store.showQuestion('Continue?', ['yes', 'no']);
+        store.selectQuestionByClick(2);
+        const snapshot = store.getSnapshot();
+        expect(snapshot.questionCustomMode).toBe(true);
+        expect(snapshot.questionSelectedIndex).toBe(2);
+        expect(snapshot.questionCustomBuffer).toBe('');
+    });
 });
 
 describe('chat-store — rename overlay', () => {

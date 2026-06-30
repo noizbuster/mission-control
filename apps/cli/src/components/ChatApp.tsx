@@ -468,6 +468,7 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
                         : {})}
                 />
             ) : null}
+            {snapshot.overlayMode === 'question' ? <QuestionOverlay store={store} /> : null}
             <ChatInputArea
                 store={store}
                 textareaRef={textareaRef}
@@ -483,11 +484,6 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
             {snapshot.overlayMode === 'approval' ? (
                 <ModalPopup>
                     <ApprovalOverlay store={store} />
-                </ModalPopup>
-            ) : null}
-            {snapshot.overlayMode === 'question' ? (
-                <ModalPopup>
-                    <QuestionOverlay store={store} />
                 </ModalPopup>
             ) : null}
             {snapshot.overlayMode === 'model-picker' ? (

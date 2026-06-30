@@ -642,6 +642,37 @@ export class ChatStore {
         this.publish();
     }
 
+    /**
+     * Single-select resolves immediately with the clicked label;
+     * multi-select toggles membership (mirrors Enter vs Space). The trailing
+     * custom-answer row enters custom-input mode.
+     */
+    selectQuestionByClick(index: number): void {
+        if (index < 0) return;
+        if (index >= this.state.questionOptions.length) {
+            if (this.state.questionMultiple) return;
+            this.state.questionSelectedIndex = index;
+            this.state.questionCustomMode = true;
+            this.state.questionCustomBuffer = '';
+            this.publish();
+            return;
+        }
+        this.state.questionSelectedIndex = index;
+        if (this.state.questionMultiple) {
+            const next = new Set(this.state.questionSelectedIndices);
+            if (next.has(index)) {
+                next.delete(index);
+            } else {
+                next.add(index);
+            }
+            this.state.questionSelectedIndices = next;
+            this.publish();
+            return;
+        }
+        const selected = this.state.questionOptions[index];
+        this.resolveQuestion(selected?.label ?? '');
+    }
+
     enterQuestionCustomMode(): void {
         this.state.questionCustomMode = true;
         this.state.questionCustomBuffer = '';

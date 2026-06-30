@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/react */
-import { TextAttributes } from '@opentui/core';
+import { type MouseEvent, MouseButton, TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/react';
 import type * as React from 'react';
 import { useCallback, useSyncExternalStore } from 'react';
@@ -171,12 +171,17 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
     });
 
     const footerText = snapshot.questionMultiple
-        ? 'Up/Down to navigate, Space to toggle, Enter to submit, Esc to cancel'
-        : 'Up/Down to navigate, Enter to select, Esc to cancel';
+        ? 'Click or Up/Down + Space to toggle, Enter to submit, Esc to cancel'
+        : 'Click or Up/Down + Enter to select, Esc to cancel';
+
+    const onOptionClick = (index: number) => (event: MouseEvent) => {
+        if (event.button !== MouseButton.LEFT) return;
+        store.selectQuestionByClick(index);
+    };
 
     return (
         <OverlayFrame
-            variant="modal"
+            variant="panel"
             title="Question"
             accent={ACCENTS.question}
             {...(snapshot.questionCustomMode ? {} : { footer: footerText })}
@@ -207,7 +212,8 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                             : '';
                         return (
                             // biome-ignore lint/suspicious/noArrayIndexKey: question options are positional within a single overlay render
-                            <box key={`q-opt-${index}-${option.label}`} flexDirection="column">
+                            // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; Up/Down/Enter/Space keyboard nav already exists, mouse is an enhancement
+                            <box key={`q-opt-${index}-${option.label}`} flexDirection="column" onMouseDown={onOptionClick(index)}>
                                 <text {...(isCursor ? { bg: SELECTED_BG } : {})}>
                                     {isCursor ? '> ' : '  '}
                                     {prefix}
@@ -225,7 +231,8 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                               const customIndex = snapshot.questionOptions.length;
                               const isSelected = customIndex === snapshot.questionSelectedIndex;
                               return (
-                                  <box flexDirection="row">
+                                  // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; Enter on this row already enters custom mode, mouse is an enhancement
+                                  <box flexDirection="row" onMouseDown={onOptionClick(customIndex)}>
                                       <text {...(isSelected ? { bg: SELECTED_BG } : {})}>
                                           {isSelected ? '> ' : '  '}
                                       </text>
