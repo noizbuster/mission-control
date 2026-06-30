@@ -16,17 +16,16 @@ export const SELECTED_BG = '#0000ff';
 export const STATUS_LINE_BG = '#0a1020';
 
 /**
- * Approval-level color ramp consumed by the bottom status line. `aggressive`
- * reuses `#ffff00` (= `ACCENTS.approval`) on purpose: the status-line approval
- * indicator and the approval-overlay accent share the same yellow. If that
- * reads as a collision during QA, switch `aggressive` to a distinct hue.
+ * Approval-level color ramp consumed by the bottom status line. Tuned one
+ * saturation step below pure RGB (~70% chroma) so the indicator reads as a
+ * calm ramp rather than neon. `verbose` is gray (no saturation).
  */
 export const APPROVAL_LEVEL_COLORS: Record<ApprovalLevel, string> = {
     verbose: '#888888',
-    safe: '#00ff00',
-    aggressive: '#ffff00',
-    reckless: '#ff8800',
-    yolo: '#ff0000',
+    safe: '#26d926',
+    aggressive: '#d9d926',
+    reckless: '#d98526',
+    yolo: '#d92626',
 };
 
 /**

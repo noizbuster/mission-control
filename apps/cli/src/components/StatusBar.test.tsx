@@ -39,10 +39,10 @@ describe('approvalLevelColor', () => {
     it('maps every level onto its ramp color', () => {
         const expected: Record<ApprovalLevel, string> = {
             verbose: '#888888',
-            safe: '#00ff00',
-            aggressive: '#ffff00',
-            reckless: '#ff8800',
-            yolo: '#ff0000',
+            safe: '#26d926',
+            aggressive: '#d9d926',
+            reckless: '#d98526',
+            yolo: '#d92626',
         };
         for (const level of APPROVAL_LEVELS) {
             expect(approvalLevelColor(level)).toBe(expected[level]);
@@ -98,7 +98,7 @@ describe('formatBottomStatus', () => {
     it('labels the segment with the active level and its ramp color', () => {
         const out = formatBottomStatus({ ...baseProps, approvalLevel: 'aggressive' });
         expect(out.approvalLabel).toBe('aggressive');
-        expect(out.approvalColor).toBe('#ffff00');
+        expect(out.approvalColor).toBe('#d9d926');
     });
 
     it('falls back to a generic label and undefined color when no level is set', () => {
