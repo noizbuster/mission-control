@@ -628,12 +628,6 @@ export class ChatStore {
             ...(nextVariantID !== undefined ? { variantID: nextVariantID } : {}),
         };
         this.setModelSelection(newSelection);
-        const label =
-            nextVariantID === undefined
-                ? `${baseSelection.providerID}/${baseSelection.modelID} (variant: unset)`
-                : `${baseSelection.providerID}/${baseSelection.modelID}#${nextVariantID}`;
-        this.state.outputText += `Cycle variant: ${label}\n`;
-        this.publish();
     }
 
     recallHistory(direction: 'up' | 'down', currentBuffer: string): string {

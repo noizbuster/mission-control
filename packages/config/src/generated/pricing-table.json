@@ -22488,13 +22488,6 @@
   },
   {
     "providerID": "openrouter",
-    "modelID": "anthropic/claude-opus-4.6-fast",
-    "inputCentsPerMillion": 3000,
-    "outputCentsPerMillion": 15000,
-    "cacheReadCentsPerMillion": 300
-  },
-  {
-    "providerID": "openrouter",
     "modelID": "anthropic/claude-opus-4.7",
     "inputCentsPerMillion": 500,
     "outputCentsPerMillion": 2500,
@@ -24269,9 +24262,8 @@
   {
     "providerID": "openrouter",
     "modelID": "stepfun/step-3.5-flash",
-    "inputCentsPerMillion": 9,
-    "outputCentsPerMillion": 30,
-    "cacheReadCentsPerMillion": 2
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 30
   },
   {
     "providerID": "openrouter",
@@ -24452,13 +24444,12 @@
     "providerID": "openrouter",
     "modelID": "z-ai/glm-5.1",
     "inputCentsPerMillion": 98,
-    "outputCentsPerMillion": 308,
-    "cacheReadCentsPerMillion": 18
+    "outputCentsPerMillion": 430
   },
   {
     "providerID": "openrouter",
     "modelID": "z-ai/glm-5.2",
-    "inputCentsPerMillion": 95,
+    "inputCentsPerMillion": 94,
     "outputCentsPerMillion": 300,
     "cacheReadCentsPerMillion": 18
   },
@@ -27533,27 +27524,36 @@
     "providerID": "synthetic",
     "modelID": "hf:openai/gpt-oss-120b",
     "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 10
+    "outputCentsPerMillion": 10,
+    "cacheReadCentsPerMillion": 10
   },
   {
     "providerID": "synthetic",
     "modelID": "hf:Qwen/Qwen3.5-397B-A17B",
     "inputCentsPerMillion": 60,
-    "outputCentsPerMillion": 300,
+    "outputCentsPerMillion": 360,
     "cacheReadCentsPerMillion": 60
   },
   {
     "providerID": "synthetic",
+    "modelID": "hf:Qwen/Qwen3.6-27B",
+    "inputCentsPerMillion": 45,
+    "outputCentsPerMillion": 360,
+    "cacheReadCentsPerMillion": 45
+  },
+  {
+    "providerID": "synthetic",
     "modelID": "hf:zai-org/GLM-4.7",
-    "inputCentsPerMillion": 55,
-    "outputCentsPerMillion": 219
+    "inputCentsPerMillion": 45,
+    "outputCentsPerMillion": 219,
+    "cacheReadCentsPerMillion": 45
   },
   {
     "providerID": "synthetic",
     "modelID": "hf:zai-org/GLM-4.7-Flash",
-    "inputCentsPerMillion": 6,
-    "outputCentsPerMillion": 40,
-    "cacheReadCentsPerMillion": 6
+    "inputCentsPerMillion": 10,
+    "outputCentsPerMillion": 50,
+    "cacheReadCentsPerMillion": 10
   },
   {
     "providerID": "synthetic",
@@ -27561,6 +27561,13 @@
     "inputCentsPerMillion": 100,
     "outputCentsPerMillion": 300,
     "cacheReadCentsPerMillion": 100
+  },
+  {
+    "providerID": "synthetic",
+    "modelID": "hf:zai-org/GLM-5.2",
+    "inputCentsPerMillion": 140,
+    "outputCentsPerMillion": 440,
+    "cacheReadCentsPerMillion": 140
   },
   {
     "providerID": "tencent-coding-plan",
@@ -30153,37 +30160,37 @@
   {
     "providerID": "xiaomi",
     "modelID": "mimo-v2-flash",
-    "inputCentsPerMillion": 10,
-    "outputCentsPerMillion": 30,
-    "cacheReadCentsPerMillion": 1
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 28,
+    "cacheReadCentsPerMillion": 0
   },
   {
     "providerID": "xiaomi",
     "modelID": "mimo-v2-omni",
-    "inputCentsPerMillion": 40,
-    "outputCentsPerMillion": 200,
-    "cacheReadCentsPerMillion": 8
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 28,
+    "cacheReadCentsPerMillion": 0
   },
   {
     "providerID": "xiaomi",
     "modelID": "mimo-v2-pro",
-    "inputCentsPerMillion": 100,
-    "outputCentsPerMillion": 300,
-    "cacheReadCentsPerMillion": 20
+    "inputCentsPerMillion": 44,
+    "outputCentsPerMillion": 87,
+    "cacheReadCentsPerMillion": 0
   },
   {
     "providerID": "xiaomi",
     "modelID": "mimo-v2.5",
-    "inputCentsPerMillion": 40,
-    "outputCentsPerMillion": 200,
-    "cacheReadCentsPerMillion": 8
+    "inputCentsPerMillion": 14,
+    "outputCentsPerMillion": 28,
+    "cacheReadCentsPerMillion": 0
   },
   {
     "providerID": "xiaomi",
     "modelID": "mimo-v2.5-pro",
-    "inputCentsPerMillion": 100,
-    "outputCentsPerMillion": 300,
-    "cacheReadCentsPerMillion": 20
+    "inputCentsPerMillion": 44,
+    "outputCentsPerMillion": 87,
+    "cacheReadCentsPerMillion": 0
   },
   {
     "providerID": "xiaomi",

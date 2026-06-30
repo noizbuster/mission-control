@@ -127,7 +127,8 @@ function statusRowColumns(): number {
  */
 export function TopStatusBar(props: StatusBarProps): React.ReactNode {
     const { provider, model, variant, contextLabel } = formatTopStatus(props);
-    const leftText = `${provider} ${model}${variant !== undefined ? ` - ${variant}` : ''}`;
+    const variantLabel = variant?.replace(/^(reasoning|thinking)-/, '');
+    const leftText = `${provider} ${model}${variantLabel !== undefined ? ` - ${variantLabel}` : ''}`;
     const fillCount = Math.max(
         0,
         statusRowColumns() - leftText.length - 1 - (contextLabel !== undefined ? contextLabel.length + 1 : 0),
@@ -137,7 +138,7 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
             <text>
                 <span attributes={TextAttributes.DIM}>{provider}</span>{' '}
                 <span attributes={TextAttributes.BOLD}>{model}</span>
-                {variant !== undefined ? ` - ${variant}` : null}
+                {variantLabel !== undefined ? ` - ${variantLabel}` : null}
             </text>
             <text>{' '}</text>
             <text attributes={TextAttributes.DIM}>{'\u2500'.repeat(fillCount)}</text>

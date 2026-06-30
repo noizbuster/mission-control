@@ -1,9 +1,13 @@
 import type { ProviderExecutionCapability } from '@mission-control/protocol';
 import modelsDevCatalogSnapshot from './generated/models-dev-catalog.json' with { type: 'json' };
-import { variantsForGeneratedModel } from './model-variant-presets.js';
+import { loadVariantOverrides, type VariantOverrides } from './model-variant-overrides.js';
+import { variantsForReasoningOptions } from './model-variant-presets.js';
 import { generatedDefaultProviderCapability, generatedProviderCapabilities } from './provider-capabilities.js';
 
 export { getModelContextLimit } from './models-dev-runtime.js';
+export { variantsForReasoningOptions } from './model-variant-presets.js';
+export { loadVariantOverrides, type VariantOverrideEntry, type VariantOverrides } from './model-variant-overrides.js';
+export type { RawModelsDevReasoningOption } from './models-dev-runtime.js';
 
 export const appName = 'mission-control';
 export const cliCommandName = 'mctrl';
@@ -167,7 +171,7 @@ const scaffoldModelProviderCatalog = [
 ] as const satisfies readonly ModelProviderCatalogEntry[];
 
 export const opencodeProviderCatalog: readonly ModelProviderCatalogEntry[] =
-    transformRawCatalog(modelsDevCatalogSnapshot);
+    transformRawCatalog(modelsDevCatalogSnapshot, loadVariantOverrides());
 
 export const modelProviderCatalog: readonly ModelProviderCatalogEntry[] = [
     ...scaffoldModelProviderCatalog,
@@ -178,11 +182,12 @@ export async function getRuntimeModelProviderCatalog(): Promise<readonly ModelPr
     const { loadModelsDevCatalog } = await import('./models-dev-runtime.js');
     type RawModelsDevCatalog = import('./models-dev-runtime.js').RawModelsDevCatalog;
     const rawCatalog: RawModelsDevCatalog = await loadModelsDevCatalog();
-    return [...scaffoldModelProviderCatalog, ...transformRawCatalog(rawCatalog)];
+    return [...scaffoldModelProviderCatalog, ...transformRawCatalog(rawCatalog, loadVariantOverrides())];
 }
 
 function transformRawCatalog(
     rawCatalog: import('./models-dev-runtime.js').RawModelsDevCatalog,
+    overrides: VariantOverrides,
 ): readonly ModelProviderCatalogEntry[] {
     return rawCatalog.providers
         .map(
@@ -201,12 +206,17 @@ function transformRawCatalog(
                 authMethods: createProviderAuthMethods(provider.id, provider.authLabel),
                 capability: capabilityForGeneratedProvider(provider.id),
                 models: provider.models.map((model) => {
-                    const variants = variantsForGeneratedModel(provider.id, model.id);
+                    const key = `${provider.id}/${model.id}`;
+                    const override = overrides[key];
+                    const variants =
+                        override !== undefined
+                            ? override
+                            : variantsForReasoningOptions(provider.id, model.reasoning_options);
                     return {
                         id: model.id,
                         name: model.name,
                         status: 'active',
-                        ...(variants !== undefined ? { variants } : {}),
+                        ...(variants !== undefined && variants.length > 0 ? { variants } : {}),
                     };
                 }),
             }),

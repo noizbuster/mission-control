@@ -471,11 +471,10 @@ describe('chat-store — onModelCycleSelect callback', () => {
 
 describe('chat-store — cycleModelVariant', () => {
     // Fixtures tied to the real catalog: openai/gpt-5 has 4 reasoning variants;
-    // opencode/claude-fable-5 has none.
     const GPT5_SELECTION: ModelProviderSelection = { providerID: 'openai', modelID: 'gpt-5' };
     const NO_VARIANT_SELECTION: ModelProviderSelection = {
-        providerID: 'opencode',
-        modelID: 'claude-fable-5',
+        providerID: 'openai',
+        modelID: 'gpt-4o-mini',
     };
 
     function createStoreWithCurrentChoice(selection: ModelProviderSelection): ChatStore {
@@ -546,17 +545,19 @@ describe('chat-store — cycleModelVariant', () => {
         store.cycleModelVariant(1);
         expect(calls).toHaveLength(0);
         expect(store.getSnapshot().currentModelVariantID).toBeUndefined();
-        expect(store.getSnapshot().transientNotice?.message).toBe('No variants for opencode/claude-fable-5');
-        expect(store.getOutput()).not.toContain('No variants for opencode/claude-fable-5');
+        expect(store.getSnapshot().transientNotice?.message).toBe('No variants for openai/gpt-4o-mini');
+        expect(store.getOutput()).not.toContain('No variants for openai/gpt-4o-mini');
     });
 
-    it('emits a "Cycle variant" notice with the new selection', () => {
+    it('updates the current variant without writing to outputText', () => {
         const store = createStoreWithCurrentChoice(GPT5_SELECTION);
         store.cycleModelVariant(1);
-        expect(store.getOutput()).toContain('Cycle variant: openai/gpt-5#reasoning-minimal');
+        expect(store.getSnapshot().currentModelVariantID).toBeDefined();
+        expect(store.getOutput()).not.toContain('Cycle variant');
 
         store.cycleModelVariant(-1);
-        expect(store.getOutput()).toContain('Cycle variant: openai/gpt-5 (variant: unset)');
+        expect(store.getSnapshot().currentModelVariantID).toBeUndefined();
+        expect(store.getOutput()).not.toContain('Cycle variant');
     });
 
     it('is a no-op when modelCycleChoices is empty', () => {
@@ -668,11 +669,11 @@ describe('chat-store — setModelSelection', () => {
         expect(store.getSnapshot().modelCycleIndex).toBe(1);
 
         store.cycleModelVariant(1);
-        expect(store.getSnapshot().currentModelVariantID).toBe('thinking-off');
+        expect(store.getSnapshot().currentModelVariantID).toBe('thinking-low');
         expect(store.getSnapshot().currentModelSelection).toEqual({
             providerID: 'anthropic',
             modelID: 'claude-opus-4-1',
-            variantID: 'thinking-off',
+            variantID: 'thinking-low',
         });
     });
 

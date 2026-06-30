@@ -1,130 +1,70 @@
-type ModelVariantPreset = {
+import type { RawModelsDevReasoningOption } from './models-dev-runtime.js';
+
+export type ModelVariantPreset = {
     readonly id: string;
     readonly name: string;
     readonly status: 'active';
 };
 
-const openAIReasoningVariants = [
-    { id: 'reasoning-minimal', name: 'Reasoning Minimal', status: 'active' },
-    { id: 'reasoning-low', name: 'Reasoning Low', status: 'active' },
-    { id: 'reasoning-medium', name: 'Reasoning Medium', status: 'active' },
-    { id: 'reasoning-high', name: 'Reasoning High', status: 'active' },
-] as const satisfies readonly ModelVariantPreset[];
+// Providers that use the `thinking-*` variant prefix instead of `reasoning-*`.
+const THINKING_PREFIX_PROVIDERS = new Set(['anthropic', 'google']);
 
-const openAILatestReasoningVariants = [
-    { id: 'reasoning-none', name: 'Reasoning None', status: 'active' },
-    { id: 'reasoning-low', name: 'Reasoning Low', status: 'active' },
-    { id: 'reasoning-medium', name: 'Reasoning Medium', status: 'active' },
-    { id: 'reasoning-high', name: 'Reasoning High', status: 'active' },
-    { id: 'reasoning-xhigh', name: 'Reasoning XHigh', status: 'active' },
-] as const satisfies readonly ModelVariantPreset[];
+// Google budget_tokens providers expose a continuous token range, not discrete
+// effort values. Anthropic's older models (claude-opus-4-1 etc.) also use
+// budget_tokens. Map both to the same three tiers.
+const BUDGET_TOKEN_TIERS = [
+    { id: 'thinking-low', name: 'Thinking Low' },
+    { id: 'thinking-medium', name: 'Thinking Medium' },
+    { id: 'thinking-high', name: 'Thinking High' },
+] as const;
 
-const anthropicThinkingVariants = [
-    { id: 'thinking-off', name: 'Thinking Off', status: 'active' },
-    { id: 'thinking-low', name: 'Thinking Low', status: 'active' },
-    { id: 'thinking-medium', name: 'Thinking Medium', status: 'active' },
-    { id: 'thinking-high', name: 'Thinking High', status: 'active' },
-] as const satisfies readonly ModelVariantPreset[];
+const BUDGET_TOKEN_PROVIDERS = new Set(['google', 'anthropic']);
 
-const geminiThinkingVariants = [
-    { id: 'thinking-low', name: 'Thinking Low', status: 'active' },
-    { id: 'thinking-medium', name: 'Thinking Medium', status: 'active' },
-    { id: 'thinking-high', name: 'Thinking High', status: 'active' },
-] as const satisfies readonly ModelVariantPreset[];
-
-const openRouterReasoningVariants = [
-    { id: 'reasoning-low', name: 'Reasoning Low', status: 'active' },
-    { id: 'reasoning-medium', name: 'Reasoning Medium', status: 'active' },
-    { id: 'reasoning-high', name: 'Reasoning High', status: 'active' },
-] as const satisfies readonly ModelVariantPreset[];
-
-const groqReasoningVariants = [
-    { id: 'reasoning-none', name: 'Reasoning None', status: 'active' },
-    { id: 'reasoning-low', name: 'Reasoning Low', status: 'active' },
-    { id: 'reasoning-medium', name: 'Reasoning Medium', status: 'active' },
-    { id: 'reasoning-high', name: 'Reasoning High', status: 'active' },
-] as const satisfies readonly ModelVariantPreset[];
-
-const mistralReasoningVariants = [
-    { id: 'reasoning-high', name: 'Reasoning High', status: 'active' },
-] as const satisfies readonly ModelVariantPreset[];
-
-// GLM-5.2+ co-emits a binary `thinking:{type:"enabled"}` toggle and a
-// `reasoning_effort` scalar. The Z.ai API only accepts `high` and `max` as
-// reasoning_effort values (empirically confirmed); pre-5.2 GLM takes only
-// the binary toggle and returns no variants.
-const zaiReasoningVariants = [
-    { id: 'reasoning-high', name: 'Reasoning High', status: 'active' },
-    { id: 'reasoning-max', name: 'Reasoning Max', status: 'active' },
-] as const satisfies readonly ModelVariantPreset[];
-
-export function variantsForGeneratedModel(
+/**
+ * Derive variant presets from the model's `reasoning_options` metadata.
+ *
+ * - `effort` type: each value in `values` becomes a variant (`reasoning-{value}`
+ *   or `thinking-{value}` depending on provider convention).
+ * - `budget_tokens` type: only Google is mapped to discrete tiers (the budget
+ *   range can't be auto-named). Other budget-type providers return undefined.
+ * - `toggle` type: reasoning is always-on with no controllable variant → undefined.
+ * - Absent: no reasoning control → undefined.
+ */
+export function variantsForReasoningOptions(
     providerID: string,
-    modelID: string,
+    reasoningOptions: readonly RawModelsDevReasoningOption[] | undefined,
 ): readonly ModelVariantPreset[] | undefined {
-    switch (providerID) {
-        case 'openai':
-            if (isOpenAILatestReasoningModel(modelID)) {
-                return openAILatestReasoningVariants;
-            }
-            return isOpenAIReasoningModel(modelID) ? openAIReasoningVariants : undefined;
-        case 'anthropic':
-            return isAnthropicThinkingModel(modelID) ? anthropicThinkingVariants : undefined;
-        case 'google':
-            return isGeminiThinkingModel(modelID) ? geminiThinkingVariants : undefined;
-        case 'openrouter':
-            return isOpenRouterReasoningModel(modelID) ? openRouterReasoningVariants : undefined;
-        case 'groq':
-            return isGroqReasoningModel(modelID) ? groqReasoningVariants : undefined;
-        case 'mistral':
-            return isMistralReasoningModel(modelID) ? mistralReasoningVariants : undefined;
-        case 'zai-coding-plan':
-            return isZaiGlm52ReasoningModel(modelID) ? zaiReasoningVariants : undefined;
-        default:
-            return undefined;
+    if (reasoningOptions === undefined || reasoningOptions.length === 0) return undefined;
+
+    for (const option of reasoningOptions) {
+        if (option.type === 'effort' && option.values !== undefined && option.values.length > 0) {
+            return effortVariants(providerID, option.values);
+        }
+        if (option.type === 'budget_tokens' && BUDGET_TOKEN_PROVIDERS.has(providerID)) {
+            return BUDGET_TOKEN_TIERS.map((tier) => ({
+                id: tier.id,
+                name: tier.name,
+                status: 'active' as const,
+            }));
+        }
     }
+    return undefined;
 }
 
-function isOpenAILatestReasoningModel(modelID: string): boolean {
-    return /^gpt-5\.(?:4|5)(?:[.-]|$)/.test(modelID);
+function effortVariants(
+    providerID: string,
+    values: readonly string[],
+): readonly ModelVariantPreset[] {
+    const prefix = THINKING_PREFIX_PROVIDERS.has(providerID) ? 'thinking-' : 'reasoning-';
+    return values.map((value) => ({
+        id: `${prefix}${value}`,
+        name: variantDisplayName(value, prefix),
+        status: 'active' as const,
+    }));
 }
 
-function isOpenAIReasoningModel(modelID: string): boolean {
-    return /^(gpt-5(?:[.-]|$)|o(?:1|3|4)(?:[.-]|$))/.test(modelID);
-}
-
-function isAnthropicThinkingModel(modelID: string): boolean {
-    return /^(claude-3-7-|claude-(?:haiku|opus|sonnet)-4)/.test(modelID);
-}
-
-function isGeminiThinkingModel(modelID: string): boolean {
-    return /^gemini-2\.5-(pro|flash)(?!-?(?:lite|.*(?:image|tts|nothink)))/.test(modelID);
-}
-
-function isOpenRouterReasoningModel(modelID: string): boolean {
-    return /gpt-5|^o[134][.-]|grok|deepseek-r|reasoning/i.test(modelID);
-}
-
-function isGroqReasoningModel(modelID: string): boolean {
-    return /qwen-qwq|deepseek-r1|reasoning/i.test(modelID);
-}
-
-const MISTRAL_REASONING_MODEL_IDS: readonly string[] = [
-    'mistral-small-2603',
-    'mistral-small-latest',
-    'mistral-medium-2604',
-];
-
-function isMistralReasoningModel(modelID: string): boolean {
-    return MISTRAL_REASONING_MODEL_IDS.includes(modelID);
-}
-
-// GLM 5.2+ (base, air, turbo) accepts `reasoning_effort`; vision SKUs (glm-*v) do not.
-function isZaiGlm52ReasoningModel(modelID: string): boolean {
-    if (/^glm-\d+v/.test(modelID)) return false;
-    const match = /^glm-(\d+)(?:\.(\d+))?(?:[.-]|$)/.exec(modelID);
-    if (match === null) return false;
-    const major = Number(match[1]);
-    const minor = match[2] !== undefined ? Number(match[2]) : 0;
-    return major >= 6 || (major === 5 && minor >= 2);
+function variantDisplayName(value: string, prefix: string): string {
+    const label = value.charAt(0).toUpperCase() + value.slice(1);
+    const kind = prefix === 'thinking-' ? 'Thinking' : 'Reasoning';
+    return `${kind} ${label}`;
 }

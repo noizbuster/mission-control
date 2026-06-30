@@ -6,6 +6,13 @@ import { dirname, join } from 'node:path';
 const modelsDevURL = 'https://models.dev/api.json';
 const cacheTTLms = 5 * 60 * 1000;
 
+export type RawModelsDevReasoningOption = {
+    readonly type: string;
+    readonly values?: readonly string[];
+    readonly min?: number;
+    readonly max?: number;
+};
+
 export type RawModelsDevModel = {
     readonly id: string;
     readonly name: string;
@@ -14,6 +21,7 @@ export type RawModelsDevModel = {
         readonly context?: number;
         readonly output?: number;
     };
+    readonly reasoning_options?: readonly RawModelsDevReasoningOption[];
 };
 
 export type RawModelsDevAuthField = {
@@ -221,11 +229,13 @@ function buildModelsFromAPI(modelsValue: unknown): RawModelsDevModel[] {
         if (!isRecord(modelValue)) continue;
         const nameValue = modelValue['name'];
         const limit = buildLimitFromAPI(modelValue['limit']);
+        const reasoningOptions = buildReasoningOptionsFromAPI(modelValue['reasoning_options']);
         models.push({
             id: modelID,
             name: typeof nameValue === 'string' ? nameValue : modelID,
             status: 'active',
             ...(limit !== undefined ? { limit } : {}),
+            ...(reasoningOptions !== undefined ? { reasoning_options: reasoningOptions } : {}),
         });
     }
     return models;
@@ -246,6 +256,32 @@ function buildLimitFromAPI(value: unknown): { readonly context?: number; readonl
         ...(context !== undefined ? { context } : {}),
         ...(output !== undefined ? { output } : {}),
     };
+}
+
+const KNOWN_REASONING_OPTION_TYPES = new Set(['effort', 'budget_tokens', 'toggle']);
+
+function buildReasoningOptionsFromAPI(
+    value: unknown,
+): readonly RawModelsDevReasoningOption[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const result: RawModelsDevReasoningOption[] = [];
+    for (const entry of value) {
+        if (!isRecord(entry)) continue;
+        const type = entry['type'];
+        if (typeof type !== 'string' || !KNOWN_REASONING_OPTION_TYPES.has(type)) continue;
+        const values = entry['values'];
+        const min = entry['min'];
+        const max = entry['max'];
+        result.push({
+            type,
+            ...(Array.isArray(values) && values.every((v) => typeof v === 'string')
+                ? { values: values as readonly string[] }
+                : {}),
+            ...(typeof min === 'number' ? { min } : {}),
+            ...(typeof max === 'number' ? { max } : {}),
+        });
+    }
+    return result.length > 0 ? result : undefined;
 }
 
 function resolveAuthFieldsForProvider(providerID: string, env: readonly string[]): readonly RawModelsDevAuthField[] {

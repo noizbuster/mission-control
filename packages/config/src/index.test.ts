@@ -6,8 +6,8 @@ import {
     missionControlAuthSchemaURL,
     modelProviderCatalog,
     opencodeProviderCatalog,
+    variantsForReasoningOptions,
 } from './index.js';
-import { variantsForGeneratedModel } from './model-variant-presets.js';
 
 describe('config catalog constants', () => {
     it('exports the default local model provider selection and catalog without test providers', () => {
@@ -122,86 +122,67 @@ describe('config catalog constants', () => {
         ]);
         expect(openAINonReasoningModel?.variants).toBeUndefined();
         expect(anthropicThinkingModel?.variants?.map((variant) => variant.id)).toEqual([
-            'thinking-off',
             'thinking-low',
             'thinking-medium',
             'thinking-high',
+            'thinking-max',
         ]);
     });
 
-    it('attaches Gemini 2.5 thinking variants only to thinking-capable Gemini models', () => {
-        expect(variantsForGeneratedModel('google', 'gemini-2.5-pro')?.map((variant) => variant.id)).toEqual([
-            'thinking-low',
-            'thinking-medium',
-            'thinking-high',
-        ]);
-        expect(variantsForGeneratedModel('google', 'gemini-2.5-flash')).toBeDefined();
-        expect(variantsForGeneratedModel('google', 'gemini-2.5-flash-lite')).toBeUndefined();
-        expect(variantsForGeneratedModel('google', 'gemini-2.5-flash-image')).toBeUndefined();
-        expect(variantsForGeneratedModel('google', 'gemini-2.5-flash-preview-tts')).toBeUndefined();
-        expect(variantsForGeneratedModel('google', 'gemini-2.5-pro-preview-tts')).toBeUndefined();
-        expect(variantsForGeneratedModel('google', 'gemini-2.0-flash')).toBeUndefined();
-
-        const googleProvider = modelProviderCatalog.find((provider) => provider.id === 'google');
-        const geminiPro = googleProvider?.models.find((model) => model.id === 'gemini-2.5-pro');
-        const geminiFlashLite = googleProvider?.models.find((model) => model.id === 'gemini-2.5-flash-lite');
-        expect(geminiPro?.variants?.map((variant) => variant.id)).toEqual([
-            'thinking-low',
-            'thinking-medium',
-            'thinking-high',
-        ]);
-        expect(geminiFlashLite?.variants).toBeUndefined();
-    });
-
-    it('attaches reasoning variants to OpenAI-compatible reasoning models per provider', () => {
-        expect(variantsForGeneratedModel('openrouter', 'openai/gpt-5')?.map((variant) => variant.id)).toEqual([
+    it('derives effort variants from reasoning_options metadata', () => {
+        const effortOptions = [{ type: 'effort', values: ['minimal', 'low', 'medium', 'high'] }];
+        expect(variantsForReasoningOptions('openai', effortOptions)?.map((v) => v.id)).toEqual([
+            'reasoning-minimal',
             'reasoning-low',
             'reasoning-medium',
             'reasoning-high',
         ]);
-        expect(variantsForGeneratedModel('openrouter', 'meta-llama/llama-4-scout')).toBeUndefined();
-        expect(variantsForGeneratedModel('groq', 'qwen-qwq-32b')?.map((variant) => variant.id)).toEqual([
-            'reasoning-none',
-            'reasoning-low',
-            'reasoning-medium',
-            'reasoning-high',
-        ]);
-        expect(variantsForGeneratedModel('mistral', 'mistral-medium-2604')?.map((variant) => variant.id)).toEqual([
-            'reasoning-high',
-        ]);
-        expect(variantsForGeneratedModel('mistral', 'mistral-small-2603')?.map((variant) => variant.id)).toEqual([
-            'reasoning-high',
-        ]);
-        expect(variantsForGeneratedModel('deepseek', 'deepseek-reasoner')).toBeUndefined();
-        expect(variantsForGeneratedModel('zai-coding-plan', 'glm-4.6')).toBeUndefined();
-        expect(variantsForGeneratedModel('zai-coding-plan', 'glm-5.1')).toBeUndefined();
-        expect(variantsForGeneratedModel('zai-coding-plan', 'glm-5v-turbo')).toBeUndefined();
-        expect(variantsForGeneratedModel('zai-coding-plan', 'glm-5.2')?.map((variant) => variant.id)).toEqual([
+        expect(variantsForReasoningOptions('zai-coding-plan', [{ type: 'effort', values: ['high', 'max'] }])?.map((v) => v.id)).toEqual([
             'reasoning-high',
             'reasoning-max',
         ]);
-
-        const openRouterProvider = modelProviderCatalog.find((provider) => provider.id === 'openrouter');
-        const openRouterReasoning = openRouterProvider?.models.find((model) => model.id === 'openai/gpt-5');
-        const openRouterNonReasoning = openRouterProvider?.models.find(
-            (model) => model.id === 'meta-llama/llama-4-scout',
-        );
-        expect(openRouterReasoning?.variants?.map((variant) => variant.id)).toEqual([
-            'reasoning-low',
-            'reasoning-medium',
-            'reasoning-high',
+        expect(variantsForReasoningOptions('anthropic', [{ type: 'effort', values: ['low', 'medium', 'high'] }])?.map((v) => v.id)).toEqual([
+            'thinking-low',
+            'thinking-medium',
+            'thinking-high',
         ]);
-        expect(openRouterNonReasoning?.variants).toBeUndefined();
+    });
 
-        const groqProvider = modelProviderCatalog.find((provider) => provider.id === 'groq');
-        // qwen-qwq-32b was dropped upstream; no live groq model matches the reasoning
-        // regex, so verify the non-reasoning path (the qwq matcher is covered above).
-        const groqNonReasoning = groqProvider?.models.find((model) => model.id === 'qwen/qwen3-32b');
-        expect(groqNonReasoning?.variants).toBeUndefined();
+    it('derives thinking tiers for Google budget_tokens reasoning options', () => {
+        const budgetOptions = [{ type: 'budget_tokens', min: 128, max: 32768 }];
+        expect(variantsForReasoningOptions('google', budgetOptions)?.map((v) => v.id)).toEqual([
+            'thinking-low',
+            'thinking-medium',
+            'thinking-high',
+        ]);
+    });
 
-        const mistralProvider = modelProviderCatalog.find((provider) => provider.id === 'mistral');
-        const mistralReasoning = mistralProvider?.models.find((model) => model.id === 'mistral-medium-2604');
-        expect(mistralReasoning?.variants?.map((variant) => variant.id)).toEqual(['reasoning-high']);
+    it('returns undefined for toggle-type or absent reasoning options', () => {
+        expect(variantsForReasoningOptions('zai-coding-plan', [{ type: 'toggle' }])).toBeUndefined();
+        expect(variantsForReasoningOptions('zai-coding-plan', undefined)).toBeUndefined();
+        expect(variantsForReasoningOptions('zai-coding-plan', [])).toBeUndefined();
+    });
+
+    it('catalog models with reasoning_options carry auto-derived variants', () => {
+        const googleProvider = modelProviderCatalog.find((provider) => provider.id === 'google');
+        const geminiPro = googleProvider?.models.find((model) => model.id === 'gemini-2.5-pro');
+        expect(geminiPro?.variants).toBeDefined();
+        expect(geminiPro?.variants?.length).toBeGreaterThan(0);
+
+        const zaiProvider = modelProviderCatalog.find((provider) => provider.id === 'zai-coding-plan');
+        const glm52 = zaiProvider?.models.find((model) => model.id === 'glm-5.2');
+        expect(glm52?.variants?.map((v) => v.id)).toEqual(['reasoning-high', 'reasoning-max']);
+
+        const glm47 = zaiProvider?.models.find((model) => model.id === 'glm-4.7');
+        expect(glm47?.variants).toBeUndefined();
+
+        const openaiProvider = modelProviderCatalog.find((provider) => provider.id === 'openai');
+        const gpt5 = openaiProvider?.models.find((model) => model.id === 'gpt-5');
+        expect(gpt5?.variants).toBeDefined();
+        expect(gpt5?.variants?.length).toBeGreaterThan(0);
+
+        const gpt4oMini = openaiProvider?.models.find((model) => model.id === 'gpt-4o-mini');
+        expect(gpt4oMini?.variants).toBeUndefined();
     });
 
     it('classifies provider execution capability explicitly', () => {

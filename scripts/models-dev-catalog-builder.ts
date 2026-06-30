@@ -18,6 +18,14 @@ export type ModelsDevRawModel = {
     readonly name?: string;
     readonly cost?: ModelsDevRawCost | null;
     readonly limit?: ModelsDevRawLimit | null;
+    readonly reasoning_options?: readonly ModelsDevRawReasoningOption[] | null;
+};
+
+export type ModelsDevRawReasoningOption = {
+    readonly type: string;
+    readonly values?: readonly string[];
+    readonly min?: number;
+    readonly max?: number;
 };
 
 export type ModelsDevRawProvider = {
@@ -45,6 +53,16 @@ export type GeneratedModel = {
     readonly status: 'active';
     readonly cost?: GeneratedCost;
     readonly limit?: GeneratedLimit;
+    readonly reasoning_options?: GeneratedReasoningOptions;
+};
+
+export type GeneratedReasoningOptions = readonly GeneratedReasoningOption[];
+
+export type GeneratedReasoningOption = {
+    readonly type: 'effort' | 'budget_tokens' | 'toggle';
+    readonly values?: readonly string[];
+    readonly min?: number;
+    readonly max?: number;
 };
 
 export type GeneratedProvider = {
@@ -129,12 +147,14 @@ function buildProvider(id: string, provider: ModelsDevRawProvider): GeneratedPro
         .map(([modelID, model]) => {
             const cost = buildCost(model.cost);
             const limit = buildLimit(model.limit);
+            const reasoningOptions = buildReasoningOptions(model.reasoning_options);
             return {
                 id: modelID,
                 name: model.name ?? modelID,
                 status: 'active' as const,
                 ...(cost !== undefined ? { cost } : {}),
                 ...(limit !== undefined ? { limit } : {}),
+                ...(reasoningOptions !== undefined ? { reasoning_options: reasoningOptions } : {}),
             };
         })
         .sort((left, right) => left.id.localeCompare(right.id));
@@ -224,12 +244,14 @@ function parseModels(providerID: string, models: Record<string, unknown>): Recor
             }
             const cost = parseCost(model['cost']);
             const limit = parseLimit(model['limit']);
+            const reasoningOptions = parseReasoningOptions(model['reasoning_options']);
             return [
                 modelID,
                 {
                     ...(name !== undefined ? { name } : {}),
                     ...(cost !== undefined ? { cost } : {}),
                     ...(limit !== undefined ? { limit } : {}),
+                    ...(reasoningOptions !== undefined ? { reasoning_options: reasoningOptions } : {}),
                 },
             ] as const;
         }),
@@ -274,6 +296,38 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isStringArray(value: unknown): value is readonly string[] {
     return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+}
+
+const KNOWN_REASONING_TYPES = new Set(['effort', 'budget_tokens', 'toggle']);
+
+function buildReasoningOptions(
+    options: readonly ModelsDevRawReasoningOption[] | null | undefined,
+): GeneratedReasoningOptions | undefined {
+    if (options === null || options === undefined || !Array.isArray(options)) return undefined;
+    const result: GeneratedReasoningOption[] = [];
+    for (const opt of options) {
+        if (!isRecord(opt)) continue;
+        const type = opt['type'];
+        if (typeof type !== 'string' || !KNOWN_REASONING_TYPES.has(type)) continue;
+        const entry: GeneratedReasoningOption = { type: type as GeneratedReasoningOption['type'] };
+        const values = opt['values'];
+        if (isStringArray(values)) entry.values = values;
+        const min = opt['min'];
+        if (typeof min === 'number') entry.min = min;
+        const max = opt['max'];
+        if (typeof max === 'number') entry.max = max;
+        result.push(entry);
+    }
+    return result.length > 0 ? result : undefined;
+}
+
+function parseReasoningOptions(
+    value: unknown,
+): readonly ModelsDevRawReasoningOption[] | null | undefined {
+    if (value === null) return null;
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value)) return undefined;
+    return value as readonly ModelsDevRawReasoningOption[];
 }
 
 function isDefined<T>(value: T | undefined): value is T {

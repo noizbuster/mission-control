@@ -10,9 +10,9 @@ import {
 
 describe('OpenAI-compatible provider reasoning variants', () => {
     it.each([
-        ['openrouter', 'openai/gpt-5', 'reasoning-high'],
-        ['openrouter', 'x-ai/grok-4.3', 'reasoning-low'],
-        ['openrouter', 'deepseek/deepseek-r1', 'reasoning-medium'],
+        ['openrouter', '~anthropic/claude-fable-latest', 'reasoning-high'],
+        ['openrouter', '~google/gemini-pro-latest', 'reasoning-low'],
+        ['openrouter', '~google/gemini-flash-latest', 'reasoning-medium'],
     ] as const)(
         'maps %s %s reasoning variant into reasoning object body field',
         async (providerID, modelID, variantID) => {
