@@ -46,6 +46,7 @@ import {
     switchModelsOverlayColumn as reduceModelsOverlayColumn,
     setModelsOverlayProviderTab as reduceModelsOverlayProviderTab,
     setModelsOverlaySearchQuery as reduceModelsOverlaySearchQuery,
+    selectModelForAssignment as selectModelForAssignmentReducer,
 } from './models-overlay-state.js';
 import { normalizeQuestionOptions, type QuestionOption } from './question-types.js';
 
@@ -97,6 +98,7 @@ export type ModelsOverlaySlice = {
     readonly focusedColumn: 'left' | 'right';
     readonly searchQuery: string;
     readonly activeProviderTab: string;
+    readonly pendingAssignModel: ModelProviderSelection | null;
 };
 
 export type AgentsDashboardSourceTabInfo = {
@@ -335,6 +337,7 @@ export class ChatStore {
                 focusedColumn: 'left',
                 searchQuery: '',
                 activeProviderTab: 'all',
+                pendingAssignModel: null,
             },
             contextTokensUsed: undefined,
             contextTokensMax: undefined,
@@ -1003,6 +1006,7 @@ export class ChatStore {
             focusedColumn: 'left',
             searchQuery: '',
             activeProviderTab: 'all',
+            pendingAssignModel: null,
         };
         this.state.overlayMode = 'models-overlay';
         this.publish();
@@ -1063,6 +1067,35 @@ export class ChatStore {
         }
     }
 
+    selectModelForAssignment(): void {
+        const state = this.buildModelsOverlayState();
+        if (state === null) return;
+        const next = selectModelForAssignmentReducer(state);
+        this.state.modelsOverlay = {
+            ...this.state.modelsOverlay,
+            pendingAssignModel: next.pendingAssignModel,
+            focusedColumn: next.focusedColumn,
+        };
+        this.publish();
+    }
+
+    async confirmRoleAssignment(): Promise<void> {
+        const slice = this.state.modelsOverlay;
+        if (slice.pendingAssignModel === null) return;
+        const roleRow = slice.roleRows[slice.activeRightIndex];
+        if (roleRow === undefined) return;
+        const pendingModel = slice.pendingAssignModel;
+        this.state.modelsOverlay = { ...this.state.modelsOverlay, pendingAssignModel: null };
+        this.publish();
+        await this.assignModelsOverlayRole(roleRow.role, pendingModel);
+    }
+
+    cancelPendingAssignment(): void {
+        if (this.state.modelsOverlay.pendingAssignModel === null) return;
+        this.state.modelsOverlay = { ...this.state.modelsOverlay, pendingAssignModel: null };
+        this.publish();
+    }
+
     setModelsOverlaySearchQuery(query: string): void {
         const state = this.buildModelsOverlayState();
         if (state === null) return;
@@ -1098,6 +1131,7 @@ export class ChatStore {
             focusedColumn: slice.focusedColumn,
             searchQuery: slice.searchQuery,
             activeProviderTab: slice.activeProviderTab,
+            pendingAssignModel: slice.pendingAssignModel,
         };
     }
 

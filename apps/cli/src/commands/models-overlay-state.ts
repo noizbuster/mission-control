@@ -45,6 +45,12 @@ export type ModelsOverlayState = {
     readonly searchQuery: string;
     /** `'all'` or a providerID from `leftEntries`. */
     readonly activeProviderTab: string;
+    /**
+     * The model selected from the left column in step 1 of the 2-step assign
+     * flow, awaiting a role confirmation on the right column. `null` when no
+     * assignment is pending.
+     */
+    readonly pendingAssignModel: ModelProviderSelection | null;
 };
 
 /** A windowed view computed from state + terminal dimensions. Pure. */
@@ -91,6 +97,7 @@ export function createModelsOverlayState(
         focusedColumn: 'left',
         searchQuery: options?.searchQuery ?? '',
         activeProviderTab: options?.activeProviderTab ?? 'all',
+        pendingAssignModel: null,
     };
 }
 
@@ -269,6 +276,51 @@ export function clearSelectedRole(state: ModelsOverlayState): ModelsOverlayState
         ...state,
         roleRows: state.roleRows.map((row, index) => (index === targetIndex ? { ...row, assignment: undefined } : row)),
     };
+}
+
+/**
+ * Step 1 of the 2-step assign flow: select the focused left-column model and
+ * move focus to the right column, setting `pendingAssignModel`. The model is
+ * resolved from the FILTERED left list. No-op (returns input) when the left
+ * column is not focused or the filtered list is empty.
+ */
+export function selectModelForAssignment(state: ModelsOverlayState): ModelsOverlayState {
+    if (state.focusedColumn !== 'left') return state;
+    const filtered = filterLeftEntries(state.leftEntries, state.activeProviderTab, state.searchQuery);
+    const model = filtered[state.activeLeftIndex];
+    if (model === undefined) return state;
+    return { ...state, pendingAssignModel: model, focusedColumn: 'right' };
+}
+
+/**
+ * Step 2 of the 2-step assign flow: confirm the pending model onto the focused
+ * right-column role. Assigns `pendingAssignModel` to the role at
+ * `activeRightIndex`, clears `pendingAssignModel`, and keeps focus on the right
+ * column (so the user can assign the same model to another role). No-op when
+ * no model is pending, the right column is not focused, or the right index is
+ * out of bounds.
+ */
+export function confirmRoleAssignment(state: ModelsOverlayState): ModelsOverlayState {
+    if (state.pendingAssignModel === null) return state;
+    if (state.focusedColumn !== 'right') return state;
+    if (state.roleRows[state.activeRightIndex] === undefined) return state;
+    const model = state.pendingAssignModel;
+    const targetIndex = state.activeRightIndex;
+    return {
+        ...state,
+        pendingAssignModel: null,
+        roleRows: state.roleRows.map((row, index) => (index === targetIndex ? { ...row, assignment: model } : row)),
+    };
+}
+
+/**
+ * Cancel a pending assignment (Escape, Backspace in pending mode, or returning
+ * to the left column via Tab). Clears `pendingAssignModel` only; the caller
+ * controls `focusedColumn`. No-op when nothing is pending.
+ */
+export function cancelPendingAssignment(state: ModelsOverlayState): ModelsOverlayState {
+    if (state.pendingAssignModel === null) return state;
+    return { ...state, pendingAssignModel: null };
 }
 
 /** Set the search query and reset `activeLeftIndex` to 0. Pure. */

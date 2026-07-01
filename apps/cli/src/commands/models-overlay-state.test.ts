@@ -2,8 +2,10 @@ import type { ModelProviderSelection, ModelRole } from '@mission-control/protoco
 import { describe, expect, it } from 'vitest';
 import {
     assignSelectedRole,
+    cancelPendingAssignment,
     clearSelectedRole,
     computeProviderTabs,
+    confirmRoleAssignment,
     createModelsOverlayRoleRows,
     createModelsOverlayState,
     createModelsOverlayView,
@@ -14,6 +16,7 @@ import {
     type ModelsOverlayRoleRow,
     navigateModelsOverlayDown,
     navigateModelsOverlayUp,
+    selectModelForAssignment,
     setModelsOverlayProviderTab,
     setModelsOverlaySearchQuery,
     switchModelsOverlayColumn,
@@ -418,5 +421,123 @@ describe('navigation with filtering', () => {
         const next = navigateModelsOverlayDown(state);
         expect(next).toBe(state);
         expect(next.activeLeftIndex).toBe(0);
+    });
+});
+
+describe('selectModelForAssignment', () => {
+    it('sets pendingAssignModel and moves focus to the right column', () => {
+        const state = createModelsOverlayState(ENTRIES, roleRows());
+        const next = selectModelForAssignment(state);
+        expect(next.pendingAssignModel).toEqual(ENTRIES[0]);
+        expect(next.focusedColumn).toBe('right');
+    });
+
+    it('is a no-op when the right column is focused', () => {
+        const state = switchModelsOverlayColumn(createModelsOverlayState(ENTRIES, roleRows()));
+        const next = selectModelForAssignment(state);
+        expect(next).toBe(state);
+        expect(next.pendingAssignModel).toBeNull();
+    });
+
+    it('is a no-op when the filtered left column is empty', () => {
+        const state = createModelsOverlayState(ENTRIES, roleRows(), { searchQuery: 'zzz' });
+        const next = selectModelForAssignment(state);
+        expect(next).toBe(state);
+        expect(next.pendingAssignModel).toBeNull();
+        expect(next.focusedColumn).toBe('left');
+    });
+
+    it('resolves the model from the filtered list when a provider tab is active', () => {
+        const entries = [selection('anthropic', 'claude'), selection('openai', 'gpt')] as const;
+        const state = createModelsOverlayState(entries, roleRows(), { activeProviderTab: 'openai' });
+        const next = selectModelForAssignment(state);
+        expect(next.pendingAssignModel).toEqual(selection('openai', 'gpt'));
+    });
+
+    it('preserves activeRightIndex', () => {
+        const state = switchModelsOverlayColumn(
+            navigateModelsOverlayDown(createModelsOverlayState(ENTRIES, roleRows())),
+        );
+        const rightIndexBefore = state.activeRightIndex;
+        const left = switchModelsOverlayColumn(state);
+        const next = selectModelForAssignment(left);
+        expect(next.activeRightIndex).toBe(rightIndexBefore);
+    });
+
+    it('does not mutate the input state', () => {
+        const state = createModelsOverlayState(ENTRIES, roleRows());
+        const pendingBefore = state.pendingAssignModel;
+        selectModelForAssignment(state);
+        expect(state.pendingAssignModel).toBe(pendingBefore);
+        expect(state.focusedColumn).toBe('left');
+    });
+});
+
+describe('confirmRoleAssignment', () => {
+    it('assigns the pending model to the focused role and clears pending', () => {
+        const state = selectModelForAssignment(createModelsOverlayState(ENTRIES, roleRows()));
+        expect(state.pendingAssignModel).not.toBeNull();
+        const next = confirmRoleAssignment(state);
+        expect(next.pendingAssignModel).toBeNull();
+        expect(next.roleRows[0]?.assignment).toEqual(ENTRIES[0]);
+    });
+
+    it('keeps focus on the right column after confirming', () => {
+        const state = selectModelForAssignment(createModelsOverlayState(ENTRIES, roleRows()));
+        const next = confirmRoleAssignment(state);
+        expect(next.focusedColumn).toBe('right');
+    });
+
+    it('is a no-op when no model is pending', () => {
+        const state = switchModelsOverlayColumn(createModelsOverlayState(ENTRIES, roleRows()));
+        const next = confirmRoleAssignment(state);
+        expect(next).toBe(state);
+    });
+
+    it('is a no-op when the right column is not focused', () => {
+        const pending = selectModelForAssignment(createModelsOverlayState(ENTRIES, roleRows()));
+        const leftFocus = { ...pending, focusedColumn: 'left' as const };
+        const next = confirmRoleAssignment(leftFocus);
+        expect(next).toBe(leftFocus);
+        expect(next.pendingAssignModel).not.toBeNull();
+    });
+
+    it('does not mutate the input state', () => {
+        const state = selectModelForAssignment(createModelsOverlayState(ENTRIES, roleRows()));
+        const pendingBefore = state.pendingAssignModel;
+        const assignmentBefore = state.roleRows[0]?.assignment;
+        confirmRoleAssignment(state);
+        expect(state.pendingAssignModel).toBe(pendingBefore);
+        expect(state.roleRows[0]?.assignment).toBe(assignmentBefore);
+    });
+});
+
+describe('cancelPendingAssignment', () => {
+    it('clears pendingAssignModel without changing focusedColumn', () => {
+        const state = selectModelForAssignment(createModelsOverlayState(ENTRIES, roleRows()));
+        expect(state.focusedColumn).toBe('right');
+        const next = cancelPendingAssignment(state);
+        expect(next.pendingAssignModel).toBeNull();
+        expect(next.focusedColumn).toBe('right');
+    });
+
+    it('is a no-op returning the same reference when nothing is pending', () => {
+        const state = createModelsOverlayState(ENTRIES, roleRows());
+        const next = cancelPendingAssignment(state);
+        expect(next).toBe(state);
+    });
+
+    it('does not mutate the input state', () => {
+        const state = selectModelForAssignment(createModelsOverlayState(ENTRIES, roleRows()));
+        const pendingBefore = state.pendingAssignModel;
+        cancelPendingAssignment(state);
+        expect(state.pendingAssignModel).toBe(pendingBefore);
+    });
+});
+
+describe('createModelsOverlayState pendingAssignModel default', () => {
+    it('initializes pendingAssignModel to null', () => {
+        const state = createModelsOverlayState(ENTRIES, roleRows());
+        expect(state.pendingAssignModel).toBeNull();
     });
 });

@@ -28,7 +28,7 @@ import { runExportAction } from './interactive-chat-export-action.js';
 import { runHelpAction } from './interactive-chat-help-action.js';
 import { runHotkeysAction } from './interactive-chat-hotkeys-action.js';
 import type { ChatOutput } from './interactive-chat-io.js';
-import type { ModelChoice } from './interactive-chat-model.js';
+import { createVariantChoices, type ModelChoice } from './interactive-chat-model.js';
 import { runModelListAction, runModelPickAction } from './interactive-chat-model-actions.js';
 import {
     emitPromptAdmission,
@@ -670,7 +670,10 @@ async function runModelsAction(
         chatOutput.write('/models requires the interactive TUI overlay.\n');
         return actionResult(modelProviderSelection, coding.activeTurn);
     }
-    const entries = modelChoices.map((choice) => choice.selection);
+    const entries = modelChoices.flatMap((choice) => {
+        const variantSelections = createVariantChoices(choice.selection).map((v) => v.selection);
+        return variantSelections.length > 0 ? variantSelections : [choice.selection];
+    });
     if (entries.length === 0) {
         chatOutput.write('No models available. Configure a provider with /model first.\n');
         return actionResult(modelProviderSelection, coding.activeTurn);

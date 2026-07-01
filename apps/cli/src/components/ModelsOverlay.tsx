@@ -53,6 +53,7 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): React.ReactNode {
         focusedColumn: slice.focusedColumn,
         searchQuery: slice.searchQuery,
         activeProviderTab: slice.activeProviderTab,
+        pendingAssignModel: slice.pendingAssignModel,
     };
     const view = createModelsOverlayView(state, MODELS_OVERLAY_MAX_VISIBLE);
 
@@ -83,19 +84,25 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): React.ReactNode {
         }
         if (key.name === 'tab') {
             key.preventDefault();
+            if (slice.focusedColumn === 'right' && slice.pendingAssignModel !== null) {
+                store.cancelPendingAssignment();
+            }
             store.switchModelsOverlayColumn();
             return;
         }
         if (key.name === 'return') {
-            const localIndex = view.activeLeftIndex - view.startIndexLeft;
-            const focusedModel = view.leftVisible[localIndex];
-            const focusedRow = slice.roleRows[slice.activeRightIndex];
-            if (focusedModel !== undefined && focusedRow !== undefined) {
-                void store.assignModelsOverlayRole(focusedRow.role, focusedModel);
+            if (slice.focusedColumn === 'left') {
+                store.selectModelForAssignment();
+            } else if (slice.pendingAssignModel !== null) {
+                void store.confirmRoleAssignment();
             }
             return;
         }
         if (key.name === 'backspace' || key.name === 'delete') {
+            if (slice.pendingAssignModel !== null) {
+                store.cancelPendingAssignment();
+                return;
+            }
             if (slice.searchQuery.length > 0) {
                 store.setModelsOverlaySearchQuery(slice.searchQuery.slice(0, -1));
                 return;
@@ -111,19 +118,22 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): React.ReactNode {
             return;
         }
         if (key.name === 'escape') {
-            store.hideModelsOverlay();
+            if (slice.pendingAssignModel !== null) {
+                store.cancelPendingAssignment();
+            } else {
+                store.hideModelsOverlay();
+            }
         }
     });
 
     const searchDisplay = slice.searchQuery.length > 0 ? slice.searchQuery : '(type to filter)';
+    const hasPending = slice.pendingAssignModel !== null;
+    const footer = hasPending
+        ? '⏎ confirm assign · Tab/Esc/⌫ cancel · ↑↓ pick role'
+        : '← → provider · type to search · ↑↓ navigate · Tab column · ⏎ assign · ⌫ clear · Esc close';
 
     return (
-        <OverlayFrame
-            variant="view"
-            title="Models"
-            hint="(Esc to close)"
-            footer="← → provider · type to search · ↑↓ navigate · Tab column · ⏎ assign · ⌫ clear · Esc close"
-        >
+        <OverlayFrame variant="view" title="Models" hint="(Esc to close)" footer={footer}>
             <box flexDirection="row" marginTop={1}>
                 {view.providerTabs.map((tab) => {
                     const isActive = tab.id === slice.activeProviderTab;
@@ -164,6 +174,11 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): React.ReactNode {
                     </box>
                     <box flexDirection="column" flexGrow={1}>
                         <text attributes={TextAttributes.BOLD}>{'Roles'}</text>
+                        {hasPending && slice.pendingAssignModel !== null && (
+                            <text fg="#ffff00" attributes={TextAttributes.BOLD}>
+                                {`Assigning: ${formatSelection(slice.pendingAssignModel)}`}
+                            </text>
+                        )}
                         <text attributes={TextAttributes.DIM}>
                             {`${view.startIndexRight + 1}-${view.endIndexRight + 1} of ${view.totalRight}`}
                         </text>
