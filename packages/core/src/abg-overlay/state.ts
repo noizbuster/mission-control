@@ -62,6 +62,8 @@ export type AbgOverlayState = {
     readonly runState: RunState;
     readonly nativeSidecarStatus: string;
     readonly lastSettledAt: string | undefined;
+    readonly nodeChangedAtMs: ReadonlyMap<string, number>;
+    readonly lastChangedNodeIds: readonly string[] | undefined;
 };
 
 /**
@@ -91,6 +93,8 @@ export type AbgOverlayDraft = {
     runState: RunState;
     nativeSidecarStatus: string;
     lastSettledAt: string | undefined;
+    nodeChangedAtMs: Map<string, number>;
+    lastChangedNodeIds: readonly string[] | undefined;
 };
 
 export interface AbgOverlayStore {
@@ -129,6 +133,8 @@ type AbgOverlayPatch = {
     runState?: RunState;
     nativeSidecarStatus?: string;
     lastSettledAt?: string;
+    nodeChangedAtMs?: Map<string, number>;
+    lastChangedNodeIds?: readonly string[];
 };
 
 export const RECENT_EVENTS_CAP = 200;
@@ -238,6 +244,20 @@ function signalReason(signal: AbgSignal): string {
     }
 }
 
+/** Default wall-clock source; faked via `vi.useFakeTimers()` + `vi.setSystemTime()` in tests. */
+const defaultNow = (): number => Date.now();
+
+/**
+ * Sets `nodeId` to `status` in the working nodes map and returns the nodeId when the status
+ * actually transitioned (previous value differed). Returns undefined for a no-op set so callers
+ * can skip recency bookkeeping for signals that do not move the node.
+ */
+function applyNodeStatus(nodes: Map<string, AbgNodeStatus>, nodeId: string, status: AbgNodeStatus): string | undefined {
+    if (nodes.get(nodeId) === status) return undefined;
+    nodes.set(nodeId, status);
+    return nodeId;
+}
+
 function createDefaultState(): AbgOverlayDraft {
     return {
         activeGraphId: undefined,
@@ -261,6 +281,8 @@ function createDefaultState(): AbgOverlayDraft {
         runState: 'idle',
         nativeSidecarStatus: '',
         lastSettledAt: undefined,
+        nodeChangedAtMs: new Map(),
+        lastChangedNodeIds: undefined,
     };
 }
 
@@ -287,6 +309,8 @@ function cloneState(state: AbgOverlayState): AbgOverlayDraft {
         runState: state.runState,
         nativeSidecarStatus: state.nativeSidecarStatus,
         lastSettledAt: state.lastSettledAt,
+        nodeChangedAtMs: new Map(state.nodeChangedAtMs),
+        lastChangedNodeIds: state.lastChangedNodeIds === undefined ? undefined : [...state.lastChangedNodeIds],
     };
 }
 
@@ -294,17 +318,23 @@ function cloneState(state: AbgOverlayState): AbgOverlayDraft {
  * Pure fold of an {@link AbgSignal} (plane A live source) into state. Total and non-throwing
  * (Metis 4.1): every error returns an empty patch so a malformed signal cannot reject the node run.
  * AbgSignal carries no timestamp outside its embedded `emit` event, so non-emit recent entries use
- * an empty timestamp placeholder (the integration layer may enrich it).
+ * an empty timestamp placeholder (the integration layer may enrich it). `nodeChangedAtMs` is bumped
+ * with the injected `now` clock only when a node status actually transitions; control-intent signals
+ * (cancel/escalate/fallback) and repeated same-status signals leave it untouched.
  */
-export function projectAbgSignal(state: AbgOverlayState, signal: AbgSignal): Partial<AbgOverlayState> {
+export function projectAbgSignal(
+    state: AbgOverlayState,
+    signal: AbgSignal,
+    now: () => number = defaultNow,
+): Partial<AbgOverlayState> {
     try {
-        return projectAbgSignalSafe(state, signal);
+        return projectAbgSignalSafe(state, signal, now);
     } catch {
         return {};
     }
 }
 
-function projectAbgSignalSafe(state: AbgOverlayState, signal: AbgSignal): Partial<AbgOverlayState> {
+function projectAbgSignalSafe(state: AbgOverlayState, signal: AbgSignal, now: () => number): Partial<AbgOverlayState> {
     const nodes = new Map<string, AbgNodeStatus>(state.nodes);
     const patch: AbgOverlayPatch = {};
     if (signal.graphId !== undefined) {
@@ -315,14 +345,15 @@ function projectAbgSignalSafe(state: AbgOverlayState, signal: AbgSignal): Partia
         patch.graphs = updateGraphSummary(state.graphs, signal.graphId, state.activeGraphId);
     }
     let entry: RecentEvent | undefined;
+    let changedNodeId: string | undefined;
 
     switch (signal.type) {
         case 'started':
-            nodes.set(signal.nodeId, 'running');
+            changedNodeId = applyNodeStatus(nodes, signal.nodeId, 'running');
             entry = { timestamp: '', type: 'node.started', nodeId: signal.nodeId, signal: 'started', message: '' };
             break;
         case 'progress':
-            nodes.set(signal.nodeId, 'running');
+            changedNodeId = applyNodeStatus(nodes, signal.nodeId, 'running');
             entry = {
                 timestamp: '',
                 type: 'node.progress',
@@ -332,11 +363,11 @@ function projectAbgSignalSafe(state: AbgOverlayState, signal: AbgSignal): Partia
             };
             break;
         case 'success':
-            nodes.set(signal.nodeId, 'succeeded');
+            changedNodeId = applyNodeStatus(nodes, signal.nodeId, 'succeeded');
             entry = { timestamp: '', type: 'node.completed', nodeId: signal.nodeId, signal: 'success', message: '' };
             break;
         case 'failure': {
-            nodes.set(signal.nodeId, 'failed');
+            changedNodeId = applyNodeStatus(nodes, signal.nodeId, 'failed');
             const errorText = redactForDisplay(safeErrorText(signal.error));
             patch.lastError = errorText;
             entry = {
@@ -349,7 +380,7 @@ function projectAbgSignalSafe(state: AbgOverlayState, signal: AbgSignal): Partia
             break;
         }
         case 'cancelled':
-            nodes.set(signal.nodeId, 'cancelled');
+            changedNodeId = applyNodeStatus(nodes, signal.nodeId, 'cancelled');
             entry = {
                 timestamp: '',
                 type: 'node.cancelled',
@@ -359,7 +390,7 @@ function projectAbgSignalSafe(state: AbgOverlayState, signal: AbgSignal): Partia
             };
             break;
         case 'emit': {
-            nodes.set(signal.nodeId, 'running');
+            changedNodeId = applyNodeStatus(nodes, signal.nodeId, 'running');
             const eventType = signal.event.type;
             const redactedPayload = redactForDisplay(safePayloadText(signal.event.payload));
             if (eventType === 'llm.text.delta') {
@@ -376,7 +407,7 @@ function projectAbgSignalSafe(state: AbgOverlayState, signal: AbgSignal): Partia
             break;
         }
         case 'select':
-            nodes.set(signal.nodeId, 'running');
+            changedNodeId = applyNodeStatus(nodes, signal.nodeId, 'running');
             entry = {
                 timestamp: '',
                 type: 'node.select',
@@ -386,7 +417,7 @@ function projectAbgSignalSafe(state: AbgOverlayState, signal: AbgSignal): Partia
             };
             break;
         case 'transition':
-            nodes.set(signal.nodeId, 'running');
+            changedNodeId = applyNodeStatus(nodes, signal.nodeId, 'running');
             entry = {
                 timestamp: '',
                 type: 'node.transition',
@@ -396,7 +427,7 @@ function projectAbgSignalSafe(state: AbgOverlayState, signal: AbgSignal): Partia
             };
             break;
         case 'spawn':
-            nodes.set(signal.nodeId, 'running');
+            changedNodeId = applyNodeStatus(nodes, signal.nodeId, 'running');
             if (signal.graphId !== undefined && !state.knownGraphIds.includes(signal.graphId)) {
                 patch.knownGraphIds = [...state.knownGraphIds, signal.graphId];
             }
@@ -423,6 +454,12 @@ function projectAbgSignalSafe(state: AbgOverlayState, signal: AbgSignal): Partia
     }
 
     patch.nodes = nodes;
+    if (changedNodeId !== undefined) {
+        const nodeChangedAtMs = new Map(state.nodeChangedAtMs);
+        nodeChangedAtMs.set(changedNodeId, now());
+        patch.nodeChangedAtMs = nodeChangedAtMs;
+        patch.lastChangedNodeIds = [changedNodeId];
+    }
     if (entry !== undefined) {
         patch.recentEvents = appendRecent(state.recentEvents, entry);
     }
@@ -593,12 +630,20 @@ function recentEventFromSignal(signal: AbgSignal): RecentEvent {
  * tick). Settled node statuses, active node ids, tool outcomes, and pending approvals come from the
  * snapshot; live node entries not present in the snapshot are preserved. toolOutcomes.lastMessage
  * is redacted. When `lastSignal` is present it is folded into recentEvents so the durable tail is
- * observable.
+ * observable. `nodeChangedAtMs` is bumped for each node whose snapshot status differs from the
+ * current overlay status.
  */
-export function mergeGraphSnapshot(state: AbgOverlayState, snapshot: AbgGraphSnapshot): Partial<AbgOverlayState> {
+export function mergeGraphSnapshot(
+    state: AbgOverlayState,
+    snapshot: AbgGraphSnapshot,
+    now: () => number = defaultNow,
+): Partial<AbgOverlayState> {
     const nodes = new Map<string, AbgNodeStatus>(state.nodes);
+    const changedNodeIds: string[] = [];
     for (const node of snapshot.nodes) {
-        nodes.set(node.nodeId, node.status);
+        if (applyNodeStatus(nodes, node.nodeId, node.status) !== undefined) {
+            changedNodeIds.push(node.nodeId);
+        }
     }
     const patch: AbgOverlayPatch = {
         activeGraphId: snapshot.graphId,
@@ -608,6 +653,15 @@ export function mergeGraphSnapshot(state: AbgOverlayState, snapshot: AbgGraphSna
         toolOutcomes: snapshot.toolOutcomes.map(redactToolOutcome),
         pendingApprovals: [...snapshot.approvals],
     };
+    if (changedNodeIds.length > 0) {
+        const nodeChangedAtMs = new Map(state.nodeChangedAtMs);
+        const ts = now();
+        for (const id of changedNodeIds) {
+            nodeChangedAtMs.set(id, ts);
+        }
+        patch.nodeChangedAtMs = nodeChangedAtMs;
+        patch.lastChangedNodeIds = changedNodeIds;
+    }
     if (snapshot.lastSignal !== undefined) {
         patch.recentEvents = appendRecent(state.recentEvents, recentEventFromSignal(snapshot.lastSignal));
     }

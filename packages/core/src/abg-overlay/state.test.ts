@@ -1,5 +1,5 @@
 import type { AbgGraphSnapshot, AbgSignal, AgentEvent } from '@mission-control/protocol';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     createAbgOverlayStore,
     DEFAULT_REFRESH_MS,
@@ -227,6 +227,8 @@ describe('abg overlay state', () => {
                 draft.runState = 'running';
                 draft.nativeSidecarStatus = 'mock';
                 draft.lastSettledAt = TS;
+                draft.nodeChangedAtMs.set('n1', 1234);
+                draft.lastChangedNodeIds = ['n1'];
             });
             store.setActive(true);
 
@@ -249,6 +251,8 @@ describe('abg overlay state', () => {
             expect(state.runState).toBe('idle');
             expect(state.nativeSidecarStatus).toBe('');
             expect(state.lastSettledAt).toBeUndefined();
+            expect(state.nodeChangedAtMs.size).toBe(0);
+            expect(state.lastChangedNodeIds).toBeUndefined();
             // active flag is controller-managed; reset() does not touch it.
             expect(store.isActive()).toBe(true);
         });
@@ -1025,6 +1029,128 @@ describe('abg overlay state', () => {
             });
             const childSummary = store.getSnapshot().graphs.get('child');
             expect(childSummary?.parentGraphId).toBe('parent');
+        });
+    });
+
+    describe('node change recency (nodeChangedAtMs)', () => {
+        const T0 = new Date('2026-07-01T00:00:00.000Z').getTime();
+        const T1 = new Date('2026-07-01T00:00:01.000Z').getTime();
+        const T2 = new Date('2026-07-01T00:00:02.000Z').getTime();
+
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('records nodeChangedAtMs when a started signal transitions a node to running', () => {
+            vi.setSystemTime(T0);
+            const store = createAbgOverlayStore();
+            store.update((draft) => {
+                Object.assign(draft, projectAbgSignal(draft, startedSignal('n1')));
+            });
+            expect(store.getSnapshot().nodeChangedAtMs.get('n1')).toBe(T0);
+            expect(store.getSnapshot().lastChangedNodeIds).toEqual(['n1']);
+        });
+
+        it('advances nodeChangedAtMs to a newer timestamp on a subsequent status change', () => {
+            vi.setSystemTime(T0);
+            const store = createAbgOverlayStore();
+            store.update((draft) => {
+                Object.assign(draft, projectAbgSignal(draft, startedSignal('n1')));
+            });
+            expect(store.getSnapshot().nodeChangedAtMs.get('n1')).toBe(T0);
+
+            vi.setSystemTime(T1);
+            store.update((draft) => {
+                Object.assign(draft, projectAbgSignal(draft, successSignal('n1')));
+            });
+            expect(store.getSnapshot().nodeChangedAtMs.get('n1')).toBe(T1);
+        });
+
+        it('does not bump nodeChangedAtMs for a repeated same-status signal (emit after started)', () => {
+            vi.setSystemTime(T0);
+            const store = createAbgOverlayStore();
+            store.update((draft) => {
+                Object.assign(draft, projectAbgSignal(draft, startedSignal('n1')));
+            });
+            expect(store.getSnapshot().nodeChangedAtMs.get('n1')).toBe(T0);
+
+            vi.setSystemTime(T1);
+            store.update((draft) => {
+                Object.assign(draft, projectAbgSignal(draft, emitDeltaSignal('n1', 'same running state')));
+            });
+            expect(store.getSnapshot().nodeChangedAtMs.get('n1')).toBe(T0);
+        });
+
+        it('does not bump nodeChangedAtMs for cancel, escalate, or fallback control signals', () => {
+            vi.setSystemTime(T0);
+            const store = createAbgOverlayStore();
+            store.update((draft) => {
+                Object.assign(draft, projectAbgSignal(draft, cancelSignal('n1', 'n2', 'timeout')));
+            });
+            store.update((draft) => {
+                Object.assign(draft, projectAbgSignal(draft, escalateSignal('n1', 'need human')));
+            });
+            store.update((draft) => {
+                Object.assign(draft, projectAbgSignal(draft, fallbackSignal('n1', 'retry exhausted')));
+            });
+            const state = store.getSnapshot();
+            expect(state.nodeChangedAtMs.size).toBe(0);
+            expect(state.lastChangedNodeIds).toBeUndefined();
+        });
+
+        it('bumps nodeChangedAtMs in mergeGraphSnapshot only when a node status differs', () => {
+            vi.setSystemTime(T0);
+            const store = createAbgOverlayStore();
+            store.update((draft) => {
+                Object.assign(draft, mergeGraphSnapshot(draft, snapshot('active', 'n1')));
+            });
+            expect(store.getSnapshot().nodeChangedAtMs.get('n1')).toBe(T0);
+
+            vi.setSystemTime(T1);
+            store.update((draft) => {
+                Object.assign(draft, mergeGraphSnapshot(draft, snapshot('active', 'n1')));
+            });
+            expect(store.getSnapshot().nodeChangedAtMs.get('n1')).toBe(T0);
+
+            vi.setSystemTime(T2);
+            const succeeded: AbgGraphSnapshot = {
+                graphId: 'g1',
+                status: 'active',
+                activeNodeIds: [],
+                nodes: [{ nodeId: 'n1', status: 'succeeded' }],
+                blackboard: [],
+                approvals: [],
+                toolOutcomes: [],
+            };
+            store.update((draft) => {
+                Object.assign(draft, mergeGraphSnapshot(draft, succeeded));
+            });
+            expect(store.getSnapshot().nodeChangedAtMs.get('n1')).toBe(T2);
+        });
+
+        it('keeps nodeChangedAtMs isolated across store snapshots (clone independence)', () => {
+            vi.setSystemTime(T0);
+            const store = createAbgOverlayStore();
+            store.update((draft) => {
+                Object.assign(draft, projectAbgSignal(draft, startedSignal('n1')));
+            });
+            const before = store.getSnapshot();
+            const beforeMap = before.nodeChangedAtMs;
+
+            vi.setSystemTime(T1);
+            store.update((draft) => {
+                Object.assign(draft, projectAbgSignal(draft, startedSignal('n2')));
+            });
+
+            expect(beforeMap.get('n1')).toBe(T0);
+            expect(beforeMap.has('n2')).toBe(false);
+            const after = store.getSnapshot();
+            expect(after.nodeChangedAtMs.get('n1')).toBe(T0);
+            expect(after.nodeChangedAtMs.get('n2')).toBe(T1);
         });
     });
 });
