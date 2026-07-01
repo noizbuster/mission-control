@@ -4,6 +4,7 @@ import type { AbgOverlayState, AbgOverlayStore } from '../commands/abg-overlay-s
 import { DEFAULT_REFRESH_MS } from '../commands/abg-overlay-state.js';
 import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA.js';
 import { ApprovalsPane, BlackboardPane, CostPolicyPane, TimelinePane, ToolsPane } from './AbgOverlayPanesB.js';
+import { graphStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
 
 export type AbgOverlayTab =
     | 'overview'
@@ -25,6 +26,9 @@ const TABS: readonly AbgOverlayTab[] = [
     'cost-policy',
     'blackboard',
 ];
+
+/** Shared tab order so keyboard drivers map digits/cycle to the same tab rendered here (no drift). */
+export const ABG_OVERLAY_TABS: readonly AbgOverlayTab[] = TABS;
 
 /** Min terminal width (cols) for the full 8-tab layout (Metis 2.8). */
 export const NARROW_THRESHOLD = 100;
@@ -61,21 +65,6 @@ const boldAttrs = { bold: true };
 const cyanFg = '#00ffff';
 const yellowFg = '#ffff00';
 
-function statusColorFg(graphStatus: AbgOverlayState['graphStatus']): string | undefined {
-    switch (graphStatus) {
-        case 'active':
-            return '#ffff00';
-        case 'completed':
-            return '#00ff00';
-        case 'failed':
-            return '#ff0000';
-        case 'cancelled':
-            return '#808080';
-        default:
-            return '#808080';
-    }
-}
-
 function truncateGraphId(graphId: string | undefined, maxLen: number = 20): string {
     if (graphId === undefined) return '(no graph)';
     if (graphId.length <= maxLen) return graphId;
@@ -97,7 +86,8 @@ function Header({
     refreshMs: number;
 }): React.ReactNode {
     const fps = Math.round(1000 / refreshMs);
-    const statusFg = statusColorFg(state.graphStatus);
+    // Preserve the pre-refactor default: an undefined graph status renders gray, not terminal-default.
+    const statusFg = state.graphStatus !== undefined ? graphStatusTheme(state.graphStatus).foreground : STATUS_FG_GRAY;
     return (
         <box flexDirection="row" justifyContent="space-between">
             <box flexDirection="row">
@@ -192,9 +182,7 @@ function FooterHint({ narrow }: { narrow: boolean }): React.ReactNode {
     }
     return (
         <box marginTop={1}>
-            <text {...dimAttrs}>
-                1-8 tabs | Tab cycle | ↑↓ scroll | g cycle graph | Ctrl+G/Esc close | r refresh | t live | c clear
-            </text>
+            <text {...dimAttrs}>1-8 tabs | Tab cycle | ↑↓ scroll | r refresh | c clear | Ctrl+G/Esc close</text>
         </box>
     );
 }

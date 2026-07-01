@@ -6,6 +6,7 @@ import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import { createRef } from 'react';
 import type { ProviderAuthStore } from '../auth-store.js';
 import type { StatusBarProps } from '../components/StatusBar.js';
+import type { AbgOverlayController } from './abg-overlay-controller.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { type ChatStore, createChatStore } from './chat-store.js';
 import type { OpenTuiChatBridge } from './chat-tui-types.js';
@@ -23,6 +24,7 @@ export type ChatTuiOptions = {
     readonly initialHistoryEntries?: readonly string[];
     readonly initialApprovalLevel?: ApprovalLevel;
     readonly authStore?: ProviderAuthStore;
+    readonly abgOverlayController?: AbgOverlayController;
     readonly welcomeData?: WelcomeData;
 };
 
@@ -131,6 +133,9 @@ export async function createChatTui(options: ChatTuiOptions): Promise<OpenTuiCha
                 scrollboxRef={scrollboxRef}
                 statusBarProps={statusBarProps}
                 {...(options.welcomeData !== undefined ? { welcomeData: options.welcomeData } : {})}
+                {...(options.abgOverlayController !== undefined
+                    ? { abgOverlayController: options.abgOverlayController }
+                    : {})}
             />
         </ChatKeymapProvider>,
     );

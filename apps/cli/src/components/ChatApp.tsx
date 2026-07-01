@@ -5,6 +5,7 @@ import { useKeymap } from '@opentui/keymap/react';
 import { useKeyboard, useRenderer } from '@opentui/react';
 import type * as React from 'react';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { AbgOverlayController } from '../commands/abg-overlay-controller.js';
 import { extractLastAssistantText, parseMessageBlocks } from '../commands/chat-blocks.js';
 import type { ChatStore } from '../commands/chat-store.js';
 import {
@@ -13,6 +14,8 @@ import {
 } from '../commands/interactive-chat-command-menu.js';
 import type { WelcomeData } from '../commands/welcome-data.js';
 import { createClipboardService } from '../platform/clipboard-service.js';
+import { AbgMinimap } from './AbgMinimap.js';
+import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from './AbgOverlay.js';
 import { ChatInputArea } from './ChatInputArea.js';
 import { ChatTranscript } from './ChatTranscript.js';
 import { FileAutocompletePanel } from './FileAutocompletePanel.js';
@@ -56,6 +59,7 @@ export type ChatAppProps = {
     readonly scrollboxRef: React.RefObject<ScrollBoxRenderable | null>;
     readonly statusBarProps?: StatusBarProps;
     readonly welcomeData?: WelcomeData;
+    readonly abgOverlayController?: AbgOverlayController;
 };
 
 export function ChatApp({
@@ -64,10 +68,16 @@ export function ChatApp({
     scrollboxRef,
     statusBarProps,
     welcomeData,
+    abgOverlayController,
 }: ChatAppProps): React.ReactNode {
     const subscribe = useCallback((cb: () => void) => store.subscribe(cb), [store]);
     const getSnapshot = useCallback(() => store.getSnapshot(), [store]);
     const snapshot = useSyncExternalStore(subscribe, getSnapshot);
+
+    // Seeded from persisted prefs so a user's last tab/scroll survives an overlay reopen.
+    const initialPrefs = store.getAbgOverlayPrefsSnapshot();
+    const [abgActiveTab, setAbgActiveTab] = useState<number>(initialPrefs.activeTabIndex);
+    const [abgScrollOffset, setAbgScrollOffset] = useState<number>(initialPrefs.scrollOffset);
 
     const keymap = useKeymap();
     const renderer = useRenderer();
@@ -189,6 +199,33 @@ export function ChatApp({
             if (key.name === 'escape' || (key.ctrl && key.name === 'g')) {
                 key.preventDefault();
                 store.toggleAbgOverlay();
+                return;
+            }
+            if (key.name >= '1' && key.name <= '8') {
+                const idx = Number.parseInt(key.name, 10) - 1;
+                setAbgActiveTab(idx);
+                setAbgScrollOffset(0);
+                return;
+            }
+            if (key.name === 'tab') {
+                setAbgActiveTab((i) => (i + 1) % ABG_OVERLAY_TABS.length);
+                setAbgScrollOffset(0);
+                return;
+            }
+            if (key.name === 'up') {
+                setAbgScrollOffset((o) => o + 1);
+                return;
+            }
+            if (key.name === 'down') {
+                setAbgScrollOffset((o) => Math.max(0, o - 1));
+                return;
+            }
+            if (key.name === 'r' && abgOverlayController !== undefined) {
+                abgOverlayController.flushNow();
+                return;
+            }
+            if (key.name === 'c' && abgOverlayController !== undefined) {
+                abgOverlayController.clearTimeline();
                 return;
             }
         }
@@ -420,6 +457,25 @@ export function ChatApp({
         };
     }, [keymap, store]);
 
+    // ABG minimap toggle layer: <leader>g (Ctrl+X then G) toggles the compact
+    // upper-right minimap. Enabled only when no overlay is active so the chord
+    // does not fire inside the full ABG overlay (which has its own Ctrl+G close).
+    useEffect(() => {
+        let disposed = false;
+        let cleanup: (() => void) | undefined;
+        void import('../platform/keymap/leader-addons.js').then(({ registerAbgMinimapToggleLayer }) => {
+            if (disposed) return;
+            cleanup = registerAbgMinimapToggleLayer(keymap, {
+                toggleMinimap: () => store.toggleAbgMinimap(),
+                isEnabled: () => store.getSnapshot().overlayMode === 'none',
+            });
+        });
+        return (): void => {
+            disposed = true;
+            cleanup?.();
+        };
+    }, [keymap, store]);
+
     const messageBlocks = parseMessageBlocks(snapshot.outputText);
     const overlayActive = snapshot.overlayMode !== 'none';
     const showWelcome = welcomeData !== undefined && snapshot.outputText === '' && !overlayActive;
@@ -439,17 +495,29 @@ export function ChatApp({
     const showAgentIndicator = !overlayActive;
 
     if (snapshot.overlayMode === 'abg') {
+        if (abgOverlayController === undefined) {
+            return (
+                <box flexDirection="column" width="100%">
+                    <OverlayFrame variant="view" title="ABG Overlay" hint="(Ctrl+G or Esc to close)">
+                        <text attributes={TextAttributes.DIM}>{'ABG overlay unavailable in this session.'}</text>
+                    </OverlayFrame>
+                </box>
+            );
+        }
+        const selection = snapshot.currentModelSelection;
+        const providerID = selection?.providerID ?? statusBarProps?.providerID ?? '';
+        const modelID = selection?.modelID ?? statusBarProps?.modelID ?? '';
+        const variantID = snapshot.currentModelVariantID;
+        const modelLabel = `${providerID}/${modelID}${variantID !== undefined ? `#${variantID}` : ''}`;
+        const activeTab: AbgOverlayTab = ABG_OVERLAY_TABS[abgActiveTab] ?? 'overview';
         return (
-            <box flexDirection="column" width="100%">
-                <OverlayFrame variant="view" title="ABG Overlay" hint="(Ctrl+G or Esc to close)">
-                    <text attributes={TextAttributes.DIM}>{'Tab 0: Overview'}</text>
-                    <text attributes={TextAttributes.DIM}>
-                        {'The ABG monitoring overlay requires an active agent run.'}
-                    </text>
-                    <text attributes={TextAttributes.DIM}>
-                        {'Start a prompt to see real-time graph/node/tool/timeline data.'}
-                    </text>
-                </OverlayFrame>
+            <box flexDirection="column" width="100%" height="100%">
+                <AbgOverlay
+                    store={abgOverlayController.store}
+                    activeTab={activeTab}
+                    scrollOffset={abgScrollOffset}
+                    modelLabel={modelLabel}
+                />
             </box>
         );
     }
@@ -480,6 +548,8 @@ export function ChatApp({
     const showSlashMenu = snapshot.inputMirror.startsWith('/');
     const showWorkflowMenu = snapshot.inputMirror.startsWith('#');
     const showFileAutocomplete = !showSlashMenu && !showWorkflowMenu && snapshot.fileAutocomplete.open;
+
+    const showAbgMinimap = snapshot.abgMinimapVisible && !overlayActive && abgOverlayController !== undefined;
 
     return (
         // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive, not a DOM element; mouse-up only surfaces the copy-hint toast.
@@ -514,6 +584,7 @@ export function ChatApp({
                 {showFileAutocomplete ? <FileAutocompletePanel fileAutocomplete={snapshot.fileAutocomplete} /> : null}
                 {toast !== null ? <Toast message={toast} /> : null}
             </box>
+            {showAbgMinimap ? <AbgMinimap store={abgOverlayController.store} /> : null}
             {statusBarProps !== undefined ? (
                 <TopStatusBar
                     {...statusBarProps}

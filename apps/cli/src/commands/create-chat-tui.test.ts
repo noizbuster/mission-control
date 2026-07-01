@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createChatTuiHandle } from './create-chat-tui.js';
+import { createAbgOverlayController } from './abg-overlay-controller.js';
+import { createAbgOverlayStore } from './abg-overlay-state.js';
 import { createChatStore } from './chat-store.js';
+import { type ChatTuiOptions, createChatTuiHandle } from './create-chat-tui.js';
 
 describe('create-chat-tui', () => {
     it('returns a handle structurally assignable to OpenTuiChatBridge', () => {
@@ -111,5 +113,19 @@ describe('create-chat-tui', () => {
         });
         handle.unmount();
         expect(called).toBe(true);
+    });
+
+    it('ChatTuiOptions accepts abgOverlayController and the controller.store satisfies AbgOverlayStore', () => {
+        const controller = createAbgOverlayController(createAbgOverlayStore());
+        const options: ChatTuiOptions = {
+            providerID: 'local',
+            modelID: 'local-echo',
+            abgOverlayController: controller,
+        };
+        expect(options.abgOverlayController).toBe(controller);
+        const store = options.abgOverlayController?.store;
+        expect(typeof store?.subscribe).toBe('function');
+        expect(typeof store?.getSnapshot).toBe('function');
+        expect(typeof store?.update).toBe('function');
     });
 });
