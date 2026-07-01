@@ -15,7 +15,7 @@ import {
     type Skill,
     WorkflowRegistry,
 } from '@mission-control/core';
-import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import type { AgentEvent, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import type { ProviderAuthStore } from '../auth-store.js';
 import { closeTreeSitterClient } from '../components/markdown/highlight.js';
 import { createAbgOverlayController } from './abg-overlay-controller.js';
@@ -29,7 +29,7 @@ import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './chat-tui-typ
 import { type ChatTuiOptions, createChatTui } from './create-chat-tui.js';
 import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
 import type { ChatActionResult } from './interactive-chat-action-result.js';
-import { runChatAction } from './interactive-chat-actions.js';
+import { runChatAction, startWorkflowTurn, type CodingActionContext } from './interactive-chat-actions.js';
 import {
     type ChatInput,
     type ChatInputEvent,
@@ -221,6 +221,7 @@ export async function runInteractiveChatSession(
     let currentModelProviderSelection = options.modelProviderSelection;
     let pendingInterrupt = false;
     let activeTurn: ActiveCodingAgentTurn | undefined;
+    let lastCodingContext: CodingActionContext | undefined;
     let turnCounter = 0;
     const inputPump = new ChatInputPump(chatInput);
     let currentSessionId = options.sessionId;
@@ -372,6 +373,12 @@ export async function runInteractiveChatSession(
     await pluginManager.registerInto(sessionWorkflowRegistry);
     const knownWorkflowNames = new Set<string>(sessionWorkflowRegistry.names());
     tuiBridge?.setWorkflowNames(sessionWorkflowRegistry.names());
+    const pendingWorkflowTurns: Array<{ readonly spec: WorkflowSpec; readonly prompt: string }> = [];
+    let workflowChainDepth = 0;
+    const MAX_CHAINED_WORKFLOW_TURNS = 4;
+    const onWorkflowStarted = (spec: WorkflowSpec, prompt: string): void => {
+        pendingWorkflowTurns.push({ spec, prompt });
+    };
     if (discoveredWorkflows.diagnostics.length > 0) {
         for (const diagnostic of discoveredWorkflows.diagnostics) {
             process.stderr.write(
@@ -413,6 +420,26 @@ export async function runInteractiveChatSession(
             }
             const next = await nextChatLoopEvent(inputPump, activeTurn);
             if (next.type === 'active-completed') {
+                if (
+                    lastCodingContext !== undefined &&
+                    pendingWorkflowTurns.length > 0 &&
+                    workflowChainDepth < MAX_CHAINED_WORKFLOW_TURNS
+                ) {
+                    const pending = pendingWorkflowTurns.shift()!;
+                    workflowChainDepth += 1;
+                    const workflowResult = await startWorkflowTurn(
+                        runtime,
+                        chatOutput,
+                        pending.spec,
+                        pending.prompt,
+                        currentModelProviderSelection,
+                        lastCodingContext,
+                    );
+                    activeTurn = workflowResult.activeTurn;
+                    continue;
+                }
+                workflowChainDepth = 0;
+                pendingWorkflowTurns.length = 0;
                 activeTurn = undefined;
                 continue;
             }
@@ -490,16 +517,9 @@ export async function runInteractiveChatSession(
                 tuiBridge.setGenerating(true);
             }
             try {
-                result = await runChatAction(
-                    runtime,
-                    chatOutput,
-                    action,
-                    currentModelProviderSelection,
-                    selectModel,
-                    modelChoices,
-                    {
-                        activeTurn,
-                        useTui,
+                const codingContext: CodingActionContext = {
+                    activeTurn,
+                    useTui,
                         commandExecutor: options.commandExecutor,
                         emitEvent: options.emitEvent,
                         observeStoredEvent: options.observeStoredEvent,
@@ -513,6 +533,7 @@ export async function runInteractiveChatSession(
                         workspaceRoot: options.workspaceRoot,
                         skills: sessionSkills,
                         workflowRegistry: sessionWorkflowRegistry,
+                        onWorkflowStarted,
                         sessionDisplayName: sessionDisplayNameController,
                         onSessionRenamed: applySessionRenameEffects,
                         undoRedo: undoRedoController,
@@ -550,6 +571,12 @@ export async function runInteractiveChatSession(
                             ? {
                                   openAgentsDashboard: (entries: readonly DashboardAgentEntry[]) =>
                                       tuiBridge.showAgentsDashboard(entries),
+                              }
+                            : {}),
+                        ...(tuiBridge !== undefined
+                            ? {
+                                  reloadAgentsDashboard: (entries: readonly DashboardAgentEntry[]) =>
+                                      tuiBridge.reloadAgentsDashboard(entries),
                               }
                             : {}),
                         ...(tuiBridge !== undefined
@@ -593,7 +620,16 @@ export async function runInteractiveChatSession(
                                       ),
                               }
                             : {}),
-                    },
+                };
+                lastCodingContext = codingContext;
+                result = await runChatAction(
+                    runtime,
+                    chatOutput,
+                    action,
+                    currentModelProviderSelection,
+                    selectModel,
+                    modelChoices,
+                    codingContext,
                 );
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);

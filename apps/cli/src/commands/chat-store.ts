@@ -988,6 +988,7 @@ export class ChatStore {
     }
 
     reloadAgentsDashboard(entries: readonly DashboardAgentEntry[]): void {
+        if (this.state.overlayMode !== 'agents-dashboard') return;
         const selectedName = this.state.agentsDashboard.agents[this.state.agentsDashboard.selectedIndex]?.name;
         const newSelectedIndex =
             selectedName !== undefined

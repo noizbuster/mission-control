@@ -9,7 +9,7 @@ import {
     type SkillToolOutput,
     type WorkflowRegistry,
 } from '@mission-control/core';
-import type { AbgGraphSpec, AgentDefinition, ModelProviderSelection } from '@mission-control/protocol';
+import type { AbgGraphSpec, AgentDefinition, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import type { ProviderAuthStore } from '../auth-store.js';
 import { type AgentsCommand, formatAgentDetails, formatAgentsList } from './agents-command.js';
 import { readDisabledSet, toggleDisabled } from './agents-disabled-config.js';
@@ -58,8 +58,9 @@ export type CodingActionContext = PromptTurnContext & {
      */
     readonly skills?: readonly Skill[];
     /**
-     * Discovered workflows for `#workflow-name` invocation (Task 2.3). When omitted,
-     * the workflow action reports that workflow invocation is unavailable.
+     * Discovered workflows for `#workflow-name` invocation (Task 2.3) and for the
+     * model-self-invoke `workflow(name, prompt)` tool. When omitted, both paths
+     * report that workflow invocation is unavailable.
      */
     readonly workflowRegistry?: WorkflowRegistry;
     /**
@@ -91,6 +92,7 @@ export type CodingActionContext = PromptTurnContext & {
      */
     readonly selectSessionForAttach?: (entries: readonly SessionPickerEntry[]) => Promise<string | undefined>;
     readonly openAgentsDashboard?: (entries: readonly DashboardAgentEntry[]) => void;
+    readonly reloadAgentsDashboard?: (entries: readonly DashboardAgentEntry[]) => void;
     readonly openModelsOverlay?: (
         entries: readonly ModelProviderSelection[],
         roleRows: readonly ModelsOverlayRoleRow[],
@@ -457,6 +459,24 @@ async function runWorkflowAction(
     });
 }
 
+export async function startWorkflowTurn(
+    runtime: AgentRuntime,
+    chatOutput: ChatOutput,
+    spec: WorkflowSpec,
+    prompt: string,
+    modelProviderSelection: ModelProviderSelection,
+    coding: CodingActionContext,
+): Promise<ChatActionResult> {
+    chatOutput.write(`Running workflow "${spec.name}"...\n`);
+    chatOutput.showNotice?.(`Workflow: ${spec.name}`);
+    seedOverlayForWorkflow(coding, spec.graph);
+    return runPromptAction(runtime, chatOutput, prompt, modelProviderSelection, {
+        ...coding,
+        activeTurn: undefined,
+        graph: spec.graph,
+    });
+}
+
 function seedOverlayForWorkflow(coding: CodingActionContext, graph: AbgGraphSpec): void {
     const controller = coding.abgOverlayController;
     if (controller === undefined) return;
@@ -604,6 +624,7 @@ async function runAgentsAction(
     if (command.kind === 'reload') {
         const agents = await loadDiscoveredAgents(workspaceRoot, userConfigDir);
         chatOutput.write(`Reloaded ${agents.length} agent${agents.length === 1 ? '' : 's'}.\n`);
+        await refreshAgentsDashboardIfOpen(coding, workspaceRoot, userConfigDir);
         return actionResult(modelProviderSelection, coding.activeTurn);
     }
 
@@ -615,10 +636,21 @@ async function runAgentsAction(
         }
         await toggleDisabled({ workspaceRoot }, command.name, 'add');
         chatOutput.write(`Disabled agent: ${command.name}\n`);
+        await refreshAgentsDashboardIfOpen(coding, workspaceRoot, userConfigDir);
         return actionResult(modelProviderSelection, coding.activeTurn);
     }
 
     return assertNever(command);
+}
+
+async function refreshAgentsDashboardIfOpen(
+    coding: CodingActionContext,
+    workspaceRoot: string,
+    userConfigDir: string,
+): Promise<void> {
+    if (coding.reloadAgentsDashboard === undefined) return;
+    const entries = await loadDashboardAgentEntries(workspaceRoot, userConfigDir);
+    coding.reloadAgentsDashboard(entries);
 }
 
 export async function loadDiscoveredAgents(
