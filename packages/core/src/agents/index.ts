@@ -10,8 +10,32 @@ export type { AgentDiscoveryDiagnostic, DiscoverAgentsOptions, DiscoverAgentsRes
 export { discoverAgents } from './agent-loader.js';
 export { AgentParseError, parseAgentFile } from './agent-parser.js';
 export { AgentIndex } from './agent-registry.js';
+export {
+    AsyncJobManager,
+    type BackgroundJobHandle,
+    type JobExecuteFn,
+    type StartJobInput,
+} from './async-job-manager.js';
 export { BUNDLED_AGENT_TEMPLATES } from './bundled/index.js';
+export {
+    type AgentDisposer,
+    AgentLifecycleManager,
+    type AgentReviver,
+    type LifecycleAdoptOptions,
+    type PersistedSubagentReviverFactory,
+} from './lifecycle-manager.js';
 export type { ModelPattern } from './model-resolver.js';
+export {
+    type AdoptOptions,
+    type AgentKind,
+    type AgentRef,
+    type AgentRefInput,
+    type AgentStatus,
+    type AgentUpdatePatch,
+    getRuntimeRegistry,
+    MAIN_AGENT_ID,
+    RuntimeAgentRegistry,
+} from './runtime-registry.js';
 export {
     type ChildSpawnContext,
     ConcreteTaskToolRuntime,
