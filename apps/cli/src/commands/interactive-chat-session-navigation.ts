@@ -80,7 +80,7 @@ export function createSessionNavigationController(input: {
             const store = await input.switchSessionStore(sessionId);
             const selection = latestSelection(replay);
             return {
-                message: `Switched to session: ${sessionId}\n${formatSessionSummary(sessionId, replay)}`,
+                message: `Switched to session: ${sessionId}\n`,
                 ...(selection !== undefined ? { modelProviderSelection: selection } : {}),
                 sessionId,
                 sessionStore: store,

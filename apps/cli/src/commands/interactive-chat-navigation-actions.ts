@@ -4,6 +4,7 @@ import type { CodingActionContext } from './interactive-chat-actions.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import type { SessionNavigationResult } from './interactive-chat-session-navigation.js';
 import { isSessionNavigationError } from './interactive-chat-session-navigation-store.js';
+import { loadSessionTranscript } from './session-transcript-reconstruction.js';
 
 export function runBranchContinueAction(
     chatOutput: ChatOutput,
@@ -41,6 +42,10 @@ export async function runSessionNavigationAction(
         if (result === undefined) {
             chatOutput.write('Session navigation is unavailable in this chat mode\n');
             return actionResult(modelProviderSelection);
+        }
+        if (result.sessionId !== undefined) {
+            const transcript = await loadSessionTranscript(result.sessionId);
+            coding.undoRedo?.replaceOutputText(transcript);
         }
         chatOutput.write(result.message);
         return actionResult(result.modelProviderSelection ?? modelProviderSelection, undefined, {
