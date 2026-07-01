@@ -51,6 +51,7 @@ export type WorkflowToolResult = z.infer<typeof workflowOutputSchema>;
 
 export type WorkflowToolOptions = {
     readonly registry: WorkflowRegistry;
+    readonly onWorkflowStarted?: (spec: WorkflowSpec, prompt: string) => void;
 };
 
 /**
@@ -90,7 +91,7 @@ export function createWorkflowToolRegistration(
         inputSchema: workflowInputSchema,
         outputSchema: workflowOutputSchema,
         outputLimit: WORKFLOW_OUTPUT_LIMIT,
-        execute: (input) => resolveWorkflow(options.registry, input),
+        execute: (input) => resolveWorkflow(options.registry, input, options.onWorkflowStarted),
         toModelOutput: (output) => output.message,
     };
 }
@@ -100,7 +101,11 @@ export function registerWorkflowTool(registry: ToolRegistry, options: WorkflowTo
     return registry.register(createWorkflowToolRegistration(options));
 }
 
-function resolveWorkflow(registry: WorkflowRegistry, input: WorkflowToolParams): WorkflowToolResult {
+function resolveWorkflow(
+    registry: WorkflowRegistry,
+    input: WorkflowToolParams,
+    onWorkflowStarted?: (spec: WorkflowSpec, prompt: string) => void,
+): WorkflowToolResult {
     const spec = registry.lookup(input.name);
     if (spec === undefined) {
         return {
@@ -108,6 +113,13 @@ function resolveWorkflow(registry: WorkflowRegistry, input: WorkflowToolParams):
             workflowName: input.name,
             message: `Unknown workflow: ${input.name}. Available workflows: ${formatAvailableWorkflowNames(registry)}.`,
         };
+    }
+    if (onWorkflowStarted !== undefined) {
+        try {
+            onWorkflowStarted(spec, input.prompt);
+        } catch {
+            // Host-side scheduling must never fail the tool settlement.
+        }
     }
     return {
         status: 'started',

@@ -33,6 +33,7 @@ function makeRegistry(specs: readonly WorkflowSpec[] = []): WorkflowRegistry {
 function buildTool(options?: Partial<WorkflowToolOptions>): ReturnType<typeof createWorkflowToolRegistration> {
     return createWorkflowToolRegistration({
         registry: options?.registry ?? makeRegistry([makeSpec('planner'), makeSpec('runner')]),
+        ...(options?.onWorkflowStarted !== undefined ? { onWorkflowStarted: options.onWorkflowStarted } : {}),
     });
 }
 
@@ -200,5 +201,44 @@ describe('workflow tool — registry mutation after registration', () => {
         const result = await tool.execute(workflowInputSchema.parse({ name: 'beta', prompt: 'go' }), CTX);
         expect(result.status).toBe('started');
         expect(result.workflowName).toBe('beta');
+    });
+});
+
+describe('workflow tool — onWorkflowStarted callback', () => {
+    it('fires the callback with the resolved spec and original prompt on started', async () => {
+        const calls: Array<{ readonly name: string; readonly prompt: string }> = [];
+        const planner = makeSpec('planner', 'plans things');
+        const tool = buildTool({
+            registry: makeRegistry([planner]),
+            onWorkflowStarted: (spec, prompt) => calls.push({ name: spec.name, prompt }),
+        });
+        const result = await tool.execute(workflowInputSchema.parse({ name: 'planner', prompt: 'plan X' }), CTX);
+        expect(result.status).toBe('started');
+        expect(calls).toEqual([{ name: 'planner', prompt: 'plan X' }]);
+    });
+
+    it('does not fire the callback on not_found', async () => {
+        let calls = 0;
+        const tool = buildTool({ onWorkflowStarted: () => calls++ });
+        await tool.execute(workflowInputSchema.parse({ name: 'missing', prompt: 'go' }), CTX);
+        expect(calls).toBe(0);
+    });
+
+    it('swallows a throwing callback so the tool settlement still returns started', async () => {
+        const tool = buildTool({
+            onWorkflowStarted: () => {
+                throw new Error('host sink failed');
+            },
+        });
+        const result = await tool.execute(workflowInputSchema.parse({ name: 'planner', prompt: 'go' }), CTX);
+        expect(result.status).toBe('started');
+        expect(result.workflowName).toBe('planner');
+    });
+
+    it('omitting the callback keeps the legacy resolve-and-return behavior', async () => {
+        const tool = buildTool();
+        const result = await tool.execute(workflowInputSchema.parse({ name: 'planner', prompt: 'go' }), CTX);
+        expect(result.status).toBe('started');
+        expect(result.message).toContain('planner');
     });
 });
