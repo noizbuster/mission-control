@@ -232,7 +232,7 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
                         await activeTurn.done;
                         activeTurn = undefined;
                         pendingInterrupt = false;
-                        chatOutput.write('\nPress Ctrl+C twice to exit\n');
+                        store.showTransientNotice('Press Ctrl+C twice to exit');
                     } else if (event.source === 'esc') {
                         // ESC-sourced interrupts never count toward exit (G9).
                     } else if (pendingInterrupt && event.interruptedPartialInput !== true) {
@@ -241,7 +241,7 @@ export function startChatAgentRunner(options: AgentRunnerOptions): AgentRunnerHa
                         break;
                     } else {
                         pendingInterrupt = true;
-                        chatOutput.write('\nPress Ctrl+C again to exit\n');
+                        store.showTransientNotice('Press Ctrl+C again to exit');
                     }
                     continue;
                 }
