@@ -14,6 +14,15 @@ import {
 } from '../commands/interactive-chat-command-menu.js';
 import type { WelcomeData } from '../commands/welcome-data.js';
 import { createClipboardService } from '../platform/clipboard-service.js';
+import {
+    buildDiffViewerModel,
+    DiffViewerOverlay,
+    moveLine,
+    nextFile,
+    nextHunk,
+    prevFile,
+    prevHunk,
+} from '../platform/keymap/diff-viewer.js';
 import { AbgMinimap } from './AbgMinimap.js';
 import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from './AbgOverlay.js';
 import { ChatInputArea } from './ChatInputArea.js';
@@ -230,10 +239,41 @@ export function ChatApp({
             }
         }
         if (snap.overlayMode === 'diff-viewer') {
+            const model = buildDiffViewerModel(snap.diffViewerEntries);
+            const cursor = snap.diffViewerCursor;
             if (key.name === 'escape' || key.name === 'q') {
                 key.preventDefault();
-                // The store exposes no hideDiffViewer; hideApproval is the idempotent overlay-clear (sets overlayMode='none' and nothing else).
-                store.hideApproval();
+                store.hideDiffViewer();
+                return;
+            }
+            if (key.name === 'j') {
+                key.preventDefault();
+                store.setDiffViewerCursor(moveLine(model, cursor, 1));
+                return;
+            }
+            if (key.name === 'k') {
+                key.preventDefault();
+                store.setDiffViewerCursor(moveLine(model, cursor, -1));
+                return;
+            }
+            if (key.name === ']') {
+                key.preventDefault();
+                store.setDiffViewerCursor(nextHunk(model, cursor));
+                return;
+            }
+            if (key.name === '[') {
+                key.preventDefault();
+                store.setDiffViewerCursor(prevHunk(model, cursor));
+                return;
+            }
+            if (key.name === 'n') {
+                key.preventDefault();
+                store.setDiffViewerCursor(nextFile(model, cursor));
+                return;
+            }
+            if (key.name === 'p') {
+                key.preventDefault();
+                store.setDiffViewerCursor(prevFile(model, cursor));
                 return;
             }
         }
@@ -523,16 +563,12 @@ export function ChatApp({
     }
 
     if (snapshot.overlayMode === 'diff-viewer') {
-        const diffCount = snapshot.diffViewerEntries.length;
+        const entries = snapshot.diffViewerEntries;
+        const cursor = snapshot.diffViewerCursor;
+        const model = buildDiffViewerModel(entries);
         return (
-            <box flexDirection="column" width="100%">
-                <OverlayFrame variant="view" title="Diff Viewer" hint="(Esc or q to close)" accent={ACCENTS.approval}>
-                    <text attributes={TextAttributes.DIM}>
-                        {diffCount > 0
-                            ? `${diffCount} diff entr${diffCount === 1 ? 'y' : 'ies'} staged for review.`
-                            : 'No diff entries to display.'}
-                    </text>
-                </OverlayFrame>
+            <box flexDirection="column" width="100%" height="100%">
+                <DiffViewerOverlay entries={entries} model={model} cursor={cursor} />
             </box>
         );
     }

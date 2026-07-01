@@ -1194,6 +1194,20 @@ export class ChatStore {
         this.publish();
     }
 
+    setDiffViewerCursor(cursor: number): void {
+        if (this.state.overlayMode !== 'diff-viewer') return;
+        this.state.diffViewerCursor = cursor;
+        this.publish();
+    }
+
+    hideDiffViewer(): void {
+        if (this.state.overlayMode !== 'diff-viewer') return;
+        this.state.diffViewerEntries = [];
+        this.state.diffViewerCursor = 0;
+        this.state.overlayMode = 'none';
+        this.publish();
+    }
+
     sendInterrupt(source: 'esc' | 'ctrl-c'): void {
         this.enqueueEvent({ type: 'interrupt', interruptedPartialInput: false, source });
         this.publish();
