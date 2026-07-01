@@ -209,6 +209,12 @@ export async function preflightInteractiveToolCall(
         return undefined;
     }
     await renderToolPreview(toolCall, options.output, options.workspaceRoot);
+    if (toolCall.toolName === 'task') {
+        const description = parseTaskDescription(toolCall.argumentsJson);
+        if (description !== undefined) {
+            options.output.showNotice?.(`Task: ${description}`);
+        }
+    }
     const request = approvalRequestForToolCall(toolCall, options.workspaceRoot);
     if (request === undefined) {
         return undefined;

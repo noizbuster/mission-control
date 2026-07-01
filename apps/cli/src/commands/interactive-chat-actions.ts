@@ -396,6 +396,7 @@ async function runSkillAction(
         return actionResult(modelProviderSelection, coding.activeTurn);
     }
     chatOutput.write(`Loading skill "${action.name}"...\n`);
+    chatOutput.showNotice?.(`Skill: ${action.name}`);
     return runPromptAction(runtime, chatOutput, expanded.prompt, modelProviderSelection, coding);
 }
 
@@ -452,6 +453,7 @@ async function runWorkflowAction(
         return actionResult(modelProviderSelection, coding.activeTurn);
     }
     chatOutput.write(`Running workflow "${action.name}"...\n`);
+    chatOutput.showNotice?.(`Workflow: ${action.name}`);
     seedOverlayForWorkflow(coding, spec.graph);
     return runPromptAction(runtime, chatOutput, action.prompt, modelProviderSelection, {
         ...coding,
