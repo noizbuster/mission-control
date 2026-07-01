@@ -229,6 +229,60 @@ describe('interactive chat session navigation', () => {
             await store.close();
         }
     });
+
+    it('renameSession appends a metadata event whose name the catalog projection reads back', async () => {
+        const dataDir = await tempRoot('mctrl-session-navigation-rename-');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        const sessionId = 'session_rename_target';
+        await writeSessionEvents({
+            dataDir,
+            sessionId,
+            events: [
+                sessionEvent(sessionId, 'session.started', 'seed'),
+                sessionEvent(sessionId, 'task.completed', 'root', { kind: 'entry', entryId: 'entry_root' }),
+            ],
+        });
+        const store = await JsonlSessionEventStore.open({ dataDir, sessionId });
+        const observed: AgentEvent[] = [];
+        const navigation = createSessionNavigationController({
+            getCurrentSessionId: () => sessionId,
+            getCurrentStore: () => store,
+            switchSessionStore: async () => {
+                throw new Error('switchSessionStore should not be called for renameSession');
+            },
+            observeStoredEvent: (event) => {
+                observed.push(event);
+            },
+        });
+
+        try {
+            const result = await navigation.renameSession({ name: 'investigate parser', modelProviderSelection: selection });
+
+            expect(result.message).toContain('investigate parser');
+            expect(observed.length).toBe(1);
+            expect(observed[0]?.type).toBe('session.metadata.updated');
+            expect(observed[0]?.sessionTree).toEqual({ kind: 'metadata', name: 'investigate parser' });
+
+            const projection = await readProjection(dataDir, sessionId);
+            expect(projection.sessionTree.sessionName).toBe('investigate parser');
+        } finally {
+            await store.close();
+        }
+    });
+
+    it('renameSession refuses when no durable session is active', async () => {
+        const navigation = createSessionNavigationController({
+            getCurrentSessionId: () => undefined,
+            getCurrentStore: () => undefined,
+            switchSessionStore: async () => {
+                throw new Error('switchSessionStore should not be called');
+            },
+        });
+
+        await expect(
+            navigation.renameSession({ name: 'orphan', modelProviderSelection: selection }),
+        ).rejects.toThrow('No durable session is active');
+    });
 });
 
 async function createCorruptSession(): Promise<{ readonly dataDir: string; readonly sessionId: string }> {

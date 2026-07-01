@@ -68,6 +68,12 @@ export type CodingActionContext = PromptTurnContext & {
      */
     readonly sessionDisplayName?: SessionDisplayNameController;
     /**
+     * Side-effect hook fired after a rename resolves (Ctrl+R overlay or
+     * `/rename <name>` slash command). Owns store/title/durable persistence
+     * updates. Optional so test contexts can omit it.
+     */
+    readonly onSessionRenamed?: (name: string) => Promise<void>;
+    /**
      * In-memory undo/redo controller for `/undo` and `/redo`. When omitted, the
      * actions report that conversation tracking is unavailable. The controller
      * never touches the durable JSONL session log.
@@ -233,6 +239,7 @@ export async function runChatAction(
                 action,
                 coding.sessionDisplayName,
                 coding.activeTurn,
+                coding.onSessionRenamed,
             );
         case 'undo':
             return runUndoAction(chatOutput, currentModelProviderSelection, coding.undoRedo, coding.activeTurn);

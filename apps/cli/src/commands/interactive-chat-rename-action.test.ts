@@ -155,4 +155,41 @@ describe('rename action handler', () => {
 
         expect(output.text()).toContain('Session renamed to: lonely');
     });
+
+    it('fires onSessionRenamed with the new name when a name is supplied', async () => {
+        const output = createCapturingOutput();
+        const { controller } = createController();
+        const persisted: string[] = [];
+        await runRenameAction(
+            output,
+            { providerID: 'local', modelID: 'local-echo' },
+            { kind: 'rename', name: 'persisted-name' },
+            controller,
+            undefined,
+            async (name) => {
+                persisted.push(name);
+            },
+        );
+
+        expect(persisted).toEqual(['persisted-name']);
+    });
+
+    it('does not fire onSessionRenamed when no name is supplied (bare /rename read)', async () => {
+        const output = createCapturingOutput();
+        const { controller } = createController();
+        controller.update('existing');
+        const persisted: string[] = [];
+        await runRenameAction(
+            output,
+            { providerID: 'local', modelID: 'local-echo' },
+            { kind: 'rename' },
+            controller,
+            undefined,
+            async (name) => {
+                persisted.push(name);
+            },
+        );
+
+        expect(persisted).toEqual([]);
+    });
 });

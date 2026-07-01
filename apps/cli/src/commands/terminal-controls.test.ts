@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectGitBranch, detectGitWorktree } from './terminal-controls.js';
+import { detectGitBranch, detectGitWorktree, formatAppTitle, formatSessionTitle } from './terminal-controls.js';
 import { execSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -148,5 +148,24 @@ describe('terminal-controls — detectGitWorktree', () => {
             }
             rmSync(main, { recursive: true, force: true });
         }
+    });
+});
+
+describe('terminal-controls — title formatters', () => {
+    it('formatAppTitle embeds the version after the product name', () => {
+        expect(formatAppTitle('0.1.0')).toBe('Mission Control 0.1.0');
+    });
+
+    it('formatSessionTitle prefers the display name when set', () => {
+        expect(formatSessionTitle('session_abc', 'my session')).toBe('my session');
+    });
+
+    it('formatSessionTitle falls back to the session id when the display name is empty', () => {
+        expect(formatSessionTitle('session_abc', '')).toBe('session_abc');
+        expect(formatSessionTitle('session_abc', undefined)).toBe('session_abc');
+    });
+
+    it('formatSessionTitle falls back to the app title when neither id nor name is present', () => {
+        expect(formatSessionTitle(undefined, undefined)).toBe('Mission Control ');
     });
 });

@@ -49,6 +49,10 @@ export type SessionNavigationController = {
         readonly entryId: string;
         readonly modelProviderSelection: ModelProviderSelection;
     }) => Promise<SessionNavigationResult>;
+    readonly renameSession: (input: {
+        readonly name: string;
+        readonly modelProviderSelection: ModelProviderSelection;
+    }) => Promise<SessionNavigationResult>;
 };
 
 export function createSessionNavigationController(input: {
@@ -210,6 +214,19 @@ export function createSessionNavigationController(input: {
                 input.observeStoredEvent,
             );
             return { message: `Active branch: ${entryId}\n` };
+        },
+        renameSession: async ({ name, modelProviderSelection }) => {
+            const sessionId = requireCurrentSessionId(input.getCurrentSessionId());
+            const store = requireCurrentStore(input.getCurrentStore());
+            await appendSessionNavigationEvent(
+                store,
+                createSessionNavigationEvent(sessionId, 'session.metadata.updated', modelProviderSelection, {
+                    message: `renamed to ${name}`,
+                    sessionTree: { kind: 'metadata', name },
+                }),
+                input.observeStoredEvent,
+            );
+            return { message: `Session renamed to: ${name}\n` };
         },
     };
 }

@@ -7,13 +7,13 @@ import { basename, join, resolve } from 'node:path';
  * Terminal title via OSC 2 (`\x1b]2;<title>\x07`, BEL terminator).
  * Gated on `isTTY` (no escapes to pipes) and `MCTRL_DISABLE_TERMINAL_TITLE !== '1'`.
  */
-export const TERMINAL_TITLE_ENABLE_ENV = 'MCTRL_ENABLE_TERMINAL_TITLE';
+export const TERMINAL_TITLE_DISABLE_ENV = 'MCTRL_DISABLE_TERMINAL_TITLE';
 export const TERMINAL_TITLE_SET_PREFIX = '\x1b]2;';
 export const TERMINAL_TITLE_SET_SUFFIX = '\x07';
 export const TERMINAL_TITLE_RESET = '\x1b]2;\x07';
 
 export function shouldManageTerminalTitle(): boolean {
-    return process.env[TERMINAL_TITLE_ENABLE_ENV] === '1' && process.stdout.isTTY === true;
+    return process.env[TERMINAL_TITLE_DISABLE_ENV] !== '1' && process.stdout.isTTY === true;
 }
 
 export function setTerminalTitle(title: string): boolean {
@@ -30,6 +30,15 @@ export function resetTerminalTitle(): boolean {
     }
     process.stderr.write(TERMINAL_TITLE_RESET);
     return true;
+}
+
+export function formatAppTitle(version: string): string {
+    return `Mission Control ${version}`;
+}
+
+export function formatSessionTitle(sessionId: string | undefined, sessionDisplayName: string | undefined): string {
+    const name = sessionDisplayName !== undefined && sessionDisplayName.length > 0 ? sessionDisplayName : sessionId;
+    return name !== undefined && name.length > 0 ? name : formatAppTitle('');
 }
 
 export const SUSPEND_UNSUPPORTED_MESSAGE = 'Suspend not supported on Windows.\n';

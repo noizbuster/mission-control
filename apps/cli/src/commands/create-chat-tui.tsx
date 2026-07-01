@@ -60,6 +60,7 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Op
         setModelSelection: (selection) => store.setModelSelection(selection),
         setApprovalLevel: (level) => store.setApprovalLevel(level),
         setSessionId: (id) => store.setSessionId(id),
+        setSessionDisplayName: (name) => store.setSessionDisplayName(name),
         setContextTokensUsed: (used) => store.setContextTokensUsed(used),
         applyAbgOverlayPrefs: (prefs) => store.applyAbgOverlayPrefs(prefs),
         getAbgOverlayPrefsSnapshot: () => store.getAbgOverlayPrefsSnapshot(),

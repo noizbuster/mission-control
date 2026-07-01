@@ -1079,6 +1079,7 @@ function createNavigationController(overrides: Partial<SessionNavigationControll
         forkSession: async () => ({ message: 'Forked session: session_child\n', sessionId: 'session_child' }),
         cloneSession: async () => ({ message: 'Cloned session: session_clone\n', sessionId: 'session_clone' }),
         selectBranch: async () => ({ message: 'Active branch: entry_leaf\n' }),
+        renameSession: async ({ name }) => ({ message: `Session renamed to: ${name}\n` }),
         ...overrides,
     };
 }

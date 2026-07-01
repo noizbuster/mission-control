@@ -43,6 +43,7 @@ function createNavigationController(
         forkSession: vi.fn(),
         cloneSession: vi.fn(),
         selectBranch: vi.fn(),
+        renameSession: vi.fn(),
     };
 }
 

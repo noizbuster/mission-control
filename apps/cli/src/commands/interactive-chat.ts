@@ -57,8 +57,9 @@ import { loadPricingTable } from './pricing-table-store.js';
 import type { EnsuredSession } from './run-agent-session.js';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
 import { loadSessionTranscript } from './session-transcript-reconstruction.js';
-import { detectGitBranch, detectGitWorktree } from './terminal-controls.js';
+import { detectGitBranch, detectGitWorktree, formatAppTitle, formatSessionTitle, resetTerminalTitle, setTerminalTitle } from './terminal-controls.js';
 import { gatherWelcomeData } from './welcome-data.js';
+import { getVersion } from '../index.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
 
@@ -262,6 +263,48 @@ export async function runInteractiveChatSession(
               });
     const unregisterProcessCleanup = tuiBridge === undefined ? registerProcessTerminalCleanup(chatInput) : undefined;
 
+    const syncSessionDisplayName = async (sessionId: string | undefined): Promise<void> => {
+        const sid = sessionId ?? '';
+        if (sid.length === 0) {
+            sessionDisplayNameController.update('');
+            tuiBridge?.setSessionDisplayName(undefined);
+            setTerminalTitle(formatAppTitle(getVersion()));
+            return;
+        }
+        let name: string | undefined;
+        try {
+            if (options.workspaceRoot !== undefined) {
+                const entries = await listSessionCatalogEntriesForWorkspace(options.workspaceRoot);
+                const entry = entries.find((it) => it.sessionId === sid);
+                name = entry?.name;
+            }
+        } catch {
+            // best-effort: leave name undefined on catalog read failure
+        }
+        sessionDisplayNameController.update(name ?? '');
+        tuiBridge?.setSessionDisplayName(name);
+        setTerminalTitle(formatSessionTitle(sid, name));
+    };
+
+    const applySessionRenameEffects = async (name: string): Promise<void> => {
+        tuiBridge?.setSessionDisplayName(name);
+        setTerminalTitle(formatSessionTitle(currentSessionId, name));
+        if (sessionNavigation !== undefined && currentSessionId !== undefined) {
+            try {
+                await sessionNavigation.renameSession({
+                    name,
+                    modelProviderSelection: currentModelProviderSelection,
+                });
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                chatOutput.write(`Could not persist session rename: ${message}\n`);
+            }
+        }
+    };
+
+    setTerminalTitle(formatAppTitle(getVersion()));
+    void syncSessionDisplayName(currentSessionId);
+
     if (tuiBridge !== undefined) {
         tuiBridgeRef = tuiBridge;
         if (initialAbgOverlayPrefs !== undefined) {
@@ -283,6 +326,7 @@ export async function runInteractiveChatSession(
         };
         tuiBridge.onRenameSubmit = (name: string) => {
             sessionDisplayNameController.update(name);
+            void applySessionRenameEffects(name);
         };
     }
 
@@ -436,6 +480,7 @@ export async function runInteractiveChatSession(
                 const ensured = await options.ensureSession();
                 currentSessionId = ensured.sessionId;
                 tuiBridge?.setSessionId(currentSessionId);
+                void syncSessionDisplayName(currentSessionId);
                 currentSessionStore = ensured.store;
             }
             let result: ChatActionResult;
@@ -469,6 +514,7 @@ export async function runInteractiveChatSession(
                         skills: sessionSkills,
                         workflowRegistry: sessionWorkflowRegistry,
                         sessionDisplayName: sessionDisplayNameController,
+                        onSessionRenamed: applySessionRenameEffects,
                         undoRedo: undoRedoController,
                         ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
                         ...(options.engine !== undefined ? { engine: options.engine } : {}),
@@ -573,6 +619,9 @@ export async function runInteractiveChatSession(
             activeTurn = result.activeTurn;
             currentSessionId = result.sessionId ?? currentSessionId;
             tuiBridge?.setSessionId(currentSessionId ?? '');
+            if (result.sessionId !== undefined) {
+                void syncSessionDisplayName(result.sessionId);
+            }
             currentSessionStore = result.sessionStore ?? currentSessionStore;
             if (result.approvalLevel !== undefined) {
                 currentApprovalLevel = result.approvalLevel;
@@ -586,6 +635,7 @@ export async function runInteractiveChatSession(
         activeTurn?.interrupt('force');
         abgOverlayController?.reset();
         chatInput.close();
+        resetTerminalTitle();
         await closeTreeSitterClient();
     }
 

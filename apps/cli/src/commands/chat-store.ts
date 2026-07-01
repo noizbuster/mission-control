@@ -130,6 +130,8 @@ export type SessionPickerView = {
 export type ChatStoreState = {
     readonly outputText: string;
     readonly sessionId: string;
+    /** Live session display name; rename overlay falls back to `sessionId` when this is empty. */
+    readonly sessionDisplayName: string;
     readonly inputMirror: string;
     readonly generating: boolean;
     readonly agentStatusText: string;
@@ -268,6 +270,7 @@ export class ChatStore {
         this.state = {
             outputText: '',
             sessionId: '',
+            sessionDisplayName: '',
             inputMirror: '',
             generating: false,
             agentStatusText: '',
@@ -469,7 +472,8 @@ export class ChatStore {
 
     showRename(): void {
         this.state.overlayMode = 'rename';
-        this.state.renameBuffer = '';
+        this.state.renameBuffer =
+            this.state.sessionDisplayName.length > 0 ? this.state.sessionDisplayName : this.state.sessionId;
         this.publish();
     }
 
@@ -488,6 +492,13 @@ export class ChatStore {
     setSessionId(sessionId: string): void {
         if (this.state.sessionId === sessionId) return;
         this.state.sessionId = sessionId;
+        this.publish();
+    }
+
+    setSessionDisplayName(name: string | undefined): void {
+        const next = name ?? '';
+        if (this.state.sessionDisplayName === next) return;
+        this.state.sessionDisplayName = next;
         this.publish();
     }
 

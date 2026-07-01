@@ -32,8 +32,20 @@ export type BottomStatusShape = {
     readonly approvalLabel: string;
     readonly approvalColor: string | undefined;
     readonly projectLabel: string | undefined;
-    readonly sessionID: string | undefined;
+    readonly sessionLabel: string | undefined;
 };
+
+/**
+ * Render label for the bottom-right session segment. Prefers the display name
+ * (e.g. a Ctrl+R rename) and falls back to the raw session id. `undefined`
+ * when neither is available.
+ */
+export function buildSessionLabel(sessionID: string | undefined, sessionDisplayName: string | undefined): string | undefined {
+    if (sessionDisplayName !== undefined && sessionDisplayName.length > 0) {
+        return sessionDisplayName;
+    }
+    return sessionID;
+}
 
 /**
  * Humanize a token count for compact status display. `undefined` is preserved
@@ -106,7 +118,7 @@ export function formatBottomStatus(props: StatusBarProps): BottomStatusShape {
         approvalLabel: props.approvalLevel ?? 'approval',
         approvalColor: approvalLevelColor(props.approvalLevel),
         projectLabel: buildProjectLabel(props.workspaceRoot, props.gitBranch, props.isWorktree),
-        sessionID: props.sessionID,
+        sessionLabel: buildSessionLabel(props.sessionID, props.sessionDisplayName),
     };
 }
 
@@ -155,11 +167,11 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
  * dark-navy bg.
  */
 export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
-    const { approvalLabel, approvalColor, projectLabel, sessionID } = formatBottomStatus(props);
+    const { approvalLabel, approvalColor, projectLabel, sessionLabel } = formatBottomStatus(props);
     const dimApproval = props.approvalLevel === undefined || props.approvalLevel === 'verbose';
     const rightLength =
         (projectLabel !== undefined ? projectLabel.length + 1 : 0) +
-        (sessionID !== undefined ? sessionID.length + 1 : 0);
+        (sessionLabel !== undefined ? sessionLabel.length + 1 : 0);
     const fillCount = Math.max(0, statusRowColumns() - approvalLabel.length - 1 - rightLength);
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
@@ -172,7 +184,7 @@ export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
             <text>{' '}</text>
             <text attributes={TextAttributes.DIM}>{'\u2500'.repeat(fillCount)}</text>
             {projectLabel !== undefined ? <text>{` ${projectLabel}`}</text> : null}
-            {sessionID !== undefined ? <text>{` ${sessionID}`}</text> : null}
+            {sessionLabel !== undefined ? <text>{` ${sessionLabel}`}</text> : null}
         </box>
     );
 }

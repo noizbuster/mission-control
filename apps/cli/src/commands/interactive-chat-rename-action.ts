@@ -21,10 +21,14 @@ export async function runRenameAction(
     action: RenameAction,
     controller: SessionDisplayNameController | undefined,
     activeTurn: ActiveCodingAgentTurn | undefined,
+    onSessionRenamed?: (name: string) => Promise<void>,
 ): Promise<ChatActionResult> {
     if (action.name !== undefined) {
         controller?.update(action.name);
         chatOutput.write(`Session renamed to: ${action.name}\n`);
+        if (onSessionRenamed !== undefined) {
+            await onSessionRenamed(action.name);
+        }
         return actionResult(modelProviderSelection, activeTurn);
     }
     const current = controller?.current();

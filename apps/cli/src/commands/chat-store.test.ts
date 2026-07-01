@@ -270,6 +270,46 @@ describe('chat-store — rename overlay', () => {
         expect(submitted).toEqual(['my-session']);
         expect(store.getSnapshot().overlayMode).toBe('none');
     });
+
+    it('showRename pre-fills the buffer with the session display name when set', () => {
+        const store = createChatStore();
+        store.setSessionId('session_abc');
+        store.setSessionDisplayName('investigating bug');
+
+        store.showRename();
+
+        expect(store.getSnapshot().renameBuffer).toBe('investigating bug');
+    });
+
+    it('showRename falls back to the session id when no display name is set', () => {
+        const store = createChatStore();
+        store.setSessionId('session_abc');
+
+        store.showRename();
+
+        expect(store.getSnapshot().renameBuffer).toBe('session_abc');
+    });
+
+    it('showRename leaves the buffer empty when neither display name nor session id is set', () => {
+        const store = createChatStore();
+
+        store.showRename();
+
+        expect(store.getSnapshot().renameBuffer).toBe('');
+    });
+
+    it('setSessionDisplayName is a no-op publish when the value is unchanged', () => {
+        const store = createChatStore();
+        let publishCount = 0;
+        store.subscribe(() => {
+            publishCount += 1;
+        });
+        store.setSessionDisplayName('first');
+        const afterFirst = publishCount;
+        store.setSessionDisplayName('first');
+
+        expect(publishCount).toBe(afterFirst);
+    });
 });
 
 describe('chat-store — event queue', () => {
