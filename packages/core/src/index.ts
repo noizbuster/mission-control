@@ -143,6 +143,7 @@ export * from './memory/index.js';
 export { PermissionSession, type PermissionSessionOptions } from './permission/session.js';
 export { PermissionRuleStore, type PermissionRuleStoreOptions } from './permission/store.js';
 export { createAllowPermissionDecision, createDefaultPermissionDecision } from './permissions.js';
+export { ensureOmoDirs, resolveOmoRoot } from './persistence/paths.js';
 export * from './plugins/index.js';
 export {
     FlatProviderBridgeError,
@@ -239,6 +240,27 @@ export { ProviderTurnError } from './providers/provider-turn-types.js';
 export type { AgentExecutionContext, AgentTask, AgentTaskResult } from './runtime/execution-context.js';
 export type { AgentExecutor } from './runtime/executor.js';
 export { createGraphTurnRunner, type GraphTurnRunnerWiring } from './runtime/graph-coordinator-turn.js';
+export {
+    createMission,
+    listMissions,
+    readMission,
+    updateMission,
+} from './runtime/mission-run/mission-store.js';
+export {
+    completeRun,
+    failRun,
+    materializeMission,
+    startRun,
+} from './runtime/mission-run/mission-run-service.js';
+export {
+    ALLOWED_RUN_TRANSITIONS,
+    assertRunTransition,
+    createRun,
+    listRunsForMission,
+    readRun,
+    TERMINAL_RUN_STATUSES,
+    updateRunStatus,
+} from './runtime/mission-run/run-store.js';
 export {
     type RunCoordinatorPromptInput,
     type RunCoordinatorResult,
