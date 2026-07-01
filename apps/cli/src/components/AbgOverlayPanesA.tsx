@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/react */
 import type React from 'react';
 import type { AbgOverlayState } from '../commands/abg-overlay-state.js';
+import { graphStatusTheme, nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
 import { useSpinnerFrame } from './spinner.js';
 import { renderVisualGraph, type VisualGraphEdge, type VisualGraphNode, type VisualGraphRow } from './visual-graph.js';
 
@@ -11,58 +12,6 @@ export interface PaneProps {
 
 const dimAttrs = { dim: true };
 const boldAttrs = { bold: true };
-
-function statusColorFg(status: string | undefined): string | undefined {
-    switch (status) {
-        case 'running':
-            return '#ffff00';
-        case 'succeeded':
-        case 'active':
-            return '#00ff00';
-        case 'failed':
-            return '#ff0000';
-        case 'blocked':
-            return '#00ffff';
-        case 'cancelled':
-            return '#808080';
-        default:
-            return undefined;
-    }
-}
-
-function graphStatusFg(graphStatus: AbgOverlayState['graphStatus']): string {
-    switch (graphStatus) {
-        case 'active':
-            return '#ffff00';
-        case 'completed':
-            return '#00ff00';
-        case 'failed':
-            return '#ff0000';
-        case 'blocked':
-            return '#00ffff';
-        case 'cancelled':
-            return '#808080';
-        default:
-            return '#808080';
-    }
-}
-
-function statusGlyph(status: string | undefined): string {
-    switch (status) {
-        case 'running':
-            return '▶';
-        case 'succeeded':
-            return '✓';
-        case 'failed':
-            return '✗';
-        case 'blocked':
-            return '⏸';
-        case 'cancelled':
-            return '⊘';
-        default:
-            return '○';
-    }
-}
 
 function truncate(text: string, max: number): string {
     return text.length > max ? `${text.slice(0, max - 1)}…` : text;
@@ -96,7 +45,8 @@ export function OverviewPane({ state, modelLabel }: PaneProps): React.ReactNode 
     }
 
     const graphId = state.focusedGraphId ?? state.activeGraphId ?? '(no graph)';
-    const statusFgVal = graphStatusFg(state.graphStatus);
+    const statusFgVal =
+        state.graphStatus !== undefined ? graphStatusTheme(state.graphStatus).foreground : STATUS_FG_GRAY;
     const statusText = state.graphStatus ?? 'idle';
 
     const liveOutputLines = state.lastLiveDelta.split('\n').slice(-8);
@@ -127,13 +77,11 @@ export function OverviewPane({ state, modelLabel }: PaneProps): React.ReactNode 
                     </box>
                     {knownGraphs.map((summary) => {
                         const isFocused = summary.graphId === state.focusedGraphId;
-                        const color = graphStatusFg(summary.status);
-                        const graphFg = color !== '#808080' ? color : undefined;
+                        const themeFg = graphStatusTheme(summary.status).foreground;
+                        const graphFg = themeFg !== STATUS_FG_GRAY ? themeFg : undefined;
                         return (
                             <box key={summary.graphId} flexDirection="row">
-                                <text {...(isFocused ? focusedStyle : dimAttrs)}>
-                                    {isFocused ? '▸ ' : '  '}
-                                </text>
+                                <text {...(isFocused ? focusedStyle : dimAttrs)}>{isFocused ? '▸ ' : '  '}</text>
                                 <text {...(graphFg !== undefined ? { fg: graphFg } : dimAttrs)}>{summary.status}</text>
                                 <text> </text>
                                 <text {...(isFocused ? boldAttrs : {})}>{truncate(summary.graphId, 30)}</text>
@@ -176,7 +124,7 @@ function renderVisualRow(row: VisualGraphRow, idx: number, spinnerGlyph: string)
     return (
         <box key={`vis-${idx}`} flexDirection="row">
             {row.segments.map((segment, segIdx) => {
-                const fg = statusColorFg(segment.status);
+                const fg = segment.status !== undefined ? nodeStatusTheme(segment.status).foreground : undefined;
                 return (
                     <text
                         // biome-ignore lint/suspicious/noArrayIndexKey: segments are positional and stable per node row
@@ -223,57 +171,17 @@ export function GraphPane({ state }: PaneProps): React.ReactNode {
     return (
         <box flexDirection="column" marginTop={1}>
             <text {...boldAttrs}>{graphId}</text>
-            {!visual.collapsed ? (
-                <box flexDirection="column" marginLeft={2}>
-                    {visual.rows.map((row, idx) => renderVisualRow(row, idx, spinnerGlyph))}
-                </box>
-            ) : (
-                <box flexDirection="column">
-                    <text {...dimAttrs}>(graph too wide — adjacency list)</text>
-                    {nodes.length === 0 ? (
-                        <box flexDirection="row" marginLeft={2}>
-                            <text {...dimAttrs}>(no nodes)</text>
-                        </box>
-                    ) : (
-                        nodes.map(([nodeId, status]) => {
-                            const fg = statusColorFg(status);
-                            const glyph = statusGlyph(status);
-                            const outgoing = state.graphEdges.filter((e) => e.source === nodeId);
-                            return (
-                                <box key={nodeId} flexDirection="column" marginLeft={2}>
-                                    <box flexDirection="row">
-                                        <text {...(fg !== undefined ? { fg } : dimAttrs)}>{glyph}</text>
-                                        <text> </text>
-                                        <text>{nodeId}</text>
-                                        <text {...dimAttrs}> ({status})</text>
-                                    </box>
-                                    {outgoing.map((edge) => (
-                                        <box
-                                            key={`${nodeId}-${edge.source}-${edge.target}`}
-                                            flexDirection="row"
-                                            marginLeft={4}
-                                        >
-                                            <text {...dimAttrs}>└→</text>
-                                            <text {...dimAttrs}> {edge.target}</text>
-                                            {edge.condition !== undefined ? (
-                                                <text {...dimAttrs}> [{truncate(edge.condition, 24)}]</text>
-                                            ) : null}
-                                        </box>
-                                    ))}
-                                </box>
-                            );
-                        })
-                    )}
-                </box>
-            )}
+            <box flexDirection="column" marginLeft={2}>
+                {visual.rows.map((row, idx) => renderVisualRow(row, idx, spinnerGlyph))}
+            </box>
             {childGraphs.length > 0 ? (
                 <box marginTop={1} flexDirection="column">
                     <text {...boldAttrs} {...dimAttrs}>
                         Child Graphs ({childGraphs.length})
                     </text>
                     {childGraphs.map((child) => {
-                        const color = graphStatusFg(child.status);
-                        const childFg = color !== '#808080' ? color : undefined;
+                        const themeFg = graphStatusTheme(child.status).foreground;
+                        const childFg = themeFg !== STATUS_FG_GRAY ? themeFg : undefined;
                         return (
                             <box key={child.graphId} flexDirection="row" marginLeft={2}>
                                 <text {...dimAttrs}>↳</text>
@@ -315,8 +223,9 @@ export function NodesPane({ state }: PaneProps): React.ReactNode {
                 </box>
             ) : (
                 nodes.map(([nodeId, status]) => {
-                    const fg = statusColorFg(status);
-                    const glyph = statusGlyph(status);
+                    const nodeTheme = nodeStatusTheme(status);
+                    const fg = nodeTheme.foreground;
+                    const glyph = nodeTheme.glyph;
                     return (
                         <box key={nodeId} flexDirection="row">
                             <text {...(fg !== undefined ? { fg } : dimAttrs)}>{glyph}</text>

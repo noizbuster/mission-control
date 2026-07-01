@@ -26,6 +26,8 @@ function createEmptyState(): AbgOverlayState {
         runState: 'idle',
         nativeSidecarStatus: '',
         lastSettledAt: undefined,
+        nodeChangedAtMs: new Map(),
+        lastChangedNodeIds: undefined,
     };
 }
 
@@ -67,6 +69,8 @@ function createHappyState(): AbgOverlayState {
         runState: 'running',
         nativeSidecarStatus: 'native',
         lastSettledAt: undefined,
+        nodeChangedAtMs: new Map(),
+        lastChangedNodeIds: undefined,
     };
 }
 
@@ -93,6 +97,8 @@ function createMalformedState(): AbgOverlayState {
         runState: 'failed',
         nativeSidecarStatus: 'unavailable',
         lastSettledAt: undefined,
+        nodeChangedAtMs: new Map(),
+        lastChangedNodeIds: undefined,
     };
 }
 
