@@ -54,6 +54,7 @@ import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 import { loadPricingTable } from './pricing-table-store.js';
 import type { EnsuredSession } from './run-agent-session.js';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
+import { loadSessionTranscript } from './session-transcript-reconstruction.js';
 import { detectGitBranch, detectGitWorktree } from './terminal-controls.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
@@ -326,6 +327,19 @@ export async function runInteractiveChatSession(
                 chatOutput.write(`resumed session: ${currentSessionId}\n`);
             }
             chatOutput.write('Press Ctrl+C twice or /exit to exit\n\n');
+        }
+
+        // Best-effort: load the prior conversation so it's visible on resume. A missing or
+        // corrupt log leaves the transcript blank and resume still proceeds.
+        if (currentSessionId !== undefined) {
+            const resumedTranscript = await loadSessionTranscript(currentSessionId);
+            if (resumedTranscript.length > 0) {
+                if (tuiBridge !== undefined) {
+                    tuiBridge.replaceOutputText(resumedTranscript);
+                } else {
+                    chatOutput.write(resumedTranscript);
+                }
+            }
         }
 
         for (;;) {
