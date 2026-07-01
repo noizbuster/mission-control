@@ -109,6 +109,29 @@ describe('README stage-01 contract', () => {
             'Ctrl+C twice exits',
             'does not run actual Codex host skills',
             'the default `local/local-echo` provider does not call tools',
+            '`/agents` with no argument opens the agent control dashboard',
+            '`/agents list` prints the discovered-agents list as text',
+            'The reserved subcommands `dashboard`, `list`, `reload`, and `disable`',
+        ] as const;
+
+        for (const term of requiredTerms) {
+            expect(content, `README missing ${term}`).toContain(term);
+        }
+    });
+
+    it('documents mctrl agents CLI and /agents dashboard', () => {
+        const content = readme();
+        const requiredTerms = [
+            'mctrl agents list',
+            'mctrl agents show <name>',
+            'mctrl agents unpack [--all] [<name>] [--force] [--user|--project|--dir <path>] [--json]',
+            'mctrl agents disable <name>',
+            'mctrl agents enable <name>',
+            'mctrl agents import <harness> <path>',
+            'copies bundled agent templates to `.mctrl/agents/`',
+            'The default scope is the project directory',
+            'opens the agent control dashboard in the TUI',
+            'prints the discovered-agents list as text when the TUI is unavailable',
         ] as const;
 
         for (const term of requiredTerms) {

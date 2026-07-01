@@ -75,6 +75,7 @@ function createCodingContext(overrides: {
         nextTurnId: () => 'turn_clear_test',
         sessionStore: undefined,
         activeTurn: undefined,
+        useTui: false,
         ...(overrides.sessionNavigation !== undefined ? { sessionNavigation: overrides.sessionNavigation } : {}),
         ...(overrides.undoRedo !== undefined ? { undoRedo: overrides.undoRedo } : {}),
     };

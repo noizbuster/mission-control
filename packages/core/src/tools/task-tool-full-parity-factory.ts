@@ -24,6 +24,7 @@ import { parseAgentFile } from '../agents/agent-parser.js';
 import { AgentIndex } from '../agents/agent-registry.js';
 import { BUNDLED_AGENT_TEMPLATES } from '../agents/bundled/index.js';
 import type { ModelPattern } from '../agents/model-resolver.js';
+import { parseModelAlias } from '../agents/model-roles.js';
 import { ConcreteTaskToolRuntime, type SpawnFn } from '../agents/task-tool-runtime.js';
 import { spawnChildCodingAgent } from '../behavior/subagents/spawn-child.js';
 import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
@@ -47,7 +48,35 @@ export type FullParityTaskToolOptions = {
     readonly summaryLimit?: number;
     readonly agentIndex?: AgentIndex;
     readonly parentAgent?: AgentDefinition;
+    readonly agentModelOverrides?: ReadonlyMap<string, ModelPattern>;
 };
+
+/**
+ * Model-resolution closure for the full-parity task tool. The `mctrl/task`
+ * skip-guard below is the SOLE enforcement of the task-role invariant on the
+ * spawn path — `resolveAgentModelField` (model-resolver.ts) is not on it — so
+ * do not remove it. Extracted pure so the override/skip/fallthrough logic is
+ * unit-testable without spawning (inert until todo 25).
+ */
+export function buildResolveModelFn(options: {
+    readonly model: AbgNodeModelOptions;
+    readonly agentModelOverrides?: ReadonlyMap<string, ModelPattern>;
+}): (agent: AgentDefinition) => ModelPattern {
+    const parentModel: ModelPattern = {
+        providerID: options.model.providerID,
+        modelID: options.model.modelID,
+        ...(options.model.variantID !== undefined ? { variantID: options.model.variantID } : {}),
+    };
+    const overrides = options.agentModelOverrides;
+    return (agent: AgentDefinition): ModelPattern => {
+        if (typeof agent.model === 'string' && parseModelAlias(agent.model) === 'task') {
+            return parentModel;
+        }
+        const override = overrides?.get(agent.name);
+        if (override !== undefined) return override;
+        return parentModel;
+    };
+}
 
 export async function registerFullParityTaskTool(
     registry: ToolRegistry,
@@ -66,11 +95,7 @@ export async function createFullParityTaskToolRegistrationForCli(
         systemPrompt: '',
         source: 'bundled',
     };
-    const resolveModel = (_agent: AgentDefinition): ModelPattern => ({
-        providerID: options.model.providerID,
-        modelID: options.model.modelID,
-        ...(options.model.variantID !== undefined ? { variantID: options.model.variantID } : {}),
-    });
+    const resolveModel = buildResolveModelFn(options);
     const spawnFn: SpawnFn = async (context) => {
         const modelOptions: AbgNodeModelOptions = {
             providerID: context.model.providerID,

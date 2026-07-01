@@ -35,6 +35,7 @@ import type {
     PermissionDecision,
     PermissionRequest,
 } from '@mission-control/protocol';
+import { readModelPatternOverrides } from './agents-model-overrides-config.js';
 import { cliAllowsAction } from './cli-permission-policy.js';
 
 type NonInteractiveToolRegistryOptions = {
@@ -137,12 +138,14 @@ export async function createNonInteractiveToolRegistry(
             modelID: selection.modelID,
             ...(selection.variantID !== undefined ? { variantID: selection.variantID } : {}),
         };
+        const agentModelOverrides = await readModelPatternOverrides({ workspaceRoot: options.workspaceRoot });
         await registerFullParityTaskTool(registry, {
             workspaceRoot: options.workspaceRoot,
             requestPermission: options.requestPermission,
             resolveSdkModel,
             model,
             parentToolRegistry: registry,
+            agentModelOverrides,
             ...(options.sessionId !== undefined ? { parentSessionId: options.sessionId } : {}),
         });
     }

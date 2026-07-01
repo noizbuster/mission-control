@@ -23,7 +23,7 @@ import { createAbgOverlayStore } from './abg-overlay-state.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { approvalLevelRules } from './approval-level.js';
 import { parseChatLine } from './chat-commands.js';
-import type { SessionPickerEntry } from './chat-store.js';
+import type { DashboardAgentEntry, SessionPickerEntry } from './chat-store.js';
 import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './chat-tui-types.js';
 import { type ChatTuiOptions, createChatTui } from './create-chat-tui.js';
 import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
@@ -408,7 +408,8 @@ export async function runInteractiveChatSession(
                 currentSessionStore = ensured.store;
             }
             let result: ChatActionResult;
-            const isPickerAction = action.kind === 'sessions' || action.kind === 'session-picker';
+            const isPickerAction =
+                action.kind === 'sessions' || action.kind === 'session-picker' || action.kind === 'agents';
             if (tuiBridge !== undefined && !isPickerAction) {
                 tuiBridge.setGenerating(true);
             }
@@ -422,6 +423,7 @@ export async function runInteractiveChatSession(
                     modelChoices,
                     {
                         activeTurn,
+                        useTui,
                         commandExecutor: options.commandExecutor,
                         emitEvent: options.emitEvent,
                         observeStoredEvent: options.observeStoredEvent,
@@ -465,6 +467,12 @@ export async function runInteractiveChatSession(
                             ? {
                                   selectSessionForAttach: (entries: readonly SessionPickerEntry[]) =>
                                       tuiBridge.showSessionPicker(entries),
+                              }
+                            : {}),
+                        ...(tuiBridge !== undefined
+                            ? {
+                                  openAgentsDashboard: (entries: readonly DashboardAgentEntry[]) =>
+                                      tuiBridge.showAgentsDashboard(entries),
                               }
                             : {}),
                         ...(tuiBridge !== undefined

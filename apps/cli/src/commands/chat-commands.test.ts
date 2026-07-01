@@ -159,6 +159,33 @@ describe('chat command parser', () => {
         });
     });
 
+    it('dispatches /agents to the agents action with parsed subcommand', () => {
+        expect(parseChatLine('/agents')).toEqual({
+            kind: 'agents',
+            agents: { kind: 'dashboard' },
+        });
+        expect(parseChatLine('/agents list')).toEqual({
+            kind: 'agents',
+            agents: { kind: 'list' },
+        });
+        expect(parseChatLine('/agents dashboard')).toEqual({
+            kind: 'agents',
+            agents: { kind: 'dashboard' },
+        });
+        expect(parseChatLine('/agents reload')).toEqual({
+            kind: 'agents',
+            agents: { kind: 'reload' },
+        });
+        expect(parseChatLine('/agents oracle')).toEqual({
+            kind: 'agents',
+            agents: { kind: 'show', name: 'oracle' },
+        });
+        expect(parseChatLine('/agents disable oracle')).toEqual({
+            kind: 'agents',
+            agents: { kind: 'disable', name: 'oracle' },
+        });
+    });
+
     it('parses session navigation commands with optional ids', () => {
         expect(parseChatLine('/new')).toEqual({ kind: 'new-session' });
         expect(parseChatLine('/new session_next')).toEqual({ kind: 'new-session', sessionId: 'session_next' });

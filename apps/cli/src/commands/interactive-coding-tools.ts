@@ -33,6 +33,7 @@ import {
 } from '@mission-control/core';
 import type { AbgNodeModelOptions, ModelProviderSelection, PermissionRequest } from '@mission-control/protocol';
 import { type AgentEvent, type ToolCall, ToolResultSchema } from '@mission-control/protocol';
+import { readModelPatternOverrides } from './agents-model-overrides-config.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { cliAllowsAction } from './cli-permission-policy.js';
 import type { InteractiveApprovalBroker } from './interactive-approval-broker.js';
@@ -146,6 +147,7 @@ export async function createInteractiveToolRegistry(
             modelID: selection.modelID,
             ...(selection.variantID !== undefined ? { variantID: selection.variantID } : {}),
         };
+        const agentModelOverrides = await readModelPatternOverrides({ workspaceRoot: options.workspaceRoot });
         await registerFullParityTaskTool(registry, {
             workspaceRoot: options.workspaceRoot,
             requestPermission: approvals.requestPermission,
@@ -153,6 +155,7 @@ export async function createInteractiveToolRegistry(
             model,
             parentToolRegistry: registry,
             parentSessionId: options.sessionId,
+            agentModelOverrides,
         });
     }
     const mcpConnectionManager = await registerNamespacedMcpTools(registry, {

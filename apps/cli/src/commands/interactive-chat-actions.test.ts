@@ -1046,6 +1046,7 @@ function createTestWorkflowSpec(name: string): WorkflowSpec {
 function createCodingContext(overrides: Partial<CodingActionContext> = {}): CodingActionContext {
     return {
         activeTurn: overrides.activeTurn ?? undefined,
+        useTui: overrides.useTui ?? false,
         commandExecutor: overrides.commandExecutor ?? undefined,
         emitEvent: overrides.emitEvent ?? undefined,
         nextTurnId: () => 'turn_test',

@@ -4,11 +4,33 @@ import { formatAgentDetails, formatAgentsList, parseAgentsCommand, parseAgentsSl
 
 describe('parseAgentsCommand', () => {
     describe('required TDD cases', () => {
-        it('parses empty input as list command', () => {
+        it('parses empty input as dashboard command', () => {
             // Given: empty tail after /agents
             // When: parsing the command
-            // Then: result is a list command
-            expect(parseAgentsCommand('')).toEqual({ kind: 'list' });
+            // Then: result is a dashboard command (opens interactive overlay)
+            expect(parseAgentsCommand('')).toEqual({ kind: 'dashboard' });
+        });
+
+        it('parses explicit list keyword as list command', () => {
+            expect(parseAgentsCommand('list')).toEqual({ kind: 'list' });
+        });
+
+        it('parses explicit dashboard keyword as dashboard command', () => {
+            expect(parseAgentsCommand('dashboard')).toEqual({ kind: 'dashboard' });
+        });
+
+        it('rejects list with trailing arguments', () => {
+            expect(parseAgentsCommand('list extra')).toEqual({
+                kind: 'invalid',
+                message: '/agents list does not accept arguments',
+            });
+        });
+
+        it('rejects dashboard with trailing arguments', () => {
+            expect(parseAgentsCommand('dashboard extra')).toEqual({
+                kind: 'invalid',
+                message: '/agents dashboard does not accept arguments',
+            });
         });
 
         it('parses reload keyword as reload command', () => {
@@ -32,11 +54,11 @@ describe('parseAgentsCommand', () => {
             expect(parseAgentsCommand('disable oracle')).toEqual({ kind: 'disable', name: 'oracle' });
         });
 
-        it('parses whitespace-only input as list command', () => {
+        it('parses whitespace-only input as dashboard command', () => {
             // Given: whitespace-only tail
             // When: parsing the command
-            // Then: result collapses to list (same as empty input)
-            expect(parseAgentsCommand('   ')).toEqual({ kind: 'list' });
+            // Then: result collapses to dashboard (same as empty input)
+            expect(parseAgentsCommand('   ')).toEqual({ kind: 'dashboard' });
         });
     });
 
@@ -80,8 +102,16 @@ describe('parseAgentsCommand', () => {
 });
 
 describe('parseAgentsSlashLine', () => {
-    it('parses /agents as list command', () => {
-        expect(parseAgentsSlashLine('/agents')).toEqual({ kind: 'list' });
+    it('parses /agents as dashboard command', () => {
+        expect(parseAgentsSlashLine('/agents')).toEqual({ kind: 'dashboard' });
+    });
+
+    it('parses /agents list as list command', () => {
+        expect(parseAgentsSlashLine('/agents list')).toEqual({ kind: 'list' });
+    });
+
+    it('parses /agents dashboard as dashboard command', () => {
+        expect(parseAgentsSlashLine('/agents dashboard')).toEqual({ kind: 'dashboard' });
     });
 
     it('parses /agents reload as reload command', () => {

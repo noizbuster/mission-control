@@ -199,4 +199,13 @@ describe('parseArgs', () => {
         expect(() => parseArgs(['graph', 'run'])).toThrow('graph run requires a graph file');
         expect(() => parseArgs(['--json', '--jsonl'])).toThrow('--json and --jsonl cannot be combined');
     });
+
+    it('parses the agents subcommand dispatcher and carries the argv tail', () => {
+        expect(parseArgs(['agents']).command).toBe('agents');
+        expect(parseArgs(['agents']).agentsArgv).toEqual([]);
+        expect(parseArgs(['agents', 'list']).command).toBe('agents');
+        expect(parseArgs(['agents', 'list']).agentsArgv).toEqual(['list']);
+        expect(parseArgs(['agents', 'show', 'oracle']).command).toBe('agents');
+        expect(parseArgs(['agents', 'show', 'oracle']).agentsArgv).toEqual(['show', 'oracle']);
+    });
 });

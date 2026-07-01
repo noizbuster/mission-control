@@ -2,7 +2,15 @@ import { extractUsageFromModelCallCompleted } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createProviderPromptKeypressState } from './auth-provider-keypress.js';
-import { type ChatStore, createChatStore, createSessionPickerView, type SessionPickerEntry } from './chat-store.js';
+import {
+    type AgentsDashboardState,
+    type ChatStore,
+    createAgentsDashboardView,
+    createChatStore,
+    createSessionPickerView,
+    type DashboardAgentEntry,
+    type SessionPickerEntry,
+} from './chat-store.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
 import type { ModelChoice } from './interactive-chat-model.js';
 
@@ -816,5 +824,274 @@ describe('createSessionPickerView — pure view helper', () => {
         expect(view.selectedIndex).toBe(7);
         expect(view.startIndex).toBe(6);
         expect(view.visibleEntries.map((e) => e.sessionId)).toEqual(['s6', 's7', 's8']);
+    });
+});
+
+describe('chat-store — agents dashboard overlay', () => {
+    function makeAgentEntry(name: string, source: string = 'bundled'): DashboardAgentEntry {
+        return { name, description: name, source, disabled: false };
+    }
+
+    it('showAgentsDashboard sets active=true and populates agents from passed-in entries', () => {
+        const store = createChatStore();
+        const entries = [makeAgentEntry('oracle'), makeAgentEntry('quick')];
+        store.showAgentsDashboard(entries);
+        const snapshot = store.getSnapshot();
+        expect(snapshot.overlayMode).toBe('agents-dashboard');
+        expect(snapshot.agentsDashboard.active).toBe(true);
+        expect(snapshot.agentsDashboard.agents).toEqual(entries);
+        expect(snapshot.agentsDashboard.selectedIndex).toBe(0);
+        expect(snapshot.agentsDashboard.sourceTab).toBe('all');
+        expect(snapshot.agentsDashboard.editingName).toBeNull();
+    });
+
+    it('hideAgentsDashboard sets active=false and clears edit state', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([makeAgentEntry('oracle')]);
+        store.beginAgentsDashboardModelEdit('oracle');
+        store.hideAgentsDashboard();
+        const snapshot = store.getSnapshot();
+        expect(snapshot.overlayMode).toBe('none');
+        expect(snapshot.agentsDashboard.active).toBe(false);
+        expect(snapshot.agentsDashboard.editingName).toBeNull();
+    });
+
+    it('navigateAgentsDashboard clamps at bounds', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([makeAgentEntry('a'), makeAgentEntry('b'), makeAgentEntry('c')]);
+        store.navigateAgentsDashboard(1);
+        expect(store.getSnapshot().agentsDashboard.selectedIndex).toBe(1);
+        store.navigateAgentsDashboard(1);
+        expect(store.getSnapshot().agentsDashboard.selectedIndex).toBe(2);
+        store.navigateAgentsDashboard(1);
+        expect(store.getSnapshot().agentsDashboard.selectedIndex).toBe(2);
+        store.navigateAgentsDashboard(-5);
+        expect(store.getSnapshot().agentsDashboard.selectedIndex).toBe(0);
+    });
+
+    it('navigateAgentsDashboard is a no-op when the filtered list is empty', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([makeAgentEntry('a', 'project')]);
+        store.cycleAgentsDashboardSourceTab(2);
+        expect(store.getSnapshot().agentsDashboard.sourceTab).toBe('user');
+        store.navigateAgentsDashboard(1);
+        expect(store.getSnapshot().agentsDashboard.selectedIndex).toBe(0);
+    });
+
+    it('cycleAgentsDashboardSourceTab cycles all -> project -> user -> bundled', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([makeAgentEntry('a', 'project'), makeAgentEntry('b', 'bundled')]);
+        expect(store.getSnapshot().agentsDashboard.sourceTab).toBe('all');
+        store.cycleAgentsDashboardSourceTab(1);
+        expect(store.getSnapshot().agentsDashboard.sourceTab).toBe('project');
+        store.cycleAgentsDashboardSourceTab(1);
+        expect(store.getSnapshot().agentsDashboard.sourceTab).toBe('user');
+        store.cycleAgentsDashboardSourceTab(1);
+        expect(store.getSnapshot().agentsDashboard.sourceTab).toBe('bundled');
+        store.cycleAgentsDashboardSourceTab(1);
+        expect(store.getSnapshot().agentsDashboard.sourceTab).toBe('all');
+    });
+
+    it('cycleAgentsDashboardSourceTab wraps backward', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([makeAgentEntry('a')]);
+        store.cycleAgentsDashboardSourceTab(-1);
+        expect(store.getSnapshot().agentsDashboard.sourceTab).toBe('bundled');
+    });
+
+    it('toggleAgentsDashboardAgentDisabled flips the in-memory disabled flag', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([makeAgentEntry('oracle')]);
+        expect(store.getSnapshot().agentsDashboard.agents[0]?.disabled).toBe(false);
+        store.toggleAgentsDashboardAgentDisabled('oracle');
+        expect(store.getSnapshot().agentsDashboard.agents[0]?.disabled).toBe(true);
+        store.toggleAgentsDashboardAgentDisabled('oracle');
+        expect(store.getSnapshot().agentsDashboard.agents[0]?.disabled).toBe(false);
+    });
+
+    it('beginAgentsDashboardModelEdit seeds editBuffer from the override model', () => {
+        const store = createChatStore();
+        const entry: DashboardAgentEntry = {
+            name: 'oracle',
+            description: 'd',
+            source: 'bundled',
+            disabled: false,
+            overrideModel: 'anthropic/claude-sonnet-4-6',
+        };
+        store.showAgentsDashboard([entry]);
+        store.beginAgentsDashboardModelEdit('oracle');
+        const snap = store.getSnapshot();
+        expect(snap.agentsDashboard.editingName).toBe('oracle');
+        expect(snap.agentsDashboard.editBuffer).toBe('anthropic/claude-sonnet-4-6');
+    });
+
+    it('beginAgentsDashboardModelEdit falls back to the base model when no override exists', () => {
+        const store = createChatStore();
+        const entry: DashboardAgentEntry = {
+            name: 'oracle',
+            description: 'd',
+            source: 'bundled',
+            disabled: false,
+            model: 'mctrl/slow',
+        };
+        store.showAgentsDashboard([entry]);
+        store.beginAgentsDashboardModelEdit('oracle');
+        expect(store.getSnapshot().agentsDashboard.editBuffer).toBe('mctrl/slow');
+    });
+
+    it('commitAgentsDashboardModelEdit updates overrideModel in memory', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([makeAgentEntry('oracle')]);
+        store.beginAgentsDashboardModelEdit('oracle');
+        store.commitAgentsDashboardModelEdit('openai/gpt-5');
+        const snap = store.getSnapshot();
+        expect(snap.agentsDashboard.editingName).toBeNull();
+        expect(snap.agentsDashboard.agents[0]?.overrideModel).toBe('openai/gpt-5');
+    });
+
+    it('commitAgentsDashboardModelEdit(undefined) clears the override', () => {
+        const store = createChatStore();
+        const entry: DashboardAgentEntry = {
+            name: 'oracle',
+            description: 'd',
+            source: 'bundled',
+            disabled: false,
+            overrideModel: 'openai/gpt-5',
+        };
+        store.showAgentsDashboard([entry]);
+        store.beginAgentsDashboardModelEdit('oracle');
+        store.commitAgentsDashboardModelEdit(undefined);
+        const snap = store.getSnapshot();
+        expect(snap.agentsDashboard.agents[0]?.overrideModel).toBeUndefined();
+    });
+
+    it('commitAgentsDashboardModelEdit is a no-op when no edit is active', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([makeAgentEntry('oracle')]);
+        store.commitAgentsDashboardModelEdit('openai/gpt-5');
+        expect(store.getSnapshot().agentsDashboard.agents[0]?.overrideModel).toBeUndefined();
+    });
+
+    it('cancelAgentsDashboardModelEdit clears edit state without committing', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([makeAgentEntry('oracle')]);
+        store.beginAgentsDashboardModelEdit('oracle');
+        store.cancelAgentsDashboardModelEdit();
+        const snap = store.getSnapshot();
+        expect(snap.agentsDashboard.editingName).toBeNull();
+        expect(snap.agentsDashboard.editBuffer).toBe('');
+        expect(snap.agentsDashboard.agents[0]?.overrideModel).toBeUndefined();
+    });
+
+    it('reloadAgentsDashboard preserves selection when agent still present', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([makeAgentEntry('a'), makeAgentEntry('b'), makeAgentEntry('c')]);
+        store.navigateAgentsDashboard(2);
+        store.reloadAgentsDashboard([
+            makeAgentEntry('a'),
+            makeAgentEntry('b'),
+            makeAgentEntry('c'),
+            makeAgentEntry('d'),
+        ]);
+        expect(store.getSnapshot().agentsDashboard.selectedIndex).toBe(2);
+    });
+
+    it('reloadAgentsDashboard resets selection when agent is gone', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([makeAgentEntry('a'), makeAgentEntry('b'), makeAgentEntry('c')]);
+        store.navigateAgentsDashboard(2);
+        store.reloadAgentsDashboard([makeAgentEntry('a'), makeAgentEntry('b')]);
+        expect(store.getSnapshot().agentsDashboard.selectedIndex).toBe(0);
+    });
+
+    it('source-tab filter narrows navigation to matching entries', () => {
+        const store = createChatStore();
+        store.showAgentsDashboard([
+            makeAgentEntry('a', 'project'),
+            makeAgentEntry('b', 'bundled'),
+            makeAgentEntry('c', 'project'),
+        ]);
+        store.cycleAgentsDashboardSourceTab(1);
+        expect(store.getSnapshot().agentsDashboard.sourceTab).toBe('project');
+        expect(store.getSnapshot().agentsDashboard.selectedIndex).toBe(0);
+        store.navigateAgentsDashboard(1);
+        expect(store.getSnapshot().agentsDashboard.selectedIndex).toBe(1);
+        store.navigateAgentsDashboard(1);
+        expect(store.getSnapshot().agentsDashboard.selectedIndex).toBe(1);
+    });
+});
+
+describe('createAgentsDashboardView — pure view helper', () => {
+    function makeAgentEntry(name: string, source: string = 'bundled'): DashboardAgentEntry {
+        return { name, description: name, source, disabled: false };
+    }
+
+    function dashboardState(overrides?: Partial<AgentsDashboardState>): AgentsDashboardState {
+        return {
+            active: true,
+            agents: [],
+            selectedIndex: 0,
+            sourceTab: 'all',
+            editingName: null,
+            editBuffer: '',
+            ...overrides,
+        };
+    }
+
+    it('returns totalCount 0 and null inspectorEntry for empty agents', () => {
+        const view = createAgentsDashboardView(dashboardState({ agents: [] }), 10);
+        expect(view.totalCount).toBe(0);
+        expect(view.inspectorEntry).toBeNull();
+        expect(view.visibleEntries).toEqual([]);
+        expect(view.startIndex).toBe(0);
+        expect(view.endIndex).toBe(0);
+    });
+
+    it('windows 12 agents with maxVisible=10 and selectedIndex=11 to {startIndex:2, endIndex:11, totalCount:12}', () => {
+        const agents = Array.from({ length: 12 }, (_, i) => makeAgentEntry(`a${i}`));
+        const view = createAgentsDashboardView(dashboardState({ agents, selectedIndex: 11 }), 10);
+        expect(view.startIndex).toBe(2);
+        expect(view.endIndex).toBe(11);
+        expect(view.totalCount).toBe(12);
+        expect(view.visibleEntries).toHaveLength(10);
+        expect(view.selectedIndex).toBe(11);
+    });
+
+    it('source-tab filter project returns only source===project entries', () => {
+        const agents = [makeAgentEntry('a', 'project'), makeAgentEntry('b', 'bundled'), makeAgentEntry('c', 'project')];
+        const view = createAgentsDashboardView(dashboardState({ agents, sourceTab: 'project' }), 10);
+        expect(view.totalCount).toBe(2);
+        expect(view.visibleEntries.map((e) => e.name)).toEqual(['a', 'c']);
+    });
+
+    it('sourceTabs counts reflect the FULL agent list regardless of active tab', () => {
+        const agents = [
+            makeAgentEntry('a', 'project'),
+            makeAgentEntry('b', 'bundled'),
+            makeAgentEntry('c', 'user'),
+            makeAgentEntry('d', 'project'),
+        ];
+        const view = createAgentsDashboardView(dashboardState({ agents, sourceTab: 'project' }), 10);
+        const counts = Object.fromEntries(view.sourceTabs.map((t) => [t.id, t.count]));
+        expect(counts).toEqual({ all: 4, project: 2, user: 1, bundled: 1 });
+    });
+
+    it('inspectorEntry returns the currently-selected entry', () => {
+        const agents = [makeAgentEntry('a'), makeAgentEntry('b'), makeAgentEntry('c')];
+        const view = createAgentsDashboardView(dashboardState({ agents, selectedIndex: 1 }), 10);
+        expect(view.inspectorEntry?.name).toBe('b');
+    });
+
+    it('clamps selectedIndex to filtered count - 1', () => {
+        const agents = [makeAgentEntry('a'), makeAgentEntry('b')];
+        const view = createAgentsDashboardView(dashboardState({ agents, selectedIndex: 10 }), 10);
+        expect(view.selectedIndex).toBe(1);
+    });
+
+    it('re-centers the window when selection moves past the middle', () => {
+        const agents = Array.from({ length: 12 }, (_, i) => makeAgentEntry(`a${i}`));
+        const view = createAgentsDashboardView(dashboardState({ agents, selectedIndex: 0 }), 3);
+        expect(view.startIndex).toBe(0);
+        expect(view.visibleEntries.map((e) => e.name)).toEqual(['a0', 'a1', 'a2']);
     });
 });

@@ -61,6 +61,26 @@ pnpm smoke:coding-agent-built-dist
 node apps/cli/dist/index.js --no-tui
 ```
 
+## mctrl agents
+
+The `mctrl agents` command inspects and manages discovered agents from the command line (non-interactive; the interactive equivalent is `/agents`).
+
+```bash
+mctrl agents list
+mctrl agents show <name>
+mctrl agents unpack [--all] [<name>] [--force] [--user|--project|--dir <path>] [--json]
+mctrl agents disable <name>
+mctrl agents enable <name>
+mctrl agents import <harness> <path>
+```
+
+- `mctrl agents list` lists every discovered agent with its source, model, and tier.
+- `mctrl agents show <name>` shows full details for one agent (description, tools, spawns, thinking level, max turns, recursion, file path, disabled status).
+- `mctrl agents unpack` copies bundled agent templates to `.mctrl/agents/`. With no flags it copies a single named agent; `--all` copies every bundled agent. `--force` overwrites existing files (bulk mode skips on collision by default). The default scope is the project directory (`<workspace>/.mctrl/agents/`); `--user` targets `<config-dir>/agents/`, `--project` is the explicit default, and `--dir <path>` targets a custom directory. `--json` emits machine-readable output.
+- `mctrl agents disable <name>` hides an agent from discovery so it cannot be spawned via `task()`.
+- `mctrl agents enable <name>` re-enables a previously disabled agent.
+- `mctrl agents import <harness> <path>` imports a harness agent file into `.mctrl/agents/`.
+
 ## Interactive chat commands
 
 `mctrl` opens a chat prompt by default. `/model opens a searchable model picker`, and `/model provider/model selects the model for the current chat only`. The selection updates the active chat model and does not persist credentials or auth defaults.
@@ -73,7 +93,7 @@ Workspace trust is controlled interactively with `/trust` (trust the current wor
 
 `#<workflow-name> {prompt}` invokes a named workflow with the given prompt. Workflows are discovered from `.mctrl/workflows/`, `.agents/workflows/`, and the config workflows directory. A prompt without a `#` prefix runs the `default` workflow fallback. Four built-in workflows ship with the runtime: `default` (no-`#` fallback), `planner` (read-only planning), `runner` (plan execution), and `autopilot` (a mode overlay applied to any workflow). See Built-in Workflows below.
 
-`/agents` inspects and manages discovered agents. `/agents` with no argument lists every discovered agent with its source, model, and tier. `/agents <name>` shows full details for one agent (description, tools, spawns, thinking level, max turns, recursion, file path, disabled status). `/agents reload` re-runs discovery without restarting the chat. `/agents disable <name>` disables a single agent so it cannot be spawned via `task()`. The reserved subcommands `reload` and `disable` take precedence over any agent literally named `reload` or `disable`. See Agent System below.
+`/agents` inspects and manages discovered agents. `/agents` with no argument opens the agent control dashboard in the TUI (or prints the discovered-agents list as text when the TUI is unavailable). `/agents list` prints the discovered-agents list as text with source, model, and tier. `/agents <name>` shows full details for one agent (description, tools, spawns, thinking level, max turns, recursion, file path, disabled status). `/agents reload` re-runs discovery without restarting the chat. `/agents disable <name>` disables a single agent so it cannot be spawned via `task()`. The reserved subcommands `dashboard`, `list`, `reload`, and `disable` take precedence over any agent literally named with those tokens; use `mctrl agents show <name>` to inspect an agent whose name collides. See Agent System below.
 
 The chat command surface is mixed: normal prompts can run through the deterministic local provider, OpenAI Responses, Anthropic Messages, Google Gemini, or the OpenAI-compatible adapter family for OpenRouter, Groq, DeepSeek, and Mistral when credentials are configured. Skill loading is real — the `SKILL.md` body becomes the next user prompt — but the default `local/local-echo` provider does not call tools, so a real tool-calling provider is required for loaded skills to drive agentic behavior.
 
@@ -123,10 +143,12 @@ Agent definition format:
 
 Managing agents in interactive chat:
 
-- `/agents` lists every discovered agent with its source, model, and tier.
+- `/agents` opens the agent control dashboard in the TUI (or prints the discovered-agents list as text on a non-TTY).
+- `/agents list` prints the discovered-agents list as text with source, model, and tier.
 - `/agents <name>` shows full details for one agent.
 - `/agents reload` re-runs discovery without restarting the chat.
 - `/agents disable <name>` disables a single agent so it cannot be spawned via `task()`.
+- The reserved subcommands `dashboard`, `list`, `reload`, and `disable` shadow same-named agents; use `mctrl agents show <name>` to inspect a colliding agent.
 
 Spawning child agents:
 

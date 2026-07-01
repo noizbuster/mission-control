@@ -1,21 +1,22 @@
 /**
- * `/agents` slash command parser and formatters (todo 6).
+ * `/agents` slash command parser and formatters (todo 5).
  *
- * Registered alongside {@linkcode parseChatLine} but not inside it: the chat
- * loop calls {@linkcode parseAgentsSlashLine} when it sees a line beginning
- * with `/agents`. The parser is pure and side-effect-free; the action runner
- * (separate module) consumes the {@linkcode AgentsCommand} discriminated
- * union and performs the actual list/show/reload/disable work against an
- * {@linkcode AgentIndex}.
+ * The chat dispatcher ({@linkcode ./chat-commands.js}) calls
+ * {@linkcode parseAgentsSlashLine} when it sees a line beginning with
+ * `/agents`. The parser is pure and side-effect-free; the action runner
+ * consumes the {@linkcode AgentsCommand} discriminated union and performs the
+ * actual dashboard/list/show/reload/disable work.
  *
- * Reserved subcommands: `reload` and `disable`. An agent literally named
- * `reload` or `disable` can only be inspected through direct registry lookup,
- * not through this slash surface.
+ * Reserved subcommands: `dashboard`, `list`, `reload`, and `disable`. An agent
+ * literally named `list`/`dashboard`/`reload`/`disable` is only inspectable via
+ * `mctrl agents show <name>` (the reserved token takes precedence on the slash
+ * surface). The same shadowing applies to cross-harness imported agents.
  */
 import type { AgentDefinition } from '@mission-control/protocol';
 import { splitCommandParts } from './chat-command-parts.js';
 
 export type AgentsCommand =
+    | { readonly kind: 'dashboard' }
     | { readonly kind: 'list' }
     | { readonly kind: 'show'; readonly name: string }
     | { readonly kind: 'reload' }
@@ -23,19 +24,34 @@ export type AgentsCommand =
     | { readonly kind: 'invalid'; readonly message: string };
 
 const AGENTS_SLASH_HEAD = 'agents';
+const SUBCOMMAND_DASHBOARD = 'dashboard';
+const SUBCOMMAND_LIST = 'list';
 const SUBCOMMAND_RELOAD = 'reload';
 const SUBCOMMAND_DISABLE = 'disable';
 
 /**
  * Parse the tail that follows `/agents ` into an {@linkcode AgentsCommand}.
  *
- * Empty input produces a `list` command. `reload` and `disable <name>` are
- * reserved subcommands; any other single token is treated as an agent name
- * (`show`).
+ * Empty input produces a `dashboard` command (opens the interactive overlay in
+ * TUI mode). `list`, `reload`, and `disable <name>` are reserved subcommands;
+ * `dashboard` is also reserved (an explicit `/agents dashboard` is equivalent to
+ * bare `/agents`). Any other single token is treated as an agent name (`show`).
  */
 export function parseAgentsCommand(input: string): AgentsCommand {
     const parts = splitCommandParts(input);
     if (parts.head.length === 0) {
+        return { kind: 'dashboard' };
+    }
+    if (parts.head === SUBCOMMAND_DASHBOARD) {
+        if (parts.tail.length > 0) {
+            return { kind: 'invalid', message: '/agents dashboard does not accept arguments' };
+        }
+        return { kind: 'dashboard' };
+    }
+    if (parts.head === SUBCOMMAND_LIST) {
+        if (parts.tail.length > 0) {
+            return { kind: 'invalid', message: '/agents list does not accept arguments' };
+        }
         return { kind: 'list' };
     }
     if (parts.head === SUBCOMMAND_RELOAD) {

@@ -20,7 +20,8 @@ export type CliCommand =
     | 'mcp-add'
     | 'mcp-list'
     | 'mcp-remove'
-    | 'mcp-test';
+    | 'mcp-test'
+    | 'agents';
 
 export type AuthCredentialArg = {
     readonly fieldID: string;
@@ -71,6 +72,8 @@ export type CliArgs = {
     readonly mcpEnabled?: boolean;
     /** When true, `session replay` mounts the opentui TUI overlay instead of dumping JSONL. */
     readonly replayInteractive?: boolean;
+    /** Raw argv tail forwarded to `parseAgentsSubcommand` by the `mctrl agents` command. */
+    readonly agentsArgv?: readonly string[];
 };
 
 export const supportedCliFlags = [
@@ -116,6 +119,9 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     }
     if (command === 'mcp') {
         return parseMcpArgs(argv.slice(1));
+    }
+    if (command === 'agents') {
+        return { ...createBaseArgs('agents'), agentsArgv: argv.slice(1) };
     }
     if (command === 'graph') {
         return parseGraphArgs(argv.slice(1));

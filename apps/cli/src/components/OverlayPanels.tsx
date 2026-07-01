@@ -1,15 +1,23 @@
 /** @jsxImportSource @opentui/react */
-import { type MouseEvent, MouseButton, TextAttributes } from '@opentui/core';
+// allow: SIZE_OK — collection of overlay components sharing the same imports,
+// useStoreSnapshot helper, and opentui rendering context. Each overlay is a
+// self-contained unit; splitting would duplicate the pragma + helper boilerplate.
+import { resolveUserConfigDir } from '@mission-control/core';
+import { MouseButton, type MouseEvent, TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/react';
 import type * as React from 'react';
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useState, useSyncExternalStore } from 'react';
+import { toggleDisabled } from '../commands/agents-disabled-config.js';
+import { parseModelPatternString, setOverride } from '../commands/agents-model-overrides-config.js';
 import { createProviderPromptView } from '../commands/auth-provider-keypress-view.js';
 import {
     APPROVAL_LEVEL_PICKER_ENTRIES,
     APPROVAL_OPTIONS,
     type ChatStore,
+    createAgentsDashboardView,
     createSessionPickerView,
 } from '../commands/chat-store.js';
+import { loadDashboardAgentEntries } from '../commands/interactive-chat-actions.js';
 import { OverlayFrame } from './OverlayFrame.js';
 import { ACCENTS, SELECTED_BG } from './overlay-theme.js';
 
@@ -211,9 +219,12 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                             ? `${snapshot.questionSelectedIndices.has(index) ? '[x] ' : '[ ] '}`
                             : '';
                         return (
-                            // biome-ignore lint/suspicious/noArrayIndexKey: question options are positional within a single overlay render
                             // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; Up/Down/Enter/Space keyboard nav already exists, mouse is an enhancement
-                            <box key={`q-opt-${index}-${option.label}`} flexDirection="column" onMouseDown={onOptionClick(index)}>
+                            <box
+                                key={`q-opt-${option.label}`}
+                                flexDirection="column"
+                                onMouseDown={onOptionClick(index)}
+                            >
                                 <text {...(isCursor ? { bg: SELECTED_BG } : {})}>
                                     {isCursor ? '> ' : '  '}
                                     {prefix}
@@ -468,6 +479,187 @@ export function SessionPickerOverlay({ store }: SessionPickerOverlayProps): Reac
                     </box>
                 );
             })}
+        </OverlayFrame>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// AgentsDashboardOverlay
+// ---------------------------------------------------------------------------
+
+const AGENTS_DASHBOARD_MAX_VISIBLE = 12;
+const MODEL_OVERRIDE_PREVIEW = 'preview — active after task-spawn wiring lands';
+
+export type AgentsDashboardOverlayProps = {
+    readonly store: ChatStore;
+    readonly workspaceRoot: string | undefined;
+};
+
+export function AgentsDashboardOverlay({ store, workspaceRoot }: AgentsDashboardOverlayProps): React.ReactNode {
+    const snapshot = useStoreSnapshot(store);
+    const [editBuffer, setEditBuffer] = useState('');
+    const dashboard = snapshot.agentsDashboard;
+    const view = createAgentsDashboardView(dashboard, AGENTS_DASHBOARD_MAX_VISIBLE);
+    const isEditing = dashboard.editingName !== null;
+    const inspector = view.inspectorEntry;
+
+    useKeyboard((key) => {
+        if (isEditing) {
+            if (key.name === 'return') {
+                const name = dashboard.editingName;
+                if (name === null) return;
+                const trimmed = editBuffer.trim();
+                if (trimmed.length === 0) {
+                    store.commitAgentsDashboardModelEdit(undefined);
+                    if (workspaceRoot !== undefined) void setOverride({ workspaceRoot }, name, undefined);
+                } else if (parseModelPatternString(trimmed) !== undefined) {
+                    store.commitAgentsDashboardModelEdit(trimmed);
+                    if (workspaceRoot !== undefined) void setOverride({ workspaceRoot }, name, trimmed);
+                } else {
+                    store.showTransientNotice('Invalid model format. Use provider/model[#variant]');
+                    return;
+                }
+                setEditBuffer('');
+                return;
+            }
+            if (key.name === 'escape') {
+                store.cancelAgentsDashboardModelEdit();
+                setEditBuffer('');
+                return;
+            }
+            if (key.name === 'backspace') {
+                setEditBuffer((prev) => prev.slice(0, -1));
+                return;
+            }
+            if (isPrintableChar(key)) {
+                setEditBuffer((prev) => prev + key.name);
+                return;
+            }
+            return;
+        }
+
+        if (key.name === 'up' || key.name === 'k') {
+            key.preventDefault();
+            store.navigateAgentsDashboard(-1);
+            return;
+        }
+        if (key.name === 'down' || key.name === 'j') {
+            key.preventDefault();
+            store.navigateAgentsDashboard(1);
+            return;
+        }
+        if (key.name === 'tab' || key.name === 'right') {
+            key.preventDefault();
+            store.cycleAgentsDashboardSourceTab(key.shift ? -1 : 1);
+            return;
+        }
+        if (key.name === 'left') {
+            key.preventDefault();
+            store.cycleAgentsDashboardSourceTab(-1);
+            return;
+        }
+        if (key.name === 'space') {
+            if (inspector !== null) {
+                store.toggleAgentsDashboardAgentDisabled(inspector.name);
+                if (workspaceRoot !== undefined) {
+                    void toggleDisabled({ workspaceRoot }, inspector.name, inspector.disabled ? 'remove' : 'add');
+                }
+            }
+            return;
+        }
+        if (key.name === 'return') {
+            if (inspector !== null) {
+                store.beginAgentsDashboardModelEdit(inspector.name);
+                setEditBuffer(inspector.overrideModel ?? inspector.model ?? '');
+            }
+            return;
+        }
+        if (key.ctrl && key.name === 'r') {
+            if (workspaceRoot !== undefined) {
+                void (async () => {
+                    const entries = await loadDashboardAgentEntries(workspaceRoot, resolveUserConfigDir());
+                    store.reloadAgentsDashboard(entries);
+                })();
+            }
+            return;
+        }
+        if (key.name === 'escape' || (key.ctrl && key.name === 'c')) {
+            store.hideAgentsDashboard();
+        }
+    });
+
+    return (
+        <OverlayFrame
+            variant="modal"
+            title="Agents"
+            footer="Up/Dn navigate · Tab cycle source · Space toggle · Enter edit · Ctrl+R reload · Esc close"
+        >
+            <box flexDirection="row">
+                {view.sourceTabs.map((tab) => {
+                    const active = tab.id === dashboard.sourceTab;
+                    return (
+                        <text key={tab.id} {...(active ? { attributes: TextAttributes.BOLD } : {})}>
+                            {`${active ? '[' : ' '} ${tab.label} (${tab.count}) ${active ? ']' : ' '}`}
+                        </text>
+                    );
+                })}
+            </box>
+            {view.totalCount === 0 ? (
+                <text attributes={TextAttributes.DIM}>No agents discovered</text>
+            ) : (
+                <box flexDirection="row" marginTop={1}>
+                    <box flexDirection="column" width="40%">
+                        <text attributes={TextAttributes.DIM}>
+                            {`${view.startIndex + 1}-${view.endIndex + 1} of ${view.totalCount}`}
+                        </text>
+                        {view.visibleEntries.map((entry, index) => {
+                            const globalIndex = view.startIndex + index;
+                            const isSelected = globalIndex === view.selectedIndex;
+                            const marker = entry.disabled ? '\u2717' : entry.overrideModel !== undefined ? '*' : ' ';
+                            return (
+                                <box key={entry.name} flexDirection="row" {...(isSelected ? { bg: SELECTED_BG } : {})}>
+                                    <text>
+                                        {isSelected ? '> ' : '  '}
+                                        {marker} {entry.name}
+                                    </text>
+                                </box>
+                            );
+                        })}
+                    </box>
+                    <box flexDirection="column" flexGrow={1}>
+                        {inspector !== null ? (
+                            <>
+                                <text attributes={TextAttributes.BOLD}>{inspector.name}</text>
+                                <text attributes={TextAttributes.DIM}>{inspector.description}</text>
+                                <text>{`  Source: ${inspector.source}`}</text>
+                                {inspector.model !== undefined ? <text>{`  Model: ${inspector.model}`}</text> : null}
+                                {inspector.tier !== undefined ? <text>{`  Tier: ${inspector.tier}`}</text> : null}
+                                {inspector.disabled ? <text fg="#ff6b6b">{'  Status: disabled'}</text> : null}
+                                {isEditing ? (
+                                    <box marginTop={1} flexDirection="column">
+                                        <box flexDirection="row">
+                                            <text fg="#00ffff">{'>'}</text>
+                                            <text> {editBuffer}</text>
+                                            <text bg="#ffffff" fg="#000000">
+                                                {'\u2588'}
+                                            </text>
+                                        </box>
+                                        <text attributes={TextAttributes.DIM}>{`  ${MODEL_OVERRIDE_PREVIEW}`}</text>
+                                    </box>
+                                ) : inspector.overrideModel !== undefined ? (
+                                    <box flexDirection="column">
+                                        <text fg="#ffaa00">{`  Override: ${inspector.overrideModel}`}</text>
+                                        <text attributes={TextAttributes.DIM}>{`  ${MODEL_OVERRIDE_PREVIEW}`}</text>
+                                    </box>
+                                ) : null}
+                                {inspector.filePath !== undefined ? (
+                                    <text attributes={TextAttributes.DIM}>{`  File: ${inspector.filePath}`}</text>
+                                ) : null}
+                            </>
+                        ) : null}
+                    </box>
+                </box>
+            )}
         </OverlayFrame>
     );
 }

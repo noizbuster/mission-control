@@ -11,6 +11,7 @@ export { discoverAgents } from './agent-loader.js';
 export { AgentParseError, parseAgentFile } from './agent-parser.js';
 export { AgentIndex } from './agent-registry.js';
 export { BUNDLED_AGENT_TEMPLATES } from './bundled/index.js';
+export type { ModelPattern } from './model-resolver.js';
 export {
     type ChildSpawnContext,
     ConcreteTaskToolRuntime,

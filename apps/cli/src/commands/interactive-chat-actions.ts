@@ -1,10 +1,22 @@
-import type { AgentRuntime, WorkflowRegistry } from '@mission-control/core';
-import { formatSkillInstructions, loadSkillBody, type Skill, type SkillToolOutput } from '@mission-control/core';
-import type { AbgGraphSpec, ModelProviderSelection } from '@mission-control/protocol';
+import {
+    AgentIndex,
+    type AgentRuntime,
+    discoverAgents,
+    formatSkillInstructions,
+    loadSkillBody,
+    resolveUserConfigDir,
+    type Skill,
+    type SkillToolOutput,
+    type WorkflowRegistry,
+} from '@mission-control/core';
+import type { AbgGraphSpec, AgentDefinition, ModelProviderSelection } from '@mission-control/protocol';
+import { type AgentsCommand, formatAgentDetails, formatAgentsList } from './agents-command.js';
+import { readDisabledSet, toggleDisabled } from './agents-disabled-config.js';
+import { readOverridesMap } from './agents-model-overrides-config.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { APPROVAL_LEVEL_META } from './approval-level.js';
 import type { ChatLineAction, WorkflowInvocationAction } from './chat-commands.js';
-import type { SessionPickerEntry } from './chat-store.js';
+import type { DashboardAgentEntry, SessionPickerEntry } from './chat-store.js';
 import type { ModelSelector } from './interactive-chat.js';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import { runBashAction, runBashDisplayOnlyAction } from './interactive-chat-bash-action.js';
@@ -36,6 +48,7 @@ import { type ActiveCodingAgentTurn, resumeCodingAgentTurn } from './interactive
 
 export type CodingActionContext = PromptTurnContext & {
     readonly activeTurn: ActiveCodingAgentTurn | undefined;
+    readonly useTui: boolean;
     readonly sessionNavigation?: SessionNavigationController;
     /**
      * Discovered skills for `/skill-name` + `$skill` real loading (todo 10).
@@ -69,6 +82,7 @@ export type CodingActionContext = PromptTurnContext & {
      * when cancelled. Only available in TUI mode (wired to `tuiBridge.showSessionPicker`).
      */
     readonly selectSessionForAttach?: (entries: readonly SessionPickerEntry[]) => Promise<string | undefined>;
+    readonly openAgentsDashboard?: (entries: readonly DashboardAgentEntry[]) => void;
 };
 
 export async function runChatAction(
@@ -260,6 +274,8 @@ export async function runChatAction(
             return runSkillAction(runtime, chatOutput, action, currentModelProviderSelection, coding);
         case 'workflow':
             return runWorkflowAction(runtime, chatOutput, action, currentModelProviderSelection, coding);
+        case 'agents':
+            return runAgentsAction(chatOutput, currentModelProviderSelection, coding, action.agents);
         case 'unknown-slash':
             chatOutput.write(`Unknown command: /${action.command}\n`);
             return actionResult(currentModelProviderSelection, coding.activeTurn);
@@ -517,6 +533,114 @@ async function runApprovalResumeAction(
 
 function assertNever(value: never): never {
     throw new Error(`Unexpected chat action: ${String(value)}`);
+}
+
+async function runAgentsAction(
+    chatOutput: ChatOutput,
+    modelProviderSelection: ModelProviderSelection,
+    coding: CodingActionContext,
+    command: AgentsCommand,
+): Promise<ChatActionResult> {
+    if (coding.workspaceRoot === undefined) {
+        chatOutput.write('Agents command unavailable: workspace root is unavailable\n');
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    if (command.kind === 'invalid') {
+        chatOutput.write(`${command.message}\n`);
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    const workspaceRoot = coding.workspaceRoot;
+    const userConfigDir = resolveUserConfigDir();
+
+    if (command.kind === 'dashboard') {
+        if (!coding.useTui || coding.openAgentsDashboard === undefined) {
+            const agents = await loadDiscoveredAgents(workspaceRoot, userConfigDir);
+            chatOutput.write(formatAgentsList(agents));
+            return actionResult(modelProviderSelection, coding.activeTurn);
+        }
+        const entries = await loadDashboardAgentEntries(workspaceRoot, userConfigDir);
+        if (entries.length === 0) {
+            chatOutput.write('No agents discovered.\n');
+            return actionResult(modelProviderSelection, coding.activeTurn);
+        }
+        coding.openAgentsDashboard(entries);
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+
+    if (command.kind === 'list') {
+        const agents = await loadDiscoveredAgents(workspaceRoot, userConfigDir);
+        chatOutput.write(formatAgentsList(agents));
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+
+    if (command.kind === 'show') {
+        const agents = await loadDiscoveredAgents(workspaceRoot, userConfigDir);
+        const agent = agents.find((a) => a.name === command.name);
+        if (agent === undefined) {
+            chatOutput.write(`Agent not found: ${command.name}\n`);
+            return actionResult(modelProviderSelection, coding.activeTurn);
+        }
+        chatOutput.write(formatAgentDetails(agent));
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+
+    if (command.kind === 'reload') {
+        const agents = await loadDiscoveredAgents(workspaceRoot, userConfigDir);
+        chatOutput.write(`Reloaded ${agents.length} agent${agents.length === 1 ? '' : 's'}.\n`);
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+
+    if (command.kind === 'disable') {
+        const agents = await loadDiscoveredAgents(workspaceRoot, userConfigDir);
+        if (!agents.some((a) => a.name === command.name)) {
+            chatOutput.write(`Agent not found: ${command.name}\n`);
+            return actionResult(modelProviderSelection, coding.activeTurn);
+        }
+        await toggleDisabled({ workspaceRoot }, command.name, 'add');
+        chatOutput.write(`Disabled agent: ${command.name}\n`);
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+
+    return assertNever(command);
+}
+
+export async function loadDiscoveredAgents(
+    workspaceRoot: string,
+    userConfigDir: string,
+): Promise<readonly AgentDefinition[]> {
+    const result = await discoverAgents({ workspaceRoot, userConfigDir });
+    return new AgentIndex(result).list();
+}
+
+export async function loadDashboardAgentEntries(
+    workspaceRoot: string,
+    userConfigDir: string,
+): Promise<DashboardAgentEntry[]> {
+    const result = await discoverAgents({ workspaceRoot, userConfigDir });
+    const agents = new AgentIndex(result).list();
+    const disabled = await readDisabledSet({ workspaceRoot });
+    const overrides = await readOverridesMap({ workspaceRoot });
+    return agents.map((agent) => {
+        const modelStr = formatDashboardModel(agent.model);
+        const overrideStr = overrides.get(agent.name);
+        const entry: DashboardAgentEntry = {
+            name: agent.name,
+            description: agent.description,
+            source: agent.source,
+            disabled: disabled.has(agent.name),
+            ...(modelStr !== undefined ? { model: modelStr } : {}),
+            ...(agent.tier !== undefined ? { tier: agent.tier } : {}),
+            ...(overrideStr !== undefined ? { overrideModel: overrideStr } : {}),
+            ...(agent.filePath !== undefined ? { filePath: agent.filePath } : {}),
+        };
+        return entry;
+    });
+}
+
+function formatDashboardModel(model: AgentDefinition['model']): string | undefined {
+    if (model === undefined) return undefined;
+    if (typeof model === 'string') return model;
+    return `${model.providerID}/${model.modelID}`;
 }
 
 async function runApprovalAction(

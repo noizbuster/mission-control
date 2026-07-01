@@ -39,6 +39,7 @@ function createCodingContext(sessionId: string | undefined): {
     readonly nextTurnId: () => string;
     readonly sessionStore: undefined;
     readonly activeTurn: undefined;
+    readonly useTui: boolean;
 } {
     return {
         provider: undefined,
@@ -50,6 +51,7 @@ function createCodingContext(sessionId: string | undefined): {
         nextTurnId: () => 'turn_export_test',
         sessionStore: undefined,
         activeTurn: undefined,
+        useTui: false,
     };
 }
 

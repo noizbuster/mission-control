@@ -37,6 +37,7 @@ function createCodingContext(workspaceRoot: string | undefined): CodingActionCon
         nextTurnId: () => 'turn_bash_test',
         sessionStore: undefined,
         activeTurn: undefined,
+        useTui: false,
     };
 }
 

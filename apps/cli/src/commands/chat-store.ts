@@ -1,6 +1,8 @@
-// allow: SIZE_OK — indivisible reactive store; the 35-field state shape and
+// allow: SIZE_OK — indivisible reactive store; the ~48-field state shape and
 // matching initial-state literal are pure data tables dictated by the bridge
-// core contract, and every action mutates the same state object.
+// core contract, and every action mutates the same state object. Dashboard
+// overlays nest as sub-state objects (agentsDashboard) to keep the top-level
+// field count flat.
 import { type ModelProviderSelection } from '@mission-control/protocol';
 import { PasteMarkerStore } from '../platform/keymap/bracketed-paste.js';
 import type { DiffEntry } from '../platform/keymap/diff-viewer.js';
@@ -46,7 +48,46 @@ export type ChatStoreOverlayMode =
     | 'rename'
     | 'abg'
     | 'diff-viewer'
-    | 'session-picker';
+    | 'session-picker'
+    | 'agents-dashboard';
+
+export type AgentsDashboardSourceTab = 'all' | 'project' | 'user' | 'bundled';
+
+export type DashboardAgentEntry = {
+    readonly name: string;
+    readonly description: string;
+    readonly source: string;
+    readonly model?: string;
+    readonly tier?: string;
+    readonly disabled: boolean;
+    readonly overrideModel?: string;
+    readonly filePath?: string;
+};
+
+export type AgentsDashboardState = {
+    readonly active: boolean;
+    readonly agents: readonly DashboardAgentEntry[];
+    readonly selectedIndex: number;
+    readonly sourceTab: AgentsDashboardSourceTab;
+    readonly editingName: string | null;
+    readonly editBuffer: string;
+};
+
+export type AgentsDashboardSourceTabInfo = {
+    readonly id: AgentsDashboardSourceTab;
+    readonly label: string;
+    readonly count: number;
+};
+
+export type AgentsDashboardView = {
+    readonly sourceTabs: readonly AgentsDashboardSourceTabInfo[];
+    readonly visibleEntries: readonly DashboardAgentEntry[];
+    readonly selectedIndex: number;
+    readonly startIndex: number;
+    readonly endIndex: number;
+    readonly totalCount: number;
+    readonly inspectorEntry: DashboardAgentEntry | null;
+};
 
 export type SessionPickerEntry = {
     readonly sessionId: string;
@@ -112,6 +153,7 @@ export type ChatStoreState = {
     readonly sessionPickerSelectedIndex: number;
     readonly sessionPickerSearch: string;
     readonly sessionPickerKeypress: ProviderPromptKeypressState;
+    readonly agentsDashboard: AgentsDashboardState;
     readonly contextTokensUsed: number | undefined;
     readonly contextTokensMax: number | undefined;
     readonly historyNavigation: { readonly position: number; readonly total: number } | null;
@@ -243,6 +285,14 @@ export class ChatStore {
             sessionPickerSelectedIndex: 0,
             sessionPickerSearch: '',
             sessionPickerKeypress: createProviderPromptKeypressState(),
+            agentsDashboard: {
+                active: false,
+                agents: [],
+                selectedIndex: 0,
+                sourceTab: 'all',
+                editingName: null,
+                editBuffer: '',
+            },
             contextTokensUsed: undefined,
             contextTokensMax: undefined,
             transientNotice: null,
@@ -786,6 +836,119 @@ export class ChatStore {
         this.hideSessionPicker();
     }
 
+    showAgentsDashboard(entries: readonly DashboardAgentEntry[]): void {
+        this.state.agentsDashboard = {
+            active: true,
+            agents: entries,
+            selectedIndex: 0,
+            sourceTab: 'all',
+            editingName: null,
+            editBuffer: '',
+        };
+        this.state.overlayMode = 'agents-dashboard';
+        this.publish();
+    }
+
+    hideAgentsDashboard(): void {
+        this.state.agentsDashboard = {
+            ...this.state.agentsDashboard,
+            active: false,
+            editingName: null,
+            editBuffer: '',
+        };
+        this.state.overlayMode = 'none';
+        this.publish();
+    }
+
+    navigateAgentsDashboard(delta: number): void {
+        const filtered = this.filterAgentsBySourceTab();
+        const count = filtered.length;
+        if (count === 0) return;
+        const next = this.state.agentsDashboard.selectedIndex + delta;
+        this.state.agentsDashboard = {
+            ...this.state.agentsDashboard,
+            selectedIndex: Math.min(Math.max(next, 0), count - 1),
+        };
+        this.publish();
+    }
+
+    cycleAgentsDashboardSourceTab(delta: number): void {
+        const tabs: readonly AgentsDashboardSourceTab[] = ['all', 'project', 'user', 'bundled'];
+        const currentIdx = tabs.indexOf(this.state.agentsDashboard.sourceTab);
+        const nextIdx = (currentIdx + delta + tabs.length) % tabs.length;
+        this.state.agentsDashboard = {
+            ...this.state.agentsDashboard,
+            sourceTab: tabs[nextIdx] ?? 'all',
+            selectedIndex: 0,
+        };
+        this.publish();
+    }
+
+    toggleAgentsDashboardAgentDisabled(name: string): void {
+        this.state.agentsDashboard = {
+            ...this.state.agentsDashboard,
+            agents: this.state.agentsDashboard.agents.map((entry) =>
+                entry.name === name ? { ...entry, disabled: !entry.disabled } : entry,
+            ),
+        };
+        this.publish();
+    }
+
+    beginAgentsDashboardModelEdit(name: string): void {
+        const entry = this.state.agentsDashboard.agents.find((a) => a.name === name);
+        this.state.agentsDashboard = {
+            ...this.state.agentsDashboard,
+            editingName: name,
+            editBuffer: entry?.overrideModel ?? entry?.model ?? '',
+        };
+        this.publish();
+    }
+
+    commitAgentsDashboardModelEdit(value: string | undefined): void {
+        const name = this.state.agentsDashboard.editingName;
+        if (name === null) return;
+        this.state.agentsDashboard = {
+            ...this.state.agentsDashboard,
+            agents: applyAgentOverrideModel(this.state.agentsDashboard.agents, name, value),
+            editingName: null,
+            editBuffer: '',
+        };
+        this.publish();
+    }
+
+    cancelAgentsDashboardModelEdit(): void {
+        this.state.agentsDashboard = {
+            ...this.state.agentsDashboard,
+            editingName: null,
+            editBuffer: '',
+        };
+        this.publish();
+    }
+
+    reloadAgentsDashboard(entries: readonly DashboardAgentEntry[]): void {
+        const selectedName = this.state.agentsDashboard.agents[this.state.agentsDashboard.selectedIndex]?.name;
+        const newSelectedIndex =
+            selectedName !== undefined
+                ? Math.max(
+                      0,
+                      entries.findIndex((e) => e.name === selectedName),
+                  )
+                : 0;
+        this.state.agentsDashboard = {
+            ...this.state.agentsDashboard,
+            agents: entries,
+            selectedIndex: newSelectedIndex,
+        };
+        this.publish();
+    }
+
+    private filterAgentsBySourceTab(): readonly DashboardAgentEntry[] {
+        const tab = this.state.agentsDashboard.sourceTab;
+        return tab === 'all'
+            ? this.state.agentsDashboard.agents
+            : this.state.agentsDashboard.agents.filter((a) => a.source === tab);
+    }
+
     navigateLevelPicker(direction: 1 | -1): void {
         const count = APPROVAL_LEVELS.length;
         this.state.levelPickerSelectedIndex = (this.state.levelPickerSelectedIndex + direction + count) % count;
@@ -902,4 +1065,58 @@ export function createSessionPickerView(
 
 export function createChatStore(options?: ChatStoreOptions): ChatStore {
     return new ChatStore(options);
+}
+
+function applyAgentOverrideModel(
+    agents: readonly DashboardAgentEntry[],
+    name: string,
+    value: string | undefined,
+): readonly DashboardAgentEntry[] {
+    return agents.map((entry) => {
+        if (entry.name !== name) return entry;
+        if (value !== undefined) {
+            return { ...entry, overrideModel: value };
+        }
+        const rebuilt: DashboardAgentEntry = {
+            name: entry.name,
+            description: entry.description,
+            source: entry.source,
+            disabled: entry.disabled,
+            ...(entry.model !== undefined ? { model: entry.model } : {}),
+            ...(entry.tier !== undefined ? { tier: entry.tier } : {}),
+            ...(entry.filePath !== undefined ? { filePath: entry.filePath } : {}),
+        };
+        return rebuilt;
+    });
+}
+
+export function createAgentsDashboardView(state: AgentsDashboardState, maxVisible: number): AgentsDashboardView {
+    const visibleLimit = Math.max(1, maxVisible);
+    const agents = state.agents;
+    const sourceTabs: AgentsDashboardSourceTabInfo[] = [
+        { id: 'all', label: 'All', count: agents.length },
+        { id: 'project', label: 'Project', count: agents.filter((a) => a.source === 'project').length },
+        { id: 'user', label: 'User', count: agents.filter((a) => a.source === 'user').length },
+        { id: 'bundled', label: 'Bundled', count: agents.filter((a) => a.source === 'bundled').length },
+    ];
+    const filteredEntries = state.sourceTab === 'all' ? agents : agents.filter((a) => a.source === state.sourceTab);
+    const totalCount = filteredEntries.length;
+    const selectedIndex = totalCount <= 0 ? 0 : Math.min(Math.max(state.selectedIndex, 0), totalCount - 1);
+    const startIndex =
+        totalCount <= visibleLimit
+            ? 0
+            : Math.min(Math.max(selectedIndex - Math.floor(visibleLimit / 2), 0), totalCount - visibleLimit);
+    const visibleCount = Math.min(visibleLimit, totalCount);
+    const endIndex = totalCount === 0 ? 0 : startIndex + visibleCount - 1;
+    const visibleEntries = totalCount === 0 ? [] : filteredEntries.slice(startIndex, endIndex + 1);
+    const inspectorEntry = totalCount === 0 ? null : (filteredEntries[selectedIndex] ?? null);
+    return {
+        sourceTabs,
+        visibleEntries,
+        selectedIndex,
+        startIndex,
+        endIndex,
+        totalCount,
+        inspectorEntry,
+    };
 }

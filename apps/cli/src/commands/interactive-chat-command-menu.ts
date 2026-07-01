@@ -199,6 +199,16 @@ export const slashCommandChoices = [
         insertText: '/hotkeys',
         description: 'Show all keyboard shortcuts',
     },
+    {
+        id: '/agents',
+        insertText: '/agents',
+        description: 'Open the agent control dashboard',
+    },
+    {
+        id: '/agents list',
+        insertText: '/agents list',
+        description: 'Print the discovered-agents list as text',
+    },
 ] as const satisfies readonly SlashCommandMenuChoice[];
 
 export function createSlashCommandMenuState(): SlashCommandMenuState {

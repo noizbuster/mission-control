@@ -1,5 +1,6 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import { type AgentsCommand, parseAgentsCommand } from './agents-command.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { isApprovalLevel } from './approval-level.js';
 import { splitCommandParts } from './chat-command-parts.js';
@@ -134,6 +135,10 @@ export type ChatLineAction =
           readonly prompt: string;
       }
     | {
+          readonly kind: 'agents';
+          readonly agents: AgentsCommand;
+      }
+    | {
           readonly kind: 'unknown-slash';
           readonly command: string;
       }
@@ -247,6 +252,8 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
             return parseNoArgumentCommand('help', parts.tail);
         case 'hotkeys':
             return parseNoArgumentCommand('hotkeys', parts.tail);
+        case 'agents':
+            return { kind: 'agents', agents: parseAgentsCommand(parts.tail) };
         default:
             return resolveUnreservedSlash(parts, options);
     }

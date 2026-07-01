@@ -1,7 +1,7 @@
 import { type AgentDefinition, AgentIndex, discoverAgents } from '@mission-control/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { formatAgentsCliList, parseAgentsSubcommand, runAgentsCliCommand } from './agents-cli.js';
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -60,6 +60,84 @@ describe('parseAgentsSubcommand', () => {
     it('rejects unpack without a name', () => {
         const cmd = parseAgentsSubcommand(['unpack']);
         expect(cmd.kind).toBe('invalid');
+    });
+
+    it('(regression) unpack <name> returns no flags key for backward-compat', () => {
+        // Given/When: parsing a bare single-name unpack
+        const cmd = parseAgentsSubcommand(['unpack', 'oracle']);
+        // Then: the command deep-equals { kind:'unpack', name:'oracle' } with NO flags key.
+        // Fails if the parser accidentally always-attaches flags.
+        expect(cmd).toEqual({ kind: 'unpack', name: 'oracle' });
+        expect(cmd).not.toHaveProperty('flags');
+    });
+
+    it('parses unpack --all into a flags-only command', () => {
+        expect(parseAgentsSubcommand(['unpack', '--all'])).toEqual({ kind: 'unpack', flags: { all: true } });
+    });
+
+    it('parses unpack --all with multiple boolean flags', () => {
+        expect(parseAgentsSubcommand(['unpack', '--all', '--force', '--json'])).toEqual({
+            kind: 'unpack',
+            flags: { all: true, force: true, json: true },
+        });
+    });
+
+    it('parses unpack --all --user and --all --project', () => {
+        expect(parseAgentsSubcommand(['unpack', '--all', '--user'])).toEqual({
+            kind: 'unpack',
+            flags: { all: true, user: true },
+        });
+        expect(parseAgentsSubcommand(['unpack', '--all', '--project'])).toEqual({
+            kind: 'unpack',
+            flags: { all: true, project: true },
+        });
+    });
+
+    it('parses unpack --all --dir <path> (space-separated)', () => {
+        expect(parseAgentsSubcommand(['unpack', '--all', '--dir', './tmp/x'])).toEqual({
+            kind: 'unpack',
+            flags: { all: true, dir: './tmp/x' },
+        });
+    });
+
+    it('parses unpack --all --dir=<path> (equals-separated)', () => {
+        expect(parseAgentsSubcommand(['unpack', '--all', '--dir=./tmp/x'])).toEqual({
+            kind: 'unpack',
+            flags: { all: true, dir: './tmp/x' },
+        });
+    });
+
+    it('parses unpack <name> --force as name + flags', () => {
+        expect(parseAgentsSubcommand(['unpack', 'oracle', '--force'])).toEqual({
+            kind: 'unpack',
+            name: 'oracle',
+            flags: { force: true },
+        });
+    });
+
+    it('rejects unpack --all with a positional name', () => {
+        expect(parseAgentsSubcommand(['unpack', '--all', 'oracle']).kind).toBe('invalid');
+    });
+
+    it('rejects unpack --user and --project together', () => {
+        expect(parseAgentsSubcommand(['unpack', '--all', '--user', '--project']).kind).toBe('invalid');
+    });
+
+    it('rejects unpack --dir with --user/--project', () => {
+        expect(parseAgentsSubcommand(['unpack', '--all', '--dir', './x', '--user']).kind).toBe('invalid');
+        expect(parseAgentsSubcommand(['unpack', '--all', '--dir', './x', '--project']).kind).toBe('invalid');
+    });
+
+    it('rejects unpack --dir with no value at end of args', () => {
+        expect(parseAgentsSubcommand(['unpack', '--all', '--dir']).kind).toBe('invalid');
+    });
+
+    it('rejects unpack --dir= (empty value)', () => {
+        expect(parseAgentsSubcommand(['unpack', '--all', '--dir=']).kind).toBe('invalid');
+    });
+
+    it('rejects unpack with an unknown flag', () => {
+        expect(parseAgentsSubcommand(['unpack', '--all', '--bogus']).kind).toBe('invalid');
     });
 
     it('parses disable <name> and enable <name>', () => {
@@ -231,6 +309,127 @@ describe('runAgentsCliCommand unpack', () => {
                 },
             ),
         ).rejects.toThrow(/not found/);
+    });
+
+    it('(bulk) unpack --all writes all 9 bundled agents to project dir', async () => {
+        // Given: a fresh workspace
+        // When: running unpack --all
+        // Then: exactly 9 .md files land under <workspace>/.mctrl/agents/
+        const targetDir = join(area.workspace, '.mctrl', 'agents');
+        const output = await runAgentsCliCommand(
+            { kind: 'unpack', flags: { all: true } },
+            { workspaceRoot: area.workspace, userConfigDir: area.userConfig },
+        );
+
+        const entries = await readdir(targetDir);
+        const mdFiles = entries.filter((name) => name.endsWith('.md'));
+        expect(mdFiles.length).toBe(9);
+        expect(output).toContain('9 of 9');
+    });
+
+    it('(bulk) unpack --all skips existing files without --force', async () => {
+        // Given: oracle.md already exists in the target dir
+        const targetDir = join(area.workspace, '.mctrl', 'agents');
+        await mkdir(targetDir, { recursive: true });
+        await writeFile(join(targetDir, 'oracle.md'), 'stale content\n', 'utf8');
+
+        // When: running unpack --all (no --force)
+        const output = await runAgentsCliCommand(
+            { kind: 'unpack', flags: { all: true } },
+            { workspaceRoot: area.workspace, userConfigDir: area.userConfig },
+        );
+
+        // Then: oracle.md is skipped (stale content preserved), 8 written, no throw
+        const stale = await readFile(join(targetDir, 'oracle.md'), 'utf8');
+        expect(stale).toBe('stale content\n');
+        expect(output).toContain('Skipped 1 existing');
+        const mdFiles = (await readdir(targetDir)).filter((name) => name.endsWith('.md'));
+        expect(mdFiles.length).toBe(9);
+    });
+
+    it('(bulk) unpack --all --force overwrites existing files', async () => {
+        // Given: oracle.md already exists with stale content
+        const targetDir = join(area.workspace, '.mctrl', 'agents');
+        await mkdir(targetDir, { recursive: true });
+        await writeFile(join(targetDir, 'oracle.md'), 'stale content\n', 'utf8');
+
+        // When: running unpack --all --force
+        await runAgentsCliCommand(
+            { kind: 'unpack', flags: { all: true, force: true } },
+            { workspaceRoot: area.workspace, userConfigDir: area.userConfig },
+        );
+
+        // Then: oracle.md is overwritten with the bundled content
+        const contents = await readFile(join(targetDir, 'oracle.md'), 'utf8');
+        expect(contents).toContain('name: oracle');
+        expect(contents).not.toContain('stale content');
+    });
+
+    it('(bulk) unpack --all --user targets <userConfigDir>/agents', async () => {
+        // Given: a fresh workspace + user config dir
+        // When: running unpack --all --user
+        // Then: all 9 files land under <userConfig>/agents, not under the project
+        const userTargetDir = join(area.userConfig, 'agents');
+        const output = await runAgentsCliCommand(
+            { kind: 'unpack', flags: { all: true, user: true } },
+            { workspaceRoot: area.workspace, userConfigDir: area.userConfig },
+        );
+
+        const mdFiles = (await readdir(userTargetDir)).filter((name) => name.endsWith('.md'));
+        expect(mdFiles.length).toBe(9);
+        expect(output).toContain(userTargetDir);
+        // Project dir must NOT be created
+        const projectDir = join(area.workspace, '.mctrl', 'agents');
+        await expect(stat(projectDir)).rejects.toThrow();
+    });
+
+    it('(bulk) unpack --all --dir <relpath> resolves against workspace root', async () => {
+        // Given: a fresh workspace
+        // When: running unpack --all --dir ./tmp/x
+        // Then: files land under <workspace>/tmp/x (resolved), 9 total
+        const targetDir = join(area.workspace, 'tmp', 'x');
+        await runAgentsCliCommand(
+            { kind: 'unpack', flags: { all: true, dir: './tmp/x' } },
+            { workspaceRoot: area.workspace, userConfigDir: area.userConfig },
+        );
+
+        const mdFiles = (await readdir(targetDir)).filter((name) => name.endsWith('.md'));
+        expect(mdFiles.length).toBe(9);
+    });
+
+    it('(bulk) unpack --all --json returns UnpackResult JSON with total 9', async () => {
+        // Given: a fresh workspace
+        // When: running unpack --all --json
+        // Then: stdout is JSON with total=9, written.length=9, skipped empty
+        const raw = await runAgentsCliCommand(
+            { kind: 'unpack', flags: { all: true, json: true } },
+            { workspaceRoot: area.workspace, userConfigDir: area.userConfig },
+        );
+
+        const parsed = JSON.parse(raw) as { targetDir: string; total: number; written: string[]; skipped: string[] };
+        expect(parsed.total).toBe(9);
+        expect(parsed.written.length).toBe(9);
+        expect(parsed.skipped.length).toBe(0);
+        expect(parsed.targetDir).toContain('.mctrl');
+    });
+
+    it('(bulk) unpack --all --json surfaces skipped entries, not silent success', async () => {
+        // Given: one file already exists
+        const targetDir = join(area.workspace, '.mctrl', 'agents');
+        await mkdir(targetDir, { recursive: true });
+        await writeFile(join(targetDir, 'oracle.md'), 'stale\n', 'utf8');
+
+        // When: running unpack --all --json (no force)
+        const raw = await runAgentsCliCommand(
+            { kind: 'unpack', flags: { all: true, json: true } },
+            { workspaceRoot: area.workspace, userConfigDir: area.userConfig },
+        );
+
+        // Then: JSON reports 1 skipped so an all-skipped run is never a silent success
+        const parsed = JSON.parse(raw) as { total: number; written: string[]; skipped: string[] };
+        expect(parsed.total).toBe(9);
+        expect(parsed.written.length).toBe(8);
+        expect(parsed.skipped.length).toBe(1);
     });
 });
 

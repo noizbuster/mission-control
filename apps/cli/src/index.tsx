@@ -4,6 +4,7 @@ import { runAuthCommand } from './commands/auth.js';
 import { runMcpCommand } from './commands/mcp.js';
 import { runModelsCommand } from './commands/models.js';
 import { runAgent } from './commands/run-agent.js';
+import { runAgentsCommand } from './commands/run-agents-cli.js';
 import { runSessionCommand } from './commands/session.js';
 import { pathToFileURL } from 'node:url';
 
@@ -52,6 +53,8 @@ export function createHelpText(): string {
         '  /trust deny            Deny project-local resources for this workspace',
         '  /trust reset           Reset this workspace trust decision',
         '  /exit                  Stop active runs and exit',
+        '  /agents                Open the agent control dashboard',
+        '  /agents list           Print the discovered-agents list as text',
         '  $<skill> [args]        Load a skill SKILL.md body as the next user prompt',
         '  $ skill invocations load real SKILL.md skills inside Mission Control',
         '  #<workflow-name> {prompt}  Invoke a named workflow with the given prompt',
@@ -92,6 +95,14 @@ export function createHelpText(): string {
         '  mcp add <name> --type remote --url <url> [--header KEY=VAL ...] [--scope project|user]',
         '  mcp remove <name> [--scope project|user]',
         '  mcp test <name>',
+        '',
+        'Agents:',
+        '  mctrl agents list                   List discovered agents (sources, models, tiers)',
+        '  mctrl agents show <name>            Show full details for one agent',
+        '  mctrl agents unpack [--all] [<name>] [--force] [--user|--project|--dir <p>] [--json]  Copy bundled agents to .mctrl/agents/',
+        '  mctrl agents disable <name>         Hide an agent from discovery',
+        '  mctrl agents enable <name>          Re-enable a disabled agent',
+        '  mctrl agents import <harness> <p>   Import a harness agent file to .mctrl/agents/',
     ].join('\n');
 }
 
@@ -130,6 +141,9 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
             return;
         case 'run':
             process.stdout.write(await runAgent(args));
+            return;
+        case 'agents':
+            process.stdout.write(await runAgentsCommand(args));
             return;
         default:
             assertNever(args.command);

@@ -18,8 +18,8 @@ import {
 } from '@mission-control/core';
 import { formatAgentDetails } from './agents-command.js';
 import { readDisabledSet, toggleDisabled } from './agents-disabled-config.js';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 
 const BUNDLED_SOURCE_PATH = '<bundled>';
 
@@ -38,14 +38,35 @@ const KNOWN_HARNESSES: ReadonlySet<string> = new Set([
     'mctrl',
 ]);
 
+/**
+ * Flags accepted by `agents unpack`. Mirrors oh-my-pi parity, except mctrl keeps
+ * the project directory as the default scope (oh-my-pi defaults to user).
+ */
+export type UnpackFlags = {
+    readonly all?: boolean;
+    readonly force?: boolean;
+    readonly user?: boolean;
+    readonly project?: boolean;
+    readonly dir?: string;
+    readonly json?: boolean;
+};
+
 export type AgentsCliCommand =
     | { readonly kind: 'list' }
     | { readonly kind: 'show'; readonly name: string }
-    | { readonly kind: 'unpack'; readonly name: string }
+    | { readonly kind: 'unpack'; readonly name?: string; readonly flags?: UnpackFlags }
     | { readonly kind: 'disable'; readonly name: string }
     | { readonly kind: 'enable'; readonly name: string }
     | { readonly kind: 'import'; readonly harness: string; readonly path: string }
     | { readonly kind: 'invalid'; readonly message: string };
+
+/** Structured result of an unpack run; serialized to JSON when `--json` is set. */
+interface UnpackResult {
+    readonly targetDir: string;
+    readonly total: number;
+    readonly written: readonly string[];
+    readonly skipped: readonly string[];
+}
 
 /**
  * Parse the argv tail that follows `mctrl agents` into an {@linkcode AgentsCliCommand}.
@@ -61,7 +82,10 @@ export function parseAgentsSubcommand(args: readonly string[]): AgentsCliCommand
         }
         return { kind: 'list' };
     }
-    if (head === 'show' || head === 'unpack' || head === 'disable' || head === 'enable') {
+    if (head === 'unpack') {
+        return parseUnpackArgs(rest);
+    }
+    if (head === 'show' || head === 'disable' || head === 'enable') {
         const name = rest[0];
         if (name === undefined) {
             return invalid(`agents ${head} requires an agent name`);
@@ -88,6 +112,90 @@ export function parseAgentsSubcommand(args: readonly string[]): AgentsCliCommand
     return invalid(`Unknown agents subcommand: ${head}`);
 }
 
+/**
+ * Parse the `agents unpack` argv tail. Walks `rest` left-to-right, collecting
+ * boolean flags, a `--dir` value (space- or `=`-separated), and at most one
+ * positional agent name. Returns `{ kind: 'invalid', message }` on any
+ * validation violation; never throws. When no flags are present, the returned
+ * command omits the `flags` key so the shape stays `{ kind:'unpack', name }`
+ * for backward compatibility.
+ */
+function parseUnpackArgs(rest: readonly string[]): AgentsCliCommand {
+    const flags: { all?: boolean; force?: boolean; user?: boolean; project?: boolean; dir?: string; json?: boolean } =
+        {};
+    let name: string | undefined;
+
+    let i = 0;
+    while (i < rest.length) {
+        const token = rest[i];
+        if (token === undefined) {
+            i += 1;
+            continue;
+        }
+        if (token === '--all') {
+            flags.all = true;
+        } else if (token === '--force') {
+            flags.force = true;
+        } else if (token === '--user') {
+            flags.user = true;
+        } else if (token === '--project') {
+            flags.project = true;
+        } else if (token === '--json') {
+            flags.json = true;
+        } else if (token === '--dir') {
+            const next = rest[i + 1];
+            if (next === undefined) {
+                return invalid('agents unpack --dir requires a value');
+            }
+            flags.dir = next;
+            i += 1;
+        } else if (token.startsWith('--dir=')) {
+            const value = token.slice('--dir='.length);
+            if (value.length === 0) {
+                return invalid('agents unpack --dir requires a value');
+            }
+            flags.dir = value;
+        } else if (token.startsWith('--')) {
+            return invalid(`agents unpack unknown flag: ${token}`);
+        } else {
+            if (name !== undefined) {
+                return invalid('agents unpack accepts at most one agent name');
+            }
+            name = token;
+        }
+        i += 1;
+    }
+
+    if (flags.all === true && name !== undefined) {
+        return invalid('agents unpack --all is mutually exclusive with an agent name');
+    }
+    if (flags.user === true && flags.project === true) {
+        return invalid('agents unpack --user and --project are mutually exclusive');
+    }
+    if (flags.dir !== undefined && (flags.user === true || flags.project === true)) {
+        return invalid('agents unpack --dir is mutually exclusive with --user/--project');
+    }
+    if (name === undefined && flags.all !== true) {
+        return invalid('agents unpack requires an agent name or --all');
+    }
+
+    const hasFlags =
+        flags.all !== undefined ||
+        flags.force !== undefined ||
+        flags.user !== undefined ||
+        flags.project !== undefined ||
+        flags.dir !== undefined ||
+        flags.json !== undefined;
+
+    if (!hasFlags) {
+        return { kind: 'unpack', name: name as string };
+    }
+    if (name !== undefined) {
+        return { kind: 'unpack', name, flags };
+    }
+    return { kind: 'unpack', flags };
+}
+
 export type AgentsCliOptions = {
     readonly workspaceRoot: string;
     readonly userConfigDir: string;
@@ -103,7 +211,7 @@ export async function runAgentsCliCommand(cmd: AgentsCliCommand, options: Agents
         case 'show':
             return runShow(cmd.name, options);
         case 'unpack':
-            return runUnpack(cmd.name, options);
+            return runUnpack(cmd, options);
         case 'disable':
             return runDisable(cmd.name, options);
         case 'enable':
@@ -132,16 +240,95 @@ async function runShow(name: string, options: AgentsCliOptions): Promise<string>
     return formatAgentDetails(withState);
 }
 
-async function runUnpack(name: string, options: AgentsCliOptions): Promise<string> {
+/**
+ * Unpack bundled agent templates. With `--all`, writes every bundled agent
+ * (skipping existing files unless `--force`). With a single name, writes that
+ * one agent (current behavior; `--force` is the implicit default for single
+ * name to preserve backward compatibility). `--json` serializes an
+ * {@linkcode UnpackResult} instead of human text.
+ *
+ * Default scope is project (`<workspace>/.mctrl/agents`), matching mctrl's
+ * pre-flag behavior; this differs from oh-my-pi, which defaults to user scope.
+ */
+async function runUnpack(
+    cmd: Extract<AgentsCliCommand, { kind: 'unpack' }>,
+    options: AgentsCliOptions,
+): Promise<string> {
+    const flags = cmd.flags ?? {};
+    const result = await unpackTemplates(cmd, options, flags);
+    if (flags.json === true) {
+        return `${JSON.stringify(result, null, 2)}\n`;
+    }
+    return formatUnpackResult(result);
+}
+
+async function unpackTemplates(
+    cmd: Extract<AgentsCliCommand, { kind: 'unpack' }>,
+    options: AgentsCliOptions,
+    flags: UnpackFlags,
+): Promise<UnpackResult> {
+    const targetDir = resolveUnpackTargetDir(options, flags);
+    await mkdir(targetDir, { recursive: true });
+
+    if (flags.all === true) {
+        const names = listBundledTemplateNames();
+        const written: string[] = [];
+        const skipped: string[] = [];
+        for (const templateName of names) {
+            const template = findBundledTemplate(templateName);
+            if (template === undefined) continue;
+            const targetPath = join(targetDir, `${templateName}.md`);
+            if (flags.force !== true) {
+                try {
+                    await stat(targetPath);
+                    skipped.push(targetPath);
+                    continue;
+                } catch (error) {
+                    if (!isENOENTError(error)) throw error;
+                }
+            }
+            await writeFile(targetPath, template, 'utf8');
+            written.push(targetPath);
+        }
+        return { targetDir, total: names.length, written, skipped };
+    }
+
+    const name = cmd.name;
+    if (name === undefined) {
+        throw new Error('agents unpack requires an agent name or --all');
+    }
     const template = findBundledTemplate(name);
     if (template === undefined) {
         throw new Error(`Bundled agent not found: ${name}`);
     }
-    const targetDir = options.projectAgentsDir ?? join(options.workspaceRoot, '.mctrl', 'agents');
     const targetPath = join(targetDir, `${name}.md`);
-    await mkdir(targetDir, { recursive: true });
     await writeFile(targetPath, template, 'utf8');
-    return `Unpacked ${name} to ${targetPath}\n`;
+    return { targetDir, total: 1, written: [targetPath], skipped: [] };
+}
+
+/** Resolve the directory unpack writes into. Project is the default scope. */
+function resolveUnpackTargetDir(options: AgentsCliOptions, flags: UnpackFlags): string {
+    if (flags.dir !== undefined) {
+        return resolve(options.workspaceRoot, flags.dir);
+    }
+    if (flags.user === true) {
+        return join(options.userConfigDir, 'agents');
+    }
+    return options.projectAgentsDir ?? join(options.workspaceRoot, '.mctrl', 'agents');
+}
+
+function formatUnpackResult(result: UnpackResult): string {
+    const lines: string[] = [`Unpacked ${result.written.length} of ${result.total} agent(s) to ${result.targetDir}`];
+    for (const filePath of result.written) lines.push(`  + ${filePath}`);
+    if (result.skipped.length > 0) {
+        lines.push(`Skipped ${result.skipped.length} existing (use --force to overwrite):`);
+        for (const filePath of result.skipped) lines.push(`  = ${filePath}`);
+    }
+    return `${lines.join('\n')}\n`;
+}
+
+function isENOENTError(error: unknown): boolean {
+    return error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT';
 }
 
 async function runDisable(name: string, options: AgentsCliOptions): Promise<string> {
@@ -227,16 +414,26 @@ function findBundledTemplate(name: string): string | undefined {
     return undefined;
 }
 
+/** Return the names of every bundled agent, in declaration order. */
+function listBundledTemplateNames(): string[] {
+    const names: string[] = [];
+    for (const template of BUNDLED_AGENT_TEMPLATES) {
+        try {
+            const agent = parseAgentFile(BUNDLED_SOURCE_PATH, template, 'bundled');
+            names.push(agent.name);
+        } catch {}
+    }
+    return names;
+}
+
 function invalid(message: string): AgentsCliCommand {
     return { kind: 'invalid', message };
 }
 
-function buildNamedAgentCmd(kind: 'show' | 'unpack' | 'disable' | 'enable', name: string): AgentsCliCommand {
+function buildNamedAgentCmd(kind: 'show' | 'disable' | 'enable', name: string): AgentsCliCommand {
     switch (kind) {
         case 'show':
             return { kind: 'show', name };
-        case 'unpack':
-            return { kind: 'unpack', name };
         case 'disable':
             return { kind: 'disable', name };
         case 'enable':

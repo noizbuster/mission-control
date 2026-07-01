@@ -17,6 +17,7 @@ import { ChatTranscript } from './ChatTranscript.js';
 import { FileAutocompletePanel } from './FileAutocompletePanel.js';
 import { OverlayFrame } from './OverlayFrame.js';
 import {
+    AgentsDashboardOverlay,
     ApprovalOverlay,
     LevelPickerOverlay,
     ModelPickerOverlay,
@@ -408,6 +409,11 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
         />
     );
 
+    // ModalPopup auto-sizes to content (no `bottom`), so the AgentSpinner's
+    // 80ms Braille animation leaks under the popup edge and surfaces as mojibake.
+    // Match the 'abg'/'diff-viewer' early-return replacement intent.
+    const showAgentIndicator = !overlayActive;
+
     if (snapshot.overlayMode === 'abg') {
         return (
             <box flexDirection="column" width="100%">
@@ -448,9 +454,9 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
         <box flexDirection="column" width="100%" height="100%" onMouseUp={handleSelectionMouseUp}>
             <box flexDirection="column" flexGrow={1}>
                 {transcript}
-                {snapshot.agentStatusText.length > 0 ? (
+                {showAgentIndicator && snapshot.agentStatusText.length > 0 ? (
                     <AgentSpinner text={snapshot.agentStatusText} />
-                ) : snapshot.generating ? (
+                ) : showAgentIndicator && snapshot.generating ? (
                     <box marginTop={1} flexShrink={0}>
                         <text fg="#ffff00">{'\u25cf Thinking...'}</text>
                     </box>
@@ -521,6 +527,11 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
             {snapshot.overlayMode === 'session-picker' ? (
                 <ModalPopup>
                     <SessionPickerOverlay store={store} />
+                </ModalPopup>
+            ) : null}
+            {snapshot.overlayMode === 'agents-dashboard' ? (
+                <ModalPopup>
+                    <AgentsDashboardOverlay store={store} workspaceRoot={statusBarProps?.workspaceRoot} />
                 </ModalPopup>
             ) : null}
         </box>
