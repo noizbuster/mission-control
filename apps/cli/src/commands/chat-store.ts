@@ -61,7 +61,8 @@ export type ChatStoreOverlayMode =
     | 'diff-viewer'
     | 'session-picker'
     | 'agents-dashboard'
-    | 'models-overlay';
+    | 'models-overlay'
+    | 'mission-panel';
 
 export type AgentsDashboardSourceTab = 'all' | 'project' | 'user' | 'bundled';
 
@@ -99,6 +100,29 @@ export type ModelsOverlaySlice = {
     readonly searchQuery: string;
     readonly activeProviderTab: string;
     readonly pendingAssignModel: ModelProviderSelection | null;
+};
+
+export type MissionPanelTab = 'runs' | 'jobs' | 'agents' | 'drain' | 'continue';
+
+export type MissionPanelRow = {
+    readonly id: string;
+    readonly label: string;
+    readonly status?: string;
+    readonly detail?: string;
+};
+
+/** Slice backing the mission panel overlay. `rows` is the pluggable data source
+ *  (stubbed empty until later todos wire real Mission/Run stores). `loadedAt`
+ *  and `count` are reload metadata captured whenever the panel is shown or
+ *  `reloadMissions` runs. Mirrors the `AgentsDashboardState` snapshot/publish
+ *  discipline: every mutation spreads the slice and calls `publish()`. */
+export type MissionPanelState = {
+    readonly active: boolean;
+    readonly activeTab: MissionPanelTab;
+    readonly rows: readonly MissionPanelRow[];
+    readonly selectedIndex: number;
+    readonly loadedAt: string | null;
+    readonly count: number;
 };
 
 export type AgentsDashboardSourceTabInfo = {
@@ -187,6 +211,7 @@ export type ChatStoreState = {
     readonly sessionPickerKeypress: ProviderPromptKeypressState;
     readonly agentsDashboard: AgentsDashboardState;
     readonly modelsOverlay: ModelsOverlaySlice;
+    readonly missionPanel: MissionPanelState;
     readonly contextTokensUsed: number | undefined;
     readonly contextTokensMax: number | undefined;
     readonly historyNavigation: { readonly position: number; readonly total: number } | null;
@@ -341,6 +366,14 @@ export class ChatStore {
                 searchQuery: '',
                 activeProviderTab: 'all',
                 pendingAssignModel: null,
+            },
+            missionPanel: {
+                active: false,
+                activeTab: 'runs',
+                rows: [],
+                selectedIndex: 0,
+                loadedAt: null,
+                count: 0,
             },
             contextTokensUsed: undefined,
             contextTokensMax: undefined,
@@ -1001,6 +1034,69 @@ export class ChatStore {
             ...this.state.agentsDashboard,
             agents: entries,
             selectedIndex: newSelectedIndex,
+        };
+        this.publish();
+    }
+
+    showMissionPanel(rows?: readonly MissionPanelRow[]): void {
+        const initialRows = rows ?? [];
+        this.state.missionPanel = {
+            active: true,
+            activeTab: 'runs',
+            rows: initialRows,
+            selectedIndex: 0,
+            loadedAt: new Date().toISOString(),
+            count: initialRows.length,
+        };
+        this.state.overlayMode = 'mission-panel';
+        this.publish();
+    }
+
+    hideMissionPanel(): void {
+        this.state.missionPanel = { ...this.state.missionPanel, active: false };
+        this.state.overlayMode = 'none';
+        this.publish();
+    }
+
+    navigateMissionPanel(direction: number): void {
+        const count = this.state.missionPanel.rows.length;
+        if (count === 0) return;
+        const next = this.state.missionPanel.selectedIndex + direction;
+        this.state.missionPanel = {
+            ...this.state.missionPanel,
+            selectedIndex: Math.min(Math.max(next, 0), count - 1),
+        };
+        this.publish();
+    }
+
+    setMissionPanelTab(tab: MissionPanelTab): void {
+        if (this.state.missionPanel.activeTab === tab) return;
+        const count = this.state.missionPanel.rows.length;
+        const safeIndex = count === 0 ? 0 : Math.min(this.state.missionPanel.selectedIndex, count - 1);
+        this.state.missionPanel = {
+            ...this.state.missionPanel,
+            activeTab: tab,
+            selectedIndex: safeIndex,
+        };
+        this.publish();
+    }
+
+    reloadMissions(rows: readonly MissionPanelRow[]): void {
+        if (this.state.overlayMode !== 'mission-panel') return;
+        const selectedId = this.state.missionPanel.rows[this.state.missionPanel.selectedIndex]?.id;
+        const newSelectedIndex =
+            selectedId !== undefined
+                ? Math.max(
+                      0,
+                      rows.findIndex((r) => r.id === selectedId),
+                  )
+                : 0;
+        this.state.missionPanel = {
+            ...this.state.missionPanel,
+            rows,
+            selectedIndex: newSelectedIndex,
+            loadedAt: new Date().toISOString(),
+            count: rows.length,
         };
         this.publish();
     }

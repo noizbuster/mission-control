@@ -9,6 +9,8 @@ import {
     createChatStore,
     createSessionPickerView,
     type DashboardAgentEntry,
+    type MissionPanelRow,
+    type MissionPanelTab,
     type SessionPickerEntry,
 } from './chat-store.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
@@ -1184,5 +1186,158 @@ describe('createAgentsDashboardView — pure view helper', () => {
         const view = createAgentsDashboardView(dashboardState({ agents, selectedIndex: 0 }), 3);
         expect(view.startIndex).toBe(0);
         expect(view.visibleEntries.map((e) => e.name)).toEqual(['a0', 'a1', 'a2']);
+    });
+});
+
+describe('chat-store — mission panel overlay', () => {
+    function makeMissionRow(id: string, label?: string): MissionPanelRow {
+        return { id, label: label ?? id };
+    }
+
+    it('showMissionPanel sets overlayMode and initializes the slice with default tab and reload metadata', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('r1'), makeMissionRow('r2')]);
+        const snapshot = store.getSnapshot();
+        expect(snapshot.overlayMode).toBe('mission-panel');
+        expect(snapshot.missionPanel.active).toBe(true);
+        expect(snapshot.missionPanel.activeTab).toBe('runs');
+        expect(snapshot.missionPanel.rows.map((r) => r.id)).toEqual(['r1', 'r2']);
+        expect(snapshot.missionPanel.selectedIndex).toBe(0);
+        expect(snapshot.missionPanel.loadedAt).not.toBeNull();
+        expect(snapshot.missionPanel.count).toBe(2);
+    });
+
+    it('showMissionPanel with no rows initializes an empty-state slice without crashing', () => {
+        const store = createChatStore();
+        store.showMissionPanel();
+        const snapshot = store.getSnapshot();
+        expect(snapshot.overlayMode).toBe('mission-panel');
+        expect(snapshot.missionPanel.active).toBe(true);
+        expect(snapshot.missionPanel.rows).toEqual([]);
+        expect(snapshot.missionPanel.count).toBe(0);
+        expect(snapshot.missionPanel.loadedAt).not.toBeNull();
+    });
+
+    it('hideMissionPanel clears the overlay and deactivates the slice', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('r1')]);
+        store.hideMissionPanel();
+        const snapshot = store.getSnapshot();
+        expect(snapshot.overlayMode).toBe('none');
+        expect(snapshot.missionPanel.active).toBe(false);
+    });
+
+    it('navigateMissionPanel moves the cursor down and up within bounds', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('a'), makeMissionRow('b'), makeMissionRow('c')]);
+        store.navigateMissionPanel(1);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(1);
+        store.navigateMissionPanel(1);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(2);
+        store.navigateMissionPanel(-1);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(1);
+    });
+
+    it('navigateMissionPanel clamps at the upper bound', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('a'), makeMissionRow('b'), makeMissionRow('c')]);
+        store.navigateMissionPanel(1);
+        store.navigateMissionPanel(1);
+        store.navigateMissionPanel(1);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(2);
+    });
+
+    it('navigateMissionPanel clamps at the lower bound with a large negative delta', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('a'), makeMissionRow('b')]);
+        store.navigateMissionPanel(-5);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(0);
+    });
+
+    it('navigateMissionPanel is a no-op when there are no rows', () => {
+        const store = createChatStore();
+        store.showMissionPanel();
+        store.navigateMissionPanel(1);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(0);
+    });
+
+    it('setMissionPanelTab switches the active tab', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('r1')]);
+        const tabs: readonly MissionPanelTab[] = ['runs', 'jobs', 'agents', 'drain', 'continue'];
+        for (const tab of tabs) {
+            store.setMissionPanelTab(tab);
+            expect(store.getSnapshot().missionPanel.activeTab).toBe(tab);
+        }
+    });
+
+    it('setMissionPanelTab is a no-op when the tab is already active', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('r1')]);
+        let publishCount = 0;
+        store.subscribe(() => {
+            publishCount += 1;
+        });
+        store.setMissionPanelTab('runs');
+        expect(publishCount).toBe(0);
+    });
+
+    it('setMissionPanelTab clamps selectedIndex into range when switching', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('a'), makeMissionRow('b')]);
+        store.navigateMissionPanel(1);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(1);
+        store.setMissionPanelTab('jobs');
+        expect(store.getSnapshot().missionPanel.activeTab).toBe('jobs');
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(1);
+    });
+
+    it('reloadMissions refreshes rows and reload metadata', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('a')]);
+        store.reloadMissions([makeMissionRow('a'), makeMissionRow('b'), makeMissionRow('c')]);
+        const snapshot = store.getSnapshot();
+        expect(snapshot.missionPanel.rows.map((r) => r.id)).toEqual(['a', 'b', 'c']);
+        expect(snapshot.missionPanel.count).toBe(3);
+        expect(snapshot.missionPanel.loadedAt).not.toBeNull();
+    });
+
+    it('reloadMissions preserves the selected row when it is still present', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('a'), makeMissionRow('b'), makeMissionRow('c')]);
+        store.navigateMissionPanel(2);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(2);
+        store.reloadMissions([makeMissionRow('a'), makeMissionRow('b'), makeMissionRow('c'), makeMissionRow('d')]);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(2);
+    });
+
+    it('reloadMissions resets selection to 0 when the selected row is gone', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('a'), makeMissionRow('b'), makeMissionRow('c')]);
+        store.navigateMissionPanel(2);
+        store.reloadMissions([makeMissionRow('a'), makeMissionRow('b')]);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(0);
+    });
+
+    it('reloadMissions is a no-op when the panel is not active', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('a')]);
+        store.hideMissionPanel();
+        let publishCount = 0;
+        store.subscribe(() => {
+            publishCount += 1;
+        });
+        store.reloadMissions([makeMissionRow('z')]);
+        expect(publishCount).toBe(0);
+        expect(store.getSnapshot().missionPanel.rows.map((r) => r.id)).toEqual(['a']);
+    });
+
+    it('publishing a new mission panel value creates a new snapshot reference', () => {
+        const store = createChatStore();
+        const first = store.getSnapshot();
+        store.showMissionPanel([makeMissionRow('a')]);
+        const second = store.getSnapshot();
+        expect(second).not.toBe(first);
+        expect(second.missionPanel.active).toBe(true);
     });
 });
