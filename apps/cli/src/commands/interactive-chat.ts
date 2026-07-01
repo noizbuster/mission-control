@@ -164,6 +164,7 @@ export async function runInteractiveChatSession(
                   getOutput: () => tuiBridge.getOutput(),
                   setAgentStatus: (text) => tuiBridge.setAgentStatus(text),
                   clearAgentStatus: () => tuiBridge.clearAgentStatus(),
+                  showNotice: (text) => tuiBridge.showTransientNotice(text),
                   isShowThinking: () => tuiBridge.isShowThinking(),
                   isToolOutputExpanded: () => tuiBridge.isToolOutputExpanded(),
                   showApproval: (toolName, action) => tuiBridge.showApproval(toolName, action),
@@ -180,6 +181,13 @@ export async function runInteractiveChatSession(
             conversationText += text;
             baseChatOutput.write(text);
         },
+    };
+    const showExitHint = (message: string): void => {
+        if (chatOutput.showNotice !== undefined) {
+            chatOutput.showNotice(message);
+        } else {
+            chatOutput.write(`\n${message}\n`);
+        }
     };
     const undoRedoController = {
         // The Ink bridge echoes "You: ..." directly to core.outputText, bypassing
@@ -369,7 +377,7 @@ export async function runInteractiveChatSession(
                     await interruptedTurn.done;
                     activeTurn = undefined;
                     pendingInterrupt = false;
-                    chatOutput.write('\nPress Ctrl+C twice to exit\n');
+                    showExitHint('Press Ctrl+C twice to exit');
                     continue;
                 }
                 // ESC-sourced interrupts are stop-only: they never count
@@ -382,7 +390,7 @@ export async function runInteractiveChatSession(
                     break;
                 }
                 pendingInterrupt = true;
-                chatOutput.write('\nPress Ctrl+C again to exit\n');
+                showExitHint('Press Ctrl+C again to exit');
                 continue;
             }
 

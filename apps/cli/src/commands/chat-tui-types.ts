@@ -31,6 +31,7 @@ export type OpenTuiChatBridge = {
     readonly setWorkflowNames: (names: readonly string[]) => void;
     readonly setAgentStatus: (text: string) => void;
     readonly clearAgentStatus: () => void;
+    readonly showTransientNotice: (message: string) => void;
     readonly isShowThinking: () => boolean;
     readonly isToolOutputExpanded: () => boolean;
     readonly showApproval: (toolName: string, action: string) => void;

@@ -47,6 +47,7 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Op
         setGenerating: (value) => store.setGenerating(value),
         setAgentStatus: (text) => store.setAgentStatus(text),
         clearAgentStatus: () => store.clearAgentStatus(),
+        showTransientNotice: (text) => store.showTransientNotice(text),
         isShowThinking: () => store.getSnapshot().showThinking,
         isToolOutputExpanded: () => store.getSnapshot().toolOutputExpanded,
         setWorkflowNames: (names) => store.setWorkflowNames(names),
