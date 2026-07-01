@@ -174,4 +174,48 @@ describe('resolveAgentModel', () => {
             expect(DEFAULT_ROLE_CONFIG['task']).toBeUndefined();
         });
     });
+
+    describe('roleConfig routing (resolver as consumed by the task factory)', () => {
+        const PARENT: ModelPattern = { providerID: 'parent', modelID: 'parent-model' };
+
+        it('returns the roleConfig assignment for mctrl/<role> with a populated entry', () => {
+            const input: ResolveAgentModelInput = {
+                agent: makeAgent({ model: 'mctrl/slow' }),
+                sessionDefault: SESSION_DEFAULT,
+                parentActiveModel: PARENT,
+                roleConfig: { slow: { providerID: 'a', modelID: 'b' } },
+            };
+            expect(resolveAgentModel(input)).toEqual({ providerID: 'a', modelID: 'b' });
+        });
+
+        it('returns the roleConfig assignment for the legacy opus alias mapped to slow', () => {
+            const input: ResolveAgentModelInput = {
+                agent: makeAgent({ model: 'opus' }),
+                sessionDefault: SESSION_DEFAULT,
+                parentActiveModel: PARENT,
+                roleConfig: { slow: { providerID: 'a', modelID: 'b' } },
+            };
+            expect(resolveAgentModel(input)).toEqual({ providerID: 'a', modelID: 'b' });
+        });
+
+        it('returns the session default for mctrl/task even when roleConfig.task is set (skip-guard)', () => {
+            const input: ResolveAgentModelInput = {
+                agent: makeAgent({ model: 'mctrl/task' }),
+                sessionDefault: SESSION_DEFAULT,
+                parentActiveModel: PARENT,
+                roleConfig: { task: { providerID: 'should-not-be-used', modelID: 'no' } },
+            };
+            expect(resolveAgentModel(input)).toEqual(SESSION_DEFAULT);
+        });
+
+        it('returns the parent model when roleConfig is empty and the model is any mctrl alias', () => {
+            const input: ResolveAgentModelInput = {
+                agent: makeAgent({ model: 'mctrl/slow' }),
+                sessionDefault: SESSION_DEFAULT,
+                parentActiveModel: PARENT,
+                roleConfig: {},
+            };
+            expect(resolveAgentModel(input)).toEqual(PARENT);
+        });
+    });
 });

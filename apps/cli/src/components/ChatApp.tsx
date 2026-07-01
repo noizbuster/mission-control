@@ -5,17 +5,18 @@ import { useKeymap } from '@opentui/keymap/react';
 import { useKeyboard, useRenderer } from '@opentui/react';
 import type * as React from 'react';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { basename } from 'node:path';
 import { extractLastAssistantText, parseMessageBlocks } from '../commands/chat-blocks.js';
 import type { ChatStore } from '../commands/chat-store.js';
 import {
     resolveSlashCommandMenuInsertText,
     resolveWorkflowCommandMenuInsertText,
 } from '../commands/interactive-chat-command-menu.js';
+import type { WelcomeData } from '../commands/welcome-data.js';
 import { createClipboardService } from '../platform/clipboard-service.js';
 import { ChatInputArea } from './ChatInputArea.js';
 import { ChatTranscript } from './ChatTranscript.js';
 import { FileAutocompletePanel } from './FileAutocompletePanel.js';
+import { ModelsOverlay } from './ModelsOverlay.js';
 import { OverlayFrame } from './OverlayFrame.js';
 import {
     AgentsDashboardOverlay,
@@ -31,7 +32,7 @@ import { SlashMenuPanel } from './SlashMenuPanel.js';
 import { BottomStatusBar, type StatusBarProps, TopStatusBar } from './StatusBar.js';
 import { Toast } from './Toast.js';
 import { WelcomeScreen } from './WelcomeScreen.js';
-import type { WelcomeData } from '../commands/welcome-data.js';
+import { basename } from 'node:path';
 
 const SPINNER_FRAMES = '\u280b\u2819\u2839\u2838\u2834\u2826\u2827\u2807';
 
@@ -57,7 +58,13 @@ export type ChatAppProps = {
     readonly welcomeData?: WelcomeData;
 };
 
-export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps, welcomeData }: ChatAppProps): React.ReactNode {
+export function ChatApp({
+    store,
+    textareaRef,
+    scrollboxRef,
+    statusBarProps,
+    welcomeData,
+}: ChatAppProps): React.ReactNode {
     const subscribe = useCallback((cb: () => void) => store.subscribe(cb), [store]);
     const getSnapshot = useCallback(() => store.getSnapshot(), [store]);
     const snapshot = useSyncExternalStore(subscribe, getSnapshot);
@@ -458,6 +465,14 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps, welc
                             : 'No diff entries to display.'}
                     </text>
                 </OverlayFrame>
+            </box>
+        );
+    }
+
+    if (snapshot.overlayMode === 'models-overlay') {
+        return (
+            <box flexDirection="column" width="100%" height="100%">
+                <ModelsOverlay store={store} />
             </box>
         );
     }

@@ -7,6 +7,7 @@ import {
     type PermissionSession,
     type PricingTable,
     type ProviderAdapter,
+    type ProviderAuthStore,
     ProviderTurnRunner,
     prependProjectContextMessages,
     type SdkModelResolver,
@@ -35,6 +36,7 @@ export type PromptTurnContext = {
     readonly graph?: AbgGraphSpec;
     readonly permissionSession?: PermissionSession;
     readonly onUsage?: (inputTokens: number | undefined) => void;
+    readonly authStore?: ProviderAuthStore;
 };
 
 export async function startPromptTurn(
@@ -137,6 +139,7 @@ export async function startPromptTurn(
         ...(coding.graph !== undefined ? { graph: coding.graph } : {}),
         ...(coding.permissionSession !== undefined ? { permissionSession: coding.permissionSession } : {}),
         ...(coding.onUsage !== undefined ? { onUsage: coding.onUsage } : {}),
+        ...(coding.authStore !== undefined ? { authStore: coding.authStore } : {}),
     });
 }
 

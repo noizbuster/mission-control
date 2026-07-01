@@ -84,6 +84,9 @@ describe('runAuthCommand auth list and logout', () => {
                     },
                 ],
                 getDefaultSelection: async () => undefined,
+                getModelRoles: async () => ({}),
+                setModelRole: async () => {},
+                clearModelRole: async () => {},
             },
         });
 

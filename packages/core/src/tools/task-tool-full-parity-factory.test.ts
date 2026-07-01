@@ -149,4 +149,54 @@ describe('buildResolveModelFn', () => {
         // Then: only mctrl/task skips; mctrl/plan is overridable
         expect(result).toEqual({ providerID: 'anthropic', modelID: 'claude-sonnet-4-6' });
     });
+
+    describe('roleConfig routing (TODO #3 wiring)', () => {
+        const roleConfig: Partial<Record<import('../agents/model-roles.js').ModelRole, ModelPattern>> = {
+            slow: { providerID: 'anthropic', modelID: 'claude-sonnet-4-6' },
+        };
+
+        it('resolves mctrl/<role> through roleConfig when the role is populated', () => {
+            // Given
+            const resolveModel = buildResolveModelFn({ model: parentModel, roleConfig });
+            // When
+            const result = resolveModel(agent('oracle', 'mctrl/slow'));
+            // Then: roleConfig.slow wins
+            expect(result).toEqual({ providerID: 'anthropic', modelID: 'claude-sonnet-4-6' });
+        });
+
+        it('preserves the mctrl/task skip-guard over roleConfig at the factory level', () => {
+            // Given: a roleConfig with a task entry that must NOT be consulted
+            const taskRoleConfig: Partial<Record<import('../agents/model-roles.js').ModelRole, ModelPattern>> = {
+                task: { providerID: 'should-not-be-used', modelID: 'no' },
+            };
+            const resolveModel = buildResolveModelFn({ model: parentModel, roleConfig: taskRoleConfig });
+            // When
+            const result = resolveModel(agent('runner', 'mctrl/task'));
+            // Then: parent model returned, roleConfig.task ignored
+            expect(result).toEqual({ providerID: 'local', modelID: 'local-echo' });
+        });
+
+        it('falls through to the parent model when roleConfig is absent (byte-identical to pre-#3)', () => {
+            // Given: no roleConfig option at all
+            const resolveModel = buildResolveModelFn({ model: parentModel });
+            // When
+            const result = resolveModel(agent('oracle', 'mctrl/slow'));
+            // Then: parent model, roleConfig tier never entered
+            expect(result).toEqual({ providerID: 'local', modelID: 'local-echo' });
+        });
+
+        it('lets agentModelOverrides win for a named agent when roleConfig has no matching entry', () => {
+            // Given
+            const overrides = new Map<string, ModelPattern>([['oracle', { providerID: 'openai', modelID: 'gpt-5' }]]);
+            const resolveModel = buildResolveModelFn({
+                model: parentModel,
+                agentModelOverrides: overrides,
+                roleConfig,
+            });
+            // When: agent model is a string with no roleConfig entry (mctrl/vision absent)
+            const result = resolveModel(agent('oracle', 'mctrl/vision'));
+            // Then: override map wins for the named agent
+            expect(result).toEqual({ providerID: 'openai', modelID: 'gpt-5' });
+        });
+    });
 });

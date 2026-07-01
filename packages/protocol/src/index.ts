@@ -187,6 +187,13 @@ export {
     PricingTableSchema,
 } from './pricing.js';
 export {
+    MODEL_ROLE_IDS,
+    type ModelRole,
+    type ModelRoleAssignments,
+    ModelRoleAssignmentsSchema,
+    ModelRoleSchema,
+} from './provider-auth.js';
+export {
     PROTOCOL_ERROR_CODES,
     PROVIDER_FINISH_REASONS,
     PROVIDER_STREAM_CHUNK_KINDS,

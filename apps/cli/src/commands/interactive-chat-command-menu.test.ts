@@ -36,10 +36,10 @@ describe('interactive chat command menu', () => {
         expect(filteredView.query).toBe('mo');
         expect(filteredView.visibleChoices.map((choice) => choice.id)).toEqual([
             '/model',
+            '/models',
             '/model pick',
             '/model list',
             '/resume',
-            '/approval safe',
         ]);
 
         const downState = reduceSlashCommandMenuSelection(initialState, '\u001b[B', '/mo');
@@ -375,6 +375,6 @@ describe('interactive chat command menu', () => {
         const view = createSlashCommandMenuView('/mo', createSlashCommandMenuState(), 10);
         const ids = view.visibleChoices.map((choice) => choice.id);
 
-        expect(ids.slice(0, 3)).toEqual(['/model', '/model pick', '/model list']);
+        expect(ids.slice(0, 3)).toEqual(['/model', '/models', '/model pick']);
     });
 });

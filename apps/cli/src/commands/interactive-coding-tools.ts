@@ -10,6 +10,7 @@ import {
     LspServerManager,
     type LspServerManagerDeps,
     type McpConnectionManager,
+    type ProviderAuthStore,
     registerAskUserTool,
     registerAstGrepTool,
     registerBashRunTool,
@@ -39,6 +40,7 @@ import { cliAllowsAction } from './cli-permission-policy.js';
 import type { InteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { renderToolPreview } from './interactive-coding-tool-preview.js';
+import { buildRoleConfigFromAuth } from './model-role-config.js';
 
 export type InteractiveToolOptions = {
     readonly workspaceRoot: string;
@@ -80,6 +82,7 @@ export type InteractiveToolOptions = {
      */
     readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
     readonly approvalLevel?: ApprovalLevel;
+    readonly authStore?: ProviderAuthStore;
 };
 
 export async function createInteractiveToolRegistry(
@@ -148,6 +151,8 @@ export async function createInteractiveToolRegistry(
             ...(selection.variantID !== undefined ? { variantID: selection.variantID } : {}),
         };
         const agentModelOverrides = await readModelPatternOverrides({ workspaceRoot: options.workspaceRoot });
+        const roleConfig =
+            options.authStore !== undefined ? await buildRoleConfigFromAuth(options.authStore) : undefined;
         await registerFullParityTaskTool(registry, {
             workspaceRoot: options.workspaceRoot,
             requestPermission: approvals.requestPermission,
@@ -156,6 +161,7 @@ export async function createInteractiveToolRegistry(
             parentToolRegistry: registry,
             parentSessionId: options.sessionId,
             agentModelOverrides,
+            ...(roleConfig !== undefined ? { roleConfig } : {}),
         });
     }
     const mcpConnectionManager = await registerNamespacedMcpTools(registry, {

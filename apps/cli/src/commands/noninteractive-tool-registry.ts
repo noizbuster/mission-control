@@ -9,6 +9,7 @@ import {
     LspServerManager,
     type LspServerManagerDeps,
     McpConnectionManager,
+    type ProviderAuthStore,
     registerAskUserTool,
     registerAstGrepTool,
     registerBashRunTool,
@@ -37,6 +38,7 @@ import type {
 } from '@mission-control/protocol';
 import { readModelPatternOverrides } from './agents-model-overrides-config.js';
 import { cliAllowsAction } from './cli-permission-policy.js';
+import { buildRoleConfigFromAuth } from './model-role-config.js';
 
 type NonInteractiveToolRegistryOptions = {
     readonly workspaceRoot: string;
@@ -71,6 +73,7 @@ type NonInteractiveToolRegistryOptions = {
      * processes. Ignored when `lspClient` is explicitly provided.
      */
     readonly lspServerManagerDeps?: LspServerManagerDeps;
+    readonly authStore?: ProviderAuthStore;
 };
 
 export async function createNonInteractiveToolRegistry(
@@ -139,6 +142,8 @@ export async function createNonInteractiveToolRegistry(
             ...(selection.variantID !== undefined ? { variantID: selection.variantID } : {}),
         };
         const agentModelOverrides = await readModelPatternOverrides({ workspaceRoot: options.workspaceRoot });
+        const roleConfig =
+            options.authStore !== undefined ? await buildRoleConfigFromAuth(options.authStore) : undefined;
         await registerFullParityTaskTool(registry, {
             workspaceRoot: options.workspaceRoot,
             requestPermission: options.requestPermission,
@@ -146,6 +151,7 @@ export async function createNonInteractiveToolRegistry(
             model,
             parentToolRegistry: registry,
             agentModelOverrides,
+            ...(roleConfig !== undefined ? { roleConfig } : {}),
             ...(options.sessionId !== undefined ? { parentSessionId: options.sessionId } : {}),
         });
     }

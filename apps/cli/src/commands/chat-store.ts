@@ -3,7 +3,8 @@
 // core contract, and every action mutates the same state object. Dashboard
 // overlays nest as sub-state objects (agentsDashboard) to keep the top-level
 // field count flat.
-import { type ModelProviderSelection } from '@mission-control/protocol';
+import { type ModelProviderSelection, type ModelRole } from '@mission-control/protocol';
+import type { ProviderAuthStore } from '../auth-store.js';
 import { PasteMarkerStore } from '../platform/keymap/bracketed-paste.js';
 import type { DiffEntry } from '../platform/keymap/diff-viewer.js';
 import { APPROVAL_LEVELS, type ApprovalLevel, isApprovalLevel } from './approval-level.js';
@@ -37,6 +38,13 @@ import {
 } from './interactive-chat-input-history.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
 import { createVariantChoices, type ModelChoice } from './interactive-chat-model.js';
+import {
+    type ModelsOverlayRoleRow,
+    type ModelsOverlayState,
+    navigateModelsOverlayDown,
+    navigateModelsOverlayUp,
+    switchModelsOverlayColumn as reduceModelsOverlayColumn,
+} from './models-overlay-state.js';
 import { normalizeQuestionOptions, type QuestionOption } from './question-types.js';
 
 export type ChatStoreOverlayMode =
@@ -49,7 +57,8 @@ export type ChatStoreOverlayMode =
     | 'abg'
     | 'diff-viewer'
     | 'session-picker'
-    | 'agents-dashboard';
+    | 'agents-dashboard'
+    | 'models-overlay';
 
 export type AgentsDashboardSourceTab = 'all' | 'project' | 'user' | 'bundled';
 
@@ -71,6 +80,17 @@ export type AgentsDashboardState = {
     readonly sourceTab: AgentsDashboardSourceTab;
     readonly editingName: string | null;
     readonly editBuffer: string;
+};
+
+/** Slice backing the models overlay. `roleRows` (right column) is built from
+ *  persisted assignments + fallback by the action handler on open. */
+export type ModelsOverlaySlice = {
+    readonly active: boolean;
+    readonly entries: readonly ModelProviderSelection[];
+    readonly roleRows: readonly ModelsOverlayRoleRow[];
+    readonly activeLeftIndex: number;
+    readonly activeRightIndex: number;
+    readonly focusedColumn: 'left' | 'right';
 };
 
 export type AgentsDashboardSourceTabInfo = {
@@ -154,6 +174,7 @@ export type ChatStoreState = {
     readonly sessionPickerSearch: string;
     readonly sessionPickerKeypress: ProviderPromptKeypressState;
     readonly agentsDashboard: AgentsDashboardState;
+    readonly modelsOverlay: ModelsOverlaySlice;
     readonly contextTokensUsed: number | undefined;
     readonly contextTokensMax: number | undefined;
     readonly historyNavigation: { readonly position: number; readonly total: number } | null;
@@ -168,6 +189,7 @@ export type ChatStoreOptions = {
     readonly workspaceRoot?: string;
     readonly initialHistoryEntries?: readonly string[];
     readonly initialApprovalLevel?: ApprovalLevel;
+    readonly authStore?: ProviderAuthStore;
 };
 
 export type AbgOverlayPrefsSnapshot = {
@@ -223,6 +245,7 @@ export class ChatStore {
     onRenameSubmit: ((name: string) => void) | undefined;
 
     private readonly workspaceRoot: string;
+    private readonly authStore: ProviderAuthStore | undefined;
     private readonly listeners = new Set<() => void>();
     private readonly eventQueue: ChatInputEvent[] = [];
     private readonly eventWaiters: Array<(event: ChatInputEvent) => void> = [];
@@ -237,6 +260,7 @@ export class ChatStore {
 
     constructor(options?: ChatStoreOptions) {
         this.workspaceRoot = options?.workspaceRoot ?? process.cwd();
+        this.authStore = options?.authStore;
         const history =
             options?.initialHistoryEntries !== undefined
                 ? createChatInputHistoryFromEntries(options.initialHistoryEntries)
@@ -292,6 +316,14 @@ export class ChatStore {
                 sourceTab: 'all',
                 editingName: null,
                 editBuffer: '',
+            },
+            modelsOverlay: {
+                active: false,
+                entries: [],
+                roleRows: [],
+                activeLeftIndex: 0,
+                activeRightIndex: 0,
+                focusedColumn: 'left',
             },
             contextTokensUsed: undefined,
             contextTokensMax: undefined,
@@ -940,6 +972,86 @@ export class ChatStore {
             selectedIndex: newSelectedIndex,
         };
         this.publish();
+    }
+
+    showModelsOverlay(entries: readonly ModelProviderSelection[], roleRows: readonly ModelsOverlayRoleRow[]): void {
+        this.state.modelsOverlay = {
+            active: true,
+            entries,
+            roleRows,
+            activeLeftIndex: 0,
+            activeRightIndex: 0,
+            focusedColumn: 'left',
+        };
+        this.state.overlayMode = 'models-overlay';
+        this.publish();
+    }
+
+    hideModelsOverlay(): void {
+        this.state.modelsOverlay = { ...this.state.modelsOverlay, active: false };
+        this.state.overlayMode = 'none';
+        this.publish();
+    }
+
+    navigateModelsOverlay(direction: 1 | -1): void {
+        const state = this.buildModelsOverlayState();
+        if (state === null) return;
+        const next = direction < 0 ? navigateModelsOverlayUp(state) : navigateModelsOverlayDown(state);
+        this.state.modelsOverlay = {
+            ...this.state.modelsOverlay,
+            activeLeftIndex: next.activeLeftIndex,
+            activeRightIndex: next.activeRightIndex,
+        };
+        this.publish();
+    }
+
+    switchModelsOverlayColumn(): void {
+        const state = this.buildModelsOverlayState();
+        if (state === null) return;
+        const next = reduceModelsOverlayColumn(state);
+        this.state.modelsOverlay = {
+            ...this.state.modelsOverlay,
+            focusedColumn: next.focusedColumn,
+        };
+        this.publish();
+    }
+
+    async assignModelsOverlayRole(role: ModelRole, selection: ModelProviderSelection): Promise<void> {
+        this.state.modelsOverlay = {
+            ...this.state.modelsOverlay,
+            roleRows: this.state.modelsOverlay.roleRows.map((row) =>
+                row.role === role ? { ...row, assignment: selection } : row,
+            ),
+        };
+        this.publish();
+        if (this.authStore !== undefined) {
+            await this.authStore.setModelRole(role, selection);
+        }
+    }
+
+    async clearModelsOverlayRole(role: ModelRole): Promise<void> {
+        this.state.modelsOverlay = {
+            ...this.state.modelsOverlay,
+            roleRows: this.state.modelsOverlay.roleRows.map((row) =>
+                row.role === role ? { ...row, assignment: undefined } : row,
+            ),
+        };
+        this.publish();
+        if (this.authStore !== undefined) {
+            await this.authStore.clearModelRole(role);
+        }
+    }
+
+    private buildModelsOverlayState(): ModelsOverlayState | null {
+        const slice = this.state.modelsOverlay;
+        if (slice.roleRows.length === 0) return null;
+        return {
+            leftEntries: slice.entries,
+            roleRows: slice.roleRows,
+            activeLeftIndex: slice.activeLeftIndex,
+            activeRightIndex: slice.activeRightIndex,
+            focusedColumn: slice.focusedColumn,
+        };
     }
 
     private filterAgentsBySourceTab(): readonly DashboardAgentEntry[] {

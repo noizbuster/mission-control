@@ -23,8 +23,8 @@ import { z } from 'zod';
 import { parseAgentFile } from '../agents/agent-parser.js';
 import { AgentIndex } from '../agents/agent-registry.js';
 import { BUNDLED_AGENT_TEMPLATES } from '../agents/bundled/index.js';
-import type { ModelPattern } from '../agents/model-resolver.js';
-import { parseModelAlias } from '../agents/model-roles.js';
+import { type ModelPattern, resolveAgentModel } from '../agents/model-resolver.js';
+import { type ModelRole, parseModelAlias } from '../agents/model-roles.js';
 import { ConcreteTaskToolRuntime, type SpawnFn } from '../agents/task-tool-runtime.js';
 import { spawnChildCodingAgent } from '../behavior/subagents/spawn-child.js';
 import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
@@ -49,18 +49,22 @@ export type FullParityTaskToolOptions = {
     readonly agentIndex?: AgentIndex;
     readonly parentAgent?: AgentDefinition;
     readonly agentModelOverrides?: ReadonlyMap<string, ModelPattern>;
+    readonly roleConfig?: Partial<Record<ModelRole, ModelPattern>>;
 };
 
 /**
  * Model-resolution closure for the full-parity task tool. The `mctrl/task`
- * skip-guard below is the SOLE enforcement of the task-role invariant on the
- * spawn path — `resolveAgentModelField` (model-resolver.ts) is not on it — so
- * do not remove it. Extracted pure so the override/skip/fallthrough logic is
- * unit-testable without spawning (inert until todo 25).
+ * skip-guard below runs BEFORE roleConfig consultation and is the authoritative
+ * enforcement of the task-role invariant on the spawn path. When `roleConfig`
+ * is populated, alias tiers (`mctrl/<role>` and legacy `opus`/`sonnet`) route
+ * through {@linkcode resolveAgentModel}, which mirrors the same skip-guard at
+ * the field level (`resolveAgentModelField`). Extracted pure so the
+ * override/role-config/skip/fallthrough logic is unit-testable without spawning.
  */
 export function buildResolveModelFn(options: {
     readonly model: AbgNodeModelOptions;
     readonly agentModelOverrides?: ReadonlyMap<string, ModelPattern>;
+    readonly roleConfig?: Partial<Record<ModelRole, ModelPattern>>;
 }): (agent: AgentDefinition) => ModelPattern {
     const parentModel: ModelPattern = {
         providerID: options.model.providerID,
@@ -68,9 +72,19 @@ export function buildResolveModelFn(options: {
         ...(options.model.variantID !== undefined ? { variantID: options.model.variantID } : {}),
     };
     const overrides = options.agentModelOverrides;
+    const roleConfig = options.roleConfig;
     return (agent: AgentDefinition): ModelPattern => {
         if (typeof agent.model === 'string' && parseModelAlias(agent.model) === 'task') {
             return parentModel;
+        }
+        if (roleConfig !== undefined && typeof agent.model === 'string') {
+            const resolved = resolveAgentModel({
+                agent,
+                roleConfig,
+                sessionDefault: parentModel,
+                parentActiveModel: parentModel,
+            });
+            if (resolved !== parentModel) return resolved;
         }
         const override = overrides?.get(agent.name);
         if (override !== undefined) return override;

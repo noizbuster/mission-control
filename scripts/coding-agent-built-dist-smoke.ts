@@ -141,6 +141,9 @@ function emptyAuthStore(authFilePath: string) {
         deleteCredential: async () => undefined,
         listCredentialSummaries: async () => [],
         getDefaultSelection: async () => undefined,
+        getModelRoles: async () => ({}),
+        setModelRole: async () => undefined,
+        clearModelRole: async () => undefined,
     };
 }
 

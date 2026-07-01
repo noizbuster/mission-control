@@ -186,6 +186,22 @@ describe('chat command parser', () => {
         });
     });
 
+    it('parses /models as the role-assignment overlay action with no arguments', () => {
+        expect(parseChatLine('/models')).toEqual({ kind: 'models' });
+    });
+
+    it('rejects /models with arguments as invalid', () => {
+        expect(parseChatLine('/models foo')).toEqual({
+            kind: 'invalid',
+            message: '/models opens the role-assignment overlay and takes no arguments',
+        });
+    });
+
+    it('keeps /model and /model pick working alongside /models (regression guard)', () => {
+        expect(parseChatLine('/model')).toEqual({ kind: 'model-pick' });
+        expect(parseChatLine('/model pick')).toEqual({ kind: 'model-pick' });
+    });
+
     it('parses session navigation commands with optional ids', () => {
         expect(parseChatLine('/new')).toEqual({ kind: 'new-session' });
         expect(parseChatLine('/new session_next')).toEqual({ kind: 'new-session', sessionId: 'session_next' });

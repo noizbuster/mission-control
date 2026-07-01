@@ -16,6 +16,7 @@ import {
     WorkflowRegistry,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import type { ProviderAuthStore } from '../auth-store.js';
 import { closeTreeSitterClient } from '../components/markdown/highlight.js';
 import { createAbgOverlayController } from './abg-overlay-controller.js';
 import { DEFAULT_ABG_OVERLAY_PREFS, loadAbgOverlayPrefs } from './abg-overlay-prefs-store.js';
@@ -26,7 +27,6 @@ import { parseChatLine } from './chat-commands.js';
 import type { DashboardAgentEntry, SessionPickerEntry } from './chat-store.js';
 import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './chat-tui-types.js';
 import { type ChatTuiOptions, createChatTui } from './create-chat-tui.js';
-import { gatherWelcomeData } from './welcome-data.js';
 import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
 import type { ChatActionResult } from './interactive-chat-action-result.js';
 import { runChatAction } from './interactive-chat-actions.js';
@@ -52,11 +52,13 @@ import { createSessionNavigationController } from './interactive-chat-session-na
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import type { ModelsOverlayRoleRow } from './models-overlay-state.js';
 import { loadPricingTable } from './pricing-table-store.js';
 import type { EnsuredSession } from './run-agent-session.js';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
 import { loadSessionTranscript } from './session-transcript-reconstruction.js';
 import { detectGitBranch, detectGitWorktree } from './terminal-controls.js';
+import { gatherWelcomeData } from './welcome-data.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
 
@@ -86,12 +88,12 @@ export type InteractiveChatOptions = {
     readonly persistModelProviderSelection?: (selection: ModelProviderSelection) => Promise<void>;
     readonly initialApprovalLevel?: ApprovalLevel;
     readonly persistApprovalLevel?: (level: ApprovalLevel) => Promise<void>;
-    /**
-     * Execution engine for coding turns. `'graph'` is the only supported value (the flat engine has
-     * been removed). `resolveSdkModel` resolves the AI-SDK model for the selection.
+    /** Execution engine for coding turns. `'graph'` is the only supported value (the flat engine has
+     *  been removed). `resolveSdkModel` resolves the AI-SDK model for the selection.
      */
     readonly engine?: 'graph';
     readonly resolveSdkModel?: SdkModelResolver;
+    readonly authStore?: ProviderAuthStore;
 };
 
 export async function runInteractiveChatSession(
@@ -138,6 +140,7 @@ export async function runInteractiveChatSession(
               ...(options.initialApprovalLevel !== undefined
                   ? { initialApprovalLevel: options.initialApprovalLevel }
                   : {}),
+              ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
               ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
               ...(welcomeData !== undefined ? { welcomeData } : {}),
           }
@@ -503,6 +506,15 @@ export async function runInteractiveChatSession(
                                       tuiBridge.showAgentsDashboard(entries),
                               }
                             : {}),
+                        ...(tuiBridge !== undefined
+                            ? {
+                                  openModelsOverlay: (
+                                      entries: readonly ModelProviderSelection[],
+                                      roleRows: readonly ModelsOverlayRoleRow[],
+                                  ) => tuiBridge.showModelsOverlay(entries, roleRows),
+                              }
+                            : {}),
+                        ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
                         ...(tuiBridge !== undefined
                             ? {
                                   selectApprovalLevel: (currentLevel?: ApprovalLevel) =>

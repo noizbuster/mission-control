@@ -4,11 +4,13 @@ import { getModelContextLimit } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import { createRef } from 'react';
+import type { ProviderAuthStore } from '../auth-store.js';
 import type { StatusBarProps } from '../components/StatusBar.js';
-import type { WelcomeData } from './welcome-data.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { type ChatStore, createChatStore } from './chat-store.js';
 import type { OpenTuiChatBridge } from './chat-tui-types.js';
+import type { ModelsOverlayRoleRow } from './models-overlay-state.js';
+import type { WelcomeData } from './welcome-data.js';
 
 export type ChatTuiOptions = {
     readonly providerID: string;
@@ -20,6 +22,7 @@ export type ChatTuiOptions = {
     readonly isWorktree?: boolean;
     readonly initialHistoryEntries?: readonly string[];
     readonly initialApprovalLevel?: ApprovalLevel;
+    readonly authStore?: ProviderAuthStore;
     readonly welcomeData?: WelcomeData;
 };
 
@@ -40,6 +43,8 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Op
         showAgentsDashboard: (entries) => store.showAgentsDashboard(entries),
         reloadAgentsDashboard: (entries) => store.reloadAgentsDashboard(entries),
         hideAgentsDashboard: () => store.hideAgentsDashboard(),
+        showModelsOverlay: (entries: readonly ModelProviderSelection[], roleRows: readonly ModelsOverlayRoleRow[]) =>
+            store.showModelsOverlay(entries, roleRows),
         showLevelPicker: (currentLevel?) => store.showLevelPicker(currentLevel),
         showApproval: (toolName, action) => store.showApproval(toolName, action),
         hideApproval: () => store.hideApproval(),
@@ -90,6 +95,7 @@ export async function createChatTui(options: ChatTuiOptions): Promise<OpenTuiCha
             ? { initialHistoryEntries: options.initialHistoryEntries }
             : {}),
         ...(options.initialApprovalLevel !== undefined ? { initialApprovalLevel: options.initialApprovalLevel } : {}),
+        ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
     });
     store.setContextTokensMax(getModelContextLimit(options.providerID, options.modelID));
     // Seed currentModelSelection so Ctrl+V variant cycling works pre-`/model`.

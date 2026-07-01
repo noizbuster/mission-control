@@ -114,6 +114,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             return await runInteractiveChatSession(runtime, {
                 modelProviderSelection: selectedModelProvider,
                 provider,
+                authStore,
                 ...(interactiveSessionId !== undefined ? { sessionId: interactiveSessionId } : {}),
                 workspaceRoot,
                 modelChoices: await listAuthenticatedModelChoices(

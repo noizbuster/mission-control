@@ -10,6 +10,7 @@ import {
     type WorkflowRegistry,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AgentDefinition, ModelProviderSelection } from '@mission-control/protocol';
+import type { ProviderAuthStore } from '../auth-store.js';
 import { type AgentsCommand, formatAgentDetails, formatAgentsList } from './agents-command.js';
 import { readDisabledSet, toggleDisabled } from './agents-disabled-config.js';
 import { readOverridesMap } from './agents-model-overrides-config.js';
@@ -45,6 +46,7 @@ import {
     type UndoRedoConversationController,
 } from './interactive-chat-undo-redo-action.js';
 import { type ActiveCodingAgentTurn, resumeCodingAgentTurn } from './interactive-coding-agent.js';
+import { createModelsOverlayRoleRows, type ModelsOverlayRoleRow } from './models-overlay-state.js';
 
 export type CodingActionContext = PromptTurnContext & {
     readonly activeTurn: ActiveCodingAgentTurn | undefined;
@@ -83,6 +85,11 @@ export type CodingActionContext = PromptTurnContext & {
      */
     readonly selectSessionForAttach?: (entries: readonly SessionPickerEntry[]) => Promise<string | undefined>;
     readonly openAgentsDashboard?: (entries: readonly DashboardAgentEntry[]) => void;
+    readonly openModelsOverlay?: (
+        entries: readonly ModelProviderSelection[],
+        roleRows: readonly ModelsOverlayRoleRow[],
+    ) => void;
+    readonly authStore?: ProviderAuthStore;
 };
 
 export async function runChatAction(
@@ -276,6 +283,8 @@ export async function runChatAction(
             return runWorkflowAction(runtime, chatOutput, action, currentModelProviderSelection, coding);
         case 'agents':
             return runAgentsAction(chatOutput, currentModelProviderSelection, coding, action.agents);
+        case 'models':
+            return runModelsAction(chatOutput, currentModelProviderSelection, modelChoices, coding);
         case 'unknown-slash':
             chatOutput.write(`Unknown command: /${action.command}\n`);
             return actionResult(currentModelProviderSelection, coding.activeTurn);
@@ -527,6 +536,7 @@ async function runApprovalResumeAction(
             ...(coding.pricingTable !== undefined ? { pricingTable: coding.pricingTable } : {}),
             ...(coding.permissionSession !== undefined ? { permissionSession: coding.permissionSession } : {}),
             ...(coding.onUsage !== undefined ? { onUsage: coding.onUsage } : {}),
+            ...(coding.authStore !== undefined ? { authStore: coding.authStore } : {}),
         }),
     );
 }
@@ -641,6 +651,27 @@ function formatDashboardModel(model: AgentDefinition['model']): string | undefin
     if (model === undefined) return undefined;
     if (typeof model === 'string') return model;
     return `${model.providerID}/${model.modelID}`;
+}
+
+async function runModelsAction(
+    chatOutput: ChatOutput,
+    modelProviderSelection: ModelProviderSelection,
+    modelChoices: readonly ModelChoice[],
+    coding: CodingActionContext,
+): Promise<ChatActionResult> {
+    if (!coding.useTui || coding.openModelsOverlay === undefined) {
+        chatOutput.write('/models requires the interactive TUI overlay.\n');
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    const entries = modelChoices.map((choice) => choice.selection);
+    if (entries.length === 0) {
+        chatOutput.write('No models available. Configure a provider with /model first.\n');
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    const assignments = coding.authStore !== undefined ? await coding.authStore.getModelRoles() : {};
+    const roleRows = createModelsOverlayRoleRows(assignments, modelProviderSelection);
+    coding.openModelsOverlay(entries, roleRows);
+    return actionResult(modelProviderSelection, coding.activeTurn);
 }
 
 async function runApprovalAction(

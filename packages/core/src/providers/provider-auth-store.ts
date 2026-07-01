@@ -6,6 +6,7 @@ import {
     type ProviderCredential,
     type ProviderCredentialSummary,
 } from '@mission-control/protocol';
+import type { ModelRole } from '../agents/model-roles.js';
 import { randomUUID } from 'node:crypto';
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -51,6 +52,9 @@ export type ProviderAuthStore = {
     readonly deleteCredential: (providerID: string) => Promise<void>;
     readonly listCredentialSummaries: () => Promise<readonly ProviderCredentialSummary[]>;
     readonly getDefaultSelection: () => Promise<ModelProviderSelection | undefined>;
+    readonly getModelRoles: () => Promise<Partial<Record<ModelRole, ModelProviderSelection>>>;
+    readonly setModelRole: (role: ModelRole, selection: ModelProviderSelection) => Promise<void>;
+    readonly clearModelRole: (role: ModelRole) => Promise<void>;
 };
 
 const defaultAuthFile = {
@@ -111,6 +115,28 @@ export function createProviderAuthStore(): ProviderAuthStore {
         async getDefaultSelection() {
             const current = await readAuthFile(authFilePath);
             return current.default;
+        },
+        async getModelRoles() {
+            const current = await readAuthFile(authFilePath);
+            return current.modelRoles ?? {};
+        },
+        async setModelRole(role, selection) {
+            const current = await readAuthFile(authFilePath);
+            const next = ProviderAuthFileSchema.parse({
+                ...current,
+                modelRoles: { ...(current.modelRoles ?? {}), [role]: selection },
+            });
+            await writeAuthFile(authFilePath, next);
+        },
+        async clearModelRole(role) {
+            const current = await readAuthFile(authFilePath);
+            const modelRoles: Record<string, ModelProviderSelection> = { ...(current.modelRoles ?? {}) };
+            delete modelRoles[role];
+            const next = ProviderAuthFileSchema.parse({
+                ...current,
+                modelRoles,
+            });
+            await writeAuthFile(authFilePath, next);
         },
     };
 }

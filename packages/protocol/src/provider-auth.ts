@@ -55,6 +55,38 @@ export const ModelProviderSelectionSchema = z.object({
 });
 export type ModelProviderSelection = z.infer<typeof ModelProviderSelectionSchema>;
 
+export const MODEL_ROLE_IDS = [
+    'default',
+    'smol',
+    'slow',
+    'vision',
+    'plan',
+    'designer',
+    'commit',
+    'title',
+    'task',
+    'advisor',
+] as const;
+
+export const ModelRoleSchema = z.enum(MODEL_ROLE_IDS);
+export type ModelRole = z.infer<typeof ModelRoleSchema>;
+
+// String keys + refine: z.record(enumKey, val) would require ALL enum keys present.
+export const ModelRoleAssignmentsSchema = z
+    .record(z.string(), ModelProviderSelectionSchema)
+    .superRefine((assignments, context) => {
+        for (const role of Object.keys(assignments)) {
+            if (!ModelRoleSchema.safeParse(role).success) {
+                context.addIssue({
+                    code: 'custom',
+                    path: [role],
+                    message: `unknown model role "${role}"`,
+                });
+            }
+        }
+    });
+export type ModelRoleAssignments = Partial<Record<ModelRole, ModelProviderSelection>>;
+
 export const ProviderApiKeyCredentialSchema = z.object({
     providerID: z.string().min(1),
     type: z.literal('apiKey'),
@@ -105,6 +137,7 @@ export const ProviderAuthFileSchema = z.object({
     $schema: z.string().url(),
     default: ModelProviderSelectionSchema.optional(),
     credentials: z.record(z.string().min(1), ProviderCredentialSchema),
+    modelRoles: ModelRoleAssignmentsSchema.optional(),
 });
 export type ProviderAuthFile = z.infer<typeof ProviderAuthFileSchema>;
 

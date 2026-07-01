@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ProviderExecutionCapabilitySchema } from './provider-auth.js';
+import {
+    MODEL_ROLE_IDS,
+    ModelRoleAssignmentsSchema,
+    ModelRoleSchema,
+    ProviderExecutionCapabilitySchema,
+} from './provider-auth.js';
 import {
     ModelProviderSelectionSchema,
     ProviderAuthFileSchema,
@@ -189,5 +194,64 @@ describe('provider auth and catalog schemas', () => {
             apiKey: 'local_test_key',
         });
         expect(summary.credentialFieldCount).toBe(3);
+    });
+
+    it('exposes MODEL_ROLE_IDS as the 10 built-in roles in the canonical order', () => {
+        expect(MODEL_ROLE_IDS).toEqual([
+            'default',
+            'smol',
+            'slow',
+            'vision',
+            'plan',
+            'designer',
+            'commit',
+            'title',
+            'task',
+            'advisor',
+        ]);
+    });
+
+    it('ModelRoleSchema accepts the built-in roles and rejects unknown roles', () => {
+        expect(ModelRoleSchema.safeParse('slow').success).toBe(true);
+        expect(ModelRoleSchema.safeParse('default').success).toBe(true);
+        expect(ModelRoleSchema.safeParse('task').success).toBe(true);
+        expect(ModelRoleSchema.safeParse('bogus').success).toBe(false);
+        expect(ModelRoleSchema.safeParse('').success).toBe(false);
+    });
+
+    it('ModelRoleAssignmentsSchema accepts a partial record and rejects unknown role keys', () => {
+        const partial = ModelRoleAssignmentsSchema.safeParse({
+            slow: { providerID: 'a', modelID: 'b' },
+        });
+        expect(partial.success).toBe(true);
+
+        const rejected = ModelRoleAssignmentsSchema.safeParse({
+            bogus: { providerID: 'a', modelID: 'b' },
+        });
+        expect(rejected.success).toBe(false);
+    });
+
+    it('ProviderAuthFileSchema parses a legacy auth file without modelRoles and leaves it undefined', () => {
+        const parsed = ProviderAuthFileSchema.parse({
+            $schema: 'https://mission-control.local/auth.schema.json',
+            credentials: {},
+        });
+        expect(parsed.modelRoles).toBeUndefined();
+        expect(parsed.credentials).toEqual({});
+    });
+
+    it('ProviderAuthFileSchema parses an auth file with modelRoles populated', () => {
+        const parsed = ProviderAuthFileSchema.parse({
+            $schema: 'https://mission-control.local/auth.schema.json',
+            credentials: {},
+            modelRoles: {
+                slow: { providerID: 'anthropic', modelID: 'claude-sonnet-4-6' },
+                vision: { providerID: 'openai', modelID: 'gpt-4o', variantID: 'reasoning-high' },
+            },
+        });
+        expect(parsed.modelRoles).toEqual({
+            slow: { providerID: 'anthropic', modelID: 'claude-sonnet-4-6' },
+            vision: { providerID: 'openai', modelID: 'gpt-4o', variantID: 'reasoning-high' },
+        });
     });
 });

@@ -13,6 +13,7 @@ import {
     type ProjectInstructionResource,
     ProjectTrustStore,
     type ProviderAdapter,
+    type ProviderAuthStore,
     projectApprovalContinuationMessages,
     redactCredentialText,
     type SdkModelResolver,
@@ -97,6 +98,7 @@ export type CodingAgentTurnOptions = {
     /** Operator-supplied pricing table; threaded to the graph so `CostLedger` emits `policy.budget.*`. */
     readonly pricingTable?: PricingTable;
     readonly approvalLevel?: ApprovalLevel;
+    readonly authStore?: ProviderAuthStore;
     /**
      * Optional ABG graph override. When provided (e.g. from a `#workflow` invocation), the turn
      * runs THIS graph instead of the default coding-agent graph built from the model selection.
@@ -198,6 +200,7 @@ async function createInteractiveRunOwner(
         ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
         ...(options.lspClient !== undefined ? { lspClient: options.lspClient } : {}),
         ...(options.requestUserQuestion !== undefined ? { requestUserQuestion: options.requestUserQuestion } : {}),
+        ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
     };
     const { registry: toolRegistry, mcpConnectionManager } = await createInteractiveToolRegistry(
         toolOptions,

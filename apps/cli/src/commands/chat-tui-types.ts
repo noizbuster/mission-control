@@ -1,9 +1,11 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { ProviderAuthStore } from '../auth-store.js';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
 import type { ApprovalLevel } from './approval-level.js';
 import type { DashboardAgentEntry, SessionPickerEntry } from './chat-store.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
 import type { ModelChoice } from './interactive-chat-model.js';
+import type { ModelsOverlayRoleRow } from './models-overlay-state.js';
 import type { QuestionOption } from './question-types.js';
 import type { WelcomeData } from './welcome-data.js';
 
@@ -18,6 +20,10 @@ export type OpenTuiChatBridge = {
     readonly showAgentsDashboard: (entries: readonly DashboardAgentEntry[]) => void;
     readonly reloadAgentsDashboard: (entries: readonly DashboardAgentEntry[]) => void;
     readonly hideAgentsDashboard: () => void;
+    readonly showModelsOverlay: (
+        entries: readonly ModelProviderSelection[],
+        roleRows: readonly ModelsOverlayRoleRow[],
+    ) => void;
     readonly showLevelPicker: (currentLevel?: string) => Promise<string | undefined>;
     readonly setApprovalLevel: (level: ApprovalLevel | undefined) => void;
     readonly setSessionId: (sessionId: string) => void;
@@ -69,6 +75,7 @@ export type OpenTuiChatBridgeOptions = {
     readonly isWorktree?: boolean;
     readonly initialHistoryEntries?: readonly string[];
     readonly initialApprovalLevel?: ApprovalLevel;
+    readonly authStore?: ProviderAuthStore;
     readonly abgOverlayController?: AbgOverlayController;
     readonly welcomeData?: WelcomeData;
 };

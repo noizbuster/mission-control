@@ -44,6 +44,12 @@ export const slashCommandChoices = [
         description: 'List available models',
     },
     {
+        id: '/models',
+        insertText: '/models',
+        description: 'Open the model role-assignment overlay',
+        opensPicker: true,
+    },
+    {
         id: '/new',
         insertText: '/new ',
         description: 'Start a new durable session',

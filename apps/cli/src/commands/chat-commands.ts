@@ -139,6 +139,9 @@ export type ChatLineAction =
           readonly agents: AgentsCommand;
       }
     | {
+          readonly kind: 'models';
+      }
+    | {
           readonly kind: 'unknown-slash';
           readonly command: string;
       }
@@ -219,6 +222,15 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
     switch (parts.head) {
         case 'model':
             return parseModelCommand(parts.tail, options);
+        case 'models': {
+            if (parts.tail.length > 0) {
+                return {
+                    kind: 'invalid',
+                    message: '/models opens the role-assignment overlay and takes no arguments',
+                };
+            }
+            return { kind: 'models' };
+        }
         case 'queue':
             return parsePromptCommand('queue', parts.tail);
         case 'steer':
