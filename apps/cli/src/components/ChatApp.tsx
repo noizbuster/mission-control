@@ -155,6 +155,18 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps, welc
     useKeyboard((key) => {
         const isCtrlC = key.ctrl && key.name === 'c';
         if (isCtrlC) {
+            const snap = store.getSnapshot();
+            // While streaming, Ctrl+C stops the agent rather than clearing the draft.
+            if (snap.generating) {
+                store.sendInterrupt('ctrl-c');
+                return;
+            }
+            const text = textareaRef.current?.plainText ?? snap.inputMirror;
+            if (text.length > 0) {
+                textareaRef.current?.clear();
+                store.setInputMirror('');
+                return;
+            }
             store.sendInterrupt('ctrl-c');
             return;
         }
