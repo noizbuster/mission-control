@@ -4,23 +4,36 @@ import {
     AgentRuntime,
     type CommandExecutionRequest,
     type CommandExecutionResult,
+    completeRun,
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
+    createMission,
     createPersistentStore,
     discoverAgents,
     discoverWorkflows,
+    ensureOmoDirs,
+    failRun,
+    materializeMission,
     PermissionGateError,
     type PersistentMemoryStore,
     PluginManager,
     type ProviderAdapter,
     registerBuiltinWorkflows,
     resolveMissionControlDataDir,
+    resolveOmoRoot,
     resolveUserConfigDir,
     type SdkModelResolver,
+    startRun,
     TursoPersistentStore,
     WorkflowRegistry,
 } from '@mission-control/core';
-import type { AbgGraphSpec, AbgNodeModelOptions, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import type {
+    AbgGraphSpec,
+    AbgNodeModelOptions,
+    AgentEvent,
+    ModelProviderSelection,
+    WorkflowSpec,
+} from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
 import { closeTreeSitterClient } from '../components/markdown/highlight.js';
@@ -170,6 +183,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     const workflowInvocation = resolveWorkflowInvocation(args);
     let effectivePrompt = args.prompt;
     let workflowGraph: AbgGraphSpec | undefined;
+    let workflowSpec: WorkflowSpec | undefined;
     if (workflowInvocation !== undefined) {
         const registry = await discoverWorkflowRegistry(workspaceRoot);
         const spec = registry.lookup(workflowInvocation.name);
@@ -179,12 +193,15 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             throw new Error(`Unknown workflow "${workflowInvocation.name}". Available workflows: ${available}.`);
         }
         workflowGraph = spec.graph;
+        workflowSpec = spec;
         effectivePrompt = workflowInvocation.prompt;
     }
+    const workflowRun = await beginNoninteractiveWorkflowRun(workspaceRoot, workflowSpec);
     try {
         await renderer.start(runtime);
         await runtime.start();
         didStart = true;
+        let workflowOutcome: WorkflowRunOutcome | undefined;
         try {
             if (graph !== undefined) {
                 await runtime.runGraph(graph);
@@ -245,8 +262,9 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                         : {}),
                     throwOnTerminalFailure: args.mode === 'plain',
                 });
+                workflowOutcome = { failed: false };
             } else if (effectivePrompt !== undefined) {
-                await runCodingPromptOnGraph({
+                const graphResult = await runCodingPromptOnGraph({
                     runtime,
                     selection: selectedModelProvider,
                     prompt: effectivePrompt,
@@ -259,13 +277,28 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     ...(pricingTable.length > 0 ? { pricingTable } : {}),
                     ...(agentModelLookup !== undefined ? { agentModelLookup } : {}),
                 });
+                workflowOutcome =
+                    graphResult.status === 'failed'
+                        ? { failed: true, reason: graphResult.reason ?? 'workflow graph run failed' }
+                        : { failed: false };
             } else {
                 await runtime.runDemoTask();
             }
         } catch (error: unknown) {
             if (!(error instanceof PermissionGateError)) {
+                await settleNoninteractiveWorkflowRun(workflowRun, {
+                    failed: true,
+                    reason: error instanceof Error ? error.message : String(error),
+                });
                 throw error;
             }
+            // A permission-gate denial aborts the turn but the CLI settles normally.
+            // The workflow Run stays non-terminal: it paused on a permission boundary
+            // rather than completing or failing, and the drain is not solved here.
+            workflowOutcome = undefined;
+        }
+        if (workflowOutcome !== undefined) {
+            await settleNoninteractiveWorkflowRun(workflowRun, workflowOutcome);
         }
         await runtime.stop();
         didStart = false;
@@ -516,4 +549,64 @@ function parseAgentModelString(value: string): AbgNodeModelOptions | undefined {
     const sep = value.indexOf('/');
     if (sep <= 0 || sep === value.length - 1) return undefined;
     return { providerID: value.slice(0, sep), modelID: value.slice(sep + 1) };
+}
+
+type NoninteractiveWorkflowRunHandle = {
+    readonly omoRoot: string;
+    readonly runId: string;
+};
+
+type WorkflowRunOutcome = {
+    readonly failed: boolean;
+    readonly reason?: string;
+};
+
+/**
+ * Materialize and start a Mission/Run pair for an explicit noninteractive
+ * workflow invocation (`--workflow <name>` or `#name {prompt}`). Returns
+ * `undefined` when there is no workflow spec or no `.omo` project root resolves,
+ * so a plain prompt or a non-`.omo` workspace runs without record side effects.
+ */
+async function beginNoninteractiveWorkflowRun(
+    workspaceRoot: string,
+    workflowSpec: WorkflowSpec | undefined,
+): Promise<NoninteractiveWorkflowRunHandle | undefined> {
+    if (workflowSpec === undefined) {
+        return undefined;
+    }
+    let omoRoot: string;
+    try {
+        omoRoot = await resolveOmoRoot(workspaceRoot);
+    } catch {
+        return undefined;
+    }
+    await ensureOmoDirs(omoRoot);
+    const mission = materializeMission(workflowSpec);
+    await createMission(omoRoot, mission);
+    const run = await startRun(omoRoot, mission.id, '');
+    return { omoRoot, runId: run.id };
+}
+
+/**
+ * Transition the workflow Run to its terminal status (`completed` or `failed`).
+ * Persistence is best-effort: a settle error is swallowed so it can never mask
+ * the real run outcome or alter the JSON/JSONL output contract. No-op when no
+ * Run was started.
+ */
+async function settleNoninteractiveWorkflowRun(
+    handle: NoninteractiveWorkflowRunHandle | undefined,
+    outcome: WorkflowRunOutcome,
+): Promise<void> {
+    if (handle === undefined) {
+        return;
+    }
+    try {
+        if (outcome.failed) {
+            await failRun(handle.omoRoot, handle.runId, outcome.reason ?? 'run failed');
+        } else {
+            await completeRun(handle.omoRoot, handle.runId);
+        }
+    } catch {
+        // Best-effort: settle failures must not change the run's observable output.
+    }
 }
