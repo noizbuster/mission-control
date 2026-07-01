@@ -10,7 +10,6 @@ export type StatusBarProps = {
     readonly modelID: string;
     readonly variantID?: string;
     readonly sessionID?: string;
-    readonly sessionDisplayName?: string;
     readonly workspaceRoot?: string;
     readonly gitBranch?: string;
     readonly isWorktree?: boolean;
@@ -36,14 +35,11 @@ export type BottomStatusShape = {
 };
 
 /**
- * Render label for the bottom-right session segment. Prefers the display name
- * (e.g. a Ctrl+R rename) and falls back to the raw session id. `undefined`
- * when neither is available.
+ * Render label for the bottom-right session segment. The status bar always
+ * shows the durable session id; the human-readable title (set via Ctrl+R or
+ * `/rename`) lives only in the rename overlay and the durable metadata event.
  */
-export function buildSessionLabel(sessionID: string | undefined, sessionDisplayName: string | undefined): string | undefined {
-    if (sessionDisplayName !== undefined && sessionDisplayName.length > 0) {
-        return sessionDisplayName;
-    }
+export function buildSessionLabel(sessionID: string | undefined): string | undefined {
     return sessionID;
 }
 
@@ -118,7 +114,7 @@ export function formatBottomStatus(props: StatusBarProps): BottomStatusShape {
         approvalLabel: props.approvalLevel ?? 'approval',
         approvalColor: approvalLevelColor(props.approvalLevel),
         projectLabel: buildProjectLabel(props.workspaceRoot, props.gitBranch, props.isWorktree),
-        sessionLabel: buildSessionLabel(props.sessionID, props.sessionDisplayName),
+        sessionLabel: buildSessionLabel(props.sessionID),
     };
 }
 
@@ -152,7 +148,7 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
                 <span attributes={TextAttributes.BOLD}>{model}</span>
                 {variantLabel !== undefined ? ` - ${variantLabel}` : null}
             </text>
-            <text>{' '}</text>
+            <text> </text>
             <text attributes={TextAttributes.DIM}>{'\u2500'.repeat(fillCount)}</text>
             {contextLabel !== undefined ? <text>{` ${contextLabel}`}</text> : null}
         </box>
@@ -162,9 +158,10 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
 /**
  * Bottom status line: approval indicator (colored by ramp; verbose and unknown
  * are dimmed) on the left; `project:branch(worktree)` followed by the raw
- * session id on the right (each segment omitted when absent). The gap between
- * the segments is filled with a dim horizontal rule (`─`). Full-width
- * dark-navy bg.
+ * session id on the right (each segment omitted when absent). The session
+ * segment always shows the durable session id; the human-readable title
+ * (Ctrl+R / `/rename`) does not appear here. The gap between the segments is
+ * filled with a dim horizontal rule (`─`). Full-width dark-navy bg.
  */
 export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
     const { approvalLabel, approvalColor, projectLabel, sessionLabel } = formatBottomStatus(props);
@@ -181,7 +178,7 @@ export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
             >
                 {approvalLabel}
             </text>
-            <text>{' '}</text>
+            <text> </text>
             <text attributes={TextAttributes.DIM}>{'\u2500'.repeat(fillCount)}</text>
             {projectLabel !== undefined ? <text>{` ${projectLabel}`}</text> : null}
             {sessionLabel !== undefined ? <text>{` ${sessionLabel}`}</text> : null}

@@ -616,9 +616,6 @@ export function ChatApp({
                 <BottomStatusBar
                     {...statusBarProps}
                     {...(snapshot.sessionId.length > 0 ? { sessionID: snapshot.sessionId } : {})}
-                    {...(snapshot.sessionDisplayName.length > 0
-                        ? { sessionDisplayName: snapshot.sessionDisplayName }
-                        : {})}
                     {...(snapshot.approvalLevel !== undefined ? { approvalLevel: snapshot.approvalLevel } : {})}
                 />
             ) : null}

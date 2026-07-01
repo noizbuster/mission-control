@@ -163,18 +163,4 @@ describe('formatBottomStatus', () => {
         const out = formatBottomStatus(baseProps);
         expect(out.sessionLabel).toBe(undefined);
     });
-
-    it('prefers the display name over the raw session id', () => {
-        const out = formatBottomStatus({
-            ...baseProps,
-            sessionID: 'session_abc123',
-            sessionDisplayName: 'my session',
-        });
-        expect(out.sessionLabel).toBe('my session');
-    });
-
-    it('falls back to the session id when the display name is empty', () => {
-        const out = formatBottomStatus({ ...baseProps, sessionID: 'session_abc123', sessionDisplayName: '' });
-        expect(out.sessionLabel).toBe('session_abc123');
-    });
 });
