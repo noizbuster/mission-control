@@ -1,5 +1,5 @@
 ---
-name: ultrabrain
+name: reasoner
 description: High-reasoning executor for complex multi-step problems.
 model: mctrl/slow
 tier: exec

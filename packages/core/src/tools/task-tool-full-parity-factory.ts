@@ -146,7 +146,7 @@ export async function createFullParityTaskToolRegistrationForCli(
         inputSchema: cliInputSchema,
         guideline:
             'Delegate a sub-task to a child agent session. Route by category or agent for preset ' +
-            'model/tools/permissions (deep=full, explore=read-only, ultrabrain=opus). Children ' +
+            'model/tools/permissions (deep=full, explore=read-only, reasoner=opus). Children ' +
             'cannot spawn nested tasks. Legacy task(description, prompt) maps to ' +
             'task(agent=deep, assignment=prompt). Pass tasks[] for batch fan-out.',
         execute: async (input, context) => {

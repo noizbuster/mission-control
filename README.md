@@ -130,7 +130,7 @@ Agent discovery scopes (first-wins by name):
 - Project: `<workspace>/.mctrl/agents/`.
 - User: `<config-dir>/agents/`.
 - Plugin: configured `additionalDirs`.
-- Bundled: runtime agents shipped with `@mission-control/core` (`deep`, `quick`, `ultrabrain`, `visual-engineering`, `explore`, `oracle`, `librarian`, `metis`, `momus`).
+- Bundled: runtime agents shipped with `@mission-control/core` (`deep`, `quick`, `reasoner`, `designer`, `explore`, `oracle`, `librarian`, `planner`, `reviewer`).
 
 Cross-harness importers (priority 50, lower than the builtin 100) scan each harness's own agent directories and import what they find: Claude Code, Cursor, Codex, Gemini, Cline, Windsurf, VS Code, GitHub Copilot, and OpenCode. A mission-control agent always wins a name conflict over an imported one. Discovery is discovery-safe: symbolic links are skipped, paths on the shared read-tool denylist are pruned, files above the 64KB size bound are skipped, the agent count is capped at 256, and discovery never throws. Broken files emit diagnostics and are skipped rather than failing the run.
 

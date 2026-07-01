@@ -5,7 +5,7 @@ import { type PermissionKind, PermissionKindSchema } from './permission-profile.
 /**
  * A task() category preset: the capability/model/tool surface a category of sub-agent runs with.
  *
- * Categories (Task 1.8) are the collapsed "specialist" dimension — `quick`, `deep`, `ultrabrain`,
+ * Categories (Task 1.8) are the collapsed "specialist" dimension — `quick`, `deep`, `reasoner`,
  * `explore`, `oracle`, `librarian`, etc. Each carries a model preset, the permission kinds its
  * child sessions are allowed to exercise, an optional system-prompt addendum, and an optional
  * tool allowlist narrowing the built-in registry.

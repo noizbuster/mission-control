@@ -250,7 +250,7 @@ export function createFullParityTaskToolRegistration(
             properties: {
                 category: {
                     type: 'string',
-                    description: 'Category id: quick, deep, ultrabrain, explore, oracle, etc.',
+                    description: 'Category id: quick, deep, reasoner, explore, oracle, etc.',
                 },
                 subagent_type: { type: 'string', description: 'Direct agent type (alternative to category).' },
                 agent: {
@@ -344,7 +344,7 @@ export function createFullParityTaskToolRegistration(
         },
         guideline:
             'Delegate a sub-task to a child agent. Use category to preset model/tools/permissions ' +
-            '(deep=full, explore=read-only, ultrabrain=opus). Children cannot spawn nested tasks. ' +
+            '(deep=full, explore=read-only, reasoner=opus). Children cannot spawn nested tasks. ' +
             'Set run_in_background=true for async work; pass task_id to resume an existing session. ' +
             'Pass tasks[] to fan out a parallel batch (each item has its own agent+assignment); ' +
             'optional context is forwarded to every child.',

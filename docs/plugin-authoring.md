@@ -272,8 +272,8 @@ read, edit, write, patch, bash, network, subagent
 inherit the full built-in surface.
 
 Note the difference between the on-disk category and the built-in runtime
-categories. The runtime's built-in catalog (`quick`, `deep`, `ultrabrain`,
-`visual-engineering`, `explore`, `oracle`, `librarian`, `metis`, `momus`) uses
+categories. The runtime's built-in catalog (`quick`, `deep`, `reasoner`,
+`designer`, `explore`, `oracle`, `librarian`, `planner`, `reviewer`) uses
 `PolicyEffectRule[]` internally. The workflow file format uses `PermissionKind[]`.
 They are two representations of the same idea. When you declare a category in a
 workflow file, use the permission kind strings.

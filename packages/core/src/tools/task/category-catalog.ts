@@ -66,14 +66,14 @@ const BUILTIN_CATEGORY_LIST: readonly CategoryDefinition[] = [
             'You are a deep task executor with full tool access. Investigate thoroughly before acting.',
     },
     {
-        id: 'ultrabrain',
+        id: 'reasoner',
         model: 'opus',
         permissions: ALLOW_ALL,
         systemPromptAddendum:
             'You are a high-reasoning task executor. Think step-by-step and consider edge cases before acting.',
     },
     {
-        id: 'visual-engineering',
+        id: 'designer',
         model: 'sonnet',
         permissions: ALLOW_ALL,
         tools: ['read', 'ls', 'grep', 'find', 'file.patch', 'file.edit', 'file.write', 'command.run'],
@@ -102,14 +102,14 @@ const BUILTIN_CATEGORY_LIST: readonly CategoryDefinition[] = [
             'You are a documentation and reference lookup specialist. Consult docs and external references.',
     },
     {
-        id: 'metis',
+        id: 'planner',
         permissions: PLANNING_RULES,
         tools: ['read', 'ls', 'grep', 'find', 'glob'],
         systemPromptAddendum:
             'You are a planning specialist. Produce plans under .omo/plans/ and notes under .omo/notepads/. Read-only elsewhere.',
     },
     {
-        id: 'momus',
+        id: 'reviewer',
         permissions: READ_ONLY_DENIES,
         tools: ['read', 'ls', 'grep', 'find'],
         systemPromptAddendum:

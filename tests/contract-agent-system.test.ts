@@ -31,12 +31,12 @@ const BUNDLED_AGENT_NAMES: readonly string[] = [
     'deep',
     'explore',
     'librarian',
-    'metis',
-    'momus',
+    'planner',
+    'reviewer',
     'oracle',
     'quick',
-    'ultrabrain',
-    'visual-engineering',
+    'reasoner',
+    'designer',
 ];
 
 const EXPECTED_PROVIDER_IDS: readonly string[] = [

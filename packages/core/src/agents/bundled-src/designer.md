@@ -1,5 +1,5 @@
 ---
-name: visual-engineering
+name: designer
 description: Frontend specialist for UI/UX and visual correctness.
 model: mctrl/default
 tier: exec

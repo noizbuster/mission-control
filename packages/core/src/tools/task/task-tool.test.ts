@@ -92,13 +92,13 @@ beforeAll(async () => {
 const ALL_CATEGORY_IDS = [
     'quick',
     'deep',
-    'ultrabrain',
-    'visual-engineering',
+    'reasoner',
+    'designer',
     'explore',
     'oracle',
     'librarian',
-    'metis',
-    'momus',
+    'planner',
+    'reviewer',
 ] as const;
 
 function ruleKey(rule: { readonly action: string; readonly resource: string; readonly effect: string }): string {
@@ -249,18 +249,18 @@ describe('bundled agent discovery via AgentIndex', () => {
         expect(quick?.tools).toEqual(['read', 'ls', 'grep', 'find', 'glob', 'todowrite']);
     });
 
-    it('ultrabrain has full tool access (no allowlist)', () => {
-        const ultrabrain = agentIndex.lookup('ultrabrain');
-        expect(ultrabrain?.tools).toBeUndefined();
+    it('reasoner has full tool access (no allowlist)', () => {
+        const reasoner = agentIndex.lookup('reasoner');
+        expect(reasoner?.tools).toBeUndefined();
     });
 
-    it('metis pathPolicies allow .omo/plans/ and .omo/notepads/ writes, deny elsewhere', () => {
-        const metis = agentIndex.lookup('metis');
-        expect(metis?.pathPolicies).toBeDefined();
-        const allows = metis?.pathPolicies?.filter((r) => r.effect === 'allow') ?? [];
+    it('planner pathPolicies allow .omo/plans/ and .omo/notepads/ writes, deny elsewhere', () => {
+        const planner = agentIndex.lookup('planner');
+        expect(planner?.pathPolicies).toBeDefined();
+        const allows = planner?.pathPolicies?.filter((r) => r.effect === 'allow') ?? [];
         expect(allows.map((r) => r.resource)).toContain('.omo/plans/**');
         expect(allows.map((r) => r.resource)).toContain('.omo/notepads/**');
-        const denies = metis?.pathPolicies?.filter((r) => r.effect === 'deny') ?? [];
+        const denies = planner?.pathPolicies?.filter((r) => r.effect === 'deny') ?? [];
         expect(denies.some((r) => r.action === 'write' && r.resource === '**')).toBe(true);
     });
 
@@ -295,16 +295,16 @@ describe('bundled agent parity with category catalog', () => {
         }
     });
 
-    it('metis bundled pathPolicies set matches catalog permissions set', () => {
-        const catalog = getCategory('metis');
-        const bundled = agentIndex.lookup('metis');
+    it('planner bundled pathPolicies set matches catalog permissions set', () => {
+        const catalog = getCategory('planner');
+        const bundled = agentIndex.lookup('planner');
         const catalogKeys = (catalog?.permissions ?? []).map(ruleKey).sort();
         const bundledKeys = (bundled?.pathPolicies ?? []).map(ruleKey).sort();
         expect(bundledKeys).toEqual(catalogKeys);
     });
 
     it('read-only categories enforce read-only via tier and tool surface (parity with catalog READ_ONLY_DENIES)', () => {
-        const readOnlyIds = ['explore', 'oracle', 'librarian', 'momus'] as const;
+        const readOnlyIds = ['explore', 'oracle', 'librarian', 'reviewer'] as const;
         const mutatingTools = ['file.edit', 'file.write', 'file.patch', 'command.run', 'bash.run'];
         for (const id of readOnlyIds) {
             const bundled = agentIndex.lookup(id);

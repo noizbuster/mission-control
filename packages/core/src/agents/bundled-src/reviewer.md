@@ -1,5 +1,5 @@
 ---
-name: momus
+name: reviewer
 description: Review and critique specialist identifying issues and improvements.
 model: mctrl/slow
 tier: read

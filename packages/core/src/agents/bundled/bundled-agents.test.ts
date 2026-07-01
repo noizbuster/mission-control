@@ -1,25 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { parseAgentFile } from '../agent-parser.js';
 import deep from './deep.md.js';
+import designer from './designer.md.js';
 import explore from './explore.md.js';
 import librarian from './librarian.md.js';
-import metis from './metis.md.js';
-import momus from './momus.md.js';
 import oracle from './oracle.md.js';
+import planner from './planner.md.js';
 import quick from './quick.md.js';
-import ultrabrain from './ultrabrain.md.js';
-import visualEngineering from './visual-engineering.md.js';
+import reasoner from './reasoner.md.js';
+import reviewer from './reviewer.md.js';
 
 const BUNDLED_TEMPLATES = [
     { name: 'quick', template: quick },
     { name: 'deep', template: deep },
-    { name: 'ultrabrain', template: ultrabrain },
-    { name: 'visual-engineering', template: visualEngineering },
+    { name: 'reasoner', template: reasoner },
+    { name: 'designer', template: designer },
     { name: 'explore', template: explore },
     { name: 'oracle', template: oracle },
     { name: 'librarian', template: librarian },
-    { name: 'metis', template: metis },
-    { name: 'momus', template: momus },
+    { name: 'planner', template: planner },
+    { name: 'reviewer', template: reviewer },
 ] as const;
 
 describe('bundled agents — parse via parseAgentFile', () => {
@@ -39,8 +39,8 @@ describe('bundled agents — parse via parseAgentFile', () => {
         });
     }
 
-    it('metis carries the .omo/plans + .omo/notepads write allowlist and broad denies', () => {
-        const parsed = parseAgentFile('/bundled/metis.md', metis, 'bundled');
+    it('planner carries the .omo/plans + .omo/notepads write allowlist and broad denies', () => {
+        const parsed = parseAgentFile('/bundled/planner.md', planner, 'bundled');
         expect(parsed.pathPolicies).toEqual([
             { action: 'write', resource: '**', effect: 'deny' },
             { action: 'write', resource: '.omo/plans/**', effect: 'allow' },
@@ -51,8 +51,8 @@ describe('bundled agents — parse via parseAgentFile', () => {
         ]);
     });
 
-    it('read-only categories (explore, oracle, librarian, momus) omit write/edit tools', () => {
-        const readOnly = ['explore', 'oracle', 'librarian', 'momus'];
+    it('read-only categories (explore, oracle, librarian, reviewer) omit write/edit tools', () => {
+        const readOnly = ['explore', 'oracle', 'librarian', 'reviewer'];
         for (const name of readOnly) {
             const entry = BUNDLED_TEMPLATES.find((item) => item.name === name);
             if (entry === undefined) throw new Error(`missing ${name}`);

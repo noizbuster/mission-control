@@ -9,7 +9,7 @@
 | Task | Location | Notes |
 | --- | --- | --- |
 | Full-parity tool | `task-tool.ts` | `createFullParityTaskToolRegistration` builds the schema-bound `task` tool. Validates parameters, resolves routing, derives child permissions, and delegates session lifecycle to an injected `TaskToolRuntime`. Schema enforces XOR between batch `tasks[]` and single `prompt` / `assignment`. Capability class `'subagent'`. |
-| Category catalog | `category-catalog.ts` | `BUILTIN_CATEGORIES` plus `getCategory`. Nine presets: `quick`, `deep`, `ultrabrain`, `visual-engineering`, `explore`, `oracle`, `librarian`, `metis`, `momus`. Each carries an optional model alias, permission rules, tool allowlist, and system-prompt addendum. |
+| Category catalog | `category-catalog.ts` | `BUILTIN_CATEGORIES` plus `getCategory`. Nine presets: `quick`, `deep`, `reasoner`, `designer`, `explore`, `oracle`, `librarian`, `planner`, `reviewer`. Each carries an optional model alias, permission rules, tool allowlist, and system-prompt addendum. |
 | Tests | `task-tool.test.ts` | Routing resolution, permission derivation, batch fan-out, background handle, resume, and model output formatting. |
 
 ## Conventions

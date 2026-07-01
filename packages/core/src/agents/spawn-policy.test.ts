@@ -92,7 +92,7 @@ describe('canSpawn', () => {
             expect(canSpawn(multiParent, 'explore').allowed).toBe(true);
             expect(canSpawn(multiParent, 'oracle').allowed).toBe(true);
             expect(canSpawn(multiParent, 'librarian').allowed).toBe(true);
-            expect(canSpawn(multiParent, 'metis').allowed).toBe(false);
+            expect(canSpawn(multiParent, 'planner').allowed).toBe(false);
         });
     });
 

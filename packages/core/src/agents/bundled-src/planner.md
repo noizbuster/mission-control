@@ -1,5 +1,5 @@
 ---
-name: metis
+name: planner
 description: Planning specialist writing to .omo/plans/ and .omo/notepads/ only.
 model: mctrl/slow
 tier: write
