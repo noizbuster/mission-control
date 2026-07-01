@@ -44,6 +44,8 @@ import {
     navigateModelsOverlayDown,
     navigateModelsOverlayUp,
     switchModelsOverlayColumn as reduceModelsOverlayColumn,
+    setModelsOverlayProviderTab as reduceModelsOverlayProviderTab,
+    setModelsOverlaySearchQuery as reduceModelsOverlaySearchQuery,
 } from './models-overlay-state.js';
 import { normalizeQuestionOptions, type QuestionOption } from './question-types.js';
 
@@ -83,7 +85,9 @@ export type AgentsDashboardState = {
 };
 
 /** Slice backing the models overlay. `roleRows` (right column) is built from
- *  persisted assignments + fallback by the action handler on open. */
+ *  persisted assignments + fallback by the action handler on open. The left
+ *  column is narrowed by `searchQuery` (substring) and `activeProviderTab`
+ *  (`'all'` or a providerID). */
 export type ModelsOverlaySlice = {
     readonly active: boolean;
     readonly entries: readonly ModelProviderSelection[];
@@ -91,6 +95,8 @@ export type ModelsOverlaySlice = {
     readonly activeLeftIndex: number;
     readonly activeRightIndex: number;
     readonly focusedColumn: 'left' | 'right';
+    readonly searchQuery: string;
+    readonly activeProviderTab: string;
 };
 
 export type AgentsDashboardSourceTabInfo = {
@@ -327,6 +333,8 @@ export class ChatStore {
                 activeLeftIndex: 0,
                 activeRightIndex: 0,
                 focusedColumn: 'left',
+                searchQuery: '',
+                activeProviderTab: 'all',
             },
             contextTokensUsed: undefined,
             contextTokensMax: undefined,
@@ -993,6 +1001,8 @@ export class ChatStore {
             activeLeftIndex: 0,
             activeRightIndex: 0,
             focusedColumn: 'left',
+            searchQuery: '',
+            activeProviderTab: 'all',
         };
         this.state.overlayMode = 'models-overlay';
         this.publish();
@@ -1053,6 +1063,30 @@ export class ChatStore {
         }
     }
 
+    setModelsOverlaySearchQuery(query: string): void {
+        const state = this.buildModelsOverlayState();
+        if (state === null) return;
+        const next = reduceModelsOverlaySearchQuery(state, query);
+        this.state.modelsOverlay = {
+            ...this.state.modelsOverlay,
+            searchQuery: next.searchQuery,
+            activeLeftIndex: next.activeLeftIndex,
+        };
+        this.publish();
+    }
+
+    setModelsOverlayProviderTab(tabId: string): void {
+        const state = this.buildModelsOverlayState();
+        if (state === null) return;
+        const next = reduceModelsOverlayProviderTab(state, tabId);
+        this.state.modelsOverlay = {
+            ...this.state.modelsOverlay,
+            activeProviderTab: next.activeProviderTab,
+            activeLeftIndex: next.activeLeftIndex,
+        };
+        this.publish();
+    }
+
     private buildModelsOverlayState(): ModelsOverlayState | null {
         const slice = this.state.modelsOverlay;
         if (slice.roleRows.length === 0) return null;
@@ -1062,6 +1096,8 @@ export class ChatStore {
             activeLeftIndex: slice.activeLeftIndex,
             activeRightIndex: slice.activeRightIndex,
             focusedColumn: slice.focusedColumn,
+            searchQuery: slice.searchQuery,
+            activeProviderTab: slice.activeProviderTab,
         };
     }
 

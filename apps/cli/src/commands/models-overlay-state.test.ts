@@ -3,13 +3,19 @@ import { describe, expect, it } from 'vitest';
 import {
     assignSelectedRole,
     clearSelectedRole,
+    computeProviderTabs,
     createModelsOverlayRoleRows,
     createModelsOverlayState,
     createModelsOverlayView,
+    filterLeftEntries,
+    formatModelSelection,
+    formatProviderTabLabel,
     formatRoleFallback,
     type ModelsOverlayRoleRow,
     navigateModelsOverlayDown,
     navigateModelsOverlayUp,
+    setModelsOverlayProviderTab,
+    setModelsOverlaySearchQuery,
     switchModelsOverlayColumn,
 } from './models-overlay-state.js';
 
@@ -198,5 +204,219 @@ describe('createModelsOverlayView', () => {
         const view = createModelsOverlayView(scrolled, 3);
         expect(view.totalRight).toBe(10);
         expect(view.rightVisible).toHaveLength(3);
+    });
+});
+
+describe('createModelsOverlayState defaults', () => {
+    it('defaults searchQuery to empty and activeProviderTab to all', () => {
+        const state = createModelsOverlayState(ENTRIES, roleRows());
+        expect(state.searchQuery).toBe('');
+        expect(state.activeProviderTab).toBe('all');
+    });
+
+    it('accepts optional initial searchQuery and activeProviderTab', () => {
+        const state = createModelsOverlayState(ENTRIES, roleRows(), {
+            searchQuery: 'sonnet',
+            activeProviderTab: 'p1',
+        });
+        expect(state.searchQuery).toBe('sonnet');
+        expect(state.activeProviderTab).toBe('p1');
+    });
+});
+
+describe('formatModelSelection', () => {
+    it('formats provider/model without a variant', () => {
+        expect(formatModelSelection(selection('anthropic', 'claude-4'))).toBe('anthropic/claude-4');
+    });
+
+    it('appends the variant as #suffix', () => {
+        expect(formatModelSelection(selection('anthropic', 'claude-4', 'thinking-high'))).toBe(
+            'anthropic/claude-4#thinking-high',
+        );
+    });
+});
+
+describe('formatProviderTabLabel', () => {
+    it('uppercases a simple providerID', () => {
+        expect(formatProviderTabLabel('anthropic')).toBe('ANTHROPIC');
+    });
+
+    it('replaces hyphens and underscores with spaces', () => {
+        expect(formatProviderTabLabel('zai-coding-plan')).toBe('ZAI CODING PLAN');
+        expect(formatProviderTabLabel('github_copilot')).toBe('GITHUB COPILOT');
+    });
+});
+
+describe('computeProviderTabs', () => {
+    it('always returns ALL as the first tab', () => {
+        const tabs = computeProviderTabs([]);
+        expect(tabs).toHaveLength(1);
+        expect(tabs[0]).toEqual({ id: 'all', label: 'ALL' });
+    });
+
+    it('deduplicates providers and sorts them alphabetically', () => {
+        const entries = [
+            selection('zai-coding-plan', 'glm-5'),
+            selection('anthropic', 'claude-4'),
+            selection('anthropic', 'claude-3'),
+            selection('openai', 'gpt-5'),
+        ];
+        const tabs = computeProviderTabs(entries);
+        expect(tabs.map((t) => t.id)).toEqual(['all', 'anthropic', 'openai', 'zai-coding-plan']);
+        expect(tabs.map((t) => t.label)).toEqual(['ALL', 'ANTHROPIC', 'OPENAI', 'ZAI CODING PLAN']);
+    });
+});
+
+describe('filterLeftEntries', () => {
+    const FILTER_ENTRIES = [
+        selection('anthropic', 'claude-sonnet-4'),
+        selection('anthropic', 'claude-haiku'),
+        selection('openai', 'gpt-5'),
+        selection('openai', 'gpt-5', 'reasoning-high'),
+    ] as const;
+
+    it('returns all entries when tab is all and query is empty', () => {
+        expect(filterLeftEntries(FILTER_ENTRIES, 'all', '')).toEqual([...FILTER_ENTRIES]);
+    });
+
+    it('filters to a single provider when activeProviderTab is set', () => {
+        const filtered = filterLeftEntries(FILTER_ENTRIES, 'anthropic', '');
+        expect(filtered).toHaveLength(2);
+        expect(filtered.every((e) => e.providerID === 'anthropic')).toBe(true);
+    });
+
+    it('filters by case-insensitive search query across all providers', () => {
+        const filtered = filterLeftEntries(FILTER_ENTRIES, 'all', 'sonnet');
+        expect(filtered).toHaveLength(1);
+        expect(filtered[0]?.modelID).toBe('claude-sonnet-4');
+    });
+
+    it('composes provider tab AND search query', () => {
+        const filtered = filterLeftEntries(FILTER_ENTRIES, 'openai', 'reasoning');
+        expect(filtered).toHaveLength(1);
+        expect(filtered[0]?.variantID).toBe('reasoning-high');
+    });
+
+    it('matches the #variant suffix in the search string', () => {
+        const filtered = filterLeftEntries(FILTER_ENTRIES, 'all', '#reasoning-high');
+        expect(filtered).toHaveLength(1);
+        expect(filtered[0]?.modelID).toBe('gpt-5');
+    });
+
+    it('returns an empty array when nothing matches', () => {
+        expect(filterLeftEntries(FILTER_ENTRIES, 'all', 'zzz')).toEqual([]);
+    });
+});
+
+describe('setModelsOverlaySearchQuery', () => {
+    it('sets the query and resets activeLeftIndex to 0', () => {
+        const downOnce = navigateModelsOverlayDown(createModelsOverlayState(ENTRIES, roleRows()));
+        expect(downOnce.activeLeftIndex).toBe(1);
+        const next = setModelsOverlaySearchQuery(downOnce, 'sonnet');
+        expect(next.searchQuery).toBe('sonnet');
+        expect(next.activeLeftIndex).toBe(0);
+    });
+
+    it('does not mutate the input state', () => {
+        const state = createModelsOverlayState(ENTRIES, roleRows());
+        const next = setModelsOverlaySearchQuery(state, 'x');
+        expect(state.searchQuery).toBe('');
+        expect(next).not.toBe(state);
+    });
+});
+
+describe('setModelsOverlayProviderTab', () => {
+    it('sets the tab and resets activeLeftIndex to 0', () => {
+        const downOnce = navigateModelsOverlayDown(createModelsOverlayState(ENTRIES, roleRows()));
+        expect(downOnce.activeLeftIndex).toBe(1);
+        const next = setModelsOverlayProviderTab(downOnce, 'p1');
+        expect(next.activeProviderTab).toBe('p1');
+        expect(next.activeLeftIndex).toBe(0);
+    });
+
+    it('does not mutate the input state', () => {
+        const state = createModelsOverlayState(ENTRIES, roleRows());
+        const next = setModelsOverlayProviderTab(state, 'p1');
+        expect(state.activeProviderTab).toBe('all');
+        expect(next).not.toBe(state);
+    });
+});
+
+describe('createModelsOverlayView with filtering', () => {
+    const FILTER_ENTRIES = [
+        selection('anthropic', 'claude-sonnet-4'),
+        selection('anthropic', 'claude-haiku'),
+        selection('openai', 'gpt-5'),
+    ] as const;
+
+    it('exposes providerTabs computed from leftEntries', () => {
+        const state = createModelsOverlayState(FILTER_ENTRIES, roleRows());
+        const view = createModelsOverlayView(state, 5);
+        expect(view.providerTabs.map((t) => t.id)).toEqual(['all', 'anthropic', 'openai']);
+        expect(view.activeProviderTab).toBe('all');
+        expect(view.searchQuery).toBe('');
+    });
+
+    it('totalLeft reflects the filtered count when a provider tab is active', () => {
+        const state = createModelsOverlayState(FILTER_ENTRIES, roleRows(), { activeProviderTab: 'anthropic' });
+        const view = createModelsOverlayView(state, 5);
+        expect(view.totalLeft).toBe(2);
+        expect(view.filteredLeftCount).toBe(2);
+        expect(view.leftVisible.every((e) => e.providerID === 'anthropic')).toBe(true);
+    });
+
+    it('totalLeft reflects the filtered count when a search query is active', () => {
+        const state = createModelsOverlayState(FILTER_ENTRIES, roleRows(), { searchQuery: 'sonnet' });
+        const view = createModelsOverlayView(state, 5);
+        expect(view.totalLeft).toBe(1);
+        expect(view.leftVisible[0]?.modelID).toBe('claude-sonnet-4');
+    });
+
+    it('leftVisible is empty and totalLeft is 0 when nothing matches', () => {
+        const state = createModelsOverlayState(FILTER_ENTRIES, roleRows(), { searchQuery: 'zzz' });
+        const view = createModelsOverlayView(state, 5);
+        expect(view.totalLeft).toBe(0);
+        expect(view.leftVisible).toEqual([]);
+    });
+});
+
+describe('assignSelectedRole with filtering', () => {
+    const FILTER_ENTRIES = [selection('anthropic', 'claude-sonnet-4'), selection('openai', 'gpt-5')] as const;
+
+    it('assigns from the filtered list when a provider tab is active', () => {
+        const state = createModelsOverlayState(FILTER_ENTRIES, roleRows(), { activeProviderTab: 'anthropic' });
+        const assigned = assignSelectedRole(state);
+        expect(assigned.roleRows[0]?.assignment).toEqual(selection('anthropic', 'claude-sonnet-4'));
+    });
+
+    it('returns the input unchanged when the filtered list is empty', () => {
+        const state = createModelsOverlayState(FILTER_ENTRIES, roleRows(), { searchQuery: 'zzz' });
+        const next = assignSelectedRole(state);
+        expect(next).toBe(state);
+    });
+});
+
+describe('navigation with filtering', () => {
+    const FILTER_ENTRIES = [
+        selection('anthropic', 'claude-sonnet-4'),
+        selection('anthropic', 'claude-haiku'),
+        selection('openai', 'gpt-5'),
+    ] as const;
+
+    it('clamps activeLeftIndex to the filtered count', () => {
+        const state = createModelsOverlayState(FILTER_ENTRIES, roleRows(), { activeProviderTab: 'anthropic' });
+        const filteredCount = 2;
+        let navigated = state;
+        for (let i = 0; i < filteredCount + 5; i++) {
+            navigated = navigateModelsOverlayDown(navigated);
+        }
+        expect(navigated.activeLeftIndex).toBe(filteredCount - 1);
+    });
+
+    it('is a no-op returning the same reference when the filtered list is empty', () => {
+        const state = createModelsOverlayState(FILTER_ENTRIES, roleRows(), { searchQuery: 'zzz' });
+        const next = navigateModelsOverlayDown(state);
+        expect(next).toBe(state);
+        expect(next.activeLeftIndex).toBe(0);
     });
 });

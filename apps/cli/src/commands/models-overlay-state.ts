@@ -9,9 +9,12 @@
  * reducers return a new state object (never mutating the input), and
  * {@linkcode createModelsOverlayView} windows both columns to fit terminal
  * dimensions. Persistence (auth store) and rendering (opentui) are the
- * consumer's job — TODO #6 bridges this contract to the ChatStore slice and
- * the `ModelsOverlay` component. Mirrors the `createAgentsDashboardView` +
- * agents-dashboard navigation precedent in `chat-store.ts`.
+ * consumer's job.
+ *
+ * Provider tabs and search filtering (mirroring oh-my-pi's model-selector
+ * concepts, NOT vendored code) narrow the left column: the active tab filters
+ * by provider, the search query filters by substring match against
+ * `provider/model[#variant]`, and the two compose with AND logic.
  */
 
 import { MODEL_ROLE_IDS, type ModelProviderSelection, type ModelRole } from '@mission-control/protocol';
@@ -24,6 +27,14 @@ export type ModelsOverlayRoleRow = {
     readonly fallback: ModelProviderSelection;
 };
 
+/** A provider tab in the left-column filter bar. */
+export type ProviderTab = {
+    /** `'all'` for the first tab, or a raw `providerID` for provider tabs. */
+    readonly id: string;
+    /** `'ALL'` or the formatted label (e.g. `'ANTHROPIC'`, `'ZAI CODING PLAN'`). */
+    readonly label: string;
+};
+
 /** The full state of the overlay. Pure data; reducers return a new copy. */
 export type ModelsOverlayState = {
     readonly leftEntries: readonly ModelProviderSelection[];
@@ -31,6 +42,9 @@ export type ModelsOverlayState = {
     readonly activeLeftIndex: number;
     readonly activeRightIndex: number;
     readonly focusedColumn: 'left' | 'right';
+    readonly searchQuery: string;
+    /** `'all'` or a providerID from `leftEntries`. */
+    readonly activeProviderTab: string;
 };
 
 /** A windowed view computed from state + terminal dimensions. Pure. */
@@ -44,17 +58,30 @@ export type ModelsOverlayView = {
     readonly startIndexRight: number;
     readonly endIndexRight: number;
     readonly focusedColumn: 'left' | 'right';
+    /** Filtered count (reflects the active tab + search query). */
     readonly totalLeft: number;
     readonly totalRight: number;
+    readonly providerTabs: readonly ProviderTab[];
+    readonly activeProviderTab: string;
+    readonly searchQuery: string;
+    readonly filteredLeftCount: number;
+};
+
+/** Options for seeding initial overlay state. */
+export type CreateModelsOverlayStateOptions = {
+    readonly searchQuery?: string;
+    readonly activeProviderTab?: string;
 };
 
 /**
  * Build the initial overlay state. Both columns are populated from the inputs,
- * indices start at 0, and the left column is focused first.
+ * indices start at 0, and the left column is focused first. The optional
+ * `searchQuery` and `activeProviderTab` default to `''` and `'all'`.
  */
 export function createModelsOverlayState(
     leftEntries: readonly ModelProviderSelection[],
     roleRows: readonly ModelsOverlayRoleRow[],
+    options?: CreateModelsOverlayStateOptions,
 ): ModelsOverlayState {
     return {
         leftEntries,
@@ -62,6 +89,8 @@ export function createModelsOverlayState(
         activeLeftIndex: 0,
         activeRightIndex: 0,
         focusedColumn: 'left',
+        searchQuery: options?.searchQuery ?? '',
+        activeProviderTab: options?.activeProviderTab ?? 'all',
     };
 }
 
@@ -88,26 +117,90 @@ export function createModelsOverlayRoleRows(
  * shows `Using built-in/session default (<provider>/<model[#variant]>)`.
  */
 export function formatRoleFallback(row: ModelsOverlayRoleRow): string {
-    const selection = row.fallback;
-    const modelPart =
-        selection.variantID !== undefined
-            ? `${selection.providerID}/${selection.modelID}#${selection.variantID}`
-            : `${selection.providerID}/${selection.modelID}`;
+    const modelPart = formatModelSelection(row.fallback);
     const prefix = row.role === 'default' ? 'Using built-in/session default' : 'Using default';
     return `${prefix} (${modelPart})`;
 }
 
 /**
+ * Format a selection as `provider/model` or `provider/model#variant`.
+ * Shared by {@linkcode formatRoleFallback} and the search filter so both
+ * match the same string the component renders.
+ */
+export function formatModelSelection(selection: ModelProviderSelection): string {
+    return selection.variantID !== undefined
+        ? `${selection.providerID}/${selection.modelID}#${selection.variantID}`
+        : `${selection.providerID}/${selection.modelID}`;
+}
+
+/**
+ * Format a provider tab label: `providerID.replace(/[-_]+/g, ' ').toUpperCase()`.
+ * Mirrors oh-my-pi's `formatProviderTabLabel` concept (not vendored).
+ */
+export function formatProviderTabLabel(providerID: string): string {
+    return providerID.replace(/[-_]+/g, ' ').toUpperCase();
+}
+
+/**
+ * Compute the provider tabs from the left entries. The first tab is always
+ * `ALL`; remaining tabs are one per unique `providerID` in `leftEntries`,
+ * sorted alphabetically, labeled via {@linkcode formatProviderTabLabel}.
+ */
+export function computeProviderTabs(leftEntries: readonly ModelProviderSelection[]): readonly ProviderTab[] {
+    const seen = new Set<string>();
+    for (const entry of leftEntries) {
+        seen.add(entry.providerID);
+    }
+    const providerIDs = [...seen].sort((a, b) => a.localeCompare(b));
+    const tabs: ProviderTab[] = [{ id: 'all', label: 'ALL' }];
+    for (const id of providerIDs) {
+        tabs.push({ id, label: formatProviderTabLabel(id) });
+    }
+    return tabs;
+}
+
+/**
+ * Filter the left entries by the active provider tab AND the search query.
+ *
+ * Tab: when `activeProviderTab !== 'all'`, only entries whose `providerID`
+ * matches pass.
+ *
+ * Search: when `searchQuery` is non-empty, only entries whose
+ * {@linkcode formatModelSelection} string contains the query (case-insensitive
+ * substring) pass. Simple `toLowerCase().includes()` normalization is used
+ * because model strings are simple (`provider/model[#variant]`) and the
+ * allowed search-input chars (`[a-zA-Z0-9/_.-#]`) are all lowercase-stable.
+ */
+export function filterLeftEntries(
+    leftEntries: readonly ModelProviderSelection[],
+    activeProviderTab: string,
+    searchQuery: string,
+): readonly ModelProviderSelection[] {
+    let filtered = leftEntries;
+    if (activeProviderTab !== 'all') {
+        filtered = filtered.filter((entry) => entry.providerID === activeProviderTab);
+    }
+    const query = searchQuery.toLowerCase();
+    if (query.length > 0) {
+        filtered = filtered.filter((entry) => formatModelSelection(entry).toLowerCase().includes(query));
+    }
+    return filtered;
+}
+
+/**
  * Window both columns to fit `maxVisible` rows around the active index.
+ * The left column operates on the FILTERED list (active tab + search query).
  * `startIndex`/`endIndex` are clamped to bounds; `endIndex` is inclusive.
  * Mirrors the windowing math of `createAgentsDashboardView`.
  */
 export function createModelsOverlayView(state: ModelsOverlayState, maxVisible: number): ModelsOverlayView {
     const visibleLimit = Math.max(1, maxVisible);
-    const left = computeWindow(state.activeLeftIndex, state.leftEntries.length, visibleLimit);
+    const filteredLeft = filterLeftEntries(state.leftEntries, state.activeProviderTab, state.searchQuery);
+    const left = computeWindow(state.activeLeftIndex, filteredLeft.length, visibleLimit);
     const right = computeWindow(state.activeRightIndex, state.roleRows.length, visibleLimit);
+    const providerTabs = computeProviderTabs(state.leftEntries);
     return {
-        leftVisible: state.leftEntries.slice(left.startIndex, left.endIndex + 1),
+        leftVisible: filteredLeft.slice(left.startIndex, left.endIndex + 1),
         rightVisible: state.roleRows.slice(right.startIndex, right.endIndex + 1),
         activeLeftIndex: left.clampedIndex,
         activeRightIndex: right.clampedIndex,
@@ -116,8 +209,12 @@ export function createModelsOverlayView(state: ModelsOverlayState, maxVisible: n
         startIndexRight: right.startIndex,
         endIndexRight: right.endIndex,
         focusedColumn: state.focusedColumn,
-        totalLeft: state.leftEntries.length,
+        totalLeft: filteredLeft.length,
         totalRight: state.roleRows.length,
+        providerTabs,
+        activeProviderTab: state.activeProviderTab,
+        searchQuery: state.searchQuery,
+        filteredLeftCount: filteredLeft.length,
     };
 }
 
@@ -141,13 +238,15 @@ export function switchModelsOverlayColumn(state: ModelsOverlayState): ModelsOver
 
 /**
  * Assign the focused left model to the focused right role (Enter). Returns a
- * new state with the target role's `assignment` updated. Does NOT touch the
- * auth store; persistence is the ChatStore method's job (called by #6). Returns
- * the input unchanged when the left column is empty or the right index is out
+ * new state with the target role's `assignment` updated. The model is resolved
+ * from the FILTERED left list (active tab + search query). Does NOT touch the
+ * auth store; persistence is the ChatStore method's job. Returns the input
+ * unchanged when the filtered left column is empty or the right index is out
  * of bounds.
  */
 export function assignSelectedRole(state: ModelsOverlayState): ModelsOverlayState {
-    const model = state.leftEntries[state.activeLeftIndex];
+    const filtered = filterLeftEntries(state.leftEntries, state.activeProviderTab, state.searchQuery);
+    const model = filtered[state.activeLeftIndex];
     if (model === undefined) return state;
     if (state.roleRows[state.activeRightIndex] === undefined) return state;
     const targetIndex = state.activeRightIndex;
@@ -158,9 +257,10 @@ export function assignSelectedRole(state: ModelsOverlayState): ModelsOverlayStat
 }
 
 /**
- * Clear the focused right role to default-inherited (Backspace/Delete). Returns
- * a new state with the target role's `assignment` set to `undefined`. Returns
- * the input unchanged when the right index is out of bounds.
+ * Clear the focused right role to default-inherited (Backspace/Delete when the
+ * search query is empty). Returns a new state with the target role's
+ * `assignment` set to `undefined`. Returns the input unchanged when the right
+ * index is out of bounds.
  */
 export function clearSelectedRole(state: ModelsOverlayState): ModelsOverlayState {
     if (state.roleRows[state.activeRightIndex] === undefined) return state;
@@ -169,6 +269,16 @@ export function clearSelectedRole(state: ModelsOverlayState): ModelsOverlayState
         ...state,
         roleRows: state.roleRows.map((row, index) => (index === targetIndex ? { ...row, assignment: undefined } : row)),
     };
+}
+
+/** Set the search query and reset `activeLeftIndex` to 0. Pure. */
+export function setModelsOverlaySearchQuery(state: ModelsOverlayState, query: string): ModelsOverlayState {
+    return { ...state, searchQuery: query, activeLeftIndex: 0 };
+}
+
+/** Set the active provider tab and reset `activeLeftIndex` to 0. Pure. */
+export function setModelsOverlayProviderTab(state: ModelsOverlayState, tabId: string): ModelsOverlayState {
+    return { ...state, activeProviderTab: tabId, activeLeftIndex: 0 };
 }
 
 type WindowSlice = {
@@ -189,10 +299,14 @@ function computeWindow(activeIndex: number, total: number, visibleLimit: number)
     return { startIndex, endIndex, clampedIndex };
 }
 
-/** Move the selection by `delta` within the focused column, clamped to bounds. */
+/**
+ * Move the selection by `delta` within the focused column, clamped to bounds.
+ * The left column clamps against the FILTERED count (active tab + search query)
+ * so navigation never runs past the visible list.
+ */
 function navigateWithinColumn(state: ModelsOverlayState, delta: number): ModelsOverlayState {
     if (state.focusedColumn === 'left') {
-        const count = state.leftEntries.length;
+        const count = filterLeftEntries(state.leftEntries, state.activeProviderTab, state.searchQuery).length;
         if (count === 0) return state;
         const next = Math.min(Math.max(state.activeLeftIndex + delta, 0), count - 1);
         if (next === state.activeLeftIndex) return state;

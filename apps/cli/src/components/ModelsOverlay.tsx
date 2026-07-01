@@ -17,6 +17,17 @@ import { SELECTED_BG } from './overlay-theme.js';
 
 const MODELS_OVERLAY_MAX_VISIBLE = 12;
 
+/**
+ * Printable characters accepted by the search input: letters, digits, and the
+ * model-string delimiters `/ - _ . #`. opentui delivers printable keys with a
+ * single-char `key.name`; the `!ctrl && !meta` guard avoids hijiking chords.
+ */
+const SEARCH_INPUT_PATTERN = /^[a-zA-Z0-9/_\-.#]$/;
+
+function isSearchInputKey(key: { readonly name: string; readonly ctrl: boolean; readonly meta: boolean }): boolean {
+    return !key.ctrl && !key.meta && SEARCH_INPUT_PATTERN.test(key.name);
+}
+
 export type ModelsOverlayProps = { readonly store: ChatStore };
 
 function useStoreSnapshot(store: ChatStore) {
@@ -40,6 +51,8 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): React.ReactNode {
         activeLeftIndex: slice.activeLeftIndex,
         activeRightIndex: slice.activeRightIndex,
         focusedColumn: slice.focusedColumn,
+        searchQuery: slice.searchQuery,
+        activeProviderTab: slice.activeProviderTab,
     };
     const view = createModelsOverlayView(state, MODELS_OVERLAY_MAX_VISIBLE);
 
@@ -54,13 +67,28 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): React.ReactNode {
             store.navigateModelsOverlay(1);
             return;
         }
+        if (key.name === 'left' || key.name === 'right') {
+            key.preventDefault();
+            const tabs = view.providerTabs;
+            if (tabs.length <= 1) return;
+            const currentIdx = tabs.findIndex((tab) => tab.id === slice.activeProviderTab);
+            const safeIdx = currentIdx >= 0 ? currentIdx : 0;
+            const delta = key.name === 'left' ? -1 : 1;
+            const nextIdx = (safeIdx + delta + tabs.length) % tabs.length;
+            const nextTab = tabs[nextIdx];
+            if (nextTab !== undefined) {
+                store.setModelsOverlayProviderTab(nextTab.id);
+            }
+            return;
+        }
         if (key.name === 'tab') {
             key.preventDefault();
             store.switchModelsOverlayColumn();
             return;
         }
         if (key.name === 'return') {
-            const focusedModel = slice.entries[slice.activeLeftIndex];
+            const localIndex = view.activeLeftIndex - view.startIndexLeft;
+            const focusedModel = view.leftVisible[localIndex];
             const focusedRow = slice.roleRows[slice.activeRightIndex];
             if (focusedModel !== undefined && focusedRow !== undefined) {
                 void store.assignModelsOverlayRole(focusedRow.role, focusedModel);
@@ -68,10 +96,18 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): React.ReactNode {
             return;
         }
         if (key.name === 'backspace' || key.name === 'delete') {
+            if (slice.searchQuery.length > 0) {
+                store.setModelsOverlaySearchQuery(slice.searchQuery.slice(0, -1));
+                return;
+            }
             const focusedRow = slice.roleRows[slice.activeRightIndex];
             if (focusedRow !== undefined) {
                 void store.clearModelsOverlayRole(focusedRow.role);
             }
+            return;
+        }
+        if (isSearchInputKey(key)) {
+            store.setModelsOverlaySearchQuery(slice.searchQuery + key.name);
             return;
         }
         if (key.name === 'escape') {
@@ -79,15 +115,31 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): React.ReactNode {
         }
     });
 
+    const searchDisplay = slice.searchQuery.length > 0 ? slice.searchQuery : '(type to filter)';
+
     return (
         <OverlayFrame
             variant="view"
             title="Models"
             hint="(Esc to close)"
-            footer="Up/Dn navigate · Tab switch column · Enter assign · Bksp/Del clear · Esc close"
+            footer="← → provider · type to search · ↑↓ navigate · Tab column · ⏎ assign · ⌫ clear · Esc close"
         >
+            <box flexDirection="row" marginTop={1}>
+                {view.providerTabs.map((tab) => {
+                    const isActive = tab.id === slice.activeProviderTab;
+                    const marker = isActive ? '> ' : '  ';
+                    return (
+                        <text key={tab.id} {...(isActive ? { bg: SELECTED_BG } : { attributes: TextAttributes.DIM })}>
+                            {`${marker}${tab.label} `}
+                        </text>
+                    );
+                })}
+            </box>
+            <text {...(slice.searchQuery.length === 0 ? { attributes: TextAttributes.DIM } : {})}>
+                {`Search: ${searchDisplay}`}
+            </text>
             {view.totalLeft === 0 ? (
-                <text attributes={TextAttributes.DIM}>No models available</text>
+                <text attributes={TextAttributes.DIM}>No models match</text>
             ) : (
                 <box flexDirection="row" marginTop={1}>
                     <box flexDirection="column" width="40%">
