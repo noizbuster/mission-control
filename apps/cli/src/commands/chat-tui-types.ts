@@ -5,6 +5,7 @@ import type { DashboardAgentEntry, SessionPickerEntry } from './chat-store.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
 import type { ModelChoice } from './interactive-chat-model.js';
 import type { QuestionOption } from './question-types.js';
+import type { WelcomeData } from './welcome-data.js';
 
 /** Public surface consumed by the imperative chat loop. */
 export type OpenTuiChatBridge = {
@@ -68,4 +69,5 @@ export type OpenTuiChatBridgeOptions = {
     readonly initialHistoryEntries?: readonly string[];
     readonly initialApprovalLevel?: ApprovalLevel;
     readonly abgOverlayController?: AbgOverlayController;
+    readonly welcomeData?: WelcomeData;
 };

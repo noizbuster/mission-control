@@ -5,6 +5,7 @@ import { useKeymap } from '@opentui/keymap/react';
 import { useKeyboard, useRenderer } from '@opentui/react';
 import type * as React from 'react';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { basename } from 'node:path';
 import { extractLastAssistantText, parseMessageBlocks } from '../commands/chat-blocks.js';
 import type { ChatStore } from '../commands/chat-store.js';
 import {
@@ -29,6 +30,8 @@ import { ACCENTS } from './overlay-theme.js';
 import { SlashMenuPanel } from './SlashMenuPanel.js';
 import { BottomStatusBar, type StatusBarProps, TopStatusBar } from './StatusBar.js';
 import { Toast } from './Toast.js';
+import { WelcomeScreen } from './WelcomeScreen.js';
+import type { WelcomeData } from '../commands/welcome-data.js';
 
 const SPINNER_FRAMES = '\u280b\u2819\u2839\u2838\u2834\u2826\u2827\u2807';
 
@@ -51,9 +54,10 @@ export type ChatAppProps = {
     readonly textareaRef: React.RefObject<TextareaRenderable | null>;
     readonly scrollboxRef: React.RefObject<ScrollBoxRenderable | null>;
     readonly statusBarProps?: StatusBarProps;
+    readonly welcomeData?: WelcomeData;
 };
 
-export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: ChatAppProps): React.ReactNode {
+export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps, welcomeData }: ChatAppProps): React.ReactNode {
     const subscribe = useCallback((cb: () => void) => store.subscribe(cb), [store]);
     const getSnapshot = useCallback(() => store.getSnapshot(), [store]);
     const snapshot = useSyncExternalStore(subscribe, getSnapshot);
@@ -399,6 +403,7 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
 
     const messageBlocks = parseMessageBlocks(snapshot.outputText);
     const overlayActive = snapshot.overlayMode !== 'none';
+    const showWelcome = welcomeData !== undefined && snapshot.outputText === '' && !overlayActive;
 
     const transcript = (
         <ChatTranscript
@@ -453,7 +458,18 @@ export function ChatApp({ store, textareaRef, scrollboxRef, statusBarProps }: Ch
         // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive, not a DOM element; mouse-up only surfaces the copy-hint toast.
         <box flexDirection="column" width="100%" height="100%" onMouseUp={handleSelectionMouseUp}>
             <box flexDirection="column" flexGrow={1}>
-                {transcript}
+                {showWelcome ? (
+                    <WelcomeScreen
+                        data={welcomeData}
+                        {...(statusBarProps?.workspaceRoot !== undefined
+                            ? { projectLabel: basename(statusBarProps.workspaceRoot) }
+                            : {})}
+                        {...(statusBarProps?.gitBranch !== undefined ? { gitBranch: statusBarProps.gitBranch } : {})}
+                        {...(statusBarProps?.isWorktree !== undefined ? { isWorktree: statusBarProps.isWorktree } : {})}
+                    />
+                ) : (
+                    transcript
+                )}
                 {showAgentIndicator && snapshot.agentStatusText.length > 0 ? (
                     <AgentSpinner text={snapshot.agentStatusText} />
                 ) : showAgentIndicator && snapshot.generating ? (

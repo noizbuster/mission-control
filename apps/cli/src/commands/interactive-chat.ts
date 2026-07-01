@@ -26,6 +26,7 @@ import { parseChatLine } from './chat-commands.js';
 import type { DashboardAgentEntry, SessionPickerEntry } from './chat-store.js';
 import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './chat-tui-types.js';
 import { type ChatTuiOptions, createChatTui } from './create-chat-tui.js';
+import { gatherWelcomeData } from './welcome-data.js';
 import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
 import type { ChatActionResult } from './interactive-chat-action-result.js';
 import { runChatAction } from './interactive-chat-actions.js';
@@ -118,6 +119,10 @@ export async function runInteractiveChatSession(
     // the non-TUI plain/JSON paths (which pin exact output).
     const gitBranch = useTui ? detectGitBranch(options.workspaceRoot) : undefined;
     const gitWorktree = useTui ? detectGitWorktree(options.workspaceRoot) : undefined;
+    const welcomeData =
+        useTui && options.workspaceRoot !== undefined
+            ? await gatherWelcomeData({ workspaceRoot: options.workspaceRoot })
+            : undefined;
     const bridgeOptions: SessionBridgeOptions | undefined = useTui
         ? {
               providerID: options.modelProviderSelection.providerID,
@@ -134,6 +139,7 @@ export async function runInteractiveChatSession(
                   ? { initialApprovalLevel: options.initialApprovalLevel }
                   : {}),
               ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
+              ...(welcomeData !== undefined ? { welcomeData } : {}),
           }
         : undefined;
     const tuiBridge =

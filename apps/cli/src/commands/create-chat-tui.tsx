@@ -5,6 +5,7 @@ import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import { createRef } from 'react';
 import type { StatusBarProps } from '../components/StatusBar.js';
+import type { WelcomeData } from './welcome-data.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { type ChatStore, createChatStore } from './chat-store.js';
 import type { OpenTuiChatBridge } from './chat-tui-types.js';
@@ -19,6 +20,7 @@ export type ChatTuiOptions = {
     readonly isWorktree?: boolean;
     readonly initialHistoryEntries?: readonly string[];
     readonly initialApprovalLevel?: ApprovalLevel;
+    readonly welcomeData?: WelcomeData;
 };
 
 /**
@@ -120,6 +122,7 @@ export async function createChatTui(options: ChatTuiOptions): Promise<OpenTuiCha
                 textareaRef={textareaRef}
                 scrollboxRef={scrollboxRef}
                 statusBarProps={statusBarProps}
+                {...(options.welcomeData !== undefined ? { welcomeData: options.welcomeData } : {})}
             />
         </ChatKeymapProvider>,
     );
