@@ -1,15 +1,28 @@
 import {
     AgentIndex,
     type AgentRuntime,
+    completeRun,
+    createMission,
     discoverAgents,
+    ensureOmoDirs,
+    failRun,
     formatSkillInstructions,
     loadSkillBody,
+    materializeMission,
+    resolveOmoRoot,
     resolveUserConfigDir,
     type Skill,
     type SkillToolOutput,
+    startRun,
     type WorkflowRegistry,
 } from '@mission-control/core';
-import type { AbgGraphSpec, AgentDefinition, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
+import type {
+    AbgGraphSpec,
+    AgentDefinition,
+    AgentEvent,
+    ModelProviderSelection,
+    WorkflowSpec,
+} from '@mission-control/protocol';
 import type { ProviderAuthStore } from '../auth-store.js';
 import { type AgentsCommand, formatAgentDetails, formatAgentsList } from './agents-command.js';
 import { readDisabledSet, toggleDisabled } from './agents-disabled-config.js';
@@ -455,10 +468,103 @@ async function runWorkflowAction(
     chatOutput.write(`Running workflow "${action.name}"...\n`);
     chatOutput.showNotice?.(`Workflow: ${action.name}`);
     seedOverlayForWorkflow(coding, spec.graph);
-    return runPromptAction(runtime, chatOutput, action.prompt, modelProviderSelection, {
+
+    // Only persist when a fresh turn starts; a queued prompt runs behind an existing turn.
+    const runHandle =
+        coding.activeTurn === undefined
+            ? await tryCreateWorkflowRun(coding.workspaceRoot, spec, action.prompt)
+            : undefined;
+
+    if (runHandle === undefined) {
+        return runPromptAction(runtime, chatOutput, action.prompt, modelProviderSelection, {
+            ...coding,
+            graph: spec.graph,
+        });
+    }
+
+    const tracker = createRunOutcomeTracker();
+    const result = await runPromptAction(runtime, chatOutput, action.prompt, modelProviderSelection, {
         ...coding,
         graph: spec.graph,
+        emitEvent: (event: AgentEvent) => {
+            tracker.observe(event);
+            coding.emitEvent?.(event);
+        },
     });
+
+    if (result.activeTurn !== undefined) {
+        void result.activeTurn.done.then(() => {
+            void settleWorkflowRun(runHandle, tracker.getOutcome());
+        });
+    } else {
+        // Turn settled inline; a 'pending' outcome means no terminal event fired (e.g. no provider).
+        const outcome = tracker.getOutcome();
+        await settleWorkflowRun(runHandle, outcome === 'pending' ? 'failed' : outcome);
+    }
+
+    return result;
+}
+
+type WorkflowRunHandle = {
+    readonly omoRoot: string;
+    readonly missionId: string;
+    readonly runId: string;
+};
+
+type WorkflowRunOutcome = 'completed' | 'failed' | 'pending';
+
+/**
+ * Best-effort Mission/Run creation. Returns undefined when the workspace has no
+ * `.omo` root so the workflow proceeds without records.
+ */
+async function tryCreateWorkflowRun(
+    workspaceRoot: string | undefined,
+    spec: WorkflowSpec,
+    prompt: string,
+): Promise<WorkflowRunHandle | undefined> {
+    if (workspaceRoot === undefined) return undefined;
+    let omoRoot: string;
+    try {
+        omoRoot = await resolveOmoRoot(workspaceRoot);
+    } catch {
+        return undefined;
+    }
+    await ensureOmoDirs(omoRoot);
+    const mission = materializeMission(spec);
+    await createMission(omoRoot, mission);
+    const run = await startRun(omoRoot, mission.id, prompt);
+    return { omoRoot, missionId: mission.id, runId: run.id };
+}
+
+function createRunOutcomeTracker(): {
+    readonly observe: (event: AgentEvent) => void;
+    readonly getOutcome: () => WorkflowRunOutcome;
+} {
+    let outcome: WorkflowRunOutcome = 'pending';
+    return {
+        observe(event: AgentEvent): void {
+            if (outcome !== 'pending') return;
+            if (event.type === 'task.completed') {
+                outcome = 'completed';
+            } else if (event.type === 'task.failed') {
+                outcome = 'failed';
+            }
+        },
+        getOutcome(): WorkflowRunOutcome {
+            return outcome;
+        },
+    };
+}
+
+/**
+ * 'pending' is a no-op — the turn is blocked or still running, so the Run stays 'running'.
+ */
+async function settleWorkflowRun(handle: WorkflowRunHandle, outcome: WorkflowRunOutcome): Promise<void> {
+    if (outcome === 'completed') {
+        await completeRun(handle.omoRoot, handle.runId).catch(() => undefined);
+    } else if (outcome === 'failed') {
+        await failRun(handle.omoRoot, handle.runId, 'workflow turn failed').catch(() => undefined);
+    }
 }
 
 export async function startWorkflowTurn(
