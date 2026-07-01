@@ -107,7 +107,8 @@ Interactive chat chords are defined in the keybind registry (`apps/cli/src/platf
 - `Ctrl+Z` suspends the terminal (undo/redo are `Ctrl+-` / `Ctrl+.`).
 - `Home` / `End` scroll the transcript (buffer-home/end are `Ctrl+Shift+Home` / `Ctrl+Shift+End`).
 - `Ctrl+P` cycles the model (the command palette is `Alt+X`).
-- `Ctrl+G` toggles the ABG monitoring overlay.
+- `Ctrl+G` toggles the full ABG monitoring overlay.
+- `Ctrl+X` then `G` toggles the ABG minimap (a compact upper-right panel).
 - `Ctrl+C` (twice) interrupts or exits; it is hardcoded and routes through the global keyboard sink, not the keybind registry.
 
 ## Built-in Workflows
