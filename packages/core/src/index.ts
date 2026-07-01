@@ -237,6 +237,13 @@ export type {
     ProviderTurnRunResult,
 } from './providers/provider-turn-types.js';
 export { ProviderTurnError } from './providers/provider-turn-types.js';
+export {
+    type ContinuationOptions,
+    type ContinuationOutcome,
+    ContinuationRuntime,
+    ContinuationRuntimeError,
+    type ContinuationState,
+} from './runtime/continuation/continuation-runtime.js';
 export type { AgentExecutionContext, AgentTask, AgentTaskResult } from './runtime/execution-context.js';
 export type { AgentExecutor } from './runtime/executor.js';
 export { createGraphTurnRunner, type GraphTurnRunnerWiring } from './runtime/graph-coordinator-turn.js';
