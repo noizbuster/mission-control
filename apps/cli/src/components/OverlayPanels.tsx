@@ -19,6 +19,7 @@ import {
 } from '../commands/chat-store.js';
 import { loadDashboardAgentEntries } from '../commands/interactive-chat-actions.js';
 import { OverlayFrame } from './OverlayFrame.js';
+import { printableCharFromKey } from './overlay-key-input.js';
 import { ACCENTS, SELECTED_BG } from './overlay-theme.js';
 
 const MODEL_PICKER_MAX_VISIBLE = 10;
@@ -27,10 +28,6 @@ function useStoreSnapshot(store: ChatStore) {
     const subscribe = useCallback((cb: () => void) => store.subscribe(cb), [store]);
     const getSnapshot = useCallback(() => store.getSnapshot(), [store]);
     return useSyncExternalStore(subscribe, getSnapshot);
-}
-
-function isPrintableChar(key: { readonly name: string; readonly ctrl: boolean; readonly meta: boolean }): boolean {
-    return !key.ctrl && !key.meta && key.name.length === 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -124,9 +121,12 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                 store.deleteQuestionCustomChar();
                 return;
             }
-            if (isPrintableChar(key)) {
-                store.appendQuestionCustom(key.name);
-                return;
+            {
+                const ch = printableCharFromKey(key);
+                if (ch !== undefined) {
+                    store.appendQuestionCustom(ch);
+                    return;
+                }
             }
             return;
         }
@@ -405,9 +405,12 @@ export function RenameOverlay({ store }: RenameOverlayProps): React.ReactNode {
             store.deleteRenameChar();
             return;
         }
-        if (isPrintableChar(key)) {
-            store.appendRenameChar(key.name);
-            return;
+        {
+            const ch = printableCharFromKey(key);
+            if (ch !== undefined) {
+                store.appendRenameChar(ch);
+                return;
+            }
         }
     });
 
@@ -531,9 +534,12 @@ export function AgentsDashboardOverlay({ store, workspaceRoot }: AgentsDashboard
                 setEditBuffer((prev) => prev.slice(0, -1));
                 return;
             }
-            if (isPrintableChar(key)) {
-                setEditBuffer((prev) => prev + key.name);
-                return;
+            {
+                const ch = printableCharFromKey(key);
+                if (ch !== undefined) {
+                    setEditBuffer((prev) => prev + ch);
+                    return;
+                }
             }
             return;
         }
