@@ -504,6 +504,57 @@ describe('chat-store — snapshot referential stability', () => {
     });
 });
 
+describe('chat-store — ABG minimap toggle', () => {
+    it('abgMinimapVisible defaults to false', () => {
+        const store = createChatStore();
+        expect(store.getSnapshot().abgMinimapVisible).toBe(false);
+    });
+
+    it('toggleAbgMinimap flips the flag to true', () => {
+        const store = createChatStore();
+        store.toggleAbgMinimap();
+        expect(store.getSnapshot().abgMinimapVisible).toBe(true);
+    });
+
+    it('toggleAbgMinimap flips the flag back to false', () => {
+        const store = createChatStore();
+        store.toggleAbgMinimap();
+        store.toggleAbgMinimap();
+        expect(store.getSnapshot().abgMinimapVisible).toBe(false);
+    });
+
+    it('toggleAbgMinimap is independent of overlayMode', () => {
+        const store = createChatStore();
+        store.toggleAbgMinimap();
+        expect(store.getSnapshot().abgMinimapVisible).toBe(true);
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        store.toggleAbgOverlay();
+        expect(store.getSnapshot().overlayMode).toBe('abg');
+        expect(store.getSnapshot().abgMinimapVisible).toBe(true);
+    });
+
+    it('abgMinimapVisible persists when an unrelated modal opens and closes', () => {
+        const store = createChatStore();
+        store.toggleAbgMinimap();
+        expect(store.getSnapshot().abgMinimapVisible).toBe(true);
+        store.showApproval('file.edit', 'edit x.ts');
+        expect(store.getSnapshot().overlayMode).toBe('approval');
+        expect(store.getSnapshot().abgMinimapVisible).toBe(true);
+        store.hideApproval();
+        expect(store.getSnapshot().overlayMode).toBe('none');
+        expect(store.getSnapshot().abgMinimapVisible).toBe(true);
+    });
+
+    it('toggleAbgMinimap publishes a new snapshot reference', () => {
+        const store = createChatStore();
+        const first = store.getSnapshot();
+        store.toggleAbgMinimap();
+        const second = store.getSnapshot();
+        expect(second).not.toBe(first);
+        expect(second.abgMinimapVisible).toBe(true);
+    });
+});
+
 describe('chat-store — onModelCycleSelect callback', () => {
     it('fires the callback when set', () => {
         const store = createChatStore();

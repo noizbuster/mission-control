@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { Keybinds } from '../platform/keymap/keybind.js';
 import { parseChatLine } from './chat-commands.js';
 import { formatHotkeysText, runHotkeysAction } from './interactive-chat-hotkeys-action.js';
-import { Keybinds } from '../platform/keymap/keybind.js';
 
 type CapturingOutput = {
     readonly write: (text: string) => void;
@@ -65,6 +65,14 @@ describe('formatHotkeysText (registry-driven)', () => {
     it('renders the <leader> token resolved against the leader chord', () => {
         // tips_toggle is `<leader>h` with leader `ctrl+x` -> "Ctrl+X H".
         expect(text).toContain('Ctrl+X H');
+    });
+
+    it('includes the abg_minimap_toggle chord (Ctrl+X G) from the registry', () => {
+        expect(text).toContain('Ctrl+X G');
+    });
+
+    it('includes the session_timeline chord (Ctrl+X T) after the T6 move off <leader>g', () => {
+        expect(text).toContain('Ctrl+X T');
     });
 
     it('aligns the key column by display width (arrow glyphs count as width 1)', () => {

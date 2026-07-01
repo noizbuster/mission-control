@@ -37,13 +37,14 @@
  * config (T17) flows through.
  */
 
-import type { Keymap, KeymapEvent } from '@opentui/keymap';
+import type { Command, Keymap, KeymapEvent } from '@opentui/keymap';
 import {
     registerBackspacePopsPendingSequence,
     registerCommaBindings,
     registerEscapeClearsPendingSequence,
     registerTimedLeader,
 } from '@opentui/keymap/addons';
+import { CommandMap, expandToChords, Keybinds } from './keybind.js';
 
 /** The leader token name. `<leader>` in binding strings resolves to this. */
 export const LEADER_TOKEN_NAME = 'leader';
@@ -101,4 +102,36 @@ export function registerLeaderAddons<TTarget extends object, TEvent extends Keym
         offComma();
         offLeader();
     };
+}
+
+export interface AbgMinimapToggleDeps {
+    readonly toggleMinimap: () => void;
+    readonly isEnabled?: () => boolean;
+}
+
+export function registerAbgMinimapToggleLayer<TTarget extends object, TEvent extends KeymapEvent>(
+    keymap: Keymap<TTarget, TEvent>,
+    deps: AbgMinimapToggleDeps,
+): () => void {
+    const keybinds = Keybinds.parse({});
+    const chords = expandToChords(keybinds.abg_minimap_toggle);
+    const bindings = chords.map((key) => ({ key, cmd: CommandMap.abg_minimap_toggle }));
+
+    const commands: readonly Command<TTarget, TEvent>[] = [
+        {
+            name: CommandMap.abg_minimap_toggle,
+            desc: 'Toggle ABG minimap',
+            run: () => {
+                deps.toggleMinimap();
+                return true;
+            },
+        },
+    ];
+
+    return keymap.registerLayer({
+        priority: 0,
+        enabled: () => deps.isEnabled?.() ?? true,
+        commands,
+        bindings,
+    });
 }

@@ -189,4 +189,31 @@ describe('mctrl keybind registry', () => {
             expect(result).toBeUndefined();
         });
     });
+
+    describe('abg_minimap_toggle (T6)', () => {
+        it('defaults to <leader>g', () => {
+            expect(Keybinds.parse({}).abg_minimap_toggle).toBe('<leader>g');
+        });
+
+        it('maps to abg.minimap.toggle in CommandMap', () => {
+            expect(CommandMap.abg_minimap_toggle).toBe('abg.minimap.toggle');
+        });
+
+        it('session_timeline was moved off <leader>g to <leader>t', () => {
+            expect(Keybinds.parse({}).session_timeline).toBe('<leader>t');
+            expect(Keybinds.parse({}).session_timeline).not.toBe('<leader>g');
+        });
+
+        it('no two default keybinds own <leader>g', () => {
+            const defaults = Keybinds.parse({});
+            const owners = (Object.keys(defaults) as KeybindName[]).filter((name) => {
+                const chords = bindingChords(defaults[name]);
+                return chords
+                    .split(',')
+                    .map((token) => token.trim())
+                    .includes('<leader>g');
+            });
+            expect(owners).toEqual(['abg_minimap_toggle']);
+        });
+    });
 });

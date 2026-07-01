@@ -177,6 +177,8 @@ export type ChatStoreState = {
     readonly abgOverlayActiveTab: number;
     readonly abgOverlayScrollOffset: number;
     readonly abgOverlayLiveOutput: boolean;
+    /** Session-local minimap visibility (NOT persisted in AbgOverlayPrefsSchema). */
+    readonly abgMinimapVisible: boolean;
     readonly diffViewerEntries: readonly DiffEntry[];
     readonly diffViewerCursor: number;
     readonly sessionPickerEntries: readonly SessionPickerEntry[];
@@ -314,6 +316,7 @@ export class ChatStore {
             abgOverlayActiveTab: 0,
             abgOverlayScrollOffset: 0,
             abgOverlayLiveOutput: false,
+            abgMinimapVisible: false,
             diffViewerEntries: [],
             diffViewerCursor: 0,
             sessionPickerEntries: [],
@@ -633,6 +636,11 @@ export class ChatStore {
 
     toggleAbgOverlay(): void {
         this.state.overlayMode = this.state.overlayMode === 'abg' ? 'none' : 'abg';
+        this.publish();
+    }
+
+    toggleAbgMinimap(): void {
+        this.state.abgMinimapVisible = !this.state.abgMinimapVisible;
         this.publish();
     }
 

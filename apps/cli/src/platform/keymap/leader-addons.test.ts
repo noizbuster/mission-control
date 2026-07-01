@@ -28,7 +28,7 @@
 
 import { createTestKeymap } from '@opentui/keymap/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LEADER_TIMEOUT_MS, registerLeaderAddons } from './leader-addons.js';
+import { LEADER_TIMEOUT_MS, registerAbgMinimapToggleLayer, registerLeaderAddons } from './leader-addons.js';
 
 /**
  * Register a `<leader>m` -> command binding + handler that tracks firing.
@@ -159,6 +159,79 @@ describe('T7 leader + pending-sequence addons', () => {
         expect(marker.fired).toBe(true);
 
         offLayer();
+        off();
+        harness.cleanup();
+    });
+});
+
+describe('T6 abg_minimap_toggle leader chord', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('(a) <leader>g: ctrl+x then g fires abg.minimap.toggle', () => {
+        const harness = createTestKeymap({ defaultKeys: true });
+        const off = registerLeaderAddons(harness.keymap, { trigger: 'ctrl+x', timeoutMs: LEADER_TIMEOUT_MS });
+
+        const marker = { fired: false };
+        const offLayer = registerAbgMinimapToggleLayer(harness.keymap, {
+            toggleMinimap: () => {
+                marker.fired = true;
+            },
+        });
+
+        harness.host.press('x', { ctrl: true });
+        expect(harness.keymap.hasPendingSequence()).toBe(true);
+
+        harness.host.press('g');
+
+        expect(marker.fired).toBe(true);
+        expect(harness.keymap.hasPendingSequence()).toBe(false);
+
+        offLayer();
+        off();
+        harness.cleanup();
+    });
+
+    it('(b) the toggle fires only after the leader+g sequence, not on bare g', () => {
+        const harness = createTestKeymap({ defaultKeys: true });
+        const off = registerLeaderAddons(harness.keymap, { trigger: 'ctrl+x', timeoutMs: LEADER_TIMEOUT_MS });
+
+        const marker = { fired: false };
+        const offLayer = registerAbgMinimapToggleLayer(harness.keymap, {
+            toggleMinimap: () => {
+                marker.fired = true;
+            },
+        });
+
+        harness.host.press('g');
+        expect(marker.fired).toBe(false);
+
+        offLayer();
+        off();
+        harness.cleanup();
+    });
+
+    it('(c) the layer returns a disposer that cleanly removes the binding', () => {
+        const harness = createTestKeymap({ defaultKeys: true });
+        const off = registerLeaderAddons(harness.keymap, { trigger: 'ctrl+x', timeoutMs: LEADER_TIMEOUT_MS });
+
+        const marker = { fired: false };
+        const offLayer = registerAbgMinimapToggleLayer(harness.keymap, {
+            toggleMinimap: () => {
+                marker.fired = true;
+            },
+        });
+
+        offLayer();
+
+        harness.host.press('x', { ctrl: true });
+        harness.host.press('g');
+        expect(marker.fired).toBe(false);
+
         off();
         harness.cleanup();
     });

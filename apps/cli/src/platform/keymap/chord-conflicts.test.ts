@@ -108,6 +108,29 @@ describe('T6 no ABG-overlay collision on messages_first', () => {
     });
 });
 
+describe('T6 abg_minimap_toggle owns <leader>g exclusively', () => {
+    it('abg_minimap_toggle defaults to exactly <leader>g', () => {
+        expect(defaults.abg_minimap_toggle).toBe('<leader>g');
+    });
+    it('session_timeline was moved off <leader>g to <leader>t', () => {
+        expect(defaults.session_timeline).toBe('<leader>t');
+        expect(expandToChords(defaults.session_timeline)).not.toContain('<leader>g');
+    });
+    it('exactly one definition owns <leader>g across the entire catalog', () => {
+        const allChords = new Map<string, string[]>();
+        for (const [name, value] of Object.entries(defaults)) {
+            const chords = expandToChords(value);
+            for (const chord of chords) {
+                const owners = allChords.get(chord) ?? [];
+                owners.push(name);
+                allChords.set(chord, owners);
+            }
+        }
+        const leaderGOwners = allChords.get('<leader>g') ?? [];
+        expect(leaderGOwners).toEqual(['abg_minimap_toggle']);
+    });
+});
+
 describe('T6 messages_first / input_buffer_home overlap is intentional (layer priority)', () => {
     // Both bind ctrl+shift+home. This is the T10 resolution: input.* (priority 0)
     // wins while the textarea is focused; messages.* (priority -100) wins while

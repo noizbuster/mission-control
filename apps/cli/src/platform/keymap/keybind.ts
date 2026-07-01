@@ -88,6 +88,7 @@ export const Definitions = {
     editor_open: keybind('ctrl+e', 'Open external editor'),
     session_rename: keybind('ctrl+r', 'Rename session'),
     abg_overlay_toggle: keybind('ctrl+g', 'Toggle ABG monitoring overlay'),
+    abg_minimap_toggle: keybind('<leader>g', 'Toggle ABG minimap'),
     thinking_toggle: keybind('ctrl+t', 'Toggle thinking/reasoning display'),
     tool_expand: keybind('ctrl+o', 'Toggle tool output expand/collapse'),
     tips_toggle: keybind('<leader>h', 'Toggle tips'),
@@ -116,7 +117,7 @@ export const Definitions = {
     session_list: keybind('<leader>l', 'List all sessions'),
     session_compact: keybind('<leader>c', 'Compact the session'),
     session_export: keybind('<leader>x', 'Export session to editor'),
-    session_timeline: keybind('<leader>g', 'Show session timeline'),
+    session_timeline: keybind('<leader>t', 'Show session timeline'),
     session_queued_prompts: keybind('<leader>q', 'Manage queued prompts'),
 
     // messages scroll + nav
@@ -208,6 +209,7 @@ export const CommandMap = {
     editor_open: 'editor.open',
     session_rename: 'session.rename',
     abg_overlay_toggle: 'abg.overlay.toggle',
+    abg_minimap_toggle: 'abg.minimap.toggle',
     thinking_toggle: 'display.thinking.toggle',
     tool_expand: 'tool.expand.toggle',
     tips_toggle: 'tips.toggle',
