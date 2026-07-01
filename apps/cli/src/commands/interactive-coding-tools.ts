@@ -25,14 +25,16 @@ import {
     registerSkillTool,
     registerWebfetchTool,
     registerWebSearchTool,
+    registerWorkflowTool,
     type SdkModelResolver,
     selectWebSearchProvider,
     type ToolInvocationSettlement,
     ToolRegistry,
     type ToolRegistryWithMcp,
     todoWriteToolRegistration,
+    type WorkflowRegistry,
 } from '@mission-control/core';
-import type { AbgNodeModelOptions, ModelProviderSelection, PermissionRequest } from '@mission-control/protocol';
+import type { AbgNodeModelOptions, ModelProviderSelection, PermissionRequest, WorkflowSpec } from '@mission-control/protocol';
 import { type AgentEvent, type ToolCall, ToolResultSchema } from '@mission-control/protocol';
 import { readModelPatternOverrides } from './agents-model-overrides-config.js';
 import type { ApprovalLevel } from './approval-level.js';
@@ -83,6 +85,8 @@ export type InteractiveToolOptions = {
     readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
     readonly approvalLevel?: ApprovalLevel;
     readonly authStore?: ProviderAuthStore;
+    readonly workflowRegistry?: WorkflowRegistry;
+    readonly onWorkflowStarted?: (spec: WorkflowSpec, prompt: string) => void;
 };
 
 export async function createInteractiveToolRegistry(
@@ -106,6 +110,12 @@ export async function createInteractiveToolRegistry(
     registry.register(todoWriteToolRegistration);
     const skillDiscovery = await discoverSkills({ workspaceRoot: options.workspaceRoot });
     registerSkillTool(registry, { skills: skillDiscovery.skills });
+    if (options.workflowRegistry !== undefined) {
+        registerWorkflowTool(registry, {
+            registry: options.workflowRegistry,
+            ...(options.onWorkflowStarted !== undefined ? { onWorkflowStarted: options.onWorkflowStarted } : {}),
+        });
+    }
     await registerWebfetchTool(registry, {
         workspaceRoot: options.workspaceRoot,
         requestPermission: approvals.requestPermission,

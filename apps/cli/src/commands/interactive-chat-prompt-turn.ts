@@ -12,11 +12,14 @@ import {
     prependProjectContextMessages,
     type SdkModelResolver,
 } from '@mission-control/core';
-import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import type { AbgGraphSpec, AgentEvent, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
 import type { ApprovalLevel } from './approval-level.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { type ActiveCodingAgentTurn, startCodingAgentTurn } from './interactive-coding-agent.js';
+import type { WorkflowRegistry } from '@mission-control/core';
+
+export type WorkflowStartedCallback = (spec: WorkflowSpec, prompt: string) => void;
 
 export type PromptTurnContext = {
     readonly provider: ProviderAdapter | undefined;
@@ -37,6 +40,8 @@ export type PromptTurnContext = {
     readonly permissionSession?: PermissionSession;
     readonly onUsage?: (inputTokens: number | undefined) => void;
     readonly authStore?: ProviderAuthStore;
+    readonly workflowRegistry?: WorkflowRegistry;
+    readonly onWorkflowStarted?: WorkflowStartedCallback;
 };
 
 export async function startPromptTurn(
@@ -140,6 +145,8 @@ export async function startPromptTurn(
         ...(coding.permissionSession !== undefined ? { permissionSession: coding.permissionSession } : {}),
         ...(coding.onUsage !== undefined ? { onUsage: coding.onUsage } : {}),
         ...(coding.authStore !== undefined ? { authStore: coding.authStore } : {}),
+        ...(coding.workflowRegistry !== undefined ? { workflowRegistry: coding.workflowRegistry } : {}),
+        ...(coding.onWorkflowStarted !== undefined ? { onWorkflowStarted: coding.onWorkflowStarted } : {}),
     });
 }
 

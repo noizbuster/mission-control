@@ -21,6 +21,7 @@ import {
     type SessionRunOwnerReceipt,
     type SystemPromptEnvironment,
     type ToolInvocationSettlement,
+    type WorkflowRegistry,
 } from '@mission-control/core';
 import type {
     AbgGraphSpec,
@@ -29,6 +30,7 @@ import type {
     AgentEventEnvelope,
     ModelProviderSelection,
     ToolCall,
+    WorkflowSpec,
 } from '@mission-control/protocol';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
 import {
@@ -111,6 +113,8 @@ export type CodingAgentTurnOptions = {
      * Invoked only when usage is present on the event (non-cumulative snapshot).
      */
     readonly onUsage?: (inputTokens: number | undefined) => void;
+    readonly workflowRegistry?: WorkflowRegistry;
+    readonly onWorkflowStarted?: (spec: WorkflowSpec, prompt: string) => void;
 };
 
 export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Promise<ActiveCodingAgentTurn> {
@@ -201,6 +205,8 @@ async function createInteractiveRunOwner(
         ...(options.lspClient !== undefined ? { lspClient: options.lspClient } : {}),
         ...(options.requestUserQuestion !== undefined ? { requestUserQuestion: options.requestUserQuestion } : {}),
         ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
+        ...(options.workflowRegistry !== undefined ? { workflowRegistry: options.workflowRegistry } : {}),
+        ...(options.onWorkflowStarted !== undefined ? { onWorkflowStarted: options.onWorkflowStarted } : {}),
     };
     const { registry: toolRegistry, mcpConnectionManager } = await createInteractiveToolRegistry(
         toolOptions,
