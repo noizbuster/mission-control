@@ -20,7 +20,15 @@ import {
 import { loadDashboardAgentEntries } from '../commands/interactive-chat-actions.js';
 import { OverlayFrame } from './OverlayFrame.js';
 import { printableCharFromKey } from './overlay-key-input.js';
-import { ACCENTS, SELECTED_BG } from './overlay-theme.js';
+import {
+    ACCENTS,
+    LEFT_ACCENT_BORDER,
+    OVERLAY_PANEL_BG,
+    QUESTION_CURSOR,
+    QUESTION_CURSOR_FG,
+    QUESTION_SELECTED_FG,
+    SELECTED_BG,
+} from './overlay-theme.js';
 
 const MODEL_PICKER_MAX_VISIBLE = 10;
 
@@ -102,10 +110,14 @@ export type QuestionOverlayProps = { readonly store: ChatStore };
 export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNode {
     const snapshot = useStoreSnapshot(store);
 
+    const multiBatch =
+        snapshot.questionTabs.length > 1 ||
+        (snapshot.questionTabs.length === 1 && (snapshot.questionTabs[0]?.multiple ?? false));
+
     useKeyboard((key) => {
         if (snapshot.questionCustomMode) {
             if (key.name === 'return') {
-                store.resolveQuestion(snapshot.questionCustomBuffer);
+                store.submitCustomAnswer(snapshot.questionCustomBuffer);
                 return;
             }
             if (key.name === 'escape') {
@@ -113,7 +125,7 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                 return;
             }
             if (key.ctrl && key.name === 'c') {
-                store.resolveQuestion('');
+                store.rejectQuestion();
                 store.sendInterrupt('ctrl-c');
                 return;
             }
@@ -121,13 +133,31 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                 store.deleteQuestionCustomChar();
                 return;
             }
-            {
-                const ch = printableCharFromKey(key);
-                if (ch !== undefined) {
-                    store.appendQuestionCustom(ch);
-                    return;
-                }
+            const ch = printableCharFromKey(key);
+            if (ch !== undefined) {
+                store.appendQuestionCustom(ch);
             }
+            return;
+        }
+
+        if (snapshot.questionConfirmActive) {
+            if (key.name === 'return') {
+                store.confirmQuestionBatch();
+                return;
+            }
+            if (key.name === 'escape' || (key.ctrl && key.name === 'c')) {
+                store.rejectQuestion();
+                store.sendInterrupt(key.ctrl ? 'ctrl-c' : 'esc');
+            }
+            return;
+        }
+
+        if (multiBatch && (key.name === 'left' || key.name === 'h')) {
+            store.navigateQuestionTab(-1);
+            return;
+        }
+        if (multiBatch && (key.name === 'right' || key.name === 'l' || key.name === 'tab')) {
+            store.navigateQuestionTab(1);
             return;
         }
 
@@ -147,6 +177,15 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                 store.enterQuestionCustomMode();
                 return;
             }
+            // Batch: Enter picks (single → record + advance) or toggles (multi).
+            if (snapshot.questionTabs.length > 0) {
+                if (snapshot.questionMultiple) {
+                    store.toggleQuestionOption();
+                } else {
+                    store.selectQuestionByClick(snapshot.questionSelectedIndex);
+                }
+                return;
+            }
             if (snapshot.questionMultiple) {
                 const selected = snapshot.questionOptions
                     .filter((_opt, i) => snapshot.questionSelectedIndices.has(i))
@@ -162,43 +201,122 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
             store.toggleQuestionOption();
             return;
         }
-        if (key.name === 'escape') {
-            // ESC cancels the question AND aborts the run. resolveQuestion
-            // unblocks the ask_user tool (which is awaiting this promise); without
-            // it, sendInterrupt could not be processed because the runner is
-            // blocked on the same await.
-            store.resolveQuestion('');
-            store.sendInterrupt('esc');
-            return;
-        }
-        if (key.ctrl && key.name === 'c') {
-            store.resolveQuestion('');
-            store.sendInterrupt('ctrl-c');
-            return;
+        if (key.name === 'escape' || (key.ctrl && key.name === 'c')) {
+            // ESC/Ctrl+C cancels the question AND aborts the run. rejectQuestion
+            // unblocks the ask_user await; without it sendInterrupt could not be
+            // processed because the runner is blocked on that same await.
+            store.rejectQuestion();
+            store.sendInterrupt(key.ctrl ? 'ctrl-c' : 'esc');
         }
     });
 
-    const footerText = snapshot.questionMultiple
-        ? 'Click or Up/Down + Space to toggle, Enter to submit, Esc to cancel'
-        : 'Click or Up/Down + Enter to select, Esc to cancel';
+    const footerText = snapshot.questionConfirmActive
+        ? 'Enter to submit answers, Esc to cancel'
+        : multiBatch
+          ? '\u2190/\u2192 or Tab switch question \u00b7 Up/Dn + Enter to answer \u00b7 Esc cancel'
+          : snapshot.questionMultiple
+            ? 'Click or hover + Up/Dn, Space to toggle, Enter to submit, Esc to cancel'
+            : 'Click or hover + Up/Dn + Enter to select, Esc to cancel';
 
     const onOptionClick = (index: number) => (event: MouseEvent) => {
         if (event.button !== MouseButton.LEFT) return;
         store.selectQuestionByClick(index);
     };
+    const onOptionHover = (index: number) => (): void => store.hoverQuestion(index);
+    const onTabHover = (index: number) => (): void => store.hoverQuestionTab(index);
 
+    // Each text line is wrapped in its own <box>: opentui merges adjacent
+    // <text> siblings onto one row, which is what jumbled the old layout.
     return (
-        <OverlayFrame
-            variant="panel"
-            title="Question"
-            accent={ACCENTS.question}
-            {...(snapshot.questionCustomMode ? {} : { footer: footerText })}
+        <box
+            flexShrink={0}
+            flexDirection="column"
+            border={['left']}
+            borderColor={ACCENTS.question}
+            customBorderChars={LEFT_ACCENT_BORDER}
+            backgroundColor={OVERLAY_PANEL_BG}
+            paddingLeft={1}
+            paddingRight={1}
         >
-            {snapshot.questionHeader.length > 0 ? (
-                <text attributes={TextAttributes.BOLD}>{snapshot.questionHeader}</text>
+            <box height={1}>
+                <text fg={ACCENTS.question} attributes={TextAttributes.BOLD}>
+                    {multiBatch ? ` Question (${snapshot.questionTabIndex + 1}/${snapshot.questionTabs.length}) ` : ' Question '}
+                </text>
+            </box>
+            {multiBatch && !snapshot.questionCustomMode ? (
+                <box height={1}>
+                    <box flexDirection="row">
+                        {snapshot.questionTabs.map((tab, index) => {
+                            const isActive = index === snapshot.questionTabIndex;
+                            const isAnswered = (snapshot.questionAnswers[index]?.length ?? 0) > 0;
+                            const tabBg = isActive ? { backgroundColor: ACCENTS.question } : {};
+                            return (
+                                // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; Left/Right/Tab nav already exists, mouse is an enhancement
+                                <box
+                                    key={`q-tab-${index}-${tab.header}`}
+                                    paddingLeft={1}
+                                    paddingRight={1}
+                                    onMouseOver={onTabHover(index)}
+                                    {...tabBg}
+                                >
+                                    <text
+                                        {...(isActive
+                                              ? { fg: '#000000' }
+                                              : isAnswered
+                                                ? {}
+                                                : { attributes: TextAttributes.DIM })}
+                                    >
+                                        {`${index + 1}. ${tab.header.length > 0 ? tab.header : tab.question.slice(0, 20)}`}
+                                    </text>
+                                </box>
+                            );
+                        })}
+                        <box
+                            paddingLeft={1}
+                            paddingRight={1}
+                            onMouseOver={onTabHover(snapshot.questionTabs.length)}
+                            {...(snapshot.questionConfirmActive ? { backgroundColor: ACCENTS.question } : {})}
+                        >
+                            <text
+                                {...(snapshot.questionConfirmActive
+                                      ? { fg: '#000000' }
+                                      : { attributes: TextAttributes.DIM })}
+                            >
+                                Confirm
+                            </text>
+                        </box>
+                    </box>
+                </box>
             ) : null}
-            <text>{snapshot.questionText}</text>
-            {snapshot.questionCustomMode ? (
+            {snapshot.questionConfirmActive ? (
+                <box flexDirection="column" marginTop={1}>
+                    <box height={1}>
+                        <text attributes={TextAttributes.BOLD}>Review your answers</text>
+                    </box>
+                    {snapshot.questionTabs.map((tab, index) => {
+                        const value = snapshot.questionAnswers[index]?.join(', ') ?? '';
+                        const answered = value.length > 0;
+                        return (
+                            <box key={`q-rev-${index}-${tab.header}`} flexDirection="row" paddingLeft={1}>
+                                <text attributes={TextAttributes.DIM}>{`${tab.header.length > 0 ? tab.header : tab.question}: `}</text>
+                                <text fg={answered ? QUESTION_SELECTED_FG : '#ff6b6b'}>
+                                    {answered ? value : '(not answered)'}
+                                </text>
+                            </box>
+                        );
+                    })}
+                </box>
+            ) : snapshot.questionHeader.length > 0 ? (
+                <box height={1}>
+                    <text attributes={TextAttributes.BOLD}>{snapshot.questionHeader}</text>
+                </box>
+            ) : null}
+            {snapshot.questionConfirmActive ? null : (
+                <box>
+                    <text>{snapshot.questionText}</text>
+                </box>
+            )}
+            {snapshot.questionConfirmActive ? null : snapshot.questionCustomMode ? (
                 <box marginTop={1}>
                     <box flexDirection="row">
                         <text fg="#ff00ff">{'>'}</text>
@@ -207,31 +325,45 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                             {'\u2588'}
                         </text>
                     </box>
-                    <text attributes={TextAttributes.DIM}>
-                        Enter to submit, Esc to go back to options, Ctrl+C to cancel
-                    </text>
+                    <box height={1}>
+                        <text attributes={TextAttributes.DIM}>
+                            Enter to submit, Esc to go back to options, Ctrl+C to cancel
+                        </text>
+                    </box>
                 </box>
             ) : (
                 <box flexDirection="column" marginTop={1}>
                     {snapshot.questionOptions.map((option, index) => {
                         const isCursor = index === snapshot.questionSelectedIndex;
-                        const prefix = snapshot.questionMultiple
+                        const marker = snapshot.questionMultiple
                             ? `${snapshot.questionSelectedIndices.has(index) ? '[x] ' : '[ ] '}`
-                            : '';
+                            : `${index + 1}. `;
+                        const rowBg = isCursor ? { backgroundColor: SELECTED_BG } : {};
+                        const labelStyle = isCursor
+                            ? { fg: QUESTION_SELECTED_FG, attributes: TextAttributes.BOLD }
+                            : {};
+                        const descStyle = isCursor
+                            ? { fg: QUESTION_SELECTED_FG }
+                            : { attributes: TextAttributes.DIM };
                         return (
                             // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; Up/Down/Enter/Space keyboard nav already exists, mouse is an enhancement
                             <box
                                 key={`q-opt-${option.label}`}
                                 flexDirection="column"
                                 onMouseDown={onOptionClick(index)}
+                                onMouseOver={onOptionHover(index)}
+                                {...rowBg}
                             >
-                                <text {...(isCursor ? { bg: SELECTED_BG } : {})}>
-                                    {isCursor ? '> ' : '  '}
-                                    {prefix}
-                                    {option.label}
-                                </text>
+                                <box flexDirection="row">
+                                    <text {...(isCursor ? { fg: QUESTION_CURSOR_FG } : {})}>
+                                        {isCursor ? `${QUESTION_CURSOR} ` : '  '}
+                                    </text>
+                                    <text {...labelStyle}>{`${marker}${option.label}`}</text>
+                                </box>
                                 {option.description !== undefined ? (
-                                    <text attributes={TextAttributes.DIM}>{`    ${option.description}`}</text>
+                                    <box flexDirection="row" paddingLeft={2}>
+                                        <text {...descStyle}>{option.description}</text>
+                                    </box>
                                 ) : null}
                             </box>
                         );
@@ -241,24 +373,38 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                         : (() => {
                               const customIndex = snapshot.questionOptions.length;
                               const isSelected = customIndex === snapshot.questionSelectedIndex;
+                              const rowBg = isSelected ? { backgroundColor: SELECTED_BG } : {};
                               return (
                                   // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; Enter on this row already enters custom mode, mouse is an enhancement
-                                  <box flexDirection="row" onMouseDown={onOptionClick(customIndex)}>
-                                      <text {...(isSelected ? { bg: SELECTED_BG } : {})}>
-                                          {isSelected ? '> ' : '  '}
-                                      </text>
-                                      <text
-                                          attributes={TextAttributes.DIM}
-                                          {...(isSelected ? { bg: SELECTED_BG } : {})}
-                                      >
-                                          Type custom answer...
-                                      </text>
+                                  <box
+                                      flexDirection="column"
+                                      onMouseDown={onOptionClick(customIndex)}
+                                      onMouseOver={onOptionHover(customIndex)}
+                                      {...rowBg}
+                                  >
+                                      <box flexDirection="row">
+                                          <text {...(isSelected ? { fg: QUESTION_CURSOR_FG } : {})}>
+                                              {isSelected ? `${QUESTION_CURSOR} ` : '  '}
+                                          </text>
+                                          <text
+                                              {...(isSelected
+                                                  ? { fg: QUESTION_SELECTED_FG }
+                                                  : { attributes: TextAttributes.DIM })}
+                                          >
+                                              {`${customIndex + 1}. Type custom answer...`}
+                                          </text>
+                                      </box>
                                   </box>
                               );
                           })()}
                 </box>
             )}
-        </OverlayFrame>
+            {snapshot.questionCustomMode ? null : (
+                <box height={1} marginTop={1}>
+                    <text attributes={TextAttributes.DIM}>{footerText}</text>
+                </box>
+            )}
+        </box>
     );
 }
 

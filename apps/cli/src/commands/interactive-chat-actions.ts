@@ -673,6 +673,7 @@ async function runApprovalResumeAction(
             ...(coding.engine !== undefined ? { engine: coding.engine } : {}),
             ...(coding.resolveSdkModel !== undefined ? { resolveSdkModel: coding.resolveSdkModel } : {}),
             ...(coding.requestUserQuestion !== undefined ? { requestUserQuestion: coding.requestUserQuestion } : {}),
+            ...(coding.requestUserQuestions !== undefined ? { requestUserQuestions: coding.requestUserQuestions } : {}),
             ...(coding.abgOverlayController !== undefined ? { abgOverlayController: coding.abgOverlayController } : {}),
             ...(coding.pricingTable !== undefined ? { pricingTable: coding.pricingTable } : {}),
             ...(coding.permissionSession !== undefined ? { permissionSession: coding.permissionSession } : {}),

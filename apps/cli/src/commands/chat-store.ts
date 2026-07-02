@@ -48,7 +48,7 @@ import {
     setModelsOverlaySearchQuery as reduceModelsOverlaySearchQuery,
     selectModelForAssignment as selectModelForAssignmentReducer,
 } from './models-overlay-state.js';
-import { normalizeQuestionOptions, type QuestionOption } from './question-types.js';
+import { normalizeQuestionOptions, type QuestionBatchEntry, type QuestionOption } from './question-types.js';
 
 export type ChatStoreOverlayMode =
     | 'none'
@@ -194,6 +194,10 @@ export type ChatStoreState = {
     readonly questionSelectedIndices: Set<number>;
     readonly questionCustomMode: boolean;
     readonly questionCustomBuffer: string;
+    readonly questionTabs: readonly QuestionBatchEntry[];
+    readonly questionTabIndex: number;
+    readonly questionAnswers: readonly (readonly string[])[];
+    readonly questionConfirmActive: boolean;
     readonly modelPickerChoices: readonly ModelChoice[];
     readonly modelPickerKeypress: ProviderPromptKeypressState;
     readonly levelPickerSelectedIndex: number;
@@ -291,6 +295,7 @@ export class ChatStore {
     private modelPickerResolve: ((selection: ModelProviderSelection | undefined) => void) | undefined;
     private levelPickerResolve: ((level: string | undefined) => void) | undefined;
     private questionResolve: ((answer: string) => void) | undefined;
+    private questionBatchResolve: ((answers: string[]) => void) | undefined;
     private sessionPickerResolve: ((sessionId: string | undefined) => void) | undefined;
     private emitScheduled = false;
     private transientNoticeCounter = 0;
@@ -334,6 +339,10 @@ export class ChatStore {
             questionSelectedIndices: new Set<number>(),
             questionCustomMode: false,
             questionCustomBuffer: '',
+            questionTabs: [],
+            questionTabIndex: 0,
+            questionAnswers: [],
+            questionConfirmActive: false,
             modelPickerChoices: [],
             modelPickerKeypress: createProviderPromptKeypressState(),
             levelPickerSelectedIndex: 0,
@@ -503,10 +512,130 @@ export class ChatStore {
         this.state.questionSelectedIndices = new Set<number>();
         this.state.questionCustomMode = false;
         this.state.questionCustomBuffer = '';
+        this.state.questionTabs = [];
+        this.state.questionTabIndex = 0;
+        this.state.questionAnswers = [];
+        this.state.questionConfirmActive = false;
         this.publish();
         return new Promise<string>((resolve) => {
             this.questionResolve = resolve;
         });
+    }
+
+    /** Multi-question batch as ONE tabbed overlay (opencode-style). A lone
+     * non-multiple question resolves immediately with no tabs; otherwise a
+     * trailing Confirm tab is added. Resolves with one answer string per
+     * question (multi-select comma-joined), in order. */
+    showQuestionBatch(entries: readonly QuestionBatchEntry[]): Promise<string[]> {
+        const tabs = entries.map((entry) => ({ ...entry, options: normalizeQuestionOptions(entry.options) }));
+        this.state.overlayMode = 'question';
+        this.state.questionTabs = tabs;
+        this.state.questionTabIndex = 0;
+        this.state.questionAnswers = tabs.map((): string[] => []);
+        this.state.questionConfirmActive = false;
+        this.loadQuestionTab(0);
+        this.publish();
+        return new Promise<string[]>((resolve) => {
+            this.questionBatchResolve = resolve;
+        });
+    }
+
+    private loadQuestionTab(index: number): void {
+        const tab = this.state.questionTabs[index];
+        if (tab === undefined) return;
+        this.state.questionText = tab.question;
+        this.state.questionHeader = tab.header;
+        this.state.questionOptions = tab.options;
+        this.state.questionMultiple = tab.multiple;
+        this.state.questionSelectedIndex = 0;
+        const labels = this.state.questionAnswers[index] ?? [];
+        const indices = new Set<number>();
+        for (const label of labels) {
+            const optIdx = tab.options.findIndex((option) => option.label === label);
+            if (optIdx >= 0) indices.add(optIdx);
+        }
+        this.state.questionSelectedIndices = indices;
+        this.state.questionCustomMode = false;
+        this.state.questionCustomBuffer = '';
+    }
+
+    /** Tabs + Confirm show when N>1 OR any question is multiple-select. */
+    private multiQuestionBatch(): boolean {
+        const tabs = this.state.questionTabs;
+        return tabs.length > 1 || (tabs.length === 1 && tabs[0]?.multiple === true);
+    }
+
+    private questionTabCount(): number {
+        return this.multiQuestionBatch() ? this.state.questionTabs.length + 1 : this.state.questionTabs.length;
+    }
+
+    navigateQuestionTab(direction: 1 | -1): void {
+        if (this.state.questionTabs.length === 0 || !this.multiQuestionBatch()) return;
+        const total = this.questionTabCount();
+        this.state.questionTabIndex = (this.state.questionTabIndex + direction + total) % total;
+        this.state.questionConfirmActive = this.state.questionTabIndex === this.state.questionTabs.length;
+        if (!this.state.questionConfirmActive) {
+            this.loadQuestionTab(this.state.questionTabIndex);
+        }
+        this.publish();
+    }
+
+    selectQuestionTab(index: number): void {
+        if (this.state.questionTabs.length === 0 || !this.multiQuestionBatch()) return;
+        const total = this.questionTabCount();
+        if (index < 0 || index >= total) return;
+        this.state.questionTabIndex = index;
+        this.state.questionConfirmActive = index === this.state.questionTabs.length;
+        if (!this.state.questionConfirmActive) {
+            this.loadQuestionTab(index);
+        }
+        this.publish();
+    }
+
+    hoverQuestionTab(index: number): void {
+        this.selectQuestionTab(index);
+    }
+
+    /** Single-select pick: record the answer, then advance — or resolve at
+     * once for a lone non-multiple question. */
+    private pickQuestionAnswer(label: string): void {
+        const idx = this.state.questionTabIndex;
+        if (idx < this.state.questionTabs.length) {
+            this.state.questionAnswers = this.state.questionAnswers.map((answers, i) =>
+                i === idx ? [label] : answers,
+            );
+        }
+        if (!this.multiQuestionBatch()) {
+            this.resolveQuestionBatch([label]);
+            return;
+        }
+        this.navigateQuestionTab(1);
+    }
+
+    /** Resolve the batch (multi-select answers comma-joined). Confirm-tab Enter. */
+    confirmQuestionBatch(): void {
+        const answers = this.state.questionAnswers.map((labels) => labels.join(', '));
+        this.resolveQuestionBatch(answers);
+    }
+
+    /** Cancel: resolve single with '', or the whole batch with empty answers. */
+    rejectQuestion(): void {
+        if (this.state.questionTabs.length > 0) {
+            this.resolveQuestionBatch(this.state.questionTabs.map((): string => ''));
+            return;
+        }
+        this.resolveQuestion('');
+    }
+
+    private resolveQuestionBatch(answers: string[]): void {
+        const resolve = this.questionBatchResolve;
+        this.questionBatchResolve = undefined;
+        this.state.overlayMode = 'none';
+        this.state.questionTabs = [];
+        this.state.questionAnswers = [];
+        this.state.questionConfirmActive = false;
+        this.publish();
+        resolve?.(answers);
     }
 
     resolveQuestion(answer: string): void {
@@ -818,6 +947,22 @@ export class ChatStore {
         this.publish();
     }
 
+    /**
+     * Move the question cursor to `index` without resolving (mouse hover).
+     * Unlike {@link selectQuestionByClick}, this never submits — it only makes
+     * the hovered row the active row. No-op outside a question overlay.
+     */
+    hoverQuestion(index: number): void {
+        if (this.state.overlayMode !== 'question') return;
+        const total = this.state.questionMultiple
+            ? this.state.questionOptions.length
+            : this.state.questionOptions.length + 1;
+        if (index < 0 || index >= total) return;
+        if (this.state.questionSelectedIndex === index) return;
+        this.state.questionSelectedIndex = index;
+        this.publish();
+    }
+
     toggleQuestionOption(): void {
         const index = this.state.questionSelectedIndex;
         if (index >= this.state.questionOptions.length) return;
@@ -828,13 +973,29 @@ export class ChatStore {
             next.add(index);
         }
         this.state.questionSelectedIndices = next;
+        this.syncMultiTabAnswers();
         this.publish();
+    }
+
+    /** Push the current tab's multi-select labels into the answers array so the
+     * tab strip's "answered" state and the Confirm review stay live. */
+    private syncMultiTabAnswers(): void {
+        const idx = this.state.questionTabIndex;
+        const tab = this.state.questionTabs[idx];
+        if (tab === undefined || !tab.multiple) return;
+        const labels: string[] = [];
+        for (const i of this.state.questionSelectedIndices) {
+            const opt = tab.options[i];
+            if (opt !== undefined) labels.push(opt.label);
+        }
+        this.state.questionAnswers = this.state.questionAnswers.map((answers, i) => (i === idx ? labels : answers));
     }
 
     /**
      * Single-select resolves immediately with the clicked label;
      * multi-select toggles membership (mirrors Enter vs Space). The trailing
-     * custom-answer row enters custom-input mode.
+     * custom-answer row enters custom-input mode. In a batch, a single-select
+     * pick records the answer and advances to the next tab instead of resolving.
      */
     selectQuestionByClick(index: number): void {
         if (index < 0) return;
@@ -855,11 +1016,41 @@ export class ChatStore {
                 next.add(index);
             }
             this.state.questionSelectedIndices = next;
+            this.syncMultiTabAnswers();
             this.publish();
             return;
         }
         const selected = this.state.questionOptions[index];
-        this.resolveQuestion(selected?.label ?? '');
+        const label = selected?.label ?? '';
+        if (this.state.questionTabs.length > 0) {
+            this.pickQuestionAnswer(label);
+            return;
+        }
+        this.resolveQuestion(label);
+    }
+
+    /** Submit the typed custom answer. Batch single-select records + advances
+     * (or resolves for a lone question); batch multi adds the text; single mode
+     * resolves outright. Exits custom-input mode in every case. */
+    submitCustomAnswer(text: string): void {
+        this.state.questionCustomMode = false;
+        this.state.questionCustomBuffer = '';
+        if (this.state.questionTabs.length === 0) {
+            this.resolveQuestion(text);
+            return;
+        }
+        if (this.state.questionMultiple) {
+            const idx = this.state.questionTabIndex;
+            const current = this.state.questionAnswers[idx] ?? [];
+            if (!current.includes(text)) {
+                this.state.questionAnswers = this.state.questionAnswers.map((answers, i) =>
+                    i === idx ? [...current, text] : answers,
+                );
+            }
+            this.publish();
+            return;
+        }
+        this.pickQuestionAnswer(text);
     }
 
     enterQuestionCustomMode(): void {

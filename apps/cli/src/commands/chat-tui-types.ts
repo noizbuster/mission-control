@@ -6,7 +6,7 @@ import type { DashboardAgentEntry, MissionPanelRow, SessionPickerEntry } from '.
 import type { ChatInputEvent } from './interactive-chat-io.js';
 import type { ModelChoice } from './interactive-chat-model.js';
 import type { ModelsOverlayRoleRow } from './models-overlay-state.js';
-import type { QuestionOption } from './question-types.js';
+import type { QuestionBatchEntry, QuestionOption } from './question-types.js';
 import type { WelcomeData } from './welcome-data.js';
 
 /** Public surface consumed by the imperative chat loop. */
@@ -51,6 +51,9 @@ export type OpenTuiChatBridge = {
         options: readonly (string | QuestionOption)[],
         metadata?: { readonly header?: string; readonly multiple?: boolean },
     ) => Promise<string>;
+    /** Multi-question batch as one tabbed overlay (opencode-style). Resolves
+     * with one answer string per entry, in order. */
+    readonly showQuestionBatch: (entries: readonly QuestionBatchEntry[]) => Promise<string[]>;
     readonly applyAbgOverlayPrefs: (prefs: {
         readonly activeTabIndex: number;
         readonly scrollOffset: number;

@@ -8,6 +8,14 @@ export type QuestionOption = {
     readonly description?: string;
 };
 
+/** One resolved entry in a multi-question batch; `header`/`multiple` defaulted, `options` normalized. */
+export type QuestionBatchEntry = {
+    readonly question: string;
+    readonly header: string;
+    readonly options: readonly QuestionOption[];
+    readonly multiple: boolean;
+};
+
 /**
  * Normalize legacy `string[]` or labeled `{ label, description? }` options.
  * The conditional `description` spread honors `exactOptionalPropertyTypes`

@@ -33,6 +33,7 @@ export type PromptTurnContext = {
     readonly engine?: 'graph';
     readonly resolveSdkModel?: SdkModelResolver;
     readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
+    readonly requestUserQuestions?: (requests: readonly AskUserQuestionRequest[]) => Promise<string[]>;
     readonly abgOverlayController?: AbgOverlayController;
     readonly pricingTable?: PricingTable;
     readonly approvalLevel?: ApprovalLevel;
@@ -139,6 +140,7 @@ export async function startPromptTurn(
         ...(coding.engine !== undefined ? { engine: coding.engine } : {}),
         ...(coding.resolveSdkModel !== undefined ? { resolveSdkModel: coding.resolveSdkModel } : {}),
         ...(coding.requestUserQuestion !== undefined ? { requestUserQuestion: coding.requestUserQuestion } : {}),
+        ...(coding.requestUserQuestions !== undefined ? { requestUserQuestions: coding.requestUserQuestions } : {}),
         ...(coding.abgOverlayController !== undefined ? { abgOverlayController: coding.abgOverlayController } : {}),
         ...(coding.pricingTable !== undefined ? { pricingTable: coding.pricingTable } : {}),
         ...(coding.approvalLevel !== undefined ? { approvalLevel: coding.approvalLevel } : {}),

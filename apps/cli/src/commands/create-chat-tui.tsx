@@ -55,6 +55,7 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Op
         showApproval: (toolName, action) => store.showApproval(toolName, action),
         hideApproval: () => store.hideApproval(),
         showQuestion: (question, options, metadata?) => store.showQuestion(question, options, metadata),
+        showQuestionBatch: (entries) => store.showQuestionBatch(entries),
         setGenerating: (value) => store.setGenerating(value),
         setAgentStatus: (text) => store.setAgentStatus(text),
         clearAgentStatus: () => store.clearAgentStatus(),

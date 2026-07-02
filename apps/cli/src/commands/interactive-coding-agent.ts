@@ -89,6 +89,7 @@ export type CodingAgentTurnOptions = {
      * (no host surface to ask the user). The interactive TUI supplies the Ink question overlay.
      */
     readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
+    readonly requestUserQuestions?: (requests: readonly AskUserQuestionRequest[]) => Promise<string[]>;
     /**
      * Optional ABG overlay controller (Wave 2). When present, its plane-A `observer` is composed
      * into the interactive graph signal tap (single-slot `onSignal`, Metis 1.1), its
@@ -205,6 +206,7 @@ async function createInteractiveRunOwner(
         ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
         ...(options.lspClient !== undefined ? { lspClient: options.lspClient } : {}),
         ...(options.requestUserQuestion !== undefined ? { requestUserQuestion: options.requestUserQuestion } : {}),
+        ...(options.requestUserQuestions !== undefined ? { requestUserQuestions: options.requestUserQuestions } : {}),
         ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
         ...(options.workflowRegistry !== undefined ? { workflowRegistry: options.workflowRegistry } : {}),
         ...(options.onWorkflowStarted !== undefined ? { onWorkflowStarted: options.onWorkflowStarted } : {}),

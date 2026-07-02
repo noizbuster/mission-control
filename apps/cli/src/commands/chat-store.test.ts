@@ -257,6 +257,116 @@ describe('chat-store — question overlay', () => {
         expect(snapshot.questionSelectedIndex).toBe(2);
         expect(snapshot.questionCustomBuffer).toBe('');
     });
+
+    it('hoverQuestion moves the cursor without resolving (single-select)', () => {
+        const store = createChatStore();
+        const promise = store.showQuestion('Continue?', ['yes', 'no']);
+        store.hoverQuestion(1);
+        const snapshot = store.getSnapshot();
+        expect(snapshot.questionSelectedIndex).toBe(1);
+        expect(snapshot.overlayMode).toBe('question');
+        store.resolveQuestion('');
+        return promise;
+    });
+
+    it('hoverQuestion reaches the custom-answer row and is a no-op when already active', () => {
+        const store = createChatStore();
+        store.showQuestion('Continue?', ['yes', 'no']);
+        store.hoverQuestion(2);
+        expect(store.getSnapshot().questionSelectedIndex).toBe(2);
+        expect(store.getSnapshot().questionCustomMode).toBe(false);
+        store.hoverQuestion(2);
+        expect(store.getSnapshot().questionSelectedIndex).toBe(2);
+    });
+
+    it('hoverQuestion is a no-op when no question overlay is open', () => {
+        const store = createChatStore();
+        store.hoverQuestion(0);
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+});
+
+describe('chat-store — multi-question batch', () => {
+    it('showQuestionBatch opens a tabbed overlay with a confirm tab for N>1', () => {
+        const store = createChatStore();
+        store.showQuestionBatch([
+            { question: 'Lang?', header: 'Language', options: [{ label: 'TS' }, { label: 'Go' }], multiple: false },
+            { question: 'Level?', header: 'Level', options: [{ label: 'Junior' }, { label: 'Senior' }], multiple: false },
+        ]);
+        const snapshot = store.getSnapshot();
+        expect(snapshot.overlayMode).toBe('question');
+        expect(snapshot.questionTabs).toHaveLength(2);
+        expect(snapshot.questionConfirmActive).toBe(false);
+        expect(snapshot.questionText).toBe('Lang?');
+    });
+
+    it('a single-select pick advances to the next tab, then confirm submits all answers', async () => {
+        const store = createChatStore();
+        const promise = store.showQuestionBatch([
+            { question: 'Lang?', header: 'Language', options: [{ label: 'TS' }, { label: 'Go' }], multiple: false },
+            { question: 'Level?', header: 'Level', options: [{ label: 'Junior' }, { label: 'Senior' }], multiple: false },
+        ]);
+        store.selectQuestionByClick(0);
+        expect(store.getSnapshot().questionTabIndex).toBe(1);
+        store.selectQuestionByClick(1);
+        expect(store.getSnapshot().questionConfirmActive).toBe(true);
+        store.confirmQuestionBatch();
+        expect(await promise).toEqual(['TS', 'Senior']);
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+
+    it('Left/Right tab navigation wraps across questions + confirm and preserves answers', () => {
+        const store = createChatStore();
+        store.showQuestionBatch([
+            { question: 'A?', header: 'A', options: [{ label: 'a1' }, { label: 'a2' }], multiple: false },
+            { question: 'B?', header: 'B', options: [{ label: 'b1' }, { label: 'b2' }], multiple: false },
+        ]);
+        store.selectQuestionByClick(1);
+        store.navigateQuestionTab(-1); // back to tab 0
+        expect(store.getSnapshot().questionTabIndex).toBe(0);
+        expect(store.getSnapshot().questionConfirmActive).toBe(false);
+        store.navigateQuestionTab(-1); // wrap back from 0 → confirm tab
+        expect(store.getSnapshot().questionConfirmActive).toBe(true);
+    });
+
+    it('multi-select toggles membership and only resolves at confirm', async () => {
+        const store = createChatStore();
+        const promise = store.showQuestionBatch([
+            { question: 'Toppings?', header: 'Toppings', options: [{ label: 'cheese' }, { label: 'mushroom' }, { label: 'olive' }], multiple: true },
+        ]);
+        // single multiple-select question → multi batch (has confirm tab)
+        expect(store.getSnapshot().questionConfirmActive).toBe(false);
+        store.navigateQuestion(1);        store.toggleQuestionOption();        store.navigateQuestion(1);        store.toggleQuestionOption();        expect(store.getSnapshot().questionSelectedIndices).toEqual(new Set<number>([1, 2]));
+        store.navigateQuestionTab(1); // to confirm tab
+        expect(store.getSnapshot().questionConfirmActive).toBe(true);
+        store.confirmQuestionBatch();
+        expect(await promise).toEqual(['mushroom, olive']);
+    });
+
+    it('rejectQuestion cancels the whole batch with empty answers', async () => {
+        const store = createChatStore();
+        const promise = store.showQuestionBatch([
+            { question: 'A?', header: 'A', options: [{ label: 'a1' }, { label: 'a2' }], multiple: false },
+            { question: 'B?', header: 'B', options: [{ label: 'b1' }, { label: 'b2' }], multiple: false },
+        ]);
+        store.selectQuestionByClick(0);
+        store.rejectQuestion();
+        expect(await promise).toEqual(['', '']);
+        expect(store.getSnapshot().overlayMode).toBe('none');
+    });
+
+    it('showQuestion (single) resets batch state so no tabs render', () => {
+        const store = createChatStore();
+        store.showQuestionBatch([
+            { question: 'A?', header: 'A', options: [{ label: 'a1' }], multiple: false },
+            { question: 'B?', header: 'B', options: [{ label: 'b1' }], multiple: false },
+        ]);
+        store.showQuestion('Plain?', ['x', 'y']);
+        const snapshot = store.getSnapshot();
+        expect(snapshot.questionTabs).toHaveLength(0);
+        expect(snapshot.questionConfirmActive).toBe(false);
+        expect(snapshot.questionText).toBe('Plain?');
+    });
 });
 
 describe('chat-store — rename overlay', () => {

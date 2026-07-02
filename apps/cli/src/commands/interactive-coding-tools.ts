@@ -89,6 +89,13 @@ export type InteractiveToolOptions = {
      * interactive TUI wires this to the Ink question overlay.
      */
     readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
+    /**
+     * Optional batch variant: hands the whole `questions` array to the host in
+     * one call so it can render a single tabbed overlay (opencode-style) with a
+     * confirm step. Returns one answer string per request, in order. When
+     * omitted the tool falls back to sequential single-question prompts.
+     */
+    readonly requestUserQuestions?: (requests: readonly AskUserQuestionRequest[]) => Promise<string[]>;
     readonly approvalLevel?: ApprovalLevel;
     readonly authStore?: ProviderAuthStore;
     readonly workflowRegistry?: WorkflowRegistry;
@@ -132,7 +139,12 @@ export async function createInteractiveToolRegistry(
         await registerWebSearchTool(registry, { sessionId: options.sessionId });
     }
     if (options.requestUserQuestion !== undefined) {
-        await registerAskUserTool(registry, { requestUserQuestion: options.requestUserQuestion });
+        await registerAskUserTool(registry, {
+            requestUserQuestion: options.requestUserQuestion,
+            ...(options.requestUserQuestions !== undefined
+                ? { requestUserQuestions: options.requestUserQuestions }
+                : {}),
+        });
     }
     await registerFileEditTool(registry, {
         workspaceRoot: options.workspaceRoot,

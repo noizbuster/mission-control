@@ -1,4 +1,4 @@
-import { TextAttributes } from '@opentui/core';
+import { type BorderCharacters, TextAttributes } from '@opentui/core';
 import type { ApprovalLevel } from '../commands/approval-level.js';
 
 /**
@@ -7,6 +7,55 @@ import type { ApprovalLevel } from '../commands/approval-level.js';
  * SlashMenuPanel, and FileAutocompletePanel.
  */
 export const SELECTED_BG = '#0000ff';
+
+/**
+ * Panel background for the inline (in-place) overlays that replace the input
+ * area, e.g. the ask-user QuestionOverlay. Matches {@link ModalPopup}'s popup
+ * fill so the inline panel and the floating modals share one dark base.
+ */
+export const OVERLAY_PANEL_BG = '#0a0a0a';
+
+/**
+ * Foreground used for the label of the currently cursor/hovered choice. Pure
+ * white reads at maximum contrast against {@link SELECTED_BG}; before this the
+ * selected row only swapped its background and left the label fg unchanged, so
+ * the text itself was not emphasized (the reported "can't tell which is
+ * selected" symptom).
+ */
+export const QUESTION_SELECTED_FG = '#ffffff';
+
+/**
+ * Foreground of the cursor chevron painted next to the active choice. Yellow
+ * pops against the blue selection band and the dark panel bg.
+ */
+export const QUESTION_CURSOR_FG = '#ffff00';
+
+/**
+ * The heavy chevron prefix that marks the active (keyboard- or hover-selected)
+ * choice row. Mirrors oh-my-pi's `nav.cursor` glyph.
+ */
+export const QUESTION_CURSOR = '\u276f';
+
+/**
+ * opencode-style left-only accent border: every border cell is blank except
+ * the vertical, which is a heavy bar `┃` drawn in the overlay's accent color.
+ * Used with `<box border={["left"]} customBorderChars={LEFT_ACCENT_BORDER}
+ * borderColor={accent}>` to give an inline panel the signature single-stripe
+ * frame without a full box border.
+ */
+export const LEFT_ACCENT_BORDER: BorderCharacters = {
+    topLeft: '',
+    topRight: '',
+    bottomLeft: '',
+    bottomRight: '',
+    horizontal: '',
+    vertical: '\u2503',
+    topT: '',
+    bottomT: '',
+    leftT: '',
+    rightT: '',
+    cross: '',
+};
 
 /**
  * Dark-navy (NON-gray) background for the two status lines that bracket the

@@ -86,6 +86,14 @@ export type AskUserQuestionRequest = {
 
 export type AskUserToolOptions = {
     readonly requestUserQuestion: (request: AskUserQuestionRequest) => Promise<string>;
+    /**
+     * Optional batch callback. When the host supplies it, a multi-question
+     * `questions` input is handed to the host in ONE call (the host can render
+     * a single tabbed overlay with a confirm step, as opencode does) instead of
+     * N sequential single-question pops. Returns one answer string per request,
+     * in order. Omitting it preserves the sequential single-question behavior.
+     */
+    readonly requestUserQuestions?: (requests: readonly AskUserQuestionRequest[]) => Promise<string[]>;
 };
 
 // ============== Model-facing JSON Schema ==============

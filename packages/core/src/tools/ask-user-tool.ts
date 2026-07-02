@@ -59,6 +59,17 @@ function formatLabeledAnswer(question: AskUserQuestion, answer: string): string 
     return `${label}: ${answer}`;
 }
 
+async function sequentialAnswers(
+    options: AskUserToolOptions,
+    requests: readonly AskUserQuestionRequest[],
+): Promise<string[]> {
+    const answers: string[] = [];
+    for (const request of requests) {
+        answers.push(await options.requestUserQuestion(request));
+    }
+    return answers;
+}
+
 export function createAskUserToolRegistration(
     options: AskUserToolOptions,
 ): ToolRegistration<AskUserInput, AskUserOutput> {
@@ -78,15 +89,18 @@ export function createAskUserToolRegistration(
             'Do not use ask_user for information you can obtain yourself by reading files or running commands.',
         execute: async (input) => {
             // Multi-question mode: `questions` takes precedence over the legacy
-            // `options` field. Sequential invocation preserves order and lets
-            // hosts render one prompt at a time.
+            // `options` field. A host batch callback renders all entries in one
+            // tabbed overlay; otherwise they are posed sequentially.
             if (input.questions !== undefined) {
-                const answers: string[] = [];
-                for (const question of input.questions) {
-                    const response = await options.requestUserQuestion(buildQuestionRequest(question));
-                    answers.push(formatLabeledAnswer(question, response));
-                }
-                return { answer: answers.join('\n') };
+                const requests = input.questions.map(buildQuestionRequest);
+                const answers =
+                    options.requestUserQuestions !== undefined
+                        ? await options.requestUserQuestions(requests)
+                        : await sequentialAnswers(options, requests);
+                const labeled = input.questions.map((question, i) =>
+                    formatLabeledAnswer(question, answers[i] ?? ''),
+                );
+                return { answer: labeled.join('\n') };
             }
             const answer = await options.requestUserQuestion({
                 question: input.question,

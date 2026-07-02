@@ -264,6 +264,56 @@ describe('createAskUserToolRegistration', () => {
         });
     });
 
+    describe('batch callback', () => {
+        it('hands the whole questions array to requestUserQuestions in one call when provided', async () => {
+            const calls: readonly AskUserQuestionRequest[][] = [];
+            let next = 0;
+            const answers = ['Dark', 'EN'];
+            const requestUserQuestions = (requests: readonly AskUserQuestionRequest[]): Promise<string[]> => {
+                (calls as AskUserQuestionRequest[][]).push([...requests]);
+                const out = requests.map((_, i) => answers[i] ?? '');
+                next += requests.length;
+                return Promise.resolve(out);
+            };
+            const registration = createAskUserToolRegistration({
+                requestUserQuestion: () => Promise.resolve(''),
+                requestUserQuestions,
+            });
+            const input: AskUserInput = {
+                question: 'Setup wizard',
+                options: [],
+                questions: [
+                    { question: 'Pick a theme', header: 'Theme', options: [{ label: 'Dark' }] },
+                    { question: 'Pick a language', options: [{ label: 'EN' }] },
+                ],
+            };
+
+            const output = await registration.execute(input, createContext());
+
+            expect(calls).toHaveLength(1);
+            expect(calls[0]).toHaveLength(2);
+            expect(next).toBe(2);
+            expect(output).toEqual({ answer: 'Theme: Dark\nPick a language: EN' });
+        });
+
+        it('falls back to the sequential single callback when no batch callback is supplied', async () => {
+            const { calls, fn } = createRecordingCallback(['Dark', 'EN']);
+            const registration = createAskUserToolRegistration({ requestUserQuestion: fn });
+            const input: AskUserInput = {
+                question: 'Setup',
+                options: [],
+                questions: [
+                    { question: 'Theme?', options: [{ label: 'Dark' }] },
+                    { question: 'Lang?', options: [{ label: 'EN' }] },
+                ],
+            };
+
+            await registration.execute(input, createContext());
+
+            expect(calls).toHaveLength(2);
+        });
+    });
+
     describe('registration metadata', () => {
         it('advertises the ask_user name and read capability class', () => {
             const registration = createAskUserToolRegistration({

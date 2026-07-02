@@ -645,13 +645,16 @@ export function ChatApp({
                         : {})}
                 />
             ) : null}
-            {snapshot.overlayMode === 'question' ? <QuestionOverlay store={store} /> : null}
-            <ChatInputArea
-                store={store}
-                textareaRef={textareaRef}
-                scrollboxRef={scrollboxRef}
-                focused={!overlayActive}
-            />
+            {snapshot.overlayMode === 'question' ? (
+                <QuestionOverlay store={store} />
+            ) : (
+                <ChatInputArea
+                    store={store}
+                    textareaRef={textareaRef}
+                    scrollboxRef={scrollboxRef}
+                    focused={!overlayActive}
+                />
+            )}
             {statusBarProps !== undefined ? (
                 <BottomStatusBar
                     {...statusBarProps}

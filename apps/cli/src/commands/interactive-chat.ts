@@ -39,6 +39,7 @@ import {
     createTerminalChatOutput,
     maxChatPromptLength,
 } from './interactive-chat-io.js';
+import type { QuestionBatchEntry, QuestionOption } from './question-types.js';
 import {
     areModelProviderSelectionsEqual,
     ChatInputPump,
@@ -75,6 +76,24 @@ export type ModelSelector = (
     currentSelection: ModelProviderSelection,
     options?: { readonly title?: string },
 ) => Promise<ModelProviderSelection | undefined>;
+
+type AskUserRawOption = string | { readonly label: string; readonly description?: string | undefined };
+
+function toQuestionOptions(options: readonly AskUserRawOption[]): readonly QuestionOption[] {
+    return options.map((option) =>
+        typeof option === 'string'
+            ? { label: option }
+            : {
+                  label: option.label,
+                  ...(option.description !== undefined ? { description: option.description } : {}),
+              },
+    );
+}
+
+function echoQuestionAnswer(chatOutput: ChatOutput, label: string, answer: string): void {
+    if (answer.length === 0) return;
+    chatOutput.write(`\ntool: You answered\n  ${label}: ${answer}\n`);
+}
 
 export type InteractiveChatOptions = {
     readonly input?: ChatInput;
@@ -649,24 +668,36 @@ export async function runInteractiveChatSession(
                         : {}),
                     ...(tuiBridge !== undefined
                         ? {
-                              requestUserQuestion: (request: AskUserQuestionRequest) =>
-                                  tuiBridge.showQuestion(
+                              requestUserQuestion: async (request: AskUserQuestionRequest) => {
+                                  const answer = await tuiBridge.showQuestion(
                                       request.question,
-                                      request.options.map((option) =>
-                                          typeof option === 'string'
-                                              ? option
-                                              : {
-                                                    label: option.label,
-                                                    ...(option.description !== undefined
-                                                        ? { description: option.description }
-                                                        : {}),
-                                                },
-                                      ),
+                                      toQuestionOptions(request.options),
                                       {
                                           ...(request.header !== undefined ? { header: request.header } : {}),
                                           ...(request.multiple !== undefined ? { multiple: request.multiple } : {}),
                                       },
-                                  ),
+                                  );
+                                  echoQuestionAnswer(chatOutput, request.header ?? request.question, answer);
+                                  return answer;
+                              },
+                              requestUserQuestions: async (requests: readonly AskUserQuestionRequest[]) => {
+                                  const entries: readonly QuestionBatchEntry[] = requests.map((request) => ({
+                                      question: request.question,
+                                      header: request.header ?? '',
+                                      options: toQuestionOptions(request.options),
+                                      multiple: request.multiple ?? false,
+                                  }));
+                                  const answers = await tuiBridge.showQuestionBatch(entries);
+                                  const lines = requests.map(
+                                      (request, i) =>
+                                          `  ${request.header ?? request.question}: ${answers[i] ?? ''}`,
+                                  );
+                                  const count = requests.length;
+                                  chatOutput.write(
+                                      `\ntool: Answered ${count} question${count > 1 ? 's' : ''}\n${lines.join('\n')}\n`,
+                                  );
+                                  return answers;
+                              },
                           }
                         : {}),
                 };
