@@ -43,6 +43,7 @@ export type McpConnectionManagerOptions = {
     readonly workspaceRoot: string;
     readonly userConfigPath?: string;
     readonly projectConfigPath?: string;
+    readonly profileName?: string;
     readonly env?: Readonly<Record<string, string | undefined>>;
 };
 

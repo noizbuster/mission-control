@@ -50,6 +50,8 @@ export type RegisterMcpToolsOptions = {
      * factory creates a new manager, connects eagerly, and returns it for teardown.
      */
     readonly mcpConnectionManager?: McpConnectionManager;
+    /** Profile name for profile-aware MCP config resolution. When set, the profile config replaces the base config. */
+    readonly profileName?: string;
 };
 
 /**
@@ -98,9 +100,10 @@ export async function registerNamespacedMcpTools(
     options: RegisterMcpToolsOptions,
 ): Promise<McpConnectionManager> {
     const manager = options.mcpConnectionManager ?? new McpConnectionManager();
-    await manager.connectAll(
-        options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : undefined,
-    );
+    await manager.connectAll({
+        workspaceRoot: options.workspaceRoot ?? process.cwd(),
+        ...(options.profileName !== undefined ? { profileName: options.profileName } : {}),
+    });
 
     const servers = manager.getServers();
     for (const server of servers) {
