@@ -283,4 +283,15 @@ describe('chat command parser', () => {
             message: 'Slash command is empty',
         });
     });
+
+    it('parses /mission as the mission control panel action with no arguments', () => {
+        expect(parseChatLine('/mission')).toEqual({ kind: 'mission' });
+    });
+
+    it('rejects /mission with arguments as invalid', () => {
+        expect(parseChatLine('/mission runs')).toEqual({
+            kind: 'invalid',
+            message: '/mission opens the mission control panel and takes no arguments',
+        });
+    });
 });

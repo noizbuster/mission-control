@@ -45,6 +45,9 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Op
         showAgentsDashboard: (entries) => store.showAgentsDashboard(entries),
         reloadAgentsDashboard: (entries) => store.reloadAgentsDashboard(entries),
         hideAgentsDashboard: () => store.hideAgentsDashboard(),
+        showMissionPanel: (rows) => store.showMissionPanel(rows),
+        reloadMissions: (rows) => store.reloadMissions(rows),
+        hideMissionPanel: () => store.hideMissionPanel(),
         showModelsOverlay: (entries: readonly ModelProviderSelection[], roleRows: readonly ModelsOverlayRoleRow[]) =>
             store.showModelsOverlay(entries, roleRows),
         showLevelPicker: (currentLevel?) => store.showLevelPicker(currentLevel),

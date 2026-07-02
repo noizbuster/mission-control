@@ -2,7 +2,7 @@ import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ProviderAuthStore } from '../auth-store.js';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
 import type { ApprovalLevel } from './approval-level.js';
-import type { DashboardAgentEntry, SessionPickerEntry } from './chat-store.js';
+import type { DashboardAgentEntry, MissionPanelRow, SessionPickerEntry } from './chat-store.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
 import type { ModelChoice } from './interactive-chat-model.js';
 import type { ModelsOverlayRoleRow } from './models-overlay-state.js';
@@ -20,6 +20,9 @@ export type OpenTuiChatBridge = {
     readonly showAgentsDashboard: (entries: readonly DashboardAgentEntry[]) => void;
     readonly reloadAgentsDashboard: (entries: readonly DashboardAgentEntry[]) => void;
     readonly hideAgentsDashboard: () => void;
+    readonly showMissionPanel: (rows?: readonly MissionPanelRow[]) => void;
+    readonly reloadMissions: (rows: readonly MissionPanelRow[]) => void;
+    readonly hideMissionPanel: () => void;
     readonly showModelsOverlay: (
         entries: readonly ModelProviderSelection[],
         roleRows: readonly ModelsOverlayRoleRow[],

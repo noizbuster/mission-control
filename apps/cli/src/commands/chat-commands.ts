@@ -142,6 +142,9 @@ export type ChatLineAction =
           readonly kind: 'models';
       }
     | {
+          readonly kind: 'mission';
+      }
+    | {
           readonly kind: 'unknown-slash';
           readonly command: string;
       }
@@ -266,6 +269,15 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
             return parseNoArgumentCommand('hotkeys', parts.tail);
         case 'agents':
             return { kind: 'agents', agents: parseAgentsCommand(parts.tail) };
+        case 'mission': {
+            if (parts.tail.length > 0) {
+                return {
+                    kind: 'invalid',
+                    message: '/mission opens the mission control panel and takes no arguments',
+                };
+            }
+            return { kind: 'mission' };
+        }
         default:
             return resolveUnreservedSlash(parts, options);
     }

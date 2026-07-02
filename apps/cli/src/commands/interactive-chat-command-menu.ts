@@ -215,6 +215,11 @@ export const slashCommandChoices = [
         insertText: '/agents list',
         description: 'Print the discovered-agents list as text',
     },
+    {
+        id: '/mission',
+        insertText: '/mission',
+        description: 'Open the mission control panel (Runs, Jobs, Agents, Drain, Continue)',
+    },
 ] as const satisfies readonly SlashCommandMenuChoice[];
 
 export function createSlashCommandMenuState(): SlashCommandMenuState {

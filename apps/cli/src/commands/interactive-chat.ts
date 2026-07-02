@@ -24,7 +24,7 @@ import { createAbgOverlayStore } from './abg-overlay-state.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { approvalLevelRules } from './approval-level.js';
 import { parseChatLine } from './chat-commands.js';
-import type { DashboardAgentEntry, SessionPickerEntry } from './chat-store.js';
+import type { DashboardAgentEntry, MissionPanelRow, SessionPickerEntry } from './chat-store.js';
 import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './chat-tui-types.js';
 import { type ChatTuiOptions, createChatTui } from './create-chat-tui.js';
 import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
@@ -577,6 +577,18 @@ export async function runInteractiveChatSession(
                             ? {
                                   reloadAgentsDashboard: (entries: readonly DashboardAgentEntry[]) =>
                                       tuiBridge.reloadAgentsDashboard(entries),
+                              }
+                            : {}),
+                        ...(tuiBridge !== undefined
+                            ? {
+                                  openMissionPanel: (rows: readonly MissionPanelRow[]) =>
+                                      tuiBridge.showMissionPanel(rows),
+                              }
+                            : {}),
+                        ...(tuiBridge !== undefined
+                            ? {
+                                  reloadMissionPanel: (rows: readonly MissionPanelRow[]) =>
+                                      tuiBridge.reloadMissions(rows),
                               }
                             : {}),
                         ...(tuiBridge !== undefined

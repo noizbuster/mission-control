@@ -7,6 +7,8 @@ import {
     ensureOmoDirs,
     failRun,
     formatSkillInstructions,
+    listMissions,
+    listRunsForMission,
     loadSkillBody,
     materializeMission,
     resolveOmoRoot,
@@ -30,7 +32,7 @@ import { readOverridesMap } from './agents-model-overrides-config.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { APPROVAL_LEVEL_META } from './approval-level.js';
 import type { ChatLineAction, WorkflowInvocationAction } from './chat-commands.js';
-import type { DashboardAgentEntry, SessionPickerEntry } from './chat-store.js';
+import type { DashboardAgentEntry, MissionPanelRow, SessionPickerEntry } from './chat-store.js';
 import type { ModelSelector } from './interactive-chat.js';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import { runBashAction, runBashDisplayOnlyAction } from './interactive-chat-bash-action.js';
@@ -106,6 +108,8 @@ export type CodingActionContext = PromptTurnContext & {
     readonly selectSessionForAttach?: (entries: readonly SessionPickerEntry[]) => Promise<string | undefined>;
     readonly openAgentsDashboard?: (entries: readonly DashboardAgentEntry[]) => void;
     readonly reloadAgentsDashboard?: (entries: readonly DashboardAgentEntry[]) => void;
+    readonly openMissionPanel?: (rows: readonly MissionPanelRow[]) => void;
+    readonly reloadMissionPanel?: (rows: readonly MissionPanelRow[]) => void;
     readonly openModelsOverlay?: (
         entries: readonly ModelProviderSelection[],
         roleRows: readonly ModelsOverlayRoleRow[],
@@ -305,6 +309,8 @@ export async function runChatAction(
             return runWorkflowAction(runtime, chatOutput, action, currentModelProviderSelection, coding);
         case 'agents':
             return runAgentsAction(chatOutput, currentModelProviderSelection, coding, action.agents);
+        case 'mission':
+            return runMissionAction(chatOutput, currentModelProviderSelection, coding);
         case 'models':
             return runModelsAction(chatOutput, currentModelProviderSelection, modelChoices, coding);
         case 'unknown-slash':
@@ -822,6 +828,58 @@ async function runModelsAction(
     const roleRows = createModelsOverlayRoleRows(assignments, modelProviderSelection);
     coding.openModelsOverlay(entries, roleRows);
     return actionResult(modelProviderSelection, coding.activeTurn);
+}
+
+async function runMissionAction(
+    chatOutput: ChatOutput,
+    modelProviderSelection: ModelProviderSelection,
+    coding: CodingActionContext,
+): Promise<ChatActionResult> {
+    if (!coding.useTui || coding.openMissionPanel === undefined) {
+        chatOutput.write('/mission requires the interactive TUI overlay.\n');
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    const rows = await loadMissionPanelRows(coding.workspaceRoot);
+    coding.openMissionPanel(rows);
+    return actionResult(modelProviderSelection, coding.activeTurn);
+}
+
+/**
+ * Build {@link MissionPanelRow} entries for the Runs tab from persisted
+ * `.omo/missions` + `.omo/runs` records. Returns an empty array when the
+ * workspace has no `.omo` root (the panel renders its empty state).
+ */
+export async function loadMissionPanelRows(workspaceRoot: string | undefined): Promise<MissionPanelRow[]> {
+    if (workspaceRoot === undefined) return [];
+    let omoRoot: string;
+    try {
+        omoRoot = await resolveOmoRoot(workspaceRoot);
+    } catch {
+        return [];
+    }
+    const missions = await listMissions(omoRoot);
+    const rows: MissionPanelRow[] = [];
+    for (const mission of missions) {
+        const runs = await listRunsForMission(omoRoot, mission.id);
+        if (runs.length === 0) {
+            rows.push({
+                id: mission.id,
+                label: mission.name,
+                status: mission.status,
+                ...(mission.workflowName !== undefined ? { detail: `workflow: ${mission.workflowName}` } : {}),
+            });
+            continue;
+        }
+        for (const run of runs) {
+            rows.push({
+                id: run.id,
+                label: `${mission.name} #${run.attempt}`,
+                status: run.status,
+                ...(run.startedAt !== undefined ? { detail: `started ${run.startedAt}` } : {}),
+            });
+        }
+    }
+    return rows;
 }
 
 async function runApprovalAction(

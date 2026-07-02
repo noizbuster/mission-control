@@ -28,6 +28,7 @@ import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from './AbgOverlay.j
 import { ChatInputArea } from './ChatInputArea.js';
 import { ChatTranscript } from './ChatTranscript.js';
 import { FileAutocompletePanel } from './FileAutocompletePanel.js';
+import { MissionPanelOverlay } from './MissionPanelOverlay.js';
 import { ModelsOverlay } from './ModelsOverlay.js';
 import { OverlayFrame } from './OverlayFrame.js';
 import {
@@ -683,6 +684,11 @@ export function ChatApp({
             {snapshot.overlayMode === 'agents-dashboard' ? (
                 <ModalPopup>
                     <AgentsDashboardOverlay store={store} workspaceRoot={statusBarProps?.workspaceRoot} />
+                </ModalPopup>
+            ) : null}
+            {snapshot.overlayMode === 'mission-panel' ? (
+                <ModalPopup>
+                    <MissionPanelOverlay store={store} workspaceRoot={statusBarProps?.workspaceRoot} />
                 </ModalPopup>
             ) : null}
         </box>
