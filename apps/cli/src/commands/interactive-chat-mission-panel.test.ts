@@ -116,6 +116,46 @@ describe('loadMissionPanelRows', () => {
 
         expect(rows).toEqual([]);
     });
+
+    it('returns an empty array when workspaceRoot is undefined', async () => {
+        const rows = await loadMissionPanelRows(undefined);
+
+        expect(rows).toEqual([]);
+    });
+
+    it('produces one row per Run under a single Mission with unique row ids', async () => {
+        const workspace = await makeWorkspace();
+        const omoRoot = await resolveOmoRoot(workspace);
+        const mission = materializeMission(makeWorkflowSpec('planner'));
+        await createMission(omoRoot, mission);
+        await startRun(omoRoot, mission.id, 'first');
+        await startRun(omoRoot, mission.id, 'second');
+
+        const rows = await loadMissionPanelRows(workspace);
+
+        expect(rows).toHaveLength(2);
+        const firstId = rows[0]?.id;
+        const secondId = rows[1]?.id;
+        expect(firstId).toBeDefined();
+        expect(secondId).toBeDefined();
+        expect(firstId).not.toBe(secondId);
+    });
+
+    it('produces rows for multiple Missions in list order', async () => {
+        const workspace = await makeWorkspace();
+        const omoRoot = await resolveOmoRoot(workspace);
+        const missionWithRun = materializeMission(makeWorkflowSpec('planner'));
+        const missionWithoutRun = materializeMission(makeWorkflowSpec('runner'));
+        await createMission(omoRoot, missionWithRun);
+        await createMission(omoRoot, missionWithoutRun);
+        await startRun(omoRoot, missionWithRun.id, 'plan');
+
+        const rows = await loadMissionPanelRows(workspace);
+
+        expect(rows).toHaveLength(2);
+        expect(rows[0]?.label).toBe('planner #1');
+        expect(rows[1]?.label).toBe('runner');
+    });
 });
 
 describe('ChatStore mission-panel slice', () => {
@@ -211,6 +251,33 @@ describe('ChatStore mission-panel slice', () => {
         store.reloadMissions([{ id: 'r9', label: 'new' }]);
 
         expect(store.getSnapshot().missionPanel.rows).toEqual([{ id: 'r1', label: 'a' }]);
+    });
+
+    it('navigateMissionPanel on a single-row list is a no-op in both directions', () => {
+        const store = createChatStore();
+        store.showMissionPanel([{ id: 'r1', label: 'only' }]);
+
+        store.navigateMissionPanel(1);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(0);
+        store.navigateMissionPanel(-1);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(0);
+    });
+
+    it('reloadMissions transitioning to an empty list resets selectedIndex to 0', () => {
+        const store = createChatStore();
+        store.showMissionPanel([
+            { id: 'r1', label: 'a' },
+            { id: 'r2', label: 'b' },
+        ]);
+        store.navigateMissionPanel(1);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(1);
+
+        store.reloadMissions([]);
+
+        const snap = store.getSnapshot().missionPanel;
+        expect(snap.rows).toEqual([]);
+        expect(snap.count).toBe(0);
+        expect(snap.selectedIndex).toBe(0);
     });
 });
 

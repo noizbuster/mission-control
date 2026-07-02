@@ -294,4 +294,15 @@ describe('chat command parser', () => {
             message: '/mission opens the mission control panel and takes no arguments',
         });
     });
+
+    it('rejects /mission with multiple trailing arguments', () => {
+        expect(parseChatLine('/mission runs jobs')).toEqual({
+            kind: 'invalid',
+            message: '/mission opens the mission control panel and takes no arguments',
+        });
+    });
+
+    it('accepts /mission with trailing whitespace as valid', () => {
+        expect(parseChatLine('/mission   ')).toEqual({ kind: 'mission' });
+    });
 });

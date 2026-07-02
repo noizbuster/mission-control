@@ -136,6 +136,76 @@ describe('workflow Mission/Run persistence', () => {
         const entries = await readdir(workspace);
         expect(entries).not.toContain('.omo');
     });
+
+    it('creates unique Mission and Run records across multiple sequential workflow turns', async () => {
+        const workspace = await makeWorkspace();
+        const registry = new WorkflowRegistry([makeWorkflowSpec('persist-demo')]);
+
+        const provider1 = createDeterministicProvider([{ kind: 'response_completed', content: 'run 1' }]);
+        const runtime1 = await makeStartedRuntime();
+        await runChatAction(
+            runtime1,
+            createOutput(),
+            { kind: 'workflow', name: 'persist-demo', prompt: 'first run' },
+            currentSelection,
+            async () => undefined,
+            [],
+            makeCodingContext({ workspaceRoot: workspace, provider: provider1, workflowRegistry: registry }),
+        );
+
+        const provider2 = createDeterministicProvider([{ kind: 'response_completed', content: 'run 2' }]);
+        const runtime2 = await makeStartedRuntime();
+        await runChatAction(
+            runtime2,
+            createOutput(),
+            { kind: 'workflow', name: 'persist-demo', prompt: 'second run' },
+            currentSelection,
+            async () => undefined,
+            [],
+            makeCodingContext({ workspaceRoot: workspace, provider: provider2, workflowRegistry: registry }),
+        );
+
+        const missions = await listMissions(workspace);
+        expect(missions).toHaveLength(2);
+        const missionIds = missions.map((m) => m.id);
+        expect(new Set(missionIds).size).toBe(2);
+
+        const firstMission = missions[0];
+        const secondMission = missions[1];
+        if (firstMission === undefined || secondMission === undefined) {
+            throw new Error('expected two missions');
+        }
+        const runs1 = await listRunsForMission(workspace, firstMission.id);
+        const runs2 = await listRunsForMission(workspace, secondMission.id);
+        expect(runs1).toHaveLength(1);
+        expect(runs2).toHaveLength(1);
+        const firstRunId = runs1[0]?.id;
+        const secondRunId = runs2[0]?.id;
+        expect(firstRunId).toBeDefined();
+        expect(secondRunId).toBeDefined();
+        expect(firstRunId).not.toBe(secondRunId);
+    });
+
+    it('writes an unknown-workflow message and creates no records when the name is not found', async () => {
+        const workspace = await makeWorkspace();
+        const registry = new WorkflowRegistry([]);
+        const runtime = await makeStartedRuntime();
+        const output = createOutput();
+
+        await runChatAction(
+            runtime,
+            output,
+            { kind: 'workflow', name: 'ghost-workflow', prompt: 'x' },
+            currentSelection,
+            async () => undefined,
+            [],
+            makeCodingContext({ workspaceRoot: workspace, workflowRegistry: registry }),
+        );
+
+        expect(output.getOutput()).toContain('Unknown workflow: ghost-workflow');
+        const missions = await listMissions(workspace);
+        expect(missions).toHaveLength(0);
+    });
 });
 
 async function makeStartedRuntime(): Promise<AgentRuntime> {

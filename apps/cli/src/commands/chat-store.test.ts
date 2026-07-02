@@ -1340,4 +1340,36 @@ describe('chat-store — mission panel overlay', () => {
         expect(second).not.toBe(first);
         expect(second.missionPanel.active).toBe(true);
     });
+
+    it('navigateMissionPanel on a single-row list is a no-op in both directions', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('only')]);
+        store.navigateMissionPanel(1);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(0);
+        store.navigateMissionPanel(-1);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(0);
+    });
+
+    it('reloadMissions transitioning to an empty list resets selection to 0', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('a'), makeMissionRow('b')]);
+        store.navigateMissionPanel(1);
+        expect(store.getSnapshot().missionPanel.selectedIndex).toBe(1);
+        store.reloadMissions([]);
+        const snapshot = store.getSnapshot();
+        expect(snapshot.missionPanel.rows).toEqual([]);
+        expect(snapshot.missionPanel.count).toBe(0);
+        expect(snapshot.missionPanel.selectedIndex).toBe(0);
+    });
+
+    it('showMissionPanel resets selectedIndex and activeTab when re-opening after navigation', () => {
+        const store = createChatStore();
+        store.showMissionPanel([makeMissionRow('a'), makeMissionRow('b'), makeMissionRow('c')]);
+        store.navigateMissionPanel(2);
+        store.setMissionPanelTab('jobs');
+        store.showMissionPanel([makeMissionRow('x'), makeMissionRow('y')]);
+        const snapshot = store.getSnapshot();
+        expect(snapshot.missionPanel.selectedIndex).toBe(0);
+        expect(snapshot.missionPanel.activeTab).toBe('runs');
+    });
 });
