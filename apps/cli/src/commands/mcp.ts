@@ -24,15 +24,21 @@ type TestableMcpClient = McpClient & { connect(): Promise<void>; close(): Promis
 export type McpCommandOptions = Readonly<LoadMcpConfigOptions>;
 
 export async function runMcpCommand(args: CliArgs, options: McpCommandOptions = {}): Promise<string> {
+    // Thread the CLI `--profile` flag (args.profileName) into the forwarded options; the flag wins
+    // over a programmatic options.profileName. Conditional spread is exactOptionalPropertyTypes-safe.
+    const merged: McpCommandOptions = {
+        ...options,
+        ...(args.profileName !== undefined ? { profileName: args.profileName } : {}),
+    };
     switch (args.command) {
         case 'mcp-add':
-            return runMcpAdd(args, options);
+            return runMcpAdd(args, merged);
         case 'mcp-list':
-            return runMcpList(options);
+            return runMcpList(merged);
         case 'mcp-remove':
-            return runMcpRemove(args, options);
+            return runMcpRemove(args, merged);
         case 'mcp-test':
-            return runMcpTest(args, options);
+            return runMcpTest(args, merged);
         default:
             throw new Error(`Unsupported mcp command: ${args.command}`);
     }

@@ -308,3 +308,123 @@ describe('mcp list malformed handling', () => {
         expect(projectOnDisk.mcpServers.new.command).toEqual(['new-bin']);
     });
 });
+
+describe('mcp profile', () => {
+    let dirs: TempDirs;
+
+    beforeEach(async () => {
+        dirs = await makeTempDirs();
+    });
+
+    afterEach(async () => {
+        await rm(dirs.root, { recursive: true, force: true });
+    });
+
+    // Profile resolution enumerates a directory; an explicit file path (userConfigPath) conflicts
+    // with profileName per T2, so profile tests pass the directory instead.
+    const profileOptions = (): { readonly userConfigDir: string; readonly projectConfigPath: string } => ({
+        userConfigDir: join(dirs.root, 'user'),
+        projectConfigPath: dirs.projectConfigPath,
+    });
+
+    it('mcp list --profile dev reads the profile config only', async () => {
+        await writeRaw(
+            join(dirs.root, 'user', 'mission-control.dev.jsonc'),
+            JSON.stringify({
+                mcp: { devserver: { type: 'local', command: ['dev-bin'] } },
+                mcp_env_allowlist: ['DEV_TOKEN'],
+            }),
+        );
+        await writeRaw(
+            join(dirs.root, 'user', 'config.json'),
+            JSON.stringify({ mcp: { base: { type: 'local', command: ['base-bin'] } } }),
+        );
+
+        const listOutput = await runMcpCommand(parseArgs(['mcp', 'list', '--profile', 'dev']), profileOptions());
+        expect(listOutput).toContain('devserver [local, user]');
+        expect(listOutput).toContain('command: dev-bin');
+        expect(listOutput).not.toContain('base');
+        expect(listOutput).not.toContain('base-bin');
+    });
+
+    it('mcp add --scope user --profile dev creates mission-control.dev.jsonc', async () => {
+        const addOutput = await runMcpCommand(
+            parseArgs([
+                'mcp',
+                'add',
+                'newdev',
+                '--type',
+                'local',
+                '--command',
+                'node',
+                '--command',
+                FIXTURE_SERVER,
+                '--scope',
+                'user',
+                '--profile',
+                'dev',
+            ]),
+            profileOptions(),
+        );
+        expect(addOutput).toContain('Added MCP server newdev (user scope)');
+
+        const profilePath = join(dirs.root, 'user', 'mission-control.dev.jsonc');
+        const onDisk = JSON.parse(await readFile(profilePath, 'utf8'));
+        expect(onDisk.mcp.newdev.command).toEqual(['node', FIXTURE_SERVER]);
+
+        await expect(readFile(join(dirs.root, 'user', 'config.json'), 'utf8')).rejects.toThrow();
+    });
+
+    it('mcp add --scope project --profile dev still writes .mcp.json only', async () => {
+        const addOutput = await runMcpCommand(
+            parseArgs([
+                'mcp',
+                'add',
+                'projserver',
+                '--type',
+                'local',
+                '--command',
+                'proj-bin',
+                '--scope',
+                'project',
+                '--profile',
+                'dev',
+            ]),
+            profileOptions(),
+        );
+        expect(addOutput).toContain('Added MCP server projserver (project scope)');
+
+        const projectOnDisk = JSON.parse(await readFile(dirs.projectConfigPath, 'utf8'));
+        expect(projectOnDisk.mcpServers.projserver.command).toEqual(['proj-bin']);
+
+        await expect(readFile(join(dirs.root, 'user', 'mission-control.dev.jsonc'), 'utf8')).rejects.toThrow();
+    });
+
+    it('mcp list --profile missing surfaces a profile-not-found error without silent success', async () => {
+        await expect(
+            runMcpCommand(parseArgs(['mcp', 'list', '--profile', 'missing']), profileOptions()),
+        ).rejects.toThrow(/No config file found for profile "missing"/);
+    });
+
+    it('never prints an expanded secret value in list output that includes a warning line', async () => {
+        const tokenRef = ref('FAKE_TOKEN');
+        await writeRaw(
+            join(dirs.root, 'user', 'mission-control.dev.jsonc'),
+            JSON.stringify({
+                mcp_env_allowlist: ['FAKE_TOKEN'],
+                mcp: { 'secret-srv': { type: 'local', command: ['echo', tokenRef], environment: { TOKEN: tokenRef } } },
+            }),
+        );
+        // Co-locate a malformed project config so the output carries a Warning line alongside the
+        // server line; this proves redaction covers the full joined text, not just the env mask.
+        await writeRaw(dirs.projectConfigPath, '{ broken json');
+
+        const listOutput = await runMcpCommand(parseArgs(['mcp', 'list', '--profile', 'dev']), {
+            ...profileOptions(),
+            env: { FAKE_TOKEN: 'SUPER_SECRET_VALUE_XYZ' },
+        });
+        expect(listOutput).toContain('Warning:');
+        expect(listOutput).toContain('TOKEN=***');
+        expect(listOutput).not.toContain('SUPER_SECRET_VALUE_XYZ');
+    });
+});
