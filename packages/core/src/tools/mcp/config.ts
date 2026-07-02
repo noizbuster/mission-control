@@ -23,7 +23,9 @@ import type {
     RemoteMcpConfigEntry,
 } from '@mission-control/protocol';
 import { McpConfigSchema, McpProjectConfigSchema, MissionControlConfigSchema } from '@mission-control/protocol';
+import { stripJsoncComments } from '../../workflows/jsonc-parser.js';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
@@ -64,7 +66,11 @@ export type ResolvedMcpConfig = {
 export type LoadMcpConfigOptions = {
     readonly workspaceRoot?: string;
     readonly userConfigPath?: string;
+    /** Config DIRECTORY override. Takes precedence over env/platform defaults; composes with `profileName`. */
+    readonly userConfigDir?: string;
     readonly projectConfigPath?: string;
+    /** When set, replaces the base `config.json` with the first existing profile candidate. Conflicts with `userConfigPath`. */
+    readonly profileName?: string;
     readonly env?: Readonly<Record<string, string | undefined>>;
 };
 
@@ -73,26 +79,134 @@ const windowsAppDataEnvKey = 'APPDATA';
 const xdgConfigHomeEnvKey = 'XDG_CONFIG_HOME';
 const ENV_VAR_PATTERN = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
 
-export function resolveUserConfigPath(options: LoadMcpConfigOptions = {}): string {
-    if (options.userConfigPath !== undefined) {
-        return options.userConfigPath;
+// MUST stay in sync with apps/cli/src/args.ts:parseProfileName. Re-implemented one-way because core
+// must not depend on cli. The charset excludes `.`, `/`, `\`, and uppercase so a profile name can
+// never inject a path separator or traversal segment into a path join.
+const PROFILE_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+/** Thrown when a profile name fails the charset/length rule; the message embeds the value via `JSON.stringify`. */
+export class ProfileNameValidationError extends Error {
+    readonly invalidValue: string | undefined;
+    constructor(raw: string | undefined) {
+        super(
+            `Invalid profile name: ${JSON.stringify(raw)}. ` +
+                'Profile names must start with a lowercase letter or digit and may contain only ' +
+                "lowercase letters, digits, '_', or '-' (max 64 characters).",
+        );
+        this.name = 'ProfileNameValidationError';
+        this.invalidValue = raw;
+    }
+}
+
+/** `undefined` in -> `undefined` out (spread-safe under `exactOptionalPropertyTypes`); invalid -> throws. */
+export function validateProfileName(raw: string | undefined): string | undefined {
+    if (raw === undefined) {
+        return undefined;
+    }
+    if (!PROFILE_NAME_PATTERN.test(raw)) {
+        throw new ProfileNameValidationError(raw);
+    }
+    return raw;
+}
+
+// Resolves the user config DIRECTORY. An explicit `userConfigDir` or `MCTRL_CONFIG_DIR` is used
+// as-is (already points at the mission-control dir); the platform default is joined with `appName`.
+function resolveConfigDirectory(options: LoadMcpConfigOptions): string {
+    if (options.userConfigDir !== undefined) {
+        return options.userConfigDir;
     }
     const env = options.env ?? process.env;
     const override = env[mcpConfigDirEnvKey];
     if (override !== undefined && override.length > 0) {
-        return join(override, 'config.json');
+        return override;
     }
     const homeDir = homedir();
     const platform = process.platform;
     if (platform === 'win32') {
         const appData = env[windowsAppDataEnvKey];
         const configHome = appData !== undefined && appData.length > 0 ? appData : join(homeDir, 'AppData', 'Roaming');
-        return join(configHome, appName, 'config.json');
+        return join(configHome, appName);
     }
     const xdgConfigHome = env[xdgConfigHomeEnvKey];
     const configHome =
         xdgConfigHome !== undefined && xdgConfigHome.length > 0 ? xdgConfigHome : join(homeDir, '.config');
-    return join(configHome, appName, 'config.json');
+    return join(configHome, appName);
+}
+
+/** The four profile candidates in priority order. Validates defensively so an unvalidated name never reaches a path join. */
+export function resolveUserProfileCandidates(
+    profileName: string,
+    options: LoadMcpConfigOptions = {},
+): readonly string[] {
+    validateProfileName(profileName);
+    const dir = resolveConfigDirectory(options);
+    return [
+        join(dir, `mission-control.${profileName}.jsonc`),
+        join(dir, `mission-control.${profileName}.json`),
+        join(dir, `config.${profileName}.jsonc`),
+        join(dir, `config.${profileName}.json`),
+    ];
+}
+
+// Profile mode: returns the first existing candidate or throws profile-not-found; `userConfigPath` +
+// `profileName` throws (conflict). Stays synchronous so the sync MCP CLI caller is unaffected.
+export function resolveUserConfigPath(options: LoadMcpConfigOptions = {}): string {
+    if (options.profileName !== undefined) {
+        validateProfileName(options.profileName);
+        if (options.userConfigPath !== undefined) {
+            throw new Error(
+                `Conflicting config options: userConfigPath (${JSON.stringify(options.userConfigPath)}) ` +
+                    `cannot be combined with profileName (${JSON.stringify(options.profileName)}). ` +
+                    'Provide userConfigDir (the directory) instead of userConfigPath to use profiles.',
+            );
+        }
+        const candidates = resolveUserProfileCandidates(options.profileName, options);
+        for (const candidate of candidates) {
+            if (existsSync(candidate)) {
+                return candidate;
+            }
+        }
+        throw new Error(
+            `No config file found for profile ${JSON.stringify(options.profileName)}. ` +
+                `Tried (in order): ${candidates.map((candidate) => JSON.stringify(candidate)).join(', ')}.`,
+        );
+    }
+    if (options.userConfigPath !== undefined) {
+        return options.userConfigPath;
+    }
+    return join(resolveConfigDirectory(options), 'config.json');
+}
+
+// Write-path resolution differs from read-path: when a profile is set and NO candidate exists, the
+// read path (`resolveUserConfigPath`) throws profile-not-found, but the write path must return the
+// create-default path (`mission-control.<profile>.jsonc`) so `writeUserMcpServer` /
+// `removeUserMcpServer` can create it. When a candidate DOES exist, both paths return it: rewriting
+// the existing file preserves the user's chosen format (`.jsonc` or `.json`).
+function resolveUserConfigPathForWrite(options: LoadMcpConfigOptions = {}): string {
+    if (options.profileName === undefined) {
+        return resolveUserConfigPath(options);
+    }
+    validateProfileName(options.profileName);
+    if (options.userConfigPath !== undefined) {
+        throw new Error(
+            `Conflicting config options: userConfigPath (${JSON.stringify(options.userConfigPath)}) ` +
+                `cannot be combined with profileName (${JSON.stringify(options.profileName)}). ` +
+                'Provide userConfigDir (the directory) instead of userConfigPath to use profiles.',
+        );
+    }
+    const candidates = resolveUserProfileCandidates(options.profileName, options);
+    for (const candidate of candidates) {
+        if (existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    // No existing candidate: create the first candidate (the `.jsonc` default) so the first write
+    // materializes `mission-control.<profile>.jsonc`.
+    const createDefault = candidates[0];
+    if (createDefault === undefined) {
+        throw new Error('unreachable: resolveUserProfileCandidates never returns an empty array');
+    }
+    return createDefault;
 }
 
 export function resolveProjectConfigPath(options: LoadMcpConfigOptions = {}): string {
@@ -248,7 +362,11 @@ async function readUserConfig(userConfigPath: string): Promise<ReadUserResult> {
     if (contents === undefined) {
         return { config: undefined };
     }
-    const parsed = parseJson(userConfigPath, contents);
+    // Profile files may be `.jsonc` (JSON with Comments). Strip `//` and `/* */` comments before
+    // JSON.parse. Trailing commas are intentionally NOT supported: stripJsoncComments leaves them
+    // intact and JSON.parse then rejects them with a clear SyntaxError.
+    const textToParse = userConfigPath.endsWith('.jsonc') ? stripJsoncComments(contents) : contents;
+    const parsed = parseJson(userConfigPath, textToParse);
     if (typeof parsed !== 'object') {
         return { config: undefined, error: parsed };
     }
@@ -338,12 +456,18 @@ export async function readProjectScopeServers(options: LoadMcpConfigOptions = {}
     };
 }
 
+// Comment-loss note (plan T3): rewriting an existing `.jsonc` config through
+// `mctrl mcp add/remove --scope user --profile <name>` preserves the config DATA but may remove
+// COMMENTS because writes use JSON serialization (`JSON.stringify`, which cannot round-trip `//`
+// or `/* */` comments). The file FORMAT (`.jsonc` vs `.json`) is preserved by rewriting the same
+// path; only inline/`/* */` comments are dropped. A freshly created profile is always written as
+// `mission-control.<profile>.jsonc` containing valid JSON (2-space indent).
 export async function writeUserMcpServer(
     name: string,
     entry: McpConfigEntry,
     options: LoadMcpConfigOptions = {},
 ): Promise<void> {
-    const userConfigPath = resolveUserConfigPath(options);
+    const userConfigPath = resolveUserConfigPathForWrite(options);
     const existing = await readUserConfig(userConfigPath);
     if (existing.error !== undefined) {
         throw new Error(`cannot write to ${userConfigPath}: ${existing.error}`);
@@ -377,7 +501,7 @@ export async function writeProjectMcpServer(
 }
 
 export async function removeUserMcpServer(name: string, options: LoadMcpConfigOptions = {}): Promise<boolean> {
-    const userConfigPath = resolveUserConfigPath(options);
+    const userConfigPath = resolveUserConfigPathForWrite(options);
     const existing = await readUserConfig(userConfigPath);
     if (existing.config === undefined || existing.config.mcp === undefined || !(name in existing.config.mcp)) {
         return false;

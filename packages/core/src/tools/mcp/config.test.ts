@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
     loadResolvedMcpConfig,
+    ProfileNameValidationError,
     readProjectScopeServers,
     readUserScopeServers,
     removeProjectMcpServer,
     removeUserMcpServer,
+    resolveUserConfigPath,
+    resolveUserProfileCandidates,
+    validateProfileName,
     writeProjectMcpServer,
     writeUserMcpServer,
 } from './config.js';
@@ -314,5 +318,507 @@ describe('mcp config write/read round-trips', () => {
             projectConfigPath: dirs.projectConfigPath,
         });
         expect(again).toBe(false);
+    });
+});
+
+describe('validateProfileName', () => {
+    it('returns undefined for undefined input so callers can spread conditionally', () => {
+        expect(validateProfileName(undefined)).toBeUndefined();
+    });
+
+    it.each(['dev', 'prod', 'prod-1', 'a_b', 'a1', 'x', 'a'.repeat(64)])('accepts a valid name: %s', (name) => {
+        expect(validateProfileName(name)).toBe(name);
+    });
+
+    const invalidNames: readonly string[] = [
+        '',
+        '.',
+        '..',
+        '.dev',
+        'a/b',
+        'a\\b',
+        'Dev',
+        'UPPER',
+        '-lead',
+        '_lead',
+        'has.space',
+        'a.b',
+        'a'.repeat(65),
+    ];
+    it.each(invalidNames)('throws ProfileNameValidationError for invalid name: %s', (name) => {
+        try {
+            validateProfileName(name);
+            throw new Error(`expected validateProfileName to throw for ${JSON.stringify(name)}`);
+        } catch (error) {
+            expect(error).toBeInstanceOf(ProfileNameValidationError);
+            if (error instanceof ProfileNameValidationError) {
+                expect(error.invalidValue).toBe(name);
+                expect(error.message).toContain(JSON.stringify(name));
+            }
+        }
+    });
+
+    it('escapes a backslash in the offending value via JSON.stringify', () => {
+        const raw = 'a\\b';
+        try {
+            validateProfileName(raw);
+            throw new Error('expected throw');
+        } catch (error) {
+            expect(error).toBeInstanceOf(ProfileNameValidationError);
+            if (error instanceof ProfileNameValidationError) {
+                expect(error.message).toContain('"a\\\\b"');
+            }
+        }
+    });
+});
+
+describe('resolveUserProfileCandidates', () => {
+    it('returns the four candidates in fixed priority order inside the config dir', () => {
+        const candidates = resolveUserProfileCandidates('dev', { userConfigDir: '/cfg', env: {} });
+        expect(candidates).toEqual([
+            '/cfg/mission-control.dev.jsonc',
+            '/cfg/mission-control.dev.json',
+            '/cfg/config.dev.jsonc',
+            '/cfg/config.dev.json',
+        ]);
+    });
+
+    it('throws ProfileNameValidationError for an invalid profile name (never joins unvalidated)', () => {
+        expect(() => resolveUserProfileCandidates('a/b', { userConfigDir: '/cfg', env: {} })).toThrow(
+            ProfileNameValidationError,
+        );
+    });
+
+    it('honors userConfigDir over MCTRL_CONFIG_DIR env', () => {
+        const candidates = resolveUserProfileCandidates('dev', {
+            userConfigDir: '/explicit',
+            env: { MCTRL_CONFIG_DIR: '/env' },
+        });
+        expect(candidates[0]).toBe('/explicit/mission-control.dev.jsonc');
+    });
+
+    it('uses MCTRL_CONFIG_DIR env as the dir when userConfigDir is absent', () => {
+        const candidates = resolveUserProfileCandidates('dev', { env: { MCTRL_CONFIG_DIR: '/envdir' } });
+        expect(candidates[0]).toBe('/envdir/mission-control.dev.jsonc');
+        expect(candidates[3]).toBe('/envdir/config.dev.json');
+    });
+});
+
+describe('profile path resolution', () => {
+    let dir: string;
+
+    beforeEach(async () => {
+        dir = await mkdtemp(join(tmpdir(), 'mcp-profile-'));
+    });
+
+    afterEach(async () => {
+        await rm(dir, { recursive: true, force: true });
+    });
+
+    async function touch(path: string): Promise<void> {
+        await writeFile(path, '{}', 'utf8');
+    }
+
+    it('returns the first candidate when mission-control.<profile>.jsonc exists', async () => {
+        await touch(join(dir, 'mission-control.dev.jsonc'));
+        const resolved = resolveUserConfigPath({ profileName: 'dev', userConfigDir: dir, env: {} });
+        expect(resolved).toBe(join(dir, 'mission-control.dev.jsonc'));
+    });
+
+    it('falls back to mission-control.<profile>.json when the jsonc candidate is absent', async () => {
+        await touch(join(dir, 'mission-control.dev.json'));
+        const resolved = resolveUserConfigPath({ profileName: 'dev', userConfigDir: dir, env: {} });
+        expect(resolved).toBe(join(dir, 'mission-control.dev.json'));
+    });
+
+    it('falls back to config.<profile>.jsonc when both mission-control candidates are absent', async () => {
+        await touch(join(dir, 'config.dev.jsonc'));
+        const resolved = resolveUserConfigPath({ profileName: 'dev', userConfigDir: dir, env: {} });
+        expect(resolved).toBe(join(dir, 'config.dev.jsonc'));
+    });
+
+    it('falls back to config.<profile>.json when only it exists', async () => {
+        await touch(join(dir, 'config.dev.json'));
+        const resolved = resolveUserConfigPath({ profileName: 'dev', userConfigDir: dir, env: {} });
+        expect(resolved).toBe(join(dir, 'config.dev.json'));
+    });
+
+    it('prefers mission-control-prefixed names over generic config.* names', async () => {
+        await touch(join(dir, 'mission-control.dev.json'));
+        await touch(join(dir, 'config.dev.jsonc'));
+        const resolved = resolveUserConfigPath({ profileName: 'dev', userConfigDir: dir, env: {} });
+        expect(resolved).toBe(join(dir, 'mission-control.dev.json'));
+    });
+
+    it('throws profile-not-found naming the profile and listing all four tried paths when none exist', () => {
+        try {
+            resolveUserConfigPath({ profileName: 'dev', userConfigDir: dir, env: {} });
+            throw new Error('expected resolveUserConfigPath to throw');
+        } catch (error) {
+            expect(error).toBeInstanceOf(Error);
+            const message = (error as Error).message;
+            expect(message).toContain('"dev"');
+            expect(message).toContain(join(dir, 'mission-control.dev.jsonc'));
+            expect(message).toContain(join(dir, 'mission-control.dev.json'));
+            expect(message).toContain(join(dir, 'config.dev.jsonc'));
+            expect(message).toContain(join(dir, 'config.dev.json'));
+        }
+    });
+
+    it('throws a conflict error when userConfigPath and profileName are both set', () => {
+        expect(() =>
+            resolveUserConfigPath({
+                profileName: 'dev',
+                userConfigPath: '/explicit/config.json',
+                userConfigDir: dir,
+                env: {},
+            }),
+        ).toThrow(/Conflicting config options/);
+    });
+
+    it('throws ProfileNameValidationError for an invalid profile name before any file access', () => {
+        expect(() => resolveUserConfigPath({ profileName: '../bad', userConfigDir: dir, env: {} })).toThrow(
+            ProfileNameValidationError,
+        );
+    });
+
+    it('honors userConfigDir as the candidate directory', async () => {
+        await touch(join(dir, 'config.prod.json'));
+        const resolved = resolveUserConfigPath({ profileName: 'prod', userConfigDir: dir, env: {} });
+        expect(resolved).toBe(join(dir, 'config.prod.json'));
+    });
+});
+
+describe('resolveUserConfigPath unprofiled backward compatibility', () => {
+    it('returns <userConfigDir>/config.json when only userConfigDir is set', () => {
+        expect(resolveUserConfigPath({ userConfigDir: '/cfg', env: {} })).toBe('/cfg/config.json');
+    });
+
+    it('returns userConfigPath directly when set and no profile', () => {
+        expect(resolveUserConfigPath({ userConfigPath: '/explicit/config.json', env: {} })).toBe(
+            '/explicit/config.json',
+        );
+    });
+
+    it('returns <MCTRL_CONFIG_DIR>/config.json from env without appending the app name', () => {
+        expect(resolveUserConfigPath({ env: { MCTRL_CONFIG_DIR: '/envcfg' } })).toBe('/envcfg/config.json');
+    });
+
+    it('userConfigDir takes precedence over MCTRL_CONFIG_DIR env', () => {
+        expect(resolveUserConfigPath({ userConfigDir: '/cfg', env: { MCTRL_CONFIG_DIR: '/envcfg' } })).toBe(
+            '/cfg/config.json',
+        );
+    });
+});
+
+describe('loadResolvedMcpConfig profile read', () => {
+    let dirs: { readonly root: string; readonly userConfigDir: string; readonly projectConfigPath: string };
+
+    beforeEach(async () => {
+        const root = await mkdtemp(join(tmpdir(), 'mcp-prof-'));
+        dirs = {
+            root,
+            userConfigDir: join(root, 'config'),
+            projectConfigPath: join(root, 'workspace', '.mcp.json'),
+        };
+    });
+
+    afterEach(async () => {
+        await rm(dirs.root, { recursive: true, force: true });
+    });
+
+    it('profile replaces base config: no base server leaks when a profile is selected', async () => {
+        await writeRaw(
+            join(dirs.userConfigDir, 'config.json'),
+            JSON.stringify({ mcp: { base: { type: 'local', command: ['base-bin'] } } }),
+        );
+        await writeRaw(
+            join(dirs.userConfigDir, 'mission-control.dev.json'),
+            JSON.stringify({ mcp: { profile: { type: 'local', command: ['profile-bin'] } } }),
+        );
+        const resolved = await loadResolvedMcpConfig({
+            profileName: 'dev',
+            userConfigDir: dirs.userConfigDir,
+            projectConfigPath: dirs.projectConfigPath,
+            env: {},
+        });
+        const names = resolved.servers.map((server) => server.name);
+        expect(names).toEqual(['profile']);
+        expect(names).not.toContain('base');
+        expect(resolved.errors).toEqual([]);
+    });
+
+    it('throws profile-not-found listing the tried candidates when no profile file exists', async () => {
+        await writeRaw(
+            join(dirs.userConfigDir, 'config.json'),
+            JSON.stringify({ mcp: { base: { type: 'local', command: ['base-bin'] } } }),
+        );
+        const dir = dirs.userConfigDir;
+        try {
+            await loadResolvedMcpConfig({
+                profileName: 'missing',
+                userConfigDir: dir,
+                projectConfigPath: dirs.projectConfigPath,
+                env: {},
+            });
+            throw new Error('expected loadResolvedMcpConfig to throw profile-not-found');
+        } catch (error) {
+            const message = (error as Error).message;
+            expect(message).toContain('No config file found for profile "missing"');
+            expect(message).toContain(join(dir, 'mission-control.missing.jsonc'));
+            expect(message).toContain(join(dir, 'mission-control.missing.json'));
+            expect(message).toContain(join(dir, 'config.missing.jsonc'));
+            expect(message).toContain(join(dir, 'config.missing.json'));
+        }
+    });
+
+    it('strips JSONC comments (// and /* */) from .jsonc profile files before parsing', async () => {
+        await writeRaw(
+            join(dirs.userConfigDir, 'mission-control.dev.jsonc'),
+            [
+                '{',
+                '  // line comment',
+                '  "mcp": {',
+                '    "srv": { "type": "local", "command": ["x"] } /* block comment */',
+                '  }',
+                '}',
+            ].join('\n'),
+        );
+        const resolved = await loadResolvedMcpConfig({
+            profileName: 'dev',
+            userConfigDir: dirs.userConfigDir,
+            projectConfigPath: dirs.projectConfigPath,
+            env: {},
+        });
+        expect(resolved.servers.map((server) => server.name)).toEqual(['srv']);
+        expect(resolved.errors).toEqual([]);
+    });
+
+    it('rejects trailing commas with a clear parse error (no silent acceptance)', async () => {
+        await writeRaw(
+            join(dirs.userConfigDir, 'mission-control.dev.jsonc'),
+            '{ "mcp": { "srv": { "type": "local", "command": ["x"], } } }',
+        );
+        const resolved = await loadResolvedMcpConfig({
+            profileName: 'dev',
+            userConfigDir: dirs.userConfigDir,
+            projectConfigPath: dirs.projectConfigPath,
+            env: {},
+        });
+        expect(resolved.servers).toEqual([]);
+        expect(resolved.errors.length).toBe(1);
+        expect(resolved.errors[0]?.message).toContain('parse');
+    });
+
+    it('project .mcp.json still overrides profile servers by name', async () => {
+        await writeRaw(
+            join(dirs.userConfigDir, 'mission-control.dev.json'),
+            JSON.stringify({
+                mcp: {
+                    shared: { type: 'local', command: ['from-profile'] },
+                    onlyProfile: { type: 'local', command: ['profile-only'] },
+                },
+            }),
+        );
+        await writeRaw(
+            dirs.projectConfigPath,
+            JSON.stringify({
+                mcpServers: {
+                    shared: { type: 'local', command: ['from-project'] },
+                    onlyProject: { type: 'remote', url: 'https://example.test/mcp' },
+                },
+            }),
+        );
+        const resolved = await loadResolvedMcpConfig({
+            profileName: 'dev',
+            userConfigDir: dirs.userConfigDir,
+            projectConfigPath: dirs.projectConfigPath,
+            env: {},
+        });
+        const byName = new Map(resolved.servers.map((server) => [server.name, server]));
+        const shared = byName.get('shared');
+        expect(shared?.scope).toBe('project');
+        if (shared?.type === 'local') {
+            expect(shared.command).toEqual(['from-project']);
+        }
+        expect(byName.get('onlyProfile')?.scope).toBe('user');
+        expect(byName.get('onlyProject')?.scope).toBe('project');
+    });
+
+    it('profile allowlist alone controls expansion: base config allowlist never leaks', async () => {
+        await writeRaw(
+            join(dirs.userConfigDir, 'config.json'),
+            JSON.stringify({
+                mcp: { base: { type: 'local', command: [ref('BASE_VAR')] } },
+                mcp_env_allowlist: ['BASE_VAR'],
+            }),
+        );
+        await writeRaw(
+            join(dirs.userConfigDir, 'mission-control.dev.json'),
+            JSON.stringify({
+                mcp: {
+                    prof: { type: 'local', command: [ref('PROFILE_VAR'), ref('BASE_VAR')] },
+                },
+                mcp_env_allowlist: ['PROFILE_VAR'],
+            }),
+        );
+        const resolved = await loadResolvedMcpConfig({
+            profileName: 'dev',
+            userConfigDir: dirs.userConfigDir,
+            projectConfigPath: dirs.projectConfigPath,
+            env: { BASE_VAR: 'base-expanded', PROFILE_VAR: 'profile-expanded' },
+        });
+        const names = resolved.servers.map((server) => server.name);
+        expect(names).toEqual(['prof']);
+        expect(names).not.toContain('base');
+        const prof = resolved.servers[0];
+        if (prof?.type === 'local') {
+            expect(prof.command).toEqual(['profile-expanded', ref('BASE_VAR')]);
+        }
+        expect(resolved.expandedSecrets).not.toContain('base-expanded');
+        expect(resolved.expandedSecrets).toContain('profile-expanded');
+    });
+});
+
+describe('profile-aware user-scope writes', () => {
+    let dirs: { readonly root: string; readonly userConfigDir: string; readonly projectConfigPath: string };
+
+    beforeEach(async () => {
+        const root = await mkdtemp(join(tmpdir(), 'mcp-prof-write-'));
+        dirs = {
+            root,
+            userConfigDir: join(root, 'config'),
+            projectConfigPath: join(root, 'workspace', '.mcp.json'),
+        };
+    });
+
+    afterEach(async () => {
+        await rm(dirs.root, { recursive: true, force: true });
+    });
+
+    it('creates mission-control.<profile>.jsonc when no candidate exists', async () => {
+        await writeUserMcpServer(
+            'srv',
+            { type: 'local', command: ['npx', 'fs-mcp'] },
+            { profileName: 'dev', userConfigDir: dirs.userConfigDir, projectConfigPath: dirs.projectConfigPath },
+        );
+        const createdPath = join(dirs.userConfigDir, 'mission-control.dev.jsonc');
+        const onDisk = JSON.parse(await readFile(createdPath, 'utf8'));
+        expect(onDisk.mcp.srv.command).toEqual(['npx', 'fs-mcp']);
+        await expect(readFile(join(dirs.userConfigDir, 'config.json'), 'utf8')).rejects.toThrow();
+    });
+
+    it('rewrites an existing .jsonc candidate preserving the file path and JSON validity', async () => {
+        const profilePath = join(dirs.userConfigDir, 'mission-control.dev.jsonc');
+        await writeRaw(
+            profilePath,
+            [
+                '{',
+                '  // my dev profile',
+                '  "mcp": {',
+                '    "first": { "type": "local", "command": ["a"] }',
+                '  }',
+                '}',
+            ].join('\n'),
+        );
+        await writeUserMcpServer(
+            'second',
+            { type: 'local', command: ['b'] },
+            { profileName: 'dev', userConfigDir: dirs.userConfigDir, projectConfigPath: dirs.projectConfigPath },
+        );
+        const onDisk = JSON.parse(await readFile(profilePath, 'utf8'));
+        expect(Object.keys(onDisk.mcp).sort()).toEqual(['first', 'second']);
+        expect(onDisk.mcp.second.command).toEqual(['b']);
+    });
+
+    it('removeUserMcpServer writes through the same profile candidate', async () => {
+        const profilePath = join(dirs.userConfigDir, 'mission-control.dev.jsonc');
+        await writeRaw(
+            profilePath,
+            JSON.stringify({ mcp: { keep: { type: 'local', command: ['k'] }, drop: { type: 'local', command: ['d'] } } }),
+        );
+        const removed = await removeUserMcpServer('drop', {
+            profileName: 'dev',
+            userConfigDir: dirs.userConfigDir,
+            projectConfigPath: dirs.projectConfigPath,
+        });
+        expect(removed).toBe(true);
+        const onDisk = JSON.parse(await readFile(profilePath, 'utf8'));
+        expect(Object.keys(onDisk.mcp)).toEqual(['keep']);
+    });
+
+    it('project-scope writes ignore the profile and always target .mcp.json', async () => {
+        await writeProjectMcpServer(
+            'web',
+            { type: 'remote', url: 'https://example.test/mcp' },
+            { profileName: 'dev', projectConfigPath: dirs.projectConfigPath },
+        );
+        const onDisk = JSON.parse(await readFile(dirs.projectConfigPath, 'utf8'));
+        expect(onDisk.mcpServers.web.url).toBe('https://example.test/mcp');
+        await expect(readFile(join(dirs.root, 'workspace', '.mcp.dev.json'), 'utf8')).rejects.toThrow();
+    });
+});
+
+describe('T6 guardrail: .mcp.<profile>.json[c] project files are never read', () => {
+    let dirs: { readonly root: string; readonly userConfigDir: string; readonly projectConfigPath: string };
+
+    beforeEach(async () => {
+        const root = await mkdtemp(join(tmpdir(), 'mcp-t6-project-ignore-'));
+        dirs = {
+            root,
+            userConfigDir: join(root, 'config'),
+            projectConfigPath: join(root, 'workspace', '.mcp.json'),
+        };
+    });
+
+    afterEach(async () => {
+        await rm(dirs.root, { recursive: true, force: true });
+    });
+
+    it('a sibling .mcp.dev.json is ignored even when --profile dev is selected', async () => {
+        await writeRaw(join(dirs.userConfigDir, 'mission-control.dev.jsonc'), JSON.stringify({ mcp: {} }));
+        await writeRaw(
+            dirs.projectConfigPath,
+            JSON.stringify({ mcpServers: { canonical: { type: 'local', command: ['real-bin'] } } }),
+        );
+        await writeRaw(
+            join(dirs.root, 'workspace', '.mcp.dev.json'),
+            JSON.stringify({ mcpServers: { profileOnlyLeak: { type: 'local', command: ['leak-bin'] } } }),
+        );
+
+        const resolved = await loadResolvedMcpConfig({
+            profileName: 'dev',
+            userConfigDir: dirs.userConfigDir,
+            projectConfigPath: dirs.projectConfigPath,
+            env: {},
+        });
+
+        const names = resolved.servers.map((server) => server.name);
+        expect(names).toContain('canonical');
+        expect(names).not.toContain('profileOnlyLeak');
+        expect(resolved.errors).toEqual([]);
+    });
+
+    it('a sibling .mcp.dev.jsonc is ignored too (both extensions)', async () => {
+        await writeRaw(join(dirs.userConfigDir, 'mission-control.dev.jsonc'), JSON.stringify({ mcp: {} }));
+        await writeRaw(
+            dirs.projectConfigPath,
+            JSON.stringify({ mcpServers: { canonical: { type: 'local', command: ['real-bin'] } } }),
+        );
+        await writeRaw(
+            join(dirs.root, 'workspace', '.mcp.dev.jsonc'),
+            JSON.stringify({ mcpServers: { jsoncLeak: { type: 'local', command: ['leak-bin'] } } }),
+        );
+
+        const resolved = await loadResolvedMcpConfig({
+            profileName: 'dev',
+            userConfigDir: dirs.userConfigDir,
+            projectConfigPath: dirs.projectConfigPath,
+            env: {},
+        });
+
+        const names = resolved.servers.map((server) => server.name);
+        expect(names).toContain('canonical');
+        expect(names).not.toContain('jsoncLeak');
     });
 });

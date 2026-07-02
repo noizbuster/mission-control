@@ -96,6 +96,7 @@ export {
     type McpConfigParseError,
     type McpConfigScope,
     mcpConfigDirEnvKey,
+    ProfileNameValidationError,
     type ReadScopeServersResult,
     type ResolvedMcpConfig,
     type ResolvedMcpServer,
@@ -104,7 +105,9 @@ export {
     removeProjectMcpServer,
     removeUserMcpServer,
     resolveProjectConfigPath,
+    resolveUserProfileCandidates,
     resolveUserConfigPath,
+    validateProfileName,
     writeProjectMcpServer,
     writeUserMcpServer,
 } from './mcp/config.js';
