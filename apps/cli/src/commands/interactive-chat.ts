@@ -18,6 +18,7 @@ import {
 import type { AgentEvent, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import type { ProviderAuthStore } from '../auth-store.js';
 import { closeTreeSitterClient } from '../components/markdown/highlight.js';
+import { getVersion } from '../index.js';
 import { createAbgOverlayController } from './abg-overlay-controller.js';
 import { DEFAULT_ABG_OVERLAY_PREFS, loadAbgOverlayPrefs } from './abg-overlay-prefs-store.js';
 import { createAbgOverlayStore } from './abg-overlay-state.js';
@@ -29,7 +30,7 @@ import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './chat-tui-typ
 import { type ChatTuiOptions, createChatTui } from './create-chat-tui.js';
 import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
 import type { ChatActionResult } from './interactive-chat-action-result.js';
-import { runChatAction, startWorkflowTurn, type CodingActionContext } from './interactive-chat-actions.js';
+import { type CodingActionContext, runChatAction, startWorkflowTurn } from './interactive-chat-actions.js';
 import {
     type ChatInput,
     type ChatInputEvent,
@@ -57,9 +58,15 @@ import { loadPricingTable } from './pricing-table-store.js';
 import type { EnsuredSession } from './run-agent-session.js';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
 import { loadSessionTranscript } from './session-transcript-reconstruction.js';
-import { detectGitBranch, detectGitWorktree, formatAppTitle, formatSessionTitle, resetTerminalTitle, setTerminalTitle } from './terminal-controls.js';
+import {
+    detectGitBranch,
+    detectGitWorktree,
+    formatAppTitle,
+    formatSessionTitle,
+    resetTerminalTitle,
+    setTerminalTitle,
+} from './terminal-controls.js';
 import { gatherWelcomeData } from './welcome-data.js';
-import { getVersion } from '../index.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
 
@@ -95,6 +102,7 @@ export type InteractiveChatOptions = {
     readonly engine?: 'graph';
     readonly resolveSdkModel?: SdkModelResolver;
     readonly authStore?: ProviderAuthStore;
+    readonly profileName?: string;
 };
 
 export async function runInteractiveChatSession(
@@ -124,7 +132,10 @@ export async function runInteractiveChatSession(
     const gitWorktree = useTui ? detectGitWorktree(options.workspaceRoot) : undefined;
     const welcomeData =
         useTui && options.workspaceRoot !== undefined
-            ? await gatherWelcomeData({ workspaceRoot: options.workspaceRoot })
+            ? await gatherWelcomeData({
+                  workspaceRoot: options.workspaceRoot,
+                  ...(options.profileName !== undefined ? { profileName: options.profileName } : {}),
+              })
             : undefined;
     const bridgeOptions: SessionBridgeOptions | undefined = useTui
         ? {
@@ -229,6 +240,32 @@ export async function runInteractiveChatSession(
     let currentProvider = options.resolveProviderForSelection?.(currentModelProviderSelection) ?? options.provider;
     let currentSessionStore = options.sessionStore;
     let currentApprovalLevel: ApprovalLevel | undefined = options.initialApprovalLevel;
+
+    // Seed the interactive turn counter from the durable session log so resumed or switched
+    // sessions never reuse an already-promoted input_turn_interactive_N id. Without this, the
+    // counter starts at 0 on every process restart, and the first new prompt collides with a
+    // prior prompt.promoted event → SessionAdmissionError('input_conflict').
+    const seedTurnCounterFromStore = async (
+        store: JsonlSessionEventStore | undefined,
+        sessionId: string | undefined,
+    ): Promise<void> => {
+        if (store === undefined || sessionId === undefined) {
+            return;
+        }
+        const events = await store.getEvents(sessionId);
+        let maxSuffix = 0;
+        for (const event of events) {
+            const inputId = event.transcript?.inputId;
+            if (typeof inputId !== 'string') {
+                continue;
+            }
+            const match = inputId.match(/^input_turn_interactive_(\d+)$/u);
+            if (match?.[1] !== undefined) {
+                maxSuffix = Math.max(maxSuffix, Number.parseInt(match[1], 10));
+            }
+        }
+        turnCounter = Math.max(turnCounter, maxSuffix);
+    };
     // Shared across turns so session-scoped "always" approvals and the active level survive turn boundaries.
     const sharedPermissionSession = new PermissionSession({
         builtInRules: approvalLevelRules(currentApprovalLevel ?? 'safe'),
@@ -410,6 +447,8 @@ export async function runInteractiveChatSession(
             }
         }
 
+        await seedTurnCounterFromStore(currentSessionStore, currentSessionId);
+
         for (;;) {
             if (activeTurn === undefined) {
                 if (chatInput.controlsPrompt === true) {
@@ -520,118 +559,116 @@ export async function runInteractiveChatSession(
                 const codingContext: CodingActionContext = {
                     activeTurn,
                     useTui,
-                        commandExecutor: options.commandExecutor,
-                        emitEvent: options.emitEvent,
-                        observeStoredEvent: options.observeStoredEvent,
-                        nextTurnId: () => {
-                            turnCounter += 1;
-                            return `turn_interactive_${turnCounter}`;
-                        },
-                        provider: currentProvider,
-                        sessionId: currentSessionId,
-                        sessionStore: currentSessionStore,
-                        workspaceRoot: options.workspaceRoot,
-                        skills: sessionSkills,
-                        workflowRegistry: sessionWorkflowRegistry,
-                        onWorkflowStarted,
-                        sessionDisplayName: sessionDisplayNameController,
-                        onSessionRenamed: applySessionRenameEffects,
-                        undoRedo: undoRedoController,
-                        ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
-                        ...(options.engine !== undefined ? { engine: options.engine } : {}),
-                        ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
-                        ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
-                        ...(pricingTableForSession.length > 0 ? { pricingTable: pricingTableForSession } : {}),
-                        ...(currentApprovalLevel !== undefined ? { approvalLevel: currentApprovalLevel } : {}),
-                        permissionSession: sharedPermissionSession,
-                        ...(tuiBridge !== undefined
-                            ? {
-                                  onUsage: (inputTokens: number | undefined) =>
-                                      tuiBridge.setContextTokensUsed(inputTokens),
-                              }
-                            : {}),
-                        listWorkspaceSessions: async () => {
-                            if (options.workspaceRoot === undefined) return [];
-                            const entries = await listSessionCatalogEntriesForWorkspace(options.workspaceRoot);
-                            return entries.map((entry) => ({
-                                sessionId: entry.sessionId,
-                                label: entry.name ?? entry.sessionId,
-                                ...(entry.updatedAt !== undefined ? { updatedAt: entry.updatedAt } : {}),
-                                messageCount: entry.messageCount,
-                                status: entry.status,
-                            }));
-                        },
-                        ...(tuiBridge !== undefined
-                            ? {
-                                  selectSessionForAttach: (entries: readonly SessionPickerEntry[]) =>
-                                      tuiBridge.showSessionPicker(entries),
-                              }
-                            : {}),
-                        ...(tuiBridge !== undefined
-                            ? {
-                                  openAgentsDashboard: (entries: readonly DashboardAgentEntry[]) =>
-                                      tuiBridge.showAgentsDashboard(entries),
-                              }
-                            : {}),
-                        ...(tuiBridge !== undefined
-                            ? {
-                                  reloadAgentsDashboard: (entries: readonly DashboardAgentEntry[]) =>
-                                      tuiBridge.reloadAgentsDashboard(entries),
-                              }
-                            : {}),
-                        ...(tuiBridge !== undefined
-                            ? {
-                                  openMissionPanel: (rows: readonly MissionPanelRow[]) =>
-                                      tuiBridge.showMissionPanel(rows),
-                              }
-                            : {}),
-                        ...(tuiBridge !== undefined
-                            ? {
-                                  reloadMissionPanel: (rows: readonly MissionPanelRow[]) =>
-                                      tuiBridge.reloadMissions(rows),
-                              }
-                            : {}),
-                        ...(tuiBridge !== undefined
-                            ? {
-                                  openModelsOverlay: (
-                                      entries: readonly ModelProviderSelection[],
-                                      roleRows: readonly ModelsOverlayRoleRow[],
-                                  ) => tuiBridge.showModelsOverlay(entries, roleRows),
-                              }
-                            : {}),
-                        ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
-                        ...(tuiBridge !== undefined
-                            ? {
-                                  selectApprovalLevel: (currentLevel?: ApprovalLevel) =>
-                                      tuiBridge
-                                          .showLevelPicker(currentLevel)
-                                          .then((level): ApprovalLevel | undefined =>
-                                              level !== undefined ? (level as ApprovalLevel) : undefined,
-                                          ),
-                              }
-                            : {}),
-                        ...(tuiBridge !== undefined
-                            ? {
-                                  requestUserQuestion: (request: AskUserQuestionRequest) =>
-                                      tuiBridge.showQuestion(
-                                          request.question,
-                                          request.options.map((option) =>
-                                              typeof option === 'string'
-                                                  ? option
-                                                  : {
-                                                        label: option.label,
-                                                        ...(option.description !== undefined
-                                                            ? { description: option.description }
-                                                            : {}),
-                                                    },
-                                          ),
-                                          {
-                                              ...(request.header !== undefined ? { header: request.header } : {}),
-                                              ...(request.multiple !== undefined ? { multiple: request.multiple } : {}),
-                                          },
+                    commandExecutor: options.commandExecutor,
+                    emitEvent: options.emitEvent,
+                    observeStoredEvent: options.observeStoredEvent,
+                    nextTurnId: () => {
+                        turnCounter += 1;
+                        return `turn_interactive_${turnCounter}`;
+                    },
+                    provider: currentProvider,
+                    sessionId: currentSessionId,
+                    sessionStore: currentSessionStore,
+                    workspaceRoot: options.workspaceRoot,
+                    skills: sessionSkills,
+                    workflowRegistry: sessionWorkflowRegistry,
+                    onWorkflowStarted,
+                    sessionDisplayName: sessionDisplayNameController,
+                    onSessionRenamed: applySessionRenameEffects,
+                    undoRedo: undoRedoController,
+                    ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
+                    ...(options.engine !== undefined ? { engine: options.engine } : {}),
+                    ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
+                    ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
+                    ...(pricingTableForSession.length > 0 ? { pricingTable: pricingTableForSession } : {}),
+                    ...(currentApprovalLevel !== undefined ? { approvalLevel: currentApprovalLevel } : {}),
+                    permissionSession: sharedPermissionSession,
+                    ...(options.profileName !== undefined ? { profileName: options.profileName } : {}),
+                    ...(tuiBridge !== undefined
+                        ? {
+                              onUsage: (inputTokens: number | undefined) => tuiBridge.setContextTokensUsed(inputTokens),
+                          }
+                        : {}),
+                    listWorkspaceSessions: async () => {
+                        if (options.workspaceRoot === undefined) return [];
+                        const entries = await listSessionCatalogEntriesForWorkspace(options.workspaceRoot);
+                        return entries.map((entry) => ({
+                            sessionId: entry.sessionId,
+                            label: entry.name ?? entry.sessionId,
+                            ...(entry.updatedAt !== undefined ? { updatedAt: entry.updatedAt } : {}),
+                            messageCount: entry.messageCount,
+                            status: entry.status,
+                        }));
+                    },
+                    ...(tuiBridge !== undefined
+                        ? {
+                              selectSessionForAttach: (entries: readonly SessionPickerEntry[]) =>
+                                  tuiBridge.showSessionPicker(entries),
+                          }
+                        : {}),
+                    ...(tuiBridge !== undefined
+                        ? {
+                              openAgentsDashboard: (entries: readonly DashboardAgentEntry[]) =>
+                                  tuiBridge.showAgentsDashboard(entries),
+                          }
+                        : {}),
+                    ...(tuiBridge !== undefined
+                        ? {
+                              reloadAgentsDashboard: (entries: readonly DashboardAgentEntry[]) =>
+                                  tuiBridge.reloadAgentsDashboard(entries),
+                          }
+                        : {}),
+                    ...(tuiBridge !== undefined
+                        ? {
+                              openMissionPanel: (rows: readonly MissionPanelRow[]) => tuiBridge.showMissionPanel(rows),
+                          }
+                        : {}),
+                    ...(tuiBridge !== undefined
+                        ? {
+                              reloadMissionPanel: (rows: readonly MissionPanelRow[]) => tuiBridge.reloadMissions(rows),
+                          }
+                        : {}),
+                    ...(tuiBridge !== undefined
+                        ? {
+                              openModelsOverlay: (
+                                  entries: readonly ModelProviderSelection[],
+                                  roleRows: readonly ModelsOverlayRoleRow[],
+                              ) => tuiBridge.showModelsOverlay(entries, roleRows),
+                          }
+                        : {}),
+                    ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
+                    ...(tuiBridge !== undefined
+                        ? {
+                              selectApprovalLevel: (currentLevel?: ApprovalLevel) =>
+                                  tuiBridge
+                                      .showLevelPicker(currentLevel)
+                                      .then((level): ApprovalLevel | undefined =>
+                                          level !== undefined ? (level as ApprovalLevel) : undefined,
                                       ),
-                              }
-                            : {}),
+                          }
+                        : {}),
+                    ...(tuiBridge !== undefined
+                        ? {
+                              requestUserQuestion: (request: AskUserQuestionRequest) =>
+                                  tuiBridge.showQuestion(
+                                      request.question,
+                                      request.options.map((option) =>
+                                          typeof option === 'string'
+                                              ? option
+                                              : {
+                                                    label: option.label,
+                                                    ...(option.description !== undefined
+                                                        ? { description: option.description }
+                                                        : {}),
+                                                },
+                                      ),
+                                      {
+                                          ...(request.header !== undefined ? { header: request.header } : {}),
+                                          ...(request.multiple !== undefined ? { multiple: request.multiple } : {}),
+                                      },
+                                  ),
+                          }
+                        : {}),
                 };
                 lastCodingContext = codingContext;
                 result = await runChatAction(
@@ -671,6 +708,9 @@ export async function runInteractiveChatSession(
                 void syncSessionDisplayName(result.sessionId);
             }
             currentSessionStore = result.sessionStore ?? currentSessionStore;
+            if (result.sessionStore !== undefined && result.sessionId !== undefined) {
+                await seedTurnCounterFromStore(result.sessionStore, result.sessionId);
+            }
             if (result.approvalLevel !== undefined) {
                 currentApprovalLevel = result.approvalLevel;
                 sharedPermissionSession.replaceBuiltInRules(approvalLevelRules(currentApprovalLevel));
