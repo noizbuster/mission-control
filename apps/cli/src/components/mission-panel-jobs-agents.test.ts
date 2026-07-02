@@ -93,6 +93,34 @@ describe('buildJobPanelRows', () => {
     it('returns an empty array for no jobs (empty-state input)', () => {
         expect(buildJobPanelRows([])).toEqual([]);
     });
+
+    it('projects a comprehensive mixed-state snapshot covering every job status in one call', () => {
+        const jobs: BackgroundJobHandle[] = [
+            makeJob({ jobId: 'job_mix_q', status: 'queued' }),
+            makeJob({ jobId: 'job_mix_r', status: 'running' }),
+            makeJob({ jobId: 'job_mix_c', status: 'completed', completedAt: '2026-07-02T13:50:00.000Z' }),
+            makeJob({
+                jobId: 'job_mix_f',
+                status: 'failed',
+                completedAt: '2026-07-02T13:51:00.000Z',
+                error: 'timeout',
+            }),
+            makeJob({ jobId: 'job_mix_x', status: 'cancelled', completedAt: '2026-07-02T13:52:00.000Z' }),
+        ];
+
+        const rows = buildJobPanelRows(jobs);
+        expect(rows.map((r) => r.status)).toEqual(['queued', 'running', 'completed', 'failed', 'cancelled']);
+        expect(rows[3]?.error).toBe('timeout');
+        expect(rows[4]?.error).toBeUndefined();
+    });
+
+    it('omits the error field for a failed job that carries no error string', () => {
+        const rows = buildJobPanelRows([
+            makeJob({ jobId: 'job_fail_no_err', status: 'failed', completedAt: '2026-07-02T13:50:00.000Z' }),
+        ]);
+        expect(rows[0]?.status).toBe('failed');
+        expect(rows[0]?.error).toBeUndefined();
+    });
 });
 
 describe('buildAgentPanelRows', () => {
@@ -129,6 +157,20 @@ describe('buildAgentPanelRows', () => {
     it('returns an empty array for no agents (empty-state input)', () => {
         expect(buildAgentPanelRows([])).toEqual([]);
     });
+
+    it('projects a comprehensive mixed-state snapshot covering every agent status in one call', () => {
+        const agents: AgentRef[] = [
+            makeAgent({ id: 'a-mix-running', status: 'running', activity: 'executing' }),
+            makeAgent({ id: 'a-mix-idle', status: 'idle' }),
+            makeAgent({ id: 'a-mix-parked', status: 'parked' }),
+            makeAgent({ id: 'a-mix-aborted', status: 'aborted' }),
+        ];
+
+        const rows = buildAgentPanelRows(agents);
+        expect(rows.map((r) => r.status)).toEqual(['running', 'idle', 'parked', 'aborted']);
+        expect(rows[0]?.detail).toBe('executing');
+        expect(rows[1]?.detail).toBe('sub');
+    });
 });
 
 describe('jobStatusColor / agentStatusColor', () => {
@@ -159,6 +201,13 @@ describe('truncatePanelId / formatPanelTimestamp', () => {
 
     it('respects an explicit limit', () => {
         expect(truncatePanelId('abcdef', 3)).toBe('abc\u2026');
+    });
+
+    it('does not truncate at the exact limit boundary', () => {
+        const atLimit = '0123456789abcdefgh';
+        expect(atLimit.length).toBe(18);
+        expect(truncatePanelId(atLimit)).toBe(atLimit);
+        expect(truncatePanelId(`${atLimit}x`)).toBe(`${atLimit}\u2026`);
     });
 
     it('extracts the time component of an ISO timestamp', () => {

@@ -196,6 +196,84 @@ describe('ConcreteTaskToolRuntime.startBackgroundSession', () => {
             const ref = services.runtimeRegistry.lookup('sess-bg-6');
             expect(ref?.status).toBe('idle');
         });
+
+        it('runs multiple background sessions concurrently without cross-contamination', async () => {
+            const services = makeServices();
+            const runtime = buildRuntimeWithServices(services, async (sessionId) => ({
+                status: 'completed',
+                output: `output-for-${sessionId}`,
+            }));
+
+            const handle1 = runtime.startBackgroundSession(makeRequest('sess-concurrent-1'));
+            const handle2 = runtime.startBackgroundSession(makeRequest('sess-concurrent-2'));
+
+            expect(handle1.backgroundId).not.toBe(handle2.backgroundId);
+            expect(handle1.sessionId).toBe('sess-concurrent-1');
+            expect(handle2.sessionId).toBe('sess-concurrent-2');
+
+            const [settled1, settled2] = await Promise.all([
+                services.jobManager.awaitJob(handle1.backgroundId),
+                services.jobManager.awaitJob(handle2.backgroundId),
+            ]);
+
+            expect(settled1.result?.output).toBe('output-for-sess-concurrent-1');
+            expect(settled2.result?.output).toBe('output-for-sess-concurrent-2');
+            expect(services.runtimeRegistry.lookup('sess-concurrent-1')?.status).toBe('idle');
+            expect(services.runtimeRegistry.lookup('sess-concurrent-2')?.status).toBe('idle');
+        });
+
+        it('tracks sequential background sessions independently', async () => {
+            const services = makeServices();
+            const runtime = buildRuntimeWithServices(services, async () => ({
+                status: 'completed',
+                output: 'done',
+            }));
+
+            const first = runtime.startBackgroundSession(makeRequest('sess-seq-1'));
+            await services.jobManager.awaitJob(first.backgroundId);
+            expect(services.runtimeRegistry.lookup('sess-seq-1')?.status).toBe('idle');
+
+            const second = runtime.startBackgroundSession(makeRequest('sess-seq-2'));
+            await services.jobManager.awaitJob(second.backgroundId);
+            expect(services.runtimeRegistry.lookup('sess-seq-2')?.status).toBe('idle');
+
+            expect(services.runtimeRegistry.lookup('sess-seq-1')?.status).toBe('idle');
+        });
+
+        it('transitions the ref to aborted when the spawn returns a failed status without throwing', async () => {
+            const services = makeServices();
+            const runtime = buildRuntimeWithServices(services, async () => ({
+                status: 'failed',
+                output: 'child reported failure',
+            }));
+
+            const handle = runtime.startBackgroundSession(makeRequest('sess-result-fail'));
+            const settled = await services.jobManager.awaitJob(handle.backgroundId);
+
+            expect(settled.status).toBe('failed');
+            expect(settled.result?.output).toBe('child reported failure');
+            expect(settled.error).toBeUndefined();
+            expect(services.runtimeRegistry.lookup('sess-result-fail')?.status).toBe('aborted');
+        });
+
+        it('marks the job handle as cancelled when the job manager cancels a running job', async () => {
+            const services = makeServices();
+            let releaseSpawn: () => void = () => undefined;
+            const runtime = buildRuntimeWithServices(
+                services,
+                () =>
+                    new Promise<{ status: 'completed'; output: string }>((resolve) => {
+                        releaseSpawn = () => resolve({ status: 'completed', output: 'late' });
+                    }),
+            );
+
+            const handle = runtime.startBackgroundSession(makeRequest('sess-cancel-run'));
+            services.jobManager.cancelJob(handle.backgroundId);
+            const settled = await services.jobManager.awaitJob(handle.backgroundId);
+
+            expect(settled.status).toBe('cancelled');
+            releaseSpawn();
+        });
     });
 
     describe('without injected services', () => {

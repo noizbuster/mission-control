@@ -256,5 +256,160 @@ describe('MissionControlServices', () => {
             const second = await getOrCreateMissionControlServices(workspaceA);
             expect(second).not.toBe(first);
         });
+
+        it('factory-provided maxConcurrency enforces the cap on the shared job manager', async () => {
+            const services = await getOrCreateMissionControlServices(workspaceA, { maxConcurrency: 1 });
+            services.getJobManager().startJob({
+                sessionId: 'sess-factory-block',
+                execute: (): Promise<{ status: 'completed'; output: string }> =>
+                    new Promise<{ status: 'completed'; output: string }>(() => {
+                        // Never resolves; dispose cancels it.
+                    }),
+            });
+
+            const queued = services.getJobManager().startJob({
+                sessionId: 'sess-factory-next',
+                execute: async () => ({ status: 'completed', output: 'ok' }),
+            });
+
+            expect(queued.status).toBe('queued');
+            expect(services.snapshot().jobs.byStatus.queued).toBe(1);
+
+            await services.dispose();
+        });
+    });
+
+    describe('phase 2 — comprehensive snapshots and dispose edge cases', () => {
+        it('reflects all five job states simultaneously in the snapshot', async () => {
+            const services = await MissionControlServices.create(workspaceA, { maxConcurrency: 2 });
+
+            // Settle two terminal jobs first while both slots are free.
+            const done = services.getJobManager().startJob({
+                sessionId: 'sess-mix-done',
+                execute: async () => ({ status: 'completed', output: 'done' }),
+            });
+            await services.getJobManager().awaitJob(done.jobId);
+
+            const failed = services.getJobManager().startJob({
+                sessionId: 'sess-mix-fail',
+                execute: async () => {
+                    throw new Error('mix-fail');
+                },
+            });
+            await services.getJobManager().awaitJob(failed.jobId);
+
+            // Occupy both slots with never-resolving blockers.
+            const blocker = (): Promise<{ status: 'completed'; output: string }> =>
+                new Promise<{ status: 'completed'; output: string }>(() => {});
+            services.getJobManager().startJob({ sessionId: 'sess-mix-run-1', execute: blocker });
+            services.getJobManager().startJob({ sessionId: 'sess-mix-run-2', execute: blocker });
+
+            // Two more queue behind the blockers; cancel one.
+            services.getJobManager().startJob({
+                sessionId: 'sess-mix-queued',
+                execute: async () => ({ status: 'completed', output: 'q' }),
+            });
+            const toCancel = services.getJobManager().startJob({
+                sessionId: 'sess-mix-cancel',
+                execute: async () => ({ status: 'completed', output: 'c' }),
+            });
+            services.getJobManager().cancelJob(toCancel.jobId);
+
+            const snapshot = services.snapshot();
+            expect(snapshot.jobs.byStatus).toEqual({
+                queued: 1,
+                running: 2,
+                completed: 1,
+                failed: 1,
+                cancelled: 1,
+            });
+            expect(snapshot.jobs.total).toBe(6);
+            expect(snapshot.jobs.activeCount).toBe(2);
+
+            await services.dispose();
+        });
+
+        it('reflects all four agent statuses simultaneously in the snapshot', async () => {
+            const services = await MissionControlServices.create(workspaceA);
+            const registry = services.getRuntimeRegistry();
+            registry.adopt({
+                id: 'a-run',
+                displayName: 'Runner',
+                kind: 'sub',
+                status: 'running',
+                sessionId: 's1',
+            });
+            registry.adopt({
+                id: 'a-idle',
+                displayName: 'Idler',
+                kind: 'sub',
+                status: 'idle',
+                sessionId: 's2',
+            });
+            registry.adopt({
+                id: 'a-park',
+                displayName: 'Parker',
+                kind: 'sub',
+                status: 'parked',
+                sessionId: 's3',
+            });
+            registry.adopt({
+                id: 'a-abort',
+                displayName: 'Aborter',
+                kind: 'sub',
+                status: 'aborted',
+                sessionId: 's4',
+            });
+
+            const snapshot = services.snapshot();
+            expect(snapshot.agents.byStatus).toEqual({
+                running: 1,
+                idle: 1,
+                parked: 1,
+                aborted: 1,
+            });
+            expect(snapshot.agents.visibleCount).toBe(4);
+
+            await services.dispose();
+        });
+
+        it('dispose cleans up running jobs, lifecycle-adopted agents, and the registry together', async () => {
+            const services = await MissionControlServices.create(workspaceA, { maxConcurrency: 2 });
+            const registry = services.getRuntimeRegistry();
+            const lifecycle = services.getLifecycleManager();
+
+            // Running blocker job.
+            services.getJobManager().startJob({
+                sessionId: 'sess-dispose-block',
+                execute: (): Promise<{ status: 'completed'; output: string }> =>
+                    new Promise<{ status: 'completed'; output: string }>(() => {}),
+            });
+
+            // Lifecycle-adopted idle agent.
+            registry.adopt({
+                id: 'lifecycle-adopted',
+                displayName: 'Adopted',
+                kind: 'sub',
+                status: 'idle',
+                sessionId: 'sess-adopted',
+            });
+            lifecycle.adopt('lifecycle-adopted');
+
+            // Non-adopted running agent.
+            registry.adopt({
+                id: 'transient-agent',
+                displayName: 'Transient',
+                kind: 'sub',
+                status: 'running',
+                sessionId: 'sess-transient',
+            });
+
+            await services.dispose();
+
+            expect(services.isDisposed()).toBe(true);
+            const snapshot = services.snapshot();
+            expect(snapshot.jobs.byStatus.cancelled).toBeGreaterThanOrEqual(1);
+            expect(snapshot.agents.visibleCount).toBe(0);
+        });
     });
 });
