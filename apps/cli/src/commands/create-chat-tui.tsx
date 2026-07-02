@@ -10,6 +10,7 @@ import type { AbgOverlayController } from './abg-overlay-controller.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { type ChatStore, createChatStore } from './chat-store.js';
 import type { OpenTuiChatBridge } from './chat-tui-types.js';
+import { getOrCreateMissionControlServices, type MissionControlServices } from './mission-control-services.js';
 import type { ModelsOverlayRoleRow } from './models-overlay-state.js';
 import type { WelcomeData } from './welcome-data.js';
 
@@ -128,6 +129,8 @@ export async function createChatTui(options: ChatTuiOptions): Promise<OpenTuiCha
         ...(options.isWorktree ? { isWorktree: options.isWorktree } : {}),
     };
 
+    const missionControlServices = await resolveMissionControlServices(options.workspaceRoot);
+
     const mountResult = await mountOpenTui(
         <ChatKeymapProvider useRenderer={useRenderer}>
             <ChatApp
@@ -139,9 +142,23 @@ export async function createChatTui(options: ChatTuiOptions): Promise<OpenTuiCha
                 {...(options.abgOverlayController !== undefined
                     ? { abgOverlayController: options.abgOverlayController }
                     : {})}
+                {...(missionControlServices !== undefined ? { missionControlServices } : {})}
             />
         </ChatKeymapProvider>,
     );
 
     return createChatTuiHandle(store, mountResult.unmount);
+}
+
+async function resolveMissionControlServices(
+    workspaceRoot: string | undefined,
+): Promise<MissionControlServices | undefined> {
+    if (workspaceRoot === undefined) return undefined;
+    try {
+        return await getOrCreateMissionControlServices(workspaceRoot);
+    } catch {
+        // No `.omo` root (or services construction failure): degrade the
+        // Jobs/Agents tabs to empty states rather than failing the TUI mount.
+        return undefined;
+    }
 }

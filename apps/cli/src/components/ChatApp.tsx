@@ -12,6 +12,7 @@ import {
     resolveSlashCommandMenuInsertText,
     resolveWorkflowCommandMenuInsertText,
 } from '../commands/interactive-chat-command-menu.js';
+import type { MissionControlServices } from '../commands/mission-control-services.js';
 import type { WelcomeData } from '../commands/welcome-data.js';
 import { createClipboardService } from '../platform/clipboard-service.js';
 import {
@@ -70,6 +71,7 @@ export type ChatAppProps = {
     readonly statusBarProps?: StatusBarProps;
     readonly welcomeData?: WelcomeData;
     readonly abgOverlayController?: AbgOverlayController;
+    readonly missionControlServices?: MissionControlServices;
 };
 
 export function ChatApp({
@@ -79,6 +81,7 @@ export function ChatApp({
     statusBarProps,
     welcomeData,
     abgOverlayController,
+    missionControlServices,
 }: ChatAppProps): React.ReactNode {
     const subscribe = useCallback((cb: () => void) => store.subscribe(cb), [store]);
     const getSnapshot = useCallback(() => store.getSnapshot(), [store]);
@@ -688,7 +691,11 @@ export function ChatApp({
             ) : null}
             {snapshot.overlayMode === 'mission-panel' ? (
                 <ModalPopup>
-                    <MissionPanelOverlay store={store} workspaceRoot={statusBarProps?.workspaceRoot} />
+                    <MissionPanelOverlay
+                        store={store}
+                        workspaceRoot={statusBarProps?.workspaceRoot}
+                        {...(missionControlServices !== undefined ? { services: missionControlServices } : {})}
+                    />
                 </ModalPopup>
             ) : null}
         </box>

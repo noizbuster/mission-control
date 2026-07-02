@@ -1058,8 +1058,8 @@ export class ChatStore {
         this.publish();
     }
 
-    navigateMissionPanel(direction: number): void {
-        const count = this.state.missionPanel.rows.length;
+    navigateMissionPanel(direction: number, maxCount?: number): void {
+        const count = maxCount ?? this.state.missionPanel.rows.length;
         if (count === 0) return;
         const next = this.state.missionPanel.selectedIndex + direction;
         this.state.missionPanel = {
