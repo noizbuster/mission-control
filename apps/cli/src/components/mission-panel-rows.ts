@@ -9,7 +9,7 @@
  * {@link RuntimeAgentRegistry.listVisibleTo}) and project them into flat
  * display rows the overlay renders verbatim.
  */
-import type { AgentRef, BackgroundJobHandle } from '@mission-control/core';
+import type { AgentRef, BackgroundJobHandle, ContinuationState } from '@mission-control/core';
 
 /** Display row for a single background job. */
 export type JobPanelRow = {
@@ -122,4 +122,56 @@ export function agentStatusColor(status: string): string {
         default:
             return '#aaaaaa';
     }
+}
+
+/**
+ * Stable inactive-state copy for the Drain tab. The interactive path uses the
+ * v1 {@link SessionRunCoordinator}; the V2 {@link RunCoordinatorV2} drain-lane
+ * only runs for workflow sessions. This string is asserted verbatim by the
+ * drain-continue test contract.
+ */
+export const DRAIN_TAB_MESSAGE =
+    'Drain Lane (RunCoordinatorV2) — Inactive\n' +
+    '\n' +
+    'Interactive mode uses SessionRunCoordinator (v1).\n' +
+    'The V2 drain-lane coordinator is not active in interactive sessions.\n' +
+    'It is available for workflow sessions only.';
+
+/** Human-readable label for the inferred terminal reason of a continuation. */
+export type ContinuationReasonLabel = 'done_signal' | 'loop_inactive' | 'resumable';
+
+export type ContinuationPanelView = {
+    readonly iteration: number;
+    readonly loopActive: boolean;
+    readonly doneSignal: boolean;
+    readonly lastSessionId: string | undefined;
+    readonly startedAt: string;
+    readonly reason: ContinuationReasonLabel;
+};
+
+/**
+ * Infer the terminal reason from a {@link ContinuationState}. The persisted
+ * state carries no explicit outcome reason (that lives on
+ * {@link ContinuationOutcome}, produced only by the driving path this panel
+ * never runs), so the label is derived from the observable flags:
+ * `doneSignal` is definitive; `!loopActive` means the loop went idle. A state
+ * that still has `loopActive && !doneSignal` reads as resumable (it may have
+ * been capped at `max_iterations`, but that is unknowable from the state alone
+ * since the configured cap is not persisted).
+ */
+export function deriveContinuationReason(state: ContinuationState): ContinuationReasonLabel {
+    if (state.doneSignal) return 'done_signal';
+    if (!state.loopActive) return 'loop_inactive';
+    return 'resumable';
+}
+
+export function buildContinuationPanelView(state: ContinuationState): ContinuationPanelView {
+    return {
+        iteration: state.iteration,
+        loopActive: state.loopActive,
+        doneSignal: state.doneSignal,
+        lastSessionId: state.lastSessionId,
+        startedAt: state.startedAt,
+        reason: deriveContinuationReason(state),
+    };
 }

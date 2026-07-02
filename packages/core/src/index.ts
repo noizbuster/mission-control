@@ -143,6 +143,7 @@ export * from './memory/index.js';
 export { PermissionSession, type PermissionSessionOptions } from './permission/session.js';
 export { PermissionRuleStore, type PermissionRuleStoreOptions } from './permission/store.js';
 export { createAllowPermissionDecision, createDefaultPermissionDecision } from './permissions.js';
+export { readBoulder } from './persistence/boulder-store.js';
 export { ensureOmoDirs, resolveOmoRoot } from './persistence/paths.js';
 export * from './plugins/index.js';
 export {

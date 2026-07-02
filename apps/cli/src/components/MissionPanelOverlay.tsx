@@ -1,16 +1,22 @@
 /** @jsxImportSource @opentui/react */
 
 import type { AgentRef, BackgroundJobHandle } from '@mission-control/core';
-import { MAIN_AGENT_ID } from '@mission-control/core';
+import { ContinuationRuntime, type ContinuationState, MAIN_AGENT_ID, readBoulder } from '@mission-control/core';
 import { TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/react';
 import type * as React from 'react';
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import type { ChatStore, MissionPanelTab } from '../commands/chat-store.js';
 import { loadMissionPanelRows } from '../commands/interactive-chat-actions.js';
 import type { MissionControlServices } from '../commands/mission-control-services.js';
 import { buildAgentPanelRows, buildJobPanelRows } from './mission-panel-rows.js';
-import { renderAgentsTab, renderJobsTab, renderRunsTab } from './mission-panel-tabs.js';
+import {
+    renderAgentsTab,
+    renderContinueTab,
+    renderDrainTab,
+    renderJobsTab,
+    renderRunsTab,
+} from './mission-panel-tabs.js';
 import { OverlayFrame } from './OverlayFrame.js';
 
 const MISSION_PANEL_TABS: readonly MissionPanelTab[] = ['runs', 'jobs', 'agents', 'drain', 'continue'];
@@ -23,13 +29,19 @@ const TAB_LABELS: Record<MissionPanelTab, string> = {
     continue: 'Continue',
 };
 
-const PLACEHOLDER_COPY: Record<Exclude<MissionPanelTab, 'runs' | 'jobs' | 'agents'>, string> = {
-    drain: 'Drain tab: RunCoordinatorV2 drain-lane state (todo 11).',
-    continue: 'Continue tab: session-spanning continuation runtime (todo 11).',
-};
-
 const NO_JOBS: readonly BackgroundJobHandle[] = [];
 const NO_AGENTS: readonly AgentRef[] = [];
+
+async function loadContinuationState(services: MissionControlServices | undefined): Promise<ContinuationState | null> {
+    if (services === undefined) return null;
+    const omoRoot = services.getOmoRoot();
+    const boulder = await readBoulder(omoRoot);
+    if (boulder === null) return null;
+    const workId = boulder.active_work_id;
+    if (workId === null) return null;
+    const runtime = new ContinuationRuntime({ boulderRoot: omoRoot, maxIterations: 0, workId });
+    return runtime.loadState();
+}
 
 export type MissionPanelOverlayProps = {
     readonly store: ChatStore;
@@ -48,6 +60,24 @@ export function MissionPanelOverlay({ store, workspaceRoot, services }: MissionP
     const agents = services !== undefined ? services.getRuntimeRegistry().listVisibleTo(MAIN_AGENT_ID) : NO_AGENTS;
     const agentRows = buildAgentPanelRows(agents);
 
+    const [continuationState, setContinuationState] = useState<ContinuationState | null>(null);
+
+    const reloadContinuation = useCallback(async (): Promise<void> => {
+        setContinuationState(await loadContinuationState(services));
+    }, [services]);
+
+    useEffect(() => {
+        if (panel.activeTab !== 'continue') return;
+        let cancelled = false;
+        void (async () => {
+            const state = await loadContinuationState(services);
+            if (!cancelled) setContinuationState(state);
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [panel.activeTab, services]);
+
     const cycleTab = useCallback(
         (delta: number): void => {
             const idx = MISSION_PANEL_TABS.indexOf(panel.activeTab);
@@ -61,11 +91,12 @@ export function MissionPanelOverlay({ store, workspaceRoot, services }: MissionP
 
     const reload = useCallback((): void => {
         if (workspaceRoot === undefined) return;
+        void reloadContinuation();
         void (async () => {
             const rows = await loadMissionPanelRows(workspaceRoot);
             store.reloadMissions(rows);
         })();
-    }, [workspaceRoot, store]);
+    }, [workspaceRoot, store, reloadContinuation]);
 
     useKeyboard((key) => {
         if (key.name === 'escape' || (key.ctrl && key.name === 'c')) {
@@ -129,17 +160,15 @@ export function MissionPanelOverlay({ store, workspaceRoot, services }: MissionP
                     );
                 })}
             </box>
-            {panel.activeTab === 'runs' ? (
-                renderRunsTab(panel.selectedIndex, panel.rows)
-            ) : panel.activeTab === 'jobs' ? (
-                renderJobsTab(panel.selectedIndex, jobRows)
-            ) : panel.activeTab === 'agents' ? (
-                renderAgentsTab(panel.selectedIndex, agentRows)
-            ) : (
-                <box marginTop={1}>
-                    <text attributes={TextAttributes.DIM}>{PLACEHOLDER_COPY[panel.activeTab]}</text>
-                </box>
-            )}
+            {panel.activeTab === 'runs'
+                ? renderRunsTab(panel.selectedIndex, panel.rows)
+                : panel.activeTab === 'jobs'
+                  ? renderJobsTab(panel.selectedIndex, jobRows)
+                  : panel.activeTab === 'agents'
+                    ? renderAgentsTab(panel.selectedIndex, agentRows)
+                    : panel.activeTab === 'drain'
+                      ? renderDrainTab()
+                      : renderContinueTab(continuationState)}
         </OverlayFrame>
     );
 }

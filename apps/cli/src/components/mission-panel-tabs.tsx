@@ -1,7 +1,15 @@
 /** @jsxImportSource @opentui/react */
+import type { ContinuationState } from '@mission-control/core';
 import { TextAttributes } from '@opentui/core';
 import type * as React from 'react';
-import { type AgentPanelRow, agentStatusColor, type JobPanelRow, jobStatusColor } from './mission-panel-rows.js';
+import {
+    type AgentPanelRow,
+    agentStatusColor,
+    buildContinuationPanelView,
+    DRAIN_TAB_MESSAGE,
+    type JobPanelRow,
+    jobStatusColor,
+} from './mission-panel-rows.js';
 import { SELECTED_BG } from './overlay-theme.js';
 
 const MISSION_PANEL_MAX_VISIBLE = 12;
@@ -126,6 +134,40 @@ export function renderAgentsTab(selectedIndex: number, rows: readonly AgentPanel
                     </box>
                 );
             })}
+        </box>
+    );
+}
+
+export function renderDrainTab(): React.ReactNode {
+    const lines = DRAIN_TAB_MESSAGE.split('\n');
+    const header = lines[0] ?? '';
+    const body = lines.slice(1).join('\n');
+    return (
+        <box flexDirection="column" marginTop={1}>
+            <text attributes={TextAttributes.BOLD}>{header}</text>
+            <text attributes={TextAttributes.DIM}>{body}</text>
+        </box>
+    );
+}
+
+export function renderContinueTab(state: ContinuationState | null): React.ReactNode {
+    if (state === null) {
+        return (
+            <box marginTop={1}>
+                <text attributes={TextAttributes.DIM}>No continuation state found.</text>
+            </box>
+        );
+    }
+    const view = buildContinuationPanelView(state);
+    const loopLabel = view.loopActive ? 'active' : 'inactive';
+    const doneLabel = view.doneSignal ? 'received' : 'not received';
+    return (
+        <box flexDirection="column" marginTop={1}>
+            <text>{`Iteration: ${view.iteration}`}</text>
+            <text>{`Loop: ${loopLabel}`}</text>
+            <text>{`Done signal: ${doneLabel}`}</text>
+            <text>{`Last session: ${view.lastSessionId ?? '(none)'}`}</text>
+            <text attributes={TextAttributes.DIM}>{`Reason: ${view.reason}`}</text>
         </box>
     );
 }
