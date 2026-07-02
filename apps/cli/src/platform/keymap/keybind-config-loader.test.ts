@@ -302,4 +302,32 @@ describe('T17 keybind config loader', () => {
             expect(second.keybinds.model_cycle).toBe('f4');
         });
     });
+
+    describe('T6 profile guardrail: discovery ignores profile-named directories', () => {
+        it('does not read a profile-named keybinds file under the config dir', () => {
+            writeKeybinds(temp.userConfig, [KEYBIND_CONFIG_FILENAME], '{"model_cycle":"f9"}');
+            writeKeybinds(temp.userConfig, ['keybinds.dev.json'], '{"model_cycle":"f1"}');
+
+            clearKeybindConfigCache();
+            const { keybinds, sourcePath } = resolveKeybindConfig({
+                workspaceRoot: temp.workspace,
+                userConfigDir: temp.userConfig,
+            });
+
+            expect(keybinds.model_cycle).toBe('f9');
+            expect(sourcePath).toBe(join(temp.userConfig, KEYBIND_CONFIG_FILENAME));
+            expect(sourcePath).not.toContain('keybinds.dev');
+        });
+
+        it('loadKeybindConfig accepts no profileName option (structural isolation)', () => {
+            writeKeybinds(temp.workspace, ['.mctrl', KEYBIND_CONFIG_FILENAME], '{"thinking_toggle":"ctrl+t"}');
+
+            clearKeybindConfigCache();
+            const result = loadKeybindConfig({ workspaceRoot: temp.workspace, userConfigDir: temp.userConfig });
+
+            expect(result.overrides).toMatchObject({ thinking_toggle: 'ctrl+t' });
+            expect(result.sourcePath).not.toBeNull();
+            expect(result.sourcePath).not.toContain('.dev');
+        });
+    });
 });
