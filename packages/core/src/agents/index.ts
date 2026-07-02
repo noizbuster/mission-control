@@ -42,4 +42,5 @@ export {
     type ConcreteTaskToolRuntimeOptions,
     type ResolveAgentModelFn,
     type SpawnFn,
+    type TaskToolRuntimeServices,
 } from './task-tool-runtime.js';

@@ -27,6 +27,7 @@ import {
     registerWorkflowTool,
     type SdkModelResolver,
     selectWebSearchProvider,
+    type TaskToolRuntimeServices,
     ToolRegistry,
     type ToolRegistryWithMcp,
     todoWriteToolRegistration,
@@ -79,6 +80,7 @@ type NonInteractiveToolRegistryOptions = {
     readonly authStore?: ProviderAuthStore;
     readonly workflowRegistry?: WorkflowRegistry;
     readonly onWorkflowStarted?: (spec: WorkflowSpec, prompt: string) => void;
+    readonly services?: TaskToolRuntimeServices;
 };
 
 export async function createNonInteractiveToolRegistry(
@@ -164,6 +166,7 @@ export async function createNonInteractiveToolRegistry(
             agentModelOverrides,
             ...(roleConfig !== undefined ? { roleConfig } : {}),
             ...(options.sessionId !== undefined ? { parentSessionId: options.sessionId } : {}),
+            ...(options.services !== undefined ? { services: options.services } : {}),
         });
     }
     const mcpConnectionManager = await registerNamespacedMcpTools(registry, {

@@ -28,13 +28,19 @@ import {
     registerWorkflowTool,
     type SdkModelResolver,
     selectWebSearchProvider,
+    type TaskToolRuntimeServices,
     type ToolInvocationSettlement,
     ToolRegistry,
     type ToolRegistryWithMcp,
     todoWriteToolRegistration,
     type WorkflowRegistry,
 } from '@mission-control/core';
-import type { AbgNodeModelOptions, ModelProviderSelection, PermissionRequest, WorkflowSpec } from '@mission-control/protocol';
+import type {
+    AbgNodeModelOptions,
+    ModelProviderSelection,
+    PermissionRequest,
+    WorkflowSpec,
+} from '@mission-control/protocol';
 import { type AgentEvent, type ToolCall, ToolResultSchema } from '@mission-control/protocol';
 import { readModelPatternOverrides } from './agents-model-overrides-config.js';
 import type { ApprovalLevel } from './approval-level.js';
@@ -87,6 +93,7 @@ export type InteractiveToolOptions = {
     readonly authStore?: ProviderAuthStore;
     readonly workflowRegistry?: WorkflowRegistry;
     readonly onWorkflowStarted?: (spec: WorkflowSpec, prompt: string) => void;
+    readonly services?: TaskToolRuntimeServices;
 };
 
 export async function createInteractiveToolRegistry(
@@ -172,6 +179,7 @@ export async function createInteractiveToolRegistry(
             parentSessionId: options.sessionId,
             agentModelOverrides,
             ...(roleConfig !== undefined ? { roleConfig } : {}),
+            ...(options.services !== undefined ? { services: options.services } : {}),
         });
     }
     const mcpConnectionManager = await registerNamespacedMcpTools(registry, {

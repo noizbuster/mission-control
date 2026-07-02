@@ -25,7 +25,7 @@ import { AgentIndex } from '../agents/agent-registry.js';
 import { BUNDLED_AGENT_TEMPLATES } from '../agents/bundled/index.js';
 import { type ModelPattern, resolveAgentModel } from '../agents/model-resolver.js';
 import { type ModelRole, parseModelAlias } from '../agents/model-roles.js';
-import { ConcreteTaskToolRuntime, type SpawnFn } from '../agents/task-tool-runtime.js';
+import { ConcreteTaskToolRuntime, type SpawnFn, type TaskToolRuntimeServices } from '../agents/task-tool-runtime.js';
 import { spawnChildCodingAgent } from '../behavior/subagents/spawn-child.js';
 import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
 import {
@@ -50,6 +50,7 @@ export type FullParityTaskToolOptions = {
     readonly parentAgent?: AgentDefinition;
     readonly agentModelOverrides?: ReadonlyMap<string, ModelPattern>;
     readonly roleConfig?: Partial<Record<ModelRole, ModelPattern>>;
+    readonly services?: TaskToolRuntimeServices;
 };
 
 /**
@@ -137,6 +138,7 @@ export async function createFullParityTaskToolRegistrationForCli(
             parentToolRegistry: options.parentToolRegistry,
             parentAgent,
             spawnFn,
+            ...(options.services !== undefined ? { services: options.services } : {}),
         }),
     });
 

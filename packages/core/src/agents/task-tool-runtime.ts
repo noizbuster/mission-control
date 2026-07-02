@@ -17,17 +17,37 @@
  */
 
 import type { AgentDefinition, PolicyEffectRule } from '@mission-control/protocol';
-import type { ChildSpawnRequest, ChildSpawnResult, TaskToolRuntime } from '../tools/task/task-tool.js';
+import type {
+    ChildSpawnRequest,
+    ChildSpawnResult,
+    TaskToolBackgroundHandle,
+    TaskToolRuntime,
+} from '../tools/task/task-tool.js';
 import { TASK_TOOL_NAME } from '../tools/task-tool.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import { ToolExecutionError } from '../tools/tool-registry-types.js';
 import { createYieldToolRegistration } from '../tools/yield-tool/yield-tool.js';
 import type { AgentIndex } from './agent-registry.js';
+import type { AsyncJobManager, JobExecuteFn } from './async-job-manager.js';
+import type { AgentLifecycleManager } from './lifecycle-manager.js';
 import { type ModelPattern } from './model-resolver.js';
 import { deriveChildPathPolicies, evaluatePathPolicies } from './path-policy-derive.js';
-import { getRuntimeRegistry } from './runtime-registry.js';
+import { getRuntimeRegistry, MAIN_AGENT_ID, type RuntimeAgentRegistry } from './runtime-registry.js';
 import { buildChildSystemPrompt } from './spawn-prompt-builder.js';
 import { randomBytes } from 'node:crypto';
+
+/**
+ * Optional runtime services injected by the CLI session owner
+ * ({@linkcode MissionControlServices}). When all three are present,
+ * {@linkcode ConcreteTaskToolRuntime.startBackgroundSession} routes through the
+ * {@linkcode AsyncJobManager} instead of throwing. When absent, the legacy
+ * `not_yet_implemented` throw is preserved for backward compatibility.
+ */
+export interface TaskToolRuntimeServices {
+    readonly jobManager: AsyncJobManager;
+    readonly lifecycleManager: AgentLifecycleManager;
+    readonly runtimeRegistry: RuntimeAgentRegistry;
+}
 
 /** Resolves an agent's active model. Caller captures session defaults and role config. */
 export type ResolveAgentModelFn = (agent: AgentDefinition) => ModelPattern;
@@ -54,9 +74,11 @@ export interface ConcreteTaskToolRuntimeOptions {
     readonly parentToolRegistry: ToolRegistry;
     readonly parentAgent: AgentDefinition;
     readonly spawnFn?: SpawnFn;
+    readonly services?: TaskToolRuntimeServices;
 }
 
-const NOT_YET_IMPLEMENTED = 'startBackgroundSession: AsyncJobManager not yet implemented (todo 23)';
+const NO_SERVICES_MESSAGE =
+    'startBackgroundSession: background services not yet implemented (inject MissionControlServices to enable)';
 
 function defaultSpawnFn(context: ChildSpawnContext): Promise<ChildSpawnResult> {
     void context;
@@ -70,6 +92,7 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
     private readonly parentToolRegistry: ToolRegistry;
     private readonly parentAgent: AgentDefinition;
     private readonly spawnFn: SpawnFn;
+    private readonly services: TaskToolRuntimeServices | undefined;
 
     constructor(options: ConcreteTaskToolRuntimeOptions) {
         this.agentIndex = options.agentIndex;
@@ -78,15 +101,18 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
         this.parentToolRegistry = options.parentToolRegistry;
         this.parentAgent = options.parentAgent;
         this.spawnFn = options.spawnFn ?? defaultSpawnFn;
+        this.services = options.services;
     }
 
     async runChildSession(request: ChildSpawnRequest): Promise<ChildSpawnResult> {
         return this.executeSpawn(request.sessionId, request);
     }
 
-    startBackgroundSession(_request: ChildSpawnRequest): never {
-        void _request;
-        throw new Error(NOT_YET_IMPLEMENTED);
+    startBackgroundSession(request: ChildSpawnRequest): TaskToolBackgroundHandle {
+        if (this.services === undefined) {
+            throw new Error(NO_SERVICES_MESSAGE);
+        }
+        return this.startBackgroundSessionWithServices(request, this.services);
     }
 
     async resumeChildSession(sessionId: string, request: ChildSpawnRequest): Promise<ChildSpawnResult> {
@@ -99,6 +125,39 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
 
     generateSessionId(): string {
         return `session_${Date.now()}_${randomBytes(4).toString('hex')}`;
+    }
+
+    private startBackgroundSessionWithServices(
+        request: ChildSpawnRequest,
+        services: TaskToolRuntimeServices,
+    ): TaskToolBackgroundHandle {
+        const { jobManager, runtimeRegistry } = services;
+        const sessionId = request.sessionId;
+
+        runtimeRegistry.adopt({
+            id: sessionId,
+            displayName: request.subagentType ?? request.category?.id ?? sessionId,
+            kind: 'sub',
+            parentId: MAIN_AGENT_ID,
+            status: 'running',
+            sessionId,
+        });
+
+        const execute: JobExecuteFn = async () => {
+            try {
+                const result = await this.executeSpawn(sessionId, request);
+                runtimeRegistry.update(sessionId, {
+                    status: result.status === 'failed' ? 'aborted' : 'idle',
+                });
+                return { status: result.status, output: result.output };
+            } catch (error) {
+                runtimeRegistry.update(sessionId, { status: 'aborted' });
+                throw error;
+            }
+        };
+
+        const handle = jobManager.startJob({ sessionId, execute });
+        return { sessionId, backgroundId: handle.jobId };
     }
 
     private async executeSpawn(sessionId: string, request: ChildSpawnRequest): Promise<ChildSpawnResult> {
