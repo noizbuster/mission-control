@@ -1,5 +1,6 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { CliArgs, CliMode } from './args.js';
+import { parseProfileName } from './args.js';
 
 type InitialRunArgs = {
     readonly graphPath?: string;
@@ -18,6 +19,7 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
     let workflowName: string | undefined;
     let sessionId: string | undefined;
     let workspacePath: string | undefined;
+    let profileName: string | undefined;
     const promptParts: string[] = [];
     let index = 0;
 
@@ -79,6 +81,11 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
                 workspacePath = readFlagValue(argv, index, '--workspace');
                 index += 2;
                 break;
+            case '--profile': {
+                profileName = parseProfileName(readFlagValue(argv, index, '--profile'));
+                index += 2;
+                break;
+            }
             case '--version':
                 showVersion = true;
                 index += 1;
@@ -88,7 +95,9 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
                 index += 1;
                 break;
             default:
-                if (current === undefined || current.startsWith('--')) {
+                // Reject single-dash tokens too: `-p`/`-m` are auth-subcommand-only shorthands and
+                // must not silently become a prompt or be mistaken for the long-only `--profile`.
+                if (current === undefined || current.startsWith('-')) {
                     throw new Error(`Unsupported argument: ${current}`);
                 }
                 promptParts.push(current);
@@ -108,6 +117,7 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
         useNative,
         workflowName,
         workspacePath,
+        profileName,
     });
 
     function setJsonMode(nextMode: 'json' | 'jsonl'): void {
@@ -143,6 +153,7 @@ function buildRunArgs(input: {
     readonly useNative: boolean | undefined;
     readonly workflowName: string | undefined;
     readonly workspacePath: string | undefined;
+    readonly profileName: string | undefined;
 }): CliArgs {
     if (input.graphPath !== undefined && input.prompt !== undefined) {
         throw new Error('prompt cannot be combined with --graph');
@@ -171,6 +182,7 @@ function buildRunArgs(input: {
         ...(input.engine !== undefined ? { engine: input.engine } : {}),
         ...(input.sessionId !== undefined ? { sessionId: input.sessionId } : {}),
         ...(input.workspacePath !== undefined ? { workspacePath: input.workspacePath } : {}),
+        ...(input.profileName !== undefined ? { profileName: input.profileName } : {}),
     } satisfies CliArgs;
     const modelProviderSelection = resolveModelProviderSelection(input.providerID, input.modelID);
     if (modelProviderSelection === undefined) {

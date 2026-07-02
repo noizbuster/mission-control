@@ -1,4 +1,5 @@
 import type { CliArgs } from './args.js';
+import { parseProfileName } from './args.js';
 
 export type McpSubcommand = 'add' | 'list' | 'remove' | 'test';
 export type McpScope = 'project' | 'user';
@@ -17,7 +18,7 @@ export function parseMcpArgs(argv: readonly string[]): CliArgs {
             return parseMcpAddArgs(argv.slice(1));
         case 'list':
         case 'ls':
-            return createBaseArgs('mcp-list');
+            return parseMcpListArgs(argv.slice(1));
         case 'remove':
         case 'rm':
             return parseMcpRemoveArgs(argv.slice(1));
@@ -45,6 +46,7 @@ function parseMcpAddArgs(argv: readonly string[]): CliArgs {
     let scope: McpScope = 'project';
     let enabled: boolean | undefined;
     let timeoutMs: number | undefined;
+    let profileName: string | undefined;
     let index = 1;
 
     while (index < argv.length) {
@@ -86,6 +88,11 @@ function parseMcpAddArgs(argv: readonly string[]): CliArgs {
                 timeoutMs = readTimeoutValue(readFlagValue(argv, index, '--timeout'));
                 index += 2;
                 break;
+            case '--profile': {
+                profileName = parseProfileName(readFlagValue(argv, index, '--profile'));
+                index += 2;
+                break;
+            }
             default:
                 throw new Error(`Unsupported mcp add argument: ${current}`);
         }
@@ -106,6 +113,28 @@ function parseMcpAddArgs(argv: readonly string[]): CliArgs {
         mcpScope: scope,
         ...(enabled !== undefined ? { mcpEnabled: enabled } : {}),
         ...(timeoutMs !== undefined ? { mcpTimeoutMs: timeoutMs } : {}),
+        ...(profileName !== undefined ? { profileName } : {}),
+    };
+}
+
+function parseMcpListArgs(argv: readonly string[]): CliArgs {
+    let profileName: string | undefined;
+    let index = 0;
+    while (index < argv.length) {
+        const current = argv[index];
+        switch (current) {
+            case '--profile': {
+                profileName = parseProfileName(readFlagValue(argv, index, '--profile'));
+                index += 2;
+                break;
+            }
+            default:
+                throw new Error(`Unsupported mcp list argument: ${current}`);
+        }
+    }
+    return {
+        ...createBaseArgs('mcp-list'),
+        ...(profileName !== undefined ? { profileName } : {}),
     };
 }
 
@@ -115,6 +144,7 @@ function parseMcpRemoveArgs(argv: readonly string[]): CliArgs {
         throw new Error('mcp remove requires a server name');
     }
     let scope: McpScope = 'project';
+    let profileName: string | undefined;
     let index = 1;
     while (index < argv.length) {
         const current = argv[index];
@@ -123,11 +153,21 @@ function parseMcpRemoveArgs(argv: readonly string[]): CliArgs {
                 scope = readScopeValue(readFlagValue(argv, index, '--scope'));
                 index += 2;
                 break;
+            case '--profile': {
+                profileName = parseProfileName(readFlagValue(argv, index, '--profile'));
+                index += 2;
+                break;
+            }
             default:
                 throw new Error(`Unsupported mcp remove argument: ${current}`);
         }
     }
-    return { ...createBaseArgs('mcp-remove'), mcpName: name, mcpScope: scope };
+    return {
+        ...createBaseArgs('mcp-remove'),
+        mcpName: name,
+        mcpScope: scope,
+        ...(profileName !== undefined ? { profileName } : {}),
+    };
 }
 
 function parseMcpTestArgs(argv: readonly string[]): CliArgs {
@@ -135,10 +175,25 @@ function parseMcpTestArgs(argv: readonly string[]): CliArgs {
     if (name === undefined) {
         throw new Error('mcp test requires a server name');
     }
-    if (argv[1] !== undefined) {
-        throw new Error(`Unsupported mcp test argument: ${argv[1]}`);
+    let profileName: string | undefined;
+    let index = 1;
+    while (index < argv.length) {
+        const current = argv[index];
+        switch (current) {
+            case '--profile': {
+                profileName = parseProfileName(readFlagValue(argv, index, '--profile'));
+                index += 2;
+                break;
+            }
+            default:
+                throw new Error(`Unsupported mcp test argument: ${current}`);
+        }
     }
-    return { ...createBaseArgs('mcp-test'), mcpName: name };
+    return {
+        ...createBaseArgs('mcp-test'),
+        mcpName: name,
+        ...(profileName !== undefined ? { profileName } : {}),
+    };
 }
 
 function createBaseArgs(command: McpCliCommand): CliArgs {

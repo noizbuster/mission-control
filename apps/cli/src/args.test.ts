@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseArgs } from './args.js';
+import { parseArgs, parseProfileName } from './args.js';
 
 describe('parseArgs', () => {
     it('parses all supported mctrl flags', () => {
@@ -207,5 +207,106 @@ describe('parseArgs', () => {
         expect(parseArgs(['agents', 'list']).agentsArgv).toEqual(['list']);
         expect(parseArgs(['agents', 'show', 'oracle']).command).toBe('agents');
         expect(parseArgs(['agents', 'show', 'oracle']).agentsArgv).toEqual(['show', 'oracle']);
+    });
+
+    it('parses the long-only --profile flag in every command position', () => {
+        expect(parseArgs(['--profile', 'dev'])).toMatchObject({
+            command: 'run',
+            profileName: 'dev',
+        });
+        expect(parseArgs(['run', '--profile', 'dev', 'prompt'])).toMatchObject({
+            command: 'run',
+            profileName: 'dev',
+            prompt: 'prompt',
+        });
+        expect(parseArgs(['mcp', 'list', '--profile', 'dev'])).toMatchObject({
+            command: 'mcp-list',
+            profileName: 'dev',
+        });
+        expect(parseArgs(['mcp', 'ls', '--profile', 'dev'])).toMatchObject({
+            command: 'mcp-list',
+            profileName: 'dev',
+        });
+        expect(parseArgs(['mcp', 'add', 'myserver', '--scope', 'user', '--profile', 'dev'])).toMatchObject({
+            command: 'mcp-add',
+            mcpName: 'myserver',
+            mcpScope: 'user',
+            profileName: 'dev',
+        });
+        expect(parseArgs(['mcp', 'remove', 'myserver', '--profile', 'dev'])).toMatchObject({
+            command: 'mcp-remove',
+            mcpName: 'myserver',
+            profileName: 'dev',
+        });
+        expect(parseArgs(['mcp', 'rm', 'myserver', '--profile', 'dev'])).toMatchObject({
+            command: 'mcp-remove',
+            profileName: 'dev',
+        });
+        expect(parseArgs(['mcp', 'test', 'myserver', '--profile', 'dev'])).toMatchObject({
+            command: 'mcp-test',
+            mcpName: 'myserver',
+            profileName: 'dev',
+        });
+        expect(parseArgs(['run', '--profile', 'dev'])).toMatchObject({
+            profileName: 'dev',
+        });
+        expect(parseArgs(['run', '--profile', 'dev']).prompt).toBeUndefined();
+    });
+
+    it('preserves the auth -p provider shorthand and rejects -p as a profile flag', () => {
+        expect(parseArgs(['auth', 'login', '-p', 'local', '--api-key', 'k'])).toMatchObject({
+            command: 'auth-login',
+            authProviderID: 'local',
+            authApiKey: 'k',
+        });
+        expect(parseArgs(['auth', 'logout', '-p', 'local'])).toMatchObject({
+            command: 'auth-logout',
+            authProviderID: 'local',
+        });
+        expect(() => parseArgs(['-p', 'dev'])).toThrow('Unsupported argument: -p');
+        expect(() => parseArgs(['run', '-p', 'dev'])).toThrow('Unsupported argument: -p');
+    });
+
+    it('rejects missing or invalid --profile values with the offending value named', () => {
+        expect(() => parseArgs(['--profile'])).toThrow('--profile requires a value');
+        expect(() => parseArgs(['run', '--profile'])).toThrow('--profile requires a value');
+        expect(() => parseArgs(['mcp', 'list', '--profile'])).toThrow('--profile requires a value');
+        // Mirror the implementation's JSON.stringify formatting so backslash/space escaping stays correct.
+        for (const bad of ['../bad', '.', '..', '.hidden', 'a/b', 'a\\b', 'UPPER', 'has space']) {
+            expect(() => parseArgs(['--profile', bad])).toThrow(
+                `Invalid --profile value: ${JSON.stringify(bad)}`,
+            );
+        }
+    });
+});
+
+describe('parseProfileName', () => {
+    it('returns undefined for undefined input', () => {
+        expect(parseProfileName(undefined)).toBeUndefined();
+    });
+
+    it('accepts lowercase letters, digits, underscores, and hyphens', () => {
+        expect(parseProfileName('dev')).toBe('dev');
+        expect(parseProfileName('prod-1')).toBe('prod-1');
+        expect(parseProfileName('a')).toBe('a');
+        expect(parseProfileName('0start')).toBe('0start');
+        expect(parseProfileName('with_underscore')).toBe('with_underscore');
+        expect(parseProfileName('a1-b2_c3')).toBe('a1-b2_c3');
+    });
+
+    it('accepts the maximum 64-character length', () => {
+        const max = 'a'.repeat(64);
+        expect(parseProfileName(max)).toBe(max);
+    });
+
+    it('rejects names longer than 64 characters', () => {
+        const tooLong = 'a'.repeat(65);
+        expect(() => parseProfileName(tooLong)).toThrow('Invalid --profile value');
+    });
+
+    it('rejects empty, path-like, and uppercase values naming the offender', () => {
+        for (const bad of ['', '.', '..', '.dev', 'dev/x', 'dev\\x', 'Dev', 'UPPER', 'has space', '-lead', '_lead']) {
+            expect(() => parseProfileName(bad)).toThrow('Invalid --profile value');
+        }
     });
 });

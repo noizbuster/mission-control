@@ -48,6 +48,12 @@ export type CliArgs = {
      */
     readonly workspacePath?: string;
     /**
+     * Config profile name resolved from the long-only `--profile <name>` flag. When set, the
+     * runtime loads the profile-specific global config file instead of the base `config.json`.
+     * The auth `-p` provider shorthand is unrelated and never aliases this flag.
+     */
+    readonly profileName?: string;
+    /**
      * Execution engine for prompt runs. `'graph'` (the only supported value) routes through the
      * ABG coding-agent graph + the AI-SDK `resolveSdkModel` bridge. Retained as an explicit flag
      * for callers/tests that pass `--engine graph`; the value `'flat'` is no longer accepted.
@@ -89,12 +95,36 @@ export const supportedCliFlags = [
     '--engine',
     '--session',
     '--workspace',
+    '--profile',
     '--api-key',
     '--credential',
     '--method',
     '--version',
     '--help',
 ] as const;
+
+// Charset excludes `.`, `/`, `\`, and uppercase on purpose: path-like values and traversal
+// attempts (`../bad`, `.`/`..`, leading-dot, `a/b`) must fail validation, not just be unused.
+const PROFILE_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+/**
+ * Validate a raw `--profile` value. `undefined` in -> `undefined` out (so callers spread the
+ * result under `exactOptionalPropertyTypes`); invalid values throw naming the offending value.
+ * Core re-implements the same pattern one-way rather than importing this (cli depends on core).
+ */
+export function parseProfileName(raw: string | undefined): string | undefined {
+    if (raw === undefined) {
+        return undefined;
+    }
+    if (!PROFILE_NAME_PATTERN.test(raw)) {
+        throw new Error(
+            `Invalid --profile value: ${JSON.stringify(raw)}. ` +
+                'Profile names must start with a lowercase letter or digit and may contain only ' +
+                "lowercase letters, digits, '_', or '-' (max 64 characters).",
+        );
+    }
+    return raw;
+}
 
 function createBaseArgs(command: CliCommand): Omit<CliArgs, 'modelProviderSelection'> {
     return {
