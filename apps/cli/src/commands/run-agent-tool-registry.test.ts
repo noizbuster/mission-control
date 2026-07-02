@@ -5,9 +5,10 @@ import type {
     ProviderAdapterContext,
     ProviderTurnRequest,
 } from '@mission-control/core';
-import { type AgentEvent, type ProviderStreamChunk } from '@mission-control/protocol';
+import { type AgentEvent, type PermissionDecision, type PermissionRequest, type ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
+import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
 import { runAgent } from './run-agent.js';
 import {
     createBufferedChatOutput,
@@ -18,6 +19,11 @@ import { replayedTypes } from './session-replay-test-support.js';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const mcpFixturePath = fileURLToPath(
+    new URL('../../../../packages/core/src/tools/mcp/fixtures/stdio-fixture-server.mjs', import.meta.url),
+);
 
 describe('runAgent interactive coding tool registry', () => {
     const tempRoots: string[] = [];
@@ -155,6 +161,125 @@ describe('runAgent interactive coding tool registry', () => {
         expect(output).not.toContain('Approve read?');
         expect(output).toContain('read failed: workspace_denied');
     });
+
+    it(
+        'profile MCP config advertises profile server tools and not base config tools (interactive path)',
+        async () => {
+            const configDir = await tempRoot('mctrl-profile-cfg-');
+            const dataDir = await tempRoot('mctrl-profile-data-');
+            const workspaceRoot = await tempRoot('mctrl-profile-ws-');
+
+            await writeFile(
+                join(configDir, 'mission-control.dev.jsonc'),
+                JSON.stringify({
+                    mcp: {
+                        'profile-only': {
+                            type: 'local',
+                            command: [process.execPath, mcpFixturePath, 'normal'],
+                            timeoutMs: 5000,
+                        },
+                    },
+                }),
+                'utf8',
+            );
+            await writeFile(
+                join(configDir, 'config.json'),
+                JSON.stringify({
+                    mcp: {
+                        'base-only': {
+                            type: 'local',
+                            command: [process.execPath, mcpFixturePath, 'normal'],
+                            timeoutMs: 5000,
+                        },
+                    },
+                }),
+                'utf8',
+            );
+
+            vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
+            vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+
+            const requests: ProviderTurnRequest[] = [];
+            const chatOutput = createBufferedChatOutput();
+
+            await runAgent(parseArgs(['--profile', 'dev', '--session', 'session_profile_mcp_interactive']), {
+                authStore: createEmptyAuthStore(),
+                chatInput: createScriptedChatInput(
+                    [
+                        { type: 'line', value: 'hello' },
+                        { type: 'interrupt' },
+                        { type: 'interrupt' },
+                    ],
+                    50,
+                ),
+                chatOutput: chatOutput.output,
+                workspaceRoot,
+                provider: providerFromTurns(requests, [[{ kind: 'response_completed', content: 'done' }]]),
+            });
+
+            const toolNames = requests[0]?.tools?.map((tool) => tool.name) ?? [];
+            expect(toolNames).toContain('mcp__profile_only__echo');
+            expect(toolNames.some((name) => name.startsWith('mcp__base_only__'))).toBe(false);
+        },
+        20000,
+    );
+
+    it(
+        'profile MCP config advertises profile server tools and not base config tools (noninteractive path)',
+        async () => {
+            const configDir = await tempRoot('mctrl-profile-cfg-ni-');
+            const workspaceRoot = await tempRoot('mctrl-profile-ws-ni-');
+
+            await writeFile(
+                join(configDir, 'mission-control.dev.jsonc'),
+                JSON.stringify({
+                    mcp: {
+                        'profile-only': {
+                            type: 'local',
+                            command: [process.execPath, mcpFixturePath, 'normal'],
+                            timeoutMs: 5000,
+                        },
+                    },
+                }),
+                'utf8',
+            );
+            await writeFile(
+                join(configDir, 'config.json'),
+                JSON.stringify({
+                    mcp: {
+                        'base-only': {
+                            type: 'local',
+                            command: [process.execPath, mcpFixturePath, 'normal'],
+                            timeoutMs: 5000,
+                        },
+                    },
+                }),
+                'utf8',
+            );
+
+            vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
+
+            const alwaysAllow = async (request: PermissionRequest): Promise<PermissionDecision> => ({
+                requestId: request.id,
+                status: 'allow',
+                reason: 'test',
+            });
+
+            const { registry, mcpConnectionManager } = await createNonInteractiveToolRegistry({
+                workspaceRoot,
+                requestPermission: alwaysAllow,
+                profileName: 'dev',
+            });
+            try {
+                const toolNames = registry.advertise().map((tool) => tool.name);
+                expect(toolNames).toContain('mcp__profile_only__echo');
+                expect(toolNames.some((name) => name.startsWith('mcp__base_only__'))).toBe(false);
+            } finally {
+                await mcpConnectionManager.disconnectAll();
+            }
+        },
+        20000,
+    );
 
     async function tempRoot(prefix: string): Promise<string> {
         const path = await mkdtemp(join(tmpdir(), prefix));

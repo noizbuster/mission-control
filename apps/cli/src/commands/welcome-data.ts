@@ -74,6 +74,7 @@ export type GatherWelcomeDataDeps = {
 
 export type GatherWelcomeDataOptions = {
     readonly workspaceRoot?: string;
+    readonly profileName?: string;
     readonly deps?: GatherWelcomeDataDeps;
 };
 
@@ -134,11 +135,15 @@ export function toWelcomeSession(entry: CliSessionCatalogEntry): WelcomeSession 
     return entry.updatedAt !== undefined ? { ...base, updatedAt: entry.updatedAt } : base;
 }
 
-async function gatherMcpServers(workspaceRoot: string | undefined): Promise<readonly WelcomeMcpServer[]> {
+async function gatherMcpServers(
+    workspaceRoot: string | undefined,
+    profileName: string | undefined,
+): Promise<readonly WelcomeMcpServer[]> {
     try {
-        const config = await loadResolvedMcpConfig(
-            workspaceRoot !== undefined ? { workspaceRoot } : {},
-        );
+        const config = await loadResolvedMcpConfig({
+            ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
+            ...(profileName !== undefined ? { profileName } : {}),
+        });
         return config.servers.filter((server) => server.enabled).map(toWelcomeMcpServer);
     } catch {
         return [];
@@ -223,7 +228,7 @@ async function raceWithTimeout<T>(promise: Promise<T>, timeoutMs: number, fallba
 export async function gatherWelcomeData(options: GatherWelcomeDataOptions = {}): Promise<WelcomeData> {
     const workspaceRoot = options.workspaceRoot;
     const [mcpServers, projectSkills, recentSessions, lspServers] = await Promise.all([
-        gatherMcpServers(workspaceRoot),
+        gatherMcpServers(workspaceRoot, options.profileName),
         gatherProjectSkills(workspaceRoot),
         gatherRecentSessions(workspaceRoot),
         gatherLspServers(options.deps),
