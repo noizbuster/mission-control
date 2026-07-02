@@ -27,12 +27,13 @@ export type OverlayFrameProps = {
 export function OverlayFrame({ variant, title, accent, hint, footer, children }: OverlayFrameProps): React.ReactNode {
     const chrome = resolveOverlayChrome(variant, accent);
 
-    // The modal renders inside a bordered popup (see ModalPopup in ChatApp), so
-    // it has no Separator of its own — the popup border is the delineator. The
-    // title and footer sit in a padded body box (pre-refactor layout). Note:
-    // opentui merges adjacent <text> siblings onto one row, so in overlays whose
-    // body starts with a bare <text> the title visually merges with it — this is
-    // the pre-existing original behavior, intentionally preserved.
+    // Modal renders inside a bordered popup (see ModalPopup in ChatApp), so it
+    // has no Separator of its own — the popup border is the delineator. The
+    // title and footer each sit in their own <box> row because opentui merges
+    // adjacent <text> siblings onto one row: without the wrappers a body that
+    // starts (or ends) with a bare <text> visually collides with the title (or
+    // footer) — the "Select model Search: …" / "Rename Session Enter new…"
+    // jumble seen on ModelPickerOverlay / RenameOverlay / SessionPickerOverlay.
     //
     // The modal title uses explicit fg/bg rather than SGR INVERSE: opentui's
     // `<text>` with `fg` set and no `bg` plus `attributes=INVERSE` paints both
@@ -44,9 +45,15 @@ export function OverlayFrame({ variant, title, accent, hint, footer, children }:
         return (
             <box flexDirection="column">
                 <box flexDirection="column" marginTop={1} paddingLeft={1} paddingRight={1}>
-                    <text fg="#000000" bg={chrome.headerFg} attributes={TextAttributes.BOLD}>{` ${title} `}</text>
+                    <box height={1}>
+                        <text fg="#000000" bg={chrome.headerFg} attributes={TextAttributes.BOLD}>{` ${title} `}</text>
+                    </box>
                     {children}
-                    {footer ? <text attributes={TextAttributes.DIM}>{footer}</text> : null}
+                    {footer ? (
+                        <box height={1}>
+                            <text attributes={TextAttributes.DIM}>{footer}</text>
+                        </box>
+                    ) : null}
                 </box>
             </box>
         );
@@ -60,10 +67,16 @@ export function OverlayFrame({ variant, title, accent, hint, footer, children }:
                     {hint ? <text attributes={TextAttributes.DIM}>{` ${hint}`}</text> : null}
                 </box>
             ) : (
-                <text fg={chrome.headerFg} attributes={chrome.headerAttrs}>{` ${title} `}</text>
+                <box height={1}>
+                    <text fg={chrome.headerFg} attributes={chrome.headerAttrs}>{` ${title} `}</text>
+                </box>
             )}
             {children}
-            {footer ? <text attributes={TextAttributes.DIM}>{footer}</text> : null}
+            {footer ? (
+                <box height={1}>
+                    <text attributes={TextAttributes.DIM}>{footer}</text>
+                </box>
+            ) : null}
         </box>
     );
 }
