@@ -678,6 +678,7 @@ async function runApprovalResumeAction(
             ...(coding.permissionSession !== undefined ? { permissionSession: coding.permissionSession } : {}),
             ...(coding.onUsage !== undefined ? { onUsage: coding.onUsage } : {}),
             ...(coding.authStore !== undefined ? { authStore: coding.authStore } : {}),
+            ...(coding.profileName !== undefined ? { profileName: coding.profileName } : {}),
         }),
     );
 }

@@ -115,6 +115,7 @@ export type CodingAgentTurnOptions = {
     readonly onUsage?: (inputTokens: number | undefined) => void;
     readonly workflowRegistry?: WorkflowRegistry;
     readonly onWorkflowStarted?: (spec: WorkflowSpec, prompt: string) => void;
+    readonly profileName?: string;
 };
 
 export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Promise<ActiveCodingAgentTurn> {
@@ -207,6 +208,7 @@ async function createInteractiveRunOwner(
         ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
         ...(options.workflowRegistry !== undefined ? { workflowRegistry: options.workflowRegistry } : {}),
         ...(options.onWorkflowStarted !== undefined ? { onWorkflowStarted: options.onWorkflowStarted } : {}),
+        ...(options.profileName !== undefined ? { profileName: options.profileName } : {}),
     };
     const { registry: toolRegistry, mcpConnectionManager } = await createInteractiveToolRegistry(
         toolOptions,

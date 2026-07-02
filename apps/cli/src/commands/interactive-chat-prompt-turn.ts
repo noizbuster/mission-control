@@ -42,6 +42,7 @@ export type PromptTurnContext = {
     readonly authStore?: ProviderAuthStore;
     readonly workflowRegistry?: WorkflowRegistry;
     readonly onWorkflowStarted?: WorkflowStartedCallback;
+    readonly profileName?: string;
 };
 
 export async function startPromptTurn(
@@ -147,6 +148,7 @@ export async function startPromptTurn(
         ...(coding.authStore !== undefined ? { authStore: coding.authStore } : {}),
         ...(coding.workflowRegistry !== undefined ? { workflowRegistry: coding.workflowRegistry } : {}),
         ...(coding.onWorkflowStarted !== undefined ? { onWorkflowStarted: coding.onWorkflowStarted } : {}),
+        ...(coding.profileName !== undefined ? { profileName: coding.profileName } : {}),
     });
 }
 
