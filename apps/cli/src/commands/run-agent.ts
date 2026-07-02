@@ -105,6 +105,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                 ? { nonInteractiveAutomationPolicy: options.nonInteractiveAutomationPolicy }
                 : {}),
             ...(persistentStore !== undefined ? { persistentStore } : {}),
+            ...(args.profileName !== undefined ? { profileName: args.profileName } : {}),
         }),
     );
     if (shouldRunChat) {
@@ -155,6 +156,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                 // is the only engine. `resolveSdkModel` is required (resolved below per turn).
                 engine: 'graph',
                 ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
+                ...(args.profileName !== undefined ? { profileName: args.profileName } : {}),
             });
         } finally {
             if (didStart) {

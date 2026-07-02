@@ -81,6 +81,7 @@ type NonInteractiveToolRegistryOptions = {
     readonly workflowRegistry?: WorkflowRegistry;
     readonly onWorkflowStarted?: (spec: WorkflowSpec, prompt: string) => void;
     readonly services?: TaskToolRuntimeServices;
+    readonly profileName?: string;
 };
 
 export async function createNonInteractiveToolRegistry(
@@ -173,6 +174,7 @@ export async function createNonInteractiveToolRegistry(
         workspaceRoot: options.workspaceRoot,
         requestPermission: options.requestPermission,
         ...(options.mcpConnectionManager !== undefined ? { mcpConnectionManager: options.mcpConnectionManager } : {}),
+        ...(options.profileName !== undefined ? { profileName: options.profileName } : {}),
     });
     // LSP seam: prefer an explicitly injected client (test injection); otherwise
     // auto-detect available language servers and register the `lsp` tool with a

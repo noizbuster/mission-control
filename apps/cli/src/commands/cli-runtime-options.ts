@@ -21,6 +21,7 @@ type CliRuntimeOptionsInput = {
     /** LSP seam: inject a real `LspClient` to register the `lsp` tool. Default undefined (off). */
     readonly lspClient?: LspClient;
     readonly persistentStore?: PersistentMemoryStore;
+    readonly profileName?: string;
 };
 
 export function createCliRuntimeOptions(input: CliRuntimeOptionsInput): AgentRuntimeOptions {
@@ -39,6 +40,7 @@ export function createCliRuntimeOptions(input: CliRuntimeOptionsInput): AgentRun
                     enableTrustedBash,
                     ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
                     ...(input.lspClient !== undefined ? { lspClient: input.lspClient } : {}),
+                    ...(input.profileName !== undefined ? { profileName: input.profileName } : {}),
                 });
                 void mcpConnectionManager.disconnectAll();
                 return registry;
