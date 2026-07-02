@@ -243,6 +243,53 @@ Deferred follow-ups:
 - DeepSeek intentionally returns no variants in v1. `deepseek-reasoner` is always-on reasoning.
 - Mistral reasoning is pinned to the dated IDs `mistral-small-2603` and `mistral-medium-2604`, plus `mistral-small-latest`. `mistral-medium-latest` is intentionally not whitelisted, so pick the dated ID for reasoning.
 
+## Configuration
+
+Mission Control separates configuration (how MCP servers and environment-variable allowlists are declared) from data (sessions, auth, trust). Configuration lives in the config directory and the project workspace; data lives in the Mission Control data directory and is never selected by `--profile`.
+
+### Config directory vs data directory
+
+- Config directory: `MCTRL_CONFIG_DIR` overrides it directly (used as-is). Without an override, the platform application-config directory joined with `mission-control` is used (`$XDG_CONFIG_HOME/mission-control` or `~/.config/mission-control` on Linux, `%APPDATA%\mission-control` on Windows, `~/Library/Application Support/mission-control` on macOS). The global user config and profile files live here.
+- Data directory: `MCTRL_DATA_DIR` overrides it; otherwise the platform application-data directory is used. Session logs, the auth file (`MISSION_CONTROL_AUTH_FILE`), and the project trust store (`trust/projects.json`) live here. The data directory is independent of `--profile`.
+
+### Global user config: `config.json`
+
+The global user config file is `config.json` in the config directory. It declares user-scope MCP servers and the environment-variable expansion allowlist (`mcp_env_allowlist`). A `${VAR}` reference in a server `command`, `args`, or `headers` is expanded only when `VAR` is listed in `mcp_env_allowlist`. User-scope `mctrl mcp add` and `mctrl mcp remove --scope user` rewrite this file.
+
+### Project-local config: `.mcp.json`
+
+The project-local config file is `.mcp.json` at the resolved workspace root. It declares project-scope MCP servers and is intended to be committed to the project. Project-scope servers merge after the selected global config and override by server name. A profile does not affect `.mcp.json`; a sibling `.mcp.<profile>.json` or `.mcp.<profile>.jsonc` is ignored.
+
+### Config profiles: `--profile <name>`
+
+`--profile <name>` is a long-only flag (there is no `-p` alias for profile) that selects a user-scope config profile for the current run. It is purely a global config file selector: it changes which user config file is read, nothing else.
+
+Filename precedence in the config directory (first existing file wins; there is no fallback to `config.json`):
+
+1. `mission-control.<profile>.jsonc`
+2. `mission-control.<profile>.json`
+3. `config.<profile>.jsonc`
+4. `config.<profile>.json`
+
+When `--profile dev` is used, the selected profile file replaces `config.json` as the global config input; there is no fallback. The base `config.json` is not read when a profile is selected, so the profile's MCP servers and allowlist entirely replace the base config.
+
+JSONC support: `.jsonc` profile files may contain `//` line comments and `/* */` block comments, which are stripped before parsing. Trailing commas are not supported and produce a parse error.
+
+Profile-not-found behavior: if no candidate file exists, the runtime surfaces a clear error naming the profile and the four candidate paths, and does not silently fall back to base config.
+
+Profile name rules: the name must match `^[a-z0-9][a-z0-9_-]{0,63}$` (lowercase letters, digits, `_`, `-`; must start with a letter or digit; max 64 characters). An invalid value is rejected with a message naming the offending value.
+
+User-scope writes with a profile: `mctrl mcp add` / `mctrl mcp remove --scope user --profile dev` rewrite an existing profile candidate (preserving its format) or create `mission-control.<profile>.jsonc` when none exists. `--scope project --profile dev` ignores the profile and still writes `.mcp.json`.
+
+`--profile` does not change the data directory, auth file (`MISSION_CONTROL_AUTH_FILE`), session logs, trust store, skills, workflows, agents, keybinds, or project `.mcp.json`. It is purely a user-config-file selector.
+
+Example:
+
+```bash
+mctrl mcp list --profile dev
+mctrl run "summarize this repository" --profile dev --session session_dev --jsonl
+```
+
 ## Coding Agent Runtime
 
 The coding-agent MVP now includes durable chat sessions, provider streaming, approval-gated local tools, replay projections, bounded graph orchestration, CLI chat, core desktop approval services, project workspace trust, permission profiles, an expanded coding-agent tool set, session tree navigation, manual compaction, and session export/import.

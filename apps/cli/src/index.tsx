@@ -31,6 +31,7 @@ export function createHelpText(): string {
         '  --graph <path>   Run an authorable ABG graph JSON file',
         '  --session <id>   Reuse or create a replayable session id',
         '  --method <id>    Select auth login method',
+        '  --profile <name>  Select a user-scope config profile (replaces config.json; long-only)',
         '  --version      Print version',
         '  --help         Print help',
         '',
