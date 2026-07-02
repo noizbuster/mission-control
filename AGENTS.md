@@ -70,6 +70,7 @@ Scoped guidance:
 | Packaging | `scripts/package-cli.ts`, `scripts/install.sh` | CLI tarball and install contract. |
 | Workflow contracts | `.github/workflows/*.yml`, `tests/workflow-yaml.test.ts` | CI and release expectations. |
 | MCP config schema | `packages/protocol/src/mcp-config.ts` | Local/remote MCP server config, LSP config placeholder, strict schemas. |
+| Config profiles | `apps/cli/src/args.ts`, `packages/core/src/tools/mcp/config.ts` | `--profile <name>` (long-only) selects a user-scope profile file in the config dir, tried in order: `mission-control.<profile>.jsonc`, `mission-control.<profile>.json`, `config.<profile>.jsonc`, `config.<profile>.json` (first existing wins; no fallback). Replaces `config.json` for that run. JSONC comments stripped; trailing commas unsupported. Profile-not-found throws listing the candidates. User-scope writes rewrite the existing candidate or create `mission-control.<profile>.jsonc`. Does NOT change data dir, auth file, session logs, trust store, skills, workflows, agents, keybinds, or project `.mcp.json` (`.mcp.<profile>.json[c]` ignored). |
 | Permission kinds | `packages/protocol/src/permission-profile.ts` | `read`/`edit`/`write`/`patch`/`bash`/`network`/`subagent` PermissionKind union. |
 | Skills loader | `packages/core/src/skills/skill-loader.ts` | 3-scope first-wins SKILL.md discovery, denylist, symlink defense. |
 | MCP clients | `packages/core/src/tools/mcp/` | Stdio + remote transports, config loader, connection manager, namespaced surfacing, secret redaction. |

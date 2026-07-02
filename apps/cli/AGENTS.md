@@ -228,7 +228,7 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | Diff renderer | `src/components/diff/` | `render-diff.ts` classifies mctrl no-line-number diffs; `DiffView.tsx` renders green/red/cyan with inverse intra-line spans. `kindStyle`/`splitLineSpans` exported for tests. |
 | Tool card | `src/components/ToolCard.tsx` | Bordered card; `hasDiffContent` auto-routes to `<DiffView>` or yellow prose lines; `expanded` prop collapses to header. |
 | Executable entry, help, version | `src/index.tsx` | Package `bin` maps `mctrl` to `./dist/index.js`. |
-| Top-level flags and modes | `src/args.ts` | Keep command/mode string unions explicit. Default mode is `'tui'` (opentui); `--no-tui`/`--json`/`--jsonl` select the non-interactive renderers. |
+| Top-level flags and modes | `src/args.ts` | Keep command/mode string unions explicit. Default mode is `'tui'` (opentui); `--no-tui`/`--json`/`--jsonl` select the non-interactive renderers. `--profile <name>` is long-only: it selects a user-scope config profile (`parseProfileName`, regex `^[a-z0-9][a-z0-9_-]{0,63}$`); auth's `-p` short flag is provider shorthand, not a profile alias. `--profile` threads through `run` and `mcp list/test/add/remove --scope user`; non-MCP commands (auth/session/models/agents) reject or ignore it safely. |
 | Run and graph args | `src/run-args.ts` | Owns `--json`, `--jsonl`, provider/model, native, graph, `--workspace`, `--session`, `--engine` flags. |
 | Auth args | `src/auth-args.ts` | Delegates into `src/commands/auth*.ts`. |
 | Session args | `src/session-args.ts` | Delegates into `src/commands/session.ts`. |

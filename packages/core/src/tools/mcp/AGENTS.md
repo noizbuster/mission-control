@@ -13,7 +13,7 @@
 | Remote transport | `http-client.ts` | `RemoteMcpClient` (StreamableHTTP + SSE fallback); one justified `as Transport` cast (SDK exactOptionalPropertyTypes defect). |
 | Shared deadline | `deadline.ts` | `raceWithDeadline(label, ms, run)` + `McpDeadline`; shared by both clients. |
 | Secret redaction | `secret-redaction.ts` | `createSecretRedactor(secrets)` longest-first deep-recursive mask → `[REDACTED]`. |
-| Config loader | `config.ts` | `config.json` mcp section + `.mcp.json` merge; `${VAR}` allowlist (user-config-only); `expandedSecrets` collection. |
+| Config loader | `config.ts` | `config.json` mcp section + `.mcp.json` merge; `${VAR}` allowlist (user-config-only); `expandedSecrets` collection. Profile-aware when `profileName` is set: `loadResolvedMcpConfig` reads only the selected profile candidate (`mission-control.<profile>.jsonc|.json`, then `config.<profile>.jsonc|.json`; first existing wins) and never falls back to base `config.json`. `resolveUserConfigPath` throws profile-not-found listing candidates; `resolveUserConfigPathForWrite` creates `mission-control.<profile>.jsonc` when none exists (writes drop comments). JSONC comments stripped; trailing commas unsupported. |
 | Connection manager | `connection-manager.ts` | `McpConnectionManager.connectAll()/disconnectAll()`; eager connect, graceful degradation, 50-tool cap. |
 | Namespaced surfacing | `surfacing.ts` | `registerNamespacedMcpTools` → `mcp__<server>__<tool>` merged into the registry; graph-path self-gating. |
 | Test fixture | `fixtures/stdio-fixture-server.mjs` | Hand-rolled JSON-RPC 2.0 stdio server (modes: normal/hung/crash). |
