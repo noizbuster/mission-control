@@ -69,6 +69,23 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         }
                     } else if (result.hadProductiveToolUse === true) {
                         state.consecutiveToolFailuresByNodeId.set(result.node.id, 0);
+                        // Bound the LLM self-loop: cap is `maxAttempts * 2` (vs the failure
+                        // counters' `maxAttempts`) so legitimate multi-turn exploration still
+                        // has room while pathological loops fail fast.
+                        const reentries = (state.consecutiveLoopActiveReentriesByNodeId.get(result.node.id) ?? 0) + 1;
+                        state.consecutiveLoopActiveReentriesByNodeId.set(result.node.id, reentries);
+                        if (reentries >= state.maxAttempts * 2) {
+                            return failGraph(
+                                graph.id,
+                                input,
+                                state.events,
+                                'node_loop_budget_exhausted',
+                                `ABG node stuck in tool loop: ${result.node.id} (${reentries} re-entries without producing output)`,
+                                terminalErrorFromSignal(result.lastSignal),
+                            );
+                        }
+                    } else {
+                        state.consecutiveLoopActiveReentriesByNodeId.set(result.node.id, 0);
                     }
                     state.consecutiveFailuresByNodeId.set(result.node.id, 0);
                     enqueueSelectedTargets(

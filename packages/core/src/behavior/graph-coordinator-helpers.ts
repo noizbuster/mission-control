@@ -32,6 +32,14 @@ export type CoordinatorState = {
     readonly attemptsByNodeId: Map<string, number>;
     readonly consecutiveFailuresByNodeId: Map<string, number>;
     readonly consecutiveToolFailuresByNodeId: Map<string, number>;
+    /**
+     * Per-node counter for consecutive `hadProductiveToolUse=true` completions. Bounds the
+     * LLM self-loop (`llm-loop-active`) so a stuck model terminates with
+     * `node_loop_budget_exhausted` instead of spinning until `maxNodeRuns`. Distinct from
+     * `consecutiveFailuresByNodeId` (failure retries) and `consecutiveToolFailuresByNodeId`
+     * (retryable tool failures): this counter fires on SUCCESSFUL tool-using turns.
+     */
+    readonly consecutiveLoopActiveReentriesByNodeId: Map<string, number>;
     readonly maxAttempts: number;
     readonly maxNodeRuns: number;
     readonly graphNodeConcurrency: number;
@@ -94,6 +102,7 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         attemptsByNodeId: new Map(),
         consecutiveFailuresByNodeId: new Map(),
         consecutiveToolFailuresByNodeId: new Map(),
+        consecutiveLoopActiveReentriesByNodeId: new Map(),
         maxAttempts: (graph.defaults?.retryLimit ?? defaultRetryLimit) + 1,
         maxNodeRuns: graph.defaults?.maxNodeRuns ?? input.maxNodeRuns ?? defaultMaxNodeRuns,
         graphNodeConcurrency: input.graphNodeConcurrency ?? defaultGraphNodeConcurrency,
