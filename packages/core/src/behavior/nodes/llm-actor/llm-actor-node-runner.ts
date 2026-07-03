@@ -188,7 +188,11 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
                 turnResult.text.trim().length > 0
                     ? parseStructuredOutput(turnResult.text, readOutputShape(node))
                     : { ok: true, value: true };
-            const outputResult = applyEnumConstraint(node, parsed);
+            const outputResult = applyShapeDefaultFallback(
+                node,
+                applyEnumConstraint(node, parsed),
+                readOutputShape(node),
+            );
             if (outputResult.ok) {
                 blackboard.set(outputKey, outputResult.value);
                 yield createAbgEmitSignal({
@@ -282,10 +286,7 @@ function readOutputDefault(node: AbgNodeSpec): string | undefined {
 
 // Substitutes outputDefault (when in-enum) for an out-of-enum value so a
 // classifier node degrades to a routable branch instead of silently stalling.
-function applyEnumConstraint(
-    node: AbgNodeSpec,
-    parsed: ParseStructuredOutputResult,
-): ParseStructuredOutputResult {
+function applyEnumConstraint(node: AbgNodeSpec, parsed: ParseStructuredOutputResult): ParseStructuredOutputResult {
     if (!parsed.ok) {
         return parsed;
     }
@@ -304,6 +305,57 @@ function applyEnumConstraint(
         ok: false,
         error: `output for outputKey not in declared outputEnum ${JSON.stringify(outputEnum)}: ${JSON.stringify(parsed.value)}`,
     };
+}
+
+/**
+ * Graceful degradation: when structured-output parsing failed (and no enum
+ * constraint rescued it), fall back to the node's declared `outputDefault`
+ * coerced to the expected shape. This prevents a single misbehaving LLM turn
+ * from killing an entire graph run — the node proceeds with a safe declared
+ * default instead.
+ *
+ * Returns the original `{ ok: false, error }` when no `outputDefault` is
+ * declared or when the default cannot be coerced to the expected shape, so the
+ * existing fail-closed path still applies for nodes without a fallback.
+ */
+function applyShapeDefaultFallback(
+    node: AbgNodeSpec,
+    parsed: ParseStructuredOutputResult,
+    shape: StructuredOutputShape,
+): ParseStructuredOutputResult {
+    if (parsed.ok) {
+        return parsed;
+    }
+    if (readOutputEnum(node) !== undefined) {
+        return parsed;
+    }
+    const fallback = readOutputDefault(node);
+    if (fallback === undefined) {
+        return parsed;
+    }
+    const coerced = coerceDefaultToShape(fallback, shape);
+    return coerced !== null ? { ok: true, value: coerced } : parsed;
+}
+
+function coerceDefaultToShape(raw: string, shape: StructuredOutputShape): unknown | null {
+    if (shape === 'boolean') {
+        const lower = raw.trim().toLowerCase();
+        if (lower === 'true' || lower === 'yes') return true;
+        if (lower === 'false' || lower === 'no') return false;
+        return null;
+    }
+    if (shape === 'object' || shape === 'array') {
+        try {
+            const parsed = JSON.parse(raw);
+            if (shape === 'object' ? !Array.isArray(parsed) && typeof parsed === 'object' : Array.isArray(parsed)) {
+                return parsed;
+            }
+            return null;
+        } catch {
+            return null;
+        }
+    }
+    return raw;
 }
 
 /**

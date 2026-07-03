@@ -510,6 +510,77 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
     });
 
+    it('substitutes outputDefault true for a boolean gate when the model returns prose', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_bool_default_true',
+            now: () => NOW,
+            sdkModel: modelReturning('Let me find the actual implementation files.'),
+            blackboard,
+        };
+        const node = {
+            id: 'guard',
+            kind: 'llm',
+            config: {
+                outputKey: 'guard.cleared',
+                outputShape: 'boolean',
+                outputDefault: 'true',
+            },
+        } as const;
+
+        const signals = await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.get('guard.cleared')).toBe(true);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(false);
+    });
+
+    it('substitutes outputDefault false for a boolean gate when parsing fails', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_bool_default_false',
+            now: () => NOW,
+            sdkModel: modelReturning('I cannot determine the answer right now.'),
+            blackboard,
+        };
+        const node = {
+            id: 'evidence',
+            kind: 'llm',
+            config: {
+                outputKey: 'evidence.verified',
+                outputShape: 'boolean',
+                outputDefault: 'false',
+            },
+        } as const;
+
+        const signals = await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.get('evidence.verified')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(false);
+    });
+
+    it('fails closed for a boolean gate with no outputDefault when parsing fails', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_bool_no_default',
+            now: () => NOW,
+            sdkModel: modelReturning('Some prose without a boolean.'),
+            blackboard,
+        };
+        const node = {
+            id: 'gate',
+            kind: 'llm',
+            config: {
+                outputKey: 'guard.cleared',
+                outputShape: 'boolean',
+            },
+        } as const;
+
+        const signals = await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.has('guard.cleared')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
+    });
+
     it('writes true for no-text turns (completion signal backwards compat)', async () => {
         const blackboard = seedBlackboard();
         const context: AbgNodeRunContext = {

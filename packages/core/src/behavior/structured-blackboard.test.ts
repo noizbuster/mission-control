@@ -142,6 +142,39 @@ describe('parseStructuredOutput', () => {
         });
     });
 
+    describe('natural-language boolean tokens', () => {
+        it('parses bare yes as boolean true', () => {
+            expect(parseStructuredOutput('yes', 'boolean')).toEqual({ ok: true, value: true });
+        });
+
+        it('parses bare no as boolean false', () => {
+            expect(parseStructuredOutput('no', 'boolean')).toEqual({ ok: true, value: false });
+        });
+
+        it('parses a key=value assignment on the last line as boolean', () => {
+            const verbose = 'Both checks pass, delegation is appropriate.\n\nguard.cleared=true';
+            expect(parseStructuredOutput(verbose, 'boolean')).toEqual({ ok: true, value: true });
+        });
+
+        it('parses a key: false assignment as boolean false', () => {
+            const verbose = 'Evidence is insufficient.\n\nguard.cleared: false';
+            expect(parseStructuredOutput(verbose, 'boolean')).toEqual({ ok: true, value: false });
+        });
+
+        it('parses key=yes as boolean true', () => {
+            expect(parseStructuredOutput('guard.cleared=yes', 'boolean')).toEqual({ ok: true, value: true });
+        });
+
+        it('does not coerce a sentence containing yes as substring', () => {
+            const result = parseStructuredOutput('Let me find the files.', 'boolean');
+            expect(result.ok).toBe(false);
+        });
+
+        it('parses yes with expectedShape any as boolean', () => {
+            expect(parseStructuredOutput('yes')).toEqual({ ok: true, value: true });
+        });
+    });
+
     describe('fail-closed edge cases', () => {
         it('fails closed on empty input', () => {
             expect(parseStructuredOutput('')).toEqual({ ok: false, error: 'empty output' });

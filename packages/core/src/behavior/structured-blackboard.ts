@@ -87,18 +87,59 @@ export function parseStructuredOutput(
         return validateShape(false, expectedShape);
     }
 
+    const lastLine = getLastNonEmptyLine(trimmed);
+    if (lastLine !== null) {
+        const lowerLast = lastLine.toLowerCase();
+        if (lowerLast === 'true' || lowerLast === 'yes') {
+            return validateShape(true, expectedShape);
+        }
+        if (lowerLast === 'false' || lowerLast === 'no') {
+            return validateShape(false, expectedShape);
+        }
+        const booleanToken = parseBooleanToken(lowerLast);
+        if (booleanToken !== null) {
+            return validateShape(booleanToken, expectedShape);
+        }
+    }
+
     const stringLine = extractStringLine(trimmed);
     if (stringLine.length === 0) {
         return { ok: false, error: 'empty output' };
     }
-    const lowerLine = stringLine.toLowerCase();
-    if (lowerLine === 'true') {
-        return validateShape(true, expectedShape);
-    }
-    if (lowerLine === 'false') {
-        return validateShape(false, expectedShape);
-    }
     return validateShape(stringLine, expectedShape);
+}
+
+/**
+ * Recognize natural-language boolean tokens a model commonly emits instead of
+ * the literal `true`/`false`. Returns `true`/`false` for an unambiguous token
+ * or `null` when the line is not a clean boolean token.
+ *
+ * Recognized forms (case-insensitive, whole-line match only):
+ *   - `yes` / `no`
+ *   - `key=true`, `key: true`, `key=false`, `key: false` — the dotted outputKey
+ *     assignment pattern (e.g. `guard.cleared=true`)
+ */
+function parseBooleanToken(line: string): boolean | null {
+    if (line === 'yes') return true;
+    if (line === 'no') return false;
+    const match = line.match(/^[a-z][a-z0-9_.-]*\s*[:=]\s*(true|false|yes|no)$/);
+    if (match !== null) {
+        const value = match[1];
+        if (value === undefined) return null;
+        return value === 'true' || value === 'yes';
+    }
+    return null;
+}
+
+function getLastNonEmptyLine(text: string): string | null {
+    const lines = text.split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const line = (lines[i] ?? '').trim();
+        if (line.length > 0) {
+            return line;
+        }
+    }
+    return null;
 }
 
 function validateShape(value: unknown, expected: StructuredOutputShape): ParseStructuredOutputResult {

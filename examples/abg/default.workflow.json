@@ -82,9 +82,10 @@
         "kind": "llm",
         "label": "Anti-dup exploration guard and delegation-bias check",
         "config": {
-          "systemPrompt": "Two checks before delegation:\n1. ANTI-DUP: if the work was already explored (check prior exploration results in context), do NOT re-explore the same ground. Skip redundant exploration and proceed with what is already known. Re-running the same searches wastes tokens and can contradict earlier findings.\n2. DELEGATION-BIAS: assess whether delegation is appropriate. Is the task small enough to do directly with certainty? Is there an existing pattern to follow (per the maturity check)? Default bias is DELEGATE for non-trivial work, but trivial single-file work you can do correctly yourself should be done directly rather than over-delegated.\nSet guard.cleared=true when both checks pass and the plan may proceed to todo planning.",
+          "systemPrompt": "Two checks before delegation:\n1. ANTI-DUP: if the work was already explored (check prior exploration results in context), do NOT re-explore the same ground. Skip redundant exploration and proceed with what is already known. Re-running the same searches wastes tokens and can contradict earlier findings.\n2. DELEGATION-BIAS: assess whether delegation is appropriate. Is the task small enough to do directly with certainty? Is there an existing pattern to follow (per the maturity check)? Default bias is DELEGATE for non-trivial work, but trivial single-file work you can do correctly yourself should be done directly rather than over-delegated.\nFirst briefly state your reasoning (1-3 sentences). Then on the LAST line, output EXACTLY `true` or `false` — no quotes, no formatting, no extra text. Output `true` when both checks pass and the plan may proceed to todo planning; output `false` otherwise.",
           "outputKey": "guard.cleared",
-          "outputShape": "boolean"
+          "outputShape": "boolean",
+          "outputDefault": "true"
         }
       },
       {
@@ -135,9 +136,10 @@
         "kind": "llm",
         "label": "Evidence check — verify concrete evidence, not just child claims",
         "config": {
-          "systemPrompt": "Personal verification after delegation. Do NOT trust the child's \"done\" claim alone. Verify concrete evidence: lsp_diagnostics clean on changed files, build exit code 0, test run passing, expected file changes present, command output matching. Confirm the work followed MUST DO / MUST NOT DO requirements and existing codebase patterns. NO EVIDENCE = NOT COMPLETE. Set evidence.verified=true only when concrete evidence confirms the work; set evidence.verified=false to trigger a bounded retry.",
+          "systemPrompt": "Personal verification after delegation. Do NOT trust the child's \"done\" claim alone. Verify concrete evidence: lsp_diagnostics clean on changed files, build exit code 0, test run passing, expected file changes present, command output matching. Confirm the work followed MUST DO / MUST NOT DO requirements and existing codebase patterns. NO EVIDENCE = NOT COMPLETE.\nFirst briefly state your reasoning (1-3 sentences). Then on the LAST line, output EXACTLY `true` or `false` — no quotes, no formatting, no extra text. Output `true` only when concrete evidence confirms the work; output `false` to trigger a bounded retry.",
           "outputKey": "evidence.verified",
-          "outputShape": "boolean"
+          "outputShape": "boolean",
+          "outputDefault": "false"
         }
       },
       {

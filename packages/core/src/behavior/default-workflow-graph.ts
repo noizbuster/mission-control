@@ -195,9 +195,13 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         'to do directly with certainty? Is there an existing pattern to follow (per the maturity ' +
                         'check)? Default bias is DELEGATE for non-trivial work, but trivial single-file work ' +
                         'you can do correctly yourself should be done directly rather than over-delegated.\n' +
-                        'Set guard.cleared=true when both checks pass and the plan may proceed to todo planning.',
+                        'First briefly state your reasoning (1-3 sentences). Then on the LAST line, output ' +
+                        'EXACTLY `true` or `false` — no quotes, no formatting, no extra text. Output `true` ' +
+                        'when both checks pass and the plan may proceed to todo planning; output `false` ' +
+                        'otherwise.',
                     outputKey: 'guard.cleared',
                     outputShape: 'boolean',
+                    outputDefault: 'true',
                 },
             },
             {
@@ -248,10 +252,13 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         'Verify concrete evidence: lsp_diagnostics clean on changed files, build exit code 0, ' +
                         'test run passing, expected file changes present, command output matching. Confirm the ' +
                         'work followed MUST DO / MUST NOT DO requirements and existing codebase patterns. ' +
-                        'NO EVIDENCE = NOT COMPLETE. Set evidence.verified=true only when concrete evidence ' +
-                        'confirms the work; set evidence.verified=false to trigger a bounded retry.',
+                        'NO EVIDENCE = NOT COMPLETE.\n' +
+                        'First briefly state your reasoning (1-3 sentences). Then on the LAST line, output ' +
+                        'EXACTLY `true` or `false` — no quotes, no formatting, no extra text. Output `true` ' +
+                        'only when concrete evidence confirms the work; output `false` to trigger a bounded retry.',
                     outputKey: 'evidence.verified',
                     outputShape: 'boolean',
+                    outputDefault: 'false',
                 },
             },
             {
