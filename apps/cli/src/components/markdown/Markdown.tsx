@@ -34,14 +34,17 @@ import { getHighlightVersion, subscribeHighlight } from './highlight.js';
 import { getCachedBlocks } from './render-cache.js';
 import { streamBlocks } from './stream.js';
 import { terminalStyleToTextProps } from './text-attributes.js';
+import { terminalDisplayWidth } from '../../commands/terminal-text.js';
 import type { TerminalMarkdownTheme, TerminalTextStyle } from './theme.js';
 import { darkTheme } from './theme.js';
 
 /**
  * A styled, width-measurable text run. `text` is the VISIBLE content only (no
- * ANSI); `style` is spread onto the `<Text>` that renders it. When `href` is
- * set the renderer wraps `text` in an OSC 8 hyperlink escape at draw time, so
- * `text.length` stays the true visible width for wrapping math.
+ * ANSI escapes); `style` is spread onto the `<Text>` that renders it. When
+ * `href` is set the renderer wraps `text` in an OSC 8 hyperlink escape at draw
+ * time, so `text` carries no embedded control bytes — pass it through
+ * `terminalDisplayWidth` to get the true visible column count (CJK glyphs count
+ * as 2 cells, surrogates stay paired).
  */
 export type InlineRun = {
     readonly text: string;
@@ -108,7 +111,8 @@ export function listItemMarker(opts: {
 export function longestWordWidth(text: string, max?: number): number {
     let longest = 0;
     for (const word of text.split(/\s+/)) {
-        if (word.length > longest) longest = word.length;
+        const wordWidth = terminalDisplayWidth(word);
+        if (wordWidth > longest) longest = wordWidth;
     }
     return max === undefined ? longest : Math.min(longest, max);
 }
@@ -135,7 +139,7 @@ export function computeTableColumnWidths(
     const minWordWidths: number[] = new Array<number>(numCols).fill(1);
     const scan = (text: string, col: number): void => {
         if (col >= numCols) return;
-        naturalWidths[col] = Math.max(naturalWidths[col] ?? 0, text.length);
+        naturalWidths[col] = Math.max(naturalWidths[col] ?? 0, terminalDisplayWidth(text));
         minWordWidths[col] = Math.max(minWordWidths[col] ?? 1, longestWordWidth(text, maxUnbroken));
     };
     for (let col = 0; col < headerCells.length; col++) {
@@ -439,7 +443,7 @@ function renderTable(token: Tokens.Table, theme: TerminalMarkdownTheme, width: n
 
     const padCell = (text: string, col: number): string => {
         const target = colWidths[col] ?? 1;
-        const padding = Math.max(0, target - text.length);
+        const padding = Math.max(0, target - terminalDisplayWidth(text));
         return text + ' '.repeat(padding);
     };
     const wrapCell = (text: string, col: number): readonly string[] => {

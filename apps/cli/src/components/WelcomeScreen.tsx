@@ -2,6 +2,7 @@
 import { TextAttributes } from '@opentui/core';
 import type * as React from 'react';
 import type { WelcomeData, WelcomeLspServer, WelcomeMcpServer, WelcomeSession, WelcomeSkill } from '../commands/welcome-data.js';
+import { padEndToDisplayWidth, terminalDisplayWidth, truncateTerminalText } from '../commands/terminal-text.js';
 
 export type WelcomeScreenProps = {
     readonly data: WelcomeData;
@@ -32,18 +33,19 @@ const DIM_FG = '#888888';
  * an ellipsis at `width - 1` columns.
  */
 export function padToWidth(text: string, width: number): string {
-    if (text.length === width) return text;
-    if (text.length > width) {
-        if (width <= 1) return text.slice(0, width);
-        return `${text.slice(0, width - 1)}\u2026`;
+    const textWidth = terminalDisplayWidth(text);
+    if (textWidth === width) return text;
+    if (textWidth > width) {
+        if (width <= 1) return truncateTerminalText(text, width, '');
+        return truncateTerminalText(text, width, '\u2026');
     }
-    return `${text}${' '.repeat(width - text.length)}`;
+    return padEndToDisplayWidth(text, width);
 }
 
 export function truncateToWidth(text: string, width: number): string {
-    if (text.length <= width) return text;
-    if (width <= 1) return text.slice(0, width);
-    return `${text.slice(0, width - 1)}\u2026`;
+    if (terminalDisplayWidth(text) <= width) return text;
+    if (width <= 1) return truncateTerminalText(text, width, '');
+    return truncateTerminalText(text, width, '\u2026');
 }
 
 /** Truncate a session id to a fixed visible width with a trailing ellipsis. */
@@ -232,7 +234,7 @@ function SectionHeader({ title }: { readonly title: string }): React.ReactNode {
                 {title}
             </text>
             <text attributes={TextAttributes.DIM}>
-                {` ${'\u2500'.repeat(Math.max(0, 60 - title.length))}`}
+                {` ${'\u2500'.repeat(Math.max(0, 60 - terminalDisplayWidth(title)))}`}
             </text>
         </box>
     );

@@ -2,6 +2,7 @@
 import { TextAttributes } from '@opentui/core';
 import type * as React from 'react';
 import type { ApprovalLevel } from '../commands/approval-level.js';
+import { terminalDisplayWidth } from '../commands/terminal-text.js';
 import { APPROVAL_LEVEL_COLORS, STATUS_LINE_BG } from './overlay-theme.js';
 import { basename } from 'node:path';
 
@@ -139,7 +140,10 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
     const leftText = `${provider} ${model}${variantLabel !== undefined ? ` - ${variantLabel}` : ''}`;
     const fillCount = Math.max(
         0,
-        statusRowColumns() - leftText.length - 1 - (contextLabel !== undefined ? contextLabel.length + 1 : 0),
+        statusRowColumns() -
+            terminalDisplayWidth(leftText) -
+            1 -
+            (contextLabel !== undefined ? terminalDisplayWidth(contextLabel) + 1 : 0),
     );
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
@@ -167,9 +171,9 @@ export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
     const { approvalLabel, approvalColor, projectLabel, sessionLabel } = formatBottomStatus(props);
     const dimApproval = props.approvalLevel === undefined || props.approvalLevel === 'verbose';
     const rightLength =
-        (projectLabel !== undefined ? projectLabel.length + 1 : 0) +
-        (sessionLabel !== undefined ? sessionLabel.length + 1 : 0);
-    const fillCount = Math.max(0, statusRowColumns() - approvalLabel.length - 1 - rightLength);
+        (projectLabel !== undefined ? terminalDisplayWidth(projectLabel) + 1 : 0) +
+        (sessionLabel !== undefined ? terminalDisplayWidth(sessionLabel) + 1 : 0);
+    const fillCount = Math.max(0, statusRowColumns() - terminalDisplayWidth(approvalLabel) - 1 - rightLength);
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
             <text
