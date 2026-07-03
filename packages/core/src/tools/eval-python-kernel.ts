@@ -17,6 +17,7 @@ import type { EvalRunResult } from './eval-context-manager.js';
 import { EVAL_PYTHON_RUNNER_SOURCE } from './eval-python-runner-source.js';
 import { type EvalToolBridge } from './eval-tool-bridge.js';
 import { type ChildProcess, spawn } from 'node:child_process';
+import { createStreamDecoder } from '../providers/stream-decoder.js';
 
 const DEFAULT_PYTHON_BIN = 'python3';
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -59,9 +60,10 @@ function createLineReader(stream: NodeJS.ReadableStream): LineReader {
     const pending: Array<(line: string | null) => void> = [];
     let buffer = '';
     let ended = false;
+    const decoder = createStreamDecoder();
 
     const onData = (chunk: Buffer | string): void => {
-        buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+        buffer += decoder.decode(chunk);
         let newlineIndex = buffer.indexOf('\n');
         while (newlineIndex !== -1) {
             const line = buffer.slice(0, newlineIndex);

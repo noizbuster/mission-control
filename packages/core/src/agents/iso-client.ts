@@ -25,6 +25,7 @@ import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createStreamDecoder } from '../providers/stream-decoder.js';
 
 /** Method the isolation backend selected, including the TS-side fallback. */
 export type IsoMethod = 'unsupported' | 'overlayfs' | 'rcopy' | 'apfs' | 'rcopy-fallback';
@@ -216,6 +217,7 @@ async function runSidecarLine<T extends IsoResolveLine | IsoDiffLine>(
         let buffer = '';
         let settled = false;
         const commandId = `iso_${Date.now().toString(36)}`;
+        const decoder = createStreamDecoder();
         const handshakeId = `handshake_${commandId}`;
         const timeoutHandle = setTimeout(() => {
             settleReject(new SidecarIsoError(`sidecar ${expectedType} timed out after ${String(timeoutMs)}ms`));
@@ -260,7 +262,7 @@ async function runSidecarLine<T extends IsoResolveLine | IsoDiffLine>(
         };
 
         const onData = (chunk: Buffer): void => {
-            buffer += chunk.toString('utf8');
+            buffer += decoder.decode(chunk);
             const lines = buffer.split('\n');
             buffer = lines.pop() ?? '';
             for (const line of lines) {
@@ -291,7 +293,7 @@ async function runSidecarLine<T extends IsoResolveLine | IsoDiffLine>(
             }
         };
         const onStderr = (chunk: Buffer): void => {
-            const text = chunk.toString('utf8').trim();
+            const text = decoder.decode(chunk).trim();
             if (text.length > 0) {
                 settleReject(new SidecarIsoError(`sidecar stderr: ${text}`));
             }

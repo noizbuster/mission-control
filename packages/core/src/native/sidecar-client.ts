@@ -13,6 +13,7 @@ import {
 import { SidecarProtocolError } from './sidecar-errors.js';
 import { parseSidecarWireResponse, sidecarResponseToAgentEvent } from './sidecar-wire.js';
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
+import { createStreamDecoder } from '../providers/stream-decoder.js';
 
 export { SidecarProtocolError } from './sidecar-errors.js';
 export { normalizeSidecarLine, parseSidecarWireResponse } from './sidecar-wire.js';
@@ -110,6 +111,7 @@ export class ProcessSidecarClient implements SidecarClient {
             let buffer = '';
             let settled = false;
             let handshakeAccepted = this.handshakeCompleted;
+            const decoder = createStreamDecoder();
             const timeoutId = setTimeout(() => {
                 void this.stop();
                 settleReject(new SidecarProtocolError('sidecar task timed out'));
@@ -138,7 +140,7 @@ export class ProcessSidecarClient implements SidecarClient {
                 reject(error);
             };
             const onData = (chunk: Buffer): void => {
-                buffer += chunk.toString('utf8');
+                buffer += decoder.decode(chunk);
                 const lines = buffer.split('\n');
                 buffer = lines.pop() ?? '';
                 for (const line of lines) {
