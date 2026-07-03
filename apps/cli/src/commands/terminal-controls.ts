@@ -12,8 +12,18 @@ export const TERMINAL_TITLE_SET_PREFIX = '\x1b]2;';
 export const TERMINAL_TITLE_SET_SUFFIX = '\x07';
 export const TERMINAL_TITLE_RESET = '\x1b]2;\x07';
 
+let titleManagementSuppressed = false;
+
+export function suppressTitleManagement(value: boolean): void {
+    titleManagementSuppressed = value;
+}
+
 export function shouldManageTerminalTitle(): boolean {
-    return process.env[TERMINAL_TITLE_DISABLE_ENV] !== '1' && process.stdout.isTTY === true;
+    return (
+        !titleManagementSuppressed &&
+        process.env[TERMINAL_TITLE_DISABLE_ENV] !== '1' &&
+        process.stdout.isTTY === true
+    );
 }
 
 export function setTerminalTitle(title: string): boolean {

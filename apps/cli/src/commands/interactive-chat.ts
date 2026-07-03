@@ -66,6 +66,7 @@ import {
     formatSessionTitle,
     resetTerminalTitle,
     setTerminalTitle,
+    suppressTitleManagement,
 } from './terminal-controls.js';
 import { gatherWelcomeData } from './welcome-data.js';
 
@@ -129,6 +130,7 @@ export async function runInteractiveChatSession(
     options: InteractiveChatOptions,
 ): Promise<string> {
     const useTui = options.input === undefined && process.stdin.isTTY === true;
+    suppressTitleManagement(useTui);
     type SessionBridgeOptions = Omit<OpenTuiChatBridgeOptions, 'providerID' | 'modelID' | 'variantID'> & {
         providerID: string;
         modelID: string;
@@ -397,14 +399,18 @@ export async function runInteractiveChatSession(
         pluginSkillDirs.push(...pluginManager.getSkillDirs());
         pluginWorkflowDirs.push(...pluginManager.getWorkflowDirs());
         for (const diagnostic of pluginManager.getDiagnostics()) {
-            process.stderr.write(
-                `plugin discovery [${diagnostic.severity}] ${diagnostic.pluginName}: ${diagnostic.message}\n`,
-            );
+            if (!useTui) {
+                process.stderr.write(
+                    `plugin discovery [${diagnostic.severity}] ${diagnostic.pluginName}: ${diagnostic.message}\n`,
+                );
+            }
         }
     } catch (error: unknown) {
-        process.stderr.write(
-            `plugin discovery [warning] skipped: ${error instanceof Error ? error.message : String(error)}\n`,
-        );
+        if (!useTui) {
+            process.stderr.write(
+                `plugin discovery [warning] skipped: ${error instanceof Error ? error.message : String(error)}\n`,
+            );
+        }
     }
 
     const discoveredSkills =
@@ -435,7 +441,7 @@ export async function runInteractiveChatSession(
     const onWorkflowStarted = (spec: WorkflowSpec, prompt: string): void => {
         pendingWorkflowTurns.push({ spec, prompt });
     };
-    if (discoveredWorkflows.diagnostics.length > 0) {
+    if (!useTui) {
         for (const diagnostic of discoveredWorkflows.diagnostics) {
             process.stderr.write(
                 `workflow discovery [${diagnostic.severity}] ${diagnostic.workflowName}: ${diagnostic.message}\n`,
