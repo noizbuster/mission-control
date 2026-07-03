@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import type { ChainOperator } from './bash-run-command-guard.js';
+import { type ChildProcess, spawn } from 'node:child_process';
 
 const forceColorEnvKey = 'FORCE_COLOR';
 
@@ -81,9 +82,7 @@ export function executeCommand(request: CommandExecutionRequest): Promise<Comman
  * cwd, signal, and output caps as `executeCommand`. An upstream child closing sends EOF to the
  * downstream stdin so a failing upstream does not hang a downstream reader.
  */
-export function executeCommandPipeline(
-    requests: readonly CommandExecutionRequest[],
-): Promise<CommandExecutionResult> {
+export function executeCommandPipeline(requests: readonly CommandExecutionRequest[]): Promise<CommandExecutionResult> {
     if (requests.length === 0) {
         throw new Error('executeCommandPipeline requires at least one request');
     }
@@ -239,6 +238,96 @@ function createOutputCollector(maxBytes: number) {
         truncated() {
             return totalBytes > kept.length;
         },
+    };
+}
+
+/**
+ * One chain step: a pipeline plus the operator that connected it to the PREVIOUS step. The
+ * operator on `steps[0]` is ignored (entry pipeline always runs). Each subsequent step runs
+ * only when its operator allows it given the previous step's exit code:
+ * `&&` requires previous exit === 0, `||` requires previous exit !== 0, `;` always runs.
+ */
+export type CommandChainStep = {
+    readonly pipeline: readonly CommandExecutionRequest[];
+    readonly operator: ChainOperator;
+};
+
+/**
+ * Execute a chain of pipelines connected by `&&`/`||`/`;`. Each pipeline runs via
+ * {@linkcode executeCommandPipeline} (direct spawns, stdio piping, no shell). Stdout and stderr
+ * across executed pipelines concatenate (so `git status; git diff` shows both). The chain's
+ * exit code is the LAST-EXECUTED pipeline's exit code. The chain short-circuits left-to-right:
+ * once an operator's condition fails, later steps do not run (bash parity).
+ *
+ * Timeout/abort propagation: if any step's result has `timedOut: true`, the chain stops and the
+ * aggregated result also reports `timedOut: true`. Per-step aborts are owned by
+ * {@linkcode executeCommandPipeline} (which honors each request's `signal`); the chain itself
+ * does not race a separate timer. The caller ({@linkcode bash-run.ts}) wraps the chain in its
+ * own timeout+abort controller so a single budget covers the whole chain.
+ */
+export async function executeCommandChain(steps: readonly CommandChainStep[]): Promise<CommandExecutionResult> {
+    if (steps.length === 0) {
+        throw new Error('executeCommandChain requires at least one step');
+    }
+    const first = steps[0];
+    if (first === undefined) {
+        throw new Error('executeCommandChain received an undefined first step');
+    }
+    if (steps.length === 1) {
+        return executeCommandPipeline(first.pipeline);
+    }
+    const startedAt = Date.now();
+    const maxBytes = first.pipeline[0]?.maxOutputBytes ?? 64 * 1024;
+    const stdout = createOutputCollector(maxBytes);
+    const stderr = createOutputCollector(maxBytes);
+    let stdoutOriginalBytes = 0;
+    let stderrOriginalBytes = 0;
+    let lastExitCode: number | null = null;
+    let lastSignal: string | null = null;
+    let timedOut = false;
+
+    for (let index = 0; index < steps.length; index += 1) {
+        const step = steps[index];
+        if (step === undefined) {
+            break;
+        }
+        if (index > 0) {
+            const operator = step.operator;
+            if (operator === '&&' && lastExitCode !== 0) {
+                break;
+            }
+            if (operator === '||' && lastExitCode === 0) {
+                break;
+            }
+        }
+        const result = await executeCommandPipeline(step.pipeline);
+        if (result.stdout.length > 0) {
+            stdout.push(Buffer.from(result.stdout));
+        }
+        if (result.stderr.length > 0) {
+            stderr.push(Buffer.from(result.stderr));
+        }
+        stdoutOriginalBytes += result.stdoutOriginalBytes ?? result.stdout.length;
+        stderrOriginalBytes += result.stderrOriginalBytes ?? result.stderr.length;
+        lastExitCode = result.exitCode;
+        lastSignal = result.signal;
+        if (result.timedOut) {
+            timedOut = true;
+            break;
+        }
+    }
+
+    return {
+        exitCode: lastExitCode,
+        signal: lastSignal,
+        timedOut,
+        stdout: stdout.text(),
+        stderr: stderr.text(),
+        stdoutOriginalBytes,
+        stderrOriginalBytes,
+        stdoutTruncated: stdout.truncated(),
+        stderrTruncated: stderr.truncated(),
+        durationMs: Date.now() - startedAt,
     };
 }
 
