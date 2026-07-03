@@ -10,6 +10,7 @@
  * display rows the overlay renders verbatim.
  */
 import type { AgentRef, BackgroundJobHandle, ContinuationState } from '@mission-control/core';
+import { truncateTerminalText } from '../commands/terminal-text.js';
 
 /** Display row for a single background job. */
 export type JobPanelRow = {
@@ -32,7 +33,7 @@ const ID_DISPLAY_LIMIT = 18;
 
 /** Truncate long opaque ids (job_/session/agent) for a compact panel column. */
 export function truncatePanelId(id: string, limit: number = ID_DISPLAY_LIMIT): string {
-    return id.length > limit ? `${id.slice(0, limit)}\u2026` : id;
+    return truncateTerminalText(id, limit, '\u2026');
 }
 
 /**

@@ -2,6 +2,7 @@ import type { GraphLabel, NodeLabel } from '@dagrejs/dagre';
 import { graphlib, layout } from '@dagrejs/dagre';
 import type { AbgNodeStatus } from '@mission-control/protocol';
 import { nodeStatusTheme } from './abg-status-theme.js';
+import { truncateTerminalText } from '../commands/terminal-text.js';
 
 export type VisualGraphNode = {
     readonly nodeId: string;
@@ -471,7 +472,5 @@ function rowHasActive(row: Cell[], effectiveWidth: number): boolean {
 
 function truncate(text: string, max: number): string {
     if (max <= 0) return '';
-    if (text.length <= max) return text;
-    if (max === 1) return '\u2026';
-    return `${text.slice(0, max - 1)}\u2026`;
+    return truncateTerminalText(text, max, '\u2026');
 }

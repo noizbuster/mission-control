@@ -2,6 +2,7 @@
 import type { AbgToolOutcomeSnapshot, ApprovalRecord } from '@mission-control/protocol';
 import type React from 'react';
 import type { AbgOverlayState, RecentEvent } from '../commands/abg-overlay-state.js';
+import { truncateTerminalText } from '../commands/terminal-text.js';
 
 export interface AbgOverlayPaneProps {
     readonly state: AbgOverlayState;
@@ -17,8 +18,7 @@ const boldAttrs = { bold: true };
 
 function truncate(text: string | undefined, max: number): string {
     if (text === undefined) return '';
-    if (text.length <= max) return text;
-    return `${text.slice(0, max - 1)}…`;
+    return truncateTerminalText(text, max, '\u2026');
 }
 
 function shortTime(iso: string | undefined): string {

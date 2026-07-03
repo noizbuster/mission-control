@@ -5,6 +5,7 @@ import { DEFAULT_REFRESH_MS } from '../commands/abg-overlay-state.js';
 import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA.js';
 import { ApprovalsPane, BlackboardPane, CostPolicyPane, TimelinePane, ToolsPane } from './AbgOverlayPanesB.js';
 import { graphStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
+import { truncateTerminalText } from '../commands/terminal-text.js';
 
 export type AbgOverlayTab =
     | 'overview'
@@ -67,8 +68,7 @@ const yellowFg = '#ffff00';
 
 function truncateGraphId(graphId: string | undefined, maxLen: number = 20): string {
     if (graphId === undefined) return '(no graph)';
-    if (graphId.length <= maxLen) return graphId;
-    return `${graphId.slice(0, maxLen - 1)}…`;
+    return truncateTerminalText(graphId, maxLen, '\u2026');
 }
 
 function formatCostSummary(state: AbgOverlayState): string {

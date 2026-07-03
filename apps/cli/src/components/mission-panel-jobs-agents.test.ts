@@ -195,19 +195,19 @@ describe('jobStatusColor / agentStatusColor', () => {
 describe('truncatePanelId / formatPanelTimestamp', () => {
     it('truncates ids longer than the limit with an ellipsis', () => {
         const long = 'job_1234567890abcdef';
-        expect(truncatePanelId(long)).toBe('job_1234567890abcd\u2026');
+        expect(truncatePanelId(long)).toBe('job_1234567890abc\u2026');
         expect(truncatePanelId('short')).toBe('short');
     });
 
     it('respects an explicit limit', () => {
-        expect(truncatePanelId('abcdef', 3)).toBe('abc\u2026');
+        expect(truncatePanelId('abcdef', 3)).toBe('ab\u2026');
     });
 
     it('does not truncate at the exact limit boundary', () => {
         const atLimit = '0123456789abcdefgh';
         expect(atLimit.length).toBe(18);
         expect(truncatePanelId(atLimit)).toBe(atLimit);
-        expect(truncatePanelId(`${atLimit}x`)).toBe(`${atLimit}\u2026`);
+        expect(truncatePanelId(`${atLimit}x`)).toBe(`0123456789abcdefg\u2026`);
     });
 
     it('extracts the time component of an ISO timestamp', () => {

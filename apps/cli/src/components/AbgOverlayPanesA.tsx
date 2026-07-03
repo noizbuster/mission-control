@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/react */
 import type React from 'react';
 import type { AbgOverlayState } from '../commands/abg-overlay-state.js';
+import { truncateTerminalText } from '../commands/terminal-text.js';
 import { graphStatusTheme, nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
 import { useSpinnerFrame } from './spinner.js';
 import { renderVisualGraph, type VisualGraphEdge, type VisualGraphNode, type VisualGraphRow } from './visual-graph.js';
@@ -14,7 +15,7 @@ const dimAttrs = { dim: true };
 const boldAttrs = { bold: true };
 
 function truncate(text: string, max: number): string {
-    return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+    return truncateTerminalText(text, max, '\u2026');
 }
 
 function formatCostSummary(state: AbgOverlayState): string {
