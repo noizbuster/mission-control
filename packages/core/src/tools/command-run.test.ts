@@ -614,6 +614,26 @@ describe('command.run tool', () => {
         expect(result.result.error?.message).toContain('exit: 6');
         expect(result.result.error?.retryable).toBe(true);
     });
+
+    it('proposes extracted file paths in the approval request for a file command', async () => {
+        const permissionRequests: PermissionRequest[] = [];
+        const registry = await createRegistry({
+            requestPermission: (request) => {
+                permissionRequests.push(request);
+                return denyPermission(request);
+            },
+            executor: async () => completedResult(),
+        });
+
+        await invokeCommand(registry, 'cat', ['secret.txt', 'config.yml']);
+
+        expect(permissionRequests).toHaveLength(1);
+        expect(permissionRequests[0]?.permission?.patterns).toEqual([
+            'cat secret.txt config.yml',
+            'secret.txt',
+            'config.yml',
+        ]);
+    });
 });
 
 type PermissionResolver = (request: PermissionRequest) => PermissionDecision;

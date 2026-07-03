@@ -422,6 +422,38 @@ describe('bash.run tool', () => {
         expect(second.result.status).toBe('failed');
         expect(second.result.error?.message).toContain('concurrency_limit');
     });
+
+    it('proposes extracted file paths alongside the full command in the permission request', async () => {
+        const permissionRequests: PermissionRequest[] = [];
+        const registry = await createRegistry({
+            requestPermission: (request) => {
+                permissionRequests.push(request);
+                return denyPermission(request);
+            },
+            executor: async () => completedResult(),
+        });
+
+        await invokeBash(registry, { commandLine: 'cat foo.txt bar.ts' });
+
+        expect(permissionRequests).toHaveLength(1);
+        expect(permissionRequests[0]?.permission?.patterns).toEqual(['cat foo.txt bar.ts', 'foo.txt', 'bar.ts']);
+    });
+
+    it('keeps the full command as the sole pattern when no paths can be extracted', async () => {
+        const permissionRequests: PermissionRequest[] = [];
+        const registry = await createRegistry({
+            requestPermission: (request) => {
+                permissionRequests.push(request);
+                return denyPermission(request);
+            },
+            executor: async () => completedResult(),
+        });
+
+        await invokeBash(registry, { commandLine: 'echo hello world' });
+
+        expect(permissionRequests).toHaveLength(1);
+        expect(permissionRequests[0]?.permission?.patterns).toEqual(['echo hello world']);
+    });
 });
 
 type CreateRegistryInput = {

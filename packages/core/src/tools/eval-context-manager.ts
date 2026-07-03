@@ -1,19 +1,28 @@
 /**
- * Persistent JavaScript eval sandbox built on `node:worker_threads` + `node:vm`.
+ * Persistent eval sandbox coordinating two runtimes: a JavaScript VM owned by a
+ * `node:worker_threads` worker, and a persistent Python kernel subprocess.
  *
- * A single worker owns a `vm.createContext()` sandbox whose global scope survives
+ * The JS worker owns a `vm.createContext()` sandbox whose global scope survives
  * across `runCode` calls, so `var` declarations persist between cells. Output
  * (console writes + the completion value of the last expression) is captured,
- * capped at 64 KiB, and returned as an `EvalRunResult`. Timeouts and aborts
- * terminate the worker (state is lost) and the next call respawns a fresh
- * context. Simplified relative to oh-my-pi's 621-LOC pool: no tool re-entry,
- * no session-keyed multi-worker pool, no inline fallback.
+ * capped at 64 KiB, and returned as an `EvalRunResult`. Tool re-entry is driven
+ * over the worker boundary: a `tool-call` message routes through the injected
+ * `EvalToolBridge` and the reply is posted back as a `tool-reply`, so cells can
+ * `await read(...)` (top-level await is enabled for cells that use it).
+ *
+ * Python cells are served by a lazily-spawned `EvalPythonKernel` that shares the
+ * same bridge. Timeouts and aborts terminate the worker / kernel (state is lost)
+ * and the next call respawns a fresh context. Simplified relative to oh-my-pi's
+ * 621-LOC pool: no session-keyed multi-worker pool, no inline fallback.
  */
 // allow: SIZE_OK — single-responsibility worker-lifecycle manager (init handshake,
 // run execution, timeout/abort race, worker-death recovery, teardown, result
 // shaping). Size reflects necessary lifecycle handling, not mixed concerns;
 // further splits would sever tightly-coupled lifecycle pieces.
 
+import { EvalPythonKernel, type PythonSpawnFn } from './eval-python-kernel.js';
+import { type EvalLanguage } from './eval-schemas.js';
+import type { EvalToolBridge } from './eval-tool-bridge.js';
 import { type EvalWorkerInbound, type EvalWorkerOutbound, parseEvalWorkerOutbound } from './eval-worker-protocol.js';
 import { EVAL_WORKER_SOURCE } from './eval-worker-source.js';
 import { randomUUID } from 'node:crypto';
@@ -29,8 +38,10 @@ const ABORT_EXIT_CODE = 130;
 
 export type EvalRunOptions = {
     readonly code: string;
+    readonly language?: EvalLanguage;
     readonly timeoutMs?: number;
     readonly signal?: AbortSignal;
+    readonly reset?: boolean;
 };
 
 export type EvalRunResult = {
@@ -38,6 +49,13 @@ export type EvalRunResult = {
     readonly exitCode: number;
     readonly truncated: boolean;
     readonly timedOut: boolean;
+};
+
+export type EvalContextManagerOptions = {
+    readonly sessionId?: string;
+    readonly bridge?: EvalToolBridge;
+    readonly pythonBin?: string;
+    readonly pythonSpawn?: PythonSpawnFn;
 };
 
 interface RunHandle {
@@ -49,7 +67,10 @@ interface RunHandle {
 
 export class EvalContextManager {
     readonly #sessionId: string;
+    readonly #bridge: EvalToolBridge | undefined;
+    readonly #pythonOptions: { readonly pythonBin?: string; readonly pythonSpawn?: PythonSpawnFn };
     #worker: Worker | null = null;
+    #python: EvalPythonKernel | null = null;
     #runs = new Map<string, RunHandle>();
     #readyPromise: Promise<void> | null = null;
     #readyResolve: ((value: void) => void) | null = null;
@@ -57,14 +78,56 @@ export class EvalContextManager {
     #readySettled = false;
     #closed = false;
 
-    constructor(options?: { readonly sessionId?: string }) {
+    constructor(options?: EvalContextManagerOptions) {
         this.#sessionId = options?.sessionId ?? `eval-${randomUUID()}`;
+        this.#bridge = options?.bridge;
+        this.#pythonOptions = {
+            ...(options?.pythonBin !== undefined ? { pythonBin: options.pythonBin } : {}),
+            ...(options?.pythonSpawn !== undefined ? { pythonSpawn: options.pythonSpawn } : {}),
+        };
     }
 
     async runCode(options: EvalRunOptions): Promise<EvalRunResult> {
         if (this.#closed) {
             return failureResult('eval context manager is closed', false, ERROR_EXIT_CODE);
         }
+        if (options.reset) {
+            await this.#resetLanguage(options.language ?? 'js');
+            if (options.code.length === 0) {
+                return { output: '', exitCode: OK_EXIT_CODE, truncated: false, timedOut: false };
+            }
+        }
+        if ((options.language ?? 'js') === 'py') {
+            return await this.#runPython(options);
+        }
+        return await this.#runJs(options);
+    }
+
+    async reset(): Promise<void> {
+        await this.#resetLanguage('js');
+        await this.#resetLanguage('py');
+    }
+
+    async close(): Promise<void> {
+        this.#closed = true;
+        await Promise.all([this.#terminateWorker('close'), this.#python?.close()]);
+    }
+
+    async #runPython(options: EvalRunOptions): Promise<EvalRunResult> {
+        if (this.#python === null) {
+            this.#python = new EvalPythonKernel({
+                ...(this.#bridge !== undefined ? { bridge: this.#bridge } : {}),
+                ...this.#pythonOptions,
+            });
+        }
+        return await this.#python.runCode({
+            code: options.code,
+            ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+            ...(options.signal !== undefined ? { signal: options.signal } : {}),
+        });
+    }
+
+    async #runJs(options: EvalRunOptions): Promise<EvalRunResult> {
         try {
             await this.#ensureReady();
         } catch (error) {
@@ -79,13 +142,14 @@ export class EvalContextManager {
         return await this.#executeRun(worker, runId, options.code, timeoutMs, options.signal);
     }
 
-    async reset(): Promise<void> {
+    async #resetLanguage(language: EvalLanguage): Promise<void> {
+        if (language === 'py') {
+            if (this.#python !== null) {
+                await this.#python.reset().catch(() => undefined);
+            }
+            return;
+        }
         await this.#terminateWorker('reset');
-    }
-
-    async close(): Promise<void> {
-        this.#closed = true;
-        await this.#terminateWorker('close');
     }
 
     async #ensureReady(): Promise<void> {
@@ -145,7 +209,32 @@ export class EvalContextManager {
                 this.#settleRunFromResult(parsed);
                 return;
             case 'tool-call':
+                void this.#serviceJsToolCall(parsed);
                 return;
+        }
+    }
+
+    async #serviceJsToolCall(parsed: Extract<EvalWorkerOutbound, { type: 'tool-call' }>): Promise<void> {
+        const worker = this.#worker;
+        if (worker === null) {
+            return;
+        }
+        let reply: { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly error: string };
+        if (this.#bridge === undefined) {
+            reply = { ok: false, error: `eval tool bridge unavailable for call: ${parsed.name}` };
+        } else {
+            try {
+                const value = await this.#bridge.handleToolCall(parsed.name, parsed.args);
+                reply = { ok: true, value };
+            } catch (error) {
+                reply = { ok: false, error: messageOf(error) };
+            }
+        }
+        const replyMessage: EvalWorkerInbound = { type: 'tool-reply', id: parsed.id, reply };
+        try {
+            worker.postMessage(replyMessage);
+        } catch {
+            // Worker may already be gone during teardown.
         }
     }
 

@@ -3,15 +3,25 @@ import { type EvalInput, type EvalOutput } from './eval-schemas.js';
 import { createEvalToolRegistration, type EvalToolOptions } from './eval-tool.js';
 import { createEvalToolBridge } from './eval-tool-bridge.js';
 import { ToolRegistry } from './tool-registry.js';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const tempDirs: string[] = [];
 
-async function makeOptions(): Promise<EvalToolOptions> {
+async function makeOptions(): Promise<EvalToolOptions & { workspaceRoot: string }> {
     const workspaceRoot = await mkdtemp(join(tmpdir(), 'eval-tool-test-'));
     tempDirs.push(workspaceRoot);
+    return { workspaceRoot };
+}
+
+async function makeOptionsWithFile(
+    relativePath: string,
+    content: string,
+): Promise<EvalToolOptions & { workspaceRoot: string }> {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'eval-tool-test-'));
+    tempDirs.push(workspaceRoot);
+    await writeFile(join(workspaceRoot, relativePath), content, 'utf8');
     return { workspaceRoot };
 }
 
@@ -185,5 +195,108 @@ describe('eval tool bridge', () => {
         await expect(bridge.handleToolCall('task', {})).rejects.toThrow(/eval re-entry blocked/);
         await expect(bridge.handleToolCall('mcp__foo__bar', {})).rejects.toThrow(/eval re-entry blocked/);
         expect(called).toBe(false);
+    });
+});
+
+describe('eval tool — python cells', () => {
+    afterEach(async () => {
+        const dirs = tempDirs.splice(0, tempDirs.length);
+        await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
+    });
+
+    it('executes a python cell and returns captured stdout', async () => {
+        const registration = createEvalToolRegistration(await makeOptions());
+        const output = await registration.execute(
+            { cells: [{ language: 'py', code: 'print("hello from python")' }] },
+            toolContext(),
+        );
+        expect(output.results).toHaveLength(1);
+        expect(output.results[0]?.exitCode).toBe(0);
+        expect(output.results[0]?.output).toContain('hello from python');
+    });
+
+    it('persists python state across cells within one invocation', async () => {
+        const registration = createEvalToolRegistration(await makeOptions());
+        const output = await registration.execute(
+            {
+                cells: [
+                    { language: 'py', code: 'total = 0\nfor i in range(5):\n    total += i' },
+                    { language: 'py', code: 'print(total)' },
+                ],
+            },
+            toolContext(),
+        );
+        expect(output.results[1]?.exitCode).toBe(0);
+        expect(output.results[1]?.output).toContain('10');
+    });
+
+    it('returns a clean error result for malformed python without crashing', async () => {
+        const registration = createEvalToolRegistration(await makeOptions());
+        const output = await registration.execute({ cells: [{ language: 'py', code: 'def (' }] }, toolContext());
+        expect(output.results).toHaveLength(1);
+        expect(output.results[0]?.exitCode).not.toBe(0);
+        expect(output.results[0]?.timedOut).toBe(false);
+    });
+
+    it('a python cell reads a workspace file via the bridge read() helper', async () => {
+        const options = await makeOptionsWithFile('data.csv', 'name,score\nalice,3\nbob,7\n');
+        const registration = createEvalToolRegistration(options);
+        const output = await registration.execute(
+            { cells: [{ language: 'py', code: 'data = read("data.csv")\nprint(len(data.splitlines()))' }] },
+            toolContext(),
+        );
+        expect(output.results[0]?.exitCode).toBe(0);
+        expect(output.results[0]?.output).toContain('3');
+    });
+});
+
+describe('eval tool — JS bridge re-entry', () => {
+    afterEach(async () => {
+        const dirs = tempDirs.splice(0, tempDirs.length);
+        await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
+    });
+
+    it('a JS cell calls read() via the bridge and returns file content', async () => {
+        const options = await makeOptionsWithFile('payload.txt', 'bridge-content-42');
+        const registration = createEvalToolRegistration(options);
+        const output = await registration.execute(
+            {
+                cells: [
+                    {
+                        language: 'js',
+                        code: 'const text = await read("payload.txt"); console.log(text)',
+                    },
+                ],
+            },
+            toolContext(),
+        );
+        expect(output.results[0]?.exitCode).toBe(0);
+        expect(output.results[0]?.output).toContain('bridge-content-42');
+    });
+
+    it('python and JS cells share workspace file access via the bridge prelude', async () => {
+        const options = await makeOptionsWithFile('scores.csv', 'name,score\nalice,3\nbob,7\ncleo,11\n');
+        const registration = createEvalToolRegistration(options);
+        const output = await registration.execute(
+            {
+                cells: [
+                    {
+                        language: 'py',
+                        title: 'load csv',
+                        code: 'rows = [l for l in read("scores.csv").splitlines() if l.strip()]\nprint("rows", len(rows))',
+                    },
+                    {
+                        language: 'js',
+                        title: 'reduce scores',
+                        code: 'const csv = await read("scores.csv");\nconst sum = csv.trim().split("\\n").slice(1).reduce((a, l) => a + Number(l.split(",")[1]), 0);\nconsole.log("sum", sum);',
+                    },
+                ],
+            },
+            toolContext(),
+        );
+        expect(output.results[0]?.exitCode).toBe(0);
+        expect(output.results[0]?.output).toContain('rows 4');
+        expect(output.results[1]?.exitCode).toBe(0);
+        expect(output.results[1]?.output).toContain('sum 21');
     });
 });

@@ -25,6 +25,7 @@ import {
 import { commandRunFailure } from './command-run-errors.js';
 import { type CommandExecutionResult, executeCommand } from './command-run-executor.js';
 import { interruptedBeforeSpawnResult } from './command-run-interruption.js';
+import { buildPermissionPatterns } from './command-run-policy.js';
 import { commandRunOutput } from './command-run-schemas.js';
 import { permissionRequest, requestToolPermission } from './tool-permissions.js';
 import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
@@ -89,7 +90,7 @@ async function runBashTool(
     const release = limiter.acquire();
     const started = commandEvent('command.started', context.toolCallId, commandMetadata(command, cwd, 'started'));
     try {
-        await requireApproval(options, context.toolCallId, input.commandLine);
+        await requireApproval(options, context.toolCallId, input.commandLine, command);
         if (context.signal.aborted) {
             return commandRunOutput(
                 command,
@@ -192,6 +193,7 @@ async function requireApproval(
     options: ResolvedBashRunToolOptions,
     toolCallId: string,
     commandLine: string,
+    command: readonly string[],
 ): Promise<void> {
     const request: PermissionRequest = {
         ...permissionRequest({
@@ -199,7 +201,7 @@ async function requireApproval(
             action: 'bash.run',
             reason: `run trusted bash: ${commandLine}`,
             permission: 'bash',
-            patterns: [commandLine],
+            patterns: buildPermissionPatterns(commandLine, command),
             workspaceRoot: options.workspaceRoot,
         }),
     };

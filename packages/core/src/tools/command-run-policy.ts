@@ -1,3 +1,4 @@
+import { extractPermissionPaths } from './bash-path-extraction.js';
 import { commandRunFailure } from './command-run-errors.js';
 
 export const COMMAND_RUN_POLICY_PROFILES = ['fixed-harness'] as const;
@@ -42,4 +43,21 @@ export function allowedCommand(
 
 function sameCommand(left: readonly string[], right: readonly string[]): boolean {
     return left.length === right.length && left.every((part, index) => part === right[index]);
+}
+
+/**
+ * Build the permission patterns for a command: the full command string first
+ * (so exact-command matching still works), followed by file paths extracted
+ * from the command (so a human can approve by file scope, which is more
+ * flexible than the fixed allowlist). The fixed allowlist is checked separately
+ * by {@link isAllowlistedCommand}; this only enriches the approval request.
+ *
+ * Defense in depth: never throws. On malformed or non-file-path commands the
+ * extracted list is empty and the caller falls back to the full command as the
+ * sole pattern, preserving the pre-enhancement behavior.
+ */
+export function buildPermissionPatterns(commandLine: string, argv: readonly string[]): readonly string[] {
+    const command = argv[0] ?? '';
+    const paths = extractPermissionPaths(command, argv.slice(1));
+    return paths.length > 0 ? [commandLine, ...paths] : [commandLine];
 }

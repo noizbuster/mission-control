@@ -1,19 +1,29 @@
 /**
- * Zod schemas and JSON-Schema parameters for the `eval` tool (Task 22).
+ * Zod schemas and JSON-Schema parameters for the `eval` tool (Task 19 / 22).
  *
- * Input is one or more JS cells (language is locked to `'js'`); each cell carries
- * optional per-cell timeout and title. Output is one result per input cell with
- * captured stdout/stderr, exit code, truncation flag, and timeout flag.
+ * Input is one or more cells in either a persistent JavaScript VM
+ * (`language: 'js'`, `node:worker_threads` + `node:vm`) or a persistent Python
+ * kernel subprocess (`language: 'py'`). State persists across cells of the same
+ * language within one invocation; both runtimes share a common prelude that
+ * exposes read-only agent tools (`read`, `grep`, ...) through the tool re-entry
+ * bridge. Each cell carries optional per-cell timeout and title. Output is one
+ * result per input cell with captured stdout/stderr, exit code, truncation flag,
+ * and timeout flag.
  */
 
 import { z } from 'zod';
 
+export const evalLanguageSchema = z.enum(['js', 'py']);
+export type EvalLanguage = z.infer<typeof evalLanguageSchema>;
+
 export const evalCellSchema = z
     .object({
-        language: z.literal('js'),
+        language: evalLanguageSchema,
         code: z.string().min(1),
         timeoutMs: z.number().int().positive().optional(),
         title: z.string().min(1).optional(),
+        /** Wipe this cell's language kernel before running; other languages are untouched. */
+        reset: z.boolean().optional(),
     })
     .strict();
 
@@ -56,8 +66,9 @@ export function evalParametersJsonSchema(): Readonly<Record<string, unknown>> {
                     properties: {
                         language: {
                             type: 'string',
-                            enum: ['js'],
-                            description: "Cell language. Only 'js' is supported.",
+                            enum: ['js', 'py'],
+                            description:
+                                "Cell runtime: 'js' for the persistent JS VM (node:worker_threads), 'py' for the persistent Python kernel subprocess.",
                         },
                         code: {
                             type: 'string',
@@ -70,6 +81,11 @@ export function evalParametersJsonSchema(): Readonly<Record<string, unknown>> {
                         title: {
                             type: 'string',
                             description: 'Optional human-readable cell title for output formatting.',
+                        },
+                        reset: {
+                            type: 'boolean',
+                            description:
+                                'Wipe this cell language kernel before running (state of the other language is untouched).',
                         },
                     },
                     required: ['language', 'code'],

@@ -7,7 +7,7 @@ import type {
 import { commandRunFailure } from './command-run-errors.js';
 import { executeCommand } from './command-run-executor.js';
 import { interruptedBeforeSpawnResult, runCommandWithTimeout } from './command-run-interruption.js';
-import { defaultCommandRunPolicyProfile, isAllowlistedCommand } from './command-run-policy.js';
+import { buildPermissionPatterns, defaultCommandRunPolicyProfile, isAllowlistedCommand } from './command-run-policy.js';
 import {
     type CommandRunInput,
     type CommandRunOutput,
@@ -132,7 +132,7 @@ async function requireApproval(
             action: 'command.run',
             reason: `run command: ${command.join(' ')}`,
             permission: 'bash',
-            patterns: [command.join(' ')],
+            patterns: buildPermissionPatterns(command.join(' '), command),
             workspaceRoot: options.workspaceRoot,
         }),
     };
