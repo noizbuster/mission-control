@@ -6,7 +6,6 @@ import {
 } from './models-dev-catalog-builder.js';
 import { spawnSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { get } from 'node:https';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -31,24 +30,11 @@ async function main(): Promise<void> {
 }
 
 async function fetchText(url: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-        get(url, (response) => {
-            const statusCode = response.statusCode ?? 0;
-            if (statusCode < 200 || statusCode >= 300) {
-                response.resume();
-                reject(new Error(`Models.dev request failed with status ${statusCode}`));
-                return;
-            }
-            response.setEncoding('utf8');
-            let data = '';
-            response.on('data', (chunk: string) => {
-                data += chunk;
-            });
-            response.on('end', () => {
-                resolve(data);
-            });
-        }).on('error', reject);
-    });
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Models.dev request failed with status ${response.status}`);
+    }
+    return response.text();
 }
 
 function formatSnapshot(path: string): void {
