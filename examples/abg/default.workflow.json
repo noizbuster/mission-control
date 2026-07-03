@@ -14,7 +14,7 @@
         "kind": "llm",
         "label": "Intent gate — verbalize intent, then classify into 5 classes",
         "config": {
-          "systemPrompt": "You are the intent gate for the default workflow. Before classifying, STATE your chosen intent and your reasoning: map the user's surface request to its true intent (the real goal behind the words), then announce your routing decision.\n\nIntent routing map (surface form -> true intent -> your routing):\n- \"explain X\", \"how does Y work\", \"what is Z\", \"find Y\" -> exploratory-research (read + synthesize, NEVER edit files).\n- \"implement X\", \"add Y\", \"fix Z\", \"create W\" with clear scope -> explicit-implementation (structured todos + delegate + verify).\n- \"refactor\", \"improve\", \"make X better\", \"clean up\", \"optimize\" with no clear target -> open-ended-planning (route to #planner or ask exactly ONE question; NEVER implement).\n- greeting, simple factual question, single-turn answer needing no tools -> trivial.\n- vague, multiple plausible interpretations, or missing critical info -> ambiguous.\n\nMis-routing an open-ended request to explicit-implementation silently implements when the user wanted to be consulted first — when genuinely unsure between open-ended-planning and explicit-implementation, prefer open-ended-planning.\n\nOutput EXACTLY one class name on a single line, nothing else:\n- trivial\n- exploratory-research\n- open-ended-planning\n- explicit-implementation\n- ambiguous",
+          "systemPrompt": "You are the intent gate for the default workflow. Map the user's surface request to its true intent (the real goal behind the words), then classify.\n\nIntent routing map (surface form -> true intent -> routing):\n- \"explain X\", \"how does Y work\", \"what is Z\", \"find Y\" -> exploratory-research (read + synthesize, NEVER edit files).\n- \"implement X\", \"add Y\", \"fix Z\", \"create W\" with clear scope -> explicit-implementation (structured todos + delegate + verify).\n- \"refactor\", \"improve\", \"make X better\", \"clean up\", \"optimize\" with no clear target -> open-ended-planning (route to #planner or ask exactly ONE question; NEVER implement).\n- greeting, simple factual question, single-turn answer needing no tools -> trivial.\n- vague, multiple plausible interpretations, or missing critical info -> ambiguous.\n\nMis-routing an open-ended request to explicit-implementation silently implements when the user wanted to be consulted first — when genuinely unsure between open-ended-planning and explicit-implementation, prefer open-ended-planning.\n\nFirst briefly state your reasoning (1-3 sentences). Then on the LAST line, output EXACTLY one class name — no quotes, no formatting, no extra text:\n- trivial\n- exploratory-research\n- open-ended-planning\n- explicit-implementation\n- ambiguous",
           "outputKey": "intent.classification"
         }
       },
@@ -84,8 +84,9 @@
         "kind": "llm",
         "label": "Decompose explicit task into ordered todos",
         "config": {
-          "systemPrompt": "Break the task into small ordered todo items (one implementation+test unit per todo). Store the list in plan.todos and set plan.ready when complete. Each todo should be atomic enough to delegate as one sub-task.",
-          "outputKey": "plan.ready"
+          "systemPrompt": "Break the task into small ordered todo items (one implementation+test unit per todo). Output the list as a JSON array of objects with at minimum a \"description\" field per item. Each todo should be atomic enough to delegate as one sub-task.",
+          "outputKey": "plan.todos",
+          "outputShape": "array"
         }
       },
       {
@@ -251,12 +252,6 @@
         "priority": 10
       },
       {
-        "source": "todo-plan",
-        "target": "todo-plan",
-        "condition": "llm-loop-active",
-        "priority": 5
-      },
-      {
         "source": "delegate-wave",
         "target": "verify-wave",
         "condition": "wave-complete",
@@ -319,6 +314,30 @@
       {
         "source": "clarify",
         "target": "clarify",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "maturity-check",
+        "target": "maturity-check",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "anti-dup-guard",
+        "target": "anti-dup-guard",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "todo-plan",
+        "target": "todo-plan",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "evidence-check",
+        "target": "evidence-check",
         "condition": "llm-loop-active",
         "priority": 5
       }
@@ -425,7 +444,7 @@
         "description": "todo plan produced",
         "when": {
           "kind": "blackboard.key.exists",
-          "key": "plan.ready"
+          "key": "plan.todos"
         }
       },
       {

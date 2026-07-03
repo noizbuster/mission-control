@@ -82,10 +82,9 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                 label: 'Intent gate — verbalize intent, then classify into 5 classes',
                 config: {
                     systemPrompt:
-                        'You are the intent gate for the default workflow. Before classifying, STATE your ' +
-                        "chosen intent and your reasoning: map the user's surface request to its true intent " +
-                        '(the real goal behind the words), then announce your routing decision.\n\n' +
-                        'Intent routing map (surface form -> true intent -> your routing):\n' +
+                        "You are the intent gate for the default workflow. Map the user's surface request to its true " +
+                        'intent (the real goal behind the words), then classify.\n\n' +
+                        'Intent routing map (surface form -> true intent -> routing):\n' +
                         '- "explain X", "how does Y work", "what is Z", "find Y" -> exploratory-research ' +
                         '(read + synthesize, NEVER edit files).\n' +
                         '- "implement X", "add Y", "fix Z", "create W" with clear scope -> explicit-implementation ' +
@@ -97,7 +96,8 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         'Mis-routing an open-ended request to explicit-implementation silently implements when the ' +
                         'user wanted to be consulted first — when genuinely unsure between open-ended-planning and ' +
                         'explicit-implementation, prefer open-ended-planning.\n\n' +
-                        'Output EXACTLY one class name on a single line, nothing else:\n' +
+                        'First briefly state your reasoning (1-3 sentences). Then on the LAST line, output EXACTLY ' +
+                        'one class name — no quotes, no formatting, no extra text:\n' +
                         '- trivial\n' +
                         '- exploratory-research\n' +
                         '- open-ended-planning\n' +
@@ -199,9 +199,10 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                 config: {
                     systemPrompt:
                         'Break the task into small ordered todo items (one implementation+test unit per todo). ' +
-                        'Store the list in plan.todos and set plan.ready when complete. Each todo should be ' +
-                        'atomic enough to delegate as one sub-task.',
-                    outputKey: 'plan.ready',
+                        'Output the list as a JSON array of objects with at minimum a "description" field per ' +
+                        'item. Each todo should be atomic enough to delegate as one sub-task.',
+                    outputKey: 'plan.todos',
+                    outputShape: 'array',
                 },
             },
             {
@@ -293,7 +294,6 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
             { source: 'maturity-check', target: 'anti-dup-guard', condition: 'maturity-assessed', priority: 10 },
             { source: 'anti-dup-guard', target: 'todo-plan', condition: 'guard-cleared', priority: 10 },
             { source: 'todo-plan', target: 'delegate-wave', condition: 'plan-ready', priority: 10 },
-            { source: 'todo-plan', target: 'todo-plan', condition: 'llm-loop-active', priority: 5 },
             { source: 'delegate-wave', target: 'verify-wave', condition: 'wave-complete', priority: 10 },
             { source: 'delegate-worker', target: 'delegate-worker', condition: 'llm-loop-active', priority: 5 },
             { source: 'verify-wave', target: 'evidence-check', condition: 'critic-passed', priority: 20 },
@@ -305,6 +305,10 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
             { source: 'final-respond', target: 'final-respond', condition: 'llm-loop-active', priority: 5 },
             { source: 'clarify', target: 'intent-gate', condition: 'clarify-loop', priority: 10 },
             { source: 'clarify', target: 'clarify', condition: 'llm-loop-active', priority: 5 },
+            { source: 'maturity-check', target: 'maturity-check', condition: 'llm-loop-active', priority: 5 },
+            { source: 'anti-dup-guard', target: 'anti-dup-guard', condition: 'llm-loop-active', priority: 5 },
+            { source: 'todo-plan', target: 'todo-plan', condition: 'llm-loop-active', priority: 5 },
+            { source: 'evidence-check', target: 'evidence-check', condition: 'llm-loop-active', priority: 5 },
         ],
         rules: [
             {
@@ -377,7 +381,7 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
             {
                 id: 'plan-ready',
                 description: 'todo plan produced',
-                when: { kind: 'blackboard.key.exists', key: 'plan.ready' },
+                when: { kind: 'blackboard.key.exists', key: 'plan.todos' },
             },
             {
                 id: 'wave-complete',

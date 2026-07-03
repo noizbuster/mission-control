@@ -279,11 +279,10 @@ describe('default workflow parity — explicit-implementation creates todos + de
         }
     });
 
-    it('todo-plan writes structured todos (plan.todos fanOutKey + plan.ready outputKey)', () => {
+    it('todo-plan writes structured todos (plan.todos outputKey + array shape)', () => {
         const graph = createDefaultWorkflowGraph();
-        expect(configString(findNode(graph, 'todo-plan'), 'outputKey')).toBe('plan.ready');
-        const todoPrompt = configString(findNode(graph, 'todo-plan'), 'systemPrompt') ?? '';
-        expect(/plan\.todos/.test(todoPrompt)).toBe(true);
+        expect(configString(findNode(graph, 'todo-plan'), 'outputKey')).toBe('plan.todos');
+        expect(configString(findNode(graph, 'todo-plan'), 'outputShape')).toBe('array');
         expect(configValue(findNode(graph, 'delegate-wave'), 'fanOutKey')).toBe('plan.todos');
     });
 
