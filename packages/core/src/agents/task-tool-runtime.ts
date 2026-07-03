@@ -17,6 +17,7 @@
  */
 
 import type { AgentDefinition, PolicyEffectRule } from '@mission-control/protocol';
+import { JOB_TOOL_NAME } from '../tools/job-tool.js';
 import type {
     ChildSpawnRequest,
     ChildSpawnResult,
@@ -211,7 +212,12 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
         const pathPolicies = deriveChildPathPolicies(this.parentAgent, child);
 
         const registry = this.parentToolRegistry.cloneWithFilter(
-            (ad) => ad.name !== TASK_TOOL_NAME && !isToolDeniedByPathPolicies(ad.capabilityClasses, pathPolicies),
+            // `task`: registry-layer recursion guard (ABG section 10.6). `job`: parent-only
+            // background-job controller — children must not operate the parent's job manager.
+            (ad) =>
+                ad.name !== TASK_TOOL_NAME &&
+                ad.name !== JOB_TOOL_NAME &&
+                !isToolDeniedByPathPolicies(ad.capabilityClasses, pathPolicies),
         );
 
         registry.register(createYieldToolRegistration({}));
