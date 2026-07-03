@@ -188,7 +188,7 @@ function scheduleAsyncHighlight(code: string, filetype: string): void {
             const client = runtime.getClient();
             const result = await client.highlightOnce(code, filetype);
             if (result.error !== undefined) {
-                process.stderr.write(`[tree-sitter-highlighter] highlight error: ${result.error}\n`);
+                return;
                 return;
             }
             const highlights = result.highlights;
@@ -198,9 +198,7 @@ function scheduleAsyncHighlight(code: string, filetype: string): void {
             asyncResultCache.set(key, lines);
             clearRenderCache();
             notifyHighlightListeners();
-        } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
-            process.stderr.write(`[tree-sitter-highlighter] unexpected error: ${message}\n`);
+        } catch {
         }
     })();
 
@@ -262,9 +260,7 @@ export function highlightTreeSitter(code: string, lang?: string): readonly Highl
 
     try {
         scheduleAsyncHighlight(code, filetype);
-    } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        process.stderr.write(`[tree-sitter-highlighter] schedule error: ${message}\n`);
+    } catch {
     }
     return monochrome(code);
 }
@@ -284,9 +280,7 @@ export async function closeTreeSitterClient(): Promise<void> {
             syntaxStyle = null;
         }
         await runtime.destroyClient();
-    } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        process.stderr.write(`[tree-sitter-highlighter] close error: ${message}\n`);
+    } catch {
     }
     initPromise = null;
     parsersRegistered = false;

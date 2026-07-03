@@ -27,9 +27,7 @@ export function createAbgOverlayController(
     const persistPrefs = (): void => {
         if (readPrefsSnapshot === undefined) return;
         const snapshot = readPrefsSnapshot();
-        void saveAbgOverlayPrefs(snapshot).catch((error) => {
-            process.stderr.write(`[abg-overlay] failed to persist preferences: ${String(error)}\n`);
-        });
+        void saveAbgOverlayPrefs(snapshot).catch(() => {});
     };
 
     return {

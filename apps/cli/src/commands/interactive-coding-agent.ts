@@ -567,8 +567,7 @@ export function interactiveGraphStreamSignal(
             for (const observer of extraObservers) {
                 try {
                     observer(signal);
-                } catch (err) {
-                    process.stderr.write(`[abg-overlay] observer error: ${String(err)}\n`);
+                } catch {
                 }
             }
         }

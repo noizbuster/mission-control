@@ -35,7 +35,6 @@ export class AppShell extends Component<AppShellProps, AppShellState> {
     }
 
     override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-        process.stderr.write(`AppShell caught: ${error.message}\n${errorInfo.componentStack ?? ''}\n`);
     }
 
     override render(): ReactNode {

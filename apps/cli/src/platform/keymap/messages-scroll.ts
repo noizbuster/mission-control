@@ -278,12 +278,7 @@ export function registerSelectionCopyLayer<TTarget extends object, TEvent extend
                 if (text.length === 0) return false;
                 // Avoid a silent no-op when OSC52 is unavailable (tmux needs passthrough).
                 if (!clipboardService.isOsc52Supported()) {
-                    process.stderr.write(
-                        '\r\nSelection copy needs OSC52 support. Use a modern terminal ' +
-                            '(iTerm2/Alacritty/Kitty/WezTerm/Windows Terminal); under tmux run ' +
-                            '`set -g set-allow-passthrough on`.\r\n',
-                    );
-                    return true;
+                    return false;
                 }
                 void clipboardService.copyToClipboard(text).then((ok) => {
                     if (ok) clearSelection();
