@@ -16,6 +16,7 @@ coverage/
 
 # Rust outputs
 target/
+native/natives/*.node
 
 # Vite and frontend caches
 .vite/

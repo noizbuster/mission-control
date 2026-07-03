@@ -27,3 +27,35 @@ jobs:
       - run: cargo test --manifest-path native/sidecar/Cargo.toml
       - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
       - run: cargo build --manifest-path native/sidecar/Cargo.toml
+
+  # Builds both Rust crates (the N-API cdylib addon and the sidecar binary)
+  # in release mode on every release platform using native GitHub-hosted
+  # runners (no Docker or cross-compile toolchain). Release distribution is
+  # handled by the separate release-cli/release-desktop workflows.
+  native-build:
+    name: native (${{ matrix.os }}-${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            arch: x64
+            runner: ubuntu-latest
+          - os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - os: darwin
+            arch: x64
+            runner: macos-13
+          - os: darwin
+            arch: arm64
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build native/natives cdylib addon
+        run: cargo build --release --manifest-path native/natives/Cargo.toml
+      - name: Build native/sidecar binary
+        run: cargo build --release --manifest-path native/sidecar/Cargo.toml

@@ -4,12 +4,14 @@ import {
     type CommandExecutionResult,
     createDelegatingLspClient,
     createLspToolRegistration,
+    createNativesClient,
     createReadOnlyRepoToolRegistrations,
     discoverSkills,
     type LspClient,
     LspServerManager,
     type LspServerManagerDeps,
     type McpConnectionManager,
+    type NativesClient,
     type ProviderAuthStore,
     registerAskUserTool,
     registerAstGrepTool,
@@ -33,6 +35,7 @@ import {
     ToolRegistry,
     type ToolRegistryWithMcp,
     todoWriteToolRegistration,
+    wireNativesFsCacheInvalidator,
     type WorkflowRegistry,
 } from '@mission-control/core';
 import type {
@@ -109,14 +112,21 @@ export async function createInteractiveToolRegistry(
     approvals: InteractiveApprovalBroker,
 ): Promise<ToolRegistryWithMcp> {
     const registry = new ToolRegistry();
+    // One shared natives client backs the read/search tools and the fs scan
+    // cache invalidation hook: file mutations (edit/write/patch) clear the
+    // cache so the next grep/read serves fresh content.
+    const natives = createNativesClient({ onWarning: () => {} });
+    wireNativesFsCacheInvalidator(natives);
     const readTools = await createReadOnlyRepoToolRegistrations({
         workspaceRoot: options.workspaceRoot,
         requestPermission: approvals.requestPermission,
+        natives,
     });
     registry.register(readTools[3]);
     registry.register(readTools[4]);
     registry.register(readTools[5]);
     registry.register(readTools[6]);
+    registry.register(readTools[7]);
     await registerGlobTool(registry, {
         workspaceRoot: options.workspaceRoot,
         requestPermission: approvals.requestPermission,
@@ -136,7 +146,10 @@ export async function createInteractiveToolRegistry(
         requestPermission: approvals.requestPermission,
     });
     if (selectWebSearchProvider() !== undefined) {
-        await registerWebSearchTool(registry, { sessionId: options.sessionId });
+        await registerWebSearchTool(registry, {
+            sessionId: options.sessionId,
+            ...(natives.available ? { natives } : {}),
+        });
     }
     if (options.requestUserQuestion !== undefined) {
         await registerAskUserTool(registry, {

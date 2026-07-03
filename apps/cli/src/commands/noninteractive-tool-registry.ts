@@ -3,12 +3,14 @@ import {
     type CommandExecutionResult,
     createDelegatingLspClient,
     createLspToolRegistration,
+    createNativesClient,
     createReadOnlyRepoToolRegistrations,
     discoverSkills,
     type LspClient,
     LspServerManager,
     type LspServerManagerDeps,
-    McpConnectionManager,
+    type McpConnectionManager,
+    type NativesClient,
     type ProviderAuthStore,
     registerAskUserTool,
     registerAstGrepTool,
@@ -31,6 +33,7 @@ import {
     ToolRegistry,
     type ToolRegistryWithMcp,
     todoWriteToolRegistration,
+    wireNativesFsCacheInvalidator,
     type WorkflowRegistry,
 } from '@mission-control/core';
 import type {
@@ -88,13 +91,20 @@ export async function createNonInteractiveToolRegistry(
     options: NonInteractiveToolRegistryOptions,
 ): Promise<ToolRegistryWithMcp> {
     const registry = new ToolRegistry();
+    // One shared natives client backs the read/search tools and the fs scan
+    // cache invalidation hook: file mutations (edit/write/patch) clear the
+    // cache so the next grep/read serves fresh content.
+    const natives = createNativesClient({ onWarning: () => {} });
+    wireNativesFsCacheInvalidator(natives);
     const readTools = await createReadOnlyRepoToolRegistrations({
         workspaceRoot: options.workspaceRoot,
         requestPermission: options.requestPermission,
+        natives,
     });
     registry.register(readTools[0]);
     registry.register(readTools[1]);
     registry.register(readTools[2]);
+    registry.register(readTools[7]);
     await registerGlobTool(registry, {
         workspaceRoot: options.workspaceRoot,
         requestPermission: options.requestPermission,
@@ -116,6 +126,7 @@ export async function createNonInteractiveToolRegistry(
     if (selectWebSearchProvider() !== undefined) {
         await registerWebSearchTool(registry, {
             sessionId: options.sessionId ?? 'default',
+            ...(natives.available ? { natives } : {}),
         });
     }
     // Non-interactive runs have no TUI to ask the user, so ask_user resolves with an empty

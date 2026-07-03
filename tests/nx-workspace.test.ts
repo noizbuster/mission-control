@@ -41,6 +41,11 @@ const requiredProjects = [
         path: 'native/sidecar/project.json',
         targets: ['build', 'dev', 'test'],
     },
+    {
+        name: 'natives',
+        path: 'native/natives/project.json',
+        targets: ['build', 'test'],
+    },
 ] as const;
 
 type JsonObject = Record<string, unknown>;
