@@ -95,21 +95,14 @@ describe('web_search tool', () => {
             expect(toolError.error.retryable).toBe(false);
         });
 
-        it('returns structured results when the transport succeeds with a valid MCP envelope', async () => {
+        it('returns structured results when the transport succeeds with a valid provider response', async () => {
             process.env['EXA_API_KEY'] = 'exa-test-key';
             globalThis.fetch = jsonFetch(
                 JSON.stringify({
-                    result: {
-                        content: [
-                            {
-                                type: 'text',
-                                text: JSON.stringify([
-                                    { title: 'Result A', url: 'https://a.test', content: 'body a', score: 0.9 },
-                                    { title: 'Result B', url: 'https://b.test' },
-                                ]),
-                            },
-                        ],
-                    },
+                    results: [
+                        { title: 'Result A', url: 'https://a.test', summary: 'body a', score: 0.9 },
+                        { title: 'Result B', url: 'https://b.test' },
+                    ],
                 }),
             );
 
@@ -121,7 +114,6 @@ describe('web_search tool', () => {
             expect(output.results[0]?.title).toBe('Result A');
             expect(output.results[0]?.url).toBe('https://a.test');
             expect(output.results[0]?.content).toBe('body a');
-            expect(output.results[0]?.score).toBe(0.9);
             expect(output.results[1]?.title).toBe('Result B');
         });
 
@@ -143,14 +135,7 @@ describe('web_search tool', () => {
             process.env['PARALLEL_API_KEY'] = 'parallel-test-key';
             globalThis.fetch = jsonFetch(
                 JSON.stringify({
-                    result: {
-                        content: [
-                            {
-                                type: 'text',
-                                text: JSON.stringify([{ title: 'Parallel Result', url: 'https://p.test' }]),
-                            },
-                        ],
-                    },
+                    results: [{ title: 'Parallel Result', url: 'https://p.test' }],
                 }),
             );
 

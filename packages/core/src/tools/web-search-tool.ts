@@ -1,14 +1,20 @@
 /**
- * `web_search` tool registration (Wave 2, task 5).
+ * `web_search` tool registration (Wave 2, task 5; expanded task 29 to the
+ * 14-provider chain + site-aware extraction).
  *
- * Wraps the MCP-over-HTTP transport from `web-search-transport.ts` behind the
- * `ToolRegistration` surface. Provider selection is deferred to call time
- * (`selectWebSearchProvider`) so the tool can be registered once and adapt to
- * env changes. Transport errors surface as `retryable: true` ToolExecutionError
- * so the provider loop can re-attempt on transient network failures.
+ * Wraps the chain transport from `web-search-transport.ts` behind the
+ * `ToolRegistration` surface. When `input.extract` is set, the top result URLs
+ * are run through `extractSiteContent` (site-aware handlers + N-API
+ * `htmlToMarkdown`) and the structured markdown is attached to each result.
+ * The NativesClient is injectable so graph-path and noninteractive runs get
+ * HTML→Markdown conversion when the addon is present. The tool stays
+ * `['network']` capability and self-gates via the credential-gated chain: no
+ * provider configured → a helpful `ToolExecutionError`.
  */
 import type { z } from 'zod';
+import { type NativesClient } from '../native/natives-client.js';
 import { type ToolAdvertisement, ToolExecutionError, type ToolRegistration, ToolRegistry } from './tool-registry.js';
+import { extractSiteContent } from './web-search-extraction.js';
 import {
     type WebSearchInput,
     type WebSearchOutput,
@@ -17,10 +23,12 @@ import {
     webSearchOutputSchema,
     webSearchParametersJsonSchema,
 } from './web-search-schemas.js';
-import { executeWebSearch, selectWebSearchProvider } from './web-search-transport.js';
+import { executeWebSearch, noProviderMessage } from './web-search-transport.js';
 
 export type WebSearchToolOptions = {
     readonly sessionId: string;
+    /** Optional native client for site-aware HTML→Markdown extraction. */
+    readonly natives?: NativesClient;
 };
 
 export async function registerWebSearchTool(
@@ -43,53 +51,87 @@ export function createWebSearchToolRegistration(
         inputSchema: webSearchInputSchema as z.ZodType<WebSearchInput>,
         outputSchema: webSearchOutputSchema as z.ZodType<WebSearchOutput>,
         outputLimit: { maxModelOutputChars: 10_000 },
-        execute: (input) => runWebSearch(input, options),
+        execute: (input, context) => runWebSearch(input, options, context.signal),
         toModelOutput: webSearchModelOutput,
         guideline:
             'Use web_search when you need current information that may not be in the workspace. Pair with webfetch to read full page content.',
     };
 }
 
-async function runWebSearch(input: WebSearchInput, options: WebSearchToolOptions): Promise<WebSearchOutput> {
-    const provider = selectWebSearchProvider();
-    if (provider === undefined) {
-        throw new ToolExecutionError({
-            code: 'tool_failed',
-            message: 'No web search provider configured. Set EXA_API_KEY or PARALLEL_API_KEY.',
-            retryable: false,
-        });
-    }
+async function runWebSearch(
+    input: WebSearchInput,
+    options: WebSearchToolOptions,
+    signal: AbortSignal,
+): Promise<WebSearchOutput> {
     try {
-        return await executeWebSearch(input, { provider, sessionId: options.sessionId });
+        const output = await executeWebSearch(input, { sessionId: options.sessionId });
+        if (input.extract === true && output.results.length > 0) {
+            return await attachExtraction(output, options.natives, signal);
+        }
+        return output;
     } catch (error: unknown) {
         if (error instanceof ToolExecutionError) {
             throw error;
         }
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.startsWith('No web search provider configured') || message === noProviderMessage()) {
+            throw new ToolExecutionError({
+                code: 'tool_failed',
+                message,
+                retryable: false,
+            });
+        }
         throw new ToolExecutionError({
             code: 'tool_failed',
-            message: `web_search failed: ${errorMessage(error)}`,
+            message: `web_search failed: ${message}`,
             retryable: true,
         });
     }
 }
 
+async function attachExtraction(
+    output: WebSearchOutput,
+    natives: NativesClient | undefined,
+    signal: AbortSignal,
+): Promise<WebSearchOutput> {
+    const top = output.results.slice(0, 3);
+    const enriched = await Promise.all(
+        top.map(async (result) => {
+            const extracted = await extractSiteContent(result.url, natives, signal);
+            if (extracted === undefined) {
+                return result;
+            }
+            return { ...result, extracted: extracted.markdown };
+        }),
+    );
+    const enrichedByUrl = new Map(enriched.map((r) => [r.url, r]));
+    const merged = output.results.map((r) => enrichedByUrl.get(r.url) ?? r);
+    return { ...output, results: merged };
+}
+
 function webSearchModelOutput(output: WebSearchOutput): string {
     const header = `web_search results (provider: ${output.provider})`;
-    if (output.results.length === 0) {
-        return `${header}\nNo results found.`;
+    const parts: string[] = [header];
+    if (output.answer !== undefined && output.answer.length > 0) {
+        parts.push('', '## Answer', output.answer);
     }
+    if (output.results.length === 0) {
+        parts.push('No results found.');
+        return parts.join('\n');
+    }
+    parts.push('', '## Sources');
     const blocks = output.results.map((result, index) => formatResult(result, index));
-    return `${header}\n\n${blocks.join('\n\n')}`;
+    return `${parts.join('\n')}\n\n${blocks.join('\n\n')}`;
 }
 
 function formatResult(result: WebSearchResult, index: number): string {
     const lines = [`[${index + 1}] ${result.title}`, `URL: ${result.url}`];
-    if (result.content !== undefined && result.content.length > 0) {
-        lines.push(`Content: ${result.content}`);
+    if (result.publishedDate !== undefined && result.publishedDate.length > 0) {
+        lines.push(`Published: ${result.publishedDate}`);
+    }
+    const content = result.extracted ?? result.content ?? result.snippet;
+    if (content !== undefined && content.length > 0) {
+        lines.push(`Content: ${content}`);
     }
     return lines.join('\n');
-}
-
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }

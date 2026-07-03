@@ -1,75 +1,126 @@
-import { z } from 'zod';
-import type { WebSearchInput, WebSearchOutput, WebSearchResult } from './web-search-schemas.js';
-
 /**
- * `web_search` MCP-over-HTTP transport (Wave 2, task 4).
+ * `web_search` chain orchestration transport (task 29 — 14-provider parity).
  *
- * Sends JSON-RPC 2.0 `tools/call` POSTs to Exa or Parallel search providers,
- * then parses the MCP content envelope (direct JSON or SSE `data:` lines) into
- * structured `WebSearchResult[]`. Ported from opencode's Effect-based
- * `mcp-websearch.ts` to plain async/await with a 25s `AbortController` timeout.
+ * Walks the resolved provider chain, dispatches each candidate's HTTP request
+ * through `fetch` with a bounded timeout, and parses the response via the
+ * provider's `parseResponse`. Failures fall through to the next provider; only
+ * user-initiated aborts surface immediately. All secret values consulted by
+ * attempted providers are collected and redacted from the final output so no
+ * API key ever leaks into results, answers, or error messages.
  */
+import { createSecretRedactor } from './mcp/secret-redaction.js';
+import {
+    allWebSearchProviders,
+    resolveInput,
+    resolveProviderChain,
+    type WebSearchProvider,
+} from './web-search-providers.js';
+import type {
+    WebSearchInput,
+    WebSearchOutput,
+    WebSearchProviderId,
+    WebSearchProviderPreference,
+    WebSearchResult,
+} from './web-search-schemas.js';
 
-const EXA_BASE_URL = 'https://mcp.exa.ai/mcp';
-const PARALLEL_URL = 'https://search.parallel.ai/mcp';
+export type { WebSearchProviderId } from './web-search-schemas.js';
+
 const WEB_SEARCH_TIMEOUT_MS = 25_000;
 
-export type WebSearchProviderId = 'exa' | 'parallel';
-
 export type WebSearchTransportOptions = {
-    readonly provider: WebSearchProviderId;
+    readonly provider?: WebSearchProviderPreference;
     readonly sessionId: string;
 };
 
+/**
+ * Legacy single-provider selector kept for backward compatibility with
+ * callers that only care about the original exa/parallel pair. Returns the
+ * first available of that pair, or `undefined` when neither is configured.
+ */
 export function selectWebSearchProvider(): WebSearchProviderId | undefined {
     if (process.env['EXA_API_KEY']) return 'exa';
     if (process.env['PARALLEL_API_KEY']) return 'parallel';
     return undefined;
 }
 
-type ProviderCallConfig = {
-    readonly url: string;
-    readonly toolName: string;
-    readonly arguments: Readonly<Record<string, unknown>>;
-    readonly headers: Readonly<Record<string, string>>;
-};
-
 export async function executeWebSearch(
     input: WebSearchInput,
     options: WebSearchTransportOptions,
 ): Promise<WebSearchOutput> {
-    const config = buildProviderCallConfig(options.provider, input, options.sessionId);
-    const requestBody = JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name: config.toolName, arguments: config.arguments },
-    });
+    const preference: WebSearchProviderPreference = options.provider ?? input.provider ?? 'auto';
+    const resolvedInput = resolveInput(input);
+    const chain = resolveProviderChain(preference);
+
+    if (chain.length === 0) {
+        throw new Error(noProviderMessage());
+    }
+
+    const secrets = new Set<string>();
+    const failures: Array<{ provider: WebSearchProvider; error: unknown }> = [];
+    let lastProvider = chain[0]!;
+
+    for (const provider of chain) {
+        lastProvider = provider;
+        for (const secret of provider.collectSecrets()) {
+            if (secret.length > 0) secrets.add(secret);
+        }
+        try {
+            const result = await dispatchProvider(provider, resolvedInput, options.sessionId);
+            return redactOutput(
+                {
+                    results: result.results,
+                    provider: provider.id,
+                    ...(result.answer !== undefined ? { answer: result.answer } : {}),
+                },
+                secrets,
+            );
+        } catch (error: unknown) {
+            if (isAbortError(error)) {
+                throw error;
+            }
+            failures.push({ provider, error });
+        }
+    }
+
+    const message =
+        failures.length > 0
+            ? `All configured web search providers failed: ${failures
+                  .map((f) => `${f.provider.id}: ${errorMessage(f.error)}`)
+                  .join('; ')}`
+            : noProviderMessage();
+    throw new Error(redactText(message, secrets));
+}
+
+async function dispatchProvider(
+    provider: WebSearchProvider,
+    input: ReturnType<typeof resolveInput>,
+    sessionId: string,
+): Promise<{ results: readonly WebSearchResult[]; answer: string | undefined }> {
+    const request = provider.buildRequest(input, sessionId);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), WEB_SEARCH_TIMEOUT_MS);
     try {
-        const response = await fetch(config.url, {
-            method: 'POST',
-            headers: {
-                accept: 'application/json, text/event-stream',
-                'content-type': 'application/json',
-                ...config.headers,
-            },
-            body: requestBody,
+        const response = await fetch(request.url, {
+            method: request.method,
+            headers: { accept: 'application/json, text/event-stream', ...request.headers },
+            ...(request.body !== undefined ? { body: request.body } : {}),
             signal: controller.signal,
         });
         if (!response.ok) {
-            throw new Error(`web_search ${options.provider} request returned HTTP ${response.status}`);
+            const bodyText = await safeReadText(response);
+            throw new Error(
+                `${provider.id} returned HTTP ${response.status}${bodyText.length > 0 ? `: ${bodyText.slice(0, 200)}` : ''}`,
+            );
         }
         const body = await response.text();
-        const payload = parseMcpResponse(body);
-        if (payload === undefined) {
-            return { results: [], provider: options.provider };
+        const parsed = provider.parseResponse(body, response.headers, input);
+        if (parsed.results.length === 0 && parsed.answer === undefined) {
+            throw new Error(`${provider.id} returned no results`);
         }
-        return { results: parseSearchResults(payload), provider: options.provider };
-    } catch (error) {
+        return parsed;
+    } catch (error: unknown) {
         if (controller.signal.aborted) {
-            throw new Error(`web_search ${options.provider} request timed out after ${WEB_SEARCH_TIMEOUT_MS / 1000}s`);
+            throw new Error(`${provider.id} request timed out after ${WEB_SEARCH_TIMEOUT_MS / 1000}s`);
         }
         throw error;
     } finally {
@@ -77,127 +128,92 @@ export async function executeWebSearch(
     }
 }
 
-function buildProviderCallConfig(
-    provider: WebSearchProviderId,
-    input: WebSearchInput,
-    sessionId: string,
-): ProviderCallConfig {
-    if (provider === 'exa') {
-        const apiKey = process.env['EXA_API_KEY'];
-        const url = apiKey !== undefined ? `${EXA_BASE_URL}?exaApiKey=${encodeURIComponent(apiKey)}` : EXA_BASE_URL;
-        const args = {
-            query: input.query,
-            type: input.type ?? 'auto',
-            numResults: input.numResults ?? 8,
-            livecrawl: 'fallback',
-            ...(input.contextMaxCharacters !== undefined ? { contextMaxCharacters: input.contextMaxCharacters } : {}),
-        };
-        return { url, toolName: 'web_search_exa', arguments: args, headers: {} };
+function redactOutput(output: WebSearchOutput, secrets: Set<string>): WebSearchOutput {
+    if (secrets.size === 0) {
+        return output;
     }
-    const headers: Record<string, string> = {};
-    const parallelKey = process.env['PARALLEL_API_KEY'];
-    if (parallelKey !== undefined) {
-        headers['Authorization'] = `Bearer ${parallelKey}`;
-    }
-    const args = {
-        objective: input.query,
-        search_queries: [input.query],
-        session_id: sessionId,
-        model_name: 'auto',
+    const redactor = createSecretRedactor([...secrets]);
+    const redactedResults = output.results.map((result) => ({
+        title: redactor.redactText(result.title),
+        url: result.url,
+        ...(result.content !== undefined ? { content: redactor.redactText(result.content) } : {}),
+        ...(result.snippet !== undefined ? { snippet: redactor.redactText(result.snippet) } : {}),
+        ...(result.score !== undefined ? { score: result.score } : {}),
+        ...(result.publishedDate !== undefined ? { publishedDate: redactor.redactText(result.publishedDate) } : {}),
+        ...(result.extracted !== undefined ? { extracted: redactor.redactText(result.extracted) } : {}),
+    }));
+    return {
+        results: redactedResults,
+        provider: output.provider,
+        ...(output.answer !== undefined ? { answer: redactor.redactText(output.answer) } : {}),
     };
-    return { url: PARALLEL_URL, toolName: 'web_search', arguments: args, headers };
 }
 
-const mcpEnvelopeSchema = z.object({
-    result: z.object({
-        content: z
-            .array(
-                z.object({
-                    type: z.string().optional(),
-                    text: z.string().optional(),
-                }),
-            )
-            .min(1),
-    }),
-});
-
-const rawResultSchema = z.object({
-    title: z.string().default(''),
-    url: z.string().default(''),
-    content: z.string().optional(),
-    text: z.string().optional(),
-    score: z.number().optional(),
-});
-
-const arrayContainerSchema = z.object({
-    results: z.array(z.unknown()).optional(),
-    data: z.array(z.unknown()).optional(),
-});
-
-function extractTextFromPayload(payload: string): string | undefined {
-    const trimmed = payload.trim();
-    if (!trimmed.startsWith('{')) return undefined;
-    const json = safeJsonParse(trimmed);
-    if (json === undefined) return undefined;
-    const parsed = mcpEnvelopeSchema.safeParse(json);
-    if (!parsed.success) return undefined;
-    for (const item of parsed.data.result.content) {
-        if (item.text !== undefined && item.text.length > 0) {
-            return item.text;
-        }
+function redactText(text: string, secrets: Set<string>): string {
+    if (secrets.size === 0) {
+        return text;
     }
-    return undefined;
+    return createSecretRedactor([...secrets]).redactText(text);
 }
 
-function parseMcpResponse(body: string): string | undefined {
-    const trimmed = body.trim();
-    const direct = trimmed.length > 0 ? extractTextFromPayload(trimmed) : undefined;
-    if (direct !== undefined) return direct;
-    for (const line of body.split('\n')) {
-        if (!line.startsWith('data: ')) continue;
-        const text = extractTextFromPayload(line.substring('data: '.length));
-        if (text !== undefined) return text;
+function isAbortError(error: unknown): boolean {
+    if (error instanceof Error) {
+        return error.name === 'AbortError' || /aborted/i.test(error.message);
     }
-    return undefined;
+    return false;
 }
 
-function parseSearchResults(text: string): WebSearchResult[] {
-    const trimmed = text.trim();
-    if (trimmed.length === 0) return [];
-    const json = safeJsonParse(trimmed);
-    if (json === undefined) {
-        return [{ title: '', url: '', content: trimmed }];
-    }
-    const rawArray: readonly unknown[] | undefined = Array.isArray(json) ? json : extractArrayField(json);
-    if (rawArray === undefined) {
-        return [{ title: '', url: '', content: trimmed }];
-    }
-    const results: WebSearchResult[] = [];
-    for (const entry of rawArray) {
-        const parsed = rawResultSchema.safeParse(entry);
-        if (!parsed.success) continue;
-        const data = parsed.data;
-        const content = data.content ?? data.text;
-        results.push({
-            title: data.title,
-            url: data.url,
-            ...(content !== undefined ? { content } : {}),
-            ...(data.score !== undefined ? { score: data.score } : {}),
-        });
-    }
-    return results;
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
-function extractArrayField(value: unknown): readonly unknown[] | undefined {
-    const parsed = arrayContainerSchema.safeParse(value);
-    if (!parsed.success) return undefined;
-    return parsed.data.results ?? parsed.data.data;
-}
-
-function safeJsonParse(text: string): unknown {
+async function safeReadText(response: Response): Promise<string> {
     try {
-        return JSON.parse(text);
+        return await response.text();
     } catch {
-        return undefined;
+        return '';
+    }
+}
+
+/** Human-readable message listing the credential env vars checked. */
+export function noProviderMessage(): string {
+    const envs = allWebSearchProviders()
+        .map((provider) => providerCredentialHint(provider.id))
+        .filter((hint): hint is string => hint !== undefined);
+    return `No web search provider configured. Set one of: ${envs.join(', ')}.`;
+}
+
+function providerCredentialHint(id: WebSearchProviderId): string | undefined {
+    switch (id) {
+        case 'exa':
+            return 'EXA_API_KEY';
+        case 'brave':
+            return 'BRAVE_API_KEY';
+        case 'jina':
+            return 'JINA_API_KEY';
+        case 'kimi':
+            return 'MOONSHOT_SEARCH_API_KEY (or KIMI_SEARCH_API_KEY / MOONSHOT_API_KEY)';
+        case 'zai':
+            return 'ZAI_API_KEY';
+        case 'anthropic':
+            return 'ANTHROPIC_API_KEY';
+        case 'perplexity':
+            return 'PERPLEXITY_API_KEY';
+        case 'gemini':
+            return 'GEMINI_API_KEY (or GOOGLE_API_KEY)';
+        case 'codex':
+            return 'OPENAI_API_KEY';
+        case 'tavily':
+            return 'TAVILY_API_KEY';
+        case 'parallel':
+            return 'PARALLEL_API_KEY';
+        case 'kagi':
+            return 'KAGI_API_KEY';
+        case 'synthetic':
+            return 'SYNTHETIC_API_KEY';
+        case 'searxng':
+            return 'SEARXNG_ENDPOINT';
+        default:
+            return undefined;
     }
 }
