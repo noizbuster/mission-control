@@ -36,15 +36,16 @@ describe('createPlannerWorkflowGraph', () => {
         expect(nodeIds).toContain('intake');
     });
 
-    it('routes from assess-ambiguity to exactly 3 ambiguity paths (clear->explore-filter, unclear->research, on-the-fence->ask-one-question)', () => {
+    it('routes from assess-ambiguity to 3 ambiguity paths + self-loop (clear->explore-filter, unclear->research, on-the-fence->ask-one-question, loop)', () => {
         const graph = createPlannerWorkflowGraph();
         const targets = graph.edges.filter((edge) => edge.source === 'assess-ambiguity').map((edge) => edge.target);
         const uniqueTargets = new Set(targets);
 
-        expect(uniqueTargets.size).toBe(3);
+        expect(uniqueTargets.size).toBe(4);
         expect(uniqueTargets).toContain('explore-filter');
         expect(uniqueTargets).toContain('research');
         expect(uniqueTargets).toContain('ask-one-question');
+        expect(uniqueTargets).toContain('assess-ambiguity');
     });
 
     it('routes the clear branch through explore-filter (needs-exploration vs direct-draft)', () => {

@@ -180,9 +180,11 @@ describe('planner workflow parity: draft state before final plan', () => {
 });
 
 describe('planner workflow parity: approval gate blocks the final plan write', () => {
-    it('write-plan is reachable ONLY via the plan-ready rule', () => {
+    it('write-plan is reachable ONLY via the plan-ready rule (excluding self-loops)', () => {
         const graph = createPlannerWorkflowGraph();
-        const incomingToWritePlan = graph.edges.filter((edge) => edge.target === 'write-plan');
+        const incomingToWritePlan = graph.edges.filter(
+            (edge) => edge.target === 'write-plan' && edge.source !== 'write-plan',
+        );
         expect(incomingToWritePlan.length).toBe(1);
         expect(incomingToWritePlan[0]?.source).toBe('approval-gate');
         expect(incomingToWritePlan[0]?.condition).toBe('plan-ready');

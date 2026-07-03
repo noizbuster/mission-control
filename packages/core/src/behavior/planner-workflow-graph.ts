@@ -340,6 +340,18 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
             { source: 'approval-gate', target: 'write-plan', condition: 'plan-ready', priority: 20 },
             { source: 'approval-gate', target: 'approval-gate', condition: 'plan-awaiting-approval', priority: 10 },
             { source: 'write-plan', target: 'present', condition: 'plan-written', priority: 10 },
+            { source: 'intake', target: 'intake', condition: 'llm-loop-active', priority: 5 },
+            { source: 'assess-ambiguity', target: 'assess-ambiguity', condition: 'llm-loop-active', priority: 5 },
+            { source: 'explore-filter', target: 'explore-filter', condition: 'llm-loop-active', priority: 5 },
+            { source: 'explore', target: 'explore', condition: 'llm-loop-active', priority: 5 },
+            { source: 'research', target: 'research', condition: 'llm-loop-active', priority: 5 },
+            { source: 'adopt-defaults', target: 'adopt-defaults', condition: 'llm-loop-active', priority: 5 },
+            { source: 'ask-one-question', target: 'ask-one-question', condition: 'llm-loop-active', priority: 5 },
+            { source: 'draft-plan', target: 'draft-plan', condition: 'llm-loop-active', priority: 5 },
+            { source: 'review-plan', target: 'review-plan', condition: 'llm-loop-active', priority: 5 },
+            { source: 'approval-gate', target: 'approval-gate', condition: 'llm-loop-active', priority: 5 },
+            { source: 'write-plan', target: 'write-plan', condition: 'llm-loop-active', priority: 5 },
+            { source: 'present', target: 'present', condition: 'llm-loop-active', priority: 5 },
         ],
         rules: [
             {
