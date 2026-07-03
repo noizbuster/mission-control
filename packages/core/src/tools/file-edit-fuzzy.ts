@@ -1,6 +1,14 @@
-// allow: SIZE_OK — faithful port of opencode's cohesive 9-stage fuzzy replacer chain.
-// The replacers, levenshtein DP, and the replace() entry point form one indivisible
-// algorithm; splitting would break the single-file contract the integration task relies on.
+// allow: SIZE_OK — the 9-stage fuzzy replacer chain is one indivisible algorithm.
+// The replacers, levenshtein DP, and the replace() entry point form a single cohesive
+// unit; splitting would break the ordered-fallback contract the integration layer relies on.
+//
+// Attribution: adapted from opencode (MIT License, Copyright (c) 2025 opencode),
+//   https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/tool/edit.ts
+// which itself sources the diff-apply approaches from cline and gemini-cli:
+//   https://github.com/cline/cline/blob/main/evals/diff-edits/diff-apply/diff-06-26-25.ts
+//   https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/utils/editCorrector.ts
+// Ported to plain TypeScript: opencode's Effect.gen / Schema.Struct plumbing was rewritten
+// to plain functions and a discriminated FuzzyReplaceResult; no @effect dependency remains.
 import { createTwoFilesPatch } from 'diff';
 
 /**
