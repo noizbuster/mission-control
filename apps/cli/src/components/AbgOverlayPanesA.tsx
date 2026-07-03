@@ -166,14 +166,19 @@ export function GraphPane({ state }: PaneProps): React.ReactNode {
         to: edge.target,
         ...(edge.condition !== undefined ? { label: edge.condition } : {}),
     }));
-    const visual = renderVisualGraph({ nodes: visualNodes, edges: visualEdges });
+    const terminalWidth = process.stdout.columns ?? 80;
+    const graphMaxWidth = Math.max(20, terminalWidth - 6);
+    const visual = renderVisualGraph({ nodes: visualNodes, edges: visualEdges, maxWidth: graphMaxWidth });
+
+    const terminalHeight = process.stdout.rows ?? 24;
+    const graphMaxHeight = Math.max(8, terminalHeight - 8);
 
     return (
         <box flexDirection="column" marginTop={1}>
             <text {...boldAttrs}>{graphId}</text>
-            <box flexDirection="column" marginLeft={2}>
+            <scrollbox marginLeft={2} maxHeight={graphMaxHeight} stickyScroll>
                 {visual.rows.map((row, idx) => renderVisualRow(row, idx, spinnerGlyph))}
-            </box>
+            </scrollbox>
             {childGraphs.length > 0 ? (
                 <box marginTop={1} flexDirection="column">
                     <text {...boldAttrs} {...dimAttrs}>
