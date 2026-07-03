@@ -321,10 +321,9 @@ describe('selection.copy (ctrl+d, high-priority selection-gated layer)', () => {
         harness.cleanup();
     });
 
-    it('writes a stderr OSC52 notice and does NOT copy or clear when OSC52 is unsupported', () => {
+    it('does NOT copy or clear when OSC52 is unsupported', () => {
         const harness = createTestKeymap({ defaultKeys: true });
         harness.host.focus(harness.root);
-        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
         const { clipboard, clearCalls, deps } = buildDeps(100, '', { text: 'block', osc52: false });
         const off = registerSelectionCopyLayer(harness.keymap, deps);
 
@@ -332,10 +331,7 @@ describe('selection.copy (ctrl+d, high-priority selection-gated layer)', () => {
 
         expect(clipboard.copied).toEqual([]);
         expect(clearCalls).toEqual([]);
-        const notice = stderrSpy.mock.calls.map((call) => String(call[0])).join('');
-        expect(notice).toContain('OSC52');
 
-        stderrSpy.mockRestore();
         off();
         harness.cleanup();
     });

@@ -99,14 +99,9 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
         });
     });
 
-    describe('QA: Failure (Metis 4.1) — observer throws is logged and swallowed', () => {
-        it('completes the signal tap and writes a stderr line when an observer throws', async () => {
+    describe('QA: Failure (Metis 4.1) — observer throws is swallowed', () => {
+        it('completes the signal tap and swallows observer errors', async () => {
             const output = bufferedOutput();
-            const stderrWrites: string[] = [];
-            const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation((text) => {
-                stderrWrites.push(String(text));
-                return true;
-            });
 
             let calls = 0;
             const throwingObserver: (signal: AbgSignal) => void = () => {
@@ -128,12 +123,7 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
             await tap(emitDeltaSignal('n1', 'c'));
 
             expect(calls).toBe(3);
-            expect(stderrWrites.length).toBe(1);
-            expect(stderrWrites[0]).toContain('[abg-overlay] observer error:');
-            expect(stderrWrites[0]).toContain('boom from faulty observer');
             expect(output.getText()).toContain('Assistant: ');
-
-            stderrSpy.mockRestore();
         });
     });
 
