@@ -418,6 +418,98 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
     });
 
+    it('persists an in-enum outputKey value unchanged', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_enum_ok',
+            now: () => NOW,
+            sdkModel: modelReturning('exploratory-research'),
+            blackboard,
+        };
+        const node = {
+            id: 'gate',
+            kind: 'llm',
+            config: {
+                outputKey: 'intent.classification',
+                outputEnum: ['trivial', 'exploratory-research', 'ambiguous'],
+            },
+        } as const;
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.get('intent.classification')).toBe('exploratory-research');
+    });
+
+    it('substitutes outputDefault when the parsed value is out-of-enum prose', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_enum_default',
+            now: () => NOW,
+            sdkModel: modelReturning('I will check the files and then report back.'),
+            blackboard,
+        };
+        const node = {
+            id: 'gate',
+            kind: 'llm',
+            config: {
+                outputKey: 'intent.classification',
+                outputEnum: ['trivial', 'exploratory-research', 'ambiguous'],
+                outputDefault: 'ambiguous',
+            },
+        } as const;
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.get('intent.classification')).toBe('ambiguous');
+    });
+
+    it('fails closed when an out-of-enum value has no outputDefault', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_enum_no_default',
+            now: () => NOW,
+            sdkModel: modelReturning('not a real class'),
+            blackboard,
+        };
+        const node = {
+            id: 'gate',
+            kind: 'llm',
+            config: {
+                outputKey: 'intent.classification',
+                outputEnum: ['trivial', 'exploratory-research', 'ambiguous'],
+            },
+        } as const;
+
+        const signals = await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.has('intent.classification')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
+    });
+
+    it('fails closed when outputDefault is itself out-of-enum', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_enum_bad_default',
+            now: () => NOW,
+            sdkModel: modelReturning('garbage prose'),
+            blackboard,
+        };
+        const node = {
+            id: 'gate',
+            kind: 'llm',
+            config: {
+                outputKey: 'intent.classification',
+                outputEnum: ['trivial', 'exploratory-research'],
+                outputDefault: 'not-in-enum',
+            },
+        } as const;
+
+        const signals = await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.has('intent.classification')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
+    });
+
     it('writes true for no-text turns (completion signal backwards compat)', async () => {
         const blackboard = seedBlackboard();
         const context: AbgNodeRunContext = {

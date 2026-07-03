@@ -184,10 +184,11 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         blackboard.appendMessages(turnResult.responseMessages);
         const outputKey = readStringConfig(node, 'outputKey');
         if (outputKey !== undefined) {
-            const outputResult: ParseStructuredOutputResult =
+            const parsed: ParseStructuredOutputResult =
                 turnResult.text.trim().length > 0
                     ? parseStructuredOutput(turnResult.text, readOutputShape(node))
                     : { ok: true, value: true };
+            const outputResult = applyEnumConstraint(node, parsed);
             if (outputResult.ok) {
                 blackboard.set(outputKey, outputResult.value);
                 yield createAbgEmitSignal({
@@ -264,6 +265,45 @@ function readOutputShape(node: AbgNodeSpec): StructuredOutputShape {
         return value;
     }
     return 'any';
+}
+
+function readOutputEnum(node: AbgNodeSpec): readonly string[] | undefined {
+    const value = node.config?.['outputEnum'];
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    const entries = value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+    return entries.length > 0 ? entries : undefined;
+}
+
+function readOutputDefault(node: AbgNodeSpec): string | undefined {
+    return readStringConfig(node, 'outputDefault');
+}
+
+// Substitutes outputDefault (when in-enum) for an out-of-enum value so a
+// classifier node degrades to a routable branch instead of silently stalling.
+function applyEnumConstraint(
+    node: AbgNodeSpec,
+    parsed: ParseStructuredOutputResult,
+): ParseStructuredOutputResult {
+    if (!parsed.ok) {
+        return parsed;
+    }
+    const outputEnum = readOutputEnum(node);
+    if (outputEnum === undefined) {
+        return parsed;
+    }
+    if (typeof parsed.value === 'string' && outputEnum.includes(parsed.value)) {
+        return parsed;
+    }
+    const fallback = readOutputDefault(node);
+    if (fallback !== undefined && outputEnum.includes(fallback)) {
+        return { ok: true, value: fallback };
+    }
+    return {
+        ok: false,
+        error: `output for outputKey not in declared outputEnum ${JSON.stringify(outputEnum)}: ${JSON.stringify(parsed.value)}`,
+    };
 }
 
 /**
