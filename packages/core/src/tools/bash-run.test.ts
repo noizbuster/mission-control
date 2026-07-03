@@ -1,9 +1,9 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { registerBashRunTool } from './bash-run.js';
-import type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor.js';
+import type { CommandChainStep, CommandExecutionRequest, CommandExecutionResult } from './command-run-executor.js';
 import { type ToolInvocationSettlement, ToolRegistry } from './tool-registry.js';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -557,6 +557,126 @@ describe('bash.run tool', () => {
         // grep -v b drops the 'b' line, sort -r reverses → c, a
         expect(stdout.trim().split('\n')).toEqual(['c', 'a']);
     });
+
+    it('runs a `&&` chain end-to-end when the left side exits zero', async () => {
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+        });
+
+        const settlement = await invokeBash(registry, {
+            commandLine: 'true && printf chain-ok',
+        });
+
+        expect(settlement.result.status).toBe('completed');
+        const stdout = (settlement.structuredOutput as { readonly stdout?: string }).stdout ?? '';
+        expect(stdout).toContain('chain-ok');
+    });
+
+    it('short-circuits a `&&` chain when the left side exits non-zero', async () => {
+        const workspaceRoot = await tempRoot('mctrl-bash-short-');
+        const marker = join(workspaceRoot, 'marker.txt');
+        const registry = await createRegistry({
+            workspaceRoot,
+            requestPermission: allowPermission,
+        });
+
+        const settlement = await invokeBash(registry, {
+            commandLine: 'false && touch marker.txt',
+        });
+
+        // bash parity: `false` exits 1, so `&&` skips the right side. The chain's overall
+        // status is `failed` (last-executed exit was non-zero) AND the marker file is never
+        // created, proving the right side did not run.
+        expect(settlement.result.status).toBe('failed');
+        await expect(stat(marker).catch(() => null)).resolves.toBeNull();
+    });
+
+    it('runs the right side of `||` when the left side fails', async () => {
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+        });
+
+        const settlement = await invokeBash(registry, {
+            commandLine: 'false || printf recovered',
+        });
+
+        expect(settlement.result.status).toBe('completed');
+        const stdout = (settlement.structuredOutput as { readonly stdout?: string }).stdout ?? '';
+        expect(stdout).toContain('recovered');
+    });
+
+    it('runs both sides of `;` unconditionally and concatenates stdout', async () => {
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+        });
+
+        const settlement = await invokeBash(registry, {
+            commandLine: 'printf one; printf two',
+        });
+
+        expect(settlement.result.status).toBe('completed');
+        const stdout = (settlement.structuredOutput as { readonly stdout?: string }).stdout ?? '';
+        expect(stdout).toContain('one');
+        expect(stdout).toContain('two');
+    });
+
+    it('aggregates permission patterns across every chain segment', async () => {
+        const permissionRequests: PermissionRequest[] = [];
+        const registry = await createRegistry({
+            requestPermission: (request) => {
+                permissionRequests.push(request);
+                return denyPermission(request);
+            },
+            chainExecutor: async () => completedResult(),
+        });
+
+        await invokeBash(registry, { commandLine: 'cat foo.txt && cat bar.ts' });
+
+        expect(permissionRequests).toHaveLength(1);
+        expect(permissionRequests[0]?.permission?.patterns).toEqual([
+            'cat foo.txt && cat bar.ts',
+            'cat foo.txt',
+            'foo.txt',
+            'cat bar.ts',
+            'bar.ts',
+        ]);
+    });
+
+    it('still denies a single `&` background inside a chain segment', async () => {
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+            chainExecutor: async () => completedResult(),
+        });
+
+        const settlement = await invokeBash(registry, { commandLine: 'sleep 1& echo ok' });
+
+        expect(settlement.result.status).toBe('failed');
+        expect(settlement.result.error?.message).toContain('command_not_allowed');
+    });
+
+    it('still denies output redirection inside a chain segment', async () => {
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+            chainExecutor: async () => completedResult(),
+        });
+
+        const settlement = await invokeBash(registry, { commandLine: 'echo ok > file && echo done' });
+
+        expect(settlement.result.status).toBe('failed');
+        expect(settlement.result.error?.message).toContain('command_not_allowed');
+    });
+
+    it('still denies env-var expansion inside a chain segment', async () => {
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+            chainExecutor: async () => completedResult(),
+        });
+
+        const settlement = await invokeBash(registry, { commandLine: 'echo $HOME && echo ok' });
+
+        expect(settlement.result.status).toBe('failed');
+        expect(settlement.result.error?.message).toContain('command_not_allowed');
+    });
 });
 
 type CreateRegistryInput = {
@@ -565,6 +685,7 @@ type CreateRegistryInput = {
     readonly requestPermission: (request: PermissionRequest) => PermissionDecision;
     readonly executor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly pipelineExecutor?: (requests: readonly CommandExecutionRequest[]) => Promise<CommandExecutionResult>;
+    readonly chainExecutor?: (steps: readonly CommandChainStep[]) => Promise<CommandExecutionResult>;
     readonly timeoutMs?: number;
     readonly maxOutputBytes?: number;
     readonly envAllowlist?: readonly string[];
@@ -580,6 +701,7 @@ async function createRegistry(input: CreateRegistryInput): Promise<ToolRegistry>
         requestPermission: input.requestPermission,
         ...(input.executor !== undefined ? { executor: input.executor } : {}),
         ...(input.pipelineExecutor !== undefined ? { pipelineExecutor: input.pipelineExecutor } : {}),
+        ...(input.chainExecutor !== undefined ? { chainExecutor: input.chainExecutor } : {}),
         ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
         ...(input.maxOutputBytes !== undefined ? { maxOutputBytes: input.maxOutputBytes } : {}),
         ...(input.envAllowlist !== undefined ? { envAllowlist: input.envAllowlist } : {}),
