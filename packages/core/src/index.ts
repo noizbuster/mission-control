@@ -186,6 +186,7 @@ export {
     type DeterministicProvider,
     type DeterministicProviderStep,
 } from './providers/deterministic-provider.js';
+export { createStreamDecoder, truncateToValidUtf8Boundary, type StreamDecoder } from './providers/stream-decoder.js';
 export {
     createGeminiGenerateContentProvider,
     createNodeGeminiGenerateContentTransport,

@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
-import { createStreamDecoder } from './stream-decoder.js';
+import { createStreamDecoder, truncateToValidUtf8Boundary } from './stream-decoder.js';
 
 describe('createStreamDecoder', () => {
     it('passes string chunks through unchanged', () => {
@@ -72,5 +72,50 @@ describe('createStreamDecoder', () => {
         result += decoder.decode(Buffer.from('이', 'utf8'));
         result += decoder.flush();
         expect(result).toBe('오버레이');
+    });
+});
+
+describe('truncateToValidUtf8Boundary', () => {
+    it('returns the buffer unchanged when maxBytes >= buf.length and buffer is valid', () => {
+        const buf = Buffer.from('hello', 'utf8');
+        expect(truncateToValidUtf8Boundary(buf, 10)).toEqual(buf);
+    });
+
+    it('cuts on a valid boundary when maxBytes splits a Korean Hangul syllable', () => {
+        // '오버레이' = [EC 98 A4] [EB B2 84] [EB A0 88] [EC 9D B4] = 12 bytes
+        const buf = Buffer.from('오버레이', 'utf8');
+        // Cut at 10 bytes: first 3 syllables (9 bytes) + 1 byte of 4th syllable
+        const truncated = truncateToValidUtf8Boundary(buf, 10);
+        expect(truncated.toString('utf8')).toBe('오버레');
+        expect(truncated.length).toBe(9);
+        expect(truncated.toString('utf8')).not.toContain('\uFFFD');
+    });
+
+    it('includes a complete Korean syllable when maxBytes lands on its boundary', () => {
+        const buf = Buffer.from('오버레이', 'utf8');
+        // Cut at 9 bytes = exactly 3 complete syllables
+        const truncated = truncateToValidUtf8Boundary(buf, 9);
+        expect(truncated.toString('utf8')).toBe('오버레');
+    });
+
+    it('cuts on a valid boundary when maxBytes splits an emoji', () => {
+        const buf = Buffer.from('a😀b', 'utf8');
+        // 'a' = 1 byte, '😀' = 4 bytes (F0 9F 98 80), 'b' = 1 byte = total 6
+        const truncated = truncateToValidUtf8Boundary(buf, 3);
+        expect(truncated.toString('utf8')).toBe('a');
+        expect(truncated.toString('utf8')).not.toContain('\uFFFD');
+    });
+
+    it('trims trailing incomplete sequence when buffer itself is truncated mid-stream', () => {
+        // '이' = EC 9D B4; keep only first 2 bytes (incomplete)
+        const incomplete = Buffer.from([0xec, 0x9d]);
+        const result = truncateToValidUtf8Boundary(incomplete, 10);
+        expect(result.length).toBe(0);
+    });
+
+    it('preserves a complete trailing sequence in a buffer that is shorter than maxBytes', () => {
+        const buf = Buffer.from('안녕', 'utf8');
+        const result = truncateToValidUtf8Boundary(buf, 100);
+        expect(result.toString('utf8')).toBe('안녕');
     });
 });
