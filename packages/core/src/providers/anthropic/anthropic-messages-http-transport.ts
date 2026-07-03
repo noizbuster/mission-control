@@ -3,10 +3,6 @@ import {
     AnthropicMessagesTransportError,
     type AnthropicMessagesTransportRequest,
 } from './anthropic-messages-transport.js';
-import { Buffer } from 'node:buffer';
-import type { IncomingMessage } from 'node:http';
-import { request as httpsRequest } from 'node:https';
-import { createStreamDecoder } from '../stream-decoder.js';
 
 export function createNodeAnthropicMessagesTransport(): AnthropicMessagesTransport {
     return {
@@ -15,27 +11,41 @@ export function createNodeAnthropicMessagesTransport(): AnthropicMessagesTranspo
 }
 
 export async function* streamAnthropicMessages(input: AnthropicMessagesTransportRequest): AsyncIterable<unknown> {
-    const response = await openAnthropicResponse(input);
-    if ((response.statusCode ?? 0) >= 400) {
-        const message = await readResponseText(response);
+    const response = await fetch(input.endpoint, {
+        method: 'POST',
+        headers: { ...input.headers, Accept: 'text/event-stream' },
+        body: JSON.stringify(input.body),
+        signal: input.signal,
+    });
+
+    if (!response.ok) {
+        const message = await response.text().catch(() => '');
         throw new AnthropicMessagesTransportError({
-            ...(response.statusCode === undefined ? {} : { status: response.statusCode }),
+            status: response.status,
             message,
         });
     }
 
+    const reader = response.body?.getReader();
+    if (reader === undefined) {
+        throw new AnthropicMessagesTransportError({ kind: 'network', message: 'response body is null' });
+    }
+
+    const decoder = new TextDecoder();
     let buffer = '';
-    const decoder = createStreamDecoder();
-    for await (const chunk of response) {
-        buffer += decoder.decode(chunk);
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
         const consumed = parseAnthropicMessagesSseEvents(buffer);
         buffer = consumed.remainder;
         for (const event of consumed.events) {
             yield event;
         }
     }
-    buffer += decoder.flush();
 
+    buffer += decoder.decode();
     const final = parseAnthropicMessagesSseEvents(`${buffer}\n\n`);
     for (const event of final.events) {
         yield event;
@@ -62,51 +72,6 @@ export function parseAnthropicMessagesSseEvents(text: string): {
             events.push(event);
         }
     }
-}
-
-function openAnthropicResponse(input: AnthropicMessagesTransportRequest): Promise<IncomingMessage> {
-    return new Promise((resolve, reject) => {
-        const url = new URL(input.endpoint);
-        const body = JSON.stringify(input.body);
-        const request = httpsRequest(
-            url,
-            {
-                method: 'POST',
-                headers: {
-                    ...input.headers,
-                    Accept: 'text/event-stream',
-                    'Content-Length': Buffer.byteLength(body).toString(),
-                },
-            },
-            resolve,
-        );
-        const abort = () => {
-            request.destroy(
-                new AnthropicMessagesTransportError({ kind: 'abort', message: 'Anthropic request aborted' }),
-            );
-        };
-        const fail = (error: Error) => {
-            input.signal.removeEventListener('abort', abort);
-            reject(
-                error instanceof AnthropicMessagesTransportError
-                    ? error
-                    : new AnthropicMessagesTransportError({ kind: 'network', message: error.message }),
-            );
-        };
-        request.on('error', fail);
-        request.on('close', () => input.signal.removeEventListener('abort', abort));
-        input.signal.addEventListener('abort', abort, { once: true });
-        request.end(body);
-    });
-}
-
-async function readResponseText(response: IncomingMessage): Promise<string> {
-    const decoder = createStreamDecoder();
-    let output = '';
-    for await (const chunk of response) {
-        output += decoder.decode(chunk);
-    }
-    return output + decoder.flush();
 }
 
 function parseSseFrame(frame: string): unknown | undefined {

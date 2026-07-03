@@ -3,15 +3,10 @@ import {
     GeminiGenerateContentTransportError,
     type GeminiGenerateContentTransportRequest,
 } from './gemini-generate-content-transport.js';
-import { createStreamDecoder } from '../stream-decoder.js';
 
 const ERROR_FIELD = 'error';
 const STATUS_FIELD = 'status';
 const MESSAGE_FIELD = 'message';
-
-import { Buffer } from 'node:buffer';
-import type { IncomingMessage } from 'node:http';
-import { request as httpsRequest } from 'node:https';
 
 export function createNodeGeminiGenerateContentTransport(): GeminiGenerateContentTransport {
     return {
@@ -22,23 +17,37 @@ export function createNodeGeminiGenerateContentTransport(): GeminiGenerateConten
 export async function* streamGeminiGenerateContent(
     input: GeminiGenerateContentTransportRequest,
 ): AsyncIterable<unknown> {
-    const response = await openGeminiResponse(input);
-    if ((response.statusCode ?? 0) >= 400) {
+    const response = await fetch(input.endpoint, {
+        method: 'POST',
+        headers: { ...input.headers, Accept: 'text/event-stream' },
+        body: JSON.stringify(input.body),
+        signal: input.signal,
+    });
+
+    if (!response.ok) {
         throw await transportErrorFromResponse(response);
     }
 
+    const reader = response.body?.getReader();
+    if (reader === undefined) {
+        throw new GeminiGenerateContentTransportError({ kind: 'network', message: 'response body is null' });
+    }
+
+    const decoder = new TextDecoder();
     let buffer = '';
-    const decoder = createStreamDecoder();
-    for await (const chunk of response) {
-        buffer += decoder.decode(chunk);
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
         const consumed = parseGeminiGenerateContentSseEvents(buffer);
         buffer = consumed.remainder;
         for (const event of consumed.events) {
             yield event;
         }
     }
-    buffer += decoder.flush();
 
+    buffer += decoder.decode();
     const final = parseGeminiGenerateContentSseEvents(`${buffer}\n\n`);
     for (const event of final.events) {
         yield event;
@@ -67,47 +76,11 @@ export function parseGeminiGenerateContentSseEvents(text: string): {
     }
 }
 
-function openGeminiResponse(input: GeminiGenerateContentTransportRequest): Promise<IncomingMessage> {
-    return new Promise((resolve, reject) => {
-        const url = new URL(input.endpoint);
-        const body = JSON.stringify(input.body);
-        const request = httpsRequest(
-            url,
-            {
-                method: 'POST',
-                headers: {
-                    ...input.headers,
-                    Accept: 'text/event-stream',
-                    'Content-Length': Buffer.byteLength(body).toString(),
-                },
-            },
-            resolve,
-        );
-        const abort = () => {
-            request.destroy(
-                new GeminiGenerateContentTransportError({ kind: 'abort', message: 'Gemini request aborted' }),
-            );
-        };
-        const fail = (error: Error) => {
-            input.signal.removeEventListener('abort', abort);
-            reject(
-                error instanceof GeminiGenerateContentTransportError
-                    ? error
-                    : new GeminiGenerateContentTransportError({ kind: 'network', message: error.message }),
-            );
-        };
-        request.on('error', fail);
-        request.on('close', () => input.signal.removeEventListener('abort', abort));
-        input.signal.addEventListener('abort', abort, { once: true });
-        request.end(body);
-    });
-}
-
-async function transportErrorFromResponse(response: IncomingMessage): Promise<GeminiGenerateContentTransportError> {
-    const text = await readResponseText(response);
+async function transportErrorFromResponse(response: Response): Promise<GeminiGenerateContentTransportError> {
+    const text = await response.text().catch(() => '');
     const parsed = parseGoogleError(text);
     return new GeminiGenerateContentTransportError({
-        ...(response.statusCode === undefined ? {} : { status: response.statusCode }),
+        status: response.status,
         ...(parsed.code !== undefined ? { code: parsed.code } : {}),
         message: parsed.message ?? text,
     });
@@ -130,15 +103,6 @@ function parseGoogleError(text: string): { readonly code?: string; readonly mess
         throw error;
     }
     return {};
-}
-
-async function readResponseText(response: IncomingMessage): Promise<string> {
-    const decoder = createStreamDecoder();
-    let output = '';
-    for await (const chunk of response) {
-        output += decoder.decode(chunk);
-    }
-    return output + decoder.flush();
 }
 
 function parseSseFrame(frame: string): unknown | undefined {
