@@ -442,6 +442,27 @@ async function resolveInteractiveSdkModel(
     });
 }
 
+const NODE_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
+    'intent-gate': 'Classifying intent',
+    'direct-respond': 'Responding',
+    'research-explore': 'Exploring',
+    'route-planner': 'Planning',
+    'maturity-check': 'Checking maturity',
+    'anti-dup-guard': 'Checking for duplicates',
+    'todo-plan': 'Planning tasks',
+    'delegate-wave': 'Delegating',
+    'delegate-worker': 'Working on task',
+    'verify-wave': 'Verifying',
+    'evidence-check': 'Checking evidence',
+    'supervisor': 'Reviewing progress',
+    'final-respond': 'Composing answer',
+    clarify: 'Asking for clarification',
+};
+
+function formatNodeLabel(nodeId: string): string {
+    return NODE_LABEL_OVERRIDES[nodeId] ?? nodeId.replace(/-/g, ' ');
+}
+
 /**
  * Live signal tap for the interactive graph path. Renders `llm.text.delta` signals to the chat output
  * as they are yielded (before projection), so the TUI streams token-by-token — parity with the flat
@@ -473,6 +494,7 @@ export function interactiveGraphStreamSignal(
                     state.streamingThinking = false;
                 }
                 output.write(`▸ ${signal.nodeId}\n`);
+                output.setAgentStatus?.(`${formatNodeLabel(signal.nodeId)}...`);
                 return;
             }
             if (signal.type === 'failure') {
