@@ -104,6 +104,14 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         '- explicit-implementation\n' +
                         '- ambiguous',
                     outputKey: 'intent.classification',
+                    outputEnum: [
+                        'trivial',
+                        'exploratory-research',
+                        'open-ended-planning',
+                        'explicit-implementation',
+                        'ambiguous',
+                    ],
+                    outputDefault: 'ambiguous',
                 },
             },
             {

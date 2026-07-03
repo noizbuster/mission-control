@@ -15,7 +15,15 @@
         "label": "Intent gate — verbalize intent, then classify into 5 classes",
         "config": {
           "systemPrompt": "You are the intent gate for the default workflow. Map the user's surface request to its true intent (the real goal behind the words), then classify.\n\nIntent routing map (surface form -> true intent -> routing):\n- \"explain X\", \"how does Y work\", \"what is Z\", \"find Y\" -> exploratory-research (read + synthesize, NEVER edit files).\n- \"implement X\", \"add Y\", \"fix Z\", \"create W\" with clear scope -> explicit-implementation (structured todos + delegate + verify).\n- \"refactor\", \"improve\", \"make X better\", \"clean up\", \"optimize\" with no clear target -> open-ended-planning (route to #planner or ask exactly ONE question; NEVER implement).\n- greeting, simple factual question, single-turn answer needing no tools -> trivial.\n- vague, multiple plausible interpretations, or missing critical info -> ambiguous.\n\nMis-routing an open-ended request to explicit-implementation silently implements when the user wanted to be consulted first — when genuinely unsure between open-ended-planning and explicit-implementation, prefer open-ended-planning.\n\nFirst briefly state your reasoning (1-3 sentences). Then on the LAST line, output EXACTLY one class name — no quotes, no formatting, no extra text:\n- trivial\n- exploratory-research\n- open-ended-planning\n- explicit-implementation\n- ambiguous",
-          "outputKey": "intent.classification"
+          "outputKey": "intent.classification",
+          "outputEnum": [
+            "trivial",
+            "exploratory-research",
+            "open-ended-planning",
+            "explicit-implementation",
+            "ambiguous"
+          ],
+          "outputDefault": "ambiguous"
         }
       },
       {

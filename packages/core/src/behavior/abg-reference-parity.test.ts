@@ -347,7 +347,7 @@ describe('abg reference parity: parallel fanOutKey and structured blackboard sta
         const chunks: LanguageModelV3StreamPart[] = [
             { type: 'stream-start', warnings: [] },
             { type: 'text-start', id: 't1' },
-            { type: 'text-delta', id: 't1', delta: '{"class":"explicit"}' },
+            { type: 'text-delta', id: 't1', delta: 'explicit-implementation' },
             { type: 'text-end', id: 't1' },
             {
                 type: 'finish',
@@ -371,7 +371,7 @@ describe('abg reference parity: parallel fanOutKey and structured blackboard sta
 
         await collectSignals(runLlmActorNode(intentGate, context));
 
-        expect(blackboard.get('intent.classification')).toEqual({ class: 'explicit' });
+        expect(blackboard.get('intent.classification')).toBe('explicit-implementation');
     });
 });
 
