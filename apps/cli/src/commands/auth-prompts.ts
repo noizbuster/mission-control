@@ -7,6 +7,7 @@ import {
 } from './auth-provider-keypress.js';
 import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
+import { truncateTerminalText } from './terminal-text.js';
 
 export type AuthPromptOptions = {
     readonly defaultValue?: string;
@@ -222,22 +223,26 @@ async function questionProviderLine(message: string, choices: readonly ProviderP
             }
         }
 
+        function writeRenderedLine(line: string): void {
+            output.write(`${truncateTerminalText(line, output.columns ?? 80)}\n`);
+        }
+
         function render(): void {
             clearPreviousRender();
             const view = createProviderPromptView(keypressState, choices, getVisibleProviderChoiceCount());
-            output.write(`${message}\n`);
-            output.write(`Search: ${view.searchQuery}\n`);
+            writeRenderedLine(message);
+            writeRenderedLine(`Search: ${view.searchQuery}`);
             if (view.totalCount === 0) {
-                output.write('No providers match\n');
+                writeRenderedLine('No providers match');
             } else {
-                output.write(`Showing ${view.startIndex + 1}-${view.endIndex} of ${view.totalCount}\n`);
+                writeRenderedLine(`Showing ${view.startIndex + 1}-${view.endIndex} of ${view.totalCount}`);
             }
             for (const [visibleIndex, choice] of view.visibleChoices.entries()) {
                 const choiceIndex = view.startIndex + visibleIndex;
                 const marker = choiceIndex === view.selectedIndex ? '>' : ' ';
-                output.write(`${marker} ${choiceIndex + 1}. ${choice.name} (${choice.id})\n`);
+                writeRenderedLine(`${marker} ${choiceIndex + 1}. ${choice.name} (${choice.id})`);
             }
-            output.write('Use Up/Down, type to search, Enter to select\n');
+            writeRenderedLine('Use Up/Down, type to search, Enter to select');
             renderedLines = 4 + view.visibleChoices.length;
         }
 
