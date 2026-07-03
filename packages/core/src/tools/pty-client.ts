@@ -1,5 +1,6 @@
 import { type SidecarStreamFrame, validateSidecarStreamFrames } from '@mission-control/protocol';
 import { redactCredentialText } from '../providers/credential-resolver.js';
+import { truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
 
 /**
  * Cumulative output cap mirrored from the Rust `pty.alloc` handler. Applied on
@@ -141,17 +142,5 @@ function takeUtf8Prefix(text: string, maxBytes: number): string {
     if (buf.length <= maxBytes) {
         return text;
     }
-    let cut = maxBytes;
-    while (cut > 0) {
-        const byte = buf[cut];
-        if (byte === undefined) {
-            break;
-        }
-        if ((byte & 0xc0) === 0x80) {
-            cut -= 1;
-        } else {
-            break;
-        }
-    }
-    return buf.subarray(0, cut).toString('utf8');
+    return truncateToValidUtf8Boundary(buf, maxBytes).toString('utf8');
 }

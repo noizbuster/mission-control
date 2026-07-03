@@ -7,6 +7,7 @@ import type {
 } from '@mission-control/protocol';
 import { z } from 'zod';
 import { redactCredentialText } from '../providers/credential-resolver.js';
+import { truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
 import {
     assertTrustedWorkspace,
     buildTrustedBashEnv,
@@ -380,7 +381,7 @@ type CappedText = {
 
 function capText(text: string, maxBytes: number): CappedText {
     const bytes = Buffer.from(text, 'utf8');
-    const capped = bytes.length > maxBytes ? bytes.subarray(0, maxBytes) : bytes;
+    const capped = bytes.length > maxBytes ? truncateToValidUtf8Boundary(bytes, maxBytes) : bytes;
     return {
         text: capped.toString('utf8'),
         truncated: bytes.length > capped.length,
