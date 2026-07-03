@@ -3,6 +3,7 @@ import {
     GeminiGenerateContentTransportError,
     type GeminiGenerateContentTransportRequest,
 } from './gemini-generate-content-transport.js';
+import { createStreamDecoder } from '../stream-decoder.js';
 
 const ERROR_FIELD = 'error';
 const STATUS_FIELD = 'status';
@@ -27,14 +28,16 @@ export async function* streamGeminiGenerateContent(
     }
 
     let buffer = '';
+    const decoder = createStreamDecoder();
     for await (const chunk of response) {
-        buffer += chunkToText(chunk);
+        buffer += decoder.decode(chunk);
         const consumed = parseGeminiGenerateContentSseEvents(buffer);
         buffer = consumed.remainder;
         for (const event of consumed.events) {
             yield event;
         }
     }
+    buffer += decoder.flush();
 
     const final = parseGeminiGenerateContentSseEvents(`${buffer}\n\n`);
     for (const event of final.events) {
@@ -130,11 +133,12 @@ function parseGoogleError(text: string): { readonly code?: string; readonly mess
 }
 
 async function readResponseText(response: IncomingMessage): Promise<string> {
+    const decoder = createStreamDecoder();
     let output = '';
     for await (const chunk of response) {
-        output += chunkToText(chunk);
+        output += decoder.decode(chunk);
     }
-    return output;
+    return output + decoder.flush();
 }
 
 function parseSseFrame(frame: string): unknown | undefined {
@@ -158,16 +162,6 @@ function parseSseFrame(frame: string): unknown | undefined {
         }
         throw error;
     }
-}
-
-function chunkToText(chunk: unknown): string {
-    if (typeof chunk === 'string') {
-        return chunk;
-    }
-    if (Buffer.isBuffer(chunk)) {
-        return chunk.toString('utf8');
-    }
-    return String(chunk);
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

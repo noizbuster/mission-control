@@ -6,6 +6,7 @@ import {
 import { Buffer } from 'node:buffer';
 import type { IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { createStreamDecoder } from '../stream-decoder.js';
 
 export function createNodeOpenAICompatibleTransport(): OpenAICompatibleTransport {
     return {
@@ -26,14 +27,16 @@ export async function* streamOpenAICompatibleChatCompletions(
     }
 
     let buffer = '';
+    const decoder = createStreamDecoder();
     for await (const chunk of response) {
-        buffer += chunkToText(chunk);
+        buffer += decoder.decode(chunk);
         const consumed = parseOpenAICompatibleSseEvents(buffer);
         buffer = consumed.remainder;
         for (const event of consumed.events) {
             yield event;
         }
     }
+    buffer += decoder.flush();
 
     const final = parseOpenAICompatibleSseEvents(`${buffer}\n\n`);
     for (const event of final.events) {
@@ -103,11 +106,12 @@ function openOpenAICompatibleResponse(input: OpenAICompatibleTransportRequest): 
 }
 
 async function readResponseText(response: IncomingMessage): Promise<string> {
+    const decoder = createStreamDecoder();
     let output = '';
     for await (const chunk of response) {
-        output += chunkToText(chunk);
+        output += decoder.decode(chunk);
     }
-    return output;
+    return output + decoder.flush();
 }
 
 function parseSseFrame(frame: string): unknown | undefined {
@@ -131,14 +135,4 @@ function parseSseFrame(frame: string): unknown | undefined {
         }
         throw error;
     }
-}
-
-function chunkToText(chunk: unknown): string {
-    if (typeof chunk === 'string') {
-        return chunk;
-    }
-    if (Buffer.isBuffer(chunk)) {
-        return chunk.toString('utf8');
-    }
-    return String(chunk);
 }
