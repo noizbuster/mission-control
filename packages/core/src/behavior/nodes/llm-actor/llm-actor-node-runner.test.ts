@@ -449,4 +449,66 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         const nonLoopEntries = blackboard.listEntries().filter((entry) => entry.key !== 'llm.loop_active');
         expect(nonLoopEntries).toEqual([]);
     });
+
+    it('persists outputKey and clears loopActive when text parses ALONGSIDE a tool call', async () => {
+        // Regression: previously outputKey was only persisted when `!loopActive`, so a model
+        // that called tools AND emitted its structured output in one turn would spin forever
+        // on the llm-loop-active self-edge. Now a successful parse clears loopActive.
+        const registry = new ToolRegistry();
+        registry.register({
+            name: 'probe',
+            description: 'read-only probe',
+            capabilityClasses: ['read'],
+            parametersJsonSchema: {
+                type: 'object',
+                properties: {},
+                required: [],
+                additionalProperties: false,
+            },
+            inputSchema: z.object({}),
+            outputSchema: z.object({ ok: z.boolean() }),
+            outputLimit: { maxModelOutputChars: 32 },
+            execute: async () => ({ ok: true }),
+        });
+
+        const chunks: LanguageModelV3StreamPart[] = [
+            { type: 'stream-start', warnings: [] },
+            { type: 'text-start', id: 't1' },
+            { type: 'text-delta', id: 't1', delta: '{"classification":"disciplined"}' },
+            { type: 'text-end', id: 't1' },
+            { type: 'tool-input-start', id: 'call_probe', toolName: 'probe' },
+            { type: 'tool-input-delta', id: 'call_probe', delta: '{}' },
+            { type: 'tool-input-end', id: 'call_probe' },
+            { type: 'tool-call', toolCallId: 'call_probe', toolName: 'probe', input: '{}' },
+            { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: buildUsage() },
+        ];
+        const model = new MockLanguageModelV3({
+            provider: 'test',
+            modelId: 'mock-tool-and-text',
+            doStream: async () => ({ stream: convertArrayToReadableStream(chunks) }),
+        });
+
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_tool_plus_output',
+            now: () => NOW,
+            sdkModel: model,
+            blackboard,
+            toolRegistry: registry,
+        };
+        const node = {
+            id: 'maturity-check',
+            kind: 'llm' as const,
+            capabilities: ['read'],
+            config: { outputKey: 'explore.maturity' },
+        };
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        // The structured output was parsed and persisted even though the turn also called a tool.
+        expect(blackboard.get('explore.maturity')).toEqual({ classification: 'disciplined' });
+        // loopActive was cleared so the llm-loop-active self-edge does NOT fire and the graph
+        // advances to the next node.
+        expect(blackboard.get('llm.loop_active')).toBe(false);
+    });
 });

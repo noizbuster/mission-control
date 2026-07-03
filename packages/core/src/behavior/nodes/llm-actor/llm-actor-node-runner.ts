@@ -178,12 +178,12 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
     // (otherwise the rule-gated self-edge would spin re-entering until maxNodeRuns). It is
     // derived from THIS turn's tool-call proposals — what the model decided this step — not
     // from response.messages roles, so it is robust to how the SDK shapes response.messages.
-    const loopActive = turnResult !== undefined && proposedToolCalls > 0;
+    let loopActive = turnResult !== undefined && proposedToolCalls > 0;
     blackboard.set('llm.loop_active', loopActive);
     if (turnResult !== undefined) {
         blackboard.appendMessages(turnResult.responseMessages);
         const outputKey = readStringConfig(node, 'outputKey');
-        if (outputKey !== undefined && !loopActive) {
+        if (outputKey !== undefined) {
             const outputResult: ParseStructuredOutputResult =
                 turnResult.text.trim().length > 0
                     ? parseStructuredOutput(turnResult.text, readOutputShape(node))
@@ -198,10 +198,22 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
                     timestamp: context.now(),
                     payload: { key: outputKey, value: outputResult.value },
                 });
-            } else {
-                // FAIL CLOSED: invalid structured output for a declared outputKey. Do not
-                // persist a partial/garbage value; surface a node failure so the graph can
-                // route to a fallback instead of routing on bad data.
+                // If the model produced valid structured output ALONGSIDE tool calls, clear
+                // loopActive so the graph advances past this node instead of spinning on the
+                // self-edge. Previously the outputKey was only persisted when loopActive was
+                // already false, so a model that called tools AND emitted its classification
+                // in one turn would loop forever (bounded only by maxNodeRuns).
+                if (loopActive) {
+                    loopActive = false;
+                    blackboard.set('llm.loop_active', false);
+                }
+            } else if (!loopActive) {
+                // FAIL CLOSED: invalid structured output for a declared outputKey on a turn
+                // that did NOT request another tool loop. Do not persist a partial/garbage
+                // value; surface a node failure so the graph can route to a fallback.
+                // When loopActive is true, leave the loop running so the model gets another
+                // chance to produce valid output on the next re-entry (the loop-active cap
+                // from the coordinator still bounds the total number of retries).
                 yield {
                     type: 'failure',
                     nodeId,
