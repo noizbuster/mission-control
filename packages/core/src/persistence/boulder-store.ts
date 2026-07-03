@@ -14,7 +14,7 @@ export type BoulderWorkStatus = (typeof boulderWorkStatuses)[number];
 export const taskSessionStatuses = ['pending', 'running', 'completed', 'failed', 'cancelled'] as const;
 export type TaskSessionStatus = (typeof taskSessionStatuses)[number];
 
-export const sessionOrigins = ['direct', 'appended'] as const;
+export const sessionOrigins = ['direct', 'appended', 'descendant'] as const;
 export type SessionOrigin = (typeof sessionOrigins)[number];
 
 /**
@@ -39,6 +39,12 @@ export const TaskSessionSchema = z
 
 export type TaskSession = z.infer<typeof TaskSessionSchema>;
 
+export const RunnerStopMarkerSchema = z.object({
+    stopped_at: z.string().min(1),
+    stopped_reason: z.string(),
+});
+export type RunnerStopMarker = z.infer<typeof RunnerStopMarkerSchema>;
+
 /**
  * Runtime schema for a single boulder work entry. `passthrough` preserves
  * fields the orchestrator may add without forcing a schema bump here, since
@@ -56,6 +62,7 @@ export const BoulderWorkSchema = z
         session_origins: z.record(z.string().min(1), z.enum(sessionOrigins)),
         agent: z.string().optional(),
         task_sessions: z.record(z.string().min(1), TaskSessionSchema).optional(),
+        runner_stop: RunnerStopMarkerSchema.optional(),
         ended_at: z.string().optional(),
         elapsed_ms: z.number().nonnegative().optional(),
     })

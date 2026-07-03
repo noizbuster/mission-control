@@ -25,8 +25,7 @@ import { AgentIndex } from '../agents/agent-registry.js';
 import { BUNDLED_AGENT_TEMPLATES } from '../agents/bundled/index.js';
 import { type ModelPattern, resolveAgentModel } from '../agents/model-resolver.js';
 import { type ModelRole, parseModelAlias } from '../agents/model-roles.js';
-import { ConcreteTaskToolRuntime, type SpawnFn, type TaskToolRuntimeServices } from '../agents/task-tool-runtime.js';
-import { spawnChildCodingAgent } from '../behavior/subagents/spawn-child.js';
+import { ConcreteTaskToolRuntime, type TaskToolRuntimeServices } from '../agents/task-tool-runtime.js';
 import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
 import {
     createFullParityTaskToolRegistration,
@@ -111,24 +110,6 @@ export async function createFullParityTaskToolRegistrationForCli(
         source: 'bundled',
     };
     const resolveModel = buildResolveModelFn(options);
-    const spawnFn: SpawnFn = async (context) => {
-        const modelOptions: AbgNodeModelOptions = {
-            providerID: context.model.providerID,
-            modelID: context.model.modelID,
-            ...(context.model.variantID !== undefined ? { variantID: context.model.variantID } : {}),
-        };
-        const taskOutput = await spawnChildCodingAgent({
-            description: context.agent.name,
-            prompt: context.prompt,
-            resolveSdkModel: options.resolveSdkModel,
-            model: modelOptions,
-            parentToolRegistry: context.childToolRegistry,
-            now: () => new Date().toISOString(),
-            sessionId: context.sessionId,
-            ...(options.summaryLimit !== undefined ? { summaryLimit: options.summaryLimit } : {}),
-        });
-        return { sessionId: context.sessionId, status: taskOutput.status, output: taskOutput.summary };
-    };
 
     const base = createFullParityTaskToolRegistration({
         runtime: new ConcreteTaskToolRuntime({
@@ -137,7 +118,8 @@ export async function createFullParityTaskToolRegistrationForCli(
             workspaceRoot: options.workspaceRoot,
             parentToolRegistry: options.parentToolRegistry,
             parentAgent,
-            spawnFn,
+            resolveSdkModel: options.resolveSdkModel,
+            ...(options.summaryLimit !== undefined ? { summaryLimit: options.summaryLimit } : {}),
             ...(options.services !== undefined ? { services: options.services } : {}),
         }),
     });

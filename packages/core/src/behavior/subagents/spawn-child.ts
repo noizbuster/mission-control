@@ -37,14 +37,36 @@ export type SpawnChildInput = {
     /** Unique session id for the child run (caller-supplied for determinism/testability). */
     readonly sessionId: string;
     readonly summaryLimit?: number;
+    /**
+     * Pre-built child tool registry from `ConcreteTaskToolRuntime.buildChildToolSurface`
+     * (already drops `task`/`job`, adds `yield`, filters denied capabilities). When
+     * provided, `createChildToolRegistry` is SKIPPED — the resolved surface is trusted
+     * as-is so child identity is not double-derived.
+     */
+    readonly childToolRegistry?: ToolRegistry;
+    /**
+     * Child system prompt built from the agent body (delegation directive + role +
+     * agent systemPrompt + parent context). When provided, it is injected into the
+     * coding-agent graph's `llm-actor` node config so the child operates under its
+     * OWN identity, not the generic parent persona.
+     */
+    readonly systemPrompt?: string;
 };
 
 /** Build + run the child graph and return its outcome as a `TaskOutput`. */
 export async function spawnChildCodingAgent(input: SpawnChildInput): Promise<TaskOutput> {
-    const childToolRegistry = createChildToolRegistry(input.parentToolRegistry);
+    const childToolRegistry = input.childToolRegistry ?? createChildToolRegistry(input.parentToolRegistry);
+
+    const graph = createCodingAgentGraph({ model: input.model });
+    if (input.systemPrompt !== undefined) {
+        const node = graph.nodes[0];
+        if (node !== undefined) {
+            node.config = { ...(node.config ?? {}), systemPrompt: input.systemPrompt };
+        }
+    }
 
     const result = await runAbgGraph({
-        graph: createCodingAgentGraph({ model: input.model }),
+        graph,
         sessionId: input.sessionId,
         now: input.now,
         modelProviderSelection: input.model,

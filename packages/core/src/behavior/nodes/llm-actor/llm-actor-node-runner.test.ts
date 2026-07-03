@@ -294,3 +294,159 @@ describe('runLlmActorNode — system prompt threading', () => {
         }
     });
 });
+
+describe('runLlmActorNode — outputKey structured-output persistence', () => {
+    function textChunks(text: string): LanguageModelV3StreamPart[] {
+        return [
+            { type: 'stream-start', warnings: [] },
+            { type: 'text-start', id: 't1' },
+            { type: 'text-delta', id: 't1', delta: text },
+            { type: 'text-end', id: 't1' },
+            { type: 'finish', finishReason: { unified: 'stop', raw: undefined }, usage: buildUsage() },
+        ];
+    }
+
+    function modelReturning(text: string): MockLanguageModelV3 {
+        return new MockLanguageModelV3({
+            provider: 'test',
+            modelId: 'mock-output',
+            doStream: async () => ({ stream: convertArrayToReadableStream(textChunks(text)) }),
+        });
+    }
+
+    function seedBlackboard(): ReturnType<typeof createBlackboard> {
+        const blackboard = createBlackboard();
+        blackboard.appendMessages([{ role: 'user', content: 'ping' }] as readonly ModelMessage[]);
+        return blackboard;
+    }
+
+    it('persists a bare JSON object to the declared outputKey', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_obj',
+            now: () => NOW,
+            sdkModel: modelReturning('{"class":"explicit"}'),
+            blackboard,
+        };
+        const node = { id: 'gate', kind: 'llm', config: { outputKey: 'intent.classification' } } as const;
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.get('intent.classification')).toEqual({ class: 'explicit' });
+    });
+
+    it('persists a json-fenced array to the declared outputKey', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_fenced',
+            now: () => NOW,
+            sdkModel: modelReturning('```json\n[{"task":"a"},{"task":"b"}]\n```'),
+            blackboard,
+        };
+        const node = { id: 'planner', kind: 'llm', config: { outputKey: 'wave.tasks' } } as const;
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.get('wave.tasks')).toEqual([{ task: 'a' }, { task: 'b' }]);
+    });
+
+    it('persists a plain boolean string as a real boolean', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_bool',
+            now: () => NOW,
+            sdkModel: modelReturning('true'),
+            blackboard,
+        };
+        const node = { id: 'verify', kind: 'llm', config: { outputKey: 'verify.complete' } } as const;
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.get('verify.complete')).toBe(true);
+    });
+
+    it('persists a plain single-line string (backwards compat)', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_str',
+            now: () => NOW,
+            sdkModel: modelReturning('explicit'),
+            blackboard,
+        };
+        const node = { id: 'gate', kind: 'llm', config: { outputKey: 'intent.classification' } } as const;
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.get('intent.classification')).toBe('explicit');
+    });
+
+    it('fails closed on invalid structured output without writing the blackboard', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_fail',
+            now: () => NOW,
+            sdkModel: modelReturning('{"class":"explicit"'),
+            blackboard,
+        };
+        const node = { id: 'gate', kind: 'llm', config: { outputKey: 'intent.classification' } } as const;
+
+        const signals = await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.has('intent.classification')).toBe(false);
+        const failure = signals.find((signal) => signal.type === 'failure');
+        expect(failure).toBeDefined();
+        expect(failure).toMatchObject({ type: 'failure', error: { code: 'invalid_structured_output' } });
+    });
+
+    it('fails closed when outputShape does not match the parsed value', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_shape',
+            now: () => NOW,
+            sdkModel: modelReturning('hello'),
+            blackboard,
+        };
+        const node = {
+            id: 'gate',
+            kind: 'llm',
+            config: { outputKey: 'intent.classification', outputShape: 'object' },
+        } as const;
+
+        const signals = await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.has('intent.classification')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
+    });
+
+    it('writes true for no-text turns (completion signal backwards compat)', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_empty',
+            now: () => NOW,
+            sdkModel: modelReturning(''),
+            blackboard,
+        };
+        const node = { id: 'wave', kind: 'llm', config: { outputKey: 'wave.complete' } } as const;
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.get('wave.complete')).toBe(true);
+    });
+
+    it('leaves the blackboard untouched for nodes without an outputKey', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_nokey',
+            now: () => NOW,
+            sdkModel: modelReturning('{"k":1}'),
+            blackboard,
+        };
+        const node = { id: 'plain', kind: 'llm' } as const;
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.has('llm.loop_active')).toBe(true);
+        const nonLoopEntries = blackboard.listEntries().filter((entry) => entry.key !== 'llm.loop_active');
+        expect(nonLoopEntries).toEqual([]);
+    });
+});

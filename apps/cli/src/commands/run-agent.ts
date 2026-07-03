@@ -56,6 +56,7 @@ import {
 } from './run-agent-graph-prompt.js';
 import { runOwnerPrompt } from './run-agent-owner-prompt.js';
 import { createRunEventRecorder } from './run-agent-session.js';
+import { graphForDefaultFallback, graphForWorkflowSpec } from './workflow-materialization.js';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
@@ -194,9 +195,16 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
             const available = names.length === 0 ? '(none discovered)' : names.slice(0, 20).join(', ');
             throw new Error(`Unknown workflow "${workflowInvocation.name}". Available workflows: ${available}.`);
         }
-        workflowGraph = spec.graph;
+        workflowGraph = graphForWorkflowSpec(spec);
         workflowSpec = spec;
         effectivePrompt = workflowInvocation.prompt;
+    } else if (graph === undefined && effectivePrompt !== undefined) {
+        // Plain-prompt default fallback: `--graph` and `#name`/`--workflow` bypass this.
+        const registry = await discoverWorkflowRegistry(workspaceRoot);
+        const fallbackGraph = graphForDefaultFallback(registry);
+        if (fallbackGraph !== undefined) {
+            workflowGraph = fallbackGraph;
+        }
     }
     const workflowRun = await beginNoninteractiveWorkflowRun(workspaceRoot, workflowSpec);
     try {
@@ -330,12 +338,17 @@ function shouldRunInteractiveChat(args: CliArgs, graph: AbgGraphSpec | undefined
 
 const WORKFLOW_NAME_PATTERN = /^[A-Za-z0-9_.:/-]+$/;
 
-type WorkflowInvocation = {
+export type WorkflowInvocation = {
     readonly name: string;
     readonly prompt: string;
 };
 
-function resolveWorkflowInvocation(args: CliArgs): WorkflowInvocation | undefined {
+export type WorkflowInvocationInput = {
+    readonly workflowName?: string;
+    readonly prompt?: string;
+};
+
+export function resolveWorkflowInvocation(args: WorkflowInvocationInput): WorkflowInvocation | undefined {
     if (args.workflowName !== undefined) {
         return { name: args.workflowName, prompt: args.prompt ?? '' };
     }

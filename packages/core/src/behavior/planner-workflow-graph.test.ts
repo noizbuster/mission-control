@@ -36,15 +36,24 @@ describe('createPlannerWorkflowGraph', () => {
         expect(nodeIds).toContain('intake');
     });
 
-    it('routes from assess-ambiguity to exactly 3 ambiguity paths (clear, unclear, on-the-fence)', () => {
+    it('routes from assess-ambiguity to exactly 3 ambiguity paths (clear->explore-filter, unclear->research, on-the-fence->ask-one-question)', () => {
         const graph = createPlannerWorkflowGraph();
         const targets = graph.edges.filter((edge) => edge.source === 'assess-ambiguity').map((edge) => edge.target);
         const uniqueTargets = new Set(targets);
 
         expect(uniqueTargets.size).toBe(3);
-        expect(uniqueTargets).toContain('explore');
+        expect(uniqueTargets).toContain('explore-filter');
         expect(uniqueTargets).toContain('research');
         expect(uniqueTargets).toContain('ask-one-question');
+    });
+
+    it('routes the clear branch through explore-filter (needs-exploration vs direct-draft)', () => {
+        const graph = createPlannerWorkflowGraph();
+        const targets = graph.edges.filter((edge) => edge.source === 'explore-filter').map((edge) => edge.target);
+        const uniqueTargets = new Set(targets);
+
+        expect(uniqueTargets).toContain('explore');
+        expect(uniqueTargets).toContain('draft-plan');
     });
 
     it('uses llm node kind and critic implementation', () => {
@@ -68,18 +77,37 @@ describe('createPlannerWorkflowGraph', () => {
         expect(reviewPlan?.config?.['outputKey']).toBe('plan.approved');
     });
 
-    it('has a critic retry loop: review-plan -> draft-plan on rejection and review-plan -> present on approval', () => {
+    it('has a draft -> review -> approval-gate lifecycle with a critic retry loop', () => {
         const graph = createPlannerWorkflowGraph();
         const fromReview = graph.edges.filter((edge) => edge.source === 'review-plan');
 
         const targets = fromReview.map((edge) => edge.target);
-        expect(targets).toContain('present');
+        expect(targets).toContain('approval-gate');
         expect(targets).toContain('draft-plan');
 
-        const approvedEdge = fromReview.find((edge) => edge.target === 'present');
+        const approvedEdge = fromReview.find((edge) => edge.target === 'approval-gate');
         const rejectedEdge = fromReview.find((edge) => edge.target === 'draft-plan');
         expect(approvedEdge?.condition).toBe('plan-approved');
         expect(rejectedEdge?.condition).toBe('plan-rejected');
+    });
+
+    it('gates the final plan write behind an approval gate (plan.ready) then routes to present', () => {
+        const graph = createPlannerWorkflowGraph();
+        const fromApproval = graph.edges.filter((edge) => edge.source === 'approval-gate');
+
+        const targets = fromApproval.map((edge) => edge.target);
+        expect(targets).toContain('write-plan');
+        expect(targets).toContain('approval-gate');
+
+        const readyEdge = fromApproval.find((edge) => edge.target === 'write-plan');
+        const awaitingEdge = fromApproval.find((edge) => edge.target === 'approval-gate');
+        expect(readyEdge?.condition).toBe('plan-ready');
+        expect(awaitingEdge?.condition).toBe('plan-awaiting-approval');
+
+        const writePlanToPresent = graph.edges.find(
+            (edge) => edge.source === 'write-plan' && edge.target === 'present',
+        );
+        expect(writePlanToPresent?.condition).toBe('plan-written');
     });
 
     it('keeps the graph bounded at 15 nodes or fewer', () => {

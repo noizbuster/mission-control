@@ -182,6 +182,8 @@ export {
     RunSchema,
     type RunStatus,
     RunStatusSchema,
+    type TaskRetryState,
+    TaskRetryStateSchema,
 } from './mission-run.js';
 export {
     type Mode,

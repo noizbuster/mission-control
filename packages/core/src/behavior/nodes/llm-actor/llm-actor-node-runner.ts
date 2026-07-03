@@ -28,6 +28,11 @@ import type { Blackboard } from '../../../memory/blackboard.js';
 import { discoverSkills } from '../../../skills/skill-loader.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../../node-registry.js';
+import {
+    type ParseStructuredOutputResult,
+    parseStructuredOutput,
+    type StructuredOutputShape,
+} from '../../structured-blackboard.js';
 import { bridgeAdvertisementsToAiSdk, createAbgToolSettlementLedger } from './abg-tool-bridge.js';
 import { type LlmActorTurnResult, runLlmActor } from './llm-actor-node.js';
 
@@ -179,16 +184,35 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         blackboard.appendMessages(turnResult.responseMessages);
         const outputKey = readStringConfig(node, 'outputKey');
         if (outputKey !== undefined && !loopActive) {
-            const outputValue = turnResult.text.length > 0 ? extractOutputValue(turnResult.text, outputKey) : true;
-            blackboard.set(outputKey, outputValue);
-            yield createAbgEmitSignal({
-                graphId: context.graphId,
-                nodeId,
-                source: 'llm-actor',
-                eventType: 'blackboard.set',
-                timestamp: context.now(),
-                payload: { key: outputKey, value: outputValue },
-            });
+            const outputResult: ParseStructuredOutputResult =
+                turnResult.text.trim().length > 0
+                    ? parseStructuredOutput(turnResult.text, readOutputShape(node))
+                    : { ok: true, value: true };
+            if (outputResult.ok) {
+                blackboard.set(outputKey, outputResult.value);
+                yield createAbgEmitSignal({
+                    graphId: context.graphId,
+                    nodeId,
+                    source: 'llm-actor',
+                    eventType: 'blackboard.set',
+                    timestamp: context.now(),
+                    payload: { key: outputKey, value: outputResult.value },
+                });
+            } else {
+                // FAIL CLOSED: invalid structured output for a declared outputKey. Do not
+                // persist a partial/garbage value; surface a node failure so the graph can
+                // route to a fallback instead of routing on bad data.
+                yield {
+                    type: 'failure',
+                    nodeId,
+                    ...graphIdPart,
+                    error: {
+                        code: 'invalid_structured_output',
+                        message: `invalid structured output for outputKey ${outputKey}: ${outputResult.error}`,
+                    },
+                };
+                return;
+            }
         }
         // Price this turn's usage and surface `policy.budget.*` events when a ledger is wired
         // (ABG §11.4). The graph can route `policy.budget.exceeded` to an escalate/abort node.
@@ -222,13 +246,12 @@ function readStringConfig(node: AbgNodeSpec, key: string): string | undefined {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-function extractOutputValue(text: string, _outputKey: string): unknown {
-    const trimmed = text.trim();
-    const firstLine = (trimmed.split('\n')[0] ?? trimmed).trim();
-    const lower = firstLine.toLowerCase();
-    if (lower === 'true') return true;
-    if (lower === 'false') return false;
-    return firstLine;
+function readOutputShape(node: AbgNodeSpec): StructuredOutputShape {
+    const value = readStringConfig(node, 'outputShape');
+    if (value === 'object' || value === 'array' || value === 'boolean' || value === 'string' || value === 'any') {
+        return value;
+    }
+    return 'any';
 }
 
 /**

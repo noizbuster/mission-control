@@ -13,7 +13,7 @@
  *   terminal states (completed | failed | cancelled) have no outgoing edges.
  */
 
-import { type Run, type RunCost, RunSchema, type RunStatus } from '@mission-control/protocol';
+import { type Run, type RunCost, RunSchema, type RunStatus, type TaskRetryState } from '@mission-control/protocol';
 import { OmoPersistenceError, omoFilePath } from '../../persistence/paths.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
@@ -72,6 +72,8 @@ export type RunPatch = {
     readonly sessionId?: string;
     readonly graphId?: string;
     readonly attempt?: number;
+    readonly childSessionIds?: readonly string[];
+    readonly taskRetryState?: Readonly<Record<string, TaskRetryState>>;
 };
 
 export function runFilePath(root: string, runId: string): string {
@@ -144,7 +146,14 @@ export async function updateRunStatus(
 
     const next: Run = {
         ...existing,
-        ...patch,
+        ...(patch.cost !== undefined ? { cost: patch.cost } : {}),
+        ...(patch.model !== undefined ? { model: patch.model } : {}),
+        ...(patch.terminalReason !== undefined ? { terminalReason: patch.terminalReason } : {}),
+        ...(patch.sessionId !== undefined ? { sessionId: patch.sessionId } : {}),
+        ...(patch.graphId !== undefined ? { graphId: patch.graphId } : {}),
+        ...(patch.attempt !== undefined ? { attempt: patch.attempt } : {}),
+        ...(patch.childSessionIds !== undefined ? { childSessionIds: [...patch.childSessionIds] } : {}),
+        ...(patch.taskRetryState !== undefined ? { taskRetryState: { ...patch.taskRetryState } } : {}),
         status,
         ...(status === 'running' && existing.startedAt === undefined ? { startedAt: now } : {}),
         ...(TERMINAL_RUN_STATUSES.has(status) ? { endedAt: now } : {}),
@@ -205,6 +214,36 @@ export function assertRunTransition(from: RunStatus, to: RunStatus): void {
     if (!allowed.includes(to)) {
         throw new MissionRunTransitionError(`Invalid run status transition: ${from} -> ${to}`, from, to);
     }
+}
+
+export async function appendChildSession(root: string, runId: string, childSessionId: string): Promise<Run> {
+    const existing = await readRun(root, runId);
+    const existingChildren = existing.childSessionIds ?? [];
+    if (existingChildren.includes(childSessionId)) {
+        return existing;
+    }
+    const validated = RunSchema.parse({
+        ...existing,
+        childSessionIds: [...existingChildren, childSessionId],
+    });
+    await atomicWriteJson(runFilePath(root, runId), validated);
+    return validated;
+}
+
+export async function recordTaskRetry(root: string, runId: string, taskKey: string, sessionId: string): Promise<Run> {
+    const existing = await readRun(root, runId);
+    const current = existing.taskRetryState ?? {};
+    const priorEntry = current[taskKey];
+    const nextEntry: TaskRetryState = {
+        retryCount: (priorEntry?.retryCount ?? 0) + 1,
+        lastSessionId: sessionId,
+    };
+    const validated = RunSchema.parse({
+        ...existing,
+        taskRetryState: { ...current, [taskKey]: nextEntry },
+    });
+    await atomicWriteJson(runFilePath(root, runId), validated);
+    return validated;
 }
 
 async function atomicWriteJson(filePath: string, value: unknown): Promise<void> {

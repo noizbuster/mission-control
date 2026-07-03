@@ -13,11 +13,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore } from '../auth-store.js';
 import { createCliProviderForSelection, runAgent } from './run-agent.js';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const LOCAL_SELECTION: ModelProviderSelection = { providerID: 'local', modelID: 'local-echo' };
+const PRODUCTION_DEFAULT_FIXTURE = `${process.cwd()}/examples/abg/default.workflow.json`;
 
 const TEST_WORKFLOW_SPEC = {
     name: 'test',
@@ -175,5 +176,86 @@ describe('workflow dispatch end-to-end', () => {
         expect(registry.lookup('nonexistent')).toBeUndefined();
         expect(registry.names()).toContain('test');
         expect(registry.names()).toContain('default');
+    });
+});
+
+describe('default workflow (production fixture) end-to-end', () => {
+    let workspaceDir: string;
+    let configDir: string;
+    let provider: ProviderAdapter;
+
+    beforeEach(async () => {
+        workspaceDir = await mkdtemp(join(tmpdir(), 'mctrl-default-prod-ws-'));
+        const workflowsDir = join(workspaceDir, '.mctrl', 'workflows');
+        await mkdir(workflowsDir, { recursive: true });
+        const fixture = await readFile(PRODUCTION_DEFAULT_FIXTURE, 'utf8');
+        await writeFile(join(workflowsDir, 'default.workflow.json'), fixture, 'utf8');
+        configDir = await mkdtemp(join(tmpdir(), 'mctrl-default-prod-cfg-'));
+        vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
+        provider = createLocalProvider();
+    });
+
+    afterEach(async () => {
+        vi.unstubAllEnvs();
+        await rm(workspaceDir, { recursive: true, force: true });
+        await rm(configDir, { recursive: true, force: true });
+    });
+
+    it('discovers the production default workflow with the 5-class intent-gate entry node', async () => {
+        const result = await discoverWorkflows({
+            workspaceRoot: workspaceDir,
+            userConfigDir: configDir,
+        });
+
+        expect(result.diagnostics).toEqual([]);
+        const registry = new WorkflowRegistry(result.workflows);
+        const spec = registry.lookup('default');
+        expect(spec?.graph.id).toBe('default');
+        expect(spec?.graph.entryNodeId).toBe('intent-gate');
+        const intentGate = spec?.graph.nodes.find((node) => node.id === 'intent-gate');
+        const outputKey = 'outputKey';
+        expect(intentGate?.config?.[outputKey]).toBe('intent.classification');
+    });
+
+    it('dispatches a plain prompt (no #) through the default workflow graph', async () => {
+        const output = await runAgent(buildArgs('explain how the build works', 'json'), {
+            provider,
+            workspaceRoot: workspaceDir,
+        });
+        const events = parseJsonEvents(output);
+
+        expect(events.some((event) => event.type === 'graph.started' && event.abg?.graphId === 'default')).toBe(true);
+        expect(events.some((event) => event.type === 'graph.completed')).toBe(true);
+        expect(events.some((event) => event.type === 'task.completed')).toBe(true);
+    });
+
+    it('the production default graph runs the intent-gate entry node', async () => {
+        const output = await runAgent(buildArgs('hello', 'json'), {
+            provider,
+            workspaceRoot: workspaceDir,
+        });
+        const events = parseJsonEvents(output);
+
+        expect(events.some((event) => event.type === 'model.call.started' && event.abg?.nodeId === 'intent-gate')).toBe(
+            true,
+        );
+    });
+
+    it('the production default graph carries the new richness nodes (research-explore, route-planner, evidence-check)', async () => {
+        const result = await discoverWorkflows({
+            workspaceRoot: workspaceDir,
+            userConfigDir: configDir,
+        });
+        const registry = new WorkflowRegistry(result.workflows);
+        const spec = registry.lookup('default');
+        expect(spec).toBeDefined();
+        if (spec === undefined) return;
+
+        const nodeIds = new Set(spec.graph.nodes.map((node) => node.id));
+        expect(nodeIds.has('research-explore')).toBe(true);
+        expect(nodeIds.has('route-planner')).toBe(true);
+        expect(nodeIds.has('anti-dup-guard')).toBe(true);
+        expect(nodeIds.has('evidence-check')).toBe(true);
+        expect(nodeIds.has('maturity-check')).toBe(true);
     });
 });

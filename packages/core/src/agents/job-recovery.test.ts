@@ -159,4 +159,49 @@ describe('recoverJobs', () => {
         // Then
         expect(report).toEqual({ recovered: 0, cancelled: 0, preserved: 0 });
     });
+
+    it('is idempotent: a second recoverJobs call preserves all jobs unchanged', async () => {
+        // Given: 2 active jobs + 1 completed
+        const jobsDir = makeTempDir();
+        await persistJob(jobsDir, sampleHandle({ jobId: 'job_a', status: 'running' }));
+        await persistJob(jobsDir, sampleHandle({ jobId: 'job_b', status: 'queued' }));
+        await persistJob(
+            jobsDir,
+            sampleHandle({
+                jobId: 'job_c',
+                status: 'completed',
+                result: { status: 'completed', output: 'done' },
+                completedAt: '2026-06-22T00:01:00.000Z',
+            }),
+        );
+
+        // When: first recovery
+        const firstReport = await recoverJobs(jobsDir);
+        expect(firstReport).toEqual({ recovered: 3, cancelled: 2, preserved: 1 });
+
+        // When: second recovery — all jobs are now terminal
+        const secondReport = await recoverJobs(jobsDir);
+
+        // Then: nothing was re-cancelled or re-executed
+        expect(secondReport).toEqual({ recovered: 3, cancelled: 0, preserved: 3 });
+    });
+
+    it('does not auto-reexecute: no new job files created after recovery', async () => {
+        // Given
+        const jobsDir = makeTempDir();
+        await persistJob(jobsDir, sampleHandle({ jobId: 'job_active', status: 'running' }));
+
+        // When
+        const { readdir } = await import('node:fs/promises');
+        const filesBefore = (await readdir(jobsDir)).length;
+        await recoverJobs(jobsDir);
+        const filesAfter = (await readdir(jobsDir)).length;
+
+        // Then: same number of files — recovery modifies in-place, never creates new jobs
+        expect(filesAfter).toBe(filesBefore);
+
+        // And: the recovered job is cancelled (not running)
+        const [loaded] = await loadPersistedJobs(jobsDir);
+        expect(loaded?.status).toBe('cancelled');
+    });
 });

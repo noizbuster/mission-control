@@ -88,6 +88,18 @@ export const RunCostSchema = z.object({
 });
 export type RunCost = z.infer<typeof RunCostSchema>;
 
+/**
+ * Per-task retry state tracked on a Run. Each plan task gets its own entry keyed
+ * by task key. When verification fails and the task is retried, `retryCount`
+ * increments and `lastSessionId` records the child session to resume from (so
+ * the child resumes with full context, not a fresh session).
+ */
+export const TaskRetryStateSchema = z.object({
+    retryCount: z.number().int().nonnegative(),
+    lastSessionId: z.string().min(1).optional(),
+});
+export type TaskRetryState = z.infer<typeof TaskRetryStateSchema>;
+
 export const RunSchema = z.object({
     id: z.string().min(1),
     missionId: z.string().min(1),
@@ -109,6 +121,10 @@ export const RunSchema = z.object({
     childAgentId: z.string().min(1).optional(),
     /** The agent kind for a child run. */
     childKind: z.enum(['main', 'sub', 'advisor']).optional(),
+    /** Child session lineage: session ids of every child task spawned by this Run. */
+    childSessionIds: z.array(z.string().min(1)).optional(),
+    /** Per-task retry state keyed by task key. Carries retry count + last child session. */
+    taskRetryState: z.record(z.string().min(1), TaskRetryStateSchema).optional(),
 });
 export type Run = z.infer<typeof RunSchema>;
 

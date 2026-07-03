@@ -17,6 +17,7 @@
  */
 
 import type { AgentDefinition, PolicyEffectRule } from '@mission-control/protocol';
+import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
 import { JOB_TOOL_NAME } from '../tools/job-tool.js';
 import type {
     ChildSpawnRequest,
@@ -30,6 +31,7 @@ import { ToolExecutionError } from '../tools/tool-registry-types.js';
 import { createYieldToolRegistration } from '../tools/yield-tool/yield-tool.js';
 import type { AgentIndex } from './agent-registry.js';
 import type { AsyncJobManager, JobExecuteFn } from './async-job-manager.js';
+import { createChildGraphSpawnFn, defaultSpawnFn, hasHardDroppedCapability } from './child-graph-spawn.js';
 import type { AgentLifecycleManager } from './lifecycle-manager.js';
 import { type ModelPattern } from './model-resolver.js';
 import { deriveChildPathPolicies, evaluatePathPolicies } from './path-policy-derive.js';
@@ -76,14 +78,28 @@ export interface ConcreteTaskToolRuntimeOptions {
     readonly parentAgent: AgentDefinition;
     readonly spawnFn?: SpawnFn;
     readonly services?: TaskToolRuntimeServices;
+    /**
+     * SDK model resolver for the default graph-runner spawn path. When `spawnFn` is
+     * absent and this is present, the runtime builds a real child execution via
+     * {@linkcode createChildGraphSpawnFn}. When both are absent the runtime rejects
+     * (pure-test mode without a real provider).
+     */
+    readonly resolveSdkModel?: SdkModelResolver;
+    readonly summaryLimit?: number;
 }
 
 const NO_SERVICES_MESSAGE =
     'startBackgroundSession: background services not yet implemented (inject MissionControlServices to enable)';
 
-function defaultSpawnFn(context: ChildSpawnContext): Promise<ChildSpawnResult> {
-    void context;
-    return Promise.reject(new Error('spawnFn not wired: real graph runner is todo 25'));
+function resolveSpawnFn(options: ConcreteTaskToolRuntimeOptions): SpawnFn {
+    if (options.spawnFn !== undefined) return options.spawnFn;
+    if (options.resolveSdkModel !== undefined) {
+        return createChildGraphSpawnFn({
+            resolveSdkModel: options.resolveSdkModel,
+            ...(options.summaryLimit !== undefined ? { summaryLimit: options.summaryLimit } : {}),
+        });
+    }
+    return defaultSpawnFn;
 }
 
 export class ConcreteTaskToolRuntime implements TaskToolRuntime {
@@ -101,7 +117,7 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
         this.workspaceRoot = options.workspaceRoot;
         this.parentToolRegistry = options.parentToolRegistry;
         this.parentAgent = options.parentAgent;
-        this.spawnFn = options.spawnFn ?? defaultSpawnFn;
+        this.spawnFn = resolveSpawnFn(options);
         this.services = options.services;
     }
 
@@ -212,11 +228,10 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
         const pathPolicies = deriveChildPathPolicies(this.parentAgent, child);
 
         const registry = this.parentToolRegistry.cloneWithFilter(
-            // `task`: registry-layer recursion guard (ABG section 10.6). `job`: parent-only
-            // background-job controller — children must not operate the parent's job manager.
             (ad) =>
                 ad.name !== TASK_TOOL_NAME &&
                 ad.name !== JOB_TOOL_NAME &&
+                !hasHardDroppedCapability(ad.capabilityClasses) &&
                 !isToolDeniedByPathPolicies(ad.capabilityClasses, pathPolicies),
         );
 

@@ -93,6 +93,16 @@ export function readStringArrayConfig(node: AbgNodeSpec, key: string): readonly 
     return value.filter((item) => typeof item === 'string' && item.length > 0);
 }
 
+export function readBooleanConfig(node: AbgNodeSpec, key: string): boolean | undefined {
+    const value = node.config?.[key];
+    return typeof value === 'boolean' ? value : undefined;
+}
+
+export function readPositiveIntConfig(node: AbgNodeSpec, key: string): number | undefined {
+    const value = node.config?.[key];
+    return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 export function uniqueStrings(values: readonly string[]): readonly string[] {
     return [...new Set(values)];
 }

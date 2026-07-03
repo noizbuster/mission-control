@@ -1,19 +1,19 @@
 /**
- * Stub-closure tests for the full-parity task tool's model-resolution logic.
+ * Tests for the full-parity task tool: model-resolution closure + end-to-end spawn.
  *
- * The override is INERT at spawn until todo 25 wires the real graph runner
- * (the factory's `spawnFn` calls `spawnChildCodingAgent`; the runtime's default
- * `spawnFn` rejects with `spawnFn not wired`). End-to-end spawn observability
- * therefore lands with todo 25. Until then, this suite drives the extracted
- * {@linkcode buildResolveModelFn} closure directly — the same closure the
- * factory passes into `ConcreteTaskToolRuntime` — to prove the
- * override / skip-task-guard / fallthrough precedence.
+ * The factory delegates child execution to `ConcreteTaskToolRuntime`'s default spawn
+ * (built from `resolveSdkModel`). The model-resolution tests drive
+ * {@linkcode buildResolveModelFn} directly; the spawn test exercises the full factory
+ * path (permission gate → runtime → default spawn → graph runner → yield capture).
  */
 
-import type { AbgNodeModelOptions, AgentDefinition } from '@mission-control/protocol';
+import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
+import type { AbgNodeModelOptions, AgentDefinition, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
+import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import type { ModelPattern } from '../agents/model-resolver.js';
-import { buildResolveModelFn } from './task-tool-full-parity-factory.js';
+import { ToolRegistry } from './tool-registry.js';
+import { buildResolveModelFn, createFullParityTaskToolRegistrationForCli } from './task-tool-full-parity-factory.js';
 
 const parentModel: AbgNodeModelOptions = { providerID: 'local', modelID: 'local-echo' };
 const parentModelWithVariant: AbgNodeModelOptions = {
@@ -198,5 +198,92 @@ describe('buildResolveModelFn', () => {
             // Then: override map wins for the named agent
             expect(result).toEqual({ providerID: 'openai', modelID: 'gpt-5' });
         });
+    });
+});
+
+describe('createFullParityTaskToolRegistrationForCli end-to-end spawn', () => {
+    function buildUsage() {
+        return {
+            inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 1, text: 1, reasoning: 0 },
+        };
+    }
+
+    function textChunks(text: string): LanguageModelV3StreamPart[] {
+        return [
+            { type: 'stream-start', warnings: [] },
+            { type: 'text-start', id: 't1' },
+            { type: 'text-delta', id: 't1', delta: text },
+            { type: 'text-end', id: 't1' },
+            { type: 'finish', finishReason: { unified: 'stop', raw: undefined }, usage: buildUsage() },
+        ];
+    }
+
+    function yieldChunks(result: string): LanguageModelV3StreamPart[] {
+        const payload = JSON.stringify({ result });
+        return [
+            { type: 'stream-start', warnings: [] },
+            { type: 'tool-input-start', id: 'cy', toolName: 'yield' },
+            { type: 'tool-input-delta', id: 'cy', delta: payload },
+            { type: 'tool-input-end', id: 'cy' },
+            { type: 'tool-call', toolCallId: 'cy', toolName: 'yield', input: payload },
+            { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: buildUsage() },
+        ];
+    }
+
+    const allowAll: (request: PermissionRequest) => PermissionDecision = (request) => ({
+        requestId: request.id,
+        status: 'allow',
+    });
+
+    function buildFactoryOptions(callCount: { value: number }, chunksFor: (call: number) => LanguageModelV3StreamPart[]) {
+        const mockModel = new MockLanguageModelV3({
+            provider: 'test',
+            modelId: 'mock',
+            doStream: async () => {
+                callCount.value += 1;
+                return { stream: convertArrayToReadableStream(chunksFor(callCount.value)) };
+            },
+        });
+        const parentToolRegistry = new ToolRegistry();
+        return {
+            workspaceRoot: '/tmp/workspace',
+            requestPermission: allowAll,
+            resolveSdkModel: () => mockModel,
+            model: parentModel,
+            parentToolRegistry,
+        };
+    }
+
+    it('spawns a bundled child agent via the default spawn and resolves with text output', async () => {
+        const callCount = { value: 0 };
+        const registration = await createFullParityTaskToolRegistrationForCli(
+            buildFactoryOptions(callCount, () => textChunks('factory child done')),
+        );
+
+        const result = await registration.execute(
+            { agent: 'deep', assignment: 'do the thing', load_skills: [] },
+            { toolCallId: 'tc_1', toolName: 'task', signal: new AbortController().signal },
+        );
+
+        expect(result.status).toBe('completed');
+        expect(result.output).toContain('factory child done');
+    });
+
+    it('returns the yielded result when the child calls yield', async () => {
+        const callCount = { value: 0 };
+        const registration = await createFullParityTaskToolRegistrationForCli(
+            buildFactoryOptions(callCount, (call) =>
+                call === 1 ? yieldChunks('factory yielded result') : textChunks('done'),
+            ),
+        );
+
+        const result = await registration.execute(
+            { agent: 'deep', assignment: 'do the thing', load_skills: [] },
+            { toolCallId: 'tc_1', toolName: 'task', signal: new AbortController().signal },
+        );
+
+        expect(result.status).toBe('completed');
+        expect(result.output).toBe('factory yielded result');
     });
 });

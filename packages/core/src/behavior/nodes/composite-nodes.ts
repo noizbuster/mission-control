@@ -16,6 +16,7 @@ import {
     transition,
     uniqueStrings,
 } from './composite-node-utils.js';
+import { runParallelFanOut } from './parallel-fan-out.js';
 import { runSpeculativeNode } from './speculative-node.js';
 
 const parallelAnySuccessMode = `a${'ny'}-success`;
@@ -80,6 +81,11 @@ async function* runSelectorNode(node: AbgNodeSpec, context: AbgNodeRunContext): 
 
 async function* runParallelNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
     yield started(node, context);
+    const fanOutKey = readStringConfig(node, 'fanOutKey');
+    if (fanOutKey !== undefined) {
+        yield* runParallelFanOut(node, context, fanOutKey, runChild);
+        return;
+    }
     const completedChildren: string[] = [];
     const failedChildren: string[] = [];
     for (const childId of node.children ?? []) {

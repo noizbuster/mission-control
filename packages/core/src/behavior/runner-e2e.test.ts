@@ -51,11 +51,11 @@ async function runVerificationNode(
 }
 
 describe('runner workflow E2E: graph structure + verification node execution', () => {
-    it('loads a valid runner WorkflowSpec with parse-plan entry node', async () => {
+    it('loads a valid runner WorkflowSpec with admit-plan entry node', async () => {
         const spec = await loadRunnerSpec();
 
         expect(spec.name).toBe('runner');
-        expect(spec.graph.entryNodeId).toBe('parse-plan');
+        expect(spec.graph.entryNodeId).toBe('admit-plan');
     });
 
     it('has a delegate-wave (parallel) that fans out to delegate-worker with task capability', async () => {

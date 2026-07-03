@@ -1,0 +1,138 @@
+/**
+ * Structured blackboard output parsing for workflow `llm` nodes.
+ *
+ * A workflow `llm` node may declare `config.outputKey`; when the model's turn
+ * produces text, `parseStructuredOutput` turns that text into a typed value
+ * (JSON object/array, boolean, or single-line string) that the runner writes to
+ * the blackboard under the declared key. Rules then route on
+ * `blackboard.value.equals` with structured values instead of fragile
+ * first-line strings.
+ *
+ * The parser is key-agnostic: it validates SHAPE, not key names. The supported
+ * key vocabulary is documented in `SUPPORTED_OUTPUT_KEYS`. Invalid structured
+ * output FAILS CLOSED ({ ok: false, error }) so the runner can emit a node
+ * failure instead of persisting garbage.
+ *
+ * Supported input forms:
+ *   (a) bare JSON   — `{"k":1}` or `[1,2]`           -> parsed object/array
+ *   (b) fenced JSON — ```json\n{...}\n```             -> parsed object/array
+ *   (c) plain boolean — `true` / `false`              -> boolean
+ *   (d) single-line string — `explicit`               -> string (backwards compat)
+ *
+ * Anything else (malformed JSON, empty output) returns { ok: false, error }.
+ */
+
+/** The structural shape a parsed value must satisfy. `'any'` accepts everything. */
+export type StructuredOutputShape = 'object' | 'array' | 'boolean' | 'string' | 'any';
+
+export type ParseStructuredOutputResult =
+    | { readonly ok: true; readonly value: unknown }
+    | { readonly ok: false; readonly error: string };
+
+/**
+ * Documented output-key vocabulary for the built-in workflows. The parser does
+ * NOT hardcode these — they are listed for discoverability so workflow authors
+ * share one consistent dots-namespaced vocabulary. The parser validates shape,
+ * never key names.
+ */
+export const SUPPORTED_OUTPUT_KEYS = [
+    'intent.classification',
+    'plan.todos',
+    'plan.ready',
+    'wave.tasks',
+    'wave.pending',
+    'delegate.results',
+    'verify.complete',
+    'checkbox.updated',
+    'final.verdict',
+] as const;
+export type SupportedOutputKey = (typeof SUPPORTED_OUTPUT_KEYS)[number];
+
+/**
+ * Parse a model turn's raw text into a structured blackboard value.
+ *
+ * @param rawText the model's full text output for the turn
+ * @param expectedShape optional shape constraint; defaults to `'any'`
+ * @returns `{ ok: true, value }` on success, `{ ok: false, error }` otherwise
+ */
+export function parseStructuredOutput(
+    rawText: string,
+    expectedShape: StructuredOutputShape = 'any',
+): ParseStructuredOutputResult {
+    const trimmed = rawText.trim();
+    if (trimmed.length === 0) {
+        return { ok: false, error: 'empty output' };
+    }
+
+    const fenced = extractFencedBlock(trimmed);
+    const looksJson = fenced !== null || firstNonWhitespaceIs(trimmed, '{', '[');
+
+    if (looksJson) {
+        const candidate = fenced ?? trimmed;
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(candidate);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { ok: false, error: `invalid JSON: ${message}` };
+        }
+        return validateShape(parsed, expectedShape);
+    }
+
+    const lower = trimmed.toLowerCase();
+    if (lower === 'true') {
+        return validateShape(true, expectedShape);
+    }
+    if (lower === 'false') {
+        return validateShape(false, expectedShape);
+    }
+
+    // Single-line string backwards-compat: take the first non-empty line.
+    const firstLine = firstLineOf(trimmed);
+    if (firstLine.length === 0) {
+        return { ok: false, error: 'empty output' };
+    }
+    return validateShape(firstLine, expectedShape);
+}
+
+function validateShape(value: unknown, expected: StructuredOutputShape): ParseStructuredOutputResult {
+    if (expected === 'any') {
+        return { ok: true, value };
+    }
+    const actual = shapeOf(value);
+    if (actual === expected) {
+        return { ok: true, value };
+    }
+    return { ok: false, error: `expected shape '${expected}', got '${actual}'` };
+}
+
+function shapeOf(value: unknown): Exclude<StructuredOutputShape, 'any'> {
+    if (typeof value === 'boolean') return 'boolean';
+    if (typeof value === 'string') return 'string';
+    if (Array.isArray(value)) return 'array';
+    return 'object';
+}
+
+/** Extract the content of the first markdown fenced code block, or null. */
+function extractFencedBlock(text: string): string | null {
+    const match = text.match(/```[^\n]*\n([\s\S]*?)```/);
+    return match !== null && match[1] !== undefined ? match[1].trim() : null;
+}
+
+/** True when the first non-whitespace character of `text` is one of `chars`. */
+function firstNonWhitespaceIs(text: string, ...chars: readonly string[]): boolean {
+    for (const ch of text) {
+        if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
+            continue;
+        }
+        return chars.includes(ch);
+    }
+    return false;
+}
+
+/** Return the first non-empty trimmed line of `text`. */
+function firstLineOf(text: string): string {
+    const newlineIndex = text.indexOf('\n');
+    const line = newlineIndex === -1 ? text : text.slice(0, newlineIndex);
+    return line.trim();
+}

@@ -42,12 +42,20 @@ export type YieldToolResult = z.infer<typeof yieldOutputSchema>;
 export type CreateYieldToolOptions = {
     /** Agent `output` schema; when present, `result` is validated against it. */
     readonly outputSchema?: z.ZodType;
+    /**
+     * Invoked synchronously when the child calls `yield`, BEFORE the tool returns
+     * the "submitted" confirmation. The spawn fn uses this to capture the yielded
+     * value so it becomes the child session's `output` — without parsing
+     * message-tool-call shapes after the graph completes.
+     */
+    readonly onYield?: (result: unknown, findings?: readonly unknown[]) => void;
 };
 
 /**
  * Build the `yield` tool registration. The optional `outputSchema` closure
  * captures the agent's declared output contract so `execute` (which receives
  * only the parsed input) can validate the result without additional wiring.
+ * The optional `onYield` callback lets the runtime capture the yielded value.
  */
 export function createYieldToolRegistration(
     options: CreateYieldToolOptions,
@@ -84,6 +92,7 @@ export function createYieldToolRegistration(
                     });
                 }
             }
+            options.onYield?.(input.result, input.findings);
             return { status: 'submitted', message: 'Result submitted. You can stop now.' };
         },
         toModelOutput: () => 'Result submitted. You can stop now.',

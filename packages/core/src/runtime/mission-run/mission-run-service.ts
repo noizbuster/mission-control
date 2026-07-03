@@ -18,6 +18,7 @@ import {
     type RunCost,
     RunSchema,
     type RunStatus,
+    type TaskRetryState,
     type WorkflowSpec,
 } from '@mission-control/protocol';
 import { readMission, updateMission } from './mission-store.js';
@@ -33,6 +34,8 @@ export type RunCompletionInput = {
     readonly cost?: RunCost;
     readonly terminalReason?: string;
     readonly model?: Run['model'];
+    readonly childSessionIds?: readonly string[];
+    readonly taskRetryState?: Readonly<Record<string, TaskRetryState>>;
 };
 
 /**
@@ -100,6 +103,8 @@ export async function completeRun(root: string, runId: string, result: RunComple
         ...(result.cost !== undefined ? { cost: result.cost } : {}),
         ...(result.terminalReason !== undefined ? { terminalReason: result.terminalReason } : {}),
         ...(result.model !== undefined ? { model: result.model } : {}),
+        ...(result.childSessionIds !== undefined ? { childSessionIds: result.childSessionIds } : {}),
+        ...(result.taskRetryState !== undefined ? { taskRetryState: result.taskRetryState } : {}),
     };
     return updateRunStatus(root, runId, 'completed', patch);
 }
@@ -109,8 +114,20 @@ export async function completeRun(root: string, runId: string, result: RunComple
  * `terminalReason`. Throws `MissionRunTransitionError` if the Run is not
  * currently running.
  */
-export async function failRun(root: string, runId: string, reason: string): Promise<Run> {
-    return updateRunStatus(root, runId, 'failed', { terminalReason: reason });
+export async function failRun(
+    root: string,
+    runId: string,
+    reason: string,
+    result: Omit<RunCompletionInput, 'terminalReason'> = {},
+): Promise<Run> {
+    const patch: RunPatch = {
+        terminalReason: reason,
+        ...(result.cost !== undefined ? { cost: result.cost } : {}),
+        ...(result.model !== undefined ? { model: result.model } : {}),
+        ...(result.childSessionIds !== undefined ? { childSessionIds: result.childSessionIds } : {}),
+        ...(result.taskRetryState !== undefined ? { taskRetryState: result.taskRetryState } : {}),
+    };
+    return updateRunStatus(root, runId, 'failed', patch);
 }
 
 function deriveCapabilities(workflowSpec: WorkflowSpec): MissionCapabilities {

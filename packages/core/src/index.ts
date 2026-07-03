@@ -131,11 +131,6 @@ export {
 } from './desktop-tool-approvals.js';
 export { EventBus } from './event-bus.js';
 export {
-    type CreateNativesClientOptions,
-    createNativesClient,
-    type NativesClient,
-} from './native/natives-client.js';
-export {
     type Blackboard,
     type BlackboardEntry,
     type BlackboardMutationKind,
@@ -145,6 +140,11 @@ export {
     createBlackboard,
 } from './memory/blackboard.js';
 export * from './memory/index.js';
+export {
+    type CreateNativesClientOptions,
+    createNativesClient,
+    type NativesClient,
+} from './native/natives-client.js';
 export { PermissionSession, type PermissionSessionOptions } from './permission/session.js';
 export { PermissionRuleStore, type PermissionRuleStoreOptions } from './permission/store.js';
 export { createAllowPermissionDecision, createDefaultPermissionDecision } from './permissions.js';
@@ -254,23 +254,25 @@ export type { AgentExecutionContext, AgentTask, AgentTaskResult } from './runtim
 export type { AgentExecutor } from './runtime/executor.js';
 export { createGraphTurnRunner, type GraphTurnRunnerWiring } from './runtime/graph-coordinator-turn.js';
 export {
-    createMission,
-    listMissions,
-    readMission,
-    updateMission,
-} from './runtime/mission-run/mission-store.js';
-export {
     completeRun,
     failRun,
     materializeMission,
     startRun,
 } from './runtime/mission-run/mission-run-service.js';
 export {
+    createMission,
+    listMissions,
+    readMission,
+    updateMission,
+} from './runtime/mission-run/mission-store.js';
+export {
     ALLOWED_RUN_TRANSITIONS,
+    appendChildSession,
     assertRunTransition,
     createRun,
     listRunsForMission,
     readRun,
+    recordTaskRetry,
     TERMINAL_RUN_STATUSES,
     updateRunStatus,
 } from './runtime/mission-run/run-store.js';

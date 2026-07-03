@@ -5,6 +5,13 @@
  */
 
 export {
+    DEFAULT_WORKFLOW_NAME,
+    type MaterializeWorkflowOptions,
+    materializeWorkflow,
+    resolveDefaultWorkflowSpec,
+    type WorkflowLookup,
+} from './materialize-workflow.js';
+export {
     DEFAULT_MAX_WORKFLOW_FILE_BYTES,
     DEFAULT_MAX_WORKFLOWS,
     type DiscoverWorkflowsOptions,

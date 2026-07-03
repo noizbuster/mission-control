@@ -62,6 +62,7 @@ import {
 } from './interactive-chat-undo-redo-action.js';
 import { type ActiveCodingAgentTurn, resumeCodingAgentTurn } from './interactive-coding-agent.js';
 import { createModelsOverlayRoleRows, type ModelsOverlayRoleRow } from './models-overlay-state.js';
+import { graphForDefaultFallback, graphForWorkflowSpec } from './workflow-materialization.js';
 
 export type CodingActionContext = PromptTurnContext & {
     readonly activeTurn: ActiveCodingAgentTurn | undefined;
@@ -339,9 +340,12 @@ async function runPromptAction(
         emitPromptAdmission(chatOutput, coding, 'queue', prompt);
         return actionResult(modelProviderSelection, coding.activeTurn);
     }
+    // Plain-prompt default fallback; explicit `#name` arrives with coding.graph set.
+    const fallbackGraph = coding.graph === undefined ? graphForDefaultFallback(coding.workflowRegistry) : undefined;
+    const effectiveCoding = fallbackGraph !== undefined ? { ...coding, graph: fallbackGraph } : coding;
     return actionResult(
         modelProviderSelection,
-        await startPromptTurn(runtime, chatOutput, prompt, modelProviderSelection, coding),
+        await startPromptTurn(runtime, chatOutput, prompt, modelProviderSelection, effectiveCoding),
     );
 }
 
@@ -473,7 +477,8 @@ async function runWorkflowAction(
     }
     chatOutput.write(`Running workflow "${action.name}"...\n`);
     chatOutput.showNotice?.(`Workflow: ${action.name}`);
-    seedOverlayForWorkflow(coding, spec.graph);
+    const workflowGraph = graphForWorkflowSpec(spec);
+    seedOverlayForWorkflow(coding, workflowGraph);
 
     // Only persist when a fresh turn starts; a queued prompt runs behind an existing turn.
     const runHandle =
@@ -484,14 +489,14 @@ async function runWorkflowAction(
     if (runHandle === undefined) {
         return runPromptAction(runtime, chatOutput, action.prompt, modelProviderSelection, {
             ...coding,
-            graph: spec.graph,
+            graph: workflowGraph,
         });
     }
 
     const tracker = createRunOutcomeTracker();
     const result = await runPromptAction(runtime, chatOutput, action.prompt, modelProviderSelection, {
         ...coding,
-        graph: spec.graph,
+        graph: workflowGraph,
         emitEvent: (event: AgentEvent) => {
             tracker.observe(event);
             coding.emitEvent?.(event);
@@ -583,11 +588,12 @@ export async function startWorkflowTurn(
 ): Promise<ChatActionResult> {
     chatOutput.write(`Running workflow "${spec.name}"...\n`);
     chatOutput.showNotice?.(`Workflow: ${spec.name}`);
-    seedOverlayForWorkflow(coding, spec.graph);
+    const workflowGraph = graphForWorkflowSpec(spec);
+    seedOverlayForWorkflow(coding, workflowGraph);
     return runPromptAction(runtime, chatOutput, prompt, modelProviderSelection, {
         ...coding,
         activeTurn: undefined,
-        graph: spec.graph,
+        graph: workflowGraph,
     });
 }
 

@@ -11,10 +11,12 @@
  * This is an INTEGRATION smoke test — it crosses three subsystems (workflow spec parsing,
  * mission materialization, policy rule algebra) that unit tests cover individually.
  */
-import { type PolicyEffectRuleSet, WorkflowSpecSchema } from '@mission-control/protocol';
+import { type AbgPolicySpec, type PolicyEffectRuleSet, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
+import { registerBuiltinWorkflows, WorkflowRegistry } from '../index.js';
 import { evaluateRules } from '../permissions/rule-evaluator.js';
 import { materializeMission } from '../runtime/mission-run/mission-run-service.js';
+import { materializeWorkflow } from '../workflows/materialize-workflow.js';
 import { readFile } from 'node:fs/promises';
 
 const workflowJsonPath = `${process.cwd()}/examples/abg/planner.workflow.json`;
@@ -99,5 +101,62 @@ describe('planner workflow E2E: discover -> materialize -> policy enforcement', 
         expect(mission.graph.entryNodeId).toBe('intake');
         expect(mission.graph.nodes.length).toBeGreaterThan(0);
         expect(mission.graph.edges.length).toBeGreaterThan(0);
+    });
+});
+
+describe('planner workflow materialization: readonly policies reach the EXECUTED graph', () => {
+    // Closes parity row 10: the EXECUTED graph (not only the Mission record) must
+    // carry planner-readonly policies after materializeWorkflow.
+    it('the raw planner graph carries NO write-deny policies (the pre-materialization state)', () => {
+        const registry = new WorkflowRegistry();
+        registerBuiltinWorkflows(registry);
+        const spec = registry.lookup('planner');
+        if (spec === undefined) throw new Error('test setup: builtin planner not registered');
+
+        expect(spec.graph.policies.length).toBe(0);
+    });
+
+    it('materializeWorkflow folds planner-readonly deny policies into the executed graph', () => {
+        const registry = new WorkflowRegistry();
+        registerBuiltinWorkflows(registry);
+        const spec = registry.lookup('planner');
+        if (spec === undefined) throw new Error('test setup: builtin planner not registered');
+
+        const executed = materializeWorkflow(spec);
+
+        const denyPolicies = executed.policies.filter(
+            (policy: AbgPolicySpec) => policy.capability === 'write' && policy.decision === 'deny',
+        );
+        expect(denyPolicies.length).toBeGreaterThanOrEqual(1);
+        for (const policy of denyPolicies) {
+            expect(policy.id).toContain('planner-readonly:policy:');
+        }
+    });
+
+    it('the broad write-deny policy on ** survives materialization onto the executed graph', () => {
+        const registry = new WorkflowRegistry();
+        registerBuiltinWorkflows(registry);
+        const spec = registry.lookup('planner');
+        if (spec === undefined) throw new Error('test setup: builtin planner not registered');
+
+        const executed = materializeWorkflow(spec);
+        const broadDeny = executed.policies.find(
+            (policy) =>
+                policy.capability === 'write' && policy.decision === 'deny' && (policy.reason ?? '').includes('**'),
+        );
+
+        expect(broadDeny).toBeDefined();
+    });
+
+    it('materializeMission and materializeWorkflow agree on planner-readonly presence', async () => {
+        const spec = await loadPlannerSpec();
+        const mission = materializeMission(spec);
+        const executed = materializeWorkflow(spec);
+
+        expect(mission.modeDeclarations ?? []).toContainEqual({ modeId: 'planner-readonly', active: true });
+        const denyOnExecuted = executed.policies.some(
+            (policy: AbgPolicySpec) => policy.decision === 'deny' && policy.capability === 'write',
+        );
+        expect(denyOnExecuted).toBe(true);
     });
 });

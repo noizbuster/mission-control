@@ -20,11 +20,11 @@ describe('createRunnerWorkflowGraph', () => {
         expect(graph.id).toBe(RUNNER_WORKFLOW_GRAPH_ID);
     });
 
-    it('has parse-plan as the entry node', () => {
+    it('has admit-plan as the entry node', () => {
         const graph = createRunnerWorkflowGraph();
         const nodeIds = graph.nodes.map((node) => node.id);
 
-        expect(graph.entryNodeId).toBe('parse-plan');
+        expect(graph.entryNodeId).toBe('admit-plan');
         expect(nodeIds).toContain('parse-plan');
     });
 
@@ -123,7 +123,7 @@ describe('examples/abg/runner.workflow.json', () => {
         expect(result.success).toBe(true);
     });
 
-    it('has name "runner" with parse-plan entry node', async () => {
+    it('has name "runner" with admit-plan entry node', async () => {
         const contents = await readFile(workflowJsonPath, 'utf8');
         const result = WorkflowSpecSchema.safeParse(JSON.parse(contents));
 
@@ -133,7 +133,7 @@ describe('examples/abg/runner.workflow.json', () => {
         }
 
         expect(result.data.name).toBe('runner');
-        expect(result.data.graph.entryNodeId).toBe('parse-plan');
+        expect(result.data.graph.entryNodeId).toBe('admit-plan');
     });
 
     it('produces a graph identical to createRunnerWorkflowGraph()', async () => {

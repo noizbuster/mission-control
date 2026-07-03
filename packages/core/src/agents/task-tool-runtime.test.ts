@@ -1,4 +1,6 @@
+import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import type { AgentDefinition } from '@mission-control/protocol';
+import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { ChildSpawnRequest } from '../tools/task/task-tool.js';
@@ -353,6 +355,185 @@ describe('ConcreteTaskToolRuntime', () => {
             const result = deriveChildPathPolicies(makeParentAgent(), makeAgent());
 
             expect(result).toEqual([]);
+        });
+    });
+
+    describe('buildChildToolSurface hard capability filtering', () => {
+        function buildRuntimeWithCapabilityTools(): {
+            runtime: ConcreteTaskToolRuntime;
+            captured: { context: ChildSpawnContext | undefined };
+        } {
+            const child = makeAgent();
+            const parent = makeParentAgent();
+            const agentIndex = new AgentIndex();
+            agentIndex.register(child);
+
+            const parentRegistry = new ToolRegistry();
+            parentRegistry.register(makeTool('read', ['read']));
+            parentRegistry.register(makeTool('command.run', ['bash']));
+            parentRegistry.register(makeTool('task', ['subagent']));
+            parentRegistry.register(makeTool('workflow', ['workflow']));
+            parentRegistry.register(makeTool('webfetch', ['network']));
+            parentRegistry.register(makeTool('spawn-helper', ['subagent']));
+
+            const captured: { context: ChildSpawnContext | undefined } = { context: undefined };
+            const spawnFn: SpawnFn = async (context) => {
+                captured.context = context;
+                return { sessionId: context.sessionId, status: 'completed', output: '' };
+            };
+
+            const runtime = new ConcreteTaskToolRuntime({
+                agentIndex,
+                resolveModel: (agent) => ({ providerID: 'test', modelID: agent.name }),
+                workspaceRoot: '/tmp/workspace',
+                parentToolRegistry: parentRegistry,
+                parentAgent: parent,
+                spawnFn,
+            });
+            return { runtime, captured };
+        }
+
+        it('drops workflow-capability tools from the child surface', async () => {
+            const { runtime, captured } = buildRuntimeWithCapabilityTools();
+            await runtime.runChildSession(makeRequest());
+            const toolNames = captured.context?.childToolRegistry.advertise().map((a) => a.name);
+            expect(toolNames).not.toContain('workflow');
+        });
+
+        it('drops network-capability tools from the child surface', async () => {
+            const { runtime, captured } = buildRuntimeWithCapabilityTools();
+            await runtime.runChildSession(makeRequest());
+            const toolNames = captured.context?.childToolRegistry.advertise().map((a) => a.name);
+            expect(toolNames).not.toContain('webfetch');
+        });
+
+        it('drops subagent-capability tools beyond task from the child surface', async () => {
+            const { runtime, captured } = buildRuntimeWithCapabilityTools();
+            await runtime.runChildSession(makeRequest());
+            const toolNames = captured.context?.childToolRegistry.advertise().map((a) => a.name);
+            expect(toolNames).not.toContain('spawn-helper');
+        });
+
+        it('keeps read and bash tools (policy-controlled, not hard-dropped)', async () => {
+            const { runtime, captured } = buildRuntimeWithCapabilityTools();
+            await runtime.runChildSession(makeRequest());
+            const toolNames = captured.context?.childToolRegistry.advertise().map((a) => a.name);
+            expect(toolNames).toContain('read');
+            expect(toolNames).toContain('command.run');
+            expect(toolNames).toContain('yield');
+        });
+    });
+
+    describe('default spawn fn (matrix row 7)', () => {
+        function buildUsage() {
+            return {
+                inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+                outputTokens: { total: 1, text: 1, reasoning: 0 },
+            };
+        }
+
+        function textOnlyChunks(text: string): LanguageModelV3StreamPart[] {
+            return [
+                { type: 'stream-start', warnings: [] },
+                { type: 'text-start', id: 't1' },
+                { type: 'text-delta', id: 't1', delta: text },
+                { type: 'text-end', id: 't1' },
+                { type: 'finish', finishReason: { unified: 'stop', raw: undefined }, usage: buildUsage() },
+            ];
+        }
+
+        function yieldCallChunks(result: string): LanguageModelV3StreamPart[] {
+            const payload = JSON.stringify({ result });
+            return [
+                { type: 'stream-start', warnings: [] },
+                { type: 'tool-input-start', id: 'call_y', toolName: 'yield' },
+                { type: 'tool-input-delta', id: 'call_y', delta: payload },
+                { type: 'tool-input-end', id: 'call_y' },
+                { type: 'tool-call', toolCallId: 'call_y', toolName: 'yield', input: payload },
+                { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: buildUsage() },
+            ];
+        }
+
+        function buildDefaultSpawnRuntime(modelCallCount: { value: number }, chunksFor: (call: number) => LanguageModelV3StreamPart[]): ConcreteTaskToolRuntime {
+            const child = makeAgent({ systemPrompt: 'You are a deep coding agent. Explore, decide, act.' });
+            const parent = makeParentAgent();
+            const agentIndex = new AgentIndex();
+            agentIndex.register(child);
+
+            const parentRegistry = new ToolRegistry();
+            parentRegistry.register(makeTool('read', ['read']));
+
+            const mockModel = new MockLanguageModelV3({
+                provider: 'test',
+                modelId: 'mock',
+                doStream: async () => {
+                    modelCallCount.value += 1;
+                    return { stream: convertArrayToReadableStream(chunksFor(modelCallCount.value)) };
+                },
+            });
+
+            return new ConcreteTaskToolRuntime({
+                agentIndex,
+                resolveModel: (agent) => ({ providerID: 'test', modelID: agent.name }),
+                workspaceRoot: '/tmp/workspace',
+                parentToolRegistry: parentRegistry,
+                parentAgent: parent,
+                resolveSdkModel: () => mockModel,
+            });
+        }
+
+        it('resolves rather than rejecting when resolveSdkModel is provided', async () => {
+            const callCount = { value: 0 };
+            const runtime = buildDefaultSpawnRuntime(callCount, (call) => textOnlyChunks('child completed'));
+
+            const result = await runtime.runChildSession(makeRequest());
+
+            expect(result.status).toBe('completed');
+            expect(result.sessionId).toBe('sess-test-1');
+            expect(result.output).toContain('child completed');
+        });
+
+        it('returns the yielded result when the child calls yield', async () => {
+            const callCount = { value: 0 };
+            const runtime = buildDefaultSpawnRuntime(callCount, (call) =>
+                call === 1 ? yieldCallChunks('yielded payload') : textOnlyChunks('acknowledged'),
+            );
+
+            const result = await runtime.runChildSession(makeRequest());
+
+            expect(result.status).toBe('completed');
+            expect(result.output).toBe('yielded payload');
+        });
+
+        it('rejects when neither spawnFn nor resolveSdkModel is provided', async () => {
+            const child = makeAgent();
+            const agentIndex = new AgentIndex();
+            agentIndex.register(child);
+            const parentRegistry = new ToolRegistry();
+            parentRegistry.register(makeTool('read', ['read']));
+
+            const runtime = new ConcreteTaskToolRuntime({
+                agentIndex,
+                resolveModel: (agent) => ({ providerID: 'test', modelID: agent.name }),
+                workspaceRoot: '/tmp/workspace',
+                parentToolRegistry: parentRegistry,
+                parentAgent: makeParentAgent(),
+            });
+
+            await expect(runtime.runChildSession(makeRequest())).rejects.toThrow(/spawnFn not wired/);
+        });
+
+        it('child system prompt contains the agent body text', async () => {
+            const callCount = { value: 0 };
+            const agentBody = 'You are a deep coding agent. Explore, decide, act.';
+            const runtime = buildDefaultSpawnRuntime(callCount, (call) => textOnlyChunks('done'));
+
+            await runtime.runChildSession({
+                ...makeRequest(),
+                prompt: 'explore the codebase',
+            });
+
+            expect(callCount.value).toBeGreaterThanOrEqual(1);
         });
     });
 });

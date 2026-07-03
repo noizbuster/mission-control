@@ -38,6 +38,8 @@ function makeState(overrides: Partial<ContinuationState> = {}): ContinuationStat
         doneSignal: false,
         lastSessionId: undefined,
         startedAt: '2026-06-22T00:00:00Z',
+        stoppedAt: undefined,
+        stoppedReason: undefined,
         ...overrides,
     };
 }
@@ -69,6 +71,20 @@ describe('ContinuationRuntime', () => {
         expect(rt.shouldContinue(makeState({ loopActive: false }))).toBe(false);
         expect(rt.shouldContinue(makeState({ loopActive: true, doneSignal: true }))).toBe(false);
         expect(rt.shouldContinue(makeState({ loopActive: true, iteration: 3 }))).toBe(false);
+    });
+
+    it('shouldContinue returns false when stop marker is active', () => {
+        const rt = new ContinuationRuntime({ maxIterations: 5, boulderRoot: tmpRoot, workId: WORK_ID });
+        expect(rt.shouldContinue(makeState({ loopActive: true, stoppedAt: '2026-01-01T00:00:00Z' }))).toBe(false);
+        expect(
+            rt.shouldContinue(makeState({ loopActive: true, stoppedAt: '2026-01-01T00:00:00Z', iteration: 0 })),
+        ).toBe(false);
+    });
+
+    it('isStopped reflects stop marker presence', () => {
+        const rt = new ContinuationRuntime({ maxIterations: 5, boulderRoot: tmpRoot, workId: WORK_ID });
+        expect(rt.isStopped(makeState({ loopActive: true }))).toBe(false);
+        expect(rt.isStopped(makeState({ stoppedAt: '2026-01-01T00:00:00Z', stoppedReason: 'user' }))).toBe(true);
     });
 
     it('advance increments iteration and updates sessionId', () => {
@@ -147,5 +163,70 @@ describe('ContinuationRuntime', () => {
         const second = await rt2.runWithContinuation(nextId, async () => looping());
         expect(second.status).toBe('continue');
         if (second.status === 'continue') expect(second.iteration).toBe(2);
+    });
+
+    it('markStopped persists runner_stop marker on the boulder work', async () => {
+        const rt = new ContinuationRuntime({ maxIterations: 5, boulderRoot: tmpRoot, workId: WORK_ID });
+        await rt.persistState(makeState({ iteration: 1, loopActive: true }));
+        await rt.markStopped('user_requested', '2026-07-01T00:00:00Z');
+
+        const loaded = await rt.loadState();
+        expect(loaded).not.toBeNull();
+        expect(loaded?.stoppedAt).toBe('2026-07-01T00:00:00Z');
+        expect(loaded?.stoppedReason).toBe('user_requested');
+    });
+
+    it('shouldContinue returns false after markStopped (stop marker survives load)', async () => {
+        const rt = new ContinuationRuntime({ maxIterations: 5, boulderRoot: tmpRoot, workId: WORK_ID });
+        await rt.persistState(makeState({ iteration: 1, loopActive: true }));
+        await rt.markStopped('interrupt');
+
+        const loaded = await rt.loadState();
+        expect(loaded).not.toBeNull();
+        expect(loaded && rt.shouldContinue(loaded)).toBe(false);
+    });
+
+    it('clearStopped removes the marker so shouldContinue can return true again', async () => {
+        const rt = new ContinuationRuntime({ maxIterations: 5, boulderRoot: tmpRoot, workId: WORK_ID });
+        await rt.persistState(makeState({ iteration: 1, loopActive: true }));
+        await rt.markStopped('interrupt');
+        await rt.clearStopped();
+
+        const loaded = await rt.loadState();
+        expect(loaded).not.toBeNull();
+        expect(loaded?.stoppedAt).toBeUndefined();
+        expect(loaded?.stoppedReason).toBeUndefined();
+        expect(loaded && rt.shouldContinue(loaded)).toBe(true);
+    });
+
+    it('stop marker survives a fresh runtime instance (restart)', async () => {
+        const rt1 = new ContinuationRuntime({ maxIterations: 5, boulderRoot: tmpRoot, workId: WORK_ID });
+        await rt1.persistState(makeState({ iteration: 2, loopActive: true }));
+        await rt1.markStopped('restart_test', '2026-07-01T12:00:00Z');
+
+        const rt2 = new ContinuationRuntime({ maxIterations: 5, boulderRoot: tmpRoot, workId: WORK_ID });
+        const loaded = await rt2.loadState();
+        expect(loaded?.stoppedAt).toBe('2026-07-01T12:00:00Z');
+        expect(loaded?.stoppedReason).toBe('restart_test');
+        expect(loaded && rt2.shouldContinue(loaded)).toBe(false);
+    });
+
+    it('runWithContinuation does not auto-continue when stop marker is active', async () => {
+        const rt = new ContinuationRuntime({ maxIterations: 5, boulderRoot: tmpRoot, workId: WORK_ID });
+        await rt.persistState(makeState({ iteration: 1, loopActive: true }));
+        await rt.markStopped('user_stop');
+
+        const result = await rt.runWithContinuation('ses-2', async () => looping());
+        expect(result.status).toBe('done');
+        if (result.status === 'done') expect(result.reason).toBe('stopped');
+    });
+
+    it('clearStopped is a no-op when no marker exists', async () => {
+        const rt = new ContinuationRuntime({ maxIterations: 5, boulderRoot: tmpRoot, workId: WORK_ID });
+        await rt.persistState(makeState({ iteration: 1, loopActive: true }));
+        await rt.clearStopped();
+
+        const loaded = await rt.loadState();
+        expect(loaded?.stoppedAt).toBeUndefined();
     });
 });

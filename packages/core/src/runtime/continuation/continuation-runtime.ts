@@ -19,7 +19,13 @@
  */
 
 import { z } from 'zod';
-import { type BoulderWork, readBoulder, writeBoulder } from '../../persistence/boulder-store.js';
+import {
+    type BoulderState,
+    type BoulderWork,
+    type RunnerStopMarker,
+    readBoulder,
+    writeBoulder,
+} from '../../persistence/boulder-store.js';
 import { randomUUID } from 'node:crypto';
 
 const CONTINUATION_STATE_KEY = 'continuation_runtime';
@@ -36,6 +42,8 @@ export interface ContinuationState {
     readonly doneSignal: boolean;
     readonly lastSessionId: string | undefined;
     readonly startedAt: string;
+    readonly stoppedAt?: string | undefined;
+    readonly stoppedReason?: string | undefined;
 }
 
 export interface GraphRunContinuationResult {
@@ -51,7 +59,7 @@ export type ContinuationOutcome =
     | {
           readonly status: 'done';
           readonly iterations: number;
-          readonly reason: 'done_signal' | 'max_iterations' | 'loop_inactive';
+          readonly reason: 'done_signal' | 'max_iterations' | 'loop_inactive' | 'stopped';
       };
 
 const PersistedContinuationStateSchema = z.object({
@@ -76,7 +84,12 @@ export class ContinuationRuntime {
     constructor(private readonly options: ContinuationOptions) {}
 
     shouldContinue(state: ContinuationState): boolean {
+        if (state.stoppedAt !== undefined) return false;
         return state.loopActive && !state.doneSignal && state.iteration < this.options.maxIterations;
+    }
+
+    isStopped(state: ContinuationState): boolean {
+        return state.stoppedAt !== undefined;
     }
 
     advance(state: ContinuationState, sessionId: string): ContinuationState {
@@ -94,6 +107,8 @@ export class ContinuationRuntime {
             doneSignal: false,
             lastSessionId: undefined,
             startedAt: now,
+            stoppedAt: undefined,
+            stoppedReason: undefined,
         };
     }
 
@@ -136,7 +151,62 @@ export class ContinuationRuntime {
             doneSignal: parsed.data.doneSignal,
             lastSessionId: parsed.data.lastSessionId,
             startedAt: parsed.data.startedAt,
+            stoppedAt: work.runner_stop?.stopped_at,
+            stoppedReason: work.runner_stop?.stopped_reason,
         };
+    }
+
+    async markStopped(reason: string, now: string = new Date().toISOString()): Promise<void> {
+        const work = await this.requireWork();
+        const stopMarker: RunnerStopMarker = {
+            stopped_at: now,
+            stopped_reason: reason,
+        };
+        await this.writeWork({ ...work, runner_stop: stopMarker });
+    }
+
+    async clearStopped(): Promise<void> {
+        const boulder = await readBoulder(this.options.boulderRoot);
+        if (boulder === null) return;
+        const work = boulder.works[this.options.workId];
+        if (work === undefined) return;
+        if (work.runner_stop === undefined) return;
+        const workWithoutStop = { ...work };
+        delete workWithoutStop.runner_stop;
+        await this.writeWork(workWithoutStop);
+    }
+
+    private async requireWork(): Promise<BoulderWork> {
+        const boulder = await readBoulder(this.options.boulderRoot);
+        if (boulder === null) {
+            throw new ContinuationRuntimeError(
+                `Cannot operate on work: boulder.json missing at ${this.options.boulderRoot}`,
+                'boulder_missing',
+            );
+        }
+        const work = boulder.works[this.options.workId];
+        if (work === undefined) {
+            throw new ContinuationRuntimeError(
+                `Cannot operate on work: work ${this.options.workId} not found`,
+                'work_missing',
+            );
+        }
+        return work;
+    }
+
+    private async writeWork(work: BoulderWork): Promise<void> {
+        const boulder = await readBoulder(this.options.boulderRoot);
+        if (boulder === null) {
+            throw new ContinuationRuntimeError(
+                `Cannot write work: boulder.json missing at ${this.options.boulderRoot}`,
+                'boulder_missing',
+            );
+        }
+        const updatedBoulder: BoulderState = {
+            ...boulder,
+            works: { ...boulder.works, [this.options.workId]: work },
+        };
+        await writeBoulder(this.options.boulderRoot, updatedBoulder);
     }
 
     async runWithContinuation(sessionId: string, runGraphFn: RunGraphFn): Promise<ContinuationOutcome> {
@@ -155,6 +225,11 @@ export class ContinuationRuntime {
         if (observed.doneSignal) {
             await this.persistState(observed);
             return { status: 'done', iterations: observed.iteration, reason: 'done_signal' };
+        }
+
+        if (observed.stoppedAt !== undefined) {
+            await this.persistState(observed);
+            return { status: 'done', iterations: observed.iteration, reason: 'stopped' };
         }
 
         if (this.shouldContinue(observed)) {
