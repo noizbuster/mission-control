@@ -23,6 +23,9 @@ export function createRuntimeSidecarClient(options: AgentRuntimeOptions): Sideca
               ...(options.enableSidecarProtocolV2 !== undefined
                   ? { enableProtocolV2: options.enableSidecarProtocolV2 }
                   : {}),
+              ...(options.enableSidecarProtocolV3 !== undefined
+                  ? { enableProtocolV3: options.enableSidecarProtocolV3 }
+                  : {}),
           })
         : new MockSidecarClient();
 }

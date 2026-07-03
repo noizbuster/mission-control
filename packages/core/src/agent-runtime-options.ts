@@ -14,6 +14,7 @@ export type AgentRuntimeOptions = {
     readonly sidecarCommand?: string;
     readonly sidecarTimeoutMs?: number;
     readonly enableSidecarProtocolV2?: boolean;
+    readonly enableSidecarProtocolV3?: boolean;
     readonly modelProviderSelection?: ModelProviderSelection;
     readonly provider?: ProviderAdapter;
     readonly providerTimeoutMs?: number;

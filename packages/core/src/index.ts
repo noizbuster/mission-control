@@ -131,6 +131,11 @@ export {
 } from './desktop-tool-approvals.js';
 export { EventBus } from './event-bus.js';
 export {
+    type CreateNativesClientOptions,
+    createNativesClient,
+    type NativesClient,
+} from './native/natives-client.js';
+export {
     type Blackboard,
     type BlackboardEntry,
     type BlackboardMutationKind,

@@ -735,7 +735,9 @@ describe('profile-aware user-scope writes', () => {
         const profilePath = join(dirs.userConfigDir, 'mission-control.dev.jsonc');
         await writeRaw(
             profilePath,
-            JSON.stringify({ mcp: { keep: { type: 'local', command: ['k'] }, drop: { type: 'local', command: ['d'] } } }),
+            JSON.stringify({
+                mcp: { keep: { type: 'local', command: ['k'] }, drop: { type: 'local', command: ['d'] } },
+            }),
         );
         const removed = await removeUserMcpServer('drop', {
             profileName: 'dev',
