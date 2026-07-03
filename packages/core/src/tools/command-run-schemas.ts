@@ -1,6 +1,7 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { z } from 'zod';
 import { redactCredentialText } from '../providers/credential-resolver.js';
+import { truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
 import type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor.js';
 import type { CommandRunPolicyProfile } from './command-run-policy.js';
 
@@ -118,7 +119,7 @@ export function commandRunOutput(
 
 function capText(text: string, maxBytes: number, originalBytesInput?: number, truncatedInput?: boolean) {
     const bytes = Buffer.from(text, 'utf8');
-    const capped = bytes.length > maxBytes ? bytes.subarray(0, maxBytes) : bytes;
+    const capped = bytes.length > maxBytes ? truncateToValidUtf8Boundary(bytes, maxBytes) : bytes;
     const originalBytes = originalBytesInput ?? bytes.length;
     return {
         text: capped.toString('utf8'),

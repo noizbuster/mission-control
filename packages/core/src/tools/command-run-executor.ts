@@ -1,5 +1,6 @@
 import type { ChainOperator } from './bash-run-command-guard.js';
 import { type ChildProcess, spawn } from 'node:child_process';
+import { truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
 
 const forceColorEnvKey = 'FORCE_COLOR';
 
@@ -230,7 +231,7 @@ function createOutputCollector(maxBytes: number) {
             kept = Buffer.concat([kept, chunk.subarray(0, maxBytes - kept.length)]);
         },
         text() {
-            return kept.toString('utf8');
+            return truncateToValidUtf8Boundary(kept, kept.length).toString('utf8');
         },
         originalBytes() {
             return totalBytes;
