@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
     clampTextOffset,
     nextGraphemeOffset,
+    padEndToDisplayWidth,
     previousGraphemeOffset,
     segmentTerminalText,
     terminalDisplayWidth,
     terminalOffsetForDisplayColumn,
+    truncateTerminalText,
 } from './terminal-text.js';
 
 describe('terminal text display offsets', () => {
@@ -85,5 +87,77 @@ describe('terminal text display offsets', () => {
 
         expect(clampTextOffset(text, -1)).toBe(0);
         expect(clampTextOffset(text, 999)).toBe(text.length);
+    });
+});
+
+describe('truncateTerminalText', () => {
+    it('returns the input unchanged when it fits the column budget', () => {
+        expect(truncateTerminalText('abc', 5)).toBe('abc');
+        expect(truncateTerminalText('', 5)).toBe('');
+    });
+
+    it('uses the default ~ marker when truncating ASCII', () => {
+        expect(truncateTerminalText('hello world', 8)).toBe('hello w~');
+    });
+
+    it('honours a custom marker', () => {
+        expect(truncateTerminalText('hello world', 8, '\u2026')).toBe('hello w\u2026');
+        // Empty marker: the full column budget is available for content.
+        expect(truncateTerminalText('hello world', 8, '')).toBe('hello wo');
+    });
+
+    it('returns just the marker when the column budget equals marker width', () => {
+        expect(truncateTerminalText('abc', 1)).toBe('~');
+        expect(truncateTerminalText('abc', 1, '\u2026')).toBe('\u2026');
+    });
+
+    it('truncates Korean Hangul by visible width, not code-unit count', () => {
+        const korean = '\ud55c\uad6d\uc5b4';
+        expect(truncateTerminalText(korean, 6)).toBe(korean);
+        // Budget 5: marker is 1 col, leaving 4 cols of content = two Hangul (2 each).
+        expect(truncateTerminalText(korean, 5)).toBe(`\ud55c\uad6d~`);
+        // Budget 4 with ellipsis (1 col): content budget is 3 cols. Two Hangul
+        // would need 4 cols, so only one fits.
+        expect(truncateTerminalText(korean, 4, '\u2026')).toBe(`\ud55c\u2026`);
+        // Budget 3: content budget 2 cols = exactly one Hangul.
+        expect(truncateTerminalText(korean, 3)).toBe(`\ud55c~`);
+    });
+
+    it('does not split surrogate-pair emoji when truncating', () => {
+        const emoji = '\ud83d\ude42';
+        const text = `a${emoji}bc`;
+        // Budget 2: 'a' (1 col) + marker (1 col); emoji never split.
+        expect(truncateTerminalText(text, 2)).toBe('a~');
+        // Budget 3: content 2 cols fits 'a' only (emoji is 2 cols, total 3 > 2).
+        expect(truncateTerminalText(text, 3)).toBe('a~');
+        // Budget 4: content 3 cols fits 'a' + emoji exactly.
+        expect(truncateTerminalText(text, 4)).toBe(`a${emoji}~`);
+    });
+});
+
+describe('padEndToDisplayWidth', () => {
+    it('returns the input unchanged when already at or beyond the target width', () => {
+        expect(padEndToDisplayWidth('abc', 3)).toBe('abc');
+        expect(padEndToDisplayWidth('abcde', 3)).toBe('abcde');
+    });
+
+    it('right-pads short ASCII to the target visible width', () => {
+        expect(padEndToDisplayWidth('abc', 6)).toBe('abc   ');
+    });
+
+    it('pads Korean by visible width, not code-unit count', () => {
+        // One Hangul syllable: visible width 2, JS .length 1.
+        const korean = '\ud55c';
+        // Pad to column 5: 2 (Hangul) + 3 spaces = visible width 5.
+        expect(padEndToDisplayWidth(korean, 5)).toBe(`${korean}   `);
+        expect(terminalDisplayWidth(padEndToDisplayWidth(korean, 5))).toBe(5);
+        // Pad three Hangul (visible width 6) to 10: needs 4 spaces.
+        expect(padEndToDisplayWidth('\ud55c\uad6d\uc5b4', 10)).toBe('\ud55c\uad6d\uc5b4    ');
+    });
+
+    it('does not pad past the target when the input contains a wide emoji', () => {
+        const emoji = '\ud83d\ude42'; // width 2
+        expect(padEndToDisplayWidth(`a${emoji}`, 5)).toBe(`a${emoji}  `);
+        expect(terminalDisplayWidth(padEndToDisplayWidth(`a${emoji}`, 5))).toBe(5);
     });
 });

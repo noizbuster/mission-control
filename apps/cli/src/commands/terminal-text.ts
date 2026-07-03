@@ -47,17 +47,18 @@ export function terminalDisplayWidth(value: string): number {
     return width;
 }
 
-export function truncateTerminalText(value: string, columns: number): string {
+export function truncateTerminalText(value: string, columns: number, marker: string = '~'): string {
     const limit = Math.max(1, columns);
     if (terminalDisplayWidth(value) <= limit) {
         return value;
     }
-    if (limit === 1) {
-        return '~';
+    const markerWidth = terminalDisplayWidth(marker);
+    const contentLimit = Math.max(0, limit - markerWidth);
+    if (contentLimit === 0) {
+        return marker;
     }
     let result = '';
     let width = 0;
-    const contentLimit = limit - 1;
     for (const { segment } of segmentTerminalText(value)) {
         const nextWidth = terminalGraphemeWidth(segment);
         if (width + nextWidth > contentLimit) {
@@ -66,7 +67,15 @@ export function truncateTerminalText(value: string, columns: number): string {
         result += segment;
         width += nextWidth;
     }
-    return `${result}~`;
+    return `${result}${marker}`;
+}
+
+export function padEndToDisplayWidth(text: string, width: number): string {
+    const textWidth = terminalDisplayWidth(text);
+    if (textWidth >= width) {
+        return text;
+    }
+    return `${text}${' '.repeat(width - textWidth)}`;
 }
 
 export function terminalOffsetForDisplayColumn(value: string, column: number): number {
