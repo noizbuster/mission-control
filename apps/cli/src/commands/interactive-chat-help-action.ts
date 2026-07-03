@@ -2,7 +2,7 @@ import type { ModelProviderSelection } from '@mission-control/protocol';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
-import { terminalDisplayWidth } from './terminal-text.js';
+import { padEndToDisplayWidth, terminalDisplayWidth } from './terminal-text.js';
 import { Keybinds } from '../platform/keymap/keybind.js';
 import { resolveKeybindConfig } from '../platform/keymap/keybind-config-loader.js';
 import { formatKeyboardShortcutsSection } from './interactive-chat-hotkeys-action.js';
@@ -31,7 +31,7 @@ export function formatHelpText(
     const lines: string[] = ['Commands:'];
     const commandColumnWidth = maxDisplayWidth(commands.map((command) => command.id));
     for (const command of commands) {
-        lines.push(`  ${padEndByDisplayWidth(command.id, commandColumnWidth)}  ${command.description}`);
+        lines.push(`  ${padEndToDisplayWidth(command.id, commandColumnWidth)}  ${command.description}`);
     }
     lines.push('');
     lines.push('Keyboard Shortcuts:');
@@ -64,7 +64,3 @@ function maxDisplayWidth(values: readonly string[]): number {
     return maximum;
 }
 
-function padEndByDisplayWidth(value: string, width: number): string {
-    const padding = Math.max(0, width - terminalDisplayWidth(value));
-    return `${value}${' '.repeat(padding)}`;
-}

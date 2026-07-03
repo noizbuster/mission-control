@@ -1,5 +1,5 @@
 import { readTerminalCursorDirection } from './interactive-chat-terminal-keys.js';
-import { terminalDisplayWidth, truncateTerminalText } from './terminal-text.js';
+import { padEndToDisplayWidth, truncateTerminalText } from './terminal-text.js';
 
 export type SlashCommandMenuChoice = {
     readonly id: string;
@@ -395,7 +395,7 @@ export function formatSlashCommandMenuLines(view: SlashCommandMenuView, columns:
     const choiceLines = view.visibleChoices.map((choice, index) => {
         const globalIndex = view.startIndex + index;
         const marker = globalIndex === view.selectedIndex ? '>' : ' ';
-        const plainLine = `${marker} ${padEndByDisplayWidth(choice.id, 13)} ${choice.description}`;
+        const plainLine = `${marker} ${padEndToDisplayWidth(choice.id, 13)} ${choice.description}`;
         const truncated = truncateTerminalText(plainLine, columns);
         return globalIndex === view.selectedIndex ? `${selectedStyle}${truncated}${resetStyle}` : truncated;
     });
@@ -482,6 +482,3 @@ function getWindowStartIndex(selectedIndex: number, totalCount: number, visibleL
     return Math.min(Math.max(selectedIndex - halfWindow, 0), totalCount - visibleLimit);
 }
 
-function padEndByDisplayWidth(value: string, width: number): string {
-    return `${value}${' '.repeat(Math.max(0, width - terminalDisplayWidth(value)))}`;
-}

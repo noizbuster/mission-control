@@ -2,7 +2,7 @@ import type { ModelProviderSelection } from '@mission-control/protocol';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
-import { terminalDisplayWidth } from './terminal-text.js';
+import { padEndToDisplayWidth, terminalDisplayWidth } from './terminal-text.js';
 import {
     type BindingValue,
     Definitions,
@@ -174,7 +174,7 @@ export function formatKeyboardShortcutsSection(keybinds: ResolvedKeybinds = Keyb
     for (const group of groups) {
         lines.push(`${group.category}:`);
         for (const row of group.rows) {
-            lines.push(`  ${padEndByDisplayWidth(row.key, keyColumnWidth)}  ${row.action}`);
+            lines.push(`  ${padEndToDisplayWidth(row.key, keyColumnWidth)}  ${row.action}`);
         }
     }
     return lines.join('\n');
@@ -213,7 +213,3 @@ function maxDisplayWidth(values: readonly string[]): number {
     return maximum;
 }
 
-function padEndByDisplayWidth(value: string, width: number): string {
-    const padding = Math.max(0, width - terminalDisplayWidth(value));
-    return `${value}${' '.repeat(padding)}`;
-}
