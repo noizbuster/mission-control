@@ -16,7 +16,16 @@
  * error for that operation instead of silently guessing a server.
  */
 import type { LspServerManager } from './lsp-server-manager.js';
-import type { LspCallHierarchyItem, LspClient, LspDiagnostic, LspHover, LspLocation, LspSymbol } from './lsp-tool.js';
+import type {
+    LspCallHierarchyItem,
+    LspClient,
+    LspDiagnostic,
+    LspHover,
+    LspLocation,
+    LspPrepareRenameResult,
+    LspSymbol,
+    LspWorkspaceEdit,
+} from './lsp-tool.js';
 
 export function createDelegatingLspClient(manager: LspServerManager): LspClient {
     return {
@@ -56,6 +65,19 @@ export function createDelegatingLspClient(manager: LspServerManager): LspClient 
         ): Promise<readonly LspCallHierarchyItem[]> {
             const client = await resolveClient(manager, uri);
             return client?.callHierarchyIncoming?.(uri, line, character) ?? [];
+        },
+        async prepareRename(uri: string, line: number, character: number): Promise<LspPrepareRenameResult | undefined> {
+            const client = await resolveClient(manager, uri);
+            return client?.prepareRename?.(uri, line, character);
+        },
+        async rename(
+            uri: string,
+            line: number,
+            character: number,
+            newName: string,
+        ): Promise<LspWorkspaceEdit | undefined> {
+            const client = await resolveClient(manager, uri);
+            return client?.rename?.(uri, line, character, newName);
         },
     };
 }

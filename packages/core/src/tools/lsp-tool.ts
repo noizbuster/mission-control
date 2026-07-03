@@ -23,6 +23,7 @@
  * document-open + sync separately. LSP positions are 0-indexed (line + character start at 0).
  */
 import { z } from 'zod';
+import { LspDiagnosticsLedger } from './lsp-diagnostics-ledger.js';
 import type { ToolRegistration } from './tool-registry-types.js';
 import { ToolExecutionError } from './tool-registry-types.js';
 import { truncateOutput, withContinuationHint } from './truncate.js';
@@ -69,6 +70,43 @@ export type LspCallHierarchyItem = {
     readonly range: LspRange;
 };
 
+/** A single LSP text edit: replace the text in `range` with `newText`. */
+export type LspTextEdit = {
+    readonly range: LspRange;
+    readonly newText: string;
+};
+
+/** LSP `TextDocumentEdit`: a versioned set of edits for one document. */
+export type LspTextDocumentEdit = {
+    readonly uri: string;
+    readonly version: number | undefined;
+    readonly edits: readonly LspTextEdit[];
+};
+
+/** LSP `WorkspaceEdit` as returned by `textDocument/rename`. Either form may be present. */
+export type LspWorkspaceEdit = {
+    readonly changes?: Readonly<Record<string, readonly LspTextEdit[]>>;
+    readonly documentChanges?: readonly LspTextDocumentEdit[];
+};
+
+/** Result of `textDocument/prepareRename`: the range that will be renamed + a placeholder. */
+export type LspPrepareRenameResult = {
+    readonly range: LspRange;
+    readonly placeholder: string;
+};
+
+/** One entry in the `lsp_status` output: a configured language server's state. */
+export type LspServerStatusEntry = {
+    readonly languageId: string;
+    readonly command: string;
+    readonly available: boolean;
+    readonly active: boolean;
+};
+
+/** Install-decision value recorded by `lsp_install_decision`. */
+export const LSP_INSTALL_DECISIONS = ['declined', 'allowed'] as const;
+export type LspInstallDecisionValue = (typeof LSP_INSTALL_DECISIONS)[number];
+
 /**
  * The LSP client seam. Real implementations spawn a language server over stdio JSON-RPC,
  * open/sync the document, then answer. The in-process client serves tests.
@@ -87,6 +125,8 @@ export type LspClient = {
     implementation?(uri: string, line: number, character: number): Promise<readonly LspLocation[]>;
     typeDefinition?(uri: string, line: number, character: number): Promise<readonly LspLocation[]>;
     callHierarchyIncoming?(uri: string, line: number, character: number): Promise<readonly LspCallHierarchyItem[]>;
+    prepareRename?(uri: string, line: number, character: number): Promise<LspPrepareRenameResult | undefined>;
+    rename?(uri: string, line: number, character: number, newName: string): Promise<LspWorkspaceEdit | undefined>;
 };
 
 const POSITIONAL_FIELDS = {
@@ -137,6 +177,19 @@ const lspInputSchema = z.discriminatedUnion('operation', [
         uri: z.string().min(1),
         ...POSITIONAL_FIELDS,
     }),
+    z.object({
+        operation: z.literal('prepareRename'),
+        uri: z.string().min(1),
+        ...POSITIONAL_FIELDS,
+    }),
+    z.object({
+        operation: z.literal('status'),
+    }),
+    z.object({
+        operation: z.literal('installDecision'),
+        serverId: z.string().min(1),
+        decision: z.enum(LSP_INSTALL_DECISIONS),
+    }),
 ]);
 export type LspInput = z.infer<typeof lspInputSchema>;
 
@@ -157,6 +210,12 @@ export type CreateLspToolInput = {
      * the advertised version hash is stable (see ToolRegistrationMetadataSchema.guideline).
      */
     readonly guideline?: string;
+    /** Provides server status entries for the `status` operation. Typically `manager.getStatus()`. */
+    readonly serverStatusProvider?: () => readonly LspServerStatusEntry[] | Promise<readonly LspServerStatusEntry[]>;
+    /** Records install decisions from the `installDecision` operation. */
+    readonly installDecisionRecorder?: (serverId: string, decision: LspInstallDecisionValue) => void;
+    /** Drops stale (pre-edit) diagnostics so the model never acts on outdated state. */
+    readonly diagnosticsLedger?: LspDiagnosticsLedger;
 };
 
 const DEFAULT_LSP_OUTPUT_LIMIT = 8000;
@@ -167,9 +226,10 @@ export function createLspToolRegistration(input: CreateLspToolInput): ToolRegist
         name: 'lsp',
         description:
             'Query a Language Server for code intelligence: diagnostics, hover, definition, references, ' +
-            'documentSymbol, workspaceSymbol, implementation, typeDefinition, and incoming call hierarchy. ' +
-            'Use for type errors, symbol docs, go-to-definition, find-references, symbol outlines, and ' +
-            'caller discovery backed by the real compiler.',
+            'documentSymbol, workspaceSymbol, implementation, typeDefinition, incoming call hierarchy, ' +
+            'prepareRename, status, and installDecision. The 8 canonical lsp_* operations map to the ' +
+            'standard opencode/oh-my-openagent surface. Use for type errors, symbol docs, go-to-definition, ' +
+            'find-references, symbol outlines, caller discovery, and rename validation backed by the real compiler.',
         capabilityClasses: ['read'],
         parametersJsonSchema: {
             type: 'object',
@@ -186,6 +246,9 @@ export function createLspToolRegistration(input: CreateLspToolInput): ToolRegist
                         'implementation',
                         'typeDefinition',
                         'callHierarchyIncoming',
+                        'prepareRename',
+                        'status',
+                        'installDecision',
                     ],
                 },
                 uri: {
@@ -216,7 +279,23 @@ export function createLspToolRegistration(input: CreateLspToolInput): ToolRegist
         ...(input.guideline !== undefined ? { guideline: input.guideline } : {}),
         execute: async (toolInput) => {
             try {
+                if (toolInput.operation === 'status') {
+                    const servers = input.serverStatusProvider !== undefined ? await input.serverStatusProvider() : [];
+                    return buildLspOutput(toolInput, servers);
+                }
+                if (toolInput.operation === 'installDecision') {
+                    input.installDecisionRecorder?.(toolInput.serverId, toolInput.decision);
+                    return buildLspOutput(toolInput, {
+                        serverId: toolInput.serverId,
+                        decision: toolInput.decision,
+                        recorded: input.installDecisionRecorder !== undefined,
+                    });
+                }
                 const result = await dispatchLspOperation(input.client, toolInput);
+                if (toolInput.operation === 'diagnostics' && input.diagnosticsLedger !== undefined) {
+                    const reduced = input.diagnosticsLedger.reduce(toolInput.uri, result as readonly LspDiagnostic[]);
+                    return buildLspOutput(toolInput, reduced);
+                }
                 return buildLspOutput(toolInput, result);
             } catch (error) {
                 throw new ToolExecutionError({
@@ -259,6 +338,11 @@ async function dispatchLspOperation(client: LspClient, input: LspInput): Promise
             return requireClientMethod(client.documentSymbol, 'documentSymbol')(input.uri);
         case 'workspaceSymbol':
             return requireClientMethod(client.workspaceSymbol, 'workspaceSymbol')(input.query);
+        case 'prepareRename':
+            return requireClientMethod(client.prepareRename, 'prepareRename')(input.uri, input.line, input.character);
+        case 'status':
+        case 'installDecision':
+            return null;
         default:
             return assertNeverLspInput(input);
     }
@@ -278,19 +362,33 @@ function assertNeverLspInput(value: never): never {
 }
 
 function buildLspOutput(input: LspInput, result: unknown): LspOutput {
-    if (input.operation === 'workspaceSymbol') {
-        return { operation: input.operation, result, truncated: false };
+    switch (input.operation) {
+        case 'workspaceSymbol':
+        case 'status':
+        case 'installDecision':
+            return { operation: input.operation, result, truncated: false };
+        default:
+            return { operation: input.operation, uri: input.uri, result, truncated: false };
     }
-    return { operation: input.operation, uri: input.uri, result, truncated: false };
 }
 
 function describeTarget(input: LspInput): string {
-    return input.operation === 'workspaceSymbol' ? input.query : input.uri;
+    switch (input.operation) {
+        case 'workspaceSymbol':
+            return input.query;
+        case 'status':
+            return '';
+        case 'installDecision':
+            return input.serverId;
+        default:
+            return input.uri;
+    }
 }
 
 /** In-process LSP client for tests (no real language-server transport). Implements the
- *  required three operations; extended operations stay absent so unsupported-path behavior
- *  can be exercised against the same class. */
+ *  required three operations only; the optional extended operations stay absent so
+ *  unsupported-path behavior can be exercised. Tests that need the extended ops pass
+ *  an object literal implementing the full `LspClient` seam. */
 export class InProcessLspClient implements LspClient {
     private readonly diagnosticsByUri: ReadonlyMap<string, readonly LspDiagnostic[]>;
     private readonly hoverFn?: (uri: string, line: number, character: number) => LspHover | undefined;
@@ -302,12 +400,8 @@ export class InProcessLspClient implements LspClient {
         readonly definition?: (uri: string, line: number, character: number) => readonly LspLocation[];
     }) {
         this.diagnosticsByUri = new Map((input.diagnostics ?? []).map((entry) => [entry.uri, entry.items]));
-        if (input.hover !== undefined) {
-            this.hoverFn = input.hover;
-        }
-        if (input.definition !== undefined) {
-            this.definitionFn = input.definition;
-        }
+        if (input.hover !== undefined) this.hoverFn = input.hover;
+        if (input.definition !== undefined) this.definitionFn = input.definition;
     }
 
     async diagnostics(uri: string): Promise<readonly LspDiagnostic[]> {

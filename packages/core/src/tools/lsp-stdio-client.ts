@@ -22,7 +22,18 @@
  * hatches. LSP positions are 0-indexed line/character; the flat `LspClient` types stay 0-indexed.
  */
 import type { ProtocolError } from '@mission-control/protocol';
-import type { LspClient, LspDiagnostic, LspHover, LspLocation } from './lsp-tool.js';
+import type {
+    LspClient,
+    LspDiagnostic,
+    LspHover,
+    LspLocation,
+    LspPrepareRenameResult,
+    LspRange,
+    LspSymbol,
+    LspTextDocumentEdit,
+    LspTextEdit,
+    LspWorkspaceEdit,
+} from './lsp-tool.js';
 import { ToolExecutionError } from './tool-registry-types.js';
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
@@ -241,6 +252,158 @@ function readPosition(value: unknown): { readonly line: number; readonly charact
     return { line, character };
 }
 
+/** Map an LSP `Range` wire value to the flat `LspRange`. */
+function readRange(value: unknown): LspRange | undefined {
+    if (!isRecord(value)) return undefined;
+    const start = readPosition(value['start']);
+    const end = readPosition(value['end']);
+    if (start === undefined || end === undefined) return undefined;
+    return { start, end };
+}
+
+/** Map LSP `DocumentSymbol[]` or `SymbolInformation[]` to the flat `LspSymbol[]`. */
+function mapSymbols(result: unknown): readonly LspSymbol[] {
+    if (!Array.isArray(result)) return [];
+    const symbols: LspSymbol[] = [];
+    for (const entry of result) {
+        const mapped = mapDocumentSymbol(entry);
+        if (mapped !== undefined) symbols.push(mapped);
+    }
+    return symbols;
+}
+
+function mapDocumentSymbol(value: unknown): LspSymbol | undefined {
+    if (!isRecord(value)) return undefined;
+    const name = value['name'];
+    const kind = value['kind'];
+    if (typeof name !== 'string') return undefined;
+    // DocumentSymbol has `range` + optional `children`; SymbolInformation has `location`.
+    const range = readRange(value['range']);
+    const locationField = isRecord(value['location']) ? value['location'] : undefined;
+    const locationRange = locationField !== undefined ? readRange(locationField['range']) : undefined;
+    const resolvedRange = range ?? locationRange;
+    if (resolvedRange === undefined) return undefined;
+    const kindName = typeof kind === 'number' ? symbolKindName(kind) : typeof kind === 'string' ? kind : 'Unknown';
+    const childrenRaw = value['children'];
+    const children = Array.isArray(childrenRaw) ? mapSymbols(childrenRaw) : undefined;
+    return {
+        name,
+        kind: kindName,
+        range: resolvedRange,
+        ...(children !== undefined && children.length > 0 ? { children } : {}),
+    };
+}
+
+const SYMBOL_KIND_NAMES: readonly string[] = [
+    'File',
+    'Module',
+    'Namespace',
+    'Package',
+    'Class',
+    'Method',
+    'Property',
+    'Field',
+    'Constructor',
+    'Enum',
+    'Interface',
+    'Function',
+    'Variable',
+    'Constant',
+    'String',
+    'Number',
+    'Boolean',
+    'Array',
+    'Object',
+    'Key',
+    'Null',
+    'EnumMember',
+    'Struct',
+    'Event',
+    'Operator',
+    'TypeParameter',
+];
+
+function symbolKindName(kind: number): string {
+    return SYMBOL_KIND_NAMES[kind - 1] ?? 'Unknown';
+}
+
+/** Map LSP `PrepareRenameResult` to the flat `LspPrepareRenameResult`. */
+function mapPrepareRename(result: unknown): LspPrepareRenameResult | undefined {
+    if (result === null) return undefined;
+    if (!isRecord(result)) return undefined;
+    // Valid forms: Range | { range, placeholder } | { range: Range } (default behavior).
+    const range = readRange(result['range']) ?? readRange(result);
+    const placeholder = result['placeholder'];
+    if (range === undefined) return undefined;
+    return {
+        range,
+        placeholder: typeof placeholder === 'string' ? placeholder : '',
+    };
+}
+
+/** Map LSP `WorkspaceEdit` to the flat `LspWorkspaceEdit`. */
+function mapWorkspaceEdit(result: unknown): LspWorkspaceEdit | undefined {
+    if (result === null || result === undefined) return undefined;
+    if (!isRecord(result)) return undefined;
+    const changesField = result['changes'];
+    const documentChangesField = result['documentChanges'];
+
+    let changes: Readonly<Record<string, readonly LspTextEdit[]>> | undefined;
+    if (isRecord(changesField)) {
+        const mapped: Record<string, readonly LspTextEdit[]> = {};
+        for (const [uri, edits] of Object.entries(changesField)) {
+            if (Array.isArray(edits)) {
+                const textEdits = mapTextEdits(edits);
+                if (textEdits.length > 0) mapped[uri] = textEdits;
+            }
+        }
+        if (Object.keys(mapped).length > 0) changes = mapped;
+    }
+
+    let documentChanges: readonly LspTextDocumentEdit[] | undefined;
+    if (Array.isArray(documentChangesField)) {
+        const mapped: LspTextDocumentEdit[] = [];
+        for (const doc of documentChangesField) {
+            const entry = mapTextDocumentEdit(doc);
+            if (entry !== undefined) mapped.push(entry);
+        }
+        if (mapped.length > 0) documentChanges = mapped;
+    }
+
+    if (changes === undefined && documentChanges === undefined) return undefined;
+    return {
+        ...(changes !== undefined ? { changes } : {}),
+        ...(documentChanges !== undefined ? { documentChanges } : {}),
+    };
+}
+
+function mapTextDocumentEdit(value: unknown): LspTextDocumentEdit | undefined {
+    if (!isRecord(value)) return undefined;
+    const uri = value['textDocument'];
+    const uriField = isRecord(uri) ? uri['uri'] : undefined;
+    const versionField = isRecord(uri) ? uri['version'] : undefined;
+    const edits = mapTextEdits(value['edits']);
+    if (typeof uriField !== 'string' || edits.length === 0) return undefined;
+    return {
+        uri: uriField,
+        version: typeof versionField === 'number' ? versionField : undefined,
+        edits,
+    };
+}
+
+function mapTextEdits(value: unknown): readonly LspTextEdit[] {
+    if (!Array.isArray(value)) return [];
+    const edits: LspTextEdit[] = [];
+    for (const edit of value) {
+        if (!isRecord(edit)) continue;
+        const range = readRange(edit['range']);
+        const newText = edit['newText'];
+        if (range === undefined || typeof newText !== 'string') continue;
+        edits.push({ range, newText });
+    }
+    return edits;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -321,6 +484,51 @@ export class StdioLspClient implements LspClient {
         return mapDefinition(result);
     }
 
+    async references(uri: string, line: number, character: number): Promise<readonly LspLocation[]> {
+        this.requireReady('references');
+        await this.ensureDocumentOpen(uri);
+        const result = await this.sendRequest('textDocument/references', {
+            textDocument: { uri },
+            position: { line, character },
+            context: { includeDeclaration: true },
+        });
+        return mapDefinition(result);
+    }
+
+    async documentSymbol(uri: string): Promise<readonly LspSymbol[]> {
+        this.requireReady('documentSymbol');
+        await this.ensureDocumentOpen(uri);
+        const result = await this.sendRequest('textDocument/documentSymbol', { textDocument: { uri } });
+        return mapSymbols(result);
+    }
+
+    async workspaceSymbol(query: string): Promise<readonly LspSymbol[]> {
+        this.requireReady('workspaceSymbol');
+        const result = await this.sendRequest('workspace/symbol', { query });
+        return mapSymbols(result);
+    }
+
+    async prepareRename(uri: string, line: number, character: number): Promise<LspPrepareRenameResult | undefined> {
+        this.requireReady('prepareRename');
+        await this.ensureDocumentOpen(uri);
+        const result = await this.sendRequest('textDocument/prepareRename', {
+            textDocument: { uri },
+            position: { line, character },
+        });
+        return mapPrepareRename(result);
+    }
+
+    async rename(uri: string, line: number, character: number, newName: string): Promise<LspWorkspaceEdit | undefined> {
+        this.requireReady('rename');
+        await this.ensureDocumentOpen(uri);
+        const result = await this.sendRequest('textDocument/rename', {
+            textDocument: { uri },
+            position: { line, character },
+            newName,
+        });
+        return mapWorkspaceEdit(result);
+    }
+
     async shutdown(): Promise<void> {
         if (this.closed) return;
         if (this.initialized && this.transport !== undefined) {
@@ -373,7 +581,7 @@ export class StdioLspClient implements LspClient {
 
     private async ensureDocumentOpen(uri: string): Promise<void> {
         if (this.openedDocuments.has(uri)) return;
-        let document;
+        let document: Awaited<ReturnType<LspDocumentSource>>;
         try {
             document = await this.resolveDocument(uri);
         } catch (error) {

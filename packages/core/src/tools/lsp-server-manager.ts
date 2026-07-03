@@ -19,6 +19,7 @@
 
 import type { StdioLspClientOptions } from './lsp-stdio-client.js';
 import { StdioLspClient } from './lsp-stdio-client.js';
+import type { LspInstallDecisionValue, LspServerStatusEntry } from './lsp-tool.js';
 import { execFile } from 'node:child_process';
 
 // ---------------------------------------------------------------------------
@@ -92,6 +93,7 @@ export class LspServerManager {
     private readonly pendingClients = new Map<string, Promise<StdioLspClient | undefined>>();
     private readonly failedLanguageIds = new Set<string>();
     private readonly commandAvailability = new Map<string, boolean>();
+    private readonly installDecisions = new Map<string, LspInstallDecisionValue>();
 
     constructor(options: LspServerManagerOptions, deps?: LspServerManagerDeps) {
         this.workspaceRoot = options.workspaceRoot;
@@ -146,6 +148,7 @@ export class LspServerManager {
         const languageId = this.getLanguageIdForFile(filePath);
         if (languageId === undefined) return undefined;
         if (this.failedLanguageIds.has(languageId)) return undefined;
+        if (this.isInstallDeclined(languageId)) return undefined;
 
         const cached = this.clients.get(languageId);
         if (cached !== undefined) return cached;
@@ -176,6 +179,36 @@ export class LspServerManager {
                 }),
             ),
         );
+    }
+
+    /**
+     * Snapshot of every configured server: its language ID, command, PATH
+     * availability, and whether an active client is cached. Powers the
+     * `lsp_status` operation. Does NOT spawn missing servers.
+     */
+    getStatus(): readonly LspServerStatusEntry[] {
+        return this.servers.map((server) => {
+            const available = this.commandAvailability.get(server.command) ?? false;
+            return {
+                languageId: server.languageId,
+                command: server.command,
+                available,
+                active: this.clients.has(server.languageId),
+            };
+        });
+    }
+
+    /**
+     * Record a user install decision for a language ID so future lookups
+     * respect the choice without re-prompting. Powers `lsp_install_decision`.
+     */
+    recordInstallDecision(languageId: string, decision: LspInstallDecisionValue): void {
+        this.installDecisions.set(languageId, decision);
+    }
+
+    /** Returns `true` when the user declined installation for this language ID. */
+    isInstallDeclined(languageId: string): boolean {
+        return this.installDecisions.get(languageId) === 'declined';
     }
 
     // ----- internal -----
