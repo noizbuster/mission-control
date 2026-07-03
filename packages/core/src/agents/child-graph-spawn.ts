@@ -79,6 +79,7 @@ export function createChildGraphSpawnFn(deps: ChildGraphSpawnDeps): (context: Ch
             now: () => new Date().toISOString(),
             sessionId: context.sessionId,
             ...(deps.summaryLimit !== undefined ? { summaryLimit: deps.summaryLimit } : {}),
+            ...(context.hostCallbacks !== undefined ? { hostCallbacks: context.hostCallbacks } : {}),
         });
 
         const output =

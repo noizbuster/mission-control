@@ -17,6 +17,7 @@
  */
 
 import type { AgentDefinition, PolicyEffectRule } from '@mission-control/protocol';
+import type { ChildHostCallbacks } from '../behavior/subagents/spawn-child.js';
 import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
 import { JOB_TOOL_NAME } from '../tools/job-tool.js';
 import type {
@@ -65,6 +66,12 @@ export interface ChildSpawnContext {
     readonly childToolRegistry: ToolRegistry;
     readonly childPermissions: readonly PolicyEffectRule[];
     readonly workspaceRoot: string;
+    /**
+     * Optional host-callback bag (ask_user overlay routing, event/signal taps). Forwarded to
+     * the spawn function and ultimately to {@linkcode spawnChildCodingAgent}; absent in
+     * pure-test spawns (no parent TUI attached).
+     */
+    readonly hostCallbacks?: ChildHostCallbacks;
 }
 
 /** Builds and runs the child graph from a resolved context. */
@@ -86,6 +93,11 @@ export interface ConcreteTaskToolRuntimeOptions {
      */
     readonly resolveSdkModel?: SdkModelResolver;
     readonly summaryLimit?: number;
+    /**
+     * Optional host-callback bag forwarded into every spawn context so the child graph can
+     * route ask_user / events / signals back to the parent TUI. Absent in pure-test spawns.
+     */
+    readonly hostCallbacks?: ChildHostCallbacks;
 }
 
 const NO_SERVICES_MESSAGE =
@@ -110,6 +122,7 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
     private readonly parentAgent: AgentDefinition;
     private readonly spawnFn: SpawnFn;
     private readonly services: TaskToolRuntimeServices | undefined;
+    private readonly hostCallbacks: ChildHostCallbacks | undefined;
 
     constructor(options: ConcreteTaskToolRuntimeOptions) {
         this.agentIndex = options.agentIndex;
@@ -119,6 +132,7 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
         this.parentAgent = options.parentAgent;
         this.spawnFn = resolveSpawnFn(options);
         this.services = options.services;
+        this.hostCallbacks = options.hostCallbacks;
     }
 
     async runChildSession(request: ChildSpawnRequest): Promise<ChildSpawnResult> {
@@ -195,6 +209,7 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
             childToolRegistry,
             childPermissions: request.childPermissions,
             workspaceRoot: this.workspaceRoot,
+            ...(this.hostCallbacks !== undefined ? { hostCallbacks: this.hostCallbacks } : {}),
         });
     }
 

@@ -26,6 +26,7 @@ import { BUNDLED_AGENT_TEMPLATES } from '../agents/bundled/index.js';
 import { type ModelPattern, resolveAgentModel } from '../agents/model-resolver.js';
 import { type ModelRole, parseModelAlias } from '../agents/model-roles.js';
 import { ConcreteTaskToolRuntime, type TaskToolRuntimeServices } from '../agents/task-tool-runtime.js';
+import type { ChildHostCallbacks } from '../behavior/subagents/spawn-child.js';
 import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
 import {
     createFullParityTaskToolRegistration,
@@ -50,6 +51,12 @@ export type FullParityTaskToolOptions = {
     readonly agentModelOverrides?: ReadonlyMap<string, ModelPattern>;
     readonly roleConfig?: Partial<Record<ModelRole, ModelPattern>>;
     readonly services?: TaskToolRuntimeServices;
+    /**
+     * Optional host-callback bag forwarded into the {@linkcode ConcreteTaskToolRuntime} so the
+     * child graph can route ask_user / events / signals back to the parent TUI. When omitted
+     * the child runs isolated; ask_user returns the `ASK_USER_BLOCKED_ANSWER` sentinel.
+     */
+    readonly hostCallbacks?: ChildHostCallbacks;
 };
 
 /**
@@ -121,6 +128,7 @@ export async function createFullParityTaskToolRegistrationForCli(
             resolveSdkModel: options.resolveSdkModel,
             ...(options.summaryLimit !== undefined ? { summaryLimit: options.summaryLimit } : {}),
             ...(options.services !== undefined ? { services: options.services } : {}),
+            ...(options.hostCallbacks !== undefined ? { hostCallbacks: options.hostCallbacks } : {}),
         }),
     });
 
