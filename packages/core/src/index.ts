@@ -50,6 +50,7 @@ export type { AbgRuleEvaluationInput, CompiledAbgRule } from './behavior/rule-co
 export { AbgGraphValidationError, compileAbgRule } from './behavior/rule-compiler.js';
 export type { AbgSignalProjectionInput } from './behavior/signals.js';
 export { projectAbgSignalToEvent } from './behavior/signals.js';
+export type { ChildHostCallbacks } from './behavior/subagents/spawn-child.js';
 export type { AbgTimelineEntry } from './behavior/timeline.js';
 export { projectAbgTimeline } from './behavior/timeline.js';
 export type { CancellationToken, TaskHandle, TaskStatus } from './cancellation.js';

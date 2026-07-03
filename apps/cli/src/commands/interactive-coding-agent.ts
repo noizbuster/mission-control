@@ -195,6 +195,12 @@ async function createInteractiveRunOwner(
     // Resolve the SDK model BEFORE building the tool registry so the `task` subagent tool can
     // capture it in its spawn closure (the child graph needs the same model resolver as the parent).
     const resolveSdkModel = await resolveInteractiveSdkModel(options);
+    const childHostCallbacks: MutableChildHostCallbacks = {
+        ...(options.requestUserQuestion !== undefined ? { requestUserQuestion: options.requestUserQuestion } : {}),
+        ...(options.requestUserQuestions !== undefined ? { requestUserQuestions: options.requestUserQuestions } : {}),
+        emitEvent: (event: AgentEvent) => options.emitEvent(event),
+        output: { write: (text: string) => options.output.write(text) },
+    };
     const toolOptions = {
         workspaceRoot: options.workspaceRoot,
         sessionId: options.sessionId,
@@ -203,6 +209,7 @@ async function createInteractiveRunOwner(
         emitEvent: options.emitEvent,
         resolveSdkModel,
         enableTrustedBash: await workspaceHasTrustedBash(options.workspaceRoot),
+        childHostCallbacks,
         ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
         ...(options.lspClient !== undefined ? { lspClient: options.lspClient } : {}),
         ...(options.requestUserQuestion !== undefined ? { requestUserQuestion: options.requestUserQuestion } : {}),
@@ -228,9 +235,10 @@ async function createInteractiveRunOwner(
     const extraObservers: ReadonlyArray<(signal: AbgSignal) => void> =
         overlayWiring !== undefined ? [overlayWiring.observer] : [];
     const onSignal = interactiveGraphStreamSignal(options.output, renderState, options.workspaceRoot, extraObservers);
-    // System-prompt context: the model needs to know WHERE it is (cwd/workspace/git) and what
-    // project-local instructions (AGENTS.md/CLAUDE.md) apply, otherwise it answers generically.
-    // Built per turn — date is fresh, AGENTS.md may have changed since the prior turn.
+    // Late-bind the graph handlers onto the child-callbacks holder. The task tool closure does
+    // not read these until SPAWN time (which is always later in the turn), so assigning them
+    // here — after the registry is built but before the first turn runs — is race-free.
+    childHostCallbacks.onSignal = (signal) => onSignal(signal);
     const systemPromptEnv = await buildCodingAgentSystemPromptEnv({
         workspaceRoot: options.workspaceRoot,
         modelId: options.modelProviderSelection.modelID,
@@ -265,6 +273,7 @@ async function createInteractiveRunOwner(
         options.observeStoredEvent?.(event);
         overlayWiring?.onDurableEvent(event);
     };
+    childHostCallbacks.onDurableEvent = (event) => onDurableEventHandler(event);
 
     const owner = new SessionRunOwner({
         sessionId: options.sessionId,
@@ -362,6 +371,22 @@ type ProviderRenderState = {
     toolNames: string[];
 };
 
+/**
+ * Mutable view of {@linkcode ChildHostCallbacks} used during interactive turn setup. The
+ * `requestUserQuestion(s)` / `emitEvent` / `output` fields are populated before the tool
+ * registry is built; `onSignal` / `onDurableEvent` are assigned after their handlers are
+ * constructed later in the same setup path. Reads happen at SPAWN time, so the late
+ * assignment is race-free.
+ */
+type MutableChildHostCallbacks = {
+    readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
+    readonly requestUserQuestions?: (requests: readonly AskUserQuestionRequest[]) => Promise<string[]>;
+    readonly emitEvent: (event: AgentEvent) => void;
+    readonly output: { readonly write: (text: string) => void };
+    onSignal?: (signal: AbgSignal) => void | Promise<void>;
+    onDurableEvent?: (event: AgentEvent) => void;
+};
+
 function renderProviderEnvelope(output: ChatOutput, state: ProviderRenderState, envelope: AgentEventEnvelope): void {
     const chunk = envelope.event.providerStreamChunk;
     if (chunk?.kind === 'text_delta') {
@@ -454,7 +479,7 @@ const NODE_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
     'delegate-worker': 'Working on task',
     'verify-wave': 'Verifying',
     'evidence-check': 'Checking evidence',
-    'supervisor': 'Reviewing progress',
+    supervisor: 'Reviewing progress',
     'final-respond': 'Composing answer',
     clarify: 'Asking for clarification',
 };
@@ -567,8 +592,7 @@ export function interactiveGraphStreamSignal(
             for (const observer of extraObservers) {
                 try {
                     observer(signal);
-                } catch {
-                }
+                } catch {}
             }
         }
     };

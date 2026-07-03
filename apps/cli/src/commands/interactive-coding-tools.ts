@@ -1,5 +1,6 @@
 import {
     type AskUserQuestionRequest,
+    type ChildHostCallbacks,
     type CommandExecutionRequest,
     type CommandExecutionResult,
     createDelegatingLspClient,
@@ -35,8 +36,8 @@ import {
     ToolRegistry,
     type ToolRegistryWithMcp,
     todoWriteToolRegistration,
-    wireNativesFsCacheInvalidator,
     type WorkflowRegistry,
+    wireNativesFsCacheInvalidator,
 } from '@mission-control/core';
 import type {
     AbgNodeModelOptions,
@@ -105,6 +106,14 @@ export type InteractiveToolOptions = {
     readonly onWorkflowStarted?: (spec: WorkflowSpec, prompt: string) => void;
     readonly services?: TaskToolRuntimeServices;
     readonly profileName?: string;
+    /**
+     * Lazy holder for routing child ask_user overlays and graph events back into this TUI.
+     * `requestUserQuestion(s)` / `emitEvent` / `output` are populated up front; `onSignal`
+     * and `onDurableEvent` are assigned after those handlers are constructed (later in the
+     * same turn-setup path). The task tool closure reads these at SPAWN time, so the late
+     * assignment is safe.
+     */
+    readonly childHostCallbacks?: ChildHostCallbacks;
 };
 
 export async function createInteractiveToolRegistry(
@@ -206,6 +215,7 @@ export async function createInteractiveToolRegistry(
             agentModelOverrides,
             ...(roleConfig !== undefined ? { roleConfig } : {}),
             ...(options.services !== undefined ? { services: options.services } : {}),
+            ...(options.childHostCallbacks !== undefined ? { hostCallbacks: options.childHostCallbacks } : {}),
         });
     }
     const mcpConnectionManager = await registerNamespacedMcpTools(registry, {
