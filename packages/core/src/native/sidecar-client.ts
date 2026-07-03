@@ -1,6 +1,7 @@
 import {
     type NativeSidecarStatus,
     SIDECAR_PROTOCOL_V2_VERSION,
+    SIDECAR_PROTOCOL_V3_VERSION,
     SIDECAR_PROTOCOL_VERSION,
     type SidecarCapability,
     type SidecarHandshakeResponse,
@@ -18,9 +19,10 @@ export { normalizeSidecarLine, parseSidecarWireResponse } from './sidecar-wire.j
 
 export type ProcessSidecarClientOptions = {
     readonly enableProtocolV2?: boolean;
+    readonly enableProtocolV3?: boolean;
 };
 
-export type NegotiatedSidecarCapability = SidecarCapability | 'task.cancel';
+export type NegotiatedSidecarCapability = SidecarCapability | 'shell.session' | 'pty.alloc' | 'iso.resolve';
 
 export interface SidecarClient {
     status(): NativeSidecarStatus;
@@ -208,14 +210,19 @@ export class ProcessSidecarClient implements SidecarClient {
     }
 
     private requestedProtocolVersion(): SidecarProtocolVersion {
-        return this.options.enableProtocolV2 === true ? SIDECAR_PROTOCOL_V2_VERSION : SIDECAR_PROTOCOL_VERSION;
+        if (this.options.enableProtocolV3 === true) return SIDECAR_PROTOCOL_V3_VERSION;
+        if (this.options.enableProtocolV2 === true) return SIDECAR_PROTOCOL_V2_VERSION;
+        return SIDECAR_PROTOCOL_VERSION;
     }
 
-    private handshakeCapabilities(): { readonly requestedCapabilities?: readonly NegotiatedSidecarCapability[] } {
-        if (this.options.enableProtocolV2 !== true) {
-            return {};
+    private handshakeCapabilities(): { readonly requestedCapabilities?: readonly string[] } {
+        if (this.options.enableProtocolV3 === true) {
+            return { requestedCapabilities: ['shell.session', 'pty.alloc', 'iso.resolve'] };
         }
-        return { requestedCapabilities: ['task.cancel'] };
+        if (this.options.enableProtocolV2 === true) {
+            return { requestedCapabilities: ['task.cancel'] };
+        }
+        return {};
     }
 
     private acceptHandshake(response: SidecarHandshakeResponse): void {
@@ -225,7 +232,14 @@ export class ProcessSidecarClient implements SidecarClient {
                 `sidecar protocol version mismatch: requested v${String(requestedVersion)} but received v${String(response.protocolVersion)}`,
             );
         }
-        if (requestedVersion === SIDECAR_PROTOCOL_V2_VERSION && !hasCapability(response.capabilities, 'task.cancel')) {
+        if (requestedVersion === SIDECAR_PROTOCOL_V3_VERSION) {
+            if (!hasCapability(response.capabilities, 'shell.session')) {
+                throw new SidecarProtocolError('sidecar protocol v3 did not negotiate shell.session');
+            }
+        } else if (
+            requestedVersion === SIDECAR_PROTOCOL_V2_VERSION &&
+            !hasCapability(response.capabilities, 'task.cancel')
+        ) {
             throw new SidecarProtocolError('sidecar protocol v2 did not negotiate task.cancel');
         }
         this.nativeStatus = 'native';
