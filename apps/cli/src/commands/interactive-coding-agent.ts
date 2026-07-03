@@ -899,6 +899,18 @@ function applyToolCallToPatch(toolCall: ToolCall): Partial<AbgOverlayState> {
     return { recentEvents: [event] };
 }
 
+const PERFORMANCE_ENTRY_GUARD_THRESHOLD = 10_000;
+
+function clearStalePerformanceEntries(): void {
+    const perf = globalThis.performance;
+    if (perf === undefined || typeof perf.clearMeasures !== 'function') return;
+    if (perf.getEntriesByType('measure').length < PERFORMANCE_ENTRY_GUARD_THRESHOLD) return;
+    perf.clearMeasures();
+    if (typeof perf.clearMarks === 'function') {
+        perf.clearMarks();
+    }
+}
+
 export function wireAbgOverlay(controller: AbgOverlayController, graphSpec?: AbgGraphSpec): AbgOverlayWiring {
     const store = controller.store;
     let pendingSnapshot: AbgOverlayState = store.getSnapshot();
@@ -917,7 +929,10 @@ export function wireAbgOverlay(controller: AbgOverlayController, graphSpec?: Abg
         pendingSnapshot = store.getSnapshot();
     };
 
-    const timer = setInterval(commitToStore, refreshMs);
+    const timer = setInterval(() => {
+        clearStalePerformanceEntries();
+        commitToStore();
+    }, refreshMs);
 
     // Seed the store at construction time so the overlay shows the graph structure before
     // graph.started fires (closes the async setup timing gap). Idempotent with graph.started.
@@ -950,7 +965,8 @@ export function wireAbgOverlay(controller: AbgOverlayController, graphSpec?: Abg
         pendingSnapshot = { ...pendingSnapshot, ...patch };
         pending = { ...pending, ...patch };
         dirty = true;
-        commitToStore();
+        // Intentionally no commitToStore() — the refreshMs timer batches per-token streaming
+        // signals. A synchronous commit per signal re-introduces the O(tokens) re-render storm.
     };
 
     const onDurableEvent = (event: AgentEvent): void => {
