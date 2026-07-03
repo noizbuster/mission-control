@@ -1,6 +1,6 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { CommandExecutionRequest, CommandExecutionResult } from './command-run-executor.js';
+import type { CommandChainStep, CommandExecutionRequest, CommandExecutionResult } from './command-run-executor.js';
 import { type CommandRunOutput, commandRunModelOutput, commandRunOutputSchema } from './command-run-schemas.js';
 
 export const bashRunInputSchema = z
@@ -25,6 +25,11 @@ export type BashRunToolOptions = {
      * and never see this option. Tests that cover pipeline behavior inject this instead.
      */
     readonly pipelineExecutor?: (requests: readonly CommandExecutionRequest[]) => Promise<CommandExecutionResult>;
+    /**
+     * Optional override for chain execution (e.g. `a && b || c ; d`). When omitted the real
+     * `executeCommandChain` is used. Single-pipeline commands never reach this code path.
+     */
+    readonly chainExecutor?: (steps: readonly CommandChainStep[]) => Promise<CommandExecutionResult>;
     readonly timeoutMs?: number;
     readonly maxOutputBytes?: number;
     readonly maxModelOutputChars?: number;
@@ -38,6 +43,7 @@ export type ResolvedBashRunToolOptions = {
     readonly requestPermission: BashRunToolOptions['requestPermission'];
     readonly executor: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly pipelineExecutor: (requests: readonly CommandExecutionRequest[]) => Promise<CommandExecutionResult>;
+    readonly chainExecutor: (steps: readonly CommandChainStep[]) => Promise<CommandExecutionResult>;
     readonly timeoutMs: number;
     readonly maxOutputBytes: number;
     readonly maxModelOutputChars: number;

@@ -1,4 +1,9 @@
-import { parseTrustedCommandLine, parseTrustedCommandPipeline } from './bash-run-command-guard.js';
+import type { CommandChain } from './bash-run-command-guard.js';
+import {
+    parseTrustedCommandChain,
+    parseTrustedCommandLine,
+    parseTrustedCommandPipeline,
+} from './bash-run-command-guard.js';
 import { commandRunFailure } from './command-run-errors.js';
 import { realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
@@ -46,6 +51,15 @@ export function assertAllowedCommandLine(commandLine: string): readonly string[]
  */
 export function assertAllowedCommandPipeline(commandLine: string): readonly (readonly string[])[] {
     return parseTrustedCommandPipeline(commandLine);
+}
+
+/**
+ * Parse a command line that may contain top-level chain operators (`&&`, `||`, `;`) plus
+ * `|` pipe operators inside each chain segment. Returns the structured chain so the executor
+ * can enforce chain semantics via direct-spawn exit-code branching (NO shell).
+ */
+export function assertAllowedCommandChain(commandLine: string): CommandChain {
+    return parseTrustedCommandChain(commandLine);
 }
 
 export async function resolveBashCwd(workspaceRoot: string, requestedCwd?: string): Promise<string> {
