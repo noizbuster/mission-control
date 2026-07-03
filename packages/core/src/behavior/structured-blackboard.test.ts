@@ -84,7 +84,7 @@ describe('parseStructuredOutput', () => {
             expect(parseStructuredOutput('explicit')).toEqual({ ok: true, value: 'explicit' });
         });
 
-        it('returns the first line of multi-line prose', () => {
+        it('returns the first line when it is a clean token', () => {
             expect(parseStructuredOutput('APPROVE\n(because all critics passed)')).toEqual({
                 ok: true,
                 value: 'APPROVE',
@@ -93,6 +93,52 @@ describe('parseStructuredOutput', () => {
 
         it('keeps a plain category label as a string', () => {
             expect(parseStructuredOutput('trivial')).toEqual({ ok: true, value: 'trivial' });
+        });
+
+        it('extracts the last line when reasoning precedes the classification', () => {
+            const verbose = [
+                'Intent: **explicit-implementation**',
+                '',
+                'Reasoning: The user asks for a concrete fix with clear scope.',
+                '',
+                'explicit-implementation',
+            ].join('\n');
+            expect(parseStructuredOutput(verbose)).toEqual({
+                ok: true,
+                value: 'explicit-implementation',
+            });
+        });
+
+        it('extracts the last line for a multi-class verbose output', () => {
+            const verbose = 'After analysis, this is exploratory.\n\nexploratory-research';
+            expect(parseStructuredOutput(verbose)).toEqual({
+                ok: true,
+                value: 'exploratory-research',
+            });
+        });
+
+        it('coerces last-line "true" to boolean from multi-line verbose output', () => {
+            const verbose = 'The anti-dup check passes. No prior exploration duplicated.\n\ntrue';
+            expect(parseStructuredOutput(verbose, 'boolean')).toEqual({
+                ok: true,
+                value: true,
+            });
+        });
+
+        it('coerces last-line "false" to boolean from multi-line verbose output', () => {
+            const verbose = 'Evidence is insufficient. Tests not passing.\n\nfalse';
+            expect(parseStructuredOutput(verbose, 'boolean')).toEqual({
+                ok: true,
+                value: false,
+            });
+        });
+
+        it('coerces bare last-line true without expectedShape', () => {
+            const verbose = 'Reasoning here.\n\ntrue';
+            expect(parseStructuredOutput(verbose)).toEqual({
+                ok: true,
+                value: true,
+            });
         });
     });
 

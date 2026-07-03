@@ -87,12 +87,18 @@ export function parseStructuredOutput(
         return validateShape(false, expectedShape);
     }
 
-    // Single-line string backwards-compat: take the first non-empty line.
-    const firstLine = firstLineOf(trimmed);
-    if (firstLine.length === 0) {
+    const stringLine = extractStringLine(trimmed);
+    if (stringLine.length === 0) {
         return { ok: false, error: 'empty output' };
     }
-    return validateShape(firstLine, expectedShape);
+    const lowerLine = stringLine.toLowerCase();
+    if (lowerLine === 'true') {
+        return validateShape(true, expectedShape);
+    }
+    if (lowerLine === 'false') {
+        return validateShape(false, expectedShape);
+    }
+    return validateShape(stringLine, expectedShape);
 }
 
 function validateShape(value: unknown, expected: StructuredOutputShape): ParseStructuredOutputResult {
@@ -130,9 +136,33 @@ function firstNonWhitespaceIs(text: string, ...chars: readonly string[]): boolea
     return false;
 }
 
-/** Return the first non-empty trimmed line of `text`. */
-function firstLineOf(text: string): string {
-    const newlineIndex = text.indexOf('\n');
-    const line = newlineIndex === -1 ? text : text.slice(0, newlineIndex);
-    return line.trim();
+/**
+ * Extract the best string line from multi-line LLM output. Prefers the last
+ * non-empty line when it is a clean single token and the first is not.
+ */
+function extractStringLine(text: string): string {
+    const lines = text
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+    if (lines.length === 0) return '';
+    const first = lines[0] ?? '';
+    if (lines.length === 1) return first;
+    const last = lines[lines.length - 1] ?? '';
+    if (isCleanToken(last) && !isCleanToken(first)) {
+        return last;
+    }
+    return first;
+}
+
+/** A clean classification token: single word, no prose, no markdown markers. */
+function isCleanToken(line: string): boolean {
+    return (
+        line.length > 0 &&
+        line.length <= 80 &&
+        !line.includes(' ') &&
+        !line.includes('**') &&
+        !line.includes('`') &&
+        !line.includes(':')
+    );
 }
