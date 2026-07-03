@@ -1,0 +1,24 @@
+{
+  "name": "@mission-control/natives",
+  "version": "0.1.0",
+  "description": "N-API native addon wrapper. The cdylib is built by native/natives (Rust) and the per-platform .node artifacts are distributed as optional dependencies following the napi-rs convention. This file is metadata for the future release-distribution flow; native/natives is not a pnpm workspace member so it is inert to install today.",
+  "license": "MIT",
+  "main": "index.node",
+  "types": "index.d.ts",
+  "files": ["index.node", "index.d.ts"],
+  "optionalDependencies": {
+    "@mission-control/natives-linux-x64": "0.1.0",
+    "@mission-control/natives-linux-arm64": "0.1.0",
+    "@mission-control/natives-darwin-x64": "0.1.0",
+    "@mission-control/natives-darwin-arm64": "0.1.0"
+  },
+  "napi": {
+    "name": "mission-control-natives",
+    "triples": [
+      { "triple": "x86_64-unknown-linux-gnu", "platform": "linux", "arch": "x64" },
+      { "triple": "aarch64-unknown-linux-gnu", "platform": "linux", "arch": "arm64" },
+      { "triple": "x86_64-apple-darwin", "platform": "darwin", "arch": "x64" },
+      { "triple": "aarch64-apple-darwin", "platform": "darwin", "arch": "arm64" }
+    ]
+  }
+}

@@ -1,0 +1,78 @@
+[package]
+name = "mission-control-natives"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "3", features = ["napi10"] }
+napi-derive = "3"
+tiktoken-rs = "0.11"
+# Regex content search (repo.search/grep acceleration).
+grep-matcher = "0.1"
+grep-regex = "0.1"
+grep-searcher = "0.1"
+regex = "1"
+rayon = "1"
+# Path discovery (glob/find acceleration): gitignore-aware directory walker
+# plus glob-pattern matching.
+ignore = "0.4"
+globset = "0.4"
+# Shared mtime-keyed file-content cache consumed by grep/glob/read
+# (task 9 fs_cache). Concurrent map; the cache is process-global and the
+# only mutation is a wholesale clear from `invalidate_fs_scan_cache`.
+dashmap = "6"
+# Structural source summaries (repo.read summarized snippets): tree-sitter AST
+# elision. Adapted from oh-my-pi's pi-ast/summary.rs (MIT, (c) 2025 Mario
+# Zechner, 2025-2026 Can Boluk). All grammars are pinned to the tree-sitter
+# 0.24 line so a single `tree_sitter::Language` type unifies across them;
+# tree-sitter-typescript has no 0.25 release, which is why the core stays on
+# 0.24 rather than tracking oh-my-pi's 0.25.
+tree-sitter = "0.24"
+tree-sitter-typescript = "0.23"
+tree-sitter-python = "0.23"
+tree-sitter-go = "0.23"
+tree-sitter-javascript = "0.23"
+# tree-sitter-rust 0.24.x ships grammar ABI 15 (incompatible with the 0.24
+# runtime, which accepts max ABI 14); 0.23.3 is ABI 14 and stays aligned.
+tree-sitter-rust = "0.23"
+# Structural code search and rewrite (ast_grep/ast_rewrite acceleration).
+# ast-grep-core is pinned to the 0.36 line because it is the LAST release whose
+# `tree-sitter` requirement is `0.24` (the same ABI-14 line the summary grammars
+# use). tree-sitter declares `links = "tree-sitter"`, so only one tree-sitter
+# version may appear in the graph; 0.37+ pull tree-sitter 0.25 and would force a
+# second native copy, breaking the link. Adapted from oh-my-pi's
+# `crates/pi-natives/src/ast.rs` (MIT, (c) 2025 Mario Zechner, 2025-2026 Can
+# Boluk), trimmed to the 6 in-tree grammars and the path-guard delegation model.
+ast-grep-core = "0.36"
+# HTML to Markdown conversion (webfetch HTML body acceleration). Adapted from
+# oh-my-pi's `crates/pi-natives/src/html.rs` (MIT, (c) 2025 Mario Zechner,
+# 2025-2026 Can Boluk). The 3.8 line is the current release; the `0.x`/`2.x`
+# versions in older references no longer exist on crates.io.
+html-to-markdown-rs = { version = "3.8.0-rc.2", default-features = false }
+# Syntax highlighting as an ANSI-colored utility (syntect). Adapted from
+# oh-my-pi's `crates/pi-natives/src/highlight.rs` (MIT, (c) 2025 Mario Zechner,
+# 2025-2026 Can Boluk). `default-syntaxes` + `default-themes` + `regex-fancy`
+# mirror oh-my-pi's tested feature set; the fancy-regex backend is required by
+# the default syntax definitions.
+syntect = { version = "5.3", default-features = false, features = [
+    "default-syntaxes",
+    "default-themes",
+    "regex-fancy",
+] }
+
+[build-dependencies]
+napi-build = "2"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
