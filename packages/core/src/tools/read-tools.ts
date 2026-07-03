@@ -1,3 +1,5 @@
+import type { NativeSummaryResult } from '../native/natives-client.js';
+import { computeLineHash } from './hashline/hash-computation.js';
 import { repoToolFailure } from './read-tools-errors.js';
 import { createWorkspaceGuard, isBinarySample, type WorkspaceGuard } from './read-tools-paths.js';
 import {
@@ -23,6 +25,7 @@ import {
     searchParametersJsonSchema,
 } from './read-tools-schemas.js';
 import { searchRepoText } from './read-tools-search.js';
+import { interceptRead } from './scheme-resolver.js';
 import { permissionRequest, requestToolPermission } from './tool-permissions.js';
 import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
 import { open, readdir } from 'node:fs/promises';
@@ -38,6 +41,7 @@ type ReadOnlyRepoToolRegistrations = readonly [
     ToolRegistration<ListInput, ListOutput>,
     ToolRegistration<SearchInput, SearchOutput>,
     ToolRegistration<SearchInput, SearchOutput>,
+    ToolRegistration<ReadInput, ReadOutput>,
 ];
 
 export async function registerReadOnlyRepoTools(
@@ -53,6 +57,7 @@ export async function registerReadOnlyRepoTools(
         registry.register(registrations[4]),
         registry.register(registrations[5]),
         registry.register(registrations[6]),
+        registry.register(registrations[7]),
     ];
 }
 
@@ -71,6 +76,7 @@ export async function createReadOnlyRepoToolRegistrations(
         createListAliasTool(guard, resolved),
         createSearchAliasTool(guard, resolved, 'grep', 'Search text files inside the workspace.'),
         createSearchAliasTool(guard, resolved, 'find', 'Find matching text inside workspace files.'),
+        createReadTaggedTool(guard, resolved),
     ];
     return registrations;
 }
@@ -128,10 +134,15 @@ function createSearchTool(
                 input.path ?? '.',
                 input.include ?? '.',
             ]);
-            const result = await searchRepoText(guard, searchInputForExecution(input), {
-                maxMatches: options.maxSearchMatches,
-                maxLineChars: options.maxSearchLineChars,
-            });
+            const result = await searchRepoText(
+                guard,
+                searchInputForExecution(input),
+                {
+                    maxMatches: options.maxSearchMatches,
+                    maxLineChars: options.maxSearchLineChars,
+                },
+                options.natives,
+            );
             return {
                 kind: 'search',
                 pattern: input.pattern,
@@ -158,6 +169,25 @@ function createReadAliasTool(
         outputSchema: readOutputSchema,
         outputLimit: { maxModelOutputChars: options.maxModelOutputChars },
         execute: (input, context) => readWorkspaceFile(guard, options, input, context.toolName, context.toolCallId),
+        toModelOutput: readModelOutput,
+    };
+}
+
+function createReadTaggedTool(
+    guard: WorkspaceGuard,
+    options: ResolvedReadOnlyRepoToolOptions,
+): ToolRegistration<ReadInput, ReadOutput> {
+    return {
+        name: 'repo.read.tagged',
+        description:
+            'Read a workspace file with each line tagged as NN#XX|content. Use the NN#XX anchors in a follow-up hashline_edit call. Output is NOT byte-identical to repo.read (it carries the anchors); use repo.read for raw content.',
+        capabilityClasses: ['repo.read'],
+        parametersJsonSchema: readParametersJsonSchema(),
+        inputSchema: readInputSchema,
+        outputSchema: readOutputSchema,
+        outputLimit: { maxModelOutputChars: options.maxModelOutputChars },
+        execute: (input, context) =>
+            readWorkspaceFile(guard, options, { ...input, tagged: true }, context.toolName, context.toolCallId),
         toModelOutput: readModelOutput,
     };
 }
@@ -200,10 +230,15 @@ function createSearchAliasTool(
                 input.path ?? '.',
                 input.include ?? '.',
             ]);
-            const result = await searchRepoText(guard, searchInputForExecution(input), {
-                maxMatches: options.maxSearchMatches,
-                maxLineChars: options.maxSearchLineChars,
-            });
+            const result = await searchRepoText(
+                guard,
+                searchInputForExecution(input),
+                {
+                    maxMatches: options.maxSearchMatches,
+                    maxLineChars: options.maxSearchLineChars,
+                },
+                options.natives,
+            );
             return {
                 kind: 'search',
                 pattern: input.pattern,
@@ -232,6 +267,12 @@ async function readWorkspaceFile(
     action: string,
     toolCallId: string,
 ): Promise<ReadOutput> {
+    if (options.schemeResolver !== undefined) {
+        const intercepted = await interceptRead(options.schemeResolver, input.path);
+        if (intercepted !== undefined) {
+            return readOutputFromScheme(input.path, intercepted);
+        }
+    }
     await requireReadPermission(options, toolCallId, action, [input.path]);
     const target = await guard.resolveExisting(input.path);
     if (!target.stats.isFile()) {
@@ -244,14 +285,97 @@ async function readWorkspaceFile(
     const contentBytes =
         sample.length < options.maxReadBytes ? sample : await readFilePrefix(target.absolutePath, options.maxReadBytes);
     const content = selectLines(contentBytes.toString('utf8'), input);
-    return {
-        kind: 'file',
+    const baseOutput = {
+        kind: 'file' as const,
         path: target.relativePath,
         content,
         truncated: target.stats.size > contentBytes.length,
         originalBytes: target.stats.size,
         returnedBytes: contentBytes.length,
     };
+    // Tagged mode: prefix every line with a `NN#XX|` content-hash anchor so a
+    // follow-up hashline_edit can reference lines by their anchor. Line numbers
+    // reflect the window start (`offset`) so a windowed tagged read keeps its
+    // anchors aligned with the source file. Tagged mode is mutually exclusive
+    // with the structural summary (elided bodies would carry meaningless tags).
+    if (input.tagged === true) {
+        const startLine = input.offset ?? 1;
+        const tagged = tagLinesWithAnchors(content, startLine);
+        return {
+            ...baseOutput,
+            content: tagged,
+            returnedBytes: Buffer.byteLength(tagged, 'utf8'),
+        };
+    }
+    // Structural summary is the DEFAULT read output for supported languages.
+    // It is applied only to the already-vetted file CONTENT, never changing
+    // the path guard or denylist. Line-windowed reads (`offset` / `limit`),
+    // an explicit `summary: false` opt-out, an unavailable addon, an
+    // unsupported language, a parse failure, or a file too small to elide
+    // all fall back to the raw text above.
+    if (
+        input.summary !== false &&
+        input.offset === undefined &&
+        input.limit === undefined &&
+        options.natives !== undefined
+    ) {
+        const result = options.natives.summarizeCode({ code: content, path: target.relativePath });
+        if (result !== null && result.parsed && result.elided) {
+            const { text, elidedLines } = renderSummaryContent(result);
+            return {
+                ...baseOutput,
+                content: text,
+                returnedBytes: Buffer.byteLength(text, 'utf8'),
+                summarized: true,
+                elidedLines,
+            };
+        }
+    }
+    return baseOutput;
+}
+
+function readOutputFromScheme(
+    sourceLabel: string,
+    intercepted: { readonly content: string; readonly notes: readonly string[] },
+): ReadOutput {
+    const contentBytes = Buffer.from(intercepted.content, 'utf8');
+    const notePrefix = intercepted.notes.length > 0 ? `\n\n${intercepted.notes.join('\n')}` : '';
+    return {
+        kind: 'file',
+        path: sourceLabel,
+        content: intercepted.content + notePrefix,
+        truncated: false,
+        originalBytes: contentBytes.length,
+        returnedBytes: contentBytes.length,
+    };
+}
+
+function tagLinesWithAnchors(content: string, startLine: number): string {
+    if (content.length === 0) {
+        return '';
+    }
+    const lines = content.split('\n');
+    return lines
+        .map((line, index) => `${startLine + index}#${computeLineHash(startLine + index, line)}|${line}`)
+        .join('\n');
+}
+
+// Render a structural summary as model-facing text: kept segments verbatim,
+// each elided span as an ASCII `... // N lines elided` marker. Imports and
+// signatures live in kept segments; bodies collapse to the markers.
+function renderSummaryContent(result: NativeSummaryResult): { text: string; elidedLines: number } {
+    const parts: string[] = [];
+    let elidedLines = 0;
+    for (const segment of result.segments) {
+        if (segment.kind === 'kept') {
+            parts.push(segment.text ?? '');
+        } else {
+            const spanLines = Math.max(0, segment.endLine - segment.startLine + 1);
+            elidedLines += spanLines;
+            parts.push(`... // ${spanLines} line${spanLines === 1 ? '' : 's'} elided`);
+        }
+    }
+    return { text: parts.join('\n'), elidedLines };
 }
 
 async function listWorkspaceDirectory(

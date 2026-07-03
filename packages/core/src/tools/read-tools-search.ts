@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { NativesClient } from '../native/natives-client.js';
 import { repoToolFailure } from './read-tools-errors.js';
 import { isBinarySample, type WorkspaceGuard, type WorkspacePath } from './read-tools-paths.js';
 import { spawn } from 'node:child_process';
@@ -43,13 +44,57 @@ export async function searchRepoText(
     guard: WorkspaceGuard,
     input: RepoSearchInput,
     options: RepoSearchOptions,
+    natives?: NativesClient,
 ): Promise<RepoSearchResult> {
     const target = await guard.resolveExisting(input.path ?? '.');
+    const nativeResult = await searchWithNatives(guard, target, input, options, natives);
+    if (nativeResult !== undefined) {
+        return nativeResult;
+    }
     const rgResult = await searchWithRipgrep(guard, target, input, options);
     if (rgResult !== undefined) {
         return rgResult;
     }
     return searchWithNode(guard, target, input, options);
+}
+
+// The N-API path is preferred when the addon is available. It searches the
+// same workspace-vetted file list the node fallback would walk, so path guards
+// (containment + the `temp/ref-repos` denylist) stay enforced on the TS side.
+// Returns `undefined` to signal "addon unavailable / errored, fall back".
+async function searchWithNatives(
+    guard: WorkspaceGuard,
+    target: WorkspacePath,
+    input: RepoSearchInput,
+    options: RepoSearchOptions,
+    natives?: NativesClient,
+): Promise<RepoSearchResult | undefined> {
+    if (natives === undefined || !natives.available) {
+        return undefined;
+    }
+    const collected = target.stats.isDirectory()
+        ? await collectFiles(guard, target.absolutePath)
+        : [target.absolutePath];
+    const suffix = input.include !== undefined ? input.include.replace(/^\*/, '') : undefined;
+    const files = suffix !== undefined ? collected.filter((file) => file.endsWith(suffix)) : collected;
+    const native = natives.search(input.pattern, files, { outputMode: 'content' });
+    if (native === null) {
+        return undefined;
+    }
+    const rows = native
+        .map((match) =>
+            formatMatch(
+                guard.relativeFromAbsolute(match.path),
+                match.lineNumber,
+                match.lineContent,
+                options.maxLineChars,
+            ),
+        )
+        .sort(compareMatches);
+    return {
+        matches: rows.slice(0, options.maxMatches),
+        totalMatches: rows.length,
+    };
 }
 
 async function searchWithRipgrep(

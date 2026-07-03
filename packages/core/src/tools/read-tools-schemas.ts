@@ -1,11 +1,24 @@
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { z } from 'zod';
+import type { NativesClient } from '../native/natives-client.js';
+import type { SchemeResolver } from './scheme-resolver.js';
 
 export const readInputSchema = z
     .object({
         path: z.string().min(1),
         offset: z.number().int().positive().optional(),
         limit: z.number().int().positive().optional(),
+        // Default `true`: supported source files are returned as a structural
+        // summary (imports + signatures, bodies elided) when the native addon
+        // is available. Set `false` to force the raw text. Unsupported
+        // languages, parse failures, and line-windowed reads (`offset` /
+        // `limit`) always fall back to raw text regardless of this flag.
+        summary: z.boolean().optional(),
+        // Opt-in: tag every line with a `NN#XX|` content-hash anchor so a
+        // follow-up `hashline_edit` can reference lines by `NN#XX` and reject
+        // stale content. Untagged reads (the default) are byte-identical to
+        // pre-tagged behavior; this flag never alters the default path.
+        tagged: z.boolean().optional(),
     })
     .strict();
 
@@ -31,6 +44,12 @@ export const readOutputSchema = z
         truncated: z.boolean(),
         originalBytes: z.number().int().nonnegative(),
         returnedBytes: z.number().int().nonnegative(),
+        // Present and `true` only when the content is a structural summary
+        // (bodies elided) rather than the verbatim source.
+        summarized: z.boolean().optional(),
+        // Number of source lines collapsed into elision markers; present only
+        // when `summarized` is true.
+        elidedLines: z.number().int().nonnegative().optional(),
     })
     .strict();
 
@@ -82,6 +101,8 @@ export type ReadOnlyRepoToolOptions = {
     readonly maxSearchLineChars?: number;
     readonly maxModelOutputChars?: number;
     readonly allowDenylistedPaths?: readonly string[];
+    readonly natives?: NativesClient;
+    readonly schemeResolver?: SchemeResolver;
 };
 
 export type ResolvedReadOnlyRepoToolOptions = {
@@ -93,13 +114,19 @@ export type ResolvedReadOnlyRepoToolOptions = {
     readonly maxSearchLineChars: number;
     readonly maxModelOutputChars: number;
     readonly allowDenylistedPaths: readonly string[];
+    readonly natives?: NativesClient;
+    readonly schemeResolver?: SchemeResolver;
 };
 
 export function readModelOutput(output: ReadOutput): string {
     const suffix = output.truncated
         ? `\n\n[truncated: ${output.returnedBytes} of ${output.originalBytes} bytes returned]`
         : '';
-    return `${output.path}\n${output.content}${suffix}`;
+    const summaryNote =
+        output.summarized === true && output.elidedLines !== undefined
+            ? `\n\n[structural summary: ${output.elidedLines} line${output.elidedLines === 1 ? '' : 's'} elided; re-read with summary:false for the raw source]`
+            : '';
+    return `${output.path}\n${output.content}${suffix}${summaryNote}`;
 }
 
 export function searchModelOutput(output: SearchOutput): string {
@@ -123,6 +150,8 @@ export function resolveOptions(options: ReadOnlyRepoToolOptions): ResolvedReadOn
         maxSearchLineChars: options.maxSearchLineChars ?? 500,
         maxModelOutputChars: options.maxModelOutputChars ?? 8 * 1024,
         allowDenylistedPaths: options.allowDenylistedPaths ?? [],
+        ...(options.natives !== undefined ? { natives: options.natives } : {}),
+        ...(options.schemeResolver !== undefined ? { schemeResolver: options.schemeResolver } : {}),
     };
 }
 
@@ -133,6 +162,16 @@ export function readParametersJsonSchema(): Readonly<Record<string, unknown>> {
             path: { type: 'string' },
             offset: { type: 'number', minimum: 1 },
             limit: { type: 'number', minimum: 1 },
+            summary: {
+                type: 'boolean',
+                description:
+                    'Default true: return a structural summary (imports + signatures, bodies elided) for supported languages. Set false for the raw source.',
+            },
+            tagged: {
+                type: 'boolean',
+                description:
+                    'Opt-in: prefix every line with a `NN#XX|` content-hash anchor for use with hashline_edit. Default false returns the raw text unchanged.',
+            },
         },
         required: ['path'],
         additionalProperties: false,

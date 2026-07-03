@@ -9,6 +9,7 @@
  * the read tools use, and stays read-class. The tool name stays `glob`.
  */
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
+import type { NativesClient } from '../native/natives-client.js';
 import {
     formatGlobModelOutput,
     type GlobToolInput,
@@ -21,7 +22,7 @@ import {
     safeReaddirRecursive,
 } from './glob-tool.js';
 import { repoToolFailure } from './read-tools-errors.js';
-import { createWorkspaceGuard, type WorkspaceGuard } from './read-tools-paths.js';
+import { createWorkspaceGuard, defaultReadOnlyRepoToolDenylist, type WorkspaceGuard } from './read-tools-paths.js';
 import { permissionRequest, requestToolPermission } from './tool-permissions.js';
 import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
 import { realpath } from 'node:fs/promises';
@@ -30,6 +31,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 export type GlobToolFactoryOptions = {
     readonly workspaceRoot: string;
     readonly requestPermission?: (request: PermissionRequest) => PermissionDecision | Promise<PermissionDecision>;
+    readonly natives?: NativesClient;
 };
 
 export async function registerGlobTool(
@@ -67,9 +69,15 @@ async function runWorkspaceGlob(
 ): Promise<GlobToolOutput> {
     await requireReadPermission(options, toolCallId, toolName, input.path ?? '.');
     const base = await resolveGlobBase(guard, input.path);
+    const max = input.maxResults ?? 100;
+
+    const nativeMatches = await tryNativeGlob(guard, options, input.pattern, base, max);
+    if (nativeMatches !== undefined) {
+        return { paths: nativeMatches, truncated: nativeMatches.length >= max };
+    }
+
     const matcher = globToRegExp(input.pattern);
     const rawEntries = await safeReaddirRecursive(base);
-    const max = input.maxResults ?? 100;
     const matches: string[] = [];
     for (const absoluteEntry of rawEntries) {
         if (guard.isDeniedAbsolutePath(absoluteEntry)) {
@@ -91,6 +99,39 @@ async function runWorkspaceGlob(
     }
     matches.sort();
     return { paths: matches, truncated: matches.length >= max };
+}
+
+// N-API path: preferred when the addon is available. The TS side resolves the
+// base through the workspace guard (containment + denylist + symlink-escape
+// rejection) and passes the surviving absolute root. Rust walks only that root,
+// so it cannot bypass the guard. The workspace denylist is forwarded so Rust
+// skips those directories during traversal. Returns `undefined` to signal
+// "addon unavailable / errored, fall back".
+async function tryNativeGlob(
+    guard: WorkspaceGuard,
+    options: GlobToolFactoryOptions,
+    pattern: string,
+    base: string,
+    max: number,
+): Promise<string[] | undefined> {
+    if (options.natives === undefined || !options.natives.available) {
+        return undefined;
+    }
+    const native = options.natives.glob(pattern, base, {
+        maxResults: max,
+        denylist: defaultReadOnlyRepoToolDenylist,
+    });
+    if (native === null) {
+        return undefined;
+    }
+    const filtered = native.filter((rel) => {
+        if (rel === '' || rel.startsWith('..')) {
+            return false;
+        }
+        return !guard.isDeniedAbsolutePath(resolve(base, rel));
+    });
+    const sorted = [...filtered].sort();
+    return sorted.slice(0, max);
 }
 
 async function resolveGlobBase(guard: WorkspaceGuard, requestedPath: string | undefined): Promise<string> {

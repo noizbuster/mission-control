@@ -15,7 +15,17 @@
  * and surfaces both stderr parse-error lines and match-limit truncation notices
  * through `AstGrepResult.parseErrors`.
  */
+
+import type {
+    NativeAstGrepResult,
+    NativeAstReplaceChange,
+    NativeAstRewriteOptions,
+    NativesClient,
+} from '../native/natives-client.js';
 import { execFile } from 'node:child_process';
+import { statSync } from 'node:fs';
+import { readdir } from 'node:fs/promises';
+import { join, relative, resolve, sep } from 'node:path';
 
 // ---------------------------------------------------------------------------
 // Public result types (locked by task spec)
@@ -40,6 +50,19 @@ export type AstGrepResult = {
 
 export type AstGrepRunOptions = {
     readonly pattern: string;
+    readonly paths: readonly string[];
+    readonly language?: string;
+    readonly cwd: string;
+    readonly signal?: AbortSignal;
+};
+
+/** Options for the dry-run rewrite path (checkbox #14). Mirrors
+ * {@link AstGrepRunOptions} but adds a `replacement` template. The N-API
+ * `astRewrite` computes changes WITHOUT writing; the caller (the ast_grep
+ * tool) registers the apply closure on the StagedPreviewRegistry. */
+export type AstGrepRewriteRunOptions = {
+    readonly pattern: string;
+    readonly replacement: string;
     readonly paths: readonly string[];
     readonly language?: string;
     readonly cwd: string;
@@ -84,6 +107,20 @@ export type AstGrepRunnerDependencies = {
     readonly matchLimit: number;
     readonly timeoutMs: number;
     readonly maxOutputBytes: number;
+    /**
+     * Optional native addon. When present and the ast module is available, the
+     * runner prefers in-process ast-grep-core over the `sg` binary. The TS
+     * binary path remains the fallback.
+     */
+    readonly natives?: NativesClient;
+    /**
+     * Optional seam that expands the runner's `paths` (relative to `cwd`) into a
+     * vetted list of absolute files for the native path. The default collector
+     * resolves relative paths under `cwd`, refuses escapes, and recursively
+     * lists directory contents applying the standard denylist + supported
+     * extension filter. Injectable so tests can mock without touching disk.
+     */
+    readonly collectFiles?: (cwd: string, paths: readonly string[]) => Promise<readonly string[]>;
 };
 
 // ---------------------------------------------------------------------------
@@ -142,8 +179,14 @@ export async function runAstGrep(
         matchLimit: deps?.matchLimit ?? DEFAULT_MATCH_LIMIT,
         timeoutMs: deps?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         maxOutputBytes: deps?.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
+        ...(deps?.natives !== undefined ? { natives: deps.natives } : {}),
+        ...(deps?.collectFiles !== undefined ? { collectFiles: deps.collectFiles } : {}),
     };
     const signal = options.signal ?? freshAbortController().signal;
+    const nativeResult = await runAstGrepWithNatives(options, resolved);
+    if (nativeResult !== undefined) {
+        return nativeResult;
+    }
     const binary = await resolved.detectBinary(signal);
     if (binary === undefined) {
         throw new AstGrepRunnerError('not_installed', NOT_INSTALLED_MESSAGE);
@@ -175,6 +218,202 @@ export async function runAstGrep(
         );
     }
     return parseAstGrepOutput(result.stdout, result.stderr, resolved.matchLimit);
+}
+
+// ---------------------------------------------------------------------------
+// Rewrite (dry-run) entry point — checkbox #14.
+// Returns computed NativeAstReplaceChange[] WITHOUT writing. Requires the
+// N-API ast module; there is no sg-binary fallback for the rewrite path.
+// ---------------------------------------------------------------------------
+
+export async function runAstGrepRewrite(
+    options: AstGrepRewriteRunOptions,
+    deps?: Partial<AstGrepRunnerDependencies>,
+): Promise<readonly NativeAstReplaceChange[]> {
+    if (options.pattern.length === 0) {
+        throw new AstGrepRunnerError('invalid_input', 'ast-grep pattern must be non-empty');
+    }
+    if (options.paths.length === 0) {
+        throw new AstGrepRunnerError('invalid_input', 'ast-grep paths must contain at least one entry');
+    }
+    const resolved: AstGrepRunnerDependencies = {
+        detectBinary: deps?.detectBinary ?? defaultBinaryDetector,
+        execute: deps?.execute ?? defaultAstGrepExecutor,
+        matchLimit: deps?.matchLimit ?? DEFAULT_MATCH_LIMIT,
+        timeoutMs: deps?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        maxOutputBytes: deps?.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
+        ...(deps?.natives !== undefined ? { natives: deps.natives } : {}),
+        ...(deps?.collectFiles !== undefined ? { collectFiles: deps.collectFiles } : {}),
+    };
+    if (resolved.natives === undefined || !resolved.natives.available) {
+        throw new AstGrepRunnerError(
+            'not_installed',
+            'ast-grep rewrite requires the native addon (ast module). The addon is unavailable or predates the ast-rewrite module.',
+        );
+    }
+    const collectFiles = resolved.collectFiles ?? defaultAstSearchFileCollector;
+    const files = await collectFiles(options.cwd, options.paths);
+    if (files.length === 0) {
+        return [];
+    }
+    const rewriteOpts: NativeAstRewriteOptions = {
+        replacement: options.replacement,
+        ...(options.language !== undefined && options.language.length > 0
+            ? { lang: options.language.toLowerCase() }
+            : {}),
+        ...(resolved.matchLimit !== DEFAULT_MATCH_LIMIT ? { maxReplacements: resolved.matchLimit } : {}),
+    };
+    const changes = resolved.natives.astRewrite(options.pattern, files, rewriteOpts);
+    if (changes === null) {
+        throw new AstGrepRunnerError(
+            'not_installed',
+            'ast-grep rewrite requires the native addon (ast module). The addon is unavailable or predates the ast-rewrite module.',
+        );
+    }
+    return changes;
+}
+
+// ---------------------------------------------------------------------------
+// Native (N-API) path — preferred when the addon exposes the ast module.
+// Returns `undefined` to signal "addon unavailable / errored, fall back to sg".
+// ---------------------------------------------------------------------------
+
+const AST_SUPPORTED_EXTENSIONS: readonly string[] = ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'py', 'rs', 'go'];
+
+const AST_SEARCH_DENYLIST: readonly string[] = [
+    'node_modules',
+    '.git',
+    'temp',
+    'ref-repos',
+    'dist',
+    'build',
+    'target',
+    '.nx',
+    'coverage',
+    '.omo',
+];
+
+async function runAstGrepWithNatives(
+    options: AstGrepRunOptions,
+    deps: AstGrepRunnerDependencies,
+): Promise<AstGrepResult | undefined> {
+    if (deps.natives === undefined || !deps.natives.available) {
+        return undefined;
+    }
+    const collectFiles = deps.collectFiles ?? defaultAstSearchFileCollector;
+    const files = await collectFiles(options.cwd, options.paths);
+    if (files.length === 0) {
+        return emptyResult([]);
+    }
+    const native: NativeAstGrepResult | null = deps.natives.astGrep(options.pattern, files, {
+        ...(options.language !== undefined && options.language.length > 0
+            ? { lang: options.language.toLowerCase() }
+            : {}),
+        includeMeta: true,
+        limit: deps.matchLimit,
+    });
+    if (native === null) {
+        return undefined;
+    }
+    return mapNativeAstGrepResult(native, options.cwd, deps.matchLimit);
+}
+
+function mapNativeAstGrepResult(native: NativeAstGrepResult, cwd: string, matchLimit: number): AstGrepResult {
+    const parseErrors: string[] = native.parseErrors !== undefined ? [...native.parseErrors] : [];
+    const matches: AstGrepMatch[] = native.matches.map((match) => ({
+        path: toWorkspaceRelative(cwd, match.path),
+        text: match.text,
+        startLine: match.startLine,
+        startColumn: match.startColumn,
+        endLine: match.endLine,
+        endColumn: match.endColumn,
+        ...(match.metaVariables !== undefined ? { metaVariables: { ...match.metaVariables } } : {}),
+    }));
+    if (native.limitReached) {
+        parseErrors.push(`result_truncated: additional match(es) dropped after limit of ${matchLimit}`);
+    }
+    const filesWithMatches = new Set(matches.map((m) => m.path)).size;
+    return {
+        matches,
+        filesSearched: native.filesSearched,
+        filesWithMatches,
+        ...(parseErrors.length > 0 ? { parseErrors } : {}),
+    };
+}
+
+function toWorkspaceRelative(cwd: string, absolutePath: string): string {
+    const rel = relative(cwd, absolutePath);
+    return rel.length === 0 ? absolutePath : rel;
+}
+
+export async function defaultAstSearchFileCollector(cwd: string, paths: readonly string[]): Promise<readonly string[]> {
+    const root = resolve(cwd);
+    const collected: string[] = [];
+    for (const entry of paths) {
+        const absolute = resolve(root, entry);
+        if (!isWithinRoot(root, absolute)) {
+            continue;
+        }
+        collected.push(...(await collectEntry(absolute, root)));
+    }
+    return collected;
+}
+
+function isWithinRoot(root: string, target: string): boolean {
+    const rootPrefix = root.endsWith(sep) ? root : root + sep;
+    return target === root || target.startsWith(rootPrefix);
+}
+
+async function collectEntry(absolute: string, root: string): Promise<readonly string[]> {
+    let isFile: boolean;
+    let isDirectory: boolean;
+    try {
+        const stats = statSync(absolute);
+        isFile = stats.isFile();
+        isDirectory = stats.isDirectory();
+    } catch {
+        return [];
+    }
+    if (isFile) {
+        return AST_SUPPORTED_EXTENSIONS.some((ext) => absolute.endsWith(`.${ext}`)) ? [absolute] : [];
+    }
+    if (!isDirectory) {
+        return [];
+    }
+    const results: string[] = [];
+    await walkDir(absolute, results);
+    return results;
+}
+
+async function walkDir(dir: string, out: string[]): Promise<void> {
+    let entries: readonly string[];
+    try {
+        entries = await readdir(dir);
+    } catch {
+        return;
+    }
+    for (const name of entries) {
+        if (AST_SEARCH_DENYLIST.includes(name)) {
+            continue;
+        }
+        const child = join(dir, name);
+        let isDir = false;
+        let isFile = false;
+        try {
+            const stats = statSync(child);
+            isDir = stats.isDirectory();
+            isFile = stats.isFile();
+        } catch {
+            continue;
+        }
+        if (isFile) {
+            if (AST_SUPPORTED_EXTENSIONS.some((ext) => name.endsWith(`.${ext}`))) {
+                out.push(child);
+            }
+        } else if (isDir) {
+            await walkDir(child, out);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

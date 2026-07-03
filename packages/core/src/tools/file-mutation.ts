@@ -5,6 +5,7 @@ import type {
     PermissionKind,
     PermissionRequest,
 } from '@mission-control/protocol';
+import type { NativesClient } from '../native/natives-client.js';
 import { assertTextPatchTarget } from './file-patch-binary.js';
 import { filePatchFailure } from './file-patch-errors.js';
 import { isDirtyTrackedTarget } from './file-patch-git.js';
@@ -17,6 +18,32 @@ type WorkspaceMutationQueueEntry = {
 };
 
 const workspaceMutationQueue = new Map<string, WorkspaceMutationQueueEntry>();
+
+/**
+ * Optional hook invoked after every successful file mutation (edit/write/
+ * patch) so the shared native fs scan cache (mtime-keyed file content used by
+ * grep/read) is bumped and the next read serves fresh content. Registered once
+ * at tool-registry assembly via {@link wireNativesFsCacheInvalidator}; when
+ * unset (addon unavailable, or a build predating the fs_cache module) the
+ * mutations still succeed — the cache is an optional acceleration, and the
+ * mtime key would self-correct on the next read of a changed file regardless.
+ */
+type FsCacheInvalidator = () => void;
+let fsCacheInvalidator: FsCacheInvalidator | undefined;
+
+/** Register (or clear, with `undefined`) the post-mutation fs cache
+ * invalidator. The mutation queue calls it after each successful `apply`. */
+export function registerFsCacheInvalidator(invalidator: FsCacheInvalidator | undefined): void {
+    fsCacheInvalidator = invalidator;
+}
+
+/** Convenience wrapper: bind the invalidator to a `NativesClient`'s
+ * `invalidateFsScanCache`, which is itself a silent no-op when the addon is
+ * unavailable. Call once from the tool-registry assembly site that owns the
+ * shared read-tools client. */
+export function wireNativesFsCacheInvalidator(client: NativesClient): void {
+    registerFsCacheInvalidator(() => client.invalidateFsScanCache());
+}
 
 export type FileMutationTargetDescriptor = {
     readonly path: string;
@@ -82,7 +109,13 @@ export async function executeFileMutation<TTarget extends FileMutationTarget, TR
         await requireMutationApproval(options.approval);
         const revalidatedTargets = await options.preflight();
         assertStableMutationTargets(approvedTargets, revalidatedTargets);
-        return options.apply(revalidatedTargets);
+        const result = await options.apply(revalidatedTargets);
+        // The mutation just changed on-disk content; bump the shared fs scan
+        // cache so the next read/grep over these files serves fresh bytes
+        // instead of a stale mtime-keyed entry. No-op when no invalidator is
+        // registered (addon unavailable).
+        fsCacheInvalidator?.();
+        return result;
     });
 }
 

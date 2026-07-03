@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { createNativesClient } from '../native/natives-client.js';
 import { registerGlobTool } from './glob-tool-factory.js';
 import { ToolRegistry } from './tool-registry.js';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+const addonRoot = process.cwd();
+const defaultAddonPath = join(addonRoot, 'native', 'natives', 'index.node');
+const addonBuilt = existsSync(defaultAddonPath);
 
 describe('workspace-scoped glob factory', () => {
     const workspaces: string[] = [];
@@ -110,6 +116,53 @@ describe('workspace-scoped glob factory', () => {
         expect(settlement.result.error?.code).toBe('schema_invalid');
     });
 
+    it('produces output-identical results from the N-API and TypeScript glob paths', async () => {
+        const workspaceRoot = await createWorkspace();
+        await mkdir(join(workspaceRoot, 'src', 'nested'), { recursive: true });
+        await writeFile(join(workspaceRoot, 'src', 'a.ts'), 'x', 'utf8');
+        await writeFile(join(workspaceRoot, 'src', 'b.json'), '{}', 'utf8');
+        await writeFile(join(workspaceRoot, 'src', 'nested', 'c.ts'), 'x', 'utf8');
+        await writeFile(join(workspaceRoot, 'README.md'), '# readme', 'utf8');
+
+        const tsRegistry = await buildRegistry(workspaceRoot);
+        const napiRegistry = await buildRegistryWithNatives(workspaceRoot);
+
+        const tsResult = await invokeGlob(tsRegistry, { pattern: '**/*.ts' });
+        const napiResult = await invokeGlob(napiRegistry, { pattern: '**/*.ts' });
+
+        expect(tsResult.result.status).toBe('completed');
+        expect(napiResult.result.status).toBe('completed');
+        const tsOutput = tsResult.structuredOutput as { paths: readonly string[] };
+        const napiOutput = napiResult.structuredOutput as { paths: readonly string[] };
+
+        if (addonBuilt) {
+            expect(napiOutput.paths).toEqual(tsOutput.paths);
+            expect(napiOutput.paths).toContain('src/a.ts');
+            expect(napiOutput.paths).toContain('src/nested/c.ts');
+            expect(napiOutput.paths.some((p) => p.endsWith('.json'))).toBe(false);
+        } else {
+            expect(napiOutput.paths).toEqual(tsOutput.paths);
+        }
+    });
+
+    it('produces identical single-level results from both paths', async () => {
+        const workspaceRoot = await createWorkspace();
+        await mkdir(join(workspaceRoot, 'src'), { recursive: true });
+        await writeFile(join(workspaceRoot, 'root.ts'), 'x', 'utf8');
+        await writeFile(join(workspaceRoot, 'src', 'nested.ts'), 'x', 'utf8');
+
+        const tsRegistry = await buildRegistry(workspaceRoot);
+        const napiRegistry = await buildRegistryWithNatives(workspaceRoot);
+
+        const tsResult = await invokeGlob(tsRegistry, { pattern: '*.ts' });
+        const napiResult = await invokeGlob(napiRegistry, { pattern: '*.ts' });
+        const tsOutput = tsResult.structuredOutput as { paths: readonly string[] };
+        const napiOutput = napiResult.structuredOutput as { paths: readonly string[] };
+
+        expect(napiOutput.paths).toEqual(tsOutput.paths);
+        expect(napiOutput.paths).toEqual(['root.ts']);
+    });
+
     async function createWorkspace(): Promise<string> {
         const workspace = await mkdtemp(join(tmpdir(), 'mctrl-glob-factory-'));
         workspaces.push(workspace);
@@ -119,6 +172,15 @@ describe('workspace-scoped glob factory', () => {
     async function buildRegistry(workspaceRoot: string): Promise<ToolRegistry> {
         const registry = new ToolRegistry();
         await registerGlobTool(registry, { workspaceRoot });
+        return registry;
+    }
+
+    async function buildRegistryWithNatives(workspaceRoot: string): Promise<ToolRegistry> {
+        const registry = new ToolRegistry();
+        await registerGlobTool(registry, {
+            workspaceRoot,
+            natives: createNativesClient({ onWarning: () => {} }),
+        });
         return registry;
     }
 
