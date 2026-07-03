@@ -454,6 +454,109 @@ describe('bash.run tool', () => {
         expect(permissionRequests).toHaveLength(1);
         expect(permissionRequests[0]?.permission?.patterns).toEqual(['echo hello world']);
     });
+
+    it('runs a real two-segment pipeline and returns the last command output', async () => {
+        // End-to-end: uses the real executeCommandPipeline (default) so `printf | grep` actually
+        // spawns two processes chained via stdio. Guards against regressions in pipe plumbing.
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+            executor: async () => completedResult({ stdout: 'WRONG: executor should not be called' }),
+        });
+
+        const settlement = await invokeBash(registry, {
+            commandLine: "printf 'hello\\nworld\\n' | grep world",
+        });
+
+        expect(settlement.result.status).toBe('completed');
+        const stdout = (settlement.structuredOutput as { readonly stdout?: string }).stdout ?? '';
+        expect(stdout.trim()).toBe('world');
+    });
+
+    it('aggregates permission patterns across every pipe segment', async () => {
+        const permissionRequests: PermissionRequest[] = [];
+        const registry = await createRegistry({
+            requestPermission: (request) => {
+                permissionRequests.push(request);
+                return denyPermission(request);
+            },
+            pipelineExecutor: async () => completedResult(),
+        });
+
+        await invokeBash(registry, { commandLine: 'cat foo.txt | grep pattern' });
+
+        expect(permissionRequests).toHaveLength(1);
+        expect(permissionRequests[0]?.permission?.patterns).toEqual([
+            'cat foo.txt | grep pattern',
+            'cat foo.txt',
+            'foo.txt',
+            'grep pattern',
+        ]);
+    });
+
+    it('uses executor (not pipelineExecutor) for a single-segment command', async () => {
+        const executorCalls: CommandExecutionRequest[] = [];
+        const pipelineCalls: CommandExecutionRequest[][] = [];
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+            executor: async (request) => {
+                executorCalls.push(request);
+                return completedResult();
+            },
+            pipelineExecutor: async (requests) => {
+                pipelineCalls.push([...requests]);
+                return completedResult();
+            },
+        });
+
+        await invokeBash(registry, { commandLine: 'pwd' });
+
+        expect(executorCalls).toHaveLength(1);
+        expect(pipelineCalls).toEqual([]);
+    });
+
+    it('treats a pipe inside quotes as a literal argument, not a segment separator', async () => {
+        const pipelineCalls: CommandExecutionRequest[][] = [];
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+            pipelineExecutor: async (requests) => {
+                pipelineCalls.push([...requests]);
+                return completedResult();
+            },
+        });
+
+        await invokeBash(registry, { commandLine: 'printf "a|b"' });
+
+        // No pipe-segment split: the quoted `|` is a literal in the only segment.
+        expect(pipelineCalls).toEqual([]);
+    });
+
+    it('rejects empty pipe segments as command_not_allowed', async () => {
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+            pipelineExecutor: async () => completedResult(),
+        });
+
+        const settlement = await invokeBash(registry, { commandLine: 'cat |' });
+
+        expect(settlement.result.status).toBe('failed');
+        expect(settlement.result.error?.message).toContain('command_not_allowed');
+        expect(settlement.result.error?.message).toContain('empty pipe segment');
+    });
+
+    it('runs a three-segment pipeline end-to-end', async () => {
+        const registry = await createRegistry({
+            requestPermission: allowPermission,
+        });
+
+        const settlement = await invokeBash(registry, {
+            commandLine: "printf 'a\\nb\\nc\\n' | grep -v b | sort -r",
+        });
+
+        expect(settlement.result.status).toBe('completed');
+        const stdout = (settlement.structuredOutput as { readonly stdout?: string }).stdout ?? '';
+        // grep -v b drops the 'b' line, sort -r reverses → c, a
+        expect(stdout.trim().split('\n')).toEqual(['c', 'a']);
+    });
 });
 
 type CreateRegistryInput = {
@@ -461,6 +564,7 @@ type CreateRegistryInput = {
     readonly workspaceTrust?: 'trusted' | 'denied' | 'unknown';
     readonly requestPermission: (request: PermissionRequest) => PermissionDecision;
     readonly executor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
+    readonly pipelineExecutor?: (requests: readonly CommandExecutionRequest[]) => Promise<CommandExecutionResult>;
     readonly timeoutMs?: number;
     readonly maxOutputBytes?: number;
     readonly envAllowlist?: readonly string[];
@@ -475,6 +579,7 @@ async function createRegistry(input: CreateRegistryInput): Promise<ToolRegistry>
         workspaceTrust: input.workspaceTrust ?? 'trusted',
         requestPermission: input.requestPermission,
         ...(input.executor !== undefined ? { executor: input.executor } : {}),
+        ...(input.pipelineExecutor !== undefined ? { pipelineExecutor: input.pipelineExecutor } : {}),
         ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
         ...(input.maxOutputBytes !== undefined ? { maxOutputBytes: input.maxOutputBytes } : {}),
         ...(input.envAllowlist !== undefined ? { envAllowlist: input.envAllowlist } : {}),

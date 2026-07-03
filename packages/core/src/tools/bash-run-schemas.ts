@@ -18,6 +18,13 @@ export type BashRunToolOptions = {
     readonly workspaceTrust: 'trusted' | 'denied' | 'unknown';
     readonly requestPermission: (request: PermissionRequest) => PermissionDecision | Promise<PermissionDecision>;
     readonly executor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
+    /**
+     * Optional override for piped execution (e.g. `cat file | grep pattern`). When omitted the
+     * real `executeCommandPipeline` is used. Single-segment commands always use `executor`
+     * (or the default `executeCommand`) so existing single-command tests inject `executor`
+     * and never see this option. Tests that cover pipeline behavior inject this instead.
+     */
+    readonly pipelineExecutor?: (requests: readonly CommandExecutionRequest[]) => Promise<CommandExecutionResult>;
     readonly timeoutMs?: number;
     readonly maxOutputBytes?: number;
     readonly maxModelOutputChars?: number;
@@ -30,6 +37,7 @@ export type ResolvedBashRunToolOptions = {
     readonly workspaceTrust: BashRunToolOptions['workspaceTrust'];
     readonly requestPermission: BashRunToolOptions['requestPermission'];
     readonly executor: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
+    readonly pipelineExecutor: (requests: readonly CommandExecutionRequest[]) => Promise<CommandExecutionResult>;
     readonly timeoutMs: number;
     readonly maxOutputBytes: number;
     readonly maxModelOutputChars: number;

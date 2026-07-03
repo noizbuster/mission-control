@@ -1,4 +1,4 @@
-import { parseTrustedCommandLine } from './bash-run-command-guard.js';
+import { parseTrustedCommandLine, parseTrustedCommandPipeline } from './bash-run-command-guard.js';
 import { commandRunFailure } from './command-run-errors.js';
 import { realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
@@ -34,6 +34,18 @@ export function assertTrustedWorkspace(workspaceTrust: 'trusted' | 'denied' | 'u
 
 export function assertAllowedCommandLine(commandLine: string): readonly string[] {
     return parseTrustedCommandLine(commandLine);
+}
+
+/**
+ * Parse a command line that may contain `|` pipe operators into one argv per segment. Each
+ * segment is independently policy-checked. Single-segment input is equivalent to
+ * `assertAllowedCommandLine`. Used by `bash.run` so the model can express common read-only
+ * patterns like `cat file | grep pattern` or `cat file | tail -n 100` without tripping the
+ * shell-control-operator guard. Other control operators (`&`, `;`, `<`, `>`, `(`, `)`, `{`,
+ * `}`) remain denied.
+ */
+export function assertAllowedCommandPipeline(commandLine: string): readonly (readonly string[])[] {
+    return parseTrustedCommandPipeline(commandLine);
 }
 
 export async function resolveBashCwd(workspaceRoot: string, requestedCwd?: string): Promise<string> {

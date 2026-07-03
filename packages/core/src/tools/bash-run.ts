@@ -5,7 +5,7 @@ import type {
     PermissionRequest,
 } from '@mission-control/protocol';
 import {
-    assertAllowedCommandLine,
+    assertAllowedCommandPipeline,
     assertTrustedWorkspace,
     buildTrustedBashEnv,
     defaultBashEnvAllowlist,
@@ -23,7 +23,12 @@ import {
     type ResolvedBashRunToolOptions,
 } from './bash-run-schemas.js';
 import { commandRunFailure } from './command-run-errors.js';
-import { type CommandExecutionResult, executeCommand } from './command-run-executor.js';
+import {
+    type CommandExecutionRequest,
+    type CommandExecutionResult,
+    executeCommand,
+    executeCommandPipeline,
+} from './command-run-executor.js';
 import { interruptedBeforeSpawnResult } from './command-run-interruption.js';
 import { buildPermissionPatterns } from './command-run-policy.js';
 import { commandRunOutput } from './command-run-schemas.js';
@@ -69,6 +74,7 @@ async function resolveOptions(options: BashRunToolOptions): Promise<ResolvedBash
         workspaceTrust: options.workspaceTrust,
         requestPermission: options.requestPermission,
         executor: options.executor ?? executeCommand,
+        pipelineExecutor: options.pipelineExecutor ?? executeCommandPipeline,
         timeoutMs: options.timeoutMs ?? defaultBashRunTimeoutMs,
         maxOutputBytes: options.maxOutputBytes ?? defaultBashRunOutputBytes,
         maxModelOutputChars: options.maxModelOutputChars ?? defaultBashRunModelOutputChars,
@@ -84,24 +90,29 @@ async function runBashTool(
     context: ToolExecutionContext,
 ): Promise<BashRunOutput> {
     assertTrustedWorkspace(options.workspaceTrust);
-    const command = assertAllowedCommandLine(input.commandLine);
+    const segments = assertAllowedCommandPipeline(input.commandLine);
     const cwd = await resolveBashCwd(options.workspaceRoot, input.cwd);
     const { env, redactionSecrets } = buildTrustedBashEnv(options.hostEnv, options.envAllowlist);
     const release = limiter.acquire();
-    const started = commandEvent('command.started', context.toolCallId, commandMetadata(command, cwd, 'started'));
+    const displayCommand = flattenSegmentsForDisplay(segments);
+    const started = commandEvent(
+        'command.started',
+        context.toolCallId,
+        commandMetadata(displayCommand, cwd, 'started'),
+    );
     try {
-        await requireApproval(options, context.toolCallId, input.commandLine, command);
+        await requireApproval(options, context.toolCallId, input.commandLine, segments);
         if (context.signal.aborted) {
             return commandRunOutput(
-                command,
+                displayCommand,
                 cwd,
                 interruptedBeforeSpawnResult(),
                 options.maxOutputBytes,
                 redactionSecrets,
             );
         }
-        const result = await runBashCommand(options, command, cwd, env, context.signal);
-        const output = commandRunOutput(command, cwd, result, options.maxOutputBytes, redactionSecrets);
+        const result = await runBashPipeline(options, segments, cwd, env, context.signal);
+        const output = commandRunOutput(displayCommand, cwd, result, options.maxOutputBytes, redactionSecrets);
         if (output.timedOut) {
             throw commandRunFailure('command_timed_out', `command timed out: ${input.commandLine}`, [
                 started,
@@ -118,6 +129,48 @@ async function runBashTool(
     } finally {
         release();
     }
+}
+
+/**
+ * Build the single-argv display form for event metadata by joining segment argvs with a literal
+ * `|` token. Backward compatible with the prior `readonly string[]` shape: a single-segment
+ * command produces the unchanged argv, and a pipeline produces a human-readable `cat | grep`
+ * display without changing the persisted `command` field shape.
+ */
+function flattenSegmentsForDisplay(segments: readonly (readonly string[])[]): readonly string[] {
+    if (segments.length === 0) {
+        return [];
+    }
+    if (segments.length === 1) {
+        const [single] = segments;
+        return single === undefined ? [] : [...single];
+    }
+    const flattened: string[] = [];
+    for (let index = 0; index < segments.length; index += 1) {
+        const segment = segments[index];
+        if (segment === undefined) {
+            continue;
+        }
+        if (index > 0) {
+            flattened.push('|');
+        }
+        flattened.push(...segment);
+    }
+    return flattened;
+}
+
+async function runBashPipeline(
+    options: ResolvedBashRunToolOptions,
+    segments: readonly (readonly string[])[],
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+    signal: AbortSignal,
+): Promise<CommandExecutionResult> {
+    if (segments.length === 1) {
+        const [single] = segments;
+        return runBashCommand(options, single ?? [], cwd, env, signal);
+    }
+    return runBashCommandPipeline(options, segments, cwd, env, signal);
 }
 
 async function runBashCommand(
@@ -189,19 +242,90 @@ async function runBashCommand(
     }
 }
 
+async function runBashCommandPipeline(
+    options: ResolvedBashRunToolOptions,
+    segments: readonly (readonly string[])[],
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+    signal: AbortSignal,
+): Promise<CommandExecutionResult> {
+    const controller = new AbortController();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
+    let interrupted = false;
+    const startedAt = Date.now();
+    const interrupt = () => {
+        interrupted = true;
+        controller.abort();
+    };
+    if (signal.aborted) {
+        interrupt();
+    } else {
+        signal.addEventListener('abort', interrupt, { once: true });
+    }
+    try {
+        const requests: CommandExecutionRequest[] = segments.map((segment) => ({
+            command: segment[0] ?? '',
+            args: segment.slice(1),
+            cwd,
+            env,
+            signal: controller.signal,
+            maxOutputBytes: options.maxOutputBytes,
+        }));
+        const execution = options.pipelineExecutor(requests);
+        timeout = setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+        }, options.timeoutMs);
+        const result = await execution;
+        if (interrupted && !timedOut) {
+            return { ...result, signal: result.signal ?? 'SIGTERM', timedOut: false };
+        }
+        return timedOut
+            ? {
+                  ...result,
+                  signal: result.signal ?? 'SIGTERM',
+                  timedOut: true,
+                  durationMs: Math.max(result.durationMs, options.timeoutMs),
+              }
+            : result;
+    } catch (error: unknown) {
+        if (timedOut) {
+            return {
+                exitCode: null,
+                signal: 'SIGTERM',
+                timedOut: true,
+                stdout: '',
+                stderr: '',
+                durationMs: options.timeoutMs,
+            };
+        }
+        if (interrupted) {
+            return interruptedBeforeSpawnResult(Date.now() - startedAt);
+        }
+        throw commandRunFailure('command_spawn_failed', error instanceof Error ? error.message : String(error));
+    } finally {
+        signal.removeEventListener('abort', interrupt);
+        if (timeout !== undefined) {
+            clearTimeout(timeout);
+        }
+    }
+}
+
 async function requireApproval(
     options: ResolvedBashRunToolOptions,
     toolCallId: string,
     commandLine: string,
-    command: readonly string[],
+    segments: readonly (readonly string[])[],
 ): Promise<void> {
+    const patterns = buildPipelinePermissionPatterns(commandLine, segments);
     const request: PermissionRequest = {
         ...permissionRequest({
             toolCallId,
             action: 'bash.run',
             reason: `run trusted bash: ${commandLine}`,
             permission: 'bash',
-            patterns: buildPermissionPatterns(commandLine, command),
+            patterns,
             workspaceRoot: options.workspaceRoot,
         }),
     };
@@ -210,6 +334,29 @@ async function requireApproval(
         return;
     }
     throw commandRunFailure(errorCodeForDecision(decision), decision.reason ?? `approval refused: ${decision.status}`);
+}
+
+/**
+ * Aggregate permission patterns across every segment of a pipeline. Each segment's argv
+ * contributes its own command-line pattern and extracted file paths so an approval covers the
+ * full pipeline (a per-segment approval would surprise the user mid-pipeline). Falls back to
+ * the original command line when no segment contributes path patterns.
+ */
+function buildPipelinePermissionPatterns(
+    commandLine: string,
+    segments: readonly (readonly string[])[],
+): readonly string[] {
+    const patterns: string[] = [commandLine];
+    for (const segment of segments) {
+        const segmentLine = segment.join(' ');
+        const segmentPatterns = buildPermissionPatterns(segmentLine, segment);
+        for (const pattern of segmentPatterns) {
+            if (pattern !== commandLine && !patterns.includes(pattern)) {
+                patterns.push(pattern);
+            }
+        }
+    }
+    return patterns;
 }
 
 function bashRunEvents(output: BashRunOutput, context: { readonly toolCallId: string }): readonly AgentEvent[] {
