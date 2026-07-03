@@ -32,8 +32,17 @@ export const askUserQuestionSchema = z
         header: z.string().max(500).optional(),
         options: z.array(askUserOptionSchema).max(50).optional(),
         multiple: z.boolean().optional(),
+        // recommended marks the option surfaced first; the tool reorders it to
+        // index 0 so the host treats position 0 as the default selection.
+        recommended: z.number().int().min(0).optional(),
     })
-    .strict();
+    .strict()
+    .refine(
+        (entry) =>
+            entry.recommended === undefined ||
+            (entry.options !== undefined && entry.recommended < entry.options.length),
+        'recommended must be a valid index into a non-empty options array',
+    );
 
 export const askUserInputSchema = z
     .object({
@@ -60,6 +69,7 @@ export type AskUserQuestion = {
     readonly header?: string | undefined;
     readonly options?: readonly AskUserOption[] | undefined;
     readonly multiple?: boolean | undefined;
+    readonly recommended?: number | undefined;
 };
 
 export type AskUserInput = {
@@ -94,6 +104,24 @@ export type AskUserToolOptions = {
      * in order. Omitting it preserves the sequential single-question behavior.
      */
     readonly requestUserQuestions?: (requests: readonly AskUserQuestionRequest[]) => Promise<string[]>;
+    /**
+     * When true, the host cannot prompt interactively (e.g. `--no-tui`/`--json`).
+     * The tool invokes `onAskBlocked` (when supplied) to emit an ask-blocked
+     * event and returns a deterministic blocked sentinel instead of awaiting a
+     * callback that would never resolve. Defaults to interactive (false/absent).
+     */
+    readonly nonInteractive?: boolean;
+    readonly onAskBlocked?: (event: AskUserBlockedEvent) => void;
+};
+
+/**
+ * Payload handed to `onAskBlocked` in non-interactive mode. Mirrors the request
+ * shape the interactive callback would have received, so a non-interactive host
+ * can persist it and resume once an answer is supplied externally.
+ */
+export type AskUserBlockedEvent = {
+    readonly question: string;
+    readonly questions: readonly AskUserQuestionRequest[];
 };
 
 // ============== Model-facing JSON Schema ==============
@@ -160,6 +188,14 @@ export function askUserParametersJsonSchema(): Readonly<Record<string, unknown>>
                         multiple: {
                             type: 'boolean',
                             description: 'When true, allow the user to select more than one option.',
+                        },
+                        recommended: {
+                            type: 'integer',
+                            minimum: 0,
+                            description:
+                                'Index of the option to surface as the recommended default. ' +
+                                'The option is moved to the first position so the host can default-select it. ' +
+                                'Must be a valid index into a non-empty options array.',
                         },
                     },
                     required: ['question'],

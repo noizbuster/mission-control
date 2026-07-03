@@ -1,5 +1,7 @@
 import {
+    type AskUserBlockedEvent,
     type AskUserInput,
+    type AskUserOption,
     type AskUserOutput,
     type AskUserQuestion,
     type AskUserQuestionRequest,
@@ -11,8 +13,17 @@ import {
 import { ToolRegistry } from './tool-registry.js';
 import type { ToolAdvertisement, ToolRegistration } from './tool-registry-types.js';
 
-export type { AskUserInput, AskUserOutput, AskUserQuestionRequest, AskUserToolOptions } from './ask-user-schemas.js';
+export type {
+    AskUserBlockedEvent,
+    AskUserInput,
+    AskUserOutput,
+    AskUserQuestionRequest,
+    AskUserToolOptions,
+} from './ask-user-schemas.js';
 export { askUserInputSchema, askUserOutputSchema, askUserParametersJsonSchema } from './ask-user-schemas.js';
+
+/** Sentinel returned in non-interactive mode; non-empty so it is not mistaken for a real free-text answer. */
+export const ASK_USER_BLOCKED_ANSWER = '(blocked: awaiting user input — no interactive host)';
 
 /**
  * `ask_user` tool — interactive question surface for the model.
@@ -24,8 +35,9 @@ export { askUserInputSchema, askUserOutputSchema, askUserParametersJsonSchema } 
  *    a single `answer` string so the model can correlate each answer with the
  *    prompt that produced it.
  *
- * Non-interactive hosts supply a callback that resolves with an empty string
- * so the tool degrades gracefully instead of hanging.
+ * Non-interactive hosts set `nonInteractive: true`: the tool emits an
+ * ask-blocked event (via `onAskBlocked`) and returns a deterministic sentinel
+ * instead of awaiting a callback that would never resolve.
  */
 export async function registerAskUserTool(
     registry: ToolRegistry,
@@ -38,15 +50,28 @@ export async function registerAskUserTool(
  * Build a callback request from a multi-question entry. The `&&`-guarded
  * spreads add `header`/`multiple` only when they are actually present, so the
  * resulting object honours `exactOptionalPropertyTypes` (no explicit
- * `undefined` values sneak through).
+ * `undefined` values sneak through). When `recommended` is a valid index the
+ * option at that index is promoted to position 0 (recommended-first), so the
+ * host can treat the first option as the default without a separate flag.
  */
 function buildQuestionRequest(question: AskUserQuestion): AskUserQuestionRequest {
+    const ordered = recommendedFirst(question.options ?? [], question.recommended);
     return {
         question: question.question,
-        options: question.options ?? [],
+        options: ordered,
         ...(question.header !== undefined && { header: question.header }),
         ...(question.multiple !== undefined && { multiple: question.multiple }),
     };
+}
+
+function recommendedFirst(
+    options: readonly AskUserOption[],
+    recommended: number | undefined,
+): readonly AskUserOption[] {
+    if (recommended === undefined) return options;
+    const pick = options[recommended];
+    if (pick === undefined) return options;
+    return [pick, ...options.slice(0, recommended), ...options.slice(recommended + 1)];
 }
 
 /**
@@ -88,18 +113,34 @@ export function createAskUserToolRegistration(
             'Provide clear options when possible; the user may also type a custom answer. ' +
             'Do not use ask_user for information you can obtain yourself by reading files or running commands.',
         execute: async (input) => {
-            // Multi-question mode: `questions` takes precedence over the legacy
-            // `options` field. A host batch callback renders all entries in one
-            // tabbed overlay; otherwise they are posed sequentially.
-            if (input.questions !== undefined) {
-                const requests = input.questions.map(buildQuestionRequest);
+            const multiMode = input.questions !== undefined;
+            // In multi-question mode `questions` takes precedence over the legacy
+            // `options` field. Each entry is reordered recommended-first so the
+            // host can default-select position 0. A host batch callback renders
+            // all entries in one tabbed overlay; otherwise they are posed
+            // sequentially.
+            const requests: AskUserQuestionRequest[] = multiMode
+                ? input.questions.map(buildQuestionRequest)
+                : [{ question: input.question, options: input.options }];
+
+            // Non-interactive hosts (--no-tui/--json) cannot block on a human.
+            // Emit the ask-blocked event then return a sentinel — never await a
+            // callback that would hang the run.
+            if (options.nonInteractive) {
+                const event: AskUserBlockedEvent = {
+                    question: input.question,
+                    questions: requests,
+                };
+                options.onAskBlocked?.(event);
+                return { answer: ASK_USER_BLOCKED_ANSWER };
+            }
+
+            if (multiMode) {
                 const answers =
                     options.requestUserQuestions !== undefined
                         ? await options.requestUserQuestions(requests)
                         : await sequentialAnswers(options, requests);
-                const labeled = input.questions.map((question, i) =>
-                    formatLabeledAnswer(question, answers[i] ?? ''),
-                );
+                const labeled = input.questions.map((question, i) => formatLabeledAnswer(question, answers[i] ?? ''));
                 return { answer: labeled.join('\n') };
             }
             const answer = await options.requestUserQuestion({

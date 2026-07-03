@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { type AskUserInput, type AskUserQuestionRequest, createAskUserToolRegistration } from './ask-user-tool.js';
+import { askUserInputSchema, askUserQuestionSchema } from './ask-user-schemas.js';
+import {
+    ASK_USER_BLOCKED_ANSWER,
+    type AskUserInput,
+    type AskUserQuestionRequest,
+    createAskUserToolRegistration,
+} from './ask-user-tool.js';
 import type { ToolExecutionContext } from './tool-registry-types.js';
 
 function createContext(): ToolExecutionContext {
@@ -322,6 +328,221 @@ describe('createAskUserToolRegistration', () => {
 
             expect(registration.name).toBe('ask_user');
             expect(registration.capabilityClasses).toEqual(['read']);
+        });
+    });
+
+    describe('recommended-first ordering', () => {
+        it('promotes the recommended option to position 0 in the callback request', async () => {
+            const { calls, fn } = createRecordingCallback(['C']);
+            const registration = createAskUserToolRegistration({ requestUserQuestion: fn });
+            const input: AskUserInput = {
+                question: 'Pick',
+                options: [],
+                questions: [
+                    {
+                        question: 'Which?',
+                        recommended: 2,
+                        options: [{ label: 'A' }, { label: 'B' }, { label: 'C' }],
+                    },
+                ],
+            };
+
+            await registration.execute(input, createContext());
+
+            expect(calls[0]?.options).toEqual([{ label: 'C' }, { label: 'A' }, { label: 'B' }]);
+        });
+
+        it('leaves the order unchanged when recommended is 0', async () => {
+            const { calls, fn } = createRecordingCallback(['A']);
+            const registration = createAskUserToolRegistration({ requestUserQuestion: fn });
+            const input: AskUserInput = {
+                question: 'Pick',
+                options: [],
+                questions: [
+                    {
+                        question: 'Which?',
+                        recommended: 0,
+                        options: [{ label: 'A' }, { label: 'B' }],
+                    },
+                ],
+            };
+
+            await registration.execute(input, createContext());
+
+            expect(calls[0]?.options).toEqual([{ label: 'A' }, { label: 'B' }]);
+        });
+
+        it('leaves the order unchanged when recommended is absent', async () => {
+            const { calls, fn } = createRecordingCallback(['A']);
+            const registration = createAskUserToolRegistration({ requestUserQuestion: fn });
+            const input: AskUserInput = {
+                question: 'Pick',
+                options: [],
+                questions: [
+                    {
+                        question: 'Which?',
+                        options: [{ label: 'A' }, { label: 'B' }],
+                    },
+                ],
+            };
+
+            await registration.execute(input, createContext());
+
+            expect(calls[0]?.options).toEqual([{ label: 'A' }, { label: 'B' }]);
+        });
+
+        it('does not forward a recommended key on the callback request', async () => {
+            const { calls, fn } = createRecordingCallback(['C']);
+            const registration = createAskUserToolRegistration({ requestUserQuestion: fn });
+            const input: AskUserInput = {
+                question: 'Pick',
+                options: [],
+                questions: [
+                    {
+                        question: 'Which?',
+                        recommended: 1,
+                        options: [{ label: 'A' }, { label: 'B' }],
+                    },
+                ],
+            };
+
+            await registration.execute(input, createContext());
+
+            expect(calls[0]).not.toHaveProperty('recommended');
+        });
+    });
+
+    describe('multiple-select answer join', () => {
+        it('passes a multi-selection answer string through labeled for multiple:true', async () => {
+            const registration = createAskUserToolRegistration({
+                requestUserQuestion: () => Promise.resolve('read, write'),
+            });
+            const input: AskUserInput = {
+                question: 'Perms',
+                options: [],
+                questions: [
+                    {
+                        question: 'Select all that apply',
+                        multiple: true,
+                        options: [{ label: 'read' }, { label: 'write' }],
+                    },
+                ],
+            };
+
+            const output = await registration.execute(input, createContext());
+
+            expect(output).toEqual({ answer: 'Select all that apply: read, write' });
+        });
+    });
+
+    describe('non-interactive mode (--no-tui/--json)', () => {
+        it('emits an ask-blocked event and returns the blocked sentinel without awaiting the callback', async () => {
+            const events: AskUserQuestionRequest[][] = [];
+            // Throws on call so any accidental invocation surfaces as an immediate
+            // test failure instead of a silent hang.
+            const neverCalled = (): Promise<string> => {
+                throw new Error('requestUserQuestion must not be called in nonInteractive mode');
+            };
+            const registration = createAskUserToolRegistration({
+                requestUserQuestion: neverCalled,
+                nonInteractive: true,
+                onAskBlocked: (event) => {
+                    events.push([...event.questions]);
+                },
+            });
+            const input: AskUserInput = {
+                question: 'Deploy?',
+                options: ['yes', 'no'],
+            };
+
+            const output = await registration.execute(input, createContext());
+
+            expect(output).toEqual({ answer: ASK_USER_BLOCKED_ANSWER });
+            expect(events).toEqual([[{ question: 'Deploy?', options: ['yes', 'no'] }]]);
+        });
+
+        it('emits recommended-first reordered requests in multi-question mode', async () => {
+            const events: AskUserQuestionRequest[][] = [];
+            const registration = createAskUserToolRegistration({
+                requestUserQuestion: () => new Promise(() => undefined),
+                nonInteractive: true,
+                onAskBlocked: (event) => {
+                    events.push([...event.questions]);
+                },
+            });
+            const input: AskUserInput = {
+                question: 'Setup',
+                options: [],
+                questions: [
+                    {
+                        question: 'Which?',
+                        recommended: 2,
+                        options: [{ label: 'A' }, { label: 'B' }, { label: 'C' }],
+                    },
+                ],
+            };
+
+            await registration.execute(input, createContext());
+
+            expect(events[0]?.[0]?.options).toEqual([{ label: 'C' }, { label: 'A' }, { label: 'B' }]);
+        });
+
+        it('returns the blocked sentinel when no onAskBlocked callback is supplied (no crash)', async () => {
+            const registration = createAskUserToolRegistration({
+                requestUserQuestion: () => new Promise(() => undefined),
+                nonInteractive: true,
+            });
+
+            const output = await registration.execute({ question: 'q', options: [] }, createContext());
+
+            expect(output).toEqual({ answer: ASK_USER_BLOCKED_ANSWER });
+        });
+    });
+
+    describe('schema validation (malformed recommended)', () => {
+        it('rejects a recommended index outside the options array', () => {
+            const result = askUserQuestionSchema.safeParse({
+                question: 'q',
+                options: [{ label: 'A' }, { label: 'B' }],
+                recommended: 5,
+            });
+
+            expect(result.success).toBe(false);
+        });
+
+        it('rejects recommended on a free-text question with no options', () => {
+            const result = askUserQuestionSchema.safeParse({
+                question: 'q',
+                recommended: 0,
+            });
+
+            expect(result.success).toBe(false);
+        });
+
+        it('accepts a valid recommended index', () => {
+            const result = askUserQuestionSchema.safeParse({
+                question: 'q',
+                options: [{ label: 'A' }, { label: 'B' }],
+                recommended: 1,
+            });
+
+            expect(result.success).toBe(true);
+        });
+
+        it('accepts a questions payload via the input schema', () => {
+            const result = askUserInputSchema.safeParse({
+                question: 'summary',
+                options: [],
+                questions: [
+                    {
+                        question: 'pick',
+                        recommended: 0,
+                        options: [{ label: 'x' }],
+                    },
+                ],
+            });
+
+            expect(result.success).toBe(true);
         });
     });
 });
