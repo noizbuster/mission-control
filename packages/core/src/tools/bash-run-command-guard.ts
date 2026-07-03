@@ -137,7 +137,9 @@ function tokenizeShellWords(commandLine: string): readonly string[] {
                 throw denied('multi-line shell input is denied');
             }
             if (forbiddenControlCharacters.has(char)) {
-                throw denied('shell control operators are denied');
+                throw denied(
+                    'shell control operators are denied (supported chain operators: `|`, `&&`, `||`, `;` at the top level only — use the `cwd` tool option instead of `cd`, avoid output redirection (`>`) and env-var expansion (`$VAR`))',
+                );
             }
             if (/\s/u.test(char)) {
                 pushToken(tokens, current);
@@ -294,4 +296,139 @@ function isEnvironmentAssignment(token: string): boolean {
 
 function denied(message: string) {
     return commandRunFailure('command_not_allowed', message);
+}
+
+/**
+ * Top-level chain operator connecting two pipelines. `&&` runs the right side only when the
+ * left side exits 0; `||` runs the right side only when the left side exits non-zero; `;` runs
+ * the right side unconditionally. Each operator is enforced by direct-spawn exit-code
+ * branching — no shell is ever invoked.
+ */
+export type ChainOperator = '&&' | '||' | ';';
+
+export type CommandChain = {
+    /**
+     * One entry per pipeline split on `&&`/`||`/`;`. Each pipeline is itself a list of argv
+     * segments (one per `|`-separated command). `pipelines[i]` runs first, then
+     * `operators[i]` decides whether `pipelines[i + 1]` runs.
+     */
+    readonly pipelines: readonly (readonly (readonly string[])[])[];
+    /** `operators.length === pipelines.length - 1`; empty for a single-pipeline chain. */
+    readonly operators: readonly ChainOperator[];
+};
+
+/**
+ * Split a command line on top-level `&&`, `||`, and `;`. Quote-aware (operators inside `'…'`
+ * or `"…"` are literal). `\` escapes inside `"…"` are honored. A lone `&` (background) is NOT
+ * consumed here — it stays in the segment text and `tokenizeShellWords`'s forbidden-char check
+ * rejects it later. A lone `|` is also NOT consumed here — it stays a pipe separator at the
+ * pipeline level (`splitOnPipe` handles it next).
+ *
+ * Returns the pipeline-text segments and the operators between them. Empty segments
+ * (e.g. `a &&`, `&& b`, `a &&&& b`, `; ;`) throw.
+ */
+function splitOnChainOperators(commandLine: string): {
+    readonly pipelines: readonly string[];
+    readonly operators: readonly ChainOperator[];
+} {
+    const pipelines: string[] = [];
+    const operators: ChainOperator[] = [];
+    const current: string[] = [];
+    let quote: '"' | "'" | null = null;
+    for (let index = 0; index < commandLine.length; index += 1) {
+        const char = commandLine[index];
+        if (char === undefined) {
+            continue;
+        }
+        if (quote !== null) {
+            current.push(char);
+            if (char === quote) {
+                quote = null;
+            }
+            if (char === '\\' && quote === '"') {
+                const next = commandLine[index + 1];
+                if (next !== undefined) {
+                    current.push(next);
+                    index += 1;
+                }
+            }
+            continue;
+        }
+        if (char === "'" || char === '"') {
+            quote = char;
+            current.push(char);
+            continue;
+        }
+        if (char === '\\') {
+            const next = commandLine[index + 1];
+            if (next === undefined) {
+                throw denied('trailing escape is denied');
+            }
+            current.push(char, next);
+            index += 1;
+            continue;
+        }
+        const next = commandLine[index + 1];
+        if (char === '&' && next === '&') {
+            pipelines.push(current.splice(0).join(''));
+            operators.push('&&');
+            index += 1;
+            continue;
+        }
+        if (char === '|' && next === '|') {
+            pipelines.push(current.splice(0).join(''));
+            operators.push('||');
+            index += 1;
+            continue;
+        }
+        if (char === ';') {
+            pipelines.push(current.splice(0).join(''));
+            operators.push(';');
+            continue;
+        }
+        current.push(char);
+    }
+    pipelines.push(current.join(''));
+    if (pipelines.length > 1) {
+        for (const segment of pipelines) {
+            if (segment.trim().length === 0) {
+                throw denied('empty chain segment is denied');
+            }
+        }
+    }
+    return { pipelines, operators };
+}
+
+/**
+ * Parse a command line that may contain top-level chain operators (`&&`, `||`, `;`) and pipe
+ * operators (`|`) within each chain segment. Each pipeline segment is independently split on
+ * `|`, tokenized, and policy-checked. The chain operators are enforced by direct-spawn
+ * exit-code branching in the executor — NO shell is ever invoked.
+ *
+ * Security invariant: every leaf argv is spawned with `child_process.spawn(cmd, args, { shell:
+ * false })`. Chain operators and pipes are pure Node-side control flow (split + per-argv policy
+ * check + exit-code branching + stdio piping). A lone `&`, `<`, `>`, `(`, `)`, `{`, `}`, `$`,
+ * backtick, or newline still trips the per-token forbidden-character guard inside each segment.
+ *
+ * Empty chain segments (e.g. `a &&`, `&& b`, `; ;`) and empty pipe segments (e.g. `a |`) are
+ * rejected. A single-pipeline input with no chain operator behaves identically to
+ * `parseTrustedCommandPipeline`.
+ */
+export function parseTrustedCommandChain(commandLine: string): CommandChain {
+    if (commandLine.includes('\0')) {
+        throw denied('null bytes are denied');
+    }
+    const { pipelines: pipelineTexts, operators } = splitOnChainOperators(commandLine);
+    if (pipelineTexts.length === 0) {
+        throw denied('empty shell input is denied');
+    }
+    const pipelines: (readonly (readonly string[])[])[] = pipelineTexts.map((text) => {
+        const segments = splitOnPipe(text);
+        return segments.map((segment) => {
+            const argv = tokenizeShellWords(segment);
+            enforceTrustedCommandPolicy(argv);
+            return argv;
+        });
+    });
+    return { pipelines, operators };
 }
