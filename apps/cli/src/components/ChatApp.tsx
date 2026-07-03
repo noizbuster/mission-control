@@ -610,9 +610,7 @@ export function ChatApp({
                 {showAgentIndicator && snapshot.agentStatusText.length > 0 ? (
                     <AgentSpinner text={snapshot.agentStatusText} />
                 ) : showAgentIndicator && snapshot.generating ? (
-                    <box marginTop={1} flexShrink={0}>
-                        <text fg="#ffff00">{'\u25cf Thinking...'}</text>
-                    </box>
+                    <AgentSpinner text="Working..." />
                 ) : null}
                 {showSlashMenu || showWorkflowMenu ? (
                     <SlashMenuPanel
