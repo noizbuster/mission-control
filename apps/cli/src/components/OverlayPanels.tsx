@@ -10,6 +10,7 @@ import { useCallback, useState, useSyncExternalStore } from 'react';
 import { toggleDisabled } from '../commands/agents-disabled-config.js';
 import { parseModelPatternString, setOverride } from '../commands/agents-model-overrides-config.js';
 import { createProviderPromptView } from '../commands/auth-provider-keypress-view.js';
+import { padEndToDisplayWidth } from '../commands/terminal-text.js';
 import {
     APPROVAL_LEVEL_PICKER_ENTRIES,
     APPROVAL_OPTIONS,
@@ -519,7 +520,7 @@ export function LevelPickerOverlay({ store }: LevelPickerOverlayProps): React.Re
                     <box key={level.id} flexDirection="row">
                         <text {...(isSelected ? { bg: SELECTED_BG } : {})}>
                             {isSelected ? '> ' : '  '}
-                            {level.label.padEnd(13)}
+                            {padEndToDisplayWidth(level.label, 13)}
                         </text>
                         <text attributes={TextAttributes.DIM}>{level.desc}</text>
                     </box>

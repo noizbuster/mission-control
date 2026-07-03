@@ -6,6 +6,7 @@ import { useKeyboard } from '@opentui/react';
 import type * as React from 'react';
 import { useCallback, useSyncExternalStore } from 'react';
 import type { ChatStore } from '../commands/chat-store.js';
+import { padEndToDisplayWidth } from '../commands/terminal-text.js';
 import {
     createModelsOverlayView,
     formatRoleFallback,
@@ -192,7 +193,7 @@ export function ModelsOverlay({ store }: ModelsOverlayProps): React.ReactNode {
                             return (
                                 <box key={`r-${row.role}`} flexDirection="row">
                                     <text {...(isFocused ? { bg: SELECTED_BG } : {})}>
-                                        {`${isFocused ? '> ' : '  '}${row.role.padEnd(12)}`}
+                                        {`${isFocused ? '> ' : '  '}${padEndToDisplayWidth(row.role, 12)}`}
                                     </text>
                                     <text
                                         attributes={

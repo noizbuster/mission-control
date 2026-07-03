@@ -45,6 +45,7 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { CommandMap } from './keybind.js';
 import type { OpenTuiKeymap } from './keymap-instance.js';
 import { BASE_MODE, useModeStack } from './mode-stack.js';
+import { padEndToDisplayWidth } from '../../commands/terminal-text.js';
 import { useKeymapSelectorReact } from './use-keymap-selector.js';
 
 // ---------------------------------------------------------------------------
@@ -337,7 +338,7 @@ function WhichKeyWindow(props: {
             rows.push(
                 <text key={`g${gi}e${ei}`} {...dimAttrs}>
                     {'  '}
-                    <span {...(keyFg !== undefined ? { fg: keyFg } : {})}>{entry.key.padEnd(14)}</span>
+                    <span {...(keyFg !== undefined ? { fg: keyFg } : {})}>{padEndToDisplayWidth(entry.key, 14)}</span>
                     {` ${entry.label}`}
                 </text>,
             );
