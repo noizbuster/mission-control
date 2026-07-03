@@ -1,4 +1,5 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import { createStreamDecoder } from '@mission-control/core';
 import {
     createProviderPromptKeypressState,
     createProviderPromptView,
@@ -61,6 +62,7 @@ function questionModelLine(
         let keypressState = createProviderPromptKeypressState();
         let renderedLines = 0;
         let cleaned = false;
+        const inputDecoder = createStreamDecoder();
 
         function clearPreviousRender(): void {
             if (renderedLines > 0) {
@@ -99,7 +101,7 @@ function questionModelLine(
         }
 
         function onData(chunk: Buffer | string): void {
-            const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+            const text = inputDecoder.decode(chunk);
             const nextState = reduceProviderPromptKeypress(keypressState, text, promptChoices);
             const shouldRender =
                 keypressState.selectedIndex !== nextState.selectedIndex ||

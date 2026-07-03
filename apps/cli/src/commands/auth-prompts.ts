@@ -7,6 +7,7 @@ import {
 } from './auth-provider-keypress.js';
 import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
+import { createStreamDecoder } from '@mission-control/core';
 import { truncateTerminalText } from './terminal-text.js';
 
 export type AuthPromptOptions = {
@@ -163,6 +164,7 @@ async function questionSecretLine(message: string, options?: AuthPromptOptions):
 
     return new Promise((resolve, reject) => {
         const characters: string[] = [];
+        const secretDecoder = createStreamDecoder();
 
         function cleanup(): void {
             input.off('data', onData);
@@ -177,7 +179,7 @@ async function questionSecretLine(message: string, options?: AuthPromptOptions):
         }
 
         function onData(chunk: Buffer | string): void {
-            const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+            const text = secretDecoder.decode(chunk);
             for (const character of text) {
                 if (character === '\u0003') {
                     cleanup();
@@ -216,6 +218,7 @@ async function questionProviderLine(message: string, choices: readonly ProviderP
     return new Promise((resolve, reject) => {
         let keypressState = createProviderPromptKeypressState();
         let renderedLines = 0;
+        const providerDecoder = createStreamDecoder();
 
         function clearPreviousRender(): void {
             if (renderedLines > 0) {
@@ -260,7 +263,7 @@ async function questionProviderLine(message: string, choices: readonly ProviderP
         }
 
         function onData(chunk: Buffer | string): void {
-            const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+            const text = providerDecoder.decode(chunk);
             const nextState = reduceProviderPromptKeypress(keypressState, text, choices);
             const shouldRender = shouldRenderProviderPrompt(keypressState, nextState);
             keypressState = nextState;
@@ -300,9 +303,11 @@ function getVisibleProviderChoiceCount(): number {
 }
 
 async function readInputLines(stream: AsyncIterable<Buffer | string>): Promise<readonly string[]> {
+    const decoder = createStreamDecoder();
     let data = '';
     for await (const chunk of stream) {
-        data += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+        data += decoder.decode(chunk);
     }
+    data += decoder.flush();
     return data.replace(/\r\n/g, '\n').split('\n');
 }
