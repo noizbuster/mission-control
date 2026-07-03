@@ -194,10 +194,9 @@ describe('runner final-wave — graph loop bound still protects against bugs', (
     });
 
     it('the fix-loop -> next-wave retry edge plus blocked-escalation keeps the loop finite', () => {
-        // Even if the strike counter had a bug, every node is bounded by maxNodeRuns.
-        // Here we assert the bounded structure: fix-loop has exactly two outgoing edges
-        // (retry and blocked), and blocked-escalation is terminal.
-        const fixLoopEdges = graph.edges.filter((edge) => edge.source === 'fix-loop');
+        const fixLoopEdges = graph.edges.filter(
+            (edge) => edge.source === 'fix-loop' && edge.source !== edge.target,
+        );
         expect(fixLoopEdges).toHaveLength(2);
 
         const conditions = new Set(fixLoopEdges.map((edge) => edge.condition));

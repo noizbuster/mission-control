@@ -324,12 +324,10 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 config: {
                     systemPrompt:
                         'Inspect the section-scoped plan checklist (plan.todos). If unchecked tasks ' +
-                        'remain, select the next wave: dispatch all tasks whose named dependencies are ' +
-                        'satisfied in PARALLEL (parallel-by-default), and hold back any task whose ' +
-                        'dependency matrix lists an incomplete blocker. Set wave.pending=true with the ' +
-                        'dispatchable task ids in wave.tasks. If all tasks are checked, set ' +
-                        'wave.pending=false.',
+                        'remain, output \'true\' on the last line. If all tasks are checked, output ' +
+                        '\'false\' on the last line.',
                     outputKey: 'wave.pending',
+                    outputShape: 'boolean',
                 },
             },
             {
@@ -393,45 +391,40 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
             {
                 id: 'f1',
                 kind: 'llm',
-                implementation: 'critic',
                 label: 'F1 — Goal verification critic',
                 config: {
                     systemPrompt:
-                        'F1: Verify the implementation achieves the plan stated goal. Output APPROVE or REJECT.',
-                    evaluateKey: 'plan.goal',
+                        'F1: Verify the implementation achieves the plan stated goal. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.',
                     outputKey: 'final.f1',
                 },
             },
             {
                 id: 'f2',
                 kind: 'llm',
-                implementation: 'critic',
                 label: 'F2 — Constraint verification critic',
                 config: {
-                    systemPrompt: 'F2: Verify all explicit constraints were honored. Output APPROVE or REJECT.',
-                    evaluateKey: 'plan.constraints',
+                    systemPrompt:
+                        'F2: Verify all explicit constraints were honored. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.',
                     outputKey: 'final.f2',
                 },
             },
             {
                 id: 'f3',
                 kind: 'llm',
-                implementation: 'critic',
                 label: 'F3 — Test verification critic',
                 config: {
-                    systemPrompt: 'F3: Verify all tests pass. Output APPROVE or REJECT.',
-                    evaluateKey: 'test.results',
+                    systemPrompt:
+                        'F3: Verify all tests pass. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.',
                     outputKey: 'final.f3',
                 },
             },
             {
                 id: 'f4',
                 kind: 'llm',
-                implementation: 'critic',
                 label: 'F4 — Code quality verification critic',
                 config: {
-                    systemPrompt: 'F4: Verify the code is clean and well-structured. Output APPROVE or REJECT.',
-                    evaluateKey: 'code.quality',
+                    systemPrompt:
+                        'F4: Verify the code is clean and well-structured. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.',
                     outputKey: 'final.f4',
                 },
             },
@@ -485,6 +478,18 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
             { source: 'final-verification-wave', target: 'fix-loop', condition: 'final-rejected', priority: 10 },
             { source: 'fix-loop', target: 'next-wave', condition: 'fix-retry', priority: 20 },
             { source: 'fix-loop', target: 'blocked-escalation', condition: 'fix-blocked', priority: 10 },
+            { source: 'admit-plan', target: 'admit-plan', condition: 'llm-loop-active', priority: 5 },
+            { source: 'parse-plan', target: 'parse-plan', condition: 'llm-loop-active', priority: 5 },
+            { source: 'init-notepad', target: 'init-notepad', condition: 'llm-loop-active', priority: 5 },
+            { source: 'next-wave', target: 'next-wave', condition: 'llm-loop-active', priority: 5 },
+            { source: 'delegate-worker', target: 'delegate-worker', condition: 'llm-loop-active', priority: 5 },
+            { source: 'per-task-verify', target: 'per-task-verify', condition: 'llm-loop-active', priority: 5 },
+            { source: 'checkbox-update', target: 'checkbox-update', condition: 'llm-loop-active', priority: 5 },
+            { source: 'f1', target: 'f1', condition: 'llm-loop-active', priority: 5 },
+            { source: 'f2', target: 'f2', condition: 'llm-loop-active', priority: 5 },
+            { source: 'f3', target: 'f3', condition: 'llm-loop-active', priority: 5 },
+            { source: 'f4', target: 'f4', condition: 'llm-loop-active', priority: 5 },
+            { source: 'fix-loop', target: 'fix-loop', condition: 'llm-loop-active', priority: 5 },
         ],
         rules: [
             {

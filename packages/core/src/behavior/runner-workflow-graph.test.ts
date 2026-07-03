@@ -46,7 +46,7 @@ describe('createRunnerWorkflowGraph', () => {
         expect(perTaskVerify?.implementation).toBe('critic');
     });
 
-    it('has a final-verification-wave with four parallel critic nodes (f1-f4)', () => {
+    it('has a final-verification-wave with four parallel LLM critic nodes (f1-f4)', () => {
         const graph = createRunnerWorkflowGraph();
         const finalWave = graph.nodes.find((node) => node.id === 'final-verification-wave');
         const criticIds = ['f1', 'f2', 'f3', 'f4'];
@@ -57,7 +57,7 @@ describe('createRunnerWorkflowGraph', () => {
         for (const criticId of criticIds) {
             const critic = graph.nodes.find((node) => node.id === criticId);
             expect(critic?.kind).toBe('llm');
-            expect(critic?.implementation).toBe('critic');
+            expect(critic?.config?.['outputKey']).toBe(`final.${criticId}`);
         }
     });
 

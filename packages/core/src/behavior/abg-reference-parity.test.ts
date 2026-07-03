@@ -215,14 +215,15 @@ describe('abg reference parity: runner workflow plan parsing and final gate', ()
         expect(graph.entryNodeId).toBe('admit-plan');
     });
 
-    it('declares a final-verification-wave with four critic children f1-f4', () => {
+    it('declares a final-verification-wave with four LLM critic children f1-f4', () => {
         const graph = createRunnerWorkflowGraph();
         const finalWave = graph.nodes.find((node) => node.id === 'final-verification-wave');
         expect(finalWave?.kind).toBe('parallel');
         expect(finalWave?.children).toEqual(['f1', 'f2', 'f3', 'f4']);
         for (const criticId of ['f1', 'f2', 'f3', 'f4']) {
             const critic = graph.nodes.find((node) => node.id === criticId);
-            expect(critic?.implementation).toBe('critic');
+            expect(critic?.kind).toBe('llm');
+            expect(critic?.config?.['outputKey']).toBe(`final.${criticId}`);
         }
     });
 

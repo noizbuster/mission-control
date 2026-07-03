@@ -1,425 +1,490 @@
 {
-    "name": "runner",
-    "description": "Runner workflow: admits the plan at the entry gate (rejects missing/malformed/unapproved plans), then parses the plan checklist, delegates waves of tasks via task() fan-out with per-task critic verification, updates checkboxes, loops until all tasks done, then runs a final verification wave with four parallel critics (F1-F4) producing APPROVE/REJECT. The parallel node aggregates the four verdicts into final.verdict (APPROVE only if all four approve). Routes to complete or a bounded 3-strike fix-loop (reopen tasks, reuse persisted child session ids); on the third strike routes to blocked-escalation and blocks for user intervention.",
-    "graph": {
-        "id": "runner",
-        "version": "0.1.0",
-        "entryNodeId": "admit-plan",
-        "defaults": {
-            "maxNodeRuns": 64
-        },
-        "nodes": [
-            {
-                "id": "admit-plan",
-                "kind": "llm",
-                "label": "Plan admission gate — reject missing/malformed/unapproved plans",
-                "config": {
-                    "systemPrompt": "You are the runner plan admission gate. BEFORE any task delegation, verify the plan is complete and approved. Read the plan from .omo/plans/<slug>.md and check ALL of: (1) the plan exists and is non-empty; (2) it carries the scaffold sections ## TL;DR, ## Scope, ## Todos, ## Final Verification Wave; (3) ## Todos contains at least one \"- [ ]\" checkbox; (4) ## Final Verification Wave is present; (5) the plan is marked approved/ready (a \"Status: Approved\" | \"Status: Ready\" | \"Status: Accepted\" line). If EVERY check passes, write plan.admitted=true. If ANY check fails, write plan.admitted=false and state the single clearest reason (missing plan, missing section, no todos, no final wave, or unapproved). Do NOT proceed to task delegation on a failed admission — the graph routes a rejected plan to plan-rejected-terminal which emits a clear failure event and stops. A missing, malformed, or unapproved plan must never reach delegate-wave.",
-                    "outputKey": "plan.admitted",
-                    "outputShape": "boolean"
-                }
-            },
-            {
-                "id": "plan-rejected-terminal",
-                "kind": "llm",
-                "label": "Terminal failure — plan rejected at admission, do not delegate",
-                "config": {
-                    "systemPrompt": "The plan was rejected at admission. Emit a clear, single failure event stating why the plan could not be admitted (missing, malformed, unapproved, or incomplete) and stop. Do NOT attempt delegation, checkbox updates, or fix-loops — the runner cannot execute without an admissible plan. Set plan.rejected=true.",
-                    "outputKey": "plan.rejected"
-                }
-            },
-            {
-                "id": "parse-plan",
-                "kind": "llm",
-                "label": "Parse plan checklist (section-scoped: Todos + Final Verification Wave only)",
-                "config": {
-                    "systemPrompt": "Read the plan file from .omo/plans/{slug}.md and parse it with section-scoped counting: only column-0 checkboxes (`- [ ]` / `- [x]`) that fall under a `## Todos` / `## TODOs` or `## Final Verification Wave` heading are counted as actionable tasks. Ignore nested or indented checkboxes and ignore checkboxes under any other heading (Notes, Acceptance Criteria, Evidence, Definition of Done, etc.). Store the ordered task list under plan.todos and surface nextTaskLabel = the label of the first unchecked todo so the delegate-wave can name it. Set plan.parsed when complete.",
-                    "outputKey": "plan.parsed",
-                    "parser": "parsePlanSections",
-                    "countedSections": [
-                        "Todos",
-                        "Final Verification Wave"
-                    ]
-                }
-            },
-            {
-                "id": "init-notepad",
-                "kind": "llm",
-                "label": "Initialize append-only notepad and extract inherited wisdom",
-                "config": {
-                    "systemPrompt": "Read the append-only notepad at .omo/notepads/{plan}/learnings.md (create it if absent). Extract prior learnings, decisions, and issues to pass as Inherited Wisdom to every delegated task. The notepad is append-only: delegated tasks MUST append findings via appendNotepad / assertAppendOnly — never overwrite or truncate. Set notepad.ready when the notepad is read and the inherited-wisdom block is prepared.",
-                    "outputKey": "notepad.ready",
-                    "notepadPath": ".omo/notepads/{plan}/learnings.md",
-                    "notepadMode": "append-only"
-                }
-            },
-            {
-                "id": "next-wave",
-                "kind": "llm",
-                "label": "Select next wave of unchecked tasks (parallel-by-default, dependency-blocked)",
-                "config": {
-                    "systemPrompt": "Inspect the section-scoped plan checklist (plan.todos). If unchecked tasks remain, select the next wave: dispatch all tasks whose named dependencies are satisfied in PARALLEL (parallel-by-default), and hold back any task whose dependency matrix lists an incomplete blocker. Set wave.pending=true with the dispatchable task ids in wave.tasks. If all tasks are checked, set wave.pending=false.",
-                    "outputKey": "wave.pending"
-                }
-            },
-            {
-                "id": "delegate-wave",
-                "kind": "parallel",
-                "label": "Fan out task() delegation per wave task (6-section prompts, parallel-by-default)",
-                "children": [
-                    "delegate-worker"
-                ],
-                "config": {
-                    "fanOutKey": "wave.tasks",
-                    "completionKey": "delegate.complete",
-                    "parallelByDefault": true,
-                    "dependencyKey": "plan.dependencies",
-                    "delegationSections": [
-                        "TASK",
-                        "EXPECTED OUTCOME",
-                        "REQUIRED TOOLS",
-                        "MUST DO",
-                        "MUST NOT DO",
-                        "CONTEXT"
-                    ]
-                }
-            },
-            {
-                "id": "delegate-worker",
-                "kind": "llm",
-                "label": "Single task() delegation — 6-section prompt contract",
-                "capabilities": [
-                    "task"
-                ],
-                "config": {
-                    "systemPrompt": "Execute the delegated sub-task via the task tool. The delegation prompt you receive MUST contain six sections: ## 1. TASK (exact checkbox item), ## 2. EXPECTED OUTCOME (files, functionality, verification command), ## 3. REQUIRED TOOLS, ## 4. MUST DO, ## 5. MUST NOT DO, ## 6. CONTEXT (notepad paths, inherited wisdom, dependencies). Follow every section. Append findings to the notepad after completion (never overwrite)."
-                }
-            },
-            {
-                "id": "per-task-verify",
-                "kind": "llm",
-                "implementation": "critic",
-                "label": "Critic — verify each delegated task result before checkbox update",
-                "config": {
-                    "evaluateKey": "delegate.results",
-                    "outputKey": "verify.complete",
-                    "verifyBeforeCheckbox": true
-                }
-            },
-            {
-                "id": "checkbox-update",
-                "kind": "llm",
-                "label": "Update plan checkboxes only after independent verification passes",
-                "config": {
-                    "systemPrompt": "You are the checkbox-update gate. You MUST NOT flip a plan checkbox (`- [ ]` to `- [x]`) based only on a child agent claiming \"done\". Independently verify each task BEFORE flipping: confirm tests pass (run the plan verification command), confirm the expected files exist and were modified, and confirm lsp_diagnostics is clean on changed files. Only after verification passes, edit .omo/plans/{slug}.md to change the matching `- [ ]` to `- [x]` and write verification evidence. After the edit, READ the plan file again to confirm the unchecked count decreased — this read-back is mandatory. If verification fails, leave the checkbox unchecked and route back to fix-loop. Set checkbox.updated only after the read-back confirms the flip landed.",
-                    "outputKey": "checkbox.updated",
-                    "planPath": ".omo/plans/{slug}.md",
-                    "verifyBeforeCheckbox": true,
-                    "readBackAfterUpdate": true
-                }
-            },
-            {
-                "id": "final-verification-wave",
-                "kind": "parallel",
-                "label": "Final verification wave — F1-F4 parallel critics aggregated into final.verdict",
-                "children": [
-                    "f1",
-                    "f2",
-                    "f3",
-                    "f4"
-                ],
-                "config": {
-                    "completionKey": "final.complete",
-                    "verdictKey": "final.verdict",
-                    "verdictStrategy": "all-approve",
-                    "verdictSources": [
-                        "final.f1",
-                        "final.f2",
-                        "final.f3",
-                        "final.f4"
-                    ],
-                    "aggregateKey": "final.critics"
-                }
-            },
-            {
-                "id": "f1",
-                "kind": "llm",
-                "implementation": "critic",
-                "label": "F1 — Goal verification critic",
-                "config": {
-                    "systemPrompt": "F1: Verify the implementation achieves the plan stated goal. Output APPROVE or REJECT.",
-                    "evaluateKey": "plan.goal",
-                    "outputKey": "final.f1"
-                }
-            },
-            {
-                "id": "f2",
-                "kind": "llm",
-                "implementation": "critic",
-                "label": "F2 — Constraint verification critic",
-                "config": {
-                    "systemPrompt": "F2: Verify all explicit constraints were honored. Output APPROVE or REJECT.",
-                    "evaluateKey": "plan.constraints",
-                    "outputKey": "final.f2"
-                }
-            },
-            {
-                "id": "f3",
-                "kind": "llm",
-                "implementation": "critic",
-                "label": "F3 — Test verification critic",
-                "config": {
-                    "systemPrompt": "F3: Verify all tests pass. Output APPROVE or REJECT.",
-                    "evaluateKey": "test.results",
-                    "outputKey": "final.f3"
-                }
-            },
-            {
-                "id": "f4",
-                "kind": "llm",
-                "implementation": "critic",
-                "label": "F4 — Code quality verification critic",
-                "config": {
-                    "systemPrompt": "F4: Verify the code is clean and well-structured. Output APPROVE or REJECT.",
-                    "evaluateKey": "code.quality",
-                    "outputKey": "final.f4"
-                }
-            },
-            {
-                "id": "complete",
-                "kind": "llm",
-                "label": "All verification passed — emit final report"
-            },
-            {
-                "id": "fix-loop",
-                "kind": "llm",
-                "label": "Final verification rejected — bounded 3-strike fix loop",
-                "config": {
-                    "systemPrompt": "You are the runner fix-loop gate. The final verification wave REJECTED the implementation (at least one of F1-F4 returned REJECT). Steps: (1) Read the current strike counter from the blackboard key fix.strikes (treat absent as 0). (2) Increment it by one and write the new value to fix.strikes. The strike budget is 3 (RUNNER_FINAL_STRIKE_BUDGET). (3) If the new strike count is STRICTLY LESS THAN the budget, set fix.route=\"retry\": reopen the rejected plan tasks (uncheck their checkboxes) AND reuse each failed task's persisted child session id from the run taskRetryState / childSessionIds (Todo 6 lineage) so the retried child resumes with full prior context instead of starting fresh. (4) If the new strike count has reached the budget, set fix.route=\"blocked\" and do NOT loop again. The graph routes fix.route=\"blocked\" to the blocked-escalation node which records state/evidence and blocks for user intervention. Never set fix.route=\"retry\" once the strike budget is exhausted; the graph loop limit (maxNodeRuns) is a backstop but the strike counter is the intended bound.",
-                    "outputKey": "fix.route",
-                    "strikeKey": "fix.strikes",
-                    "strikeBudget": 3,
-                    "maxStrikes": 3,
-                    "lineageKey": "run.childSessionIds",
-                    "retryStateKey": "run.taskRetryState"
-                }
-            },
-            {
-                "id": "blocked-escalation",
-                "kind": "llm",
-                "label": "Strike budget exhausted — record state/evidence and block for user",
-                "config": {
-                    "systemPrompt": "The runner exhausted its 3-strike fix budget (fix.strikes reached the ceiling) without all four final critics (F1-F4) approving. Emit a single blocked-escalation event: record the current state (which critics rejected and why, which plan tasks remain open, the last child session ids attempted) and write verifiable evidence to the run record and the evidence directory. Set fix.blocked=true. Do NOT retry, do NOT reopen tasks, do NOT route back to next-wave. Signal for human intervention: the runner cannot proceed autonomously past the final approval gate. A user must review the evidence, fix the root cause, and explicitly resume (clearing the stop marker) before the runner may attempt another fix cycle.",
-                    "outputKey": "fix.blocked",
-                    "evidencePath": ".omo/evidence/",
-                    "strikeBudget": 3
-                }
-            }
+  "name": "runner",
+  "description": "Runner workflow: admits the plan at the entry gate (rejects missing/malformed/unapproved plans), then parses the plan checklist, delegates waves of tasks via task() fan-out with per-task critic verification, updates checkboxes, loops until all tasks done, then runs a final verification wave with four parallel critics (F1-F4) producing APPROVE/REJECT. The parallel node aggregates the four verdicts into final.verdict (APPROVE only if all four approve). Routes to complete or a bounded 3-strike fix-loop (reopen tasks, reuse persisted child session ids); on the third strike routes to blocked-escalation and blocks for user intervention.",
+  "graph": {
+    "id": "runner",
+    "version": "0.1.0",
+    "entryNodeId": "admit-plan",
+    "defaults": {
+      "maxNodeRuns": 64
+    },
+    "nodes": [
+      {
+        "id": "admit-plan",
+        "kind": "llm",
+        "label": "Plan admission gate — reject missing/malformed/unapproved plans",
+        "config": {
+          "systemPrompt": "You are the runner plan admission gate. BEFORE any task delegation, verify the plan is complete and approved. Read the plan from .omo/plans/<slug>.md and check ALL of: (1) the plan exists and is non-empty; (2) it carries the scaffold sections ## TL;DR, ## Scope, ## Todos, ## Final Verification Wave; (3) ## Todos contains at least one \"- [ ]\" checkbox; (4) ## Final Verification Wave is present; (5) the plan is marked approved/ready (a \"Status: Approved\" | \"Status: Ready\" | \"Status: Accepted\" line). If EVERY check passes, write plan.admitted=true. If ANY check fails, write plan.admitted=false and state the single clearest reason (missing plan, missing section, no todos, no final wave, or unapproved). Do NOT proceed to task delegation on a failed admission — the graph routes a rejected plan to plan-rejected-terminal which emits a clear failure event and stops. A missing, malformed, or unapproved plan must never reach delegate-wave.",
+          "outputKey": "plan.admitted",
+          "outputShape": "boolean"
+        }
+      },
+      {
+        "id": "plan-rejected-terminal",
+        "kind": "llm",
+        "label": "Terminal failure — plan rejected at admission, do not delegate",
+        "config": {
+          "systemPrompt": "The plan was rejected at admission. Emit a clear, single failure event stating why the plan could not be admitted (missing, malformed, unapproved, or incomplete) and stop. Do NOT attempt delegation, checkbox updates, or fix-loops — the runner cannot execute without an admissible plan. Set plan.rejected=true.",
+          "outputKey": "plan.rejected"
+        }
+      },
+      {
+        "id": "parse-plan",
+        "kind": "llm",
+        "label": "Parse plan checklist (section-scoped: Todos + Final Verification Wave only)",
+        "config": {
+          "systemPrompt": "Read the plan file from .omo/plans/{slug}.md and parse it with section-scoped counting: only column-0 checkboxes (`- [ ]` / `- [x]`) that fall under a `## Todos` / `## TODOs` or `## Final Verification Wave` heading are counted as actionable tasks. Ignore nested or indented checkboxes and ignore checkboxes under any other heading (Notes, Acceptance Criteria, Evidence, Definition of Done, etc.). Store the ordered task list under plan.todos and surface nextTaskLabel = the label of the first unchecked todo so the delegate-wave can name it. Set plan.parsed when complete.",
+          "outputKey": "plan.parsed",
+          "parser": "parsePlanSections",
+          "countedSections": [
+            "Todos",
+            "Final Verification Wave"
+          ]
+        }
+      },
+      {
+        "id": "init-notepad",
+        "kind": "llm",
+        "label": "Initialize append-only notepad and extract inherited wisdom",
+        "config": {
+          "systemPrompt": "Read the append-only notepad at .omo/notepads/{plan}/learnings.md (create it if absent). Extract prior learnings, decisions, and issues to pass as Inherited Wisdom to every delegated task. The notepad is append-only: delegated tasks MUST append findings via appendNotepad / assertAppendOnly — never overwrite or truncate. Set notepad.ready when the notepad is read and the inherited-wisdom block is prepared.",
+          "outputKey": "notepad.ready",
+          "notepadPath": ".omo/notepads/{plan}/learnings.md",
+          "notepadMode": "append-only"
+        }
+      },
+      {
+        "id": "next-wave",
+        "kind": "llm",
+        "label": "Select next wave of unchecked tasks (parallel-by-default, dependency-blocked)",
+        "config": {
+          "systemPrompt": "Inspect the section-scoped plan checklist (plan.todos). If unchecked tasks remain, output 'true' on the last line. If all tasks are checked, output 'false' on the last line.",
+          "outputKey": "wave.pending",
+          "outputShape": "boolean"
+        }
+      },
+      {
+        "id": "delegate-wave",
+        "kind": "parallel",
+        "label": "Fan out task() delegation per wave task (6-section prompts, parallel-by-default)",
+        "children": [
+          "delegate-worker"
         ],
-        "edges": [
-            {
-                "source": "admit-plan",
-                "target": "parse-plan",
-                "condition": "plan-admitted",
-                "priority": 20
-            },
-            {
-                "source": "admit-plan",
-                "target": "plan-rejected-terminal",
-                "condition": "plan-rejected-admission",
-                "priority": 10
-            },
-            {
-                "source": "parse-plan",
-                "target": "init-notepad",
-                "condition": "plan-parsed",
-                "priority": 10
-            },
-            {
-                "source": "init-notepad",
-                "target": "next-wave",
-                "condition": "notepad-ready",
-                "priority": 10
-            },
-            {
-                "source": "next-wave",
-                "target": "delegate-wave",
-                "condition": "wave-pending",
-                "priority": 20
-            },
-            {
-                "source": "next-wave",
-                "target": "final-verification-wave",
-                "condition": "all-tasks-done",
-                "priority": 10
-            },
-            {
-                "source": "delegate-wave",
-                "target": "per-task-verify",
-                "condition": "delegate-complete",
-                "priority": 10
-            },
-            {
-                "source": "per-task-verify",
-                "target": "checkbox-update",
-                "condition": "verify-done",
-                "priority": 10
-            },
-            {
-                "source": "checkbox-update",
-                "target": "next-wave",
-                "condition": "checkbox-updated",
-                "priority": 10
-            },
-            {
-                "source": "final-verification-wave",
-                "target": "complete",
-                "condition": "final-approved",
-                "priority": 20
-            },
-            {
-                "source": "final-verification-wave",
-                "target": "fix-loop",
-                "condition": "final-rejected",
-                "priority": 10
-            },
-            {
-                "source": "fix-loop",
-                "target": "next-wave",
-                "condition": "fix-retry",
-                "priority": 20
-            },
-            {
-                "source": "fix-loop",
-                "target": "blocked-escalation",
-                "condition": "fix-blocked",
-                "priority": 10
-            }
+        "config": {
+          "fanOutKey": "wave.tasks",
+          "completionKey": "delegate.complete",
+          "parallelByDefault": true,
+          "dependencyKey": "plan.dependencies",
+          "delegationSections": [
+            "TASK",
+            "EXPECTED OUTCOME",
+            "REQUIRED TOOLS",
+            "MUST DO",
+            "MUST NOT DO",
+            "CONTEXT"
+          ]
+        }
+      },
+      {
+        "id": "delegate-worker",
+        "kind": "llm",
+        "label": "Single task() delegation — 6-section prompt contract",
+        "capabilities": [
+          "task"
         ],
-        "rules": [
-            {
-                "id": "llm-loop-active",
-                "description": "LLM node re-enters while it proposes tool calls",
-                "when": {
-                    "kind": "blackboard.value.equals",
-                    "key": "llm.loop_active",
-                    "value": true
-                }
-            },
-            {
-                "id": "plan-admitted",
-                "description": "plan passed admission — parse and execute",
-                "when": {
-                    "kind": "blackboard.value.equals",
-                    "key": "plan.admitted",
-                    "value": true
-                }
-            },
-            {
-                "id": "plan-rejected-admission",
-                "description": "plan failed admission — terminate, do not delegate",
-                "when": {
-                    "kind": "blackboard.value.equals",
-                    "key": "plan.admitted",
-                    "value": false
-                }
-            },
-            {
-                "id": "plan-parsed",
-                "description": "plan parsed successfully",
-                "when": {
-                    "kind": "blackboard.key.exists",
-                    "key": "plan.parsed"
-                }
-            },
-            {
-                "id": "notepad-ready",
-                "description": "notepad initialized",
-                "when": {
-                    "kind": "blackboard.key.exists",
-                    "key": "notepad.ready"
-                }
-            },
-            {
-                "id": "wave-pending",
-                "description": "unchecked tasks remain in the plan",
-                "when": {
-                    "kind": "blackboard.value.equals",
-                    "key": "wave.pending",
-                    "value": true
-                }
-            },
-            {
-                "id": "all-tasks-done",
-                "description": "all plan tasks checked",
-                "when": {
-                    "kind": "blackboard.value.equals",
-                    "key": "wave.pending",
-                    "value": false
-                }
-            },
-            {
-                "id": "delegate-complete",
-                "description": "delegation wave finished",
-                "when": {
-                    "kind": "blackboard.value.equals",
-                    "key": "delegate.complete",
-                    "value": true
-                }
-            },
-            {
-                "id": "verify-done",
-                "description": "per-task verification complete",
-                "when": {
-                    "kind": "blackboard.key.exists",
-                    "key": "verify.complete"
-                }
-            },
-            {
-                "id": "checkbox-updated",
-                "description": "plan checkboxes updated",
-                "when": {
-                    "kind": "blackboard.key.exists",
-                    "key": "checkbox.updated"
-                }
-            },
-            {
-                "id": "final-approved",
-                "description": "all final critics approved",
-                "when": {
-                    "kind": "blackboard.value.equals",
-                    "key": "final.verdict",
-                    "value": "APPROVE"
-                }
-            },
-            {
-                "id": "final-rejected",
-                "description": "at least one final critic rejected",
-                "when": {
-                    "kind": "blackboard.value.equals",
-                    "key": "final.verdict",
-                    "value": "REJECT"
-                }
-            },
-            {
-                "id": "fix-retry",
-                "description": "fix-loop reopening tasks (strike count under the 3-strike ceiling)",
-                "when": {
-                    "kind": "blackboard.value.equals",
-                    "key": "fix.route",
-                    "value": "retry"
-                }
-            },
-            {
-                "id": "fix-blocked",
-                "description": "fix-loop strike budget exhausted — escalate, do not loop",
-                "when": {
-                    "kind": "blackboard.value.equals",
-                    "key": "fix.route",
-                    "value": "blocked"
-                }
-            }
+        "config": {
+          "systemPrompt": "Execute the delegated sub-task via the task tool. The delegation prompt you receive MUST contain six sections: ## 1. TASK (exact checkbox item), ## 2. EXPECTED OUTCOME (files, functionality, verification command), ## 3. REQUIRED TOOLS, ## 4. MUST DO, ## 5. MUST NOT DO, ## 6. CONTEXT (notepad paths, inherited wisdom, dependencies). Follow every section. Append findings to the notepad after completion (never overwrite)."
+        }
+      },
+      {
+        "id": "per-task-verify",
+        "kind": "llm",
+        "implementation": "critic",
+        "label": "Critic — verify each delegated task result before checkbox update",
+        "config": {
+          "evaluateKey": "delegate.results",
+          "outputKey": "verify.complete",
+          "verifyBeforeCheckbox": true
+        }
+      },
+      {
+        "id": "checkbox-update",
+        "kind": "llm",
+        "label": "Update plan checkboxes only after independent verification passes",
+        "config": {
+          "systemPrompt": "You are the checkbox-update gate. You MUST NOT flip a plan checkbox (`- [ ]` to `- [x]`) based only on a child agent claiming \"done\". Independently verify each task BEFORE flipping: confirm tests pass (run the plan verification command), confirm the expected files exist and were modified, and confirm lsp_diagnostics is clean on changed files. Only after verification passes, edit .omo/plans/{slug}.md to change the matching `- [ ]` to `- [x]` and write verification evidence. After the edit, READ the plan file again to confirm the unchecked count decreased — this read-back is mandatory. If verification fails, leave the checkbox unchecked and route back to fix-loop. Set checkbox.updated only after the read-back confirms the flip landed.",
+          "outputKey": "checkbox.updated",
+          "planPath": ".omo/plans/{slug}.md",
+          "verifyBeforeCheckbox": true,
+          "readBackAfterUpdate": true
+        }
+      },
+      {
+        "id": "final-verification-wave",
+        "kind": "parallel",
+        "label": "Final verification wave — F1-F4 parallel critics aggregated into final.verdict",
+        "children": [
+          "f1",
+          "f2",
+          "f3",
+          "f4"
         ],
-        "policies": []
-    }
+        "config": {
+          "completionKey": "final.complete",
+          "verdictKey": "final.verdict",
+          "verdictStrategy": "all-approve",
+          "verdictSources": [
+            "final.f1",
+            "final.f2",
+            "final.f3",
+            "final.f4"
+          ],
+          "aggregateKey": "final.critics"
+        }
+      },
+      {
+        "id": "f1",
+        "kind": "llm",
+        "label": "F1 — Goal verification critic",
+        "config": {
+          "systemPrompt": "F1: Verify the implementation achieves the plan stated goal. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.",
+          "outputKey": "final.f1"
+        }
+      },
+      {
+        "id": "f2",
+        "kind": "llm",
+        "label": "F2 — Constraint verification critic",
+        "config": {
+          "systemPrompt": "F2: Verify all explicit constraints were honored. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.",
+          "outputKey": "final.f2"
+        }
+      },
+      {
+        "id": "f3",
+        "kind": "llm",
+        "label": "F3 — Test verification critic",
+        "config": {
+          "systemPrompt": "F3: Verify all tests pass. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.",
+          "outputKey": "final.f3"
+        }
+      },
+      {
+        "id": "f4",
+        "kind": "llm",
+        "label": "F4 — Code quality verification critic",
+        "config": {
+          "systemPrompt": "F4: Verify the code is clean and well-structured. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.",
+          "outputKey": "final.f4"
+        }
+      },
+      {
+        "id": "complete",
+        "kind": "llm",
+        "label": "All verification passed — emit final report"
+      },
+      {
+        "id": "fix-loop",
+        "kind": "llm",
+        "label": "Final verification rejected — bounded 3-strike fix loop",
+        "config": {
+          "systemPrompt": "You are the runner fix-loop gate. The final verification wave REJECTED the implementation (at least one of F1-F4 returned REJECT). Steps: (1) Read the current strike counter from the blackboard key fix.strikes (treat absent as 0). (2) Increment it by one and write the new value to fix.strikes. The strike budget is 3 (RUNNER_FINAL_STRIKE_BUDGET). (3) If the new strike count is STRICTLY LESS THAN the budget, set fix.route=\"retry\": reopen the rejected plan tasks (uncheck their checkboxes) AND reuse each failed task's persisted child session id from the run taskRetryState / childSessionIds (Todo 6 lineage) so the retried child resumes with full prior context instead of starting fresh. (4) If the new strike count has reached the budget, set fix.route=\"blocked\" and do NOT loop again. The graph routes fix.route=\"blocked\" to the blocked-escalation node which records state/evidence and blocks for user intervention. Never set fix.route=\"retry\" once the strike budget is exhausted; the graph loop limit (maxNodeRuns) is a backstop but the strike counter is the intended bound.",
+          "outputKey": "fix.route",
+          "strikeKey": "fix.strikes",
+          "strikeBudget": 3,
+          "maxStrikes": 3,
+          "lineageKey": "run.childSessionIds",
+          "retryStateKey": "run.taskRetryState"
+        }
+      },
+      {
+        "id": "blocked-escalation",
+        "kind": "llm",
+        "label": "Strike budget exhausted — record state/evidence and block for user",
+        "config": {
+          "systemPrompt": "The runner exhausted its 3-strike fix budget (fix.strikes reached the ceiling) without all four final critics (F1-F4) approving. Emit a single blocked-escalation event: record the current state (which critics rejected and why, which plan tasks remain open, the last child session ids attempted) and write verifiable evidence to the run record and the evidence directory. Set fix.blocked=true. Do NOT retry, do NOT reopen tasks, do NOT route back to next-wave. Signal for human intervention: the runner cannot proceed autonomously past the final approval gate. A user must review the evidence, fix the root cause, and explicitly resume (clearing the stop marker) before the runner may attempt another fix cycle.",
+          "outputKey": "fix.blocked",
+          "evidencePath": ".omo/evidence/",
+          "strikeBudget": 3
+        }
+      }
+    ],
+    "edges": [
+      {
+        "source": "admit-plan",
+        "target": "parse-plan",
+        "condition": "plan-admitted",
+        "priority": 20
+      },
+      {
+        "source": "admit-plan",
+        "target": "plan-rejected-terminal",
+        "condition": "plan-rejected-admission",
+        "priority": 10
+      },
+      {
+        "source": "parse-plan",
+        "target": "init-notepad",
+        "condition": "plan-parsed",
+        "priority": 10
+      },
+      {
+        "source": "init-notepad",
+        "target": "next-wave",
+        "condition": "notepad-ready",
+        "priority": 10
+      },
+      {
+        "source": "next-wave",
+        "target": "delegate-wave",
+        "condition": "wave-pending",
+        "priority": 20
+      },
+      {
+        "source": "next-wave",
+        "target": "final-verification-wave",
+        "condition": "all-tasks-done",
+        "priority": 10
+      },
+      {
+        "source": "delegate-wave",
+        "target": "per-task-verify",
+        "condition": "delegate-complete",
+        "priority": 10
+      },
+      {
+        "source": "per-task-verify",
+        "target": "checkbox-update",
+        "condition": "verify-done",
+        "priority": 10
+      },
+      {
+        "source": "checkbox-update",
+        "target": "next-wave",
+        "condition": "checkbox-updated",
+        "priority": 10
+      },
+      {
+        "source": "final-verification-wave",
+        "target": "complete",
+        "condition": "final-approved",
+        "priority": 20
+      },
+      {
+        "source": "final-verification-wave",
+        "target": "fix-loop",
+        "condition": "final-rejected",
+        "priority": 10
+      },
+      {
+        "source": "fix-loop",
+        "target": "next-wave",
+        "condition": "fix-retry",
+        "priority": 20
+      },
+      {
+        "source": "fix-loop",
+        "target": "blocked-escalation",
+        "condition": "fix-blocked",
+        "priority": 10
+      },
+      {
+        "source": "admit-plan",
+        "target": "admit-plan",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "parse-plan",
+        "target": "parse-plan",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "init-notepad",
+        "target": "init-notepad",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "next-wave",
+        "target": "next-wave",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "delegate-worker",
+        "target": "delegate-worker",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "per-task-verify",
+        "target": "per-task-verify",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "checkbox-update",
+        "target": "checkbox-update",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "f1",
+        "target": "f1",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "f2",
+        "target": "f2",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "f3",
+        "target": "f3",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "f4",
+        "target": "f4",
+        "condition": "llm-loop-active",
+        "priority": 5
+      },
+      {
+        "source": "fix-loop",
+        "target": "fix-loop",
+        "condition": "llm-loop-active",
+        "priority": 5
+      }
+    ],
+    "rules": [
+      {
+        "id": "llm-loop-active",
+        "description": "LLM node re-enters while it proposes tool calls",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "llm.loop_active",
+          "value": true
+        }
+      },
+      {
+        "id": "plan-admitted",
+        "description": "plan passed admission — parse and execute",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "plan.admitted",
+          "value": true
+        }
+      },
+      {
+        "id": "plan-rejected-admission",
+        "description": "plan failed admission — terminate, do not delegate",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "plan.admitted",
+          "value": false
+        }
+      },
+      {
+        "id": "plan-parsed",
+        "description": "plan parsed successfully",
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "plan.parsed"
+        }
+      },
+      {
+        "id": "notepad-ready",
+        "description": "notepad initialized",
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "notepad.ready"
+        }
+      },
+      {
+        "id": "wave-pending",
+        "description": "unchecked tasks remain in the plan",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "wave.pending",
+          "value": true
+        }
+      },
+      {
+        "id": "all-tasks-done",
+        "description": "all plan tasks checked",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "wave.pending",
+          "value": false
+        }
+      },
+      {
+        "id": "delegate-complete",
+        "description": "delegation wave finished",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "delegate.complete",
+          "value": true
+        }
+      },
+      {
+        "id": "verify-done",
+        "description": "per-task verification complete",
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "verify.complete"
+        }
+      },
+      {
+        "id": "checkbox-updated",
+        "description": "plan checkboxes updated",
+        "when": {
+          "kind": "blackboard.key.exists",
+          "key": "checkbox.updated"
+        }
+      },
+      {
+        "id": "final-approved",
+        "description": "all final critics approved",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "final.verdict",
+          "value": "APPROVE"
+        }
+      },
+      {
+        "id": "final-rejected",
+        "description": "at least one final critic rejected",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "final.verdict",
+          "value": "REJECT"
+        }
+      },
+      {
+        "id": "fix-retry",
+        "description": "fix-loop reopening tasks (strike count under the 3-strike ceiling)",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "fix.route",
+          "value": "retry"
+        }
+      },
+      {
+        "id": "fix-blocked",
+        "description": "fix-loop strike budget exhausted — escalate, do not loop",
+        "when": {
+          "kind": "blackboard.value.equals",
+          "key": "fix.route",
+          "value": "blocked"
+        }
+      }
+    ],
+    "policies": []
+  }
 }

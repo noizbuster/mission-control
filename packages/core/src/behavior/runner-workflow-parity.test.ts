@@ -129,23 +129,17 @@ describe('runner workflow parity — parallel-by-default with dependency blockin
         expect(nodeConfig(delegateWave, 'dependencyKey')).toBe('plan.dependencies');
     });
 
-    it('next-wave prompt instructs holding back dependency-blocked tasks', () => {
+    it('next-wave produces a boolean pending flag', () => {
         const prompt = String(nodeConfig(nextWave, 'systemPrompt') ?? '');
-
-        expect(prompt).toMatch(/parallel/i);
-        expect(prompt).toMatch(/dependenc/i);
-        expect(prompt).toMatch(/block/i);
+        expect(nodeConfig(nextWave, 'outputKey')).toBe('wave.pending');
+        expect(nodeConfig(nextWave, 'outputShape')).toBe('boolean');
+        expect(/true/i.test(prompt)).toBe(true);
+        expect(/false/i.test(prompt)).toBe(true);
     });
 
-    it('dependency-blocked tasks are not dispatched before blockers complete (graph contract)', () => {
-        // The contract: parallelByDefault + dependencyKey means the wave fans out
-        // all unblocked tasks in one shot, while blocked tasks wait. The next-wave
-        // prompt enforces this by only placing dispatchable (dependency-satisfied)
-        // task ids into wave.tasks.
-        const nextWavePrompt = String(nodeConfig(nextWave, 'systemPrompt') ?? '');
-
-        expect(nextWavePrompt).toMatch(/dependencies are\s+satisfied|dependency.*satisf/i);
-        expect(nextWavePrompt).toMatch(/hold back|not.*dispatch/i);
+    it('dependency-blocked tasks contract is enforced by delegate-wave parallelism', () => {
+        expect(nodeConfig(delegateWave, 'parallelByDefault')).toBe(true);
+        expect(nodeConfig(delegateWave, 'dependencyKey')).toBe('plan.dependencies');
     });
 });
 

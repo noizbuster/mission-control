@@ -78,7 +78,7 @@ describe('runner workflow E2E: graph structure + verification node execution', (
         expect(perTaskVerify?.implementation).toBe('critic');
     });
 
-    it('has a final-verification-wave with exactly four critic children (f1-f4)', async () => {
+    it('has a final-verification-wave with exactly four LLM critic children (f1-f4)', async () => {
         const spec = await loadRunnerSpec();
         const graph = spec.graph;
 
@@ -88,7 +88,8 @@ describe('runner workflow E2E: graph structure + verification node execution', (
 
         for (const criticId of ['f1', 'f2', 'f3', 'f4']) {
             const critic = graph.nodes.find((node) => node.id === criticId);
-            expect(critic?.implementation).toBe('critic');
+            expect(critic?.kind).toBe('llm');
+            expect(critic?.config?.['outputKey']).toBe(`final.${criticId}`);
         }
     });
 
