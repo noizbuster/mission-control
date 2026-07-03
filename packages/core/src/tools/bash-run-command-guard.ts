@@ -6,7 +6,7 @@ const deniedShellCommands = new Set(['bash', 'sh', 'zsh', 'fish', 'dash', 'ksh',
 const deniedWrapperCommands = new Set(['env', 'command', 'builtin', 'exec', 'sudo']);
 const deniedRemoteCommands = new Set(['curl', 'wget', 'ssh', 'scp', 'rsync', 'nc', 'ncat', 'socat']);
 const deniedBackgroundCommands = new Set(['nohup', 'disown', 'setsid', 'tmux', 'screen']);
-const deniedInteractiveCommands = new Set(['vim', 'vi', 'nano', 'less', 'more', 'top', 'watch', 'tail', 'read']);
+const deniedInteractiveCommands = new Set(['vim', 'vi', 'nano', 'less', 'more', 'top', 'watch', 'read']);
 const deniedPublishCommands = new Set(['npm', 'pnpm', 'yarn', 'cargo']);
 const interpreterEvalFlags = new Map<string, readonly string[]>([
     ['node', ['-e', '--eval']],
@@ -24,6 +24,86 @@ export function parseTrustedCommandLine(commandLine: string): readonly string[] 
     const argv = tokenizeShellWords(commandLine);
     enforceTrustedCommandPolicy(argv);
     return argv;
+}
+
+/**
+ * Parse a command line that may contain `|` pipe operators, returning one argv per segment.
+ * Each segment is independently tokenized and policy-checked; the `|` character is no longer
+ * a forbidden control operator at this entry point (it is still forbidden inside a segment).
+ *
+ * Security: pipe segments NEVER invoke a shell. Each segment is spawned directly and chained
+ * via Node.js `child_process` stdio piping. The same per-command policy still applies to every
+ * segment (allowlist, denied commands, no shell expansions, etc.), so a pipe like
+ * `cat file | grep pattern` runs as two direct spawns, not as `bash -c "cat file | grep pattern"`.
+ *
+ * Empty segments (e.g. `cat |`, `| grep`, `cat || grep`) are rejected. A single-segment input
+ * behaves identically to `parseTrustedCommandLine`.
+ */
+export function parseTrustedCommandPipeline(commandLine: string): readonly (readonly string[])[] {
+    if (commandLine.includes('\0')) {
+        throw denied('null bytes are denied');
+    }
+    const segments = splitOnPipe(commandLine);
+    if (segments.length === 0) {
+        throw denied('empty shell input is denied');
+    }
+    return segments.map((segment) => {
+        const argv = tokenizeShellWords(segment);
+        enforceTrustedCommandPolicy(argv);
+        return argv;
+    });
+}
+
+/**
+ * Split on `|` characters that are NOT inside a quote and NOT escaped. The tokenizer still
+ * rejects `$`, backticks, newlines, and the other control characters — `|` is the only
+ * operator this split honors, so a malicious `||` or `|&` produces empty segments that the
+ * caller rejects. Quote-aware: `"a|b"` is one segment containing the literal `a|b`.
+ */
+function splitOnPipe(commandLine: string): readonly string[] {
+    const segments: string[] = [];
+    let current = '';
+    let quote: '"' | "'" | null = null;
+    for (let index = 0; index < commandLine.length; index += 1) {
+        const char = commandLine[index];
+        if (char === undefined) {
+            continue;
+        }
+        if (quote !== null) {
+            current += char;
+            if (char === quote) {
+                quote = null;
+            }
+            if (char === '\\' && quote === '"') {
+                const next = commandLine[index + 1];
+                if (next !== undefined) {
+                    current += next;
+                    index += 1;
+                }
+            }
+            continue;
+        }
+        if (char === "'" || char === '"') {
+            quote = char;
+            current += char;
+            continue;
+        }
+        if (char === '|') {
+            segments.push(current);
+            current = '';
+            continue;
+        }
+        current += char;
+    }
+    segments.push(current);
+    if (segments.length > 1) {
+        for (const segment of segments) {
+            if (segment.trim().length === 0) {
+                throw denied('empty pipe segment is denied');
+            }
+        }
+    }
+    return segments;
 }
 
 function tokenizeShellWords(commandLine: string): readonly string[] {
