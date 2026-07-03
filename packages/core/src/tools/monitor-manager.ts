@@ -14,6 +14,7 @@
 // default `node:child_process` spawner.
 
 import { redactCredentialText } from '../providers/credential-resolver.js';
+import { createStreamDecoder, truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 
@@ -450,7 +451,7 @@ function truncateLine(text: string, maxBytes: number): TruncatedLine {
     if (bytes.length <= maxBytes) {
         return { text, truncated: false };
     }
-    const sliced = bytes.subarray(0, maxBytes);
+    const sliced = truncateToValidUtf8Boundary(bytes, maxBytes);
     return { text: sliced.toString('utf8'), truncated: true };
 }
 
@@ -478,6 +479,8 @@ export function createDefaultSpawner(): MonitorProcessSpawner {
                 let stderrBuf = '';
                 let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
                 let settled = false;
+                const stdoutDecoder = createStreamDecoder();
+                const stderrDecoder = createStreamDecoder();
 
                 const teardown = (exitCode: number | null, signal: string | null): void => {
                     if (settled) return;
@@ -499,12 +502,12 @@ export function createDefaultSpawner(): MonitorProcessSpawner {
                 }
 
                 child.stdout?.on('data', (chunk: Buffer) => {
-                    const [remaining, lines] = splitLines(stdoutBuf + chunk.toString('utf8'));
+                    const [remaining, lines] = splitLines(stdoutBuf + stdoutDecoder.decode(chunk));
                     stdoutBuf = remaining;
                     for (const line of lines) sink.onLine({ stream: 'stdout', text: line });
                 });
                 child.stderr?.on('data', (chunk: Buffer) => {
-                    const [remaining, lines] = splitLines(stderrBuf + chunk.toString('utf8'));
+                    const [remaining, lines] = splitLines(stderrBuf + stderrDecoder.decode(chunk));
                     stderrBuf = remaining;
                     for (const line of lines) sink.onLine({ stream: 'stderr', text: line });
                 });
