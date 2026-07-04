@@ -130,8 +130,14 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         "user's question, then synthesize a grounded answer. You are READ-ONLY: you must NOT " +
                         'edit, write, patch, or run effectful tools. Cite file:line evidence for every claim ' +
                         'about the codebase. Do NOT begin implementation — if the exploration reveals the user ' +
-                        'actually wants implementation, say so and stop. Set explore.complete when synthesis is ' +
-                        'ready.',
+                        'actually wants implementation, say so and stop.\n' +
+                        'PATH RESILIENCE: paths mentioned in project docs (AGENTS.md, CLAUDE.md) may be stale ' +
+                        'after refactors. If a documented path returns not_found, do NOT conclude the file or ' +
+                        'feature is missing — fall back to glob with the basename (e.g. "**/<basename>"), grep ' +
+                        'for a distinctive symbol from the docs, or list the parent directory. Only conclude ' +
+                        '"not present" after at least one alternative search has returned empty. A failed read ' +
+                        'is NOT explored ground — it tells you nothing about whether the file exists elsewhere.\n' +
+                        'Set explore.complete when synthesis is ready.',
                     outputKey: 'explore.complete',
                 },
             },
@@ -187,10 +193,14 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                 config: {
                     systemPrompt:
                         'Two checks before delegation:\n' +
-                        '1. ANTI-DUP: if the work was already explored (check prior exploration results in ' +
-                        'context), do NOT re-explore the same ground. Skip redundant exploration and proceed ' +
-                        'with what is already known. Re-running the same searches wastes tokens and can ' +
-                        'contradict earlier findings.\n' +
+                        '1. ANTI-DUP: if the work was already SUCCESSFULLY explored (a read that returned ' +
+                        'content, a grep with matches — check prior exploration results in context), do NOT ' +
+                        're-read the same files. Skip redundant exploration and proceed with what is already ' +
+                        'known. Re-running the same successful searches wastes tokens and can contradict ' +
+                        'earlier findings. A tool FAILURE (not_found, read_failed, empty glob) is NOT explored ' +
+                        'ground — it tells you nothing, so it must NOT count as prior exploration. If a ' +
+                        'documented path failed, switch tools (glob the basename, grep a symbol, list the ' +
+                        'parent) before treating the area as covered.\n' +
                         '2. DELEGATION-BIAS: assess whether delegation is appropriate. Is the task small enough ' +
                         'to do directly with certainty? Is there an existing pattern to follow (per the maturity ' +
                         'check)? Default bias is DELEGATE for non-trivial work, but trivial single-file work ' +
