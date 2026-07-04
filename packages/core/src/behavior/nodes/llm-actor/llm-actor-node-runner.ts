@@ -309,14 +309,14 @@ function applyEnumConstraint(node: AbgNodeSpec, parsed: ParseStructuredOutputRes
 
 /**
  * Graceful degradation: when structured-output parsing failed (and no enum
- * constraint rescued it), fall back to the node's declared `outputDefault`
- * coerced to the expected shape. This prevents a single misbehaving LLM turn
- * from killing an entire graph run — the node proceeds with a safe declared
- * default instead.
+ * constraint rescued it), fall back to a safe value so a single misbehaving
+ * LLM turn cannot kill the entire graph run.
  *
- * Returns the original `{ ok: false, error }` when no `outputDefault` is
- * declared or when the default cannot be coerced to the expected shape, so the
- * existing fail-closed path still applies for nodes without a fallback.
+ * Resolution order:
+ *   1. explicit `outputDefault` coerced to the expected shape
+ *   2. shape-specific safe default: `array` → `[]`, `boolean` → `false`
+ *   3. original `{ ok: false, error }` (fail-closed) for shapes without an
+ *      unambiguous safe default (`object`, `string`, `any`)
  */
 function applyShapeDefaultFallback(
     node: AbgNodeSpec,
@@ -330,11 +330,19 @@ function applyShapeDefaultFallback(
         return parsed;
     }
     const fallback = readOutputDefault(node);
-    if (fallback === undefined) {
-        return parsed;
+    if (fallback !== undefined) {
+        const coerced = coerceDefaultToShape(fallback, shape);
+        if (coerced !== null) {
+            return { ok: true, value: coerced };
+        }
     }
-    const coerced = coerceDefaultToShape(fallback, shape);
-    return coerced !== null ? { ok: true, value: coerced } : parsed;
+    if (shape === 'array') {
+        return { ok: true, value: [] };
+    }
+    if (shape === 'boolean') {
+        return { ok: true, value: false };
+    }
+    return parsed;
 }
 
 function coerceDefaultToShape(raw: string, shape: StructuredOutputShape): unknown | null {

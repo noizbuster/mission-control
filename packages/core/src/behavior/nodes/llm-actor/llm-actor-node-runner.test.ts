@@ -558,7 +558,7 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         expect(signals.some((signal) => signal.type === 'failure')).toBe(false);
     });
 
-    it('fails closed for a boolean gate with no outputDefault when parsing fails', async () => {
+    it('auto-defaults to false for a boolean gate with no outputDefault when parsing fails', async () => {
         const blackboard = seedBlackboard();
         const context: AbgNodeRunContext = {
             graphId: 'g_bool_no_default',
@@ -577,7 +577,53 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
 
         const signals = await collectSignals(runLlmActorNode(node, context));
 
-        expect(blackboard.has('guard.cleared')).toBe(false);
+        expect(blackboard.get('guard.cleared')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(false);
+    });
+
+    it('auto-defaults to empty array for an array node with no outputDefault when parsing fails', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_array_no_default',
+            now: () => NOW,
+            sdkModel: modelReturning('I need to look at the files first.'),
+            blackboard,
+        };
+        const node = {
+            id: 'todo-plan',
+            kind: 'llm',
+            config: {
+                outputKey: 'plan.todos',
+                outputShape: 'array',
+            },
+        } as const;
+
+        const signals = await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.get('plan.todos')).toEqual([]);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(false);
+    });
+
+    it('fails closed for an object node with no outputDefault when parsing fails', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_object_no_default',
+            now: () => NOW,
+            sdkModel: modelReturning('not an object'),
+            blackboard,
+        };
+        const node = {
+            id: 'gate',
+            kind: 'llm',
+            config: {
+                outputKey: 'some.object',
+                outputShape: 'object',
+            },
+        } as const;
+
+        const signals = await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.has('some.object')).toBe(false);
         expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
     });
 
