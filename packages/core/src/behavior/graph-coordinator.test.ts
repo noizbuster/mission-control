@@ -140,52 +140,46 @@ describe('bounded ABG graph coordinator', () => {
         });
     });
 
-    it('terminates an LLM self-loop stuck on productive tool use with node_loop_budget_exhausted', async () => {
-        // Given: a node that ALWAYS yields a `tool.completed` emit (so hadProductiveToolUse=true)
-        // and sets `llm.loop_active=true`, then re-enters itself via a self-edge. Without the
-        // loop-active cap this would spin until `maxNodeRuns`.
+    it('force-completes a node stuck in a tool loop instead of killing the graph', async () => {
         const registry = createAbgNodeRegistry();
-        registry.register('always-tool-use', async function* run(
-            node: AbgNodeSpec,
-            context: AbgNodeRunContext,
-        ): AsyncIterable<AbgSignal> {
-            yield { type: 'started', graphId: context.graphId, nodeId: node.id };
-            yield createAbgEmitSignal({
-                graphId: context.graphId,
-                nodeId: node.id,
-                eventType: 'tool.completed',
-                timestamp: context.now(),
-            });
-            yield { type: 'success', graphId: context.graphId, nodeId: node.id };
-        });
+        registry.register(
+            'always-tool-use',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                context.blackboard?.set('llm.loop_active', true);
+                yield createAbgEmitSignal({
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    eventType: 'tool.completed',
+                    timestamp: context.now(),
+                });
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
 
-        // When
         const result = await runAbgGraph({
             ...baseInput,
             registry,
             graph: {
                 id: 'loop-active-stuck',
                 entryNodeId: 'spinner',
-                // retryLimit 2 -> maxAttempts 3 -> loop cap = 3 * 2 = 6
                 defaults: { retryLimit: 2 },
                 nodes: [{ id: 'spinner', kind: 'llm', implementation: 'always-tool-use' }],
-                edges: [{ source: 'spinner', target: 'spinner' }],
-                rules: [],
+                edges: [{ source: 'spinner', target: 'spinner', condition: 'llm-loop-active', priority: 5 }],
+                rules: [
+                    {
+                        id: 'llm-loop-active',
+                        description: 'llm loop active',
+                        when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true },
+                    },
+                ],
                 policies: [],
             },
         });
 
-        // Then: the run terminates with node_loop_budget_exhausted at exactly 6 re-entries.
-        expect(result.status).toBe('failed');
-        expect(attemptsFor(result.events, 'spinner')).toEqual([1, 2, 3, 4, 5, 6]);
-        expect(result.events.at(-1)).toMatchObject({
-            type: 'graph.failed',
-            abg: {
-                error: {
-                    code: 'node_loop_budget_exhausted',
-                },
-            },
-        });
+        expect(result.status).toBe('completed');
+        expect(result.events.some((e) => e.type === 'node.failed' && e.abg?.signalType === 'fallback')).toBe(true);
+        expect(result.events.some((e) => e.type === 'graph.completed')).toBe(true);
     });
 
     it('records requires-approval policies as blocked graph state', async () => {

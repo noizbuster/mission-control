@@ -69,20 +69,30 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         }
                     } else if (result.hadProductiveToolUse === true) {
                         state.consecutiveToolFailuresByNodeId.set(result.node.id, 0);
-                        // Bound the LLM self-loop: cap is `maxAttempts * 2` (vs the failure
-                        // counters' `maxAttempts`) so legitimate multi-turn exploration still
-                        // has room while pathological loops fail fast.
                         const reentries = (state.consecutiveLoopActiveReentriesByNodeId.get(result.node.id) ?? 0) + 1;
                         state.consecutiveLoopActiveReentriesByNodeId.set(result.node.id, reentries);
                         if (reentries >= state.maxAttempts * 2) {
-                            return failGraph(
-                                graph.id,
-                                input,
-                                state.events,
-                                'node_loop_budget_exhausted',
-                                `ABG node stuck in tool loop: ${result.node.id} (${reentries} re-entries without producing output)`,
-                                terminalErrorFromSignal(result.lastSignal),
-                            );
+                            state.blackboard.set('llm.loop_active', false);
+                            state.consecutiveLoopActiveReentriesByNodeId.set(result.node.id, 0);
+                            state.events.push({
+                                type: 'node.failed',
+                                timestamp: input.now(),
+                                sessionId: input.sessionId,
+                                message: `ABG node loop budget exhausted, force-completing: ${result.node.id} (${reentries} re-entries without producing output)`,
+                                durability: 'durable',
+                                nativeSidecarStatus: 'mock',
+                                modelProviderSelection: input.modelProviderSelection,
+                                abg: {
+                                    graphId: graph.id,
+                                    nodeId: result.node.id,
+                                    signalType: 'fallback',
+                                    error: {
+                                        code: 'node_loop_budget_exhausted',
+                                        message: `force-completing after ${reentries} re-entries`,
+                                        retryable: false,
+                                    },
+                                },
+                            });
                         }
                     } else {
                         state.consecutiveLoopActiveReentriesByNodeId.set(result.node.id, 0);
