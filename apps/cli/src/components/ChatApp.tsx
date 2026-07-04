@@ -518,6 +518,29 @@ export function ChatApp({
     const overlayActive = snapshot.overlayMode !== 'none';
     const showWelcome = welcomeData !== undefined && snapshot.outputText === '' && !overlayActive;
 
+    // opentui's double-buffer diff can miss cells when a wide character (Korean
+    // Hangul, emoji) is replaced by a narrow one — the continuation cell is not
+    // marked dirty, leaving stale pixels that look like garbled text. Force a
+    // full repaint (skip the diff, write every cell) when the view changes
+    // dramatically: overlay open/close, and when a streaming response finishes.
+    const prevOverlayMode = useRef(snapshot.overlayMode);
+    useEffect(() => {
+        if (prevOverlayMode.current !== snapshot.overlayMode) {
+            prevOverlayMode.current = snapshot.overlayMode;
+            Reflect.set(renderer, 'forceFullRepaintRequested', true);
+            renderer.requestRender();
+        }
+    }, [snapshot.overlayMode, renderer]);
+
+    const prevGenerating = useRef(snapshot.generating);
+    useEffect(() => {
+        if (prevGenerating.current && !snapshot.generating) {
+            Reflect.set(renderer, 'forceFullRepaintRequested', true);
+            renderer.requestRender();
+        }
+        prevGenerating.current = snapshot.generating;
+    }, [snapshot.generating, renderer]);
+
     const transcript = (
         <ChatTranscript
             blocks={messageBlocks}
