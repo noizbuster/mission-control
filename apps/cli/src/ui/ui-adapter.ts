@@ -6,4 +6,6 @@ export interface AgentUIRenderer {
     render(event: AgentEvent): void;
     stop(): Promise<void>;
     getOutput(): string;
+    /** When true, render() already wrote output to stdout; callers must NOT write getOutput() again. */
+    readonly streamedOutput?: boolean;
 }

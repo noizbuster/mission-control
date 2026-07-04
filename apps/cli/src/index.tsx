@@ -33,6 +33,7 @@ export function createHelpText(): string {
         '  --session <id>   Reuse or create a replayable session id',
         '  --method <id>    Select auth login method',
         '  --profile <name>  Select a user-scope config profile (replaces config.json; long-only)',
+        '  --thinking     Show reasoning/thinking blocks in non-interactive output',
         '  --version      Print version',
         '  --help         Print help',
         '',

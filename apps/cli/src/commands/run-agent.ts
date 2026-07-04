@@ -325,7 +325,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         closePersistentStore(persistentStore);
         await closeTreeSitterClient();
     }
-    return renderer.getOutput();
+    return renderer.streamedOutput === true ? '' : renderer.getOutput();
 }
 
 function shouldRunInteractiveChat(args: CliArgs, graph: AbgGraphSpec | undefined, options: RunAgentOptions): boolean {

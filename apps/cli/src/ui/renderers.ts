@@ -115,6 +115,7 @@ abstract class BufferedRenderer implements AgentUIRenderer {
 export type BlockRendererOptions = { readonly thinking?: boolean };
 
 export class PlainRenderer extends BufferedRenderer {
+    readonly streamedOutput = true;
     private readonly thinking: boolean;
     private readonly accumulator = createBlockAccumulator();
     private readonly rendered: string[] = [];
@@ -141,6 +142,7 @@ export class PlainRenderer extends BufferedRenderer {
 }
 
 export class TuiRenderer extends BufferedRenderer {
+    readonly streamedOutput = true;
     private readonly thinking: boolean;
     private readonly accumulator = createBlockAccumulator();
     private readonly rendered: string[] = [];
