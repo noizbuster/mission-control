@@ -64,12 +64,11 @@ export const RUNNER_PLAN_ADMISSION_PROMPT =
     '## Scope, ## Todos, ## Final Verification Wave; (3) ## Todos contains at least one ' +
     '"- [ ]" checkbox; (4) ## Final Verification Wave is present; (5) the plan is marked ' +
     'approved/ready (a "Status: Approved" | "Status: Ready" | "Status: Accepted" line). ' +
-    'If EVERY check passes, write plan.admitted=true. If ANY check fails, write ' +
-    'plan.admitted=false and state the single clearest reason (missing plan, missing section, ' +
-    'no todos, no final wave, or unapproved). Do NOT proceed to task delegation on a failed ' +
-    'admission — the graph routes a rejected plan to plan-rejected-terminal which emits a ' +
-    'clear failure event and stops. A missing, malformed, or unapproved plan must never reach ' +
-    'delegate-wave.';
+    'A missing, malformed, or unapproved plan must never reach delegate-wave — the graph ' +
+    'routes a rejected plan to plan-rejected-terminal which emits a clear failure event ' +
+    'and stops.\n' +
+    'On the LAST line, output EXACTLY `true` if every check passes, or `false` if any check ' +
+    'fails — no quotes, no formatting, no extra text.';
 
 /** Terminal failure prompt for a plan rejected at admission. */
 export const RUNNER_PLAN_REJECTED_PROMPT =
@@ -324,8 +323,8 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 config: {
                     systemPrompt:
                         'Inspect the section-scoped plan checklist (plan.todos). If unchecked tasks ' +
-                        'remain, output \'true\' on the last line. If all tasks are checked, output ' +
-                        '\'false\' on the last line.',
+                        "remain, output 'true' on the last line. If all tasks are checked, output " +
+                        "'false' on the last line.",
                     outputKey: 'wave.pending',
                     outputShape: 'boolean',
                 },
