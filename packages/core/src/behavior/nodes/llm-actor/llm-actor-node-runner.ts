@@ -75,7 +75,8 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
 
     const hasOutputKey = readStringConfig(node, 'outputKey') !== undefined;
     const hasCapabilities = (node.capabilities ?? []).length > 0;
-    const suppressTools = hasOutputKey && !hasCapabilities;
+    const capabilitiesExplicitlyEmpty = Array.isArray(node.capabilities) && node.capabilities.length === 0;
+    const suppressTools = capabilitiesExplicitlyEmpty || (hasOutputKey && !hasCapabilities);
     const advertisedTools = suppressTools
         ? []
         : context.toolRegistry !== undefined

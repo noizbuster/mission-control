@@ -721,3 +721,73 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         expect(blackboard.get('llm.loop_active')).toBe(false);
     });
 });
+
+describe('runLlmActorNode — capabilities-based tool suppression', () => {
+    function registryWithReadTool(): ToolRegistry {
+        const registry = new ToolRegistry();
+        registry.register({
+            name: 'read',
+            description: 'read a file',
+            capabilityClasses: ['read'],
+            parametersJsonSchema: {
+                type: 'object',
+                properties: {},
+                required: [],
+                additionalProperties: false,
+            },
+            inputSchema: z.object({}),
+            outputSchema: z.object({ ok: z.boolean() }),
+            outputLimit: { maxModelOutputChars: 32 },
+            execute: async () => ({ ok: true }),
+        });
+        return registry;
+    }
+
+    it('suppresses all tools when capabilities is explicitly empty', async () => {
+        const blackboard = createBlackboard();
+        blackboard.appendMessages([{ role: 'user', content: 'summarize' }] as readonly ModelMessage[]);
+        const model = buildModel();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_no_caps',
+            now: () => NOW,
+            sdkModel: model,
+            blackboard,
+            toolRegistry: registryWithReadTool(),
+        };
+        const node = {
+            id: 'final-respond',
+            kind: 'llm' as const,
+            capabilities: [],
+        };
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(model.doStreamCalls.length).toBe(1);
+        const call = model.doStreamCalls[0];
+        expect(call?.tools).toBeUndefined();
+    });
+
+    it('advertises tools when capabilities is absent and no outputKey', async () => {
+        const blackboard = createBlackboard();
+        blackboard.appendMessages([{ role: 'user', content: 'summarize' }] as readonly ModelMessage[]);
+        const model = buildModel();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_inherit_caps',
+            now: () => NOW,
+            sdkModel: model,
+            blackboard,
+            toolRegistry: registryWithReadTool(),
+        };
+        const node = {
+            id: 'final-respond',
+            kind: 'llm' as const,
+        };
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(model.doStreamCalls.length).toBe(1);
+        const call = model.doStreamCalls[0];
+        expect(call?.tools).toBeDefined();
+        expect(call?.tools?.length).toBeGreaterThan(0);
+    });
+});
