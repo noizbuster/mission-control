@@ -211,8 +211,10 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                 config: {
                     systemPrompt:
                         'Break the task into small ordered todo items (one implementation+test unit per todo). ' +
-                        'Output the list as a JSON array of objects with at minimum a "description" field per ' +
-                        'item. Each todo should be atomic enough to delegate as one sub-task.',
+                        'Each todo should be atomic enough to delegate as one sub-task.\n' +
+                        'Output the list as a JSON array of objects. Each object MUST have a "description" field ' +
+                        '(string). Output ONLY the JSON array — no prose, no markdown fences, no explanation. ' +
+                        'Example: [{"description":"add input validation"},{"description":"write unit test"}]',
                     outputKey: 'plan.todos',
                     outputShape: 'array',
                 },
