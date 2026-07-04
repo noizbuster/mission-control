@@ -117,6 +117,123 @@ describe('provider event protocol schemas', () => {
         });
     });
 
+    it('parses reasoning_delta and reasoning_completed stream chunks mirroring the text_delta envelope', () => {
+        const reasoningDelta = ProviderStreamChunkSchema.parse({
+            kind: 'reasoning_delta',
+            requestId: 'provider_request_1',
+            sequence: 1,
+            sourceEventType: 'response.reasoning.delta',
+            providerResponseId: 'resp_1',
+            delta: 'thinking...',
+        });
+        const reasoningDeltaWithRedactions = ProviderStreamChunkSchema.parse({
+            kind: 'reasoning_delta',
+            requestId: 'provider_request_1',
+            sequence: 2,
+            delta: 'redacted thought',
+            redactions: [
+                {
+                    classification: 'credential',
+                    reason: 'provider credential must not be logged',
+                    replacement: '[REDACTED:credential]',
+                },
+            ],
+        });
+        const reasoningCompleted = ProviderStreamChunkSchema.parse({
+            kind: 'reasoning_completed',
+            requestId: 'provider_request_1',
+            sequence: 3,
+            sourceEventType: 'response.reasoning.completed',
+            providerResponseId: 'resp_1',
+            text: 'full reasoning trace',
+        });
+
+        expect(reasoningDelta).toMatchObject({ kind: 'reasoning_delta', delta: 'thinking...' });
+        expect(reasoningDeltaWithRedactions).toMatchObject({
+            kind: 'reasoning_delta',
+            redactions: [{ classification: 'credential' }],
+        });
+        expect(reasoningCompleted).toMatchObject({ kind: 'reasoning_completed', text: 'full reasoning trace' });
+    });
+
+    it('rejects reasoning chunks missing required fields and rejects unknown fields under .strict()', () => {
+        // malformed_input adversarial: missing requestId must throw
+        expect(() =>
+            ProviderStreamChunkSchema.parse({
+                kind: 'reasoning_delta',
+                sequence: 1,
+                delta: 'x',
+            }),
+        ).toThrow();
+        // reasoning_completed missing text must throw
+        expect(() =>
+            ProviderStreamChunkSchema.parse({
+                kind: 'reasoning_completed',
+                requestId: 'r',
+                sequence: 1,
+            }),
+        ).toThrow();
+        // unknown field rejected by .strict()
+        expect(() =>
+            ProviderStreamChunkSchema.parse({
+                kind: 'reasoning_delta',
+                requestId: 'r',
+                sequence: 1,
+                delta: 'x',
+                surprise: true,
+            }),
+        ).toThrow();
+        expect(() =>
+            ProviderStreamChunkSchema.parse({
+                kind: 'reasoning_completed',
+                requestId: 'r',
+                sequence: 1,
+                text: 'x',
+                surprise: true,
+            }),
+        ).toThrow();
+    });
+
+    it('accepts an optional reasoning string on ProviderMessageSchema without changing content semantics', () => {
+        const withReasoning = ProviderMessageSchema.parse({
+            messageId: 'message_1',
+            role: 'assistant',
+            content: 'answer',
+            reasoning: 'private chain-of-thought',
+        });
+        const withoutReasoning = ProviderMessageSchema.parse({
+            messageId: 'message_2',
+            role: 'assistant',
+            content: 'answer',
+        });
+
+        expect(withReasoning.reasoning).toBe('private chain-of-thought');
+        expect(withoutReasoning.reasoning).toBeUndefined();
+        // blast radius: response_completed arm still validates with a reasoning-bearing message
+        const completedWithReasoning = ProviderStreamChunkSchema.parse({
+            kind: 'response_completed',
+            requestId: 'r',
+            sequence: 4,
+            message: {
+                messageId: 'message_3',
+                role: 'assistant',
+                content: 'final answer',
+                reasoning: 'final reasoning trace',
+            },
+            finishReason: 'stop',
+        });
+        expect(completedWithReasoning).toMatchObject({ kind: 'response_completed' });
+        // reasoning must not be required and must not bleed into unrelated fields
+        expect(() =>
+            ProviderMessageSchema.parse({
+                messageId: 'message_4',
+                role: 'assistant',
+                content: 'answer',
+                reasoningRedactions: [],
+            }),
+        ).toThrow();
+    });
+
     it('attaches provider stream chunks to agent events without storing credentials', () => {
         const event = ProviderStreamChunkSchema.parse({
             kind: 'text_delta',

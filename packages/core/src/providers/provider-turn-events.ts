@@ -48,6 +48,22 @@ export function redactProviderChunk(chunk: ProviderStreamChunk): ProviderStreamC
                 ...redactionField(redactions),
             };
         }
+        case 'reasoning_delta': {
+            const redactions = redactionsForText(chunk.delta, chunk.redactions);
+            return {
+                ...chunk,
+                delta: redactCredentialText(chunk.delta),
+                ...redactionField(redactions),
+            };
+        }
+        case 'reasoning_completed': {
+            const redactions = redactionsForText(chunk.text, chunk.redactions);
+            return {
+                ...chunk,
+                text: redactCredentialText(chunk.text),
+                ...redactionField(redactions),
+            };
+        }
         case 'tool_call_delta':
             return { ...chunk, argumentsDelta: redactCredentialText(chunk.argumentsDelta) };
         case 'tool_call_completed':
@@ -113,6 +129,8 @@ export function responseFailedChunk(
 function eventTypeForChunk(chunk: ProviderStreamChunk): AgentEvent['type'] {
     switch (chunk.kind) {
         case 'text_delta':
+        case 'reasoning_delta':
+        case 'reasoning_completed':
         case 'tool_call_delta':
         case 'tool_call_completed':
             return 'task.progress';
@@ -131,6 +149,10 @@ function messageForChunk(chunk: ProviderStreamChunk): string {
     switch (chunk.kind) {
         case 'text_delta':
             return chunk.delta;
+        case 'reasoning_delta':
+            return chunk.delta;
+        case 'reasoning_completed':
+            return chunk.text;
         case 'tool_call_delta':
             return chunk.argumentsDelta;
         case 'tool_call_completed':

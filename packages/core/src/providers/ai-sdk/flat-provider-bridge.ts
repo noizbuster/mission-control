@@ -258,6 +258,15 @@ function bridgeFlatStream(
                     textOpen = false;
                 }
             };
+            const reasoningId = 'flat_bridge_reasoning';
+            let reasoningOpen = false;
+            let reasoningEmitted = false;
+            const closeReasoning = () => {
+                if (reasoningOpen) {
+                    controller.enqueue({ type: 'reasoning-end', id: reasoningId });
+                    reasoningOpen = false;
+                }
+            };
             controller.enqueue({ type: 'stream-start', warnings: [] });
             const abortPromise = new Promise<IteratorResult<ProviderStreamChunk>>((resolve) => {
                 if (signal.aborted) {
@@ -294,12 +303,21 @@ function bridgeFlatStream(
                             controller.enqueue({ type: 'text-delta', id: textId, delta: chunk.delta });
                             textEmitted = true;
                             break;
+                        case 'reasoning_delta':
+                            if (!reasoningOpen) {
+                                controller.enqueue({ type: 'reasoning-start', id: reasoningId });
+                                reasoningOpen = true;
+                            }
+                            controller.enqueue({ type: 'reasoning-delta', id: reasoningId, delta: chunk.delta });
+                            reasoningEmitted = true;
+                            break;
                         case 'tool_call_delta':
                             // Buffered — emitted in full on the matching `tool_call_completed`
                             // (the flat stream only carries the toolName on completion).
                             break;
                         case 'tool_call_completed': {
                             closeText();
+                            closeReasoning();
                             const { toolCallId, toolName, argumentsJson } = chunk.toolCall;
                             controller.enqueue({ type: 'tool-input-start', id: toolCallId, toolName });
                             controller.enqueue({ type: 'tool-input-delta', id: toolCallId, delta: argumentsJson });
@@ -307,8 +325,23 @@ function bridgeFlatStream(
                             controller.enqueue({ type: 'tool-call', toolCallId, toolName, input: argumentsJson });
                             break;
                         }
+                        case 'reasoning_completed': {
+                            closeReasoning();
+                            // Parity with response_completed's unstreammed-text fallback: surface the
+                            // full reasoning as one block when no reasoning_delta streamed it.
+                            if (!reasoningEmitted) {
+                                const reasoningText = chunk.text;
+                                if (typeof reasoningText === 'string' && reasoningText.length > 0) {
+                                    controller.enqueue({ type: 'reasoning-start', id: reasoningId });
+                                    controller.enqueue({ type: 'reasoning-delta', id: reasoningId, delta: reasoningText });
+                                    controller.enqueue({ type: 'reasoning-end', id: reasoningId });
+                                }
+                            }
+                            break;
+                        }
                         case 'response_completed': {
                             closeText();
+                            closeReasoning();
                             // Deterministic/scripted providers (and providers that deliver the
                             // full assistant text on completion rather than via text_delta) carry the
                             // final content on the response message. Surface it as a text block when
@@ -328,6 +361,7 @@ function bridgeFlatStream(
                         }
                         case 'response_failed':
                             closeText();
+                            closeReasoning();
                             controller.enqueue(finishStreamPart('error', undefined));
                             controller.error(new FlatProviderBridgeError(chunk.error));
                             return;

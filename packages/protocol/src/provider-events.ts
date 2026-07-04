@@ -26,6 +26,8 @@ export {
 export const PROVIDER_STREAM_CHUNK_KINDS = [
     'response_started',
     'text_delta',
+    'reasoning_delta',
+    'reasoning_completed',
     'tool_call_delta',
     'tool_call_completed',
     'response_completed',
@@ -106,6 +108,7 @@ export const ProviderMessageSchema = z
         messageId: EventIdSchema,
         role: z.literal('assistant'),
         content: z.string(),
+        reasoning: z.string().optional(),
         toolCallIds: z.array(z.string().min(1)).optional(),
         providerToolCalls: z.array(ProviderToolCallTranscriptSchema).optional(),
         redactions: z.array(RedactionMetadataSchema).optional(),
@@ -160,6 +163,28 @@ export const ProviderStreamChunkSchema = z.discriminatedUnion('kind', [
             sourceEventType: SourceEventTypeSchema,
             providerResponseId: ProviderResponseIdSchema,
             delta: z.string(),
+            redactions: z.array(RedactionMetadataSchema).optional(),
+        })
+        .strict(),
+    z
+        .object({
+            kind: z.literal('reasoning_delta'),
+            requestId: z.string().min(1),
+            sequence: EventSequenceSchema,
+            sourceEventType: SourceEventTypeSchema,
+            providerResponseId: ProviderResponseIdSchema,
+            delta: z.string(),
+            redactions: z.array(RedactionMetadataSchema).optional(),
+        })
+        .strict(),
+    z
+        .object({
+            kind: z.literal('reasoning_completed'),
+            requestId: z.string().min(1),
+            sequence: EventSequenceSchema,
+            sourceEventType: SourceEventTypeSchema,
+            providerResponseId: ProviderResponseIdSchema,
+            text: z.string(),
             redactions: z.array(RedactionMetadataSchema).optional(),
         })
         .strict(),
