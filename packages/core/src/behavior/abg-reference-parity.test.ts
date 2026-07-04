@@ -113,7 +113,7 @@ describe('abg reference parity: default workflow fallback and intent structure',
         const delegateWorker = graph.nodes.find((node) => node.id === 'delegate-worker');
         expect(delegateWave?.kind).toBe('parallel');
         expect(delegateWave?.children).toContain('delegate-worker');
-        expect(delegateWorker?.capabilities).toContain('task');
+        expect(delegateWorker?.capabilities).toContain('subagent');
     });
 
     it('intent-gate prompt verbalizes the chosen intent and uses richer classes than three', () => {

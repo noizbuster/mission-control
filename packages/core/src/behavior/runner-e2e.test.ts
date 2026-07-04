@@ -67,7 +67,7 @@ describe('runner workflow E2E: graph structure + verification node execution', (
 
         expect(delegateWave?.kind).toBe('parallel');
         expect(delegateWave?.children).toContain('delegate-worker');
-        expect(delegateWorker?.capabilities).toContain('task');
+        expect(delegateWorker?.capabilities).toContain('subagent');
     });
 
     it('has a per-task-verify node with critic implementation', async () => {

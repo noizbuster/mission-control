@@ -90,7 +90,7 @@
         "kind": "llm",
         "label": "Single task() delegation — 6-section prompt contract",
         "capabilities": [
-          "task"
+          "subagent"
         ],
         "config": {
           "systemPrompt": "Execute the delegated sub-task via the task tool. The delegation prompt you receive MUST contain six sections: ## 1. TASK (exact checkbox item), ## 2. EXPECTED OUTCOME (files, functionality, verification command), ## 3. REQUIRED TOOLS, ## 4. MUST DO, ## 5. MUST NOT DO, ## 6. CONTEXT (notepad paths, inherited wisdom, dependencies). Follow every section. Append findings to the notepad after completion (never overwrite)."

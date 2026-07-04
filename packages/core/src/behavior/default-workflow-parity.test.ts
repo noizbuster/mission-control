@@ -201,7 +201,7 @@ describe('default workflow parity — exploratory-research routes read-only, nev
         const graph = createDefaultWorkflowGraph();
         const capabilities = findNode(graph, 'research-explore').capabilities ?? [];
         expect(capabilities).toContain('read');
-        const forbidden = ['write', 'edit', 'patch', 'bash', 'task'];
+        const forbidden = ['write', 'edit', 'patch', 'bash', 'subagent'];
         for (const cap of forbidden) {
             expect(capabilities, `research-explore must not declare ${cap}`).not.toContain(cap);
         }
@@ -233,7 +233,7 @@ describe('default workflow parity — open-ended-planning routes to planning, ne
         const graph = createDefaultWorkflowGraph();
         const capabilities = findNode(graph, 'route-planner').capabilities ?? [];
         expect(capabilities).toContain('workflow');
-        const forbidden = ['task', 'write', 'edit', 'patch', 'bash'];
+        const forbidden = ['subagent', 'write', 'edit', 'patch', 'bash'];
         for (const cap of forbidden) {
             expect(capabilities, `route-planner must not declare ${cap}`).not.toContain(cap);
         }
@@ -291,7 +291,7 @@ describe('default workflow parity — explicit-implementation creates todos + de
         const delegateWave = findNode(graph, 'delegate-wave');
         expect(delegateWave.kind).toBe('parallel');
         expect(delegateWave.children).toContain('delegate-worker');
-        expect(findNode(graph, 'delegate-worker').capabilities).toContain('task');
+        expect(findNode(graph, 'delegate-worker').capabilities).toContain('subagent');
     });
 
     it('anti-dup-guard node carries anti-dup and delegation-bias semantics', () => {

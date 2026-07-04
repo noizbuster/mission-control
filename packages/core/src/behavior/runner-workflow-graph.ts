@@ -346,7 +346,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 id: 'delegate-worker',
                 kind: 'llm',
                 label: 'Single task() delegation — 6-section prompt contract',
-                capabilities: ['task'],
+                capabilities: ['subagent'],
                 config: {
                     systemPrompt: RUNNER_DELEGATE_WORKER_PROMPT,
                 },

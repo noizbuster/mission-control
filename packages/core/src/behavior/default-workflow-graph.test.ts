@@ -60,7 +60,7 @@ describe('createDefaultWorkflowGraph', () => {
 
         expect(delegateWave?.kind).toBe('parallel');
         expect(delegateWave?.children).toContain('delegate-worker');
-        expect(delegateWorker?.capabilities).toContain('task');
+        expect(delegateWorker?.capabilities).toContain('subagent');
     });
 
     it('accepts custom model and maxNodeRuns options', () => {

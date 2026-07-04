@@ -35,7 +35,7 @@ describe('createRunnerWorkflowGraph', () => {
 
         expect(delegateWave?.kind).toBe('parallel');
         expect(delegateWave?.children).toContain('delegate-worker');
-        expect(delegateWorker?.capabilities).toContain('task');
+        expect(delegateWorker?.capabilities).toContain('subagent');
     });
 
     it('has a per-task-verify phase using critic implementation', () => {

@@ -115,7 +115,7 @@
         "kind": "llm",
         "label": "Single task() delegation",
         "capabilities": [
-          "task"
+          "subagent"
         ],
         "config": {
           "systemPrompt": "Execute the delegated sub-task via the task tool. Frame the delegation with TASK, EXPECTED OUTCOME, REQUIRED TOOLS, MUST DO, MUST NOT DO, and CONTEXT."

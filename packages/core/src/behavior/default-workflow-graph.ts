@@ -240,7 +240,7 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                 id: 'delegate-worker',
                 kind: 'llm',
                 label: 'Single task() delegation',
-                capabilities: ['task'],
+                capabilities: ['subagent'],
                 config: {
                     systemPrompt:
                         'Execute the delegated sub-task via the task tool. Frame the delegation with TASK, ' +
