@@ -655,7 +655,7 @@ export function buildBlocks(
 
 export type MarkdownProps = {
     readonly text: string;
-    readonly width: number;
+    readonly width?: number;
     readonly streaming?: boolean;
     readonly theme?: TerminalMarkdownTheme;
     readonly selectable?: boolean;

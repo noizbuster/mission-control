@@ -2,8 +2,7 @@
 import { MacOSScrollAccel, type ScrollAcceleration, type ScrollBoxRenderable, TextAttributes } from '@opentui/core';
 import type * as React from 'react';
 import { blockPrefix, type ChatBlock, joinBlockText, readToolBlockTitle } from '../commands/chat-blocks.js';
-import { buildBlocks, Markdown, useHighlightVersion } from './markdown/Markdown.js';
-import { getCachedBlocks } from './markdown/render-cache.js';
+import { Markdown } from './markdown/Markdown.js';
 import { darkTheme, type TerminalMarkdownTheme } from './markdown/theme.js';
 import { ToolCard } from './ToolCard.js';
 
@@ -66,10 +65,6 @@ const thinkingTheme: TerminalMarkdownTheme = {
     defaultTextStyle: { attributes: { italic: true, dim: true } },
 };
 
-function terminalContentWidth(): number {
-    return Math.max(1, (process.stdout.columns ?? 80) - 1);
-}
-
 function MarkdownPanel({
     text,
     theme,
@@ -85,26 +80,13 @@ function MarkdownPanel({
     readonly streaming?: boolean;
     readonly marginTop?: number;
 }): React.ReactNode {
-    useHighlightVersion();
-    const width = Math.max(1, terminalContentWidth() - barWidth);
-    const rendered = getCachedBlocks(text, width, streaming ?? false, theme, buildBlocks);
-    const barRows = rendered.reduce((sum, block) => sum + block.lines.length, 0);
     return (
         <box flexDirection="row" {...(marginTop !== undefined ? { marginTop } : {})}>
-            <box width={barWidth} flexDirection="column">
-                {Array.from({ length: barRows }, (_value, index) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: bar rows mirror markdown line count
-                    <text key={`bar-${index}`} bg={barColor}>
-                        {' '.repeat(barWidth)}
-                    </text>
-                ))}
-            </box>
+            <box width={barWidth} backgroundColor={barColor} shouldFill={true} />
             <box flexDirection="column" flexGrow={1}>
                 <Markdown
                     text={text}
-                    width={width}
                     theme={theme}
-                    selectable={true}
                     {...(streaming ? { streaming: true } : {})}
                 />
             </box>
@@ -181,14 +163,7 @@ function MessageBlock({
     return (
         <box flexDirection="row">
             {leftHex !== undefined ? (
-                <box width={1} flexDirection="column">
-                    {block.lines.map((_line, index) => (
-                        // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
-                        <text key={`bar-${index}`} bg={leftHex}>
-                            {' '}
-                        </text>
-                    ))}
-                </box>
+                <box width={1} backgroundColor={leftHex} shouldFill={true} />
             ) : null}
             <box flexDirection="column" flexGrow={1}>
                 {block.lines.map((line, index) => {

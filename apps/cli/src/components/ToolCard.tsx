@@ -41,7 +41,7 @@ export function ToolCard({ lines, title, expanded }: ToolCardProps): React.React
     const header = buildHeaderLabel(title, lines.length, expanded);
     const yellow = '#ffff00';
     return (
-        <box flexDirection="column" borderStyle="rounded">
+        <box flexDirection="column">
             <text {...{ bold: true }} {...(yellow !== undefined ? { fg: yellow } : {})}>
                 {header}
             </text>
