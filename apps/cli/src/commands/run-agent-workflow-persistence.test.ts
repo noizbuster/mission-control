@@ -127,8 +127,8 @@ describe('noninteractive workflow Mission/Run persistence', () => {
             },
         );
 
-        // The plain output contract is unchanged.
-        expect(output).toContain('graph=persist-demo-graph');
+        // T8 streaming gate: plain mode returns '' (blocks streamed to stdout).
+        expect(output).toBe('');
 
         const missions = await listMissions(workspaceDir);
         expect(missions).toHaveLength(1);
@@ -245,8 +245,8 @@ describe('noninteractive workflow Mission/Run persistence', () => {
                 },
             );
 
-            // The workflow still runs and produces output; no records are written.
-            expect(output).toContain('graph=persist-demo-graph');
+            // T8 streaming gate: plain mode returns '' (blocks streamed to stdout).
+            expect(output).toBe('');
             const missions = await listMissions(noOmoDir);
             expect(missions).toHaveLength(0);
         } finally {

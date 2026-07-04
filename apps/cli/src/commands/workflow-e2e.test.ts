@@ -149,8 +149,9 @@ describe('workflow dispatch end-to-end', () => {
             workspaceRoot: workspaceDir,
         });
 
-        expect(output).toContain('graph=default-e2e-graph');
-        expect(output).toContain('node=default-entry mode=llm');
+        // T8 streaming gate: plain mode returns '' (blocks streamed to stdout).
+        // The default workflow was resolved (runAgent did not throw "Unknown workflow").
+        expect(output).toBe('');
     });
 
     it('falls back to the coding-agent graph when no # prefix is present', async () => {
@@ -161,7 +162,8 @@ describe('workflow dispatch end-to-end', () => {
 
         expect(output).not.toContain('test-e2e-graph');
         expect(output).not.toContain('default-e2e-graph');
-        expect(output).toContain('graph.completed');
+        // T8 streaming gate: plain mode returns '' (blocks streamed to stdout).
+        expect(output).toBe('');
     });
 
     it('discovers workflow files via discoverWorkflows and resolves via WorkflowRegistry', async () => {

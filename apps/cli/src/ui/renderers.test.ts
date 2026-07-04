@@ -1,43 +1,112 @@
 import { AgentRuntime } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { darkTheme, noColorTheme } from '../components/markdown/theme.js';
+import { joinBlocks, type RenderBlockOptions, renderBlock } from './block-renderer.js';
+import type { OutputBlock } from './output-blocks.js';
 import { type AgentUIRenderer, JsonRenderer, PlainRenderer, TuiRenderer } from './renderers.js';
 
-const event: AgentEvent = {
+const TS = '2026-07-05T02:00:00.000Z';
+
+/**
+ * Construct a typed AgentEvent fixture from a partial. Mirrors the helper in
+ * run-agent-streaming-seam.test.ts: AgentEvent is a discriminated union, so
+ * inline construction is verbose; the cast narrows the spread to the union.
+ */
+function event(partial: Partial<AgentEvent> & { type: AgentEvent['type'] }): AgentEvent {
+    return { timestamp: TS, ...partial } as AgentEvent;
+}
+
+const bareTaskCompleted: AgentEvent = event({
     type: 'task.completed',
-    timestamp: '2026-06-02T10:00:00.000Z',
     sessionId: 'session_test',
     taskId: 'task_1',
     message: 'completed by mock sidecar',
     nativeSidecarStatus: 'mock',
-    modelProviderSelection: {
-        providerID: 'local',
-        modelID: 'local-echo',
-    },
-};
+    modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+});
 
-async function renderWith(renderer: AgentUIRenderer): Promise<string> {
-    await renderer.start(new AgentRuntime({ useNative: false }));
-    renderer.render(event);
-    await renderer.stop();
-    return renderer.getOutput();
+/**
+ * PlainRenderer/TuiRenderer stream each rendered block to stdout during
+ * render() (T7). Spy on stdout.write so streamed blocks do not pollute the
+ * vitest reporter. Returns a restore function.
+ */
+function silenceStdout(): () => void {
+    const spy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    return () => spy.mockRestore();
+}
+
+async function renderEvents(renderer: AgentUIRenderer, events: readonly AgentEvent[]): Promise<string> {
+    const restore = silenceStdout();
+    try {
+        await renderer.start(new AgentRuntime({ useNative: false }));
+        for (const e of events) renderer.render(e);
+        await renderer.stop();
+        return renderer.getOutput();
+    } finally {
+        restore();
+    }
+}
+
+function runStarted(providerID: string, modelID: string): AgentEvent {
+    return event({
+        type: 'run.started',
+        sessionId: 'session_blocks',
+        modelProviderSelection: { providerID, modelID },
+    });
+}
+
+function responseCompleted(requestId: string, sequence: number, content: string): AgentEvent {
+    return event({
+        type: 'task.progress',
+        providerStreamChunk: {
+            kind: 'response_completed',
+            requestId,
+            sequence,
+            message: { messageId: 'm1', role: 'assistant', content },
+            finishReason: 'stop',
+        },
+    });
+}
+
+function reasoningCompleted(requestId: string, sequence: number, text: string): AgentEvent {
+    return event({
+        type: 'task.progress',
+        providerStreamChunk: { kind: 'reasoning_completed', requestId, sequence, text },
+    });
+}
+
+function toolCallCompleted(toolCallId: string, toolName: string, sequence: number, argumentsJson: string): AgentEvent {
+    return event({
+        type: 'task.progress',
+        providerStreamChunk: {
+            kind: 'tool_call_completed',
+            requestId: 'req-tool',
+            sequence,
+            toolCall: { toolCallId, toolName, argumentsJson },
+        },
+    });
+}
+
+function toolResultEvent(toolCallId: string, output: string): AgentEvent {
+    return event({
+        type: 'tool.completed',
+        toolResult: { toolCallId, status: 'completed', output },
+    });
 }
 
 describe('CLI renderers', () => {
-    it('tui plain and json renderers implement AgentUIRenderer', async () => {
-        const tuiOutput = await renderWith(new TuiRenderer());
-        const plainOutput = await renderWith(new PlainRenderer());
-        const jsonOutput = await renderWith(new JsonRenderer());
+    it('a bare task.completed folds to zero blocks for Plain/Tui; JsonRenderer still emits NDJSON', async () => {
+        const plainOutput = await renderEvents(new PlainRenderer(), [bareTaskCompleted]);
+        const tuiOutput = await renderEvents(new TuiRenderer(), [bareTaskCompleted]);
+        const jsonOutput = await renderEvents(new JsonRenderer(), [bareTaskCompleted]);
 
-        expect(tuiOutput).toContain('event list');
-        expect(tuiOutput).toContain('provider: local');
-        expect(tuiOutput).toContain('model: local-echo');
-        expect(tuiOutput).toContain('selection: local/local-echo');
-        expect(tuiOutput).toContain('node mode: none');
-        expect(plainOutput).toContain('provider: local');
-        expect(plainOutput).toContain('model: local-echo');
-        expect(plainOutput).toContain('selection: local/local-echo');
-        expect(plainOutput).toContain('task.completed completed by mock sidecar');
+        // task.completed has no providerStreamChunk and is not a session-header
+        // trigger (run.started/task.started), so the block accumulator yields [].
+        expect(plainOutput).toBe('');
+        expect(tuiOutput).toBe('');
+
+        // JsonRenderer is byte-unchanged: NDJSON per event with machine state.
         expect(JSON.parse(jsonOutput.trim())).toMatchObject({
             type: 'task.completed',
             taskId: 'task_1',
@@ -48,26 +117,127 @@ describe('CLI renderers', () => {
         });
     });
 
-    it('plain renderer prints graph node mode when graph node context exists', async () => {
-        const renderer = new PlainRenderer();
+    it('emits a session-header block and an assistant-text block separated by a blank line', async () => {
+        const events: AgentEvent[] = [runStarted('local', 'local-echo'), responseCompleted('r1', 1, 'Hello world.')];
+        const output = await renderEvents(new PlainRenderer(), events);
 
-        renderer.render({
-            type: 'node.started',
-            timestamp: '2026-06-02T10:00:00.000Z',
-            sessionId: 'session_graph',
-            message: 'node started: draft-answer',
-            modelProviderSelection: {
-                providerID: 'local',
-                modelID: 'local-echo',
-            },
-            abg: {
-                graphId: 'research-answer',
-                nodeId: 'draft-answer',
-                nodeKind: 'llm',
-            },
-        });
+        // session-header block renders the opencode-style "> provider · model" line.
+        expect(output).toContain('> local \u00b7 local-echo');
+        // assistant-text block renders the authoritative message content.
+        expect(output).toContain('Hello world.');
+        // blocks are blank-line separated (joinBlocks collapses to at most \n\n).
+        expect(output).toContain('\n\n');
+        // the old flat event-log format is gone.
+        expect(output).not.toContain('provider: local');
+        expect(output).not.toContain('selection: local/local-echo');
+        expect(output).not.toContain('event list');
+    });
 
-        expect(renderer.getOutput()).toContain('node.started graph=research-answer node=draft-answer mode=llm');
+    it('joinBlocks collapses runs of newlines so adjacent blocks get exactly one blank line', () => {
+        const opts: RenderBlockOptions = { width: 80, tty: false, thinking: false, theme: noColorTheme };
+        const blocks: OutputBlock[] = [
+            { kind: 'session-header', providerID: 'p', modelID: 'm' },
+            { kind: 'assistant-text', text: 'first' },
+            { kind: 'assistant-text', text: 'second' },
+        ];
+        const output = joinBlocks(blocks.map((b) => renderBlock(b, opts)));
+
+        expect(output).toContain('first\n\nsecond');
+        expect(output).not.toMatch(/\n{3,}/);
+    });
+
+    it('renders read-class tools as a compact inline one-liner and file.patch as a multi-line block', () => {
+        const opts: RenderBlockOptions = { width: 80, tty: false, thinking: false, theme: noColorTheme };
+        const readBlock: OutputBlock = {
+            kind: 'tool',
+            toolCallId: 'tc1',
+            toolName: 'read',
+            argumentsJson: '{"path":"/src/index.ts"}',
+            status: 'completed',
+        };
+        const patchBlock: OutputBlock = {
+            kind: 'tool',
+            toolCallId: 'tc2',
+            toolName: 'file.patch',
+            argumentsJson: '{}',
+            status: 'completed',
+            output: '--- a/f\n+++ b/f\n@@ -1 +1 @@\n-old\n+new',
+        };
+
+        const readRendered = renderBlock(readBlock, opts);
+        const patchRendered = renderBlock(patchBlock, opts);
+
+        // read: inline one-liner; the JSON path value is extracted as the summary.
+        expect(readRendered).toContain('\u2699 read /src/index.ts');
+        expect(readRendered).not.toContain('path');
+        expect(readRendered.split('\n').filter((line) => line !== '')).toHaveLength(1);
+
+        // file.patch: expanded block with header + multi-line body.
+        expect(patchRendered).toContain('\u2699 file.patch');
+        expect(patchRendered).toContain('--- a/f');
+        expect(patchRendered).toContain('+new');
+        expect(patchRendered.split('\n').filter((line) => line !== '').length).toBeGreaterThan(2);
+    });
+
+    it('renders assistant-text markdown into visible text with syntax stripped', async () => {
+        const output = await renderEvents(new PlainRenderer(), [responseCompleted('r1', 1, '**bold** and `code`')]);
+
+        expect(output).toContain('bold');
+        expect(output).toContain('code');
+        expect(output).not.toContain('**');
+        expect(output).not.toContain('`code`');
+    });
+
+    it('suppresses reasoning blocks by default and renders them when thinking=true', async () => {
+        const reasoningEvents: AgentEvent[] = [reasoningCompleted('r1', 1, 'secret chain of thought')];
+
+        const suppressed = await renderEvents(new PlainRenderer(), reasoningEvents);
+        expect(suppressed).toBe('');
+        expect(suppressed).not.toContain('secret chain of thought');
+
+        const visible = await renderEvents(new PlainRenderer({ thinking: true }), reasoningEvents);
+        expect(visible).toContain('secret chain of thought');
+    });
+
+    it('folds a multi-event turn (header + text + tool) through the full accumulator pipeline', async () => {
+        const events: AgentEvent[] = [
+            runStarted('openai', 'gpt-5'),
+            responseCompleted('r1', 1, 'Answer.'),
+            toolCallCompleted('tc1', 'file.patch', 2, '{}'),
+            toolResultEvent('tc1', 'patch applied'),
+        ];
+        const output = await renderEvents(new PlainRenderer(), events);
+
+        expect(output).toContain('> openai \u00b7 gpt-5');
+        expect(output).toContain('Answer.');
+        expect(output).toContain('\u2699 file.patch');
+        expect(output).toContain('patch applied');
+    });
+
+    it('emits zero ANSI escape bytes when tty=false across every block kind', () => {
+        const opts: RenderBlockOptions = { width: 80, tty: false, thinking: true, theme: darkTheme };
+        const blocks: OutputBlock[] = [
+            { kind: 'session-header', providerID: 'p', modelID: 'm' },
+            { kind: 'assistant-text', text: '# Heading\n\nbody with **bold**' },
+            { kind: 'reasoning', text: 'a thought' },
+            {
+                kind: 'tool',
+                toolCallId: 'tc1',
+                toolName: 'read',
+                argumentsJson: '{"path":"/f"}',
+                status: 'completed',
+            },
+            { kind: 'error', message: 'boom' },
+        ];
+        const output = joinBlocks(blocks.map((b) => renderBlock(b, opts)));
+
+        expect(output.includes('\x1b')).toBe(false);
+        // structure and visible text survive even without color.
+        expect(output).toContain('Heading');
+        expect(output).toContain('bold');
+        expect(output).toContain('a thought');
+        expect(output).toContain('\u2699 read');
+        expect(output).toContain('Error:');
     });
 
     it('json renderer includes machine-readable run state metadata', async () => {

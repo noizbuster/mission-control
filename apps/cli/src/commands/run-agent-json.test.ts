@@ -55,6 +55,11 @@ describe('runAgent JSON reporter', () => {
         await useTempDataDir(tempDirs);
         const output = await runAgent(
             parseArgs(['run', 'summarize this repository', '--json', '--session', 'session_json_completed_state']),
+            {
+                provider: createDeterministicProvider([
+                    { kind: 'response_completed', content: 'summarized' },
+                ]),
+            },
         );
         const records = parseJsonRecords(output);
         const finalRecord = lastRecord(records);
