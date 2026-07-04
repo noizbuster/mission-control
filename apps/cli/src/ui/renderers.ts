@@ -5,6 +5,9 @@ import type {
     ModelProviderSelection,
     RunCoordinatorState,
 } from '@mission-control/protocol';
+import { darkTheme, noColorTheme } from '../components/markdown/theme.js';
+import { joinBlocks, renderBlock } from './block-renderer.js';
+import { createBlockAccumulator } from './output-blocks.js';
 import type { AgentUIRenderer } from './ui-adapter.js';
 
 type JsonOutputStatus = RunCoordinatorState;
@@ -109,48 +112,57 @@ abstract class BufferedRenderer implements AgentUIRenderer {
     }
 }
 
+export type BlockRendererOptions = { readonly thinking?: boolean };
+
 export class PlainRenderer extends BufferedRenderer {
+    private readonly thinking: boolean;
+    private readonly accumulator = createBlockAccumulator();
+    private readonly rendered: string[] = [];
+
+    constructor(options: BlockRendererOptions = {}) {
+        super();
+        this.thinking = options.thinking ?? false;
+    }
+
+    render(event: AgentEvent): void {
+        const tty = process.stdout.isTTY ?? false;
+        const width = process.stdout.columns ?? 80;
+        const theme = tty ? darkTheme : noColorTheme;
+        for (const block of this.accumulator.consume(event)) {
+            const rendered = renderBlock(block, { width, tty, thinking: this.thinking, theme });
+            process.stdout.write(rendered);
+            this.rendered.push(rendered);
+        }
+    }
+
     getOutput(): string {
-        const lines = [
-            'mission-control',
-            'command: mctrl',
-            `session: ${this.sessionId}`,
-            `provider: ${this.selectedProvider}`,
-            `model: ${this.selectedModel}`,
-            ...(this.selectedVariant === undefined ? [] : [`variant: ${this.selectedVariant}`]),
-            `selection: ${this.selectedSelection}`,
-            `node mode: ${this.currentNodeMode}`,
-            ...this.events.map((event) => {
-                const message = eventMessageSuffix(event);
-                const graph = event.abg?.graphId !== undefined ? ` graph=${event.abg.graphId}` : '';
-                const node = event.abg?.nodeId !== undefined ? ` node=${event.abg.nodeId}` : '';
-                const mode = event.abg?.nodeKind !== undefined ? ` mode=${event.abg.nodeKind}` : '';
-                const model = event.abg?.model !== undefined ? ` model=${formatSelection(event.abg.model)}` : '';
-                return `${event.type}${graph}${node}${mode}${model}${message}`;
-            }),
-        ];
-        return `${lines.join('\n')}\n`;
+        return joinBlocks(this.rendered);
     }
 }
 
 export class TuiRenderer extends BufferedRenderer {
+    private readonly thinking: boolean;
+    private readonly accumulator = createBlockAccumulator();
+    private readonly rendered: string[] = [];
+
+    constructor(options: BlockRendererOptions = {}) {
+        super();
+        this.thinking = options.thinking ?? false;
+    }
+
+    render(event: AgentEvent): void {
+        const tty = process.stdout.isTTY ?? false;
+        const width = process.stdout.columns ?? 80;
+        const theme = tty ? darkTheme : noColorTheme;
+        for (const block of this.accumulator.consume(event)) {
+            const rendered = renderBlock(block, { width, tty, thinking: this.thinking, theme });
+            process.stdout.write(rendered);
+            this.rendered.push(rendered);
+        }
+    }
+
     getOutput(): string {
-        return `${[
-            'mission-control',
-            'command: mctrl',
-            `session: ${this.sessionId}`,
-            `provider: ${this.selectedProvider}`,
-            `model: ${this.selectedModel}`,
-            ...(this.selectedVariant === undefined ? [] : [`variant: ${this.selectedVariant}`]),
-            `selection: ${this.selectedSelection}`,
-            `node mode: ${this.currentNodeMode}`,
-            'current status: running',
-            `event list: ${this.events.map((event) => event.type).join(', ')}`,
-            'running task count: 0',
-            `last message: ${this.lastMessage}`,
-            `native sidecar status: ${this.nativeSidecarStatus}`,
-            'Ctrl+C to exit',
-        ].join('\n')}\n`;
+        return joinBlocks(this.rendered);
     }
 }
 
@@ -247,13 +259,6 @@ class JsonMachineStateTracker {
             }
         }
     }
-}
-
-function eventMessageSuffix(event: AgentEvent): string {
-    if (event.message === undefined || event.message.startsWith(`${event.type}: `)) {
-        return '';
-    }
-    return ` ${event.message}`;
 }
 
 function formatSelection(selection: ModelProviderSelection): string {
