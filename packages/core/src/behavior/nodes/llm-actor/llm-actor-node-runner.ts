@@ -27,6 +27,7 @@ import { assembleSystemPrompt, type SystemPromptSkill } from '../../../context/s
 import type { Blackboard } from '../../../memory/blackboard.js';
 import { discoverSkills, resolveUserConfigDir } from '../../../skills/skill-loader.js';
 import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../../../tools/read-tools-paths.js';
+import type { ToolAdvertisement } from '../../../tools/tool-registry-types.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../../node-registry.js';
 import {
@@ -183,12 +184,12 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
     const hasCapabilities = (node.capabilities ?? []).length > 0;
     const capabilitiesExplicitlyEmpty = Array.isArray(node.capabilities) && node.capabilities.length === 0;
     const suppressTools = capabilitiesExplicitlyEmpty || (hasOutputKey && !hasCapabilities);
-    const advertisedTools = suppressTools
+    const allAdvertisements = suppressTools
         ? []
         : context.toolRegistry !== undefined
           ? context.toolRegistry.advertise()
           : [];
-    const advertisements = advertisedTools;
+    const advertisements = filterByCapabilities(allAdvertisements, node.capabilities);
     const toolSnippets = advertisements.map((advertisement) => ({
         name: advertisement.name,
         description: advertisement.description,
@@ -225,7 +226,7 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
     const tools =
         suppressTools || context.toolRegistry === undefined
             ? undefined
-            : bridgeAdvertisementsToAiSdk(context.toolRegistry, advertisedTools, {
+            : bridgeAdvertisementsToAiSdk(context.toolRegistry, advertisements, {
                   settlementLedger,
                   // Forward the tool's own events (file.diff.applied, ...) into the graph stream so
                   // the graph surfaces the same rich tool events the flat loop's settleToolCalls does.
@@ -369,6 +370,27 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
 function readStringConfig(node: AbgNodeSpec, key: string): string | undefined {
     const value = node.config?.[key];
     return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * Filter tool advertisements by the node's declared capabilities.
+ *
+ * - `undefined` capabilities → all tools (backward compat: undeclared = inherit).
+ * - `[]` capabilities → no tools (handled earlier by `capabilitiesExplicitlyEmpty`).
+ * - Non-empty capabilities → only tools whose `capabilityClasses` intersect.
+ */
+function filterByCapabilities(
+    advertisements: readonly ToolAdvertisement[],
+    capabilities: readonly string[] | undefined,
+): readonly ToolAdvertisement[] {
+    if (capabilities === undefined) {
+        return advertisements;
+    }
+    if (capabilities.length === 0) {
+        return [];
+    }
+    const capabilitySet = new Set(capabilities);
+    return advertisements.filter((ad) => ad.capabilityClasses.some((cls) => capabilitySet.has(cls)));
 }
 
 function readOutputShape(node: AbgNodeSpec): StructuredOutputShape {

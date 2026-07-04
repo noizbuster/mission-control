@@ -791,6 +791,62 @@ describe('runLlmActorNode — capabilities-based tool suppression', () => {
         expect(call?.tools).toBeDefined();
         expect(call?.tools?.length).toBeGreaterThan(0);
     });
+
+    it('filters tools to only matching capability classes when capabilities is non-empty', async () => {
+        const registry = new ToolRegistry();
+        registry.register({
+            name: 'read',
+            description: 'read a file',
+            capabilityClasses: ['read'],
+            parametersJsonSchema: {
+                type: 'object',
+                properties: {},
+                required: [],
+                additionalProperties: false,
+            },
+            inputSchema: z.object({}),
+            outputSchema: z.object({ ok: z.boolean() }),
+            outputLimit: { maxModelOutputChars: 32 },
+            execute: async () => ({ ok: true }),
+        });
+        registry.register({
+            name: 'task',
+            description: 'delegate a sub-task',
+            capabilityClasses: ['subagent'],
+            parametersJsonSchema: {
+                type: 'object',
+                properties: {},
+                required: [],
+                additionalProperties: false,
+            },
+            inputSchema: z.object({}),
+            outputSchema: z.object({ ok: z.boolean() }),
+            outputLimit: { maxModelOutputChars: 32 },
+            execute: async () => ({ ok: true }),
+        });
+        const blackboard = createBlackboard();
+        blackboard.appendMessages([{ role: 'user', content: 'delegate work' }] as readonly ModelMessage[]);
+        const model = buildModel();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_filtered_caps',
+            now: () => NOW,
+            sdkModel: model,
+            blackboard,
+            toolRegistry: registry,
+        };
+        const node = {
+            id: 'delegate-worker',
+            kind: 'llm' as const,
+            capabilities: ['subagent'],
+        };
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(model.doStreamCalls.length).toBe(1);
+        const call = model.doStreamCalls[0];
+        expect(call?.tools).toBeDefined();
+        expect(call?.tools?.length).toBe(1);
+    });
 });
 
 describe('runLlmActorNode — skill discovery session cache', () => {
