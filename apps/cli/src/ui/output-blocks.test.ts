@@ -331,3 +331,109 @@ describe('graceful handling of malformed input', () => {
         expect(reasoning[0]).toMatchObject({ kind: 'reasoning', text: 'inline reasoning' });
     });
 });
+
+describe('graph-path event handling', () => {
+    it('emits session-header from graph.started carrying modelProviderSelection', () => {
+        const blocks = foldEvents([
+            event({
+                type: 'graph.started',
+                modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+                abg: { graphId: 'default' },
+            }),
+        ]);
+        const headers = blocks.filter((b) => b.kind === 'session-header');
+        expect(headers).toHaveLength(1);
+        expect(headers[0]).toEqual({ kind: 'session-header', providerID: 'local', modelID: 'local-echo' });
+    });
+
+    it('emits session-header from session.started (first event with modelProviderSelection)', () => {
+        const blocks = foldEvents([
+            event({
+                type: 'session.started',
+                sessionId: 's1',
+                modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+            }),
+        ]);
+        expect(blocks.some((b) => b.kind === 'session-header')).toBe(true);
+    });
+
+    it('emits assistant-text from model.call.completed with message', () => {
+        const blocks = foldEvents([
+            event({
+                type: 'model.call.completed',
+                message: 'received prompt: hello',
+                modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+                abg: { graphId: 'default', nodeId: 'intent-gate', nodeKind: 'llm' },
+            }),
+        ]);
+        const text = blocks.filter((b) => b.kind === 'assistant-text');
+        expect(text).toHaveLength(1);
+        expect(text[0]).toEqual({ kind: 'assistant-text', text: 'received prompt: hello' });
+    });
+
+    it('skips generic model.call.completed label messages', () => {
+        const blocks = foldEvents([
+            event({
+                type: 'model.call.completed',
+                message: 'model.call.completed: intent-gate',
+                abg: { graphId: 'default', nodeId: 'intent-gate', nodeKind: 'llm' },
+            }),
+        ]);
+        expect(blocks.filter((b) => b.kind === 'assistant-text')).toHaveLength(0);
+    });
+
+    it('does not double-emit assistant-text when response_completed chunk is present', () => {
+        const blocks = foldEvents([
+            event({
+                type: 'model.call.completed',
+                message: 'from event.message',
+                providerStreamChunk: {
+                    kind: 'response_completed',
+                    requestId: 'r1',
+                    sequence: 1,
+                    message: { messageId: 'm1', role: 'assistant', content: 'from chunk' },
+                    finishReason: 'stop',
+                },
+            }),
+        ]);
+        const text = blocks.filter((b) => b.kind === 'assistant-text');
+        expect(text).toHaveLength(1);
+        expect(text[0]).toEqual({ kind: 'assistant-text', text: 'from chunk' });
+    });
+
+    it('emits assistant-text for each model.call.completed in a multi-node graph', () => {
+        const blocks = foldEvents([
+            event({
+                type: 'model.call.completed',
+                message: 'classification result',
+                abg: { graphId: 'default', nodeId: 'intent-gate', nodeKind: 'llm' },
+            }),
+            event({
+                type: 'model.call.completed',
+                message: 'clarifying question',
+                abg: { graphId: 'default', nodeId: 'clarify', nodeKind: 'llm' },
+            }),
+        ]);
+        const text = blocks.filter((b) => b.kind === 'assistant-text');
+        expect(text).toHaveLength(2);
+        expect(text[0]).toMatchObject({ text: 'classification result' });
+        expect(text[1]).toMatchObject({ text: 'clarifying question' });
+    });
+
+    it('produces session-header and assistant-text from a realistic graph event sequence', () => {
+        const blocks = foldEvents([
+            event({
+                type: 'graph.started',
+                modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+                abg: { graphId: 'default' },
+            }),
+            event({
+                type: 'model.call.completed',
+                message: 'received prompt: hello',
+                modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+                abg: { graphId: 'default', nodeId: 'intent-gate', nodeKind: 'llm' },
+            }),
+        ]);
+        expect(blocks.map((b) => b.kind)).toEqual(['session-header', 'assistant-text']);
+    });
+});

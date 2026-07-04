@@ -100,11 +100,7 @@ export function createBlockAccumulator(): BlockAccumulator {
         const out: OutputBlock[] = [];
         const chunk = event.providerStreamChunk;
 
-        if (
-            !sessionHeaderEmitted &&
-            (event.type === 'run.started' || event.type === 'task.started') &&
-            event.modelProviderSelection !== undefined
-        ) {
+        if (!sessionHeaderEmitted && event.modelProviderSelection !== undefined) {
             const sel = event.modelProviderSelection;
             sessionHeaderEmitted = true;
             out.push({
@@ -146,6 +142,22 @@ export function createBlockAccumulator(): BlockAccumulator {
             }
             openText.delete(requestId);
             out.push({ kind: 'assistant-text', text: chunk.message.content });
+        }
+
+        // Graph path: model.call.completed carries the final assistant text in event.message
+        // when no providerStreamChunk accompanies it (the common case for the non-interactive
+        // graph path with the local provider or non-streaming adapters). Skip when a
+        // response_completed chunk already produced assistant-text from the same event,
+        // and skip the generic "model.call.completed: <nodeId>" label emitted when finalText
+        // was unavailable.
+        if (
+            event.type === 'model.call.completed' &&
+            chunk === undefined &&
+            event.message !== undefined &&
+            event.message.length > 0 &&
+            !isGenericModelCallLabel(event)
+        ) {
+            out.push({ kind: 'assistant-text', text: event.message });
         }
 
         if (event.toolResult !== undefined) {
@@ -233,4 +245,9 @@ function errorMessageFor(event: AgentEvent): string {
         return event.run.reason;
     }
     return event.type;
+}
+
+function isGenericModelCallLabel(event: AgentEvent): boolean {
+    if (event.abg?.nodeId === undefined) return false;
+    return event.message === `model.call.completed: ${event.abg.nodeId}`;
 }

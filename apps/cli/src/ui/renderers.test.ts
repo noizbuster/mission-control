@@ -96,15 +96,16 @@ function toolResultEvent(toolCallId: string, output: string): AgentEvent {
 }
 
 describe('CLI renderers', () => {
-    it('a bare task.completed folds to zero blocks for Plain/Tui; JsonRenderer still emits NDJSON', async () => {
+    it('a bare task.completed emits only a session-header (from modelProviderSelection); JsonRenderer still emits NDJSON', async () => {
         const plainOutput = await renderEvents(new PlainRenderer(), [bareTaskCompleted]);
         const tuiOutput = await renderEvents(new TuiRenderer(), [bareTaskCompleted]);
         const jsonOutput = await renderEvents(new JsonRenderer(), [bareTaskCompleted]);
 
-        // task.completed has no providerStreamChunk and is not a session-header
-        // trigger (run.started/task.started), so the block accumulator yields [].
-        expect(plainOutput).toBe('');
-        expect(tuiOutput).toBe('');
+        // task.completed carries modelProviderSelection, which now triggers the session-header
+        // (broadened from run.started/task.started to any event with modelProviderSelection).
+        // No assistant-text or tool blocks are produced.
+        expect(plainOutput).toBe('\n> local \u00b7 local-echo\n');
+        expect(tuiOutput).toBe('\n> local \u00b7 local-echo\n');
 
         // JsonRenderer is byte-unchanged: NDJSON per event with machine state.
         expect(JSON.parse(jsonOutput.trim())).toMatchObject({
