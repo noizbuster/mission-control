@@ -46,20 +46,14 @@ import { SlashMenuPanel } from './SlashMenuPanel.js';
 import { BottomStatusBar, type StatusBarProps, TopStatusBar } from './StatusBar.js';
 import { Toast } from './Toast.js';
 import { WelcomeScreen } from './WelcomeScreen.js';
+import { useSpinnerFrame } from './spinner.js';
 import { basename } from 'node:path';
 
-const SPINNER_FRAMES = '\u280b\u2819\u2839\u2838\u2834\u2826\u2827\u2807';
-
 function AgentSpinner({ text }: { readonly text: string }): React.ReactNode {
-    const [frame, setFrame] = useState(0);
-    useEffect(() => {
-        const timer = setInterval(() => setFrame((f) => (f + 1) % SPINNER_FRAMES.length), 80);
-        return (): void => clearInterval(timer);
-    }, []);
-    const ch = SPINNER_FRAMES[frame] ?? SPINNER_FRAMES[0] ?? '';
+    const { glyph } = useSpinnerFrame();
     return (
         <box marginTop={1} flexShrink={0}>
-            <text fg="#00ffff">{`${ch} ${text}`}</text>
+            <text fg="#00ffff">{`${glyph} ${text}`}</text>
         </box>
     );
 }
