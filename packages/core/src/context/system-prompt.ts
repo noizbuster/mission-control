@@ -190,7 +190,87 @@ function escapeXml(value: string): string {
     return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// --- Canonical content-hash cache ---
+// `assembleSystemPrompt` runs once per LLM turn, but within a single run its inputs are
+// stable: the persona, env (incl. `date` — pinned per-run via buildCodingAgentSystemPromptEnv),
+// tools, guidelines, skills, workflows, and resources are the same across turns. The rendered
+// string is therefore identical turn-over-turn and is cached. The key is a canonical (recursively
+// key-sorted, arrays pre-sorted) JSON of ALL inputs, hashed with djb2 (fast, deterministic, no
+// imports). Cardinality is tiny — one distinct prompt per run — so djb2 collision risk is
+// negligible. Arrays MUST be sorted before hashing: toolSnippets/guidelines/skills/workflows/
+// resources are fresh array literals each turn (llm-actor-node-runner.ts:86-98) and discovery/
+// advertise() ordering can shift mid-session; reference comparison would never hit (Oracle M4).
+const promptCache = new Map<string, string>();
+let promptCacheHits = 0;
+let promptCacheMisses = 0;
+
+function canonicalize(value: unknown): unknown {
+    if (Array.isArray(value)) {
+        return value.map(canonicalize);
+    }
+    if (value !== null && typeof value === 'object') {
+        const obj = value as Record<string, unknown>;
+        const out: Record<string, unknown> = {};
+        for (const key of Object.keys(obj).sort()) {
+            out[key] = canonicalize(obj[key]);
+        }
+        return out;
+    }
+    return value;
+}
+
+function stableStringify(value: unknown): string {
+    return JSON.stringify(canonicalize(value));
+}
+
+function djb2(text: string): string {
+    let hash = 5381;
+    for (let i = 0; i < text.length; i++) {
+        hash = ((hash << 5) + hash + text.charCodeAt(i)) | 0;
+    }
+    return (hash >>> 0).toString(16);
+}
+
+function sortedByKey<T>(items: readonly T[] | undefined, keyOf: (item: T) => string): readonly T[] {
+    if (items === undefined) {
+        return [];
+    }
+    return [...items].sort((a, b) => {
+        const ka = keyOf(a);
+        const kb = keyOf(b);
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
+}
+
+function buildPromptCacheKey(input: AssembleSystemPromptInput): string {
+    const normalized = {
+        persona: input.persona,
+        env: input.env,
+        toolSnippets: sortedByKey(input.toolSnippets, (t) => t.name),
+        guidelines: [...(input.guidelines ?? [])].sort(),
+        skills: sortedByKey(input.skills, (s) => s.name),
+        workflows: sortedByKey(input.workflows, (w) => w.name),
+        contextBaseline: input.contextBaseline,
+        resources: sortedByKey(input.resources, (r) => r.path),
+        append: input.append,
+    };
+    return djb2(stableStringify(normalized));
+}
+
 export function assembleSystemPrompt(input: AssembleSystemPromptInput = {}): string {
+    const key = buildPromptCacheKey(input);
+    const cached = promptCache.get(key);
+    if (cached !== undefined) {
+        promptCacheHits += 1;
+        return cached;
+    }
+    promptCacheMisses += 1;
+    const rendered = renderSystemPrompt(input);
+    promptCache.set(key, rendered);
+    return rendered;
+}
+
+function renderSystemPrompt(input: AssembleSystemPromptInput): string {
     const sections: string[] = [];
     sections.push(nonEmpty(input.persona) ? input.persona.trim() : DEFAULT_CODING_AGENT_PERSONA);
 
@@ -240,4 +320,16 @@ export function assembleSystemPrompt(input: AssembleSystemPromptInput = {}): str
     }
 
     return sections.join(SECTION_SEPARATOR).trim();
+}
+
+/** @internal Test-only cache hit/miss counters for perf assertions (inner renderers are private). */
+export function _testPromptCacheStats(): { readonly hits: number; readonly misses: number } {
+    return { hits: promptCacheHits, misses: promptCacheMisses };
+}
+
+/** @internal Test-only: clears the cache + counters so prior-test keys don't mask regressions. */
+export function _testResetPromptCache(): void {
+    promptCache.clear();
+    promptCacheHits = 0;
+    promptCacheMisses = 0;
 }

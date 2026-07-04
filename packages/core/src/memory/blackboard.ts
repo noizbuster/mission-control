@@ -42,6 +42,10 @@ export class Blackboard {
     private readonly entries = new Map<string, unknown>();
     private messages: readonly ModelMessage[] = [];
     private readonly onMutation: BlackboardMutationObserver | undefined;
+    // Cached `toRecord()` snapshot. Invalidated DIRECTLY in set/delete — NOT via the
+    // optional external onMutation observer (it is undefined when no coordinator wires
+    // it; Oracle M1). Frozen so a consumer cannot corrupt the shared cache reference.
+    private cachedRecord: Readonly<Record<string, unknown>> | undefined;
 
     constructor(options: BlackboardOptions = {}) {
         this.onMutation = options.onMutation;
@@ -72,6 +76,7 @@ export class Blackboard {
 
     set(key: string, value: unknown): void {
         this.entries.set(key, value);
+        this.cachedRecord = undefined;
         this.onMutation?.('blackboard.set', { key, value });
     }
 
@@ -81,12 +86,18 @@ export class Blackboard {
 
     delete(key: string): void {
         this.entries.delete(key);
+        this.cachedRecord = undefined;
         this.onMutation?.('blackboard.delete', { key });
     }
 
     /** Snapshot of entries as a plain object, for rule evaluation (`blackboard.*` predicates). */
     toRecord(): Readonly<Record<string, unknown>> {
-        return Object.fromEntries(this.entries.entries());
+        if (this.cachedRecord !== undefined) {
+            return this.cachedRecord;
+        }
+        const record = Object.freeze(Object.fromEntries(this.entries.entries()));
+        this.cachedRecord = record;
+        return record;
     }
 
     listEntries(): readonly BlackboardEntry[] {

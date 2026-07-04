@@ -65,10 +65,48 @@ function matchSegments(patternSegs: readonly string[], valueSegs: readonly strin
     return matchSegment(head, valueHead) && matchSegments(rest, valueSegs.slice(1));
 }
 
-function matchSegment(patternSeg: string, valueSeg: string): boolean {
+/**
+ * Cache of compiled segment regexes, keyed on the raw pattern segment string.
+ * The compiled `regexSource` is a pure function of the segment, so keying on
+ * the segment is equivalent to keying on the derived source but avoids a second
+ * string allocation per miss.
+ *
+ * Bounded by distinct-segment cardinality: the segments reaching this cache are
+ * permission-rule pattern fragments, which are static config fixed at startup.
+ * There is no runtime path that injects unbounded distinct segments, so module-
+ * lifetime caching without LRU eviction is safe. Regexes are non-global, so
+ * `lastIndex` stays `0` and cached instances are safe to reuse across calls.
+ */
+const segmentRegexCache = new Map<string, RegExp>();
+
+function compileSegmentRegex(patternSeg: string): RegExp {
     const regexSource = patternSeg
         .replace(/[.+^${}()|[\]\\]/g, '\\$&')
         .replace(/\*/g, '.*')
         .replace(/\?/g, '.');
-    return new RegExp(`^${regexSource}$`).test(valueSeg);
+    return new RegExp(`^${regexSource}$`);
+}
+
+function matchSegment(patternSeg: string, valueSeg: string): boolean {
+    let regex = segmentRegexCache.get(patternSeg);
+    if (regex === undefined) {
+        regex = compileSegmentRegex(patternSeg);
+        segmentRegexCache.set(patternSeg, regex);
+    }
+    return regex.test(valueSeg);
+}
+
+/**
+ * Test-only: the number of distinct segment patterns currently cached.
+ */
+export function _testRegexCacheSize(): number {
+    return segmentRegexCache.size;
+}
+
+/**
+ * Test-only: clears the segment regex cache so segments accumulated by prior
+ * tests do not mask cache-growth regressions.
+ */
+export function _testResetRegexCache(): void {
+    segmentRegexCache.clear();
 }

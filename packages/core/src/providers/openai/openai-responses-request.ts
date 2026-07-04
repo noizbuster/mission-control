@@ -2,6 +2,7 @@ import { modelProviderCatalog } from '@mission-control/config';
 import type { ProviderCredential, ToolDefinition } from '@mission-control/protocol';
 import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver.js';
 import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
+import { createVariantLookup } from '../shared/variant-cache.js';
 import type {
     OpenAIReasoningEffort,
     OpenAIResponsesInputItem,
@@ -152,10 +153,10 @@ function openAIReasoningForVariant(
     }
 }
 
+const isOpenAIVariantConfigured = createVariantLookup(modelProviderCatalog);
+
 function isConfiguredOpenAIVariant(modelID: string, variantID: string): boolean {
-    const openAIProvider = modelProviderCatalog.find((provider) => provider.id === 'openai');
-    const model = openAIProvider?.models.find((entry) => entry.id === modelID);
-    return (model?.variants ?? []).some((variant) => variant.id === variantID);
+    return isOpenAIVariantConfigured('openai', modelID, variantID);
 }
 
 function openAIToolForDefinition(tool: ToolDefinition): OpenAIResponsesTool {

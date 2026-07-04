@@ -2,6 +2,7 @@ import { modelProviderCatalog } from '@mission-control/config';
 import type { AgentMessage, ProviderCredential, ToolDefinition } from '@mission-control/protocol';
 import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver.js';
 import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
+import { createVariantLookup } from '../shared/variant-cache.js';
 import {
     type AnthropicContentBlock,
     type AnthropicMessagesRequestBody,
@@ -109,10 +110,10 @@ function anthropicThinkingForVariant(
     }
 }
 
+const isAnthropicVariantConfigured = createVariantLookup(modelProviderCatalog);
+
 function isConfiguredAnthropicVariant(modelID: string, variantID: string): boolean {
-    const anthropicProvider = modelProviderCatalog.find((provider) => provider.id === 'anthropic');
-    const model = anthropicProvider?.models.find((entry) => entry.id === modelID);
-    return (model?.variants ?? []).some((variant) => variant.id === variantID);
+    return isAnthropicVariantConfigured('anthropic', modelID, variantID);
 }
 
 function systemPromptFromMessages(messages: readonly AgentMessage[]): string | undefined {

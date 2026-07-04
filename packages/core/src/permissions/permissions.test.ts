@@ -1,8 +1,8 @@
 import type { PolicyEffectRule, PolicyEffectRuleSet } from '@mission-control/protocol';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { deriveChildPermissions } from './rule-derive.js';
 import { type EvaluationResult, evaluateRules } from './rule-evaluator.js';
-import { wildcardMatch } from './wildcard-match.js';
+import { _testRegexCacheSize, _testResetRegexCache, wildcardMatch } from './wildcard-match.js';
 
 describe('wildcardMatch', () => {
     describe('single-segment *', () => {
@@ -58,6 +58,29 @@ describe('wildcardMatch', () => {
             expect(wildcardMatch('a.b', 'a.b')).toBe(true);
             expect(wildcardMatch('a.b', 'axb')).toBe(false);
         });
+    });
+});
+
+describe('wildcardMatch regex cache', () => {
+    beforeEach(() => {
+        _testResetRegexCache();
+    });
+
+    it('compiles each distinct pattern segment once, not once per recursion', () => {
+        // '**/*' against a 4-segment value recurses through matchSegment('*')
+        // once per consumed position (4 times). Only the '*' segment reaches
+        // matchSegment ('**' is handled by the recursion branch), so a correct
+        // cache holds exactly one entry — bounded by distinct-segment
+        // cardinality, NOT by recursion depth.
+        wildcardMatch('**/*', 'a/b/c/d');
+        expect(_testRegexCacheSize()).toBe(1);
+    });
+
+    it('does not grow on a repeat call with the same pattern', () => {
+        wildcardMatch('**/*', 'a/b/c/d');
+        const sizeAfterFirst = _testRegexCacheSize();
+        wildcardMatch('**/*', 'x/y/z/w');
+        expect(_testRegexCacheSize()).toBe(sizeAfterFirst);
     });
 });
 

@@ -53,10 +53,23 @@ export class ProviderTurnRunner {
             await this.emitEnvelope(input, state, started, 'durable');
             const result = await this.runAttempt(input, signal, state, attempt);
             if (result.kind === 'completed') {
-                await this.emitEnvelope(input, state, result.chunk, 'durable');
+                // Redact once at the result boundary (mirrors the failed-path redact at :69).
+                // The hot loop no longer pre-redacts every chunk; eventForProviderChunk is the
+                // single source of truth for event redaction. The completed chunk is returned in
+                // ProviderTurnRunResult.message, so its content must be redacted here too.
+                // This double-redacts vs eventForProviderChunk, but only once per turn (idempotent).
+                const completedChunk = redactProviderChunk(result.chunk);
+                if (completedChunk.kind !== 'response_completed') {
+                    throw new TypeError(`Unexpected completed provider chunk kind: ${completedChunk.kind}`);
+                }
+                await this.emitEnvelope(input, state, completedChunk, 'durable');
+                // result.envelopes is the LIVE mutable ref of the per-turn state, not a frozen copy.
+                // Safe to return directly: createEmitterState builds state fresh per runTurn, and once a
+                // turn returns the state object is never mutated again. The public ProviderTurnRunResult
+                // type still declares the field readonly, so callers cannot mutate it through the boundary.
                 return {
                     status: 'completed',
-                    message: result.chunk.message,
+                    message: completedChunk.message,
                     attempts: attempt,
                     envelopes: state.durableEnvelopes,
                 };
@@ -117,7 +130,7 @@ export class ProviderTurnRunner {
                 if (next.done === true) {
                     break;
                 }
-                const chunk = redactProviderChunk(next.value);
+                const chunk = next.value;
                 state.nextProviderSequence = Math.max(state.nextProviderSequence, chunk.sequence + 1);
                 if (chunk.kind === 'response_completed') {
                     return { kind: 'completed', chunk };
@@ -170,7 +183,7 @@ export class ProviderTurnRunner {
         input.onEnvelope?.(envelope);
         await input.writeEnvelope?.(envelope);
         if (durability === 'durable') {
-            state.durableEnvelopes = [...state.durableEnvelopes, envelope];
+            state.durableEnvelopes.push(envelope);
             state.nextDurableSequence += 1;
             return;
         }
@@ -189,7 +202,7 @@ type ProviderEmitterState = {
     nextDurableSequence: number;
     nextEphemeralSequence: number;
     nextProviderSequence: number;
-    durableEnvelopes: readonly AgentEventEnvelope[];
+    durableEnvelopes: AgentEventEnvelope[];
 };
 
 function createEmitterState(startSequence: number): ProviderEmitterState {

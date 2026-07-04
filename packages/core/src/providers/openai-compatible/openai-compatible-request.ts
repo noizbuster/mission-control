@@ -7,6 +7,7 @@ import type {
 } from '@mission-control/protocol';
 import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver.js';
 import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
+import { createVariantLookup } from '../shared/variant-cache.js';
 import { type OpenAICompatibleProviderSpec, openAICompatibleProviderSpec } from './openai-compatible-specs.js';
 import type {
     OpenAICompatibleChatMessage,
@@ -128,10 +129,10 @@ function openAICompatibleReasoningForVariant(
     }
 }
 
+const isOpenAICompatibleVariantConfigured = createVariantLookup(modelProviderCatalog);
+
 function isConfiguredOpenAICompatibleVariant(providerID: string, modelID: string, variantID: string): boolean {
-    const provider = modelProviderCatalog.find((entry) => entry.id === providerID);
-    const model = provider?.models.find((entry) => entry.id === modelID);
-    return (model?.variants ?? []).some((variant) => variant.id === variantID);
+    return isOpenAICompatibleVariantConfigured(providerID, modelID, variantID);
 }
 
 function chatMessageForAgentMessage(

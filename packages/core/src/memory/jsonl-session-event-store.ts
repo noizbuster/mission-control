@@ -119,12 +119,10 @@ export class JsonlSessionEventStore implements MemoryStore {
             return;
         }
         await this.enqueueAppend(() =>
-            this.appendParsedEnvelope(
-                AgentEventEnvelopeSchema.parse({
-                    ...parsedEnvelope,
-                    sequence: this.nextSequence,
-                }),
-            ),
+            this.appendParsedEnvelope({
+                ...parsedEnvelope,
+                sequence: this.nextSequence,
+            }),
         );
     }
 

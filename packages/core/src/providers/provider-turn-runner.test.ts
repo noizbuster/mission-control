@@ -60,6 +60,41 @@ describe('ProviderTurnRunner', () => {
         expect(replay.snapshot.lastMessage).toBe('hello');
     });
 
+    it('accumulates durable envelopes in emission order with monotonic durable sequences', async () => {
+        // Given — a turn mixing ephemeral text deltas, durable tool-call completions,
+        // and the durable response completion. result.envelopes must hold ONLY the durable
+        // envelopes, in the order they were emitted, with sequences monotonic within the
+        // durable stream (ephemeral deltas are excluded and do not consume durable sequences).
+        const runner = new ProviderTurnRunner({
+            provider: createDeterministicProvider([
+                { kind: 'text_delta', delta: 'a' },
+                { kind: 'tool_call_completed', toolCallId: 'tool_1', toolName: 'repo.read', argumentsJson: '{}' },
+                { kind: 'text_delta', delta: 'b' },
+                { kind: 'tool_call_completed', toolCallId: 'tool_2', toolName: 'repo.search', argumentsJson: '{}' },
+                { kind: 'response_completed', content: 'done' },
+            ]),
+            now: fixedNow,
+            createEventId: (_event, sequence) => `evt_${sequence}`,
+        });
+
+        // When
+        const result = await runner.runTurn(turnInput('session_durable_order', 'request_durable_order'));
+
+        // Then — output-equivalence lock on durable-only contents, ordering, and sequence assignment.
+        expect(result.status).toBe('completed');
+        const projected = result.envelopes.map((envelope) => ({
+            sequence: envelope.sequence,
+            durability: envelope.durability,
+            kind: envelope.event.providerStreamChunk?.kind,
+        }));
+        expect(projected).toEqual([
+            { sequence: 0, durability: 'durable', kind: 'response_started' },
+            { sequence: 1, durability: 'durable', kind: 'tool_call_completed' },
+            { sequence: 2, durability: 'durable', kind: 'tool_call_completed' },
+            { sequence: 3, durability: 'durable', kind: 'response_completed' },
+        ]);
+    });
+
     it('stops scripted tool calls at the provider turn loop limit', async () => {
         // Given
         const { store, sessionId } = await openStore('session_provider_loop_limit');

@@ -37,6 +37,9 @@ export async function buildCodingAgentSystemPromptEnv(
 ): Promise<SystemPromptEnvironment> {
     const cwd = input.cwd ?? process.cwd();
     const platform = input.platform ?? process.platform;
+    // PINNED per-run: assembleSystemPrompt caches the rendered prompt keyed on env.date. Making
+    // this per-turn (e.g. reading new Date() inside the per-turn builder) would bust the cache
+    // every turn. This builder is invoked ONCE per run (run-agent.ts:238 et al.), not per turn.
     const date = (input.now ?? (() => new Date()))().toISOString();
     const gitEnabled = await isGitWorkspace(input.workspaceRoot);
     return {

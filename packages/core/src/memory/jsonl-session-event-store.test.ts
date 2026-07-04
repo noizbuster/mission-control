@@ -1,5 +1,5 @@
-import type { AgentEvent } from '@mission-control/protocol';
-import { afterEach, describe, expect, it } from 'vitest';
+import { type AgentEvent, type AgentEventEnvelope, AgentEventEnvelopeSchema } from '@mission-control/protocol';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { JsonlSessionEventStore, JsonlSessionEventStoreError } from './jsonl-session-event-store.js';
 import { appendFile, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -201,6 +201,39 @@ describe('JsonlSessionEventStore', () => {
 
         // Then
         expect(records.slice(1).map((record) => envelopeSequence(record))).toEqual([0, 1]);
+    });
+
+    it('parses the envelope exactly once when appending with store sequence', async () => {
+        // Given
+        const dataDir = await createTempDataDir();
+        const sessionId = 'session_jsonl_single_parse';
+        const store = await JsonlSessionEventStore.open({
+            sessionId,
+            dataDir,
+            createEventId: (_event, sequence) => `event_${sequence}`,
+        });
+        const envelope: AgentEventEnvelope = {
+            eventId: 'event_incoming',
+            sequence: 0,
+            createdAt: '2026-06-04T10:00:00.000Z',
+            sessionId,
+            durability: 'durable',
+            event: sessionStartedEvent(sessionId),
+        };
+        const parseSpy = vi.spyOn(AgentEventEnvelopeSchema, 'parse');
+
+        try {
+            // When
+            await store.appendEnvelopeWithStoreSequence(envelope);
+
+            // Then
+            expect(parseSpy).toHaveBeenCalledTimes(1);
+            const events = await store.getEvents(sessionId);
+            expect(events).toEqual([envelope.event]);
+        } finally {
+            await store.close();
+            parseSpy.mockRestore();
+        }
     });
 
     it('reports corrupt line diagnostics with the session id and line number', async () => {

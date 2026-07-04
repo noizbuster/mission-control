@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { assembleSystemPrompt, DEFAULT_CODING_AGENT_PERSONA } from './system-prompt.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import {
+    _testPromptCacheStats,
+    _testResetPromptCache,
+    assembleSystemPrompt,
+    DEFAULT_CODING_AGENT_PERSONA,
+} from './system-prompt.js';
 
 describe('assembleSystemPrompt', () => {
     it('returns a non-empty persona with coding-agent identity and tool-usage guidance', () => {
@@ -178,5 +183,51 @@ describe('assembleSystemPrompt', () => {
 
     it('omits empty context baseline', () => {
         expect(assembleSystemPrompt({ contextBaseline: '   ' })).not.toContain('contextBaseline');
+    });
+});
+
+describe('assembleSystemPrompt content-hash cache', () => {
+    beforeEach(() => {
+        _testResetPromptCache();
+    });
+
+    it('caches across calls with fresh array literals of equal content (1 miss, 4 hits over 5 calls)', () => {
+        const env = { modelId: 'm', cwd: '/repo', gitEnabled: true, date: '2026-07-04', platform: 'linux' };
+        for (let turn = 0; turn < 5; turn++) {
+            assembleSystemPrompt({
+                env,
+                append: 'finalize',
+                toolSnippets: [{ name: 'repo.read', description: 'read a file' }],
+                guidelines: ['prefer edit over write'],
+                skills: [{ name: 'git-master', description: 'git ops' }],
+                workflows: [{ name: 'default', description: 'fallback' }],
+                resources: [{ path: 'AGENTS.md', content: 'Use pnpm.' }],
+            });
+        }
+        const stats = _testPromptCacheStats();
+        expect(stats.misses).toBe(1);
+        expect(stats.hits).toBe(4);
+    });
+
+    it('hits when array order differs but content is equal (sorted content-hash, not reference compare)', () => {
+        assembleSystemPrompt({
+            skills: [
+                { name: 'a', description: 'desc-a' },
+                { name: 'b', description: 'desc-b' },
+            ],
+        });
+        assembleSystemPrompt({
+            skills: [
+                { name: 'b', description: 'desc-b' },
+                { name: 'a', description: 'desc-a' },
+            ],
+        });
+        expect(_testPromptCacheStats()).toEqual({ hits: 1, misses: 1 });
+    });
+
+    it('misses when content changes (cache busts on different env.date)', () => {
+        assembleSystemPrompt({ env: { date: '2026-07-04' } });
+        assembleSystemPrompt({ env: { date: '2026-07-05' } });
+        expect(_testPromptCacheStats()).toEqual({ hits: 0, misses: 2 });
     });
 });

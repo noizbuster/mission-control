@@ -7,6 +7,7 @@ import type {
 } from '@mission-control/protocol';
 import { ProviderCredentialResolutionError, type ProviderCredentialResolver } from '../credential-resolver.js';
 import { ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
+import { createVariantLookup } from '../shared/variant-cache.js';
 import {
     defaultGeminiGenerateContentBaseEndpoint,
     type GeminiContent,
@@ -109,10 +110,10 @@ function geminiThinkingForVariant(
     }
 }
 
+const isGeminiVariantConfigured = createVariantLookup(modelProviderCatalog);
+
 function isConfiguredGeminiVariant(modelID: string, variantID: string): boolean {
-    const googleProvider = modelProviderCatalog.find((provider) => provider.id === GOOGLE_PROVIDER_ID);
-    const model = googleProvider?.models.find((entry) => entry.id === modelID);
-    return (model?.variants ?? []).some((variant) => variant.id === variantID);
+    return isGeminiVariantConfigured(GOOGLE_PROVIDER_ID, modelID, variantID);
 }
 
 function systemInstructionFromMessages(
