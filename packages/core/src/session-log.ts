@@ -9,6 +9,16 @@ export class SessionEventLog {
         this.events.push(event);
     }
 
+    /**
+     * Release the live event array in place. The field is `readonly` (forbids
+     * reassignment) but in-place truncation via `.length = 0` is allowed.
+     * Callers MUST compute any derived snapshot BEFORE calling this, since
+     * `getSnapshot`/`getTimeline`/`getGraphSnapshot` scan `this.events`.
+     */
+    clear(): void {
+        this.events.length = 0;
+    }
+
     getEvents(): AgentEvent[] {
         return [...this.events];
     }

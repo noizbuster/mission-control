@@ -210,6 +210,31 @@ export async function getOrCreateMissionControlServices(
     return pending;
 }
 
+/**
+ * Dispose every cached {@link MissionControlServices} and clear the module
+ * cache. Intended for process teardown: the CLI entrypoint calls this in its
+ * top-level `finally` so manager state (jobs, adopted agents, registry) is
+ * released when the process exits instead of leaking until GC.
+ *
+ * Each entry is cleared in its own `try/finally` so a rejecting construction
+ * promise or a throwing `dispose()` still drops that entry from the cache.
+ * Does NOT call {@link resetMissionControlServicesCache}; that test seam
+ * clears without disposing and is superseded by this for production teardown.
+ */
+export async function disposeAllMissionControlServices(): Promise<void> {
+    const entries = Array.from(instances.entries());
+    for (const [key, pending] of entries) {
+        try {
+            const instance = await pending;
+            await instance.dispose();
+        } finally {
+            if (instances.get(key) === pending) {
+                instances.delete(key);
+            }
+        }
+    }
+}
+
 /** Test seam: drop every cached instance so the next call rebuilds. */
 export function resetMissionControlServicesCache(): void {
     instances.clear();

@@ -146,6 +146,22 @@ describe('AgentRuntime', () => {
             expect.arrayContaining(['permission.requested', 'approval.blocked']),
         );
     });
+
+    it('freezes the final snapshot and clears live events on stop', async () => {
+        const runtime = new AgentRuntime({ useNative: false, permissionDecisionResolver: allowAllPermissions });
+
+        await runtime.start();
+        await runtime.runDemoTask();
+        const preStopCompleted = runtime.getSnapshot().completedTaskCount;
+        await runtime.stop();
+
+        const postStopSnapshot = runtime.getSnapshot();
+        expect(postStopSnapshot.stoppedAt).toBeDefined();
+        expect(postStopSnapshot.completedTaskCount).toBe(preStopCompleted);
+        expect(preStopCompleted).toBeGreaterThan(0);
+        expect(runtime.getTimeline()).toEqual([]);
+        expect(runtime.getEvents()).toEqual([]);
+    });
 });
 
 async function runPermissionedFakeEffect(runtime: AgentRuntime, effect: () => void): Promise<void> {

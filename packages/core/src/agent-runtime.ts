@@ -87,6 +87,7 @@ export class AgentRuntime {
     private readonly persistentStore: PersistentMemoryStore | undefined;
     private modelProviderSelection: ModelProviderSelection;
     private session: AgentSession | undefined;
+    private frozenSnapshot: AgentSnapshot | undefined = undefined;
     private promptTaskCounter = 0;
 
     constructor(options: AgentRuntimeOptions = {}) {
@@ -120,6 +121,8 @@ export class AgentRuntime {
             }),
         );
         await this.sidecarClient.stop();
+        this.frozenSnapshot = this.log.getSnapshot(ensureRuntimeSession(this.session));
+        this.log.clear();
     }
 
     async runDemoTask(): Promise<void> {
@@ -204,6 +207,9 @@ export class AgentRuntime {
     }
 
     getSnapshot(): AgentSnapshot {
+        if (this.frozenSnapshot !== undefined) {
+            return this.frozenSnapshot;
+        }
         const session = ensureRuntimeSession(this.session);
         return this.log.getSnapshot(session);
     }

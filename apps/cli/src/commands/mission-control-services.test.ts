@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+    disposeAllMissionControlServices,
     getOrCreateMissionControlServices,
     MissionControlServices,
     type MissionControlServicesSnapshot,
@@ -276,6 +277,56 @@ describe('MissionControlServices', () => {
             expect(services.snapshot().jobs.byStatus.queued).toBe(1);
 
             await services.dispose();
+        });
+    });
+
+    describe('disposeAllMissionControlServices', () => {
+        it('disposes every cached service, drains state, and clears the map', async () => {
+            const servicesA = await getOrCreateMissionControlServices(workspaceA);
+            const servicesB = await getOrCreateMissionControlServices(workspaceB);
+
+            // Give each service real state so dispose has work to do.
+            servicesA.getRuntimeRegistry().adopt({
+                id: 'agent-dispose-all-a',
+                displayName: 'Agent A',
+                kind: 'sub',
+                status: 'idle',
+                sessionId: 'session-dispose-all-a',
+            });
+            servicesA.getJobManager().startJob({
+                sessionId: 'session-dispose-all-a',
+                execute: (): Promise<{ status: 'completed'; output: string }> =>
+                    new Promise<{ status: 'completed'; output: string }>(() => {
+                        // Never resolves; dispose cancels it.
+                    }),
+            });
+            servicesB.getRuntimeRegistry().adopt({
+                id: 'agent-dispose-all-b',
+                displayName: 'Agent B',
+                kind: 'sub',
+                status: 'running',
+                sessionId: 'session-dispose-all-b',
+            });
+
+            await disposeAllMissionControlServices();
+
+            // Both prior entries are disposed and drained.
+            expect(servicesA.isDisposed()).toBe(true);
+            expect(servicesB.isDisposed()).toBe(true);
+            expect(servicesA.snapshot().agents.visibleCount).toBe(0);
+            expect(servicesA.snapshot().jobs.byStatus.cancelled).toBeGreaterThanOrEqual(1);
+            expect(servicesB.snapshot().agents.visibleCount).toBe(0);
+
+            // Map is empty: re-calling getOrCreate builds FRESH instances (not the disposed ones).
+            const rebuiltA = await getOrCreateMissionControlServices(workspaceA);
+            const rebuiltB = await getOrCreateMissionControlServices(workspaceB);
+            expect(rebuiltA).not.toBe(servicesA);
+            expect(rebuiltB).not.toBe(servicesB);
+            expect(rebuiltA.isDisposed()).toBe(false);
+            expect(rebuiltB.isDisposed()).toBe(false);
+
+            // Clean up the rebuilt entries so afterEach leaves nothing undisposed.
+            await disposeAllMissionControlServices();
         });
     });
 

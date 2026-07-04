@@ -2,6 +2,7 @@
 import { parseArgs } from './args.js';
 import { runAuthCommand } from './commands/auth.js';
 import { runMcpCommand } from './commands/mcp.js';
+import { disposeAllMissionControlServices } from './commands/mission-control-services.js';
 import { runModelsCommand } from './commands/models.js';
 import { runAgent } from './commands/run-agent.js';
 import { runAgentsCommand } from './commands/run-agents-cli.js';
@@ -157,15 +158,18 @@ function isCliEntrypoint(): boolean {
 }
 
 if (isCliEntrypoint()) {
-    await main().catch((error: unknown) => {
+    try {
+        await main();
+    } catch (error: unknown) {
         if (error instanceof Error) {
             process.stderr.write(`${error.message}\n`);
-            process.exitCode = 1;
-            return;
+        } else {
+            process.stderr.write(`${String(error)}\n`);
         }
-        process.stderr.write(`${String(error)}\n`);
         process.exitCode = 1;
-    });
+    } finally {
+        await disposeAllMissionControlServices().catch(() => {});
+    }
 }
 
 function assertNever(value: never): never {
