@@ -212,7 +212,7 @@ describe('planner workflow parity: approval gate blocks the final plan write', (
         const prompt = configString(gate, 'systemPrompt') ?? '';
         expect(prompt).toMatch(/WAIT/i);
         expect(prompt).toMatch(/NEVER authorization to implement/i);
-        expect(prompt).toMatch(/do not set plan\.ready/i);
+        expect(prompt).toMatch(/explicitly approves/i);
         expect(configString(gate, 'outputKey')).toBe('plan.ready');
     });
 

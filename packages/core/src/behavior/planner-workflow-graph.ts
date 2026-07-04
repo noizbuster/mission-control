@@ -284,9 +284,10 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                         'approach, and every surviving owner-decision with your recommended option. ' +
                         "Then WAIT for the user's explicit okay. Approval authorizes writing the plan " +
                         "ONLY — it is NEVER authorization to implement. Read the user's next reply as " +
-                        'a decision: approve (set plan.ready=true), scope-change (revise the draft, ' +
-                        're-present), or still-unclear (emit one short line, do not re-explore). Do ' +
-                        'not set plan.ready until the user explicitly approves.',
+                        'a decision: approve, scope-change (revise the draft, re-present), or still-unclear ' +
+                        '(emit one short line, do not re-explore). ' +
+                        'On the LAST line, output EXACTLY `true` when the user explicitly approves, or ' +
+                        '`false` otherwise — no quotes, no formatting, no extra text.',
                     outputKey: 'plan.ready',
                     outputShape: 'boolean',
                 },
