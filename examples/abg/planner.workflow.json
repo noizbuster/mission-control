@@ -127,7 +127,8 @@
       {
         "id": "present",
         "kind": "llm",
-        "label": "Present the finalized plan with file path and summary"
+        "label": "Present the finalized plan with file path and summary",
+        "capabilities": []
       }
     ],
     "edges": [

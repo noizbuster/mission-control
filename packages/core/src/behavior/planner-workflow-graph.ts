@@ -317,6 +317,7 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                 id: 'present',
                 kind: 'llm',
                 label: 'Present the finalized plan with file path and summary',
+                capabilities: [],
             },
         ],
         edges: [

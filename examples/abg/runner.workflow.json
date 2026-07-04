@@ -181,7 +181,8 @@
       {
         "id": "complete",
         "kind": "llm",
-        "label": "All verification passed — emit final report"
+        "label": "All verification passed — emit final report",
+        "capabilities": []
       },
       {
         "id": "fix-loop",

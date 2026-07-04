@@ -431,6 +431,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 id: 'complete',
                 kind: 'llm',
                 label: 'All verification passed — emit final report',
+                capabilities: [],
             },
             {
                 id: 'fix-loop',
