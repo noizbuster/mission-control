@@ -541,6 +541,18 @@ export function ChatApp({
         prevGenerating.current = snapshot.generating;
     }, [snapshot.generating, renderer]);
 
+    // During streaming, opentui's cell-diff can miss wide-character continuation
+    // cells on every incremental text update. A periodic full repaint corrects
+    // the accumulated errors without the per-frame cost of always skipping diff.
+    useEffect(() => {
+        if (!snapshot.generating) return;
+        const timer = setInterval(() => {
+            Reflect.set(renderer, 'forceFullRepaintRequested', true);
+            renderer.requestRender();
+        }, 500);
+        return (): void => clearInterval(timer);
+    }, [snapshot.generating, renderer]);
+
     const transcript = (
         <ChatTranscript
             blocks={messageBlocks}
