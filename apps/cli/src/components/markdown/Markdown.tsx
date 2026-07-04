@@ -24,7 +24,8 @@
 import type { Token, Tokens } from 'marked';
 import { marked } from 'marked';
 import type React from 'react';
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
+import { SyntaxStyle } from '@opentui/core';
 import wrapAnsi from 'wrap-ansi';
 // MUST come after ./theme.js: the module graph highlight -> tree-sitter-highlighter
 // -> render-cache -> theme -> highlight is circular. Loading render-cache first
@@ -687,21 +688,30 @@ export function useHighlightVersion(): number {
     return useSyncExternalStore(subscribeHighlight, getHighlightVersion, getHighlightVersion);
 }
 
-export function Markdown({ text, width, streaming, theme, selectable }: MarkdownProps): React.ReactNode {
-    useHighlightVersion();
-    const resolvedTheme = theme ?? darkTheme;
-    const blocks = getCachedBlocks(text, width, streaming ?? false, resolvedTheme, buildBlocks);
+export function Markdown({ text, streaming, theme }: MarkdownProps): React.ReactNode {
+    const syntaxStyle = useMemo(() => {
+        try {
+            return SyntaxStyle.fromStyles({
+                default: { fg: theme?.heading?.fg ?? '#e0e0e0' },
+                'markdown.bold': { bold: true },
+                'markdown.italic': { italic: true },
+                'markdown.heading': { bold: true, fg: theme?.heading?.fg ?? '#00ffff' },
+                'markdown.link': { underline: true, fg: theme?.link?.fg ?? '#58a6ff' },
+                'markdown.code': { fg: theme?.code?.fg ?? '#e0e0e0' },
+                'markdown.code.block': { fg: theme?.codeBlock?.fg ?? '#e0e0e0' },
+                'markdown.quote': { italic: true, dim: true },
+                'markdown.list': { fg: theme?.listBullet?.fg ?? '#ffff00' },
+            });
+        } catch {
+            return SyntaxStyle.create();
+        }
+    }, [theme]);
     return (
-        <box flexDirection="column" {...(selectable !== undefined ? { selectable } : {})}>
-            {blocks.map((block, blockIndex) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: block order is stable for cached input
-                <box key={blockIndex} flexDirection="column">
-                    {block.lines.map((line, lineIndex) => (
-                        // biome-ignore lint/suspicious/noArrayIndexKey: line order is stable within a block
-                        <LineView key={lineIndex} line={line} />
-                    ))}
-                </box>
-            ))}
-        </box>
+        <markdown
+            content={text}
+            streaming={streaming ?? false}
+            syntaxStyle={syntaxStyle}
+            conceal={true}
+        />
     );
 }
