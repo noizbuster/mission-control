@@ -203,6 +203,7 @@ function createBaseArgs(command: McpCliCommand): CliArgs {
         command,
         showHelp: false,
         showVersion: false,
+        thinking: false,
     };
 }
 

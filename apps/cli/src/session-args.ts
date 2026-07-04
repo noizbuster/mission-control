@@ -71,5 +71,6 @@ function createSessionArgs(command: CliArgs['command']): CliArgs {
         command,
         showHelp: false,
         showVersion: false,
+        thinking: false,
     };
 }

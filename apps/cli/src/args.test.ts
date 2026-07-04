@@ -9,6 +9,7 @@ describe('parseArgs', () => {
             command: 'run',
             showHelp: false,
             showVersion: false,
+            thinking: false,
         });
         expect(parseArgs(['--no-tui']).mode).toBe('plain');
         expect(parseArgs(['--json']).mode).toBe('json');
@@ -28,6 +29,18 @@ describe('parseArgs', () => {
         expect(() => parseArgs(['--workspace', '--json'])).toThrow('--workspace requires a value');
         expect(parseArgs(['--version']).showVersion).toBe(true);
         expect(parseArgs(['--help']).showHelp).toBe(true);
+    });
+
+    it('parses the --thinking flag as a boolean defaulting to false', () => {
+        expect(parseArgs(['--thinking']).thinking).toBe(true);
+        expect(parseArgs([]).thinking).toBe(false);
+        expect(parseArgs(['--no-tui']).thinking).toBe(false);
+        expect(parseArgs(['--thinking', '--json'])).toMatchObject({ thinking: true, mode: 'json' });
+        expect(parseArgs(['--json', '--thinking'])).toMatchObject({ thinking: true, mode: 'json' });
+        expect(parseArgs(['--thinking', 'do something'])).toMatchObject({ thinking: true, prompt: 'do something' });
+        // --thinking is a bare boolean flag (mirrors --native); =value syntax is not supported.
+        expect(() => parseArgs(['--thinking=true'])).toThrow('Unsupported argument: --thinking=true');
+        expect(() => parseArgs(['--thinking=false'])).toThrow('Unsupported argument: --thinking=false');
     });
 
     it('rejects unsupported arguments', () => {

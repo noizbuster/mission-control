@@ -58,7 +58,8 @@ function buildArgs(prompt: string, mode: CliArgs['mode']): CliArgs {
         useNative: false,
         command: 'run',
         showHelp: false,
-        showVersion: false,
+            showVersion: false,
+            thinking: false,
         prompt,
         modelProviderSelection: LOCAL_SELECTION,
     };

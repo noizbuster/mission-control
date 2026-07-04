@@ -171,7 +171,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     }
 
     const recorder = await createRunEventRecorder(args, { workspaceRoot });
-    const renderer = createRenderer(args.mode);
+    const renderer = createRenderer(args.mode, args.thinking);
     const unsubscribe = runtime.onEvent((event) => {
         renderer.render(recorder.record(event));
     });
@@ -471,15 +471,15 @@ function closePersistentStore(store: PersistentMemoryStore | undefined): void {
     }
 }
 
-function createRenderer(mode: CliArgs['mode']): AgentUIRenderer {
+function createRenderer(mode: CliArgs['mode'], thinking = false): AgentUIRenderer {
     switch (mode) {
         case 'plain':
-            return new PlainRenderer();
+            return new PlainRenderer({ thinking });
         case 'json':
         case 'jsonl':
             return new JsonRenderer();
         case 'tui':
-            return new TuiRenderer();
+            return new TuiRenderer({ thinking });
         default:
             return assertNever(mode);
     }

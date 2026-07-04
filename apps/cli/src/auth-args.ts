@@ -97,6 +97,7 @@ function createBaseArgs(command: AuthCliCommand): CliArgs {
         command,
         showHelp: false,
         showVersion: false,
+        thinking: false,
     };
 }
 

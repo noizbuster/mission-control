@@ -130,6 +130,7 @@ function makeArgs(overrides: { readonly mode?: CliMode; readonly sessionId?: str
         command: 'run',
         showHelp: false,
         showVersion: false,
+        thinking: false,
         ...(overrides.sessionId !== undefined ? { sessionId: overrides.sessionId } : {}),
     };
 }

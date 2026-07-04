@@ -12,6 +12,7 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
     let useNative: boolean | undefined;
     let showHelp = false;
     let showVersion = false;
+    let thinking = false;
     let providerID: string | undefined;
     let modelID: string | undefined;
     let engine: 'graph' | undefined;
@@ -46,6 +47,10 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
                 break;
             case '--no-native':
                 useNative = false;
+                index += 1;
+                break;
+            case '--thinking':
+                thinking = true;
                 index += 1;
                 break;
             case '--provider':
@@ -114,6 +119,7 @@ export function parseRunArgs(argv: readonly string[], initial: InitialRunArgs): 
         sessionId,
         showHelp,
         showVersion,
+        thinking,
         useNative,
         workflowName,
         workspacePath,
@@ -150,6 +156,7 @@ function buildRunArgs(input: {
     readonly sessionId: string | undefined;
     readonly showHelp: boolean;
     readonly showVersion: boolean;
+    readonly thinking: boolean;
     readonly useNative: boolean | undefined;
     readonly workflowName: string | undefined;
     readonly workspacePath: string | undefined;
@@ -176,6 +183,7 @@ function buildRunArgs(input: {
         command: 'run',
         showHelp: input.showHelp,
         showVersion: input.showVersion,
+        thinking: input.thinking,
         ...(input.graphPath !== undefined ? { graphPath: input.graphPath } : {}),
         ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
         ...(input.workflowName !== undefined ? { workflowName: input.workflowName } : {}),

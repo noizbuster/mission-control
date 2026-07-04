@@ -34,6 +34,12 @@ export type CliArgs = {
     readonly command: CliCommand;
     readonly showHelp: boolean;
     readonly showVersion: boolean;
+    /**
+     * When true, non-interactive Plain/Tui renderers emit reasoning/thinking blocks (dimmed italic).
+     * Default false (reasoning suppressed). JsonRenderer and the interactive opentui TUI ignore this
+     * flag (the interactive TUI has its own Ctrl+T thinking toggle). Mirrors opencode `--thinking`.
+     */
+    readonly thinking: boolean;
     readonly graphPath?: string;
     readonly prompt?: string;
     /**
@@ -88,6 +94,7 @@ export const supportedCliFlags = [
     '--jsonl',
     '--native',
     '--no-native',
+    '--thinking',
     '--provider',
     '--model',
     '--graph',
@@ -133,6 +140,7 @@ function createBaseArgs(command: CliCommand): Omit<CliArgs, 'modelProviderSelect
         command,
         showHelp: false,
         showVersion: false,
+        thinking: false,
     };
 }
 

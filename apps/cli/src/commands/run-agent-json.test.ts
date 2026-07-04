@@ -42,6 +42,7 @@ describe('runAgent JSON reporter', () => {
             command: 'run',
             showHelp: false,
             showVersion: false,
+            thinking: false,
         });
         const lines = output.trim().split('\n');
         const parsed = lines.map((line) => AgentEventSchema.parse(JSON.parse(line)));
@@ -79,6 +80,7 @@ describe('runAgent JSON reporter', () => {
             command: 'run',
             showHelp: false,
             showVersion: false,
+            thinking: false,
             modelProviderSelection: {
                 providerID: 'local',
                 modelID: 'local-echo',
@@ -106,6 +108,7 @@ describe('runAgent JSON reporter', () => {
             command: 'run',
             showHelp: false,
             showVersion: false,
+            thinking: false,
             modelProviderSelection: {
                 providerID: 'anthropic',
                 modelID: 'claude-sonnet-4-6',
@@ -138,6 +141,7 @@ describe('runAgent JSON reporter', () => {
             command: 'run',
             showHelp: false,
             showVersion: false,
+            thinking: false,
             graphPath: 'research.graph.json',
             modelProviderSelection: {
                 providerID: 'local',

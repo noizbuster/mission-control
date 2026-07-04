@@ -115,6 +115,7 @@ function baseRunOptions() {
         command: 'run' as const,
         showHelp: false,
         showVersion: false,
+        thinking: false,
     };
 }
 

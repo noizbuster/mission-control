@@ -27,6 +27,7 @@ describe('runAgent plain reporter', () => {
             command: 'run',
             showHelp: false,
             showVersion: false,
+            thinking: false,
         });
 
         expect(output).toContain('mission-control');
@@ -43,6 +44,7 @@ describe('runAgent plain reporter', () => {
             command: 'run',
             showHelp: false,
             showVersion: false,
+            thinking: false,
             modelProviderSelection: {
                 providerID: 'local',
                 modelID: 'local-echo',
@@ -62,6 +64,7 @@ describe('runAgent plain reporter', () => {
                 command: 'run',
                 showHelp: false,
                 showVersion: false,
+            thinking: false,
                 modelProviderSelection: {
                     providerID: 'local',
                     modelID: 'removed-model',
@@ -76,6 +79,7 @@ describe('runAgent plain reporter', () => {
                 command: 'run',
                 showHelp: false,
                 showVersion: false,
+            thinking: false,
                 modelProviderSelection: {
                     providerID: 'unknown',
                     modelID: 'removed-model',
@@ -101,6 +105,7 @@ describe('runAgent plain reporter', () => {
                 command: 'run',
                 showHelp: false,
                 showVersion: false,
+            thinking: false,
             },
             { authStore: store },
         );
@@ -128,6 +133,7 @@ describe('runAgent plain reporter', () => {
                 command: 'run',
                 showHelp: false,
                 showVersion: false,
+            thinking: false,
             },
             { authStore: store },
         );
@@ -147,6 +153,7 @@ describe('runAgent plain reporter', () => {
             command: 'run',
             showHelp: false,
             showVersion: false,
+            thinking: false,
             modelProviderSelection: {
                 providerID: 'anthropic',
                 modelID: 'claude-sonnet-4-6',
@@ -168,6 +175,7 @@ describe('runAgent plain reporter', () => {
             command: 'run',
             showHelp: false,
             showVersion: false,
+            thinking: false,
             graphPath: 'examples/abg/coding-agent.graph.json',
             modelProviderSelection: {
                 providerID: 'local',
@@ -215,6 +223,7 @@ describe('runAgent plain reporter', () => {
                 command: 'run',
                 showHelp: false,
                 showVersion: false,
+            thinking: false,
                 graphPath,
             }),
         ).rejects.toThrow('unknown ABG edge target: missing');
@@ -259,6 +268,7 @@ describe('runAgent plain reporter', () => {
                 command: 'run',
                 showHelp: false,
                 showVersion: false,
+            thinking: false,
                 graphPath,
             }),
         ).rejects.toThrow('unknown ABG edge condition rule: missing-rule');
@@ -346,6 +356,7 @@ describe('runAgent workflow invocation', () => {
                 command: 'run',
                 showHelp: false,
                 showVersion: false,
+            thinking: false,
                 prompt: '#planner plan the migration',
                 modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
             },
@@ -367,6 +378,7 @@ describe('runAgent workflow invocation', () => {
                 command: 'run',
                 showHelp: false,
                 showVersion: false,
+            thinking: false,
                 workflowName: 'planner',
                 prompt: 'plan the migration',
                 modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
@@ -390,6 +402,7 @@ describe('runAgent workflow invocation', () => {
                     command: 'run',
                     showHelp: false,
                     showVersion: false,
+            thinking: false,
                     prompt: '#nonexistent do something',
                     modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
                 },
@@ -407,6 +420,7 @@ describe('runAgent workflow invocation', () => {
                     command: 'run',
                     showHelp: false,
                     showVersion: false,
+            thinking: false,
                     workflowName: 'nonexistent',
                     prompt: 'do something',
                     modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
@@ -424,6 +438,7 @@ describe('runAgent workflow invocation', () => {
                 command: 'run',
                 showHelp: false,
                 showVersion: false,
+            thinking: false,
                 prompt: 'just a regular prompt',
                 modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
             },
