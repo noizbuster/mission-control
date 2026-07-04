@@ -200,20 +200,24 @@ export function AbgOverlay({
 
     if (narrow) {
         return (
-            <box flexDirection="column">
+            <box flexDirection="column" height="100%" shouldFill={true}>
                 <Header state={state} modelLabel={modelLabel} refreshMs={refreshMs} />
                 <TabStrip activeTab="overview" />
-                <PaneBody activeTab="overview" state={state} modelLabel={modelLabel} />
+                <box flexGrow={1} shouldFill={true}>
+                    <PaneBody activeTab="overview" state={state} modelLabel={modelLabel} />
+                </box>
                 <FooterHint narrow={true} />
             </box>
         );
     }
 
     return (
-        <box flexDirection="column">
+        <box flexDirection="column" height="100%" shouldFill={true}>
             <Header state={state} modelLabel={modelLabel} refreshMs={refreshMs} />
             <TabStrip activeTab={activeTab} />
-            <PaneBody activeTab={activeTab} state={state} modelLabel={modelLabel} />
+            <box flexGrow={1} shouldFill={true}>
+                <PaneBody activeTab={activeTab} state={state} modelLabel={modelLabel} />
+            </box>
             <FooterHint narrow={false} />
         </box>
     );

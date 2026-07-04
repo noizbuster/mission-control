@@ -541,7 +541,7 @@ export function ChatApp({
     if (snapshot.overlayMode === 'abg') {
         if (abgOverlayController === undefined) {
             return (
-                <box flexDirection="column" width="100%">
+                <box flexDirection="column" width="100%" height="100%" shouldFill={true}>
                     <OverlayFrame variant="view" title="ABG Overlay" hint="(Ctrl+G or Esc to close)">
                         <text attributes={TextAttributes.DIM}>{'ABG overlay unavailable in this session.'}</text>
                     </OverlayFrame>
@@ -555,7 +555,7 @@ export function ChatApp({
         const modelLabel = `${providerID}/${modelID}${variantID !== undefined ? `#${variantID}` : ''}`;
         const activeTab: AbgOverlayTab = ABG_OVERLAY_TABS[abgActiveTab] ?? 'overview';
         return (
-            <box flexDirection="column" width="100%" height="100%">
+            <box flexDirection="column" width="100%" height="100%" shouldFill={true}>
                 <AbgOverlay
                     store={abgOverlayController.store}
                     activeTab={activeTab}
@@ -571,7 +571,7 @@ export function ChatApp({
         const cursor = snapshot.diffViewerCursor;
         const model = buildDiffViewerModel(entries);
         return (
-            <box flexDirection="column" width="100%" height="100%">
+            <box flexDirection="column" width="100%" height="100%" shouldFill={true}>
                 <DiffViewerOverlay entries={entries} model={model} cursor={cursor} />
             </box>
         );
@@ -579,7 +579,7 @@ export function ChatApp({
 
     if (snapshot.overlayMode === 'models-overlay') {
         return (
-            <box flexDirection="column" width="100%" height="100%">
+            <box flexDirection="column" width="100%" height="100%" shouldFill={true}>
                 <ModelsOverlay store={store} />
             </box>
         );
