@@ -156,8 +156,9 @@
         "id": "final-respond",
         "kind": "llm",
         "label": "Synthesize final answer citing evidence",
+        "capabilities": [],
         "config": {
-          "systemPrompt": "Synthesize the final answer from verified results. Cite the evidence that was checked (files changed, tests passing, build status, command output). Do not claim completion beyond what the evidence supports; surface pre-existing failures unrelated to this work as notes rather than fixing them."
+          "systemPrompt": "Synthesize the final answer from verified results already in context. Cite the evidence that was checked (files changed, tests passing, build status, command output). Do not claim completion beyond what the evidence supports; surface pre-existing failures unrelated to this work as notes rather than fixing them. Do NOT call any tools — synthesize ONLY from what is already in the conversation."
         }
       },
       {
