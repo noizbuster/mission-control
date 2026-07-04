@@ -1,4 +1,5 @@
 import { AgentRuntime, type Skill, WorkflowRegistry } from '@mission-control/core';
+import * as missionControlCore from '@mission-control/core';
 import type { ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SessionPickerEntry } from './chat-store.js';
@@ -544,6 +545,110 @@ describe('interactive chat actions', () => {
             expect(captured).toContain('Unknown workflow: missing');
             expect(captured).toContain('wf-0, wf-1');
             expect(captured).not.toContain('wf-24');
+        });
+    });
+
+    describe('/skills reload action', () => {
+        const tempRoots: string[] = [];
+
+        afterEach(async () => {
+            await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
+            tempRoots.length = 0;
+            vi.unstubAllEnvs();
+        });
+
+        it('re-runs discoverSkills and emits a reload confirmation', async () => {
+            const root = await mkdtemp(join(tmpdir(), 'skills-reload-ws-'));
+            const configDir = await mkdtemp(join(tmpdir(), 'skills-reload-cfg-'));
+            tempRoots.push(root, configDir);
+            const skillDir = join(root, '.mctrl', 'skills', 'reload-skill');
+            await mkdir(skillDir, { recursive: true });
+            await writeFile(
+                join(skillDir, 'SKILL.md'),
+                '---\nname: reload-skill\ndescription: reload test.\n---\nbody',
+                'utf8',
+            );
+
+            vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
+
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            await runChatAction(
+                runtime,
+                output,
+                { kind: 'skills', skills: { kind: 'reload' } },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({ workspaceRoot: root }),
+            );
+
+            const captured = output.getOutput();
+            expect(captured).toContain('Reloaded 1 skill');
+        });
+    });
+
+    describe('/skills and /agents reload bust the skill cache', () => {
+        const tempRoots: string[] = [];
+
+        afterEach(async () => {
+            await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
+            tempRoots.length = 0;
+            vi.unstubAllEnvs();
+        });
+
+        it('calls bustSkillCache before re-running discovery on /skills reload', async () => {
+            const root = await mkdtemp(join(tmpdir(), 'bust-skills-ws-'));
+            const configDir = await mkdtemp(join(tmpdir(), 'bust-skills-cfg-'));
+            tempRoots.push(root, configDir);
+            vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
+
+            const spy = vi.spyOn(missionControlCore, 'bustSkillCache');
+            try {
+                const runtime = new AgentRuntime();
+                const output = createOutput();
+                await runChatAction(
+                    runtime,
+                    output,
+                    { kind: 'skills', skills: { kind: 'reload' } },
+                    currentSelection,
+                    async () => undefined,
+                    [],
+                    createCodingContext({ workspaceRoot: root }),
+                );
+
+                expect(spy).toHaveBeenCalledTimes(1);
+                expect(output.getOutput()).toContain('Reloaded');
+            } finally {
+                spy.mockRestore();
+            }
+        });
+
+        it('calls bustSkillCache before re-running discovery on /agents reload', async () => {
+            const root = await mkdtemp(join(tmpdir(), 'bust-agents-ws-'));
+            const configDir = await mkdtemp(join(tmpdir(), 'bust-agents-cfg-'));
+            tempRoots.push(root, configDir);
+            vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
+
+            const spy = vi.spyOn(missionControlCore, 'bustSkillCache');
+            try {
+                const runtime = new AgentRuntime();
+                const output = createOutput();
+                await runChatAction(
+                    runtime,
+                    output,
+                    { kind: 'agents', agents: { kind: 'reload' } },
+                    currentSelection,
+                    async () => undefined,
+                    [],
+                    createCodingContext({ workspaceRoot: root }),
+                );
+
+                expect(spy).toHaveBeenCalledTimes(1);
+                expect(output.getOutput()).toContain('Reloaded');
+            } finally {
+                spy.mockRestore();
+            }
         });
     });
 

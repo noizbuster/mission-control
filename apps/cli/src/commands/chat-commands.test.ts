@@ -284,6 +284,42 @@ describe('chat command parser', () => {
         });
     });
 
+    it('dispatches /skills reload to the skills reload action', () => {
+        expect(parseChatLine('/skills reload')).toEqual({
+            kind: 'skills',
+            skills: { kind: 'reload' },
+        });
+    });
+
+    it('rejects bare /skills as invalid (no list/dashboard subcommand)', () => {
+        expect(parseChatLine('/skills')).toEqual({
+            kind: 'skills',
+            skills: { kind: 'invalid', message: '/skills requires a subcommand: reload' },
+        });
+    });
+
+    it('rejects /skills reload with trailing arguments', () => {
+        expect(parseChatLine('/skills reload force')).toEqual({
+            kind: 'skills',
+            skills: { kind: 'invalid', message: '/skills reload does not accept arguments' },
+        });
+    });
+
+    it('rejects unknown /skills subcommands as invalid', () => {
+        expect(parseChatLine('/skills list')).toEqual({
+            kind: 'skills',
+            skills: { kind: 'invalid', message: '/skills supports: reload' },
+        });
+    });
+
+    it('shadows a same-named skill with the reserved /skills command', () => {
+        const known = new Set(['skills']);
+        expect(parseChatLine('/skills reload', { knownSkillNames: known })).toEqual({
+            kind: 'skills',
+            skills: { kind: 'reload' },
+        });
+    });
+
     it('parses /mission as the mission control panel action with no arguments', () => {
         expect(parseChatLine('/mission')).toEqual({ kind: 'mission' });
     });

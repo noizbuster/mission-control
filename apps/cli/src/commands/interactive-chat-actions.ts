@@ -1,9 +1,11 @@
 import {
     AgentIndex,
     type AgentRuntime,
+    bustSkillCache,
     completeRun,
     createMission,
     discoverAgents,
+    discoverSkills,
     ensureOmoDirs,
     failRun,
     formatSkillInstructions,
@@ -31,7 +33,7 @@ import { readDisabledSet, toggleDisabled } from './agents-disabled-config.js';
 import { readOverridesMap } from './agents-model-overrides-config.js';
 import type { ApprovalLevel } from './approval-level.js';
 import { APPROVAL_LEVEL_META } from './approval-level.js';
-import type { ChatLineAction, WorkflowInvocationAction } from './chat-commands.js';
+import type { ChatLineAction, SkillsCommand, WorkflowInvocationAction } from './chat-commands.js';
 import type { DashboardAgentEntry, MissionPanelRow, SessionPickerEntry } from './chat-store.js';
 import type { ModelSelector } from './interactive-chat.js';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
@@ -310,6 +312,8 @@ export async function runChatAction(
             return runWorkflowAction(runtime, chatOutput, action, currentModelProviderSelection, coding);
         case 'agents':
             return runAgentsAction(chatOutput, currentModelProviderSelection, coding, action.agents);
+        case 'skills':
+            return runSkillsAction(chatOutput, currentModelProviderSelection, coding, action.skills);
         case 'mission':
             return runMissionAction(chatOutput, currentModelProviderSelection, coding);
         case 'models':
@@ -744,6 +748,7 @@ async function runAgentsAction(
     }
 
     if (command.kind === 'reload') {
+        bustSkillCache();
         const agents = await loadDiscoveredAgents(workspaceRoot, userConfigDir);
         chatOutput.write(`Reloaded ${agents.length} agent${agents.length === 1 ? '' : 's'}.\n`);
         await refreshAgentsDashboardIfOpen(coding, workspaceRoot, userConfigDir);
@@ -762,6 +767,31 @@ async function runAgentsAction(
         return actionResult(modelProviderSelection, coding.activeTurn);
     }
 
+    return assertNever(command);
+}
+
+async function runSkillsAction(
+    chatOutput: ChatOutput,
+    modelProviderSelection: ModelProviderSelection,
+    coding: CodingActionContext,
+    command: SkillsCommand,
+): Promise<ChatActionResult> {
+    if (coding.workspaceRoot === undefined) {
+        chatOutput.write('Skills command unavailable: workspace root is unavailable\n');
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    if (command.kind === 'invalid') {
+        chatOutput.write(`${command.message}\n`);
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    if (command.kind === 'reload') {
+        const workspaceRoot = coding.workspaceRoot;
+        const userConfigDir = resolveUserConfigDir();
+        bustSkillCache();
+        const { skills } = await discoverSkills({ workspaceRoot, userConfigDir });
+        chatOutput.write(`Reloaded ${skills.length} skill${skills.length === 1 ? '' : 's'}.\n`);
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
     return assertNever(command);
 }
 

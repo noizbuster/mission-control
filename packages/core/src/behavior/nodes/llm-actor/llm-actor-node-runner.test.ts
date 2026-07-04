@@ -11,13 +11,14 @@ import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import type { AbgSignal } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { createBlackboard } from '../../../memory/blackboard.js';
+import { type Blackboard, createBlackboard } from '../../../memory/blackboard.js';
+import * as skillLoaderModule from '../../../skills/skill-loader.js';
 import { ToolRegistry } from '../../../tools/tool-registry.js';
 import type { AbgNodeRunContext } from '../../node-registry.js';
-import { runLlmActorNode } from './llm-actor-node-runner.js';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { bustSkillCache, _testResetSkillCache, runLlmActorNode } from './llm-actor-node-runner.js';
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -789,5 +790,124 @@ describe('runLlmActorNode — capabilities-based tool suppression', () => {
         const call = model.doStreamCalls[0];
         expect(call?.tools).toBeDefined();
         expect(call?.tools?.length).toBeGreaterThan(0);
+    });
+});
+
+describe('runLlmActorNode — skill discovery session cache', () => {
+    const node = { id: 'llm-actor', kind: 'llm' } as const;
+
+    let tempRoot: string;
+    let workspace: string;
+    let skillPath: string;
+    let previousConfigDir: string | undefined;
+
+    async function runTurn(blackboard: Blackboard): Promise<void> {
+        const model = buildModel();
+        blackboard.appendMessages([{ role: 'user', content: 'ping' }] as readonly ModelMessage[]);
+        const context: AbgNodeRunContext = {
+            graphId: 'g-cache',
+            now: () => NOW,
+            sdkModel: model,
+            blackboard,
+            systemPromptEnv: { cwd: workspace, workspaceRoot: workspace },
+        };
+        await collectSignals(runLlmActorNode(node, context));
+    }
+
+    beforeEach(async () => {
+        _testResetSkillCache();
+        tempRoot = await mkdtemp(join(tmpdir(), 'runner-skill-cache-'));
+        workspace = join(tempRoot, 'workspace');
+        const skillDir = join(workspace, '.agents', 'skills', 'cached-skill');
+        await mkdir(skillDir, { recursive: true });
+        skillPath = join(skillDir, 'SKILL.md');
+        await writeFile(
+            skillPath,
+            '---\nname: cached-skill\ndescription: A skill for cache testing.\n---\nBody.',
+            'utf8',
+        );
+        previousConfigDir = process.env['MCTRL_CONFIG_DIR'];
+        process.env['MCTRL_CONFIG_DIR'] = join(tempRoot, 'empty-global-config');
+    });
+
+    afterEach(async () => {
+        if (previousConfigDir !== undefined) {
+            process.env['MCTRL_CONFIG_DIR'] = previousConfigDir;
+        } else {
+            delete process.env['MCTRL_CONFIG_DIR'];
+        }
+        await rm(tempRoot, { recursive: true, force: true });
+    });
+
+    it('calls discoverSkills once across 5 turns sharing one blackboard', async () => {
+        const spy = vi.spyOn(skillLoaderModule, 'discoverSkills');
+        try {
+            const blackboard = createBlackboard();
+            for (let turn = 0; turn < 5; turn++) {
+                await runTurn(blackboard);
+            }
+            expect(spy).toHaveBeenCalledTimes(1);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('re-discovers when a SKILL.md mtime changes', async () => {
+        const spy = vi.spyOn(skillLoaderModule, 'discoverSkills');
+        try {
+            const blackboard = createBlackboard();
+            for (let turn = 0; turn < 5; turn++) {
+                await runTurn(blackboard);
+            }
+            expect(spy).toHaveBeenCalledTimes(1);
+
+            const futureMtime = Math.floor(Date.now() / 1000) + 500;
+            await utimes(skillPath, futureMtime, futureMtime);
+
+            await runTurn(blackboard);
+            expect(spy).toHaveBeenCalledTimes(2);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('starts cold for a new blackboard with the same workspaceRoot', async () => {
+        const spy = vi.spyOn(skillLoaderModule, 'discoverSkills');
+        try {
+            const blackboardA = createBlackboard();
+            for (let turn = 0; turn < 3; turn++) {
+                await runTurn(blackboardA);
+            }
+            expect(spy).toHaveBeenCalledTimes(1);
+
+            const blackboardB = createBlackboard();
+            await runTurn(blackboardB);
+            expect(spy).toHaveBeenCalledTimes(2);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('re-discovers after bustSkillCache() clears the cache', async () => {
+        const spy = vi.spyOn(skillLoaderModule, 'discoverSkills');
+        try {
+            const blackboard = createBlackboard();
+            for (let turn = 0; turn < 3; turn++) {
+                await runTurn(blackboard);
+            }
+            expect(spy).toHaveBeenCalledTimes(1);
+
+            bustSkillCache();
+
+            await runTurn(blackboard);
+            expect(spy).toHaveBeenCalledTimes(2);
+
+            for (let turn = 0; turn < 3; turn++) {
+                await runTurn(blackboard);
+            }
+            expect(spy).toHaveBeenCalledTimes(2);
+        } finally {
+            spy.mockRestore();
+        }
     });
 });

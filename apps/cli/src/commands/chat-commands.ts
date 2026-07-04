@@ -7,6 +7,10 @@ import { splitCommandParts } from './chat-command-parts.js';
 import { parseSessionSlashCommand } from './chat-session-commands.js';
 import { formatModelSelection, type ModelChoice, resolveModelCommand } from './interactive-chat-model.js';
 
+export type SkillsCommand =
+    | { readonly kind: 'reload' }
+    | { readonly kind: 'invalid'; readonly message: string };
+
 export type ChatLineAction =
     | {
           readonly kind: 'empty';
@@ -139,6 +143,10 @@ export type ChatLineAction =
           readonly agents: AgentsCommand;
       }
     | {
+          readonly kind: 'skills';
+          readonly skills: SkillsCommand;
+      }
+    | {
           readonly kind: 'models';
       }
     | {
@@ -269,6 +277,8 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
             return parseNoArgumentCommand('hotkeys', parts.tail);
         case 'agents':
             return { kind: 'agents', agents: parseAgentsCommand(parts.tail) };
+        case 'skills':
+            return { kind: 'skills', skills: parseSkillsCommand(parts.tail) };
         case 'mission': {
             if (parts.tail.length > 0) {
                 return {
@@ -295,6 +305,20 @@ function resolveUnreservedSlash(
         return { kind: 'skill', name: parts.head, instruction: parts.tail };
     }
     return { kind: 'unknown-slash', command: parts.head };
+}
+
+export function parseSkillsCommand(input: string): SkillsCommand {
+    const parts = splitCommandParts(input);
+    if (parts.head.length === 0) {
+        return { kind: 'invalid', message: '/skills requires a subcommand: reload' };
+    }
+    if (parts.head === 'reload') {
+        if (parts.tail.length > 0) {
+            return { kind: 'invalid', message: '/skills reload does not accept arguments' };
+        }
+        return { kind: 'reload' };
+    }
+    return { kind: 'invalid', message: '/skills supports: reload' };
 }
 
 function parsePromptCommand(kind: 'queue' | 'steer', prompt: string): ChatLineAction {

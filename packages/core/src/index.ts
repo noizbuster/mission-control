@@ -337,6 +337,7 @@ export {
     type ToolOutcomeStatus,
 } from './session-replay.js';
 export * from './skills/index.js';
+export { bustSkillCache } from './behavior/nodes/llm-actor/llm-actor-node-runner.js';
 export {
     type AskUserInput,
     type AskUserOutput,
