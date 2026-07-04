@@ -5,6 +5,11 @@ export type TextBlockState = {
     text: string;
 };
 
+export type ThinkingBlockState = {
+    kind: 'thinking';
+    text: string;
+};
+
 export type ToolUseBlockState = {
     kind: 'tool_use';
     id: string;
@@ -14,7 +19,7 @@ export type ToolUseBlockState = {
     completed: boolean;
 };
 
-export type ContentBlockState = TextBlockState | ToolUseBlockState;
+export type ContentBlockState = TextBlockState | ThinkingBlockState | ToolUseBlockState;
 
 export type AnthropicMessagesMappingState = {
     requestId: string;
@@ -72,6 +77,15 @@ export function completedText(state: AnthropicMessagesMappingState): string {
         .sort(([left], [right]) => left - right)
         .map((entry) => entry[1])
         .filter((block): block is TextBlockState => block.kind === 'text')
+        .map((block) => block.text)
+        .join('');
+}
+
+export function completedThinking(state: AnthropicMessagesMappingState): string {
+    return Array.from(state.blocksByIndex.entries())
+        .sort(([left], [right]) => left - right)
+        .map((entry) => entry[1])
+        .filter((block): block is ThinkingBlockState => block.kind === 'thinking')
         .map((block) => block.text)
         .join('');
 }

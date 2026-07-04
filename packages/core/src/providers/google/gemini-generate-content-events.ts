@@ -49,6 +49,11 @@ export function parseGeminiTextPart(value: unknown): string | undefined {
     return parsed.success ? parsed.data.text : undefined;
 }
 
+export function parseGeminiThoughtFlag(value: unknown): boolean {
+    const parsed = GeminiTextPartSchema.safeParse(value);
+    return parsed.success ? parsed.data.thought === true : false;
+}
+
 function normalizeFunctionCallPart(part: GeminiFunctionCallPartData): GeminiParsedFunctionCall {
     return {
         name: part.functionCall.name,

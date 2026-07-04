@@ -47,6 +47,7 @@ export const GeminiFunctionCallPartSchema = z
 export const GeminiTextPartSchema = z
     .object({
         text: z.string(),
+        thought: z.boolean().optional(),
     })
     .passthrough();
 

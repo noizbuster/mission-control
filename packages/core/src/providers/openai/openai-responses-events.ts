@@ -58,6 +58,24 @@ const TextDeltaEventSchema = EventHeaderSchema.extend({
     delta: z.string(),
 });
 
+const ReasoningSummaryTextDeltaEventSchema = EventHeaderSchema.extend({
+    type: z.literal('response.reasoning_summary_text.delta'),
+    response_id: z.string().min(1).optional(),
+    item_id: z.string().min(1).optional(),
+    output_index: z.number().int().nonnegative().optional(),
+    summary_index: z.number().int().nonnegative().optional(),
+    delta: z.string(),
+});
+
+const ReasoningSummaryTextDoneEventSchema = EventHeaderSchema.extend({
+    type: z.literal('response.reasoning_summary_text.done'),
+    response_id: z.string().min(1).optional(),
+    item_id: z.string().min(1).optional(),
+    output_index: z.number().int().nonnegative().optional(),
+    summary_index: z.number().int().nonnegative().optional(),
+    text: z.string().optional(),
+});
+
 const OutputItemAddedEventSchema = EventHeaderSchema.extend({
     type: z.literal('response.output_item.added'),
     response_id: z.string().min(1).optional(),
@@ -122,6 +140,8 @@ const ErrorEventSchema = EventHeaderSchema.extend({
 export type OpenAIResponsesStreamEvent =
     | z.infer<typeof ResponseCreatedEventSchema>
     | z.infer<typeof TextDeltaEventSchema>
+    | z.infer<typeof ReasoningSummaryTextDeltaEventSchema>
+    | z.infer<typeof ReasoningSummaryTextDoneEventSchema>
     | z.infer<typeof OutputItemAddedEventSchema>
     | z.infer<typeof OutputItemDoneEventSchema>
     | z.infer<typeof FunctionArgumentsDeltaEventSchema>
@@ -144,6 +164,10 @@ export function parseOpenAIResponsesStreamEvent(value: unknown): OpenAIResponses
             return ResponseCreatedEventSchema.parse(value);
         case 'response.output_text.delta':
             return TextDeltaEventSchema.parse(value);
+        case 'response.reasoning_summary_text.delta':
+            return ReasoningSummaryTextDeltaEventSchema.parse(value);
+        case 'response.reasoning_summary_text.done':
+            return ReasoningSummaryTextDoneEventSchema.parse(value);
         case 'response.output_item.added':
             return OutputItemAddedEventSchema.parse(value);
         case 'response.output_item.done':

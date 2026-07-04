@@ -85,6 +85,100 @@ describe('Gemini GenerateContent provider adapter', () => {
         expect(JSON.stringify(chunks)).not.toContain('sk-gemini-test-secret');
     });
 
+    it('maps thought parts to reasoning chunks and excludes them from message content', async () => {
+        // Given — the bug fix: thought:true parts must NOT leak into text_delta / message.content
+        const requests: GeminiGenerateContentTransportRequest[] = [];
+        const provider = createGeminiGenerateContentProvider({
+            credentialResolver: createStaticProviderCredentialResolver([
+                geminiCredential('google', 'sk-gemini-test-secret'),
+            ]),
+            transport: transportFromEvents(requests, [
+                {
+                    responseId: 'resp_thought',
+                    candidates: [
+                        {
+                            index: 0,
+                            content: {
+                                role: 'model',
+                                parts: [
+                                    { text: 'Let me think.', thought: true },
+                                    { text: 'Final answer.' },
+                                ],
+                            },
+                        },
+                    ],
+                    usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 3, totalTokenCount: 8 },
+                },
+                {
+                    responseId: 'resp_thought',
+                    candidates: [
+                        { index: 0, content: { role: 'model', parts: [] }, finishReason: 'STOP' },
+                    ],
+                    usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 3, totalTokenCount: 8 },
+                },
+            ]),
+        });
+
+        // When
+        const chunks = await collectChunks(
+            provider.streamTurn(geminiTurnRequest(), { attempt: 1, signal: new AbortController().signal }),
+        );
+
+        // Then — thought part diverted to reasoning_delta, NOT text_delta
+        const reasoningDeltas = chunks.filter((c) => c.kind === 'reasoning_delta');
+        const reasoningCompleted = chunks.filter((c) => c.kind === 'reasoning_completed');
+        const textDeltas = chunks.filter((c) => c.kind === 'text_delta');
+        const completed = chunks.find((c) => c.kind === 'response_completed');
+
+        expect(reasoningDeltas).toMatchObject([{ kind: 'reasoning_delta', delta: 'Let me think.' }]);
+        expect(textDeltas).toMatchObject([{ kind: 'text_delta', delta: 'Final answer.' }]);
+        expect(reasoningCompleted).toMatchObject([{ kind: 'reasoning_completed', text: 'Let me think.' }]);
+        expect(completed).toMatchObject({
+            message: { content: 'Final answer.', reasoning: 'Let me think.' },
+        });
+    });
+
+    it('still emits text_delta for parts without the thought flag', async () => {
+        // Given — thought:false / absent must flow through the normal text path
+        const provider = createGeminiGenerateContentProvider({
+            credentialResolver: createStaticProviderCredentialResolver([
+                geminiCredential('google', 'sk-gemini-test-secret'),
+            ]),
+            transport: transportFromEvents([], [
+                {
+                    responseId: 'resp_plain',
+                    candidates: [
+                        {
+                            index: 0,
+                            content: {
+                                role: 'model',
+                                parts: [{ text: 'hello', thought: false }, { text: ' world' }],
+                            },
+                            finishReason: 'STOP',
+                        },
+                    ],
+                    usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 2, totalTokenCount: 4 },
+                },
+            ]),
+        });
+
+        // When
+        const chunks = await collectChunks(
+            provider.streamTurn(geminiTurnRequest(), { attempt: 1, signal: new AbortController().signal }),
+        );
+
+        // Then — all parts are text_delta, no reasoning chunks
+        expect(chunks.filter((c) => c.kind === 'reasoning_delta')).toHaveLength(0);
+        expect(chunks.filter((c) => c.kind === 'reasoning_completed')).toHaveLength(0);
+        expect(chunks.filter((c) => c.kind === 'text_delta')).toMatchObject([
+            { delta: 'hello' },
+            { delta: ' world' },
+        ]);
+        const completed = chunks.find((c) => c.kind === 'response_completed');
+        expect(completed).toMatchObject({ message: { content: 'hello world' } });
+        expect(completed && 'reasoning' in (completed as { message: Record<string, unknown> }).message).toBe(false);
+    });
+
     it('maps auth and abort failures without leaking the Gemini API key', async () => {
         // Given
         const authProvider = createGeminiGenerateContentProvider({

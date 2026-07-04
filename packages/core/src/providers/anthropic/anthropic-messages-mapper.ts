@@ -4,6 +4,7 @@ import { parseAnthropicMessagesStreamEvent, parseAnthropicToolUseContentBlock } 
 import {
     type AnthropicMessagesMappingState,
     completedText,
+    completedThinking,
     createAnthropicMessagesMappingState,
     finishReasonFromAnthropicStopReason,
     providerResponseId,
@@ -17,6 +18,7 @@ export { type AnthropicMessagesMappingState, createAnthropicMessagesMappingState
 const TYPE_FIELD = 'type';
 const TEXT_FIELD = 'text';
 const PARTIAL_JSON_FIELD = 'partial_json';
+const THINKING_FIELD = 'thinking';
 
 export function* mapAnthropicMessagesStreamEvent(
     rawEvent: unknown,
@@ -54,7 +56,18 @@ export function* mapAnthropicMessagesStreamEvent(
             }
             updateUsage(state, event.usage);
             return;
-        case 'message_stop':
+        case 'message_stop': {
+            const thinking = completedThinking(state);
+            if (thinking !== '') {
+                yield {
+                    kind: 'reasoning_completed',
+                    requestId: state.requestId,
+                    sequence,
+                    sourceEventType: event.type,
+                    ...providerResponseId(state.providerMessageId),
+                    text: thinking,
+                };
+            }
             yield {
                 kind: 'response_completed',
                 requestId: state.requestId,
@@ -65,6 +78,7 @@ export function* mapAnthropicMessagesStreamEvent(
                     messageId: state.providerMessageId ?? `message_${state.requestId}`,
                     role: 'assistant',
                     content: completedText(state),
+                    ...(thinking !== '' ? { reasoning: thinking } : {}),
                     ...providerToolCallMessageFields(state),
                 },
                 finishReason: finishReasonFromAnthropicStopReason(state.stopReason),
@@ -75,6 +89,7 @@ export function* mapAnthropicMessagesStreamEvent(
                 },
             };
             return;
+        }
         case 'error':
             yield {
                 kind: 'response_failed',
@@ -105,6 +120,10 @@ function rememberContentBlock(state: AnthropicMessagesMappingState, index: numbe
     }
     if (isTextBlock(rawBlock)) {
         state.blocksByIndex.set(index, { kind: 'text', text: rawBlock.text ?? '' });
+        return;
+    }
+    if (isThinkingBlock(rawBlock)) {
+        state.blocksByIndex.set(index, { kind: 'thinking', text: '' });
     }
 }
 
@@ -128,6 +147,18 @@ function* handleContentBlockDelta(
             sourceEventType,
             ...providerResponseId(state.providerMessageId),
             delta: delta.text,
+        };
+        return;
+    }
+    if (delta.type === 'thinking_delta' && block.kind === 'thinking' && isThinkingDelta(delta)) {
+        block.text += delta.thinking;
+        yield {
+            kind: 'reasoning_delta',
+            requestId: state.requestId,
+            sequence,
+            sourceEventType,
+            ...providerResponseId(state.providerMessageId),
+            delta: delta.thinking,
         };
         return;
     }
@@ -180,6 +211,14 @@ function isTextBlock(value: unknown): value is { readonly type: 'text'; readonly
 
 function isTextDelta(value: unknown): value is { readonly type: 'text_delta'; readonly text: string } {
     return isRecord(value) && value[TYPE_FIELD] === 'text_delta' && typeof value[TEXT_FIELD] === 'string';
+}
+
+function isThinkingBlock(value: unknown): value is { readonly type: 'thinking'; readonly thinking?: string } {
+    return isRecord(value) && value[TYPE_FIELD] === 'thinking';
+}
+
+function isThinkingDelta(value: unknown): value is { readonly type: 'thinking_delta'; readonly thinking: string } {
+    return isRecord(value) && value[TYPE_FIELD] === 'thinking_delta' && typeof value[THINKING_FIELD] === 'string';
 }
 
 function isInputJsonDelta(

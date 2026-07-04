@@ -393,8 +393,120 @@ describe('OpenAI Responses provider adapter', () => {
         expect(chunks.some((chunk) => chunk.kind === 'tool_call_completed')).toBe(false);
     });
 
-    it('sends tool definitions and function call outputs for Responses continuation', async () => {
+    it('streams reasoning summary chunks and populates message.reasoning', async () => {
         // Given
+        const provider = createOpenAIResponsesProvider({
+            credentialResolver: createStaticProviderCredentialResolver([credential('openai', 'sk-test-secret')]),
+            transport: transportFromEvents([], [
+                { type: 'response.created', response: { id: 'resp_reason' }, sequence_number: 0 },
+                {
+                    type: 'response.reasoning_summary_text.delta',
+                    response_id: 'resp_reason',
+                    sequence_number: 1,
+                    delta: 'Thinking ',
+                },
+                {
+                    type: 'response.reasoning_summary_text.delta',
+                    response_id: 'resp_reason',
+                    sequence_number: 2,
+                    delta: 'hard.',
+                },
+                {
+                    type: 'response.reasoning_summary_text.done',
+                    response_id: 'resp_reason',
+                    sequence_number: 3,
+                    text: 'Thinking hard.',
+                },
+                { type: 'response.output_text.delta', response_id: 'resp_reason', sequence_number: 4, delta: 'Answer' },
+                {
+                    type: 'response.completed',
+                    sequence_number: 5,
+                    response: {
+                        id: 'resp_reason',
+                        status: 'completed',
+                        output: [
+                            {
+                                id: 'msg_reason',
+                                type: 'message',
+                                role: 'assistant',
+                                content: [{ type: 'output_text', text: 'Answer' }],
+                            },
+                        ],
+                        usage: { input_tokens: 3, output_tokens: 2, total_tokens: 5 },
+                    },
+                },
+            ]),
+        });
+
+        // When
+        const chunks = await collectChunks(
+            provider.streamTurn(turnRequest(), { attempt: 1, signal: new AbortController().signal }),
+        );
+
+        // Then
+        const reasoningDeltas = chunks.filter((c) => c.kind === 'reasoning_delta');
+        const reasoningCompleted = chunks.filter((c) => c.kind === 'reasoning_completed');
+        const completed = chunks.find((c) => c.kind === 'response_completed');
+
+        expect(reasoningDeltas).toMatchObject([
+            { kind: 'reasoning_delta', delta: 'Thinking ' },
+            { kind: 'reasoning_delta', delta: 'hard.' },
+        ]);
+        expect(reasoningCompleted).toMatchObject([{ kind: 'reasoning_completed', text: 'Thinking hard.' }]);
+        expect(completed).toMatchObject({
+            kind: 'response_completed',
+            message: { content: 'Answer', reasoning: 'Thinking hard.' },
+        });
+    });
+
+    it('does not emit reasoning_completed when the done event has empty text', async () => {
+        // Given — encrypted/absent reasoning: .done with no text
+        const provider = createOpenAIResponsesProvider({
+            credentialResolver: createStaticProviderCredentialResolver([credential('openai', 'sk-test-secret')]),
+            transport: transportFromEvents([], [
+                { type: 'response.created', response: { id: 'resp_enc' }, sequence_number: 0 },
+                {
+                    type: 'response.reasoning_summary_text.delta',
+                    response_id: 'resp_enc',
+                    sequence_number: 1,
+                    delta: 'partial',
+                },
+                {
+                    type: 'response.reasoning_summary_text.done',
+                    response_id: 'resp_enc',
+                    sequence_number: 2,
+                },
+                {
+                    type: 'response.completed',
+                    sequence_number: 3,
+                    response: {
+                        id: 'resp_enc',
+                        status: 'completed',
+                        output: [
+                            {
+                                id: 'msg_enc',
+                                type: 'message',
+                                role: 'assistant',
+                                content: [{ type: 'output_text', text: 'visible' }],
+                            },
+                        ],
+                    },
+                },
+            ]),
+        });
+
+        // When
+        const chunks = await collectChunks(
+            provider.streamTurn(turnRequest(), { attempt: 1, signal: new AbortController().signal }),
+        );
+
+        // Then — no reasoning_completed; message.reasoning absent (encrypted model)
+        expect(chunks.filter((c) => c.kind === 'reasoning_completed')).toHaveLength(0);
+        const completed = chunks.find((c) => c.kind === 'response_completed');
+        expect(completed).toMatchObject({ message: { content: 'visible' } });
+    });
+
+    it('sends tool definitions and function call outputs for Responses continuation', async () => {        // Given
         const requests: OpenAIResponsesTransportRequest[] = [];
         const provider = createOpenAIResponsesProvider({
             credentialResolver: createStaticProviderCredentialResolver([credential('openai', 'sk-test-secret')]),

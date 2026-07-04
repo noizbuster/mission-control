@@ -3,6 +3,7 @@ import {
     parseGeminiFunctionCallPart,
     parseGeminiGenerateContentEvent,
     parseGeminiTextPart,
+    parseGeminiThoughtFlag,
 } from './gemini-generate-content-events.js';
 import type { GeminiGenerateContentMappingState, GeminiToolCallState } from './gemini-generate-content-state.js';
 import {
@@ -42,6 +43,16 @@ export function* mapGeminiGenerateContentStreamEvent(
         }
         if (candidate.finishReason !== undefined) {
             state.stopReason = candidate.finishReason;
+            if (state.thoughts !== '') {
+                yield {
+                    kind: 'reasoning_completed',
+                    requestId: state.requestId,
+                    sequence: nextSequence(state),
+                    sourceEventType: 'candidate.finishReason',
+                    ...providerResponseId(state.providerResponseId),
+                    text: state.thoughts,
+                };
+            }
             yield completedChunk(state);
         }
     }
@@ -53,6 +64,21 @@ function* mapPart(
     partIndex: number,
     part: unknown,
 ): Iterable<ProviderStreamChunk> {
+    if (parseGeminiThoughtFlag(part)) {
+        const thoughtText = parseGeminiTextPart(part);
+        if (thoughtText !== undefined) {
+            state.thoughts += thoughtText;
+            yield {
+                kind: 'reasoning_delta',
+                requestId: state.requestId,
+                sequence: nextSequence(state),
+                sourceEventType: 'candidate.part.thought',
+                ...providerResponseId(state.providerResponseId),
+                delta: thoughtText,
+            };
+        }
+        return;
+    }
     const text = parseGeminiTextPart(part);
     if (text !== undefined) {
         state.text += text;
@@ -119,6 +145,7 @@ function completedChunk(
             messageId: state.providerResponseId ?? `message_${state.requestId}`,
             role: 'assistant',
             content: state.text,
+            ...(state.thoughts !== '' ? { reasoning: state.thoughts } : {}),
             ...providerToolCallMessageFields(state),
         },
         finishReason: finishReasonFromGemini(state),

@@ -92,6 +92,107 @@ describe('Anthropic Messages provider adapter', () => {
         expect(JSON.stringify(chunks)).not.toContain('sk-ant-test-secret');
     });
 
+    it('streams reasoning chunks for thinking content blocks and populates message.reasoning', async () => {
+        // Given
+        const provider = createAnthropicMessagesProvider({
+            credentialResolver: createStaticProviderCredentialResolver([
+                anthropicCredential('anthropic', 'sk-ant-test-secret'),
+            ]),
+            transport: transportFromEvents([], [
+                {
+                    type: 'message_start',
+                    message: { id: 'msg_thinking', type: 'message', role: 'assistant', content: [] },
+                },
+                {
+                    type: 'content_block_start',
+                    index: 0,
+                    content_block: { type: 'thinking', thinking: '' },
+                },
+                { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Let me ' } },
+                { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'reason.' } },
+                { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'cryptsig' } },
+                { type: 'content_block_stop', index: 0 },
+                {
+                    type: 'content_block_start',
+                    index: 1,
+                    content_block: { type: 'text', text: '' },
+                },
+                { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Answer' } },
+                { type: 'content_block_stop', index: 1 },
+                {
+                    type: 'message_delta',
+                    delta: { stop_reason: 'end_turn' },
+                    usage: { output_tokens: 5 },
+                },
+                { type: 'message_stop' },
+            ]),
+        });
+
+        // When
+        const chunks = await collectChunks(
+            provider.streamTurn(anthropicTurnRequest(), { attempt: 1, signal: new AbortController().signal }),
+        );
+
+        // Then
+        const reasoningDeltas = chunks.filter((c) => c.kind === 'reasoning_delta');
+        const reasoningCompleted = chunks.filter((c) => c.kind === 'reasoning_completed');
+        const textDeltas = chunks.filter((c) => c.kind === 'text_delta');
+        const completed = chunks.find((c) => c.kind === 'response_completed');
+
+        expect(reasoningDeltas).toMatchObject([
+            { kind: 'reasoning_delta', delta: 'Let me ' },
+            { kind: 'reasoning_delta', delta: 'reason.' },
+        ]);
+        expect(reasoningCompleted).toMatchObject([{ kind: 'reasoning_completed', text: 'Let me reason.' }]);
+        expect(textDeltas).toMatchObject([{ kind: 'text_delta', delta: 'Answer' }]);
+        expect(completed).toMatchObject({
+            kind: 'response_completed',
+            message: { content: 'Answer', reasoning: 'Let me reason.' },
+        });
+        // signature_delta must NOT produce any chunk
+        expect(JSON.stringify(chunks)).not.toContain('cryptsig');
+    });
+
+    it('emits zero reasoning chunks for a turn without thinking blocks', async () => {
+        // Given — stale_state probe: a second turn after a reasoning turn must reset state
+        const provider = createAnthropicMessagesProvider({
+            credentialResolver: createStaticProviderCredentialResolver([
+                anthropicCredential('anthropic', 'sk-ant-test-secret'),
+            ]),
+            transport: transportFromEvents([], [
+                {
+                    type: 'message_start',
+                    message: { id: 'msg_plain', type: 'message', role: 'assistant', content: [] },
+                },
+                {
+                    type: 'content_block_start',
+                    index: 0,
+                    content_block: { type: 'text', text: '' },
+                },
+                { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'hi' } },
+                { type: 'content_block_stop', index: 0 },
+                {
+                    type: 'message_delta',
+                    delta: { stop_reason: 'end_turn' },
+                    usage: { output_tokens: 1 },
+                },
+                { type: 'message_stop' },
+            ]),
+        });
+
+        // When
+        const chunks = await collectChunks(
+            provider.streamTurn(anthropicTurnRequest(), { attempt: 1, signal: new AbortController().signal }),
+        );
+
+        // Then — no reasoning chunks, no reasoning field on message
+        expect(chunks.filter((c) => c.kind === 'reasoning_delta')).toHaveLength(0);
+        expect(chunks.filter((c) => c.kind === 'reasoning_completed')).toHaveLength(0);
+        const completed = chunks.find((c) => c.kind === 'response_completed');
+        expect(completed).toMatchObject({ message: { content: 'hi' } });
+        expect(completed && 'reasoning' in (completed as { message: Record<string, unknown> }).message).toBe(false);
+    });
+
     it('maps auth failures without leaking the Anthropic API key', async () => {
         // Given
         const provider = createAnthropicMessagesProvider({

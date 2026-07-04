@@ -14,6 +14,7 @@ export type OpenAIResponsesMappingState = {
     requestId: string;
     nextSequence: number;
     providerResponseId?: string;
+    reasoning: string;
     toolCallsByItemId: Map<string, ToolCallState>;
     toolItemIdsByOutputIndex: Map<number, string>;
 };
@@ -22,6 +23,7 @@ export function createOpenAIResponsesMappingState(requestId: string): OpenAIResp
     return {
         requestId,
         nextSequence: 0,
+        reasoning: '',
         toolCallsByItemId: new Map(),
         toolItemIdsByOutputIndex: new Map(),
     };

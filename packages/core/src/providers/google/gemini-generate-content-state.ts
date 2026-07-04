@@ -14,6 +14,7 @@ export type GeminiGenerateContentMappingState = {
     started: boolean;
     providerResponseId?: string;
     text: string;
+    thoughts: string;
     stopReason?: string;
     inputTokens: number;
     outputTokens: number;
@@ -27,6 +28,7 @@ export function createGeminiGenerateContentMappingState(requestId: string): Gemi
         nextSequence: 0,
         started: false,
         text: '',
+        thoughts: '',
         inputTokens: 0,
         outputTokens: 0,
         totalTokens: 0,

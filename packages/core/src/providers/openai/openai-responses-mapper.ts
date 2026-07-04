@@ -49,6 +49,29 @@ export function* mapOpenAIResponsesStreamEvent(
                 delta: event.delta,
             };
             return;
+        case 'response.reasoning_summary_text.delta':
+            state.reasoning += event.delta;
+            yield {
+                kind: 'reasoning_delta',
+                requestId: state.requestId,
+                sequence,
+                sourceEventType: event.type,
+                ...providerResponseId(event.response_id ?? state.providerResponseId),
+                delta: event.delta,
+            };
+            return;
+        case 'response.reasoning_summary_text.done':
+            if (event.text !== undefined && event.text !== '') {
+                yield {
+                    kind: 'reasoning_completed',
+                    requestId: state.requestId,
+                    sequence,
+                    sourceEventType: event.type,
+                    ...providerResponseId(event.response_id ?? state.providerResponseId),
+                    text: event.text,
+                };
+            }
+            return;
         case 'response.output_item.added':
             rememberFunctionCall(state, event.output_index, parseOpenAIFunctionCallItem(event.item));
             return;
@@ -122,6 +145,7 @@ export function* mapOpenAIResponsesStreamEvent(
                     messageId: `message_${event.response.id}`,
                     role: 'assistant',
                     content: completedResponseText(event.response.output ?? []),
+                    ...(state.reasoning !== '' ? { reasoning: state.reasoning } : {}),
                     ...providerToolCallMessageFields(state),
                 },
                 finishReason: 'stop',
