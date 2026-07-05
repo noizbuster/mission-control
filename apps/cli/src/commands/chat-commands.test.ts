@@ -245,6 +245,14 @@ describe('chat command parser', () => {
         });
     });
 
+    it('parses /retry as a no-argument failed-run-rerun command', () => {
+        expect(parseChatLine('/retry')).toEqual({ kind: 'retry' });
+        expect(parseChatLine('/retry now')).toEqual({
+            kind: 'invalid',
+            message: '/retry does not accept arguments',
+        });
+    });
+
     it('parses /resume unchanged (semantics move to last-session in T6)', () => {
         expect(parseChatLine('/resume')).toEqual({ kind: 'resume' });
     });

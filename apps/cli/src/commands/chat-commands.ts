@@ -42,6 +42,9 @@ export type ChatLineAction =
           readonly kind: 'continue';
       }
     | {
+          readonly kind: 'retry';
+      }
+    | {
           readonly kind: 'new-session';
           readonly sessionId?: string;
       }
@@ -253,6 +256,8 @@ function parseSlashCommand(line: string, options: ChatLineOptions): ChatLineActi
         // (chat-commands.ts branch arm). Different fields, not a collision.
         case 'continue':
             return parseNoArgumentCommand('continue', parts.tail);
+        case 'retry':
+            return parseNoArgumentCommand('retry', parts.tail);
         case 'interrupt':
             return parseNoArgumentCommand('interrupt', parts.tail);
         case 'exit':
@@ -337,7 +342,7 @@ function parseBashInvocation(commandText: string, kind: 'bash' | 'bash-display-o
 }
 
 function parseNoArgumentCommand(
-    kind: 'resume' | 'continue' | 'sessions' | 'interrupt' | 'exit' | 'undo' | 'redo' | 'help' | 'hotkeys',
+    kind: 'resume' | 'continue' | 'retry' | 'sessions' | 'interrupt' | 'exit' | 'undo' | 'redo' | 'help' | 'hotkeys',
     input: string,
 ): ChatLineAction {
     if (input.length > 0) {
