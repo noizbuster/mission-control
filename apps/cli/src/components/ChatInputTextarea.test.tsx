@@ -2,7 +2,7 @@ import type { TextareaRenderable } from '@opentui/core';
 import type { ReactNode, RefObject } from 'react';
 import { isValidElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { ChatInputTextarea, type ChatInputTextareaProps } from './ChatInputTextarea.js';
+import { ChatInputTextarea, ChatInputTextareaBase, type ChatInputTextareaProps } from './ChatInputTextarea.js';
 
 type TextareaPropShape = {
     readonly onContentChange: () => void;
@@ -33,7 +33,7 @@ function makeMockRef(plainText: string): RefObject<TextareaRenderable | null> {
 }
 
 function mountTextarea(props: ChatInputTextareaProps): TextareaPropShape {
-    const node: ReactNode = ChatInputTextarea(props);
+    const node: ReactNode = ChatInputTextareaBase(props);
     if (!isValidElement(node)) {
         throw new Error('ChatInputTextarea did not return a valid element');
     }
@@ -156,7 +156,7 @@ describe('ChatInputTextarea', () => {
         });
 
         it('omits the placeholder prop entirely when undefined (exactOptionalPropertyTypes)', () => {
-            const node = ChatInputTextarea({
+            const node = ChatInputTextareaBase({
                 ...noopCallbacks,
                 textareaRef: { current: null } as RefObject<TextareaRenderable | null>,
                 focused: true,
@@ -213,6 +213,41 @@ describe('ChatInputTextarea', () => {
             const bindings = mountBindings();
             const backspace = bindings.find((b) => b.name === 'backspace' && !b.shift && !b.ctrl && !b.meta);
             expect(backspace?.action).toBe('backspace');
+        });
+    });
+
+    describe('memo construction', () => {
+        it('does not throw when constructed as a JSX element', () => {
+            expect(() => {
+                void (
+                    <ChatInputTextarea
+                        onSubmit={(): void => {}}
+                        onContentChange={(): void => {}}
+                        onCursorChange={(): void => {}}
+                        onKeyDown={(): void => {}}
+                        onPaste={(): void => {}}
+                        textareaRef={{ current: null } as RefObject<TextareaRenderable | null>}
+                        focused={true}
+                    />
+                );
+            }).not.toThrow();
+        });
+
+        it('does not throw when constructed with a placeholder prop', () => {
+            expect(() => {
+                void (
+                    <ChatInputTextarea
+                        placeholder="type here"
+                        onSubmit={(): void => {}}
+                        onContentChange={(): void => {}}
+                        onCursorChange={(): void => {}}
+                        onKeyDown={(): void => {}}
+                        onPaste={(): void => {}}
+                        textareaRef={{ current: null } as RefObject<TextareaRenderable | null>}
+                        focused={true}
+                    />
+                );
+            }).not.toThrow();
         });
     });
 });

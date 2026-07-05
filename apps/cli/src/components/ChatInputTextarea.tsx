@@ -3,6 +3,7 @@
 import type { KeyEvent, PasteEvent, TextareaRenderable } from '@opentui/core';
 import { defaultTextareaKeyBindings } from '@opentui/core';
 import type * as React from 'react';
+import { memo } from 'react';
 
 export type ChatInputTextareaProps = {
     readonly placeholder?: string;
@@ -16,7 +17,7 @@ export type ChatInputTextareaProps = {
     readonly focused: boolean;
 };
 
-export function ChatInputTextarea({
+export function ChatInputTextareaBase({
     placeholder,
     disabled = false,
     onSubmit,
@@ -68,3 +69,11 @@ export function ChatInputTextarea({
         </box>
     );
 }
+
+/**
+ * Memoized wrapper: skips re-render when all props are unchanged (shallow
+ * compare). Effective because ChatInputArea passes stable handler refs
+ * (`useCallback`) and a stable selector slice, so streaming tokens no longer
+ * re-render the input textarea.
+ */
+export const ChatInputTextarea = memo(ChatInputTextareaBase);

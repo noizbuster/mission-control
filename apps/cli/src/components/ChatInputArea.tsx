@@ -4,7 +4,8 @@ import type { KeyEvent, PasteEvent, ScrollBoxRenderable, TextareaRenderable } fr
 import { decodePasteBytes } from '@opentui/core';
 import type * as React from 'react';
 import { useCallback, useRef, useSyncExternalStore } from 'react';
-import type { ChatStore } from '../commands/chat-store.js';
+import { type ChatSelectorStore, createChatSelectorStore } from '../commands/chat-selector-store.js';
+import type { ChatStore, ChatStoreState } from '../commands/chat-store.js';
 import {
     isSlashCommandMenuOpen,
     isWorkflowCommandMenuOpen,
@@ -30,6 +31,7 @@ import { join } from 'node:path';
 
 const DOUBLE_ESC_WINDOW_MS = 500;
 const DOUBLE_ESC_ACTION_ENV = 'MCTRL_DOUBLE_ESC_ACTION';
+const noopCursorChange = (): void => {};
 
 function resolveDoubleEscAction(): 'tree' | 'fork' | 'interrupt' | 'none' {
     const action = process.env[DOUBLE_ESC_ACTION_ENV];
@@ -37,6 +39,21 @@ function resolveDoubleEscAction(): 'tree' | 'fork' | 'interrupt' | 'none' {
     if (action === 'fork') return 'fork';
     if (action === 'none') return 'none';
     return 'interrupt';
+}
+
+/**
+ * Reads ONLY input-area slices — NOT outputText/messageBlocks, so streaming
+ * tokens never re-render ChatInputArea. Module-level for cache stability
+ * (createChatSelectorStore keys on selector identity).
+ */
+function selectInputAreaSlice(snap: ChatStoreState) {
+    return {
+        inputMirror: snap.inputMirror,
+        generating: snap.generating,
+        overlayMode: snap.overlayMode,
+        fileAutocomplete: snap.fileAutocomplete,
+        menuState: snap.menuState,
+    };
 }
 
 export type ChatInputAreaProps = {
@@ -47,15 +64,20 @@ export type ChatInputAreaProps = {
 };
 
 export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: ChatInputAreaProps): React.ReactNode {
-    const subscribe = useCallback((cb: () => void) => store.subscribe(cb), [store]);
-    const getSnapshot = useCallback(() => store.getSnapshot(), [store]);
-    const snapshot = useSyncExternalStore(subscribe, getSnapshot);
+    const selectorStoreRef = useRef<ChatSelectorStore<ReturnType<typeof selectInputAreaSlice>> | null>(null);
+    if (selectorStoreRef.current === null) {
+        selectorStoreRef.current = createChatSelectorStore(store, selectInputAreaSlice);
+    }
+    const snapshot = useSyncExternalStore(selectorStoreRef.current.subscribe, selectorStoreRef.current.getSnapshot);
     const submittingRef = useRef(false);
     const lastEscRef = useRef<number | undefined>(undefined);
 
-    const plainText = (): string => textareaRef.current?.plainText ?? snapshot.inputMirror;
+    const plainText = useCallback(
+        (): string => textareaRef.current?.plainText ?? snapshot.inputMirror,
+        [textareaRef, snapshot.inputMirror],
+    );
 
-    const applyFileCompletion = (): boolean => {
+    const applyFileCompletion = useCallback((): boolean => {
         const snap = store.getSnapshot();
         const completed = buildFileAutocompleteCompletion(snap.fileAutocomplete);
         const textarea = textareaRef.current;
@@ -69,9 +91,9 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
         textarea.gotoBufferEnd();
         store.setInputMirror(next);
         return true;
-    };
+    }, [store, textareaRef]);
 
-    const handleSubmit = (): void => {
+    const handleSubmit = useCallback((): void => {
         const captured = textareaRef.current?.plainText ?? '';
         if (submittingRef.current) return;
         submittingRef.current = true;
@@ -137,209 +159,218 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
                 }
             }, 0);
         }, 0);
-    };
+    }, [store, textareaRef, applyFileCompletion]);
 
-    const handleContentChange = (text: string): void => {
-        store.setInputMirror(text);
-    };
+    const handleContentChange = useCallback(
+        (text: string): void => {
+            store.setInputMirror(text);
+        },
+        [store],
+    );
 
-    const handleKeyDown = (key: KeyEvent): void => {
-        if (key.name === 'return' && !key.ctrl && !key.meta && !key.shift) {
-            key.preventDefault();
-            handleSubmit();
-            return;
-        }
-
-        const snap = store.getSnapshot();
-
-        if (key.name === 'tab' && snap.fileAutocomplete.open) {
-            key.preventDefault();
-            applyFileCompletion();
-            return;
-        }
-
-        if (key.name === 'escape') {
-            key.preventDefault();
-            if (snap.generating) {
-                lastEscRef.current = undefined;
-                store.sendInterrupt('esc');
+    const handleKeyDown = useCallback(
+        (key: KeyEvent): void => {
+            if (key.name === 'return' && !key.ctrl && !key.meta && !key.shift) {
+                key.preventDefault();
+                handleSubmit();
                 return;
             }
-            if (snap.fileAutocomplete.open) {
-                store.closeMenus();
+
+            const snap = store.getSnapshot();
+
+            if (key.name === 'tab' && snap.fileAutocomplete.open) {
+                key.preventDefault();
+                applyFileCompletion();
                 return;
             }
-            const text = plainText();
-            if (text.length > 0) {
-                textareaRef.current?.clear();
-                store.setInputMirror('');
-                return;
-            }
-            const now = Date.now();
-            const action = resolveDoubleEscAction();
-            if (action === 'none') return;
-            if (lastEscRef.current !== undefined && now - lastEscRef.current < DOUBLE_ESC_WINDOW_MS) {
-                lastEscRef.current = undefined;
-                if (action === 'tree') {
-                    store.sendSlashCommand('/tree');
-                } else if (action === 'fork') {
-                    store.sendSlashCommand('/fork');
-                } else {
+
+            if (key.name === 'escape') {
+                key.preventDefault();
+                if (snap.generating) {
+                    lastEscRef.current = undefined;
                     store.sendInterrupt('esc');
-                }
-                return;
-            }
-            lastEscRef.current = now;
-            return;
-        }
-
-        if (key.ctrl) {
-            if (key.name === 'g') {
-                key.preventDefault();
-                store.toggleAbgOverlay();
-                return;
-            }
-            if (key.name === 'z') {
-                key.preventDefault();
-                if (suspendControls.isWindowsPlatform()) {
-                    store.emitOutput(SUSPEND_UNSUPPORTED_MESSAGE);
-                } else {
-                    suspendControls.sendSuspendSignal();
-                }
-                return;
-            }
-            if (key.name === 'd') {
-                key.preventDefault();
-                if (plainText().length === 0) {
-                    store.sendInterrupt('ctrl-c');
-                } else {
-                    textareaRef.current?.deleteChar();
-                }
-                return;
-            }
-            if (key.name === 't') {
-                key.preventDefault();
-                store.toggleShowThinking();
-                return;
-            }
-            if (key.name === 'o') {
-                key.preventDefault();
-                store.toggleToolOutputExpanded();
-                return;
-            }
-            if (key.name === 'p') {
-                key.preventDefault();
-                store.cycleModel(key.shift ? -1 : 1);
-                return;
-            }
-            if (key.name === 'e') {
-                key.preventDefault();
-                const editor = editorControls.resolveEditor();
-                if (editor === undefined) {
-                    store.emitOutput(NO_EDITOR_MESSAGE);
                     return;
                 }
-                const tempPath = join(tmpdir(), `mctrl-edit-${Date.now()}.md`);
-                writeFileSync(tempPath, plainText(), 'utf-8');
-                try {
-                    editorControls.runEditor(editor, tempPath);
-                    const edited = readFileSync(tempPath, 'utf-8');
-                    textareaRef.current?.setText(edited);
-                    textareaRef.current?.gotoBufferEnd();
-                    store.setInputMirror(edited);
-                } finally {
-                    unlinkSync(tempPath);
+                if (snap.fileAutocomplete.open) {
+                    store.closeMenus();
+                    return;
                 }
+                const text = plainText();
+                if (text.length > 0) {
+                    textareaRef.current?.clear();
+                    store.setInputMirror('');
+                    return;
+                }
+                const now = Date.now();
+                const action = resolveDoubleEscAction();
+                if (action === 'none') return;
+                if (lastEscRef.current !== undefined && now - lastEscRef.current < DOUBLE_ESC_WINDOW_MS) {
+                    lastEscRef.current = undefined;
+                    if (action === 'tree') {
+                        store.sendSlashCommand('/tree');
+                    } else if (action === 'fork') {
+                        store.sendSlashCommand('/fork');
+                    } else {
+                        store.sendInterrupt('esc');
+                    }
+                    return;
+                }
+                lastEscRef.current = now;
                 return;
             }
-            if (key.name === 'r') {
-                key.preventDefault();
-                store.showRename();
-                return;
-            }
-            if (key.name === 'v') {
-                const image = clipboardImageControls.readClipboardImage();
-                if (image !== undefined) {
+
+            if (key.ctrl) {
+                if (key.name === 'g') {
                     key.preventDefault();
-                    textareaRef.current?.insertText(`${image.path} `);
+                    store.toggleAbgOverlay();
                     return;
                 }
+                if (key.name === 'z') {
+                    key.preventDefault();
+                    if (suspendControls.isWindowsPlatform()) {
+                        store.emitOutput(SUSPEND_UNSUPPORTED_MESSAGE);
+                    } else {
+                        suspendControls.sendSuspendSignal();
+                    }
+                    return;
+                }
+                if (key.name === 'd') {
+                    key.preventDefault();
+                    if (plainText().length === 0) {
+                        store.sendInterrupt('ctrl-c');
+                    } else {
+                        textareaRef.current?.deleteChar();
+                    }
+                    return;
+                }
+                if (key.name === 't') {
+                    key.preventDefault();
+                    store.toggleShowThinking();
+                    return;
+                }
+                if (key.name === 'o') {
+                    key.preventDefault();
+                    store.toggleToolOutputExpanded();
+                    return;
+                }
+                if (key.name === 'p') {
+                    key.preventDefault();
+                    store.cycleModel(key.shift ? -1 : 1);
+                    return;
+                }
+                if (key.name === 'e') {
+                    key.preventDefault();
+                    const editor = editorControls.resolveEditor();
+                    if (editor === undefined) {
+                        store.emitOutput(NO_EDITOR_MESSAGE);
+                        return;
+                    }
+                    const tempPath = join(tmpdir(), `mctrl-edit-${Date.now()}.md`);
+                    writeFileSync(tempPath, plainText(), 'utf-8');
+                    try {
+                        editorControls.runEditor(editor, tempPath);
+                        const edited = readFileSync(tempPath, 'utf-8');
+                        textareaRef.current?.setText(edited);
+                        textareaRef.current?.gotoBufferEnd();
+                        store.setInputMirror(edited);
+                    } finally {
+                        unlinkSync(tempPath);
+                    }
+                    return;
+                }
+                if (key.name === 'r') {
+                    key.preventDefault();
+                    store.showRename();
+                    return;
+                }
+                if (key.name === 'v') {
+                    const image = clipboardImageControls.readClipboardImage();
+                    if (image !== undefined) {
+                        key.preventDefault();
+                        textareaRef.current?.insertText(`${image.path} `);
+                        return;
+                    }
+                    key.preventDefault();
+                    store.cycleModelVariant(key.shift ? -1 : 1);
+                    return;
+                }
+            }
+
+            if (key.name === 'home') {
                 key.preventDefault();
-                store.cycleModelVariant(key.shift ? -1 : 1);
+                scrollboxRef.current?.scrollTo(0);
                 return;
             }
-        }
-
-        if (key.name === 'home') {
-            key.preventDefault();
-            scrollboxRef.current?.scrollTo(0);
-            return;
-        }
-        if (key.name === 'end') {
-            key.preventDefault();
-            const scrollHeight = scrollboxRef.current?.scrollHeight ?? 0;
-            scrollboxRef.current?.scrollTo(scrollHeight);
-            return;
-        }
-        if (key.name === 'pageup') {
-            key.preventDefault();
-            const half = Math.floor((process.stdout.rows ?? 24) / 2);
-            scrollboxRef.current?.scrollBy(-half);
-            return;
-        }
-        if (key.name === 'pagedown') {
-            key.preventDefault();
-            const half = Math.floor((process.stdout.rows ?? 24) / 2);
-            scrollboxRef.current?.scrollBy(half);
-            return;
-        }
-
-        if (key.name === 'up' || key.name === 'down') {
-            const direction: 'up' | 'down' = key.name;
-            const buffer = plainText();
-            const cursorOffset = textareaRef.current?.cursorOffset ?? 0;
-            const atBound = direction === 'up' ? cursorOffset === 0 : cursorOffset === buffer.length;
-            const historyOwnsArrows = snapshot.historyNavigation !== null;
-            const slashMenuOpen = isSlashCommandMenuOpen(buffer);
-            const workflowMenuOpen = isWorkflowCommandMenuOpen(buffer);
-            const fileAutoOpen = snap.fileAutocomplete.open;
-
-            const recallHistory =
-                historyOwnsArrows || (atBound && !slashMenuOpen && !workflowMenuOpen && !fileAutoOpen);
-            if (recallHistory) {
+            if (key.name === 'end') {
                 key.preventDefault();
-                const recalled = store.recallHistory(direction, buffer);
-                textareaRef.current?.setText(recalled);
-                textareaRef.current?.gotoBufferEnd();
+                const scrollHeight = scrollboxRef.current?.scrollHeight ?? 0;
+                scrollboxRef.current?.scrollTo(scrollHeight);
+                return;
+            }
+            if (key.name === 'pageup') {
+                key.preventDefault();
+                const half = Math.floor((process.stdout.rows ?? 24) / 2);
+                scrollboxRef.current?.scrollBy(-half);
+                return;
+            }
+            if (key.name === 'pagedown') {
+                key.preventDefault();
+                const half = Math.floor((process.stdout.rows ?? 24) / 2);
+                scrollboxRef.current?.scrollBy(half);
                 return;
             }
 
-            if (slashMenuOpen) {
-                key.preventDefault();
-                store.navigateSlashMenu(direction);
-                return;
-            }
-            if (workflowMenuOpen) {
-                key.preventDefault();
-                store.navigateWorkflowMenu(direction);
-                return;
-            }
-            if (fileAutoOpen) {
-                key.preventDefault();
-                store.navigateFileAutocomplete(direction);
-                return;
-            }
-        }
-    };
+            if (key.name === 'up' || key.name === 'down') {
+                const direction: 'up' | 'down' = key.name;
+                const buffer = plainText();
+                const cursorOffset = textareaRef.current?.cursorOffset ?? 0;
+                const atBound = direction === 'up' ? cursorOffset === 0 : cursorOffset === buffer.length;
+                const historyOwnsArrows = snap.historyNavigation !== null;
+                const slashMenuOpen = isSlashCommandMenuOpen(buffer);
+                const workflowMenuOpen = isWorkflowCommandMenuOpen(buffer);
+                const fileAutoOpen = snap.fileAutocomplete.open;
 
-    const handlePaste = (event: PasteEvent): void => {
-        const text = decodePasteBytes(event.bytes);
-        const decision = evaluatePaste(text);
-        if (decision.kind === 'literal') return;
-        event.preventDefault();
-        const id = store.registerPaste(text);
-        textareaRef.current?.insertText(makeMarker(id, decision.lineCount, decision.charCount));
-    };
+                const recallHistory =
+                    historyOwnsArrows || (atBound && !slashMenuOpen && !workflowMenuOpen && !fileAutoOpen);
+                if (recallHistory) {
+                    key.preventDefault();
+                    const recalled = store.recallHistory(direction, buffer);
+                    textareaRef.current?.setText(recalled);
+                    textareaRef.current?.gotoBufferEnd();
+                    return;
+                }
+
+                if (slashMenuOpen) {
+                    key.preventDefault();
+                    store.navigateSlashMenu(direction);
+                    return;
+                }
+                if (workflowMenuOpen) {
+                    key.preventDefault();
+                    store.navigateWorkflowMenu(direction);
+                    return;
+                }
+                if (fileAutoOpen) {
+                    key.preventDefault();
+                    store.navigateFileAutocomplete(direction);
+                    return;
+                }
+            }
+        },
+        [store, textareaRef, scrollboxRef, plainText, applyFileCompletion, handleSubmit],
+    );
+
+    const handlePaste = useCallback(
+        (event: PasteEvent): void => {
+            const text = decodePasteBytes(event.bytes);
+            const decision = evaluatePaste(text);
+            if (decision.kind === 'literal') return;
+            event.preventDefault();
+            const id = store.registerPaste(text);
+            textareaRef.current?.insertText(makeMarker(id, decision.lineCount, decision.charCount));
+        },
+        [store, textareaRef],
+    );
 
     return (
         <box flexDirection="column" flexShrink={0}>
@@ -348,7 +379,7 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
                 focused={focused}
                 onSubmit={handleSubmit}
                 onContentChange={handleContentChange}
-                onCursorChange={() => {}}
+                onCursorChange={noopCursorChange}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 placeholder={
