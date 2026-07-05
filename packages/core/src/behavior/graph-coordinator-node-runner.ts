@@ -301,15 +301,22 @@ function isToolApprovalBlockedError(error: unknown): boolean {
  * A denial (`approval_denied`) is intentionally NOT terminal — the LLMActor surfaces it to the
  * model so the run can adapt instead of dying on the first denied tool.
  *
- * Also recognizes `provider_aborted` (an interrupt/abort) as terminal — without this, the graph
- * would retry the model call up to `maxAttempts` times before surfacing the interrupt, which hangs
- * interrupt-aware tests (and wastes budget on a run the user already canceled).
+ * `provider_aborted` is intentionally NOT terminal here. A provider-side stream drop (network
+ * blip, the server closing the connection mid-flight) surfaces as `provider_aborted` even when
+ * the user did NOT cancel — classifying it as terminal killed the whole graph on attempt 1 of
+ * `maxAttempts` whenever a provider stream dropped. User-initiated interrupts are handled
+ * separately and do NOT depend on this classification: the graph coordinator short-circuits on
+ * `abortSignal.aborted` at the top of its loop (prompt cancellation, no wasted retries), and the
+ * graph turn runner maps any aborted run to `interrupted` regardless of how the graph settled.
+ * With `provider_aborted` retryable here, a transient provider stream drop retries up to
+ * `maxAttempts` like any other retryable failure; a persistent drop still fails via
+ * `node_retry_exhausted`.
  */
 function isTerminalToolFailureError(error: unknown): boolean {
     if (typeof error !== 'object' || error === null || !('code' in error)) {
         return false;
     }
-    return error.code === 'tool_settlement_failed' || error.code === 'provider_aborted';
+    return error.code === 'tool_settlement_failed';
 }
 
 /**

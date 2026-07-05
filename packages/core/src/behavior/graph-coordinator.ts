@@ -21,6 +21,19 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
 
     state.events.push(graphEvent('graph.started', graph.id, input, 'ABG graph started'));
     while (state.queuedNodeIds.length > 0) {
+        // `provider_aborted` is retryable in isTerminalToolFailureError, so without this gate a
+        // user cancel would re-enqueue the node up to maxAttempts before the loop noticed. The
+        // turn runner maps any aborted run to `interrupted` regardless of how we settle here.
+        if (input.abortSignal?.aborted === true) {
+            return failGraph(
+                graph.id,
+                input,
+                state.events,
+                'provider_aborted',
+                'ABG graph aborted by run-owner signal',
+                { code: 'provider_aborted', message: 'run-owner signal aborted', retryable: false },
+            );
+        }
         if (state.totalNodeRuns >= state.maxNodeRuns) {
             return failGraph(graph.id, input, state.events, 'graph_loop_limit', 'ABG graph loop limit exceeded');
         }

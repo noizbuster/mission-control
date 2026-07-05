@@ -182,6 +182,83 @@ describe('bounded ABG graph coordinator', () => {
         expect(result.events.some((e) => e.type === 'graph.completed')).toBe(true);
     });
 
+    it('retries a provider_aborted failure up to the cap instead of failing terminally (no abort signal)', async () => {
+        const registry = createAbgNodeRegistry();
+        registry.register('always-provider-aborted', failTimesBeforeSuccessWithCode(Number.POSITIVE_INFINITY, 'provider_aborted'));
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'provider-aborted-retry',
+                entryNodeId: 'flaky',
+                defaults: { retryLimit: 2 },
+                nodes: [{ id: 'flaky', kind: 'llm', implementation: 'always-provider-aborted' }],
+                edges: [],
+                rules: [],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('failed');
+        expect(attemptsFor(result.events, 'flaky')).toEqual([1, 2, 3]);
+        expect(result.events.at(-1)).toMatchObject({
+            type: 'graph.failed',
+            abg: {
+                error: {
+                    code: 'node_retry_exhausted',
+                },
+            },
+        });
+    });
+
+    it('retries a provider_aborted failure and completes when the retry succeeds (transient stream drop)', async () => {
+        const registry = createAbgNodeRegistry();
+        registry.register('abort-then-success', failTimesBeforeSuccessWithCode(1, 'provider_aborted'));
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'provider-aborted-transient',
+                entryNodeId: 'flaky',
+                defaults: { retryLimit: 2 },
+                nodes: [{ id: 'flaky', kind: 'llm', implementation: 'abort-then-success' }],
+                edges: [],
+                rules: [],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('completed');
+        expect(attemptsFor(result.events, 'flaky')).toEqual([1, 2]);
+    });
+
+    it('short-circuits as provider_aborted when the run-owner abort signal is already set', async () => {
+        const registry = createAbgNodeRegistry();
+        registry.register('always-fail', failTimesBeforeSuccess(Number.POSITIVE_INFINITY));
+        const controller = new AbortController();
+        controller.abort();
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            abortSignal: controller.signal,
+            graph: {
+                id: 'aborted-before-start',
+                entryNodeId: 'doomed',
+                defaults: { retryLimit: 2 },
+                nodes: [{ id: 'doomed', kind: 'action', implementation: 'always-fail' }],
+                edges: [],
+                rules: [],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('failed');
+        expect(result.terminalError).toMatchObject({ code: 'provider_aborted' });
+    });
+
     it('records requires-approval policies as blocked graph state', async () => {
         // When
         const result = await runAbgGraph({
@@ -243,6 +320,19 @@ function failTimesBeforeSuccess(failures: number) {
         yield { type: 'started', graphId: context.graphId, nodeId: node.id };
         if (runs <= failures) {
             yield { type: 'failure', graphId: context.graphId, nodeId: node.id, error: { code: 'temporary' } };
+            return;
+        }
+        yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+    };
+}
+
+function failTimesBeforeSuccessWithCode(failures: number, code: string) {
+    let runs = 0;
+    return async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+        runs += 1;
+        yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+        if (runs <= failures) {
+            yield { type: 'failure', graphId: context.graphId, nodeId: node.id, error: { code } };
             return;
         }
         yield { type: 'success', graphId: context.graphId, nodeId: node.id };
