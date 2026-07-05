@@ -294,6 +294,48 @@ describe('ProviderTurnRunner', () => {
         expect(provider.attemptCount()).toBe(2);
     });
 
+    it('retries a thrown transient provider error (fetch/ECONNRESET) and completes on the next attempt', async () => {
+        let attempt = 0;
+        const provider: ProviderAdapter = {
+            streamTurn: (request) => {
+                return (async function* stream() {
+                    attempt += 1;
+                    if (attempt === 1) {
+                        throw new Error('fetch failed: ECONNRESET');
+                    }
+                    yield {
+                        kind: 'response_completed',
+                        requestId: request.requestId,
+                        sequence: 0,
+                        message: { messageId: `message_${request.turnId}`, role: 'assistant', content: 'recovered' },
+                        finishReason: 'stop',
+                    } as ProviderStreamChunk;
+                })();
+            },
+        };
+        const runner = new ProviderTurnRunner({ provider, retryLimit: 1 });
+
+        const result = await runner.runTurn(turnInput('session_thrown_retry', 'request_thrown_retry'));
+
+        expect(result.status).toBe('completed');
+        expect(result.attempts).toBe(2);
+    });
+
+    it('retries a premature stream close (done without response_completed) up to the cap then fails as unknown', async () => {
+        const provider: ProviderAdapter = {
+            streamTurn: () => (async function* stream() {})(),
+        };
+        const runner = new ProviderTurnRunner({ provider, retryLimit: 1 });
+
+        const result = await runner.runTurn(turnInput('session_premature_close', 'request_premature'));
+
+        expect(result.status).toBe('failed');
+        expect(result.attempts).toBe(2);
+        if (result.status === 'failed') {
+            expect(result.error.code).toBe('unknown');
+        }
+    });
+
     it('retries immediately on the first retry then applies exponential backoff up to the cap', async () => {
         const provider = createDeterministicProvider([
             [

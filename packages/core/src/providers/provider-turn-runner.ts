@@ -254,11 +254,13 @@ function toolLoopLimitError(limit: number): ProtocolError {
     };
 }
 
+// Retryable: `unknown` is the carrier for transient network/stream drops (thrown fetch errors,
+// premature stream close) — the case retries exist for. `attempt === maxAttempts` still bounds it.
 function unknownProviderError(message: string): ProtocolError {
     return {
         code: 'unknown',
         message,
-        retryable: false,
+        retryable: true,
     };
 }
 
