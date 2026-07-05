@@ -147,14 +147,16 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
     );
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
-            <text>
+            <text selectable>
                 <span attributes={TextAttributes.DIM}>{provider}</span>{' '}
                 <span attributes={TextAttributes.BOLD}>{model}</span>
                 {variantLabel !== undefined ? ` - ${variantLabel}` : null}
             </text>
-            <text> </text>
-            <text attributes={TextAttributes.DIM}>{'\u2500'.repeat(fillCount)}</text>
-            {contextLabel !== undefined ? <text>{` ${contextLabel}`}</text> : null}
+            <text selectable> </text>
+            <text selectable attributes={TextAttributes.DIM}>
+                {'\u2500'.repeat(fillCount)}
+            </text>
+            {contextLabel !== undefined ? <text selectable>{` ${contextLabel}`}</text> : null}
         </box>
     );
 }
@@ -177,15 +179,18 @@ export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
             <text
+                selectable
                 {...(approvalColor !== undefined ? { fg: approvalColor } : {})}
                 {...(dimApproval ? { attributes: TextAttributes.DIM } : {})}
             >
                 {approvalLabel}
             </text>
-            <text> </text>
-            <text attributes={TextAttributes.DIM}>{'\u2500'.repeat(fillCount)}</text>
-            {projectLabel !== undefined ? <text>{` ${projectLabel}`}</text> : null}
-            {sessionLabel !== undefined ? <text>{` ${sessionLabel}`}</text> : null}
+            <text selectable> </text>
+            <text selectable attributes={TextAttributes.DIM}>
+                {'\u2500'.repeat(fillCount)}
+            </text>
+            {projectLabel !== undefined ? <text selectable>{` ${projectLabel}`}</text> : null}
+            {sessionLabel !== undefined ? <text selectable>{` ${sessionLabel}`}</text> : null}
         </box>
     );
 }
