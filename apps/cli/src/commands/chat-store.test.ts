@@ -118,6 +118,34 @@ describe('chat-store — emitOutput', () => {
         expect(listener).toHaveBeenCalledTimes(2);
         expect(store.getOutput()).toBe('ab');
     });
+
+    it('coalesces rapid calls at the 50ms window while generating=true (not 16ms)', () => {
+        const store = createChatStore();
+        store.setGenerating(true);
+        const listener = vi.fn();
+        store.subscribe(listener);
+        for (let i = 0; i < 50; i++) {
+            store.emitOutput('x');
+        }
+        expect(listener).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(16);
+        expect(listener).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(34);
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(store.getOutput()).toBe('x'.repeat(50));
+    });
+
+    it('coalesces rapid calls at the 16ms window while generating=false (idle)', () => {
+        const store = createChatStore();
+        const listener = vi.fn();
+        store.subscribe(listener);
+        store.emitOutput('a');
+        vi.advanceTimersByTime(15);
+        expect(listener).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(1);
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(store.getOutput()).toBe('a');
+    });
 });
 
 describe('chat-store — replaceOutputText / getOutput', () => {

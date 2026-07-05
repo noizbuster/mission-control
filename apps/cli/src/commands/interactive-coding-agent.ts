@@ -586,7 +586,7 @@ export function interactiveGraphStreamSignal(
             }
         } finally {
             // Observers MUST stay sync `(signal) => void`: an async wrap adds a microtask hop per signal
-            // and breaks the 33ms coalescing guarantee. Non-throwing (Metis 4.1): errors logged +
+            // and breaks the emit-coalesce guarantee (50ms during streaming, 16ms when idle). Non-throwing (Metis 4.1): errors logged +
             // swallowed so a faulty observer cannot reject the awaited onSignal tap. Runs in `finally`
             // so early returns in the render body above never skip the fan-out.
             for (const observer of extraObservers) {

@@ -243,6 +243,9 @@ export type AbgOverlayPrefsSnapshot = {
 
 const WHITESPACE_PATTERN = /\s/u;
 const EMIT_COALESCE_MS = 16;
+// 20fps visible update during streaming; halves render frequency vs 16ms to keep
+// the main thread responsive for keyboard input while tokens pour in.
+const STREAMING_EMIT_COALESCE_MS = 50;
 const CURSOR_UP = '\u001b[A';
 const CURSOR_DOWN = '\u001b[B';
 const APPROVAL_LEVEL_DEFAULT_INDEX = 1;
@@ -406,10 +409,11 @@ export class ChatStore {
         this.state.outputText += text;
         if (!this.emitScheduled) {
             this.emitScheduled = true;
+            const ms = this.state.generating ? STREAMING_EMIT_COALESCE_MS : EMIT_COALESCE_MS;
             setTimeout(() => {
                 this.emitScheduled = false;
                 this.publish();
-            }, EMIT_COALESCE_MS);
+            }, ms);
         }
     }
 
