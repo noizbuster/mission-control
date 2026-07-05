@@ -13,6 +13,7 @@ import {
 import {
     ALLOWED_RUN_TRANSITIONS,
     createRun,
+    findMostRecentFailedRun,
     listRunsForMission,
     MissionRunTransitionError,
     type RunPatch,
@@ -175,6 +176,47 @@ describe('mission-run lifecycle', () => {
         expect(failedRun.status).toBe('failed');
         expect(failedRun.terminalReason).toBe('provider timeout');
         expect(failedRun.endedAt).toBeDefined();
+    });
+
+    it('persists the initiating prompt on the Run so /retry can recover it', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const mission = materializeMission(makeTestWorkflowSpec());
+        await createMission(root, mission);
+
+        const runningRun = await startRun(root, mission.id, 'fix the @-autocomplete bug');
+
+        const reloaded = await readRun(root, runningRun.id);
+        expect(reloaded.prompt).toBe('fix the @-autocomplete bug');
+    });
+
+    it('findMostRecentFailedRun returns the latest failed run by endedAt', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const mission = materializeMission(makeTestWorkflowSpec());
+        await createMission(root, mission);
+
+        const first = await startRun(root, mission.id, 'first attempt');
+        await failRun(root, first.id, 'boom');
+
+        const second = await startRun(root, mission.id, 'second attempt');
+        await failRun(root, second.id, 'boom again');
+
+        const latest = await findMostRecentFailedRun(root);
+        expect(latest).toBeDefined();
+        expect(latest?.id).toBe(second.id);
+        expect(latest?.prompt).toBe('second attempt');
+    });
+
+    it('findMostRecentFailedRun ignores completed runs and returns undefined when none failed', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const mission = materializeMission(makeTestWorkflowSpec());
+        await createMission(root, mission);
+
+        expect(await findMostRecentFailedRun(root)).toBeUndefined();
+
+        const run = await startRun(root, mission.id, 'succeeds');
+        await completeRun(root, run.id);
+
+        expect(await findMostRecentFailedRun(root)).toBeUndefined();
     });
 
     it('throws MissionRunTransitionError on invalid transition (pending → completed)', async () => {

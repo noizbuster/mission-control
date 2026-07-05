@@ -216,6 +216,49 @@ export function assertRunTransition(from: RunStatus, to: RunStatus): void {
     }
 }
 
+/**
+ * Find the most recently-ended `failed` Run. Used by `/retry` to re-invoke the last failed
+ * workflow run. Scans every run file; returns the failed run with the latest `endedAt`.
+ * Runs without `endedAt` sort before those with it. Returns `undefined` when there are no
+ * failed runs (or no runs directory).
+ */
+export async function findMostRecentFailedRun(root: string): Promise<Run | undefined> {
+    const dir = omoFilePath(root, RUNS_DIR);
+    let entries: readonly string[];
+    try {
+        entries = await readdir(dir);
+    } catch (error: unknown) {
+        if (isErrorCode(error, 'ENOENT')) {
+            return undefined;
+        }
+        throw error;
+    }
+    let latest: Run | undefined;
+    for (const entry of entries) {
+        if (!entry.endsWith(JSON_EXTENSION)) continue;
+        const runId = entry.slice(0, -JSON_EXTENSION.length);
+        const run = await readRun(root, runId).catch((error: unknown) => {
+            if (error instanceof RunStoreError && (error.code === 'run_missing' || error.code === 'run_corrupt')) {
+                return undefined;
+            }
+            throw error;
+        });
+        if (run === undefined || run.status !== 'failed') continue;
+        if (latest === undefined || compareEndedAt(run, latest) > 0) {
+            latest = run;
+        }
+    }
+    return latest;
+}
+
+function compareEndedAt(a: Run, b: Run): number {
+    const aTime = a.endedAt ?? '';
+    const bTime = b.endedAt ?? '';
+    if (aTime < bTime) return -1;
+    if (aTime > bTime) return 1;
+    return 0;
+}
+
 export async function appendChildSession(root: string, runId: string, childSessionId: string): Promise<Run> {
     const existing = await readRun(root, runId);
     const existingChildren = existing.childSessionIds ?? [];

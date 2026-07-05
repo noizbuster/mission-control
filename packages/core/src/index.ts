@@ -272,6 +272,7 @@ export {
     appendChildSession,
     assertRunTransition,
     createRun,
+    findMostRecentFailedRun,
     listRunsForMission,
     readRun,
     recordTaskRetry,

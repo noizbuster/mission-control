@@ -65,17 +65,11 @@ export function materializeMission(workflowSpec: WorkflowSpec): Mission {
 
 /**
  * Start a Run for `missionId`. Creates the Run in `pending`, transitions it to
- * `running` (enforcing the state machine), links a fresh `sessionId`, and
- * transitions the parent Mission to `active`. The `prompt` parameter is the
- * initiating user prompt — accepted for forward compatibility with session
- * admission wiring (a later task); not persisted in the Run record itself.
+ * `running` (enforcing the state machine), links a fresh `sessionId`, persists
+ * the initiating `prompt` (so `/retry` can re-invoke it), and transitions the
+ * parent Mission to `active`.
  */
-export async function startRun(
-    root: string,
-    missionId: string,
-    // biome-ignore lint/correctness/noUnusedFunctionParameters: reserved for session admission wiring (Task 1.5)
-    prompt: string,
-): Promise<Run> {
+export async function startRun(root: string, missionId: string, prompt: string): Promise<Run> {
     const mission = await readMission(root, missionId);
     const sessionId = randomUUID();
 
@@ -84,6 +78,7 @@ export async function startRun(
         missionId: mission.id,
         status: 'pending' as RunStatus,
         sessionId,
+        prompt,
     });
     await createRun(root, pendingRun);
 
