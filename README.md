@@ -394,13 +394,14 @@ Noninteractive JSON/JSONL run states:
 - `--jsonl` persists a replayable session log; `--json` emits transient JSON Lines without persistence.
 - Noninteractive runs do not auto-approve effectful tools; they block and wait for external approval.
 
-Session export, import, compaction, and stats:
+Session export, import, compaction, deletion, and stats:
 
 - `mctrl session export <id> <path>` writes a checksummed session archive file with manifest, events, and SHA-256 checksum.
 - `mctrl session import <path>` imports a session archive into a new durable session.
 - `mctrl session list` lists sessions with lock status, event counts, message counts, and trust status.
 - `mctrl session show <id>` shows the session snapshot, approvals, tool outcomes, coding steps, and diagnostics.
 - `mctrl session replay <id> --jsonl` replays durable events and coding steps as JSON Lines.
+- `mctrl session delete <id> [--force]` deletes a session and all of its descendant subagent/child sessions. Each session's JSONL log, lock file, and index entries are removed. The command refuses to delete any session in the tree that has an active live lock unless `--force` is passed; stale and corrupt locks are cleaned up automatically.
 - `/compact` in interactive chat summarizes older session history into a durable compaction boundary event, reducing replay context while preserving the session tree.
 
 Desktop scope:

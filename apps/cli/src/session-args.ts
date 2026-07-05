@@ -59,6 +59,24 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
             }
             return { ...createSessionArgs('session-import'), filePath };
         }
+        case 'delete': {
+            const sessionId = argv[1];
+            if (sessionId === undefined) {
+                throw new Error('session delete requires a session id');
+            }
+            const force = argv[2] === '--force';
+            if (!force && argv[2] !== undefined) {
+                throw new Error(`Unsupported session delete argument: ${argv[2]}`);
+            }
+            if (force && argv[3] !== undefined) {
+                throw new Error(`Unsupported session delete argument: ${argv[3]}`);
+            }
+            return {
+                ...createSessionArgs('session-delete'),
+                sessionId,
+                ...(force ? { force: true } : {}),
+            };
+        }
         default:
             throw new Error(`Unsupported session command: ${command ?? ''}`);
     }

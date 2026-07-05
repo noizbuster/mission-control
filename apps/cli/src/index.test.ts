@@ -41,6 +41,7 @@ describe('CLI entrypoint', () => {
         expect(help).toContain('mctrl session export session_demo /tmp/session_demo.mctrl-session.json');
         expect(help).toContain('mctrl session import /tmp/session_demo.mctrl-session.json');
         expect(help).toContain('mctrl session replay session_demo --jsonl');
+        expect(help).toContain('mctrl session delete session_demo [--force]');
         expect(help).toContain('--version');
         expect(help).toContain('--help');
         expect(help).toContain('mctrl --no-tui --provider local --model local-echo');

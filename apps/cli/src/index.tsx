@@ -84,6 +84,7 @@ export function createHelpText(): string {
         '  mctrl session export session_demo /tmp/session_demo.mctrl-session.json',
         '  mctrl session import /tmp/session_demo.mctrl-session.json',
         '  mctrl session replay session_demo --jsonl',
+        '  mctrl session delete session_demo [--force]',
         '  mctrl auth login --provider local --api-key <key>',
         '  mctrl auth login --provider anthropic --api-key <key>',
         '  mctrl auth login --provider openai --method oauth-headless',
@@ -134,6 +135,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
         case 'session-export':
         case 'session-import':
         case 'session-replay':
+        case 'session-delete':
             process.stdout.write(await runSessionCommand(args));
             return;
         case 'mcp-add':
