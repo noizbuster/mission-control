@@ -8,11 +8,13 @@ import {
     discoverSkills,
     ensureOmoDirs,
     failRun,
+    findMostRecentFailedRun,
     formatSkillInstructions,
     listMissions,
     listRunsForMission,
     loadSkillBody,
     materializeMission,
+    readMission,
     resolveOmoRoot,
     resolveUserConfigDir,
     type Skill,
@@ -141,15 +143,15 @@ export async function runChatAction(
         case 'bash-display-only':
             return runBashDisplayOnlyAction(chatOutput, currentModelProviderSelection, coding, action);
         case 'queue':
-            if (coding.sessionId === undefined && coding.activeTurn === undefined) {
-                chatOutput.write('Start a prompt first (no active session).\n');
+            if (coding.activeTurn === undefined) {
+                chatOutput.write('No active run to queue behind — type the prompt normally to start a new run.\n');
                 return actionResult(currentModelProviderSelection);
             }
             emitPromptAdmission(chatOutput, coding, 'queue', action.prompt);
             return actionResult(currentModelProviderSelection, coding.activeTurn);
         case 'steer':
-            if (coding.sessionId === undefined && coding.activeTurn === undefined) {
-                chatOutput.write('Start a prompt first (no active session).\n');
+            if (coding.activeTurn === undefined) {
+                chatOutput.write('No active run to steer — type the prompt normally to start a new run.\n');
                 return actionResult(currentModelProviderSelection);
             }
             emitPromptAdmission(chatOutput, coding, 'steer', action.prompt);
@@ -328,6 +330,8 @@ export async function runChatAction(
             return runSessionPickerAction(chatOutput, currentModelProviderSelection, coding);
         case 'continue':
             return runApprovalResumeAction(chatOutput, currentModelProviderSelection, coding);
+        case 'retry':
+            return runRetryAction(runtime, chatOutput, currentModelProviderSelection, coding);
         default:
             return assertNever(action);
     }
@@ -663,10 +667,10 @@ async function runApprovalResumeAction(
         coding.workspaceRoot === undefined ||
         coding.sessionStore === undefined
     ) {
-        emitResumeRequest(chatOutput, coding, 'idle');
+        chatOutput.write('Nothing to resume — no provider/session configured. Send a prompt to start a run.\n');
         return actionResult(modelProviderSelection);
     }
-    chatOutput.write(`Resuming blocked run for ${coding.sessionId}\n`);
+    chatOutput.write(`Resuming run for ${coding.sessionId}\n`);
     return actionResult(
         modelProviderSelection,
         await resumeCodingAgentTurn({
@@ -691,6 +695,65 @@ async function runApprovalResumeAction(
             ...(coding.authStore !== undefined ? { authStore: coding.authStore } : {}),
             ...(coding.profileName !== undefined ? { profileName: coding.profileName } : {}),
         }),
+    );
+}
+
+// `/retry` re-runs the last FAILED workflow with its original prompt; `/continue` only resumes a run
+// blocked on approval. The prompt is recovered from the Run record (startRun persists it).
+async function runRetryAction(
+    runtime: AgentRuntime,
+    chatOutput: ChatOutput,
+    modelProviderSelection: ModelProviderSelection,
+    coding: CodingActionContext,
+): Promise<ChatActionResult> {
+    if (coding.activeTurn !== undefined) {
+        chatOutput.write('A turn is already running. Interrupt it first (/interrupt or Ctrl+C twice).\n');
+        return actionResult(modelProviderSelection, coding.activeTurn);
+    }
+    if (coding.workspaceRoot === undefined || coding.workflowRegistry === undefined) {
+        chatOutput.write('Retry unavailable: no workspace or workflow registry.\n');
+        return actionResult(modelProviderSelection);
+    }
+    let omoRoot: string;
+    try {
+        omoRoot = await resolveOmoRoot(coding.workspaceRoot);
+    } catch {
+        chatOutput.write('Retry unavailable: no .omo root for this workspace.\n');
+        return actionResult(modelProviderSelection);
+    }
+    const failed = await findMostRecentFailedRun(omoRoot);
+    if (failed === undefined) {
+        chatOutput.write('No failed run to retry. Type a prompt or use #<workflow> {prompt} to start a new run.\n');
+        return actionResult(modelProviderSelection);
+    }
+    if (failed.prompt === undefined) {
+        chatOutput.write(
+            `Last failed run (${failed.id.slice(0, 8)}) has no persisted prompt — it predates /retry support. Re-invoke it manually.\n`,
+        );
+        return actionResult(modelProviderSelection);
+    }
+    const mission = await readMission(omoRoot, failed.missionId).catch(() => undefined);
+    const workflowName = mission?.workflowName;
+    if (workflowName === undefined) {
+        chatOutput.write(
+            `Last failed run (${failed.id.slice(0, 8)}) has no linked workflow. Re-invoke it manually.\n`,
+        );
+        return actionResult(modelProviderSelection);
+    }
+    const spec = coding.workflowRegistry.lookup(workflowName);
+    if (spec === undefined) {
+        chatOutput.write(
+            `Workflow "${workflowName}" from the last failed run is no longer available. Type a new prompt.\n`,
+        );
+        return actionResult(modelProviderSelection);
+    }
+    chatOutput.write(`Retrying last failed workflow "${workflowName}" with its original prompt.\n`);
+    return runWorkflowAction(
+        runtime,
+        chatOutput,
+        { kind: 'workflow', name: workflowName, prompt: failed.prompt },
+        modelProviderSelection,
+        coding,
     );
 }
 

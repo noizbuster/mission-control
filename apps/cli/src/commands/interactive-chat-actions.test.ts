@@ -954,7 +954,7 @@ describe('interactive chat actions', () => {
                 expect(output.getOutput()).toContain('Resume requested for session_x');
             });
 
-            it('writes a resume request when idle without a full session', async () => {
+            it('reports honestly when idle without a full session (nothing to resume)', async () => {
                 const runtime = new AgentRuntime();
                 const output = createOutput();
                 const emitEvent = vi.fn();
@@ -969,7 +969,8 @@ describe('interactive chat actions', () => {
                     createCodingContext({ emitEvent, sessionId: 'session_x' }),
                 );
 
-                expect(output.getOutput()).toContain('Resume requested for session_x');
+                expect(output.getOutput()).toContain('Nothing to resume');
+                expect(emitEvent).not.toHaveBeenCalled();
             });
         });
 
@@ -1023,7 +1024,7 @@ describe('interactive chat actions', () => {
                 expect(output.getOutput()).toContain('No active session yet — send a prompt first.');
             });
 
-            it('refuses /queue in a session-less idle state without enqueueing', async () => {
+            it('refuses /queue without an active run without enqueueing', async () => {
                 const runtime = new AgentRuntime();
                 const output = createOutput();
                 const emitEvent = vi.fn();
@@ -1043,10 +1044,10 @@ describe('interactive chat actions', () => {
                 );
 
                 expect(emitEvent).not.toHaveBeenCalled();
-                expect(output.getOutput()).toContain('Start a prompt first (no active session).');
+                expect(output.getOutput()).toContain('No active run to queue behind');
             });
 
-            it('refuses /steer in a session-less idle state without enqueueing', async () => {
+            it('refuses /steer without an active run without enqueueing', async () => {
                 const runtime = new AgentRuntime();
                 const output = createOutput();
                 const emitEvent = vi.fn();
@@ -1066,7 +1067,7 @@ describe('interactive chat actions', () => {
                 );
 
                 expect(emitEvent).not.toHaveBeenCalled();
-                expect(output.getOutput()).toContain('Start a prompt first (no active session).');
+                expect(output.getOutput()).toContain('No active run to steer');
             });
 
             it('still enqueues /queue when an active turn exists', async () => {

@@ -44,7 +44,7 @@ describe('runAgent interactive resume for blocked runs', () => {
             },
         });
 
-        expect(output).toContain('Resuming blocked run for session_cli_resume_blocked');
+        expect(output).toContain('Resuming run for session_cli_resume_blocked');
         expect(output).toContain('Assistant: final after applied patch');
         expect(events).toContainEqual(
             expect.objectContaining({

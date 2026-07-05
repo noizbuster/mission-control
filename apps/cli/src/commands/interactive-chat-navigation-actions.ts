@@ -13,6 +13,10 @@ export function runBranchContinueAction(
     parentMessageId: string,
     prompt: string,
 ): ChatActionResult {
+    if (coding.activeTurn === undefined) {
+        chatOutput.write('No active run to branch-continue into — start a prompt first.\n');
+        return actionResult(modelProviderSelection);
+    }
     emitPromptAdmission(chatOutput, coding, 'steer', prompt, parentMessageId);
     chatOutput.write(`Branch continue from ${parentMessageId}: ${prompt}\n`);
     return actionResult(modelProviderSelection, coding.activeTurn);
