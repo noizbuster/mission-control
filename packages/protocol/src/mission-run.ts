@@ -107,6 +107,8 @@ export const RunSchema = z.object({
     /** Links this Run to its durable event timeline (the JSONL session store). */
     sessionId: z.string().min(1).optional(),
     graphId: z.string().min(1).optional(),
+    /** The initiating user prompt for this Run, persisted so `/retry` can re-invoke it. */
+    prompt: z.string().optional(),
     /** Resolved model the Run executed with (snapshot of the Mission's model selection). */
     model: AbgNodeModelOptionsSchema.optional(),
     cost: RunCostSchema.default(() => ({ cents: 0, inputTokens: 0, outputTokens: 0, modelCalls: 0 })),
