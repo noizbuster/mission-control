@@ -4,9 +4,9 @@ import { type ScrollBoxRenderable, TextAttributes, type TextareaRenderable } fro
 import { useKeymap } from '@opentui/keymap/react';
 import { useKeyboard, useRenderer } from '@opentui/react';
 import type * as React from 'react';
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { AbgOverlayController } from '../commands/abg-overlay-controller.js';
-import { extractLastAssistantText, parseMessageBlocks } from '../commands/chat-blocks.js';
+import { type ChatBlock, extractLastAssistantText, parseMessageBlocks } from '../commands/chat-blocks.js';
 import type { ChatStore } from '../commands/chat-store.js';
 import {
     resolveSlashCommandMenuInsertText,
@@ -48,6 +48,36 @@ import { Toast } from './Toast.js';
 import { WelcomeScreen } from './WelcomeScreen.js';
 import { useSpinnerFrame } from './spinner.js';
 import { basename } from 'node:path';
+
+/**
+ * Reuse previous block references when content (kind + element-wise lines) is unchanged.
+ * Precondition for React.memo on MessageBlock: without reference stability, memo never skips.
+ */
+export function preserveBlockReferences(fresh: readonly ChatBlock[], prev: readonly ChatBlock[]): readonly ChatBlock[] {
+    return fresh.map((block, i) => {
+        const old = prev[i];
+        if (
+            old !== undefined &&
+            old.kind === block.kind &&
+            old.lines.length === block.lines.length &&
+            old.lines.every((line, j) => line === block.lines[j])
+        ) {
+            return old;
+        }
+        return block;
+    });
+}
+
+// Two memos: outer avoids re-parsing when outputText is stable (overlay toggles);
+// inner avoids re-comparing when the parse result is stable. prevRef holds the last
+// stable result for the next comparison.
+function useStableMessageBlocks(outputText: string): readonly ChatBlock[] {
+    const prevRef = useRef<readonly ChatBlock[]>([]);
+    const fresh = useMemo(() => parseMessageBlocks(outputText), [outputText]);
+    const stable = useMemo(() => preserveBlockReferences(fresh, prevRef.current), [fresh]);
+    prevRef.current = stable;
+    return stable;
+}
 
 function AgentSpinner({ text }: { readonly text: string }): React.ReactNode {
     const { glyph } = useSpinnerFrame();
@@ -514,7 +544,7 @@ export function ChatApp({
         };
     }, [keymap, store]);
 
-    const messageBlocks = parseMessageBlocks(snapshot.outputText);
+    const messageBlocks = useStableMessageBlocks(snapshot.outputText);
     const overlayActive = snapshot.overlayMode !== 'none';
     const showWelcome = welcomeData !== undefined && snapshot.outputText === '' && !overlayActive;
 

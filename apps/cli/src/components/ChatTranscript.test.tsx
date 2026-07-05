@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
 import { MacOSScrollAccel, type ScrollBoxRenderable } from '@opentui/core';
 import type { RefObject } from 'react';
-import { chatTranscriptScrollOptions, ChatTranscriptScrollbox } from './ChatTranscript.js';
+import { describe, expect, it } from 'vitest';
+import { ChatTranscriptScrollbox, chatTranscriptScrollOptions, MarkdownPanel, MessageBlock } from './ChatTranscript.js';
+import { darkTheme } from './markdown/theme.js';
 
 describe('chatTranscriptScrollOptions', () => {
     it('builds the native scrollbox config with sticky-bottom macOS acceleration', () => {
@@ -53,6 +54,47 @@ describe('ChatTranscriptScrollbox component', () => {
                     {null}
                 </ChatTranscriptScrollbox>
             );
+        }).not.toThrow();
+    });
+});
+
+describe('MessageBlock component (memoized)', () => {
+    it('does not throw when constructed with a streaming assistant block', () => {
+        expect(() => {
+            void (
+                <MessageBlock
+                    block={{ kind: 'assistant', lines: ['Assistant: hello'] }}
+                    isStreaming={true}
+                    toolOutputExpanded={false}
+                />
+            );
+        }).not.toThrow();
+    });
+
+    it('does not throw when constructed with a collapsed tool block', () => {
+        expect(() => {
+            void (
+                <MessageBlock
+                    block={{ kind: 'tool', lines: ['Command preview for command.run', '$ ls'] }}
+                    toolOutputExpanded={false}
+                />
+            );
+        }).not.toThrow();
+    });
+});
+
+describe('MarkdownPanel component (memoized)', () => {
+    it('does not throw when constructed with streaming enabled', () => {
+        expect(() => {
+            void (
+                <MarkdownPanel text="# heading" theme={darkTheme} barColor="#00ff00" barWidth={1} streaming={true} />
+            );
+        }).not.toThrow();
+    });
+
+    it('does not throw when constructed without streaming and a marginTop', () => {
+        expect(() => {
+            void (<MarkdownPanel text="plain text" theme={darkTheme} barColor="#ff00ff" barWidth={2} marginTop={1} />);
         }).not.toThrow();
     });
 });

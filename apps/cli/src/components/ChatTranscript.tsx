@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/react */
 import { MacOSScrollAccel, type ScrollAcceleration, type ScrollBoxRenderable, TextAttributes } from '@opentui/core';
 import type * as React from 'react';
+import { memo } from 'react';
 import { blockPrefix, type ChatBlock, joinBlockText, readToolBlockTitle } from '../commands/chat-blocks.js';
 import { Markdown } from './markdown/Markdown.js';
 import { darkTheme, type TerminalMarkdownTheme } from './markdown/theme.js';
@@ -65,7 +66,7 @@ const thinkingTheme: TerminalMarkdownTheme = {
     defaultTextStyle: { attributes: { italic: true, dim: true } },
 };
 
-function MarkdownPanel({
+export function MarkdownPanelBase({
     text,
     theme,
     barColor,
@@ -94,7 +95,15 @@ function MarkdownPanel({
     );
 }
 
-function MessageBlock({
+/**
+ * Memoized wrapper: skips re-render when all props are unchanged (shallow
+ * compare). Effective because MessageBlock passes a value-stable `text`
+ * (pure joinBlockText of a referentially-stable block.lines, per todo 2's
+ * preserveBlockReferences) plus module-constant theme/barColor/barWidth.
+ */
+export const MarkdownPanel = memo(MarkdownPanelBase);
+
+export function MessageBlockBase({
     block,
     isStreaming,
     toolOutputExpanded,
@@ -183,6 +192,15 @@ function MessageBlock({
         </box>
     );
 }
+
+/**
+ * Memoized wrapper: skips re-render when all props are unchanged (shallow
+ * compare). Effective because ChatTranscript passes a referentially-stable
+ * `block` (preserveBlockReferences in ChatApp reuses refs for unchanged
+ * segments), so completed blocks skip re-render while the streaming tail
+ * (whose block ref changes per token) re-renders normally.
+ */
+export const MessageBlock = memo(MessageBlockBase);
 
 export function ChatTranscript({
     blocks,
