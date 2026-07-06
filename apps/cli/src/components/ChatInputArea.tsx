@@ -61,9 +61,16 @@ export type ChatInputAreaProps = {
     readonly textareaRef: React.RefObject<TextareaRenderable | null>;
     readonly scrollboxRef: React.RefObject<ScrollBoxRenderable | null>;
     readonly focused: boolean;
+    readonly promptMenuInteractionsEnabled?: boolean;
 };
 
-export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: ChatInputAreaProps): React.ReactNode {
+export function ChatInputArea({
+    store,
+    textareaRef,
+    scrollboxRef,
+    focused,
+    promptMenuInteractionsEnabled = true,
+}: ChatInputAreaProps): React.ReactNode {
     const selectorStoreRef = useRef<ChatSelectorStore<ReturnType<typeof selectInputAreaSlice>> | null>(null);
     if (selectorStoreRef.current === null) {
         selectorStoreRef.current = createChatSelectorStore(store, selectInputAreaSlice);
@@ -104,11 +111,11 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
 
                     const snap = store.getSnapshot();
 
-                    if (snap.fileAutocomplete.open && applyFileCompletion()) {
+                    if (promptMenuInteractionsEnabled && snap.fileAutocomplete.open && applyFileCompletion()) {
                         return;
                     }
 
-                    if (captured.startsWith('#')) {
+                    if (promptMenuInteractionsEnabled && captured.startsWith('#')) {
                         const insertText = resolveWorkflowCommandMenuInsertText(
                             captured,
                             snap.menuState,
@@ -122,7 +129,7 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
                         }
                     }
 
-                    if (captured.startsWith('/')) {
+                    if (promptMenuInteractionsEnabled && captured.startsWith('/')) {
                         const insertText = resolveSlashCommandMenuInsertText(captured, snap.menuState);
                         if (insertText !== undefined && insertText.trimEnd() !== captured.trimEnd()) {
                             textareaRef.current?.setText(insertText);
@@ -134,10 +141,10 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
 
                     let value = snap.pasteStore.expand(captured);
 
-                    if (captured.startsWith('/')) {
+                    if (promptMenuInteractionsEnabled && captured.startsWith('/')) {
                         const resolved = resolveSlashCommandMenuSubmission(captured, snap.menuState);
                         if (resolved !== captured) value = resolved;
-                    } else if (captured.startsWith('#')) {
+                    } else if (promptMenuInteractionsEnabled && captured.startsWith('#')) {
                         const resolved = resolveWorkflowCommandMenuSubmission(
                             captured,
                             snap.menuState,
@@ -159,7 +166,7 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
                 }
             }, 0);
         }, 0);
-    }, [store, textareaRef, applyFileCompletion]);
+    }, [store, textareaRef, applyFileCompletion, promptMenuInteractionsEnabled]);
 
     const handleContentChange = useCallback(
         (text: string): void => {
@@ -178,7 +185,7 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
 
             const snap = store.getSnapshot();
 
-            if (key.name === 'tab' && snap.fileAutocomplete.open) {
+            if (promptMenuInteractionsEnabled && key.name === 'tab' && snap.fileAutocomplete.open) {
                 key.preventDefault();
                 applyFileCompletion();
                 return;
@@ -191,7 +198,7 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
                     store.sendInterrupt('esc');
                     return;
                 }
-                if (snap.fileAutocomplete.open) {
+                if (promptMenuInteractionsEnabled && snap.fileAutocomplete.open) {
                     store.closeMenus();
                     return;
                 }
@@ -326,9 +333,9 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
                 const cursorOffset = textareaRef.current?.cursorOffset ?? 0;
                 const atBound = direction === 'up' ? cursorOffset === 0 : cursorOffset === buffer.length;
                 const historyOwnsArrows = snap.historyNavigation !== null;
-                const slashMenuOpen = isSlashCommandMenuOpen(buffer);
-                const workflowMenuOpen = isWorkflowCommandMenuOpen(buffer);
-                const fileAutoOpen = snap.fileAutocomplete.open;
+                const slashMenuOpen = promptMenuInteractionsEnabled && isSlashCommandMenuOpen(buffer);
+                const workflowMenuOpen = promptMenuInteractionsEnabled && isWorkflowCommandMenuOpen(buffer);
+                const fileAutoOpen = promptMenuInteractionsEnabled && snap.fileAutocomplete.open;
 
                 const recallHistory =
                     historyOwnsArrows || (atBound && !slashMenuOpen && !workflowMenuOpen && !fileAutoOpen);
@@ -357,7 +364,7 @@ export function ChatInputArea({ store, textareaRef, scrollboxRef, focused }: Cha
                 }
             }
         },
-        [store, textareaRef, scrollboxRef, plainText, applyFileCompletion, handleSubmit],
+        [store, textareaRef, scrollboxRef, plainText, applyFileCompletion, handleSubmit, promptMenuInteractionsEnabled],
     );
 
     const handlePaste = useCallback(

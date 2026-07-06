@@ -14,18 +14,28 @@ export type SlashMenuPanelProps = {
     readonly inputBuffer: string;
     readonly menuState: SlashCommandMenuState;
     readonly workflowNames: readonly string[];
+    readonly maxVisibleRows?: number;
+    readonly showFooter?: boolean;
 };
 
 const MAX_VISIBLE = 5;
+const FOOTER = 'Up/Down to navigate, Enter to select, Esc to close';
 
-export function SlashMenuPanel({ inputBuffer, menuState, workflowNames }: SlashMenuPanelProps): React.ReactNode {
+export function SlashMenuPanel({
+    inputBuffer,
+    menuState,
+    workflowNames,
+    maxVisibleRows = MAX_VISIBLE,
+    showFooter = true,
+}: SlashMenuPanelProps): React.ReactNode {
     const isSlash = inputBuffer.startsWith('/');
     const isWorkflow = inputBuffer.startsWith('#');
     if (!isSlash && !isWorkflow) return null;
+    if (maxVisibleRows <= 0) return null;
 
     const view = isSlash
-        ? createSlashCommandMenuView(inputBuffer, menuState, MAX_VISIBLE)
-        : createWorkflowCommandMenuView(inputBuffer, menuState, MAX_VISIBLE, workflowNames);
+        ? createSlashCommandMenuView(inputBuffer, menuState, maxVisibleRows)
+        : createWorkflowCommandMenuView(inputBuffer, menuState, maxVisibleRows, workflowNames);
 
     if (!view.open) return null;
 
@@ -62,7 +72,7 @@ export function SlashMenuPanel({ inputBuffer, menuState, workflowNames }: SlashM
           });
 
     return (
-        <OverlayFrame variant="panel" title={header.trim()} footer="Up/Down to navigate, Enter to select, Esc to close">
+        <OverlayFrame variant="panel" title={header.trim()} {...(showFooter ? { footer: FOOTER } : {})}>
             <box height={1} />
             {items}
         </OverlayFrame>

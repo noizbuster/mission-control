@@ -10,12 +10,21 @@ import { SELECTED_BG } from './overlay-theme.js';
 
 export type FileAutocompletePanelProps = {
     readonly fileAutocomplete: FileAutocompleteState;
+    readonly maxVisibleRows?: number;
+    readonly showFooter?: boolean;
 };
 
 const MAX_VISIBLE = 8;
+const FOOTER = 'Tab/Enter to complete, Up/Down to navigate, Esc to close';
 
-export function FileAutocompletePanel({ fileAutocomplete }: FileAutocompletePanelProps): React.ReactNode {
-    const view = createFileAutocompleteView(fileAutocomplete, MAX_VISIBLE);
+export function FileAutocompletePanel({
+    fileAutocomplete,
+    maxVisibleRows = MAX_VISIBLE,
+    showFooter = true,
+}: FileAutocompletePanelProps): React.ReactNode {
+    if (maxVisibleRows <= 0) return null;
+
+    const view = createFileAutocompleteView(fileAutocomplete, maxVisibleRows);
     if (!view.open) return null;
 
     const header =
@@ -24,11 +33,7 @@ export function FileAutocompletePanel({ fileAutocomplete }: FileAutocompletePane
             : ` Files matching @${view.prefix} `;
 
     return (
-        <OverlayFrame
-            variant="panel"
-            title={header.trim()}
-            footer="Tab/Enter to complete, Up/Down to navigate, Esc to close"
-        >
+        <OverlayFrame variant="panel" title={header.trim()} {...(showFooter ? { footer: FOOTER } : {})}>
             {view.empty ? (
                 <text attributes={TextAttributes.DIM}> no files match</text>
             ) : (
