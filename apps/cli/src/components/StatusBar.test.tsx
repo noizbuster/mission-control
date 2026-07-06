@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { APPROVAL_LEVELS, type ApprovalLevel } from '../commands/approval-level.js';
+import { bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import {
     approvalLevelColor,
     formatBottomStatus,
+    formatBottomStatusRow,
     formatTopStatus,
+    formatTopStatusRow,
     humanizeTokens,
     type StatusBarProps,
+    statusBarLayoutFromPolicy,
 } from './StatusBar.js';
 
 const baseProps: StatusBarProps = { providerID: 'local', modelID: 'local-echo' };
+
+function statusLayoutForColumns(columns: number) {
+    return statusBarLayoutFromPolicy(bottomDockPolicy({ columns, rows: 24 }));
+}
 
 describe('humanizeTokens', () => {
     it('preserves undefined so the caller can hide the segment', () => {
@@ -162,5 +170,104 @@ describe('formatBottomStatus', () => {
     it('leaves the session id undefined when not provided', () => {
         const out = formatBottomStatus(baseProps);
         expect(out.sessionLabel).toBe(undefined);
+    });
+});
+
+describe('policy-derived status rows', () => {
+    it('hides optional context, project, and session segments at narrow widths', () => {
+        // Given: complete status data but a narrow policy layout.
+        const statusLayout = statusLayoutForColumns(65);
+        const props: StatusBarProps = {
+            ...baseProps,
+            statusLayout,
+            contextTokensUsed: 12345,
+            contextTokensMax: 200000,
+            workspaceRoot: '/home/user/mission-control',
+            gitBranch: 'feature-x',
+            sessionID: 'session_abc123',
+            approvalLevel: 'safe',
+        };
+
+        // When: both row models are formatted from the policy-derived layout.
+        const top = formatTopStatusRow(props);
+        const bottom = formatBottomStatusRow(props);
+
+        // Then: required segments remain, optional segments hide, and filler stays non-negative.
+        expect(top.provider).toBe('local');
+        expect(top.model).toBe('local-echo');
+        expect(top.contextLabel).toBe(undefined);
+        expect(top.fillCount).toBeGreaterThanOrEqual(0);
+        expect(bottom.approvalLabel).toBe('safe');
+        expect(bottom.projectLabel).toBe(undefined);
+        expect(bottom.sessionLabel).toBe(undefined);
+        expect(bottom.fillCount).toBeGreaterThanOrEqual(0);
+    });
+
+    it('shows context usage and project at 80 columns while keeping session hidden', () => {
+        // Given: the normal-width policy threshold and complete status data.
+        const statusLayout = statusLayoutForColumns(80);
+        const props: StatusBarProps = {
+            ...baseProps,
+            statusLayout,
+            contextTokensUsed: 12345,
+            contextTokensMax: 200000,
+            workspaceRoot: '/home/user/mission-control',
+            gitBranch: 'feature-x',
+            sessionID: 'session_abc123',
+        };
+
+        // When: both status rows are formatted.
+        const top = formatTopStatusRow(props);
+        const bottom = formatBottomStatusRow(props);
+
+        // Then: context/project follow the >=80 policy gate and session remains gated off.
+        expect(top.contextLabel).toBe('12.3k / 200k');
+        expect(bottom.projectLabel).toBe('mission-control:feature-x');
+        expect(bottom.sessionLabel).toBe(undefined);
+        expect(top.fillCount).toBeGreaterThanOrEqual(0);
+        expect(bottom.fillCount).toBeGreaterThanOrEqual(0);
+    });
+
+    it('shows session at 120 columns', () => {
+        // Given: the wide policy threshold and a durable session id.
+        const statusLayout = statusLayoutForColumns(120);
+        const props: StatusBarProps = {
+            ...baseProps,
+            statusLayout,
+            workspaceRoot: '/home/user/mission-control',
+            sessionID: 'session_abc123',
+        };
+
+        // When: the bottom row is formatted.
+        const bottom = formatBottomStatusRow(props);
+
+        // Then: project and session are both visible at the >=120 policy gate.
+        expect(bottom.projectLabel).toBe('mission-control');
+        expect(bottom.sessionLabel).toBe('session_abc123');
+        expect(bottom.fillCount).toBeGreaterThanOrEqual(0);
+    });
+
+    it('never produces negative filler for long project and session labels', () => {
+        // Given: visible project/session gates with labels longer than the available row width.
+        const statusLayout = statusLayoutForColumns(120);
+        const longSessionID = `session_${'x'.repeat(80)}`;
+        const props: StatusBarProps = {
+            ...baseProps,
+            statusLayout,
+            workspaceRoot: '/home/user/mission-control-with-a-very-long-worktree-name',
+            gitBranch: 'feature-with-a-very-long-branch-name',
+            isWorktree: true,
+            sessionID: longSessionID,
+        };
+
+        // When: the bottom row computes filler against the policy width.
+        const bottom = formatBottomStatusRow(props);
+
+        // Then: both labels stay visible, but the filler clamps to zero instead of underflowing.
+        expect(bottom.projectLabel).toBe(
+            'mission-control-with-a-very-long-worktree-name:feature-with-a-very-long-branch-name(worktree)',
+        );
+        expect(bottom.sessionLabel).toBe(longSessionID);
+        expect(bottom.fillCount).toBe(0);
     });
 });

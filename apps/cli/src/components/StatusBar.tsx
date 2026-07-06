@@ -3,8 +3,14 @@ import { TextAttributes } from '@opentui/core';
 import type * as React from 'react';
 import type { ApprovalLevel } from '../commands/approval-level.js';
 import { terminalDisplayWidth } from '../commands/terminal-text.js';
+import { type BottomDockPolicy, type BottomDockStatusPolicy, bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { APPROVAL_LEVEL_COLORS, STATUS_LINE_BG } from './overlay-theme.js';
 import { basename } from 'node:path';
+
+export type StatusBarLayout = {
+    readonly columns: BottomDockPolicy['columns'];
+    readonly status: Pick<BottomDockStatusPolicy, 'showContextUsage' | 'showProject' | 'showSession'>;
+};
 
 export type StatusBarProps = {
     readonly providerID: string;
@@ -17,6 +23,8 @@ export type StatusBarProps = {
     readonly approvalLevel?: ApprovalLevel;
     readonly contextTokensUsed?: number;
     readonly contextTokensMax?: number;
+    readonly onCopySessionID?: () => void;
+    readonly statusLayout?: StatusBarLayout;
 };
 
 /** Structured view of the top status line (pure, for unit tests + render). */
@@ -34,6 +42,46 @@ export type BottomStatusShape = {
     readonly projectLabel: string | undefined;
     readonly sessionLabel: string | undefined;
 };
+
+export type TopStatusRowShape = TopStatusShape & {
+    readonly variantLabel: string | undefined;
+    readonly leftText: string;
+    readonly fillCount: number;
+};
+
+export type BottomStatusRowShape = BottomStatusShape & { readonly dimApproval: boolean; readonly fillCount: number };
+
+export function statusBarLayoutFromPolicy(policy: Pick<BottomDockPolicy, 'columns' | 'status'>): StatusBarLayout {
+    return {
+        columns: policy.columns,
+        status: {
+            showContextUsage: policy.status.showContextUsage,
+            showProject: policy.status.showProject,
+            showSession: policy.status.showSession,
+        },
+    };
+}
+
+export const DEFAULT_STATUS_BAR_LAYOUT: StatusBarLayout = statusBarLayoutFromPolicy(
+    bottomDockPolicy({ columns: 80, rows: 24 }),
+);
+
+function resolveStatusBarLayout(props: StatusBarProps): StatusBarLayout {
+    return props.statusLayout ?? DEFAULT_STATUS_BAR_LAYOUT;
+}
+
+function statusRowFillCount({
+    columns,
+    leftText,
+    rightSegments,
+}: {
+    readonly columns: number;
+    readonly leftText: string;
+    readonly rightSegments: readonly string[];
+}): number {
+    const rightLength = rightSegments.reduce((total, segment) => total + terminalDisplayWidth(segment) + 1, 0);
+    return Math.max(0, columns - terminalDisplayWidth(leftText) - 1 - rightLength);
+}
 
 /**
  * Render label for the bottom-right session segment. The status bar always
@@ -119,32 +167,53 @@ export function formatBottomStatus(props: StatusBarProps): BottomStatusShape {
     };
 }
 
-/**
- * Number of columns the row should fill. Matches the Separator component's
- * width source (`process.stdout.columns`, read at render time so a store
- * update after a resize recomputes the fill).
- */
-function statusRowColumns(): number {
-    return process.stdout.columns ?? 80;
+export function formatTopStatusRow(props: StatusBarProps): TopStatusRowShape {
+    const layout = resolveStatusBarLayout(props);
+    const { provider, model, variant, contextLabel: rawContextLabel } = formatTopStatus(props);
+    const variantLabel = variant?.replace(/^(reasoning|thinking)-/, '');
+    const contextLabel = layout.status.showContextUsage ? rawContextLabel : undefined;
+    const leftText = `${provider} ${model}${variantLabel !== undefined ? ` - ${variantLabel}` : ''}`;
+    const rightSegments = contextLabel !== undefined ? [contextLabel] : [];
+    return {
+        provider,
+        model,
+        variant,
+        variantLabel,
+        contextLabel,
+        leftText,
+        fillCount: statusRowFillCount({ columns: layout.columns, leftText, rightSegments }),
+    };
+}
+
+export function formatBottomStatusRow(props: StatusBarProps): BottomStatusRowShape {
+    const layout = resolveStatusBarLayout(props);
+    const {
+        approvalLabel,
+        approvalColor,
+        projectLabel: rawProjectLabel,
+        sessionLabel: rawSessionLabel,
+    } = formatBottomStatus(props);
+    const projectLabel = layout.status.showProject ? rawProjectLabel : undefined;
+    const sessionLabel = layout.status.showSession ? rawSessionLabel : undefined;
+    const rightSegments = [projectLabel, sessionLabel].filter((segment): segment is string => segment !== undefined);
+    return {
+        approvalLabel,
+        approvalColor,
+        projectLabel,
+        sessionLabel,
+        dimApproval: props.approvalLevel === undefined || props.approvalLevel === 'verbose',
+        fillCount: statusRowFillCount({ columns: layout.columns, leftText: approvalLabel, rightSegments }),
+    };
 }
 
 /**
  * Top status line: provider (dim) + model (bold) + ` - ` variant (default) on
- * the left; humanized context usage on the right, omitted when the max is
- * unknown. The gap between the segments is filled with a dim horizontal rule
- * (`─`) so the line reads as a continuous divider. Full-width dark-navy bg.
+ * the left; policy-visible humanized context usage on the right. The gap
+ * between the segments is filled with a dim horizontal rule (`─`) so the line
+ * reads as a continuous divider. Full-width dark-navy bg.
  */
 export function TopStatusBar(props: StatusBarProps): React.ReactNode {
-    const { provider, model, variant, contextLabel } = formatTopStatus(props);
-    const variantLabel = variant?.replace(/^(reasoning|thinking)-/, '');
-    const leftText = `${provider} ${model}${variantLabel !== undefined ? ` - ${variantLabel}` : ''}`;
-    const fillCount = Math.max(
-        0,
-        statusRowColumns() -
-            terminalDisplayWidth(leftText) -
-            1 -
-            (contextLabel !== undefined ? terminalDisplayWidth(contextLabel) + 1 : 0),
-    );
+    const { provider, model, variantLabel, contextLabel, fillCount } = formatTopStatusRow(props);
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
             <text selectable>
@@ -170,12 +239,8 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
  * filled with a dim horizontal rule (`─`). Full-width dark-navy bg.
  */
 export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
-    const { approvalLabel, approvalColor, projectLabel, sessionLabel } = formatBottomStatus(props);
-    const dimApproval = props.approvalLevel === undefined || props.approvalLevel === 'verbose';
-    const rightLength =
-        (projectLabel !== undefined ? terminalDisplayWidth(projectLabel) + 1 : 0) +
-        (sessionLabel !== undefined ? terminalDisplayWidth(sessionLabel) + 1 : 0);
-    const fillCount = Math.max(0, statusRowColumns() - terminalDisplayWidth(approvalLabel) - 1 - rightLength);
+    const { approvalLabel, approvalColor, projectLabel, sessionLabel, dimApproval, fillCount } =
+        formatBottomStatusRow(props);
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
             <text
@@ -190,7 +255,11 @@ export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
                 {'\u2500'.repeat(fillCount)}
             </text>
             {projectLabel !== undefined ? <text selectable>{` ${projectLabel}`}</text> : null}
-            {sessionLabel !== undefined ? <text selectable>{` ${sessionLabel}`}</text> : null}
+            {sessionLabel !== undefined ? (
+                <text selectable {...(props.onCopySessionID !== undefined ? { onMouseUp: props.onCopySessionID } : {})}>
+                    {` ${sessionLabel}`}
+                </text>
+            ) : null}
         </box>
     );
 }
