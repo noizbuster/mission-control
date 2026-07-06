@@ -1,7 +1,8 @@
 # Mission Control CLI — TUI Design Contract
 
 > Authoritative design contract for the `apps/cli` terminal UI. Covers the ABG
-> monitoring overlay, the dagre-driven graph canvas, and the minimap.
+> monitoring overlay, the dagre-driven graph canvas, the minimap, and the chat
+> bottom-dock primitive.
 >
 > **Status legend:** each token is tagged `[EXISTING]` (already shipped in the
 > named source file — document, do not invent) or `[NEW]` (grammar introduced
@@ -43,7 +44,10 @@ them verbatim; do not redefine.
 `fg`/`bg` in `<OverlayFrame>`, not SGR INVERSE.
 
 Graph/minimap rendering reuses `ACCENTS` and `SELECTED_BG`; it does **not**
-introduce new accent hex values. Palette extension happens in section 5.
+introduce new accent hex values. Palette extension happens in section 5. The
+chat bottom dock also reuses `SELECTED_BG`, `STATUS_LINE_BG`, `ACCENTS`,
+`APPROVAL_LEVEL_COLORS`, and `OverlayFrame` chrome; it does not introduce new
+colors, fonts, spacing tokens, or visual style.
 
 ## 2. Graph Dimensions
 
@@ -293,3 +297,41 @@ what is off-screen.
 Vertical behavior mirrors horizontal: rows beyond the pane height scroll
 inside the existing native `<scrollbox>`; the minimap's viewport rect tracks
 the vertical scroll position.
+
+## 10. Chat Bottom-Dock Primitive
+
+`ChatApp` owns the full chat screen topology: one flex-growing upper output
+region, one `ChatBottomDock` sibling, and any global/modal overlays outside the
+dock. The split is a responsibility contract, not a new visual language.
+
+The upper output region owns `WelcomeScreen` or `ChatTranscript`,
+`AgentSpinner`, `Toast`, and `AbgMinimap`. `Toast` stays anchored in this upper
+region above the dock so transient notices never consume prompt rows.
+
+The bottom dock owns, in order, `TopStatusBar`, the prompt-adjacent slash menu,
+workflow menu, and file autocomplete panels, the `QuestionOverlay` or
+`ChatInputArea` slot, and `BottomStatusBar`. `ChatInputArea` remains the native
+textarea boundary for text, cursor, paste, submit, history, and prompt-panel
+interactions; the dock composes it and forwards refs rather than replacing input
+semantics.
+
+Full-screen overlays (`abg`, `diff-viewer`, `models-overlay`) remain early
+returns in `ChatApp`. Modal overlays (`approval`, `model-picker`,
+`level-picker`, `rename`, `session-picker`, `agents-dashboard`,
+`mission-panel`) remain outside `ChatBottomDock` and are routed by `ChatApp`.
+Do not move global/modal overlay responsibility into the dock.
+
+Bottom-dock layout policy is deterministic by terminal size:
+
+| Policy | Contract |
+| --- | --- |
+| Width classes | `<66` narrow, `66-79` compact, `80-119` normal, `120-149` wide, `>=150` spacious. |
+| Status visibility | Context usage and project show at `>=80`; session shows at `>=120`. |
+| Menu footer | Prompt-panel footers show at `>=66` when menu rows are available. |
+| Minimum reservation | At least `4` transcript rows, `2` status rows, and `1` input row are reserved before allocating prompt-panel menu rows. |
+
+Status rows render with `STATUS_LINE_BG` and `APPROVAL_LEVEL_COLORS`.
+Prompt-adjacent slash/workflow/file panels render through `OverlayFrame` and use
+`SELECTED_BG` for selection. Question and modal accents come from `ACCENTS` and
+the existing `OverlayFrame` chrome. No component in the dock may add a raw
+visual token when an existing token covers the role.
