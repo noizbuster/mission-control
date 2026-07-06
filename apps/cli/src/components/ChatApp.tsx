@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/react */
 
-import { type ScrollBoxRenderable, TextAttributes, type TextareaRenderable } from '@opentui/core';
+import { type CliRenderer, type ScrollBoxRenderable, TextAttributes, type TextareaRenderable } from '@opentui/core';
 import { useKeymap } from '@opentui/keymap/react';
 import { useKeyboard, useRenderer } from '@opentui/react';
 import type * as React from 'react';
@@ -26,9 +26,9 @@ import {
 } from '../platform/keymap/diff-viewer.js';
 import { AbgMinimap } from './AbgMinimap.js';
 import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from './AbgOverlay.js';
-import { ChatInputArea } from './ChatInputArea.js';
+import { ChatBottomDock } from './ChatBottomDock.js';
 import { ChatTranscript } from './ChatTranscript.js';
-import { FileAutocompletePanel } from './FileAutocompletePanel.js';
+import { type BottomDockPolicy, bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { MissionPanelOverlay } from './MissionPanelOverlay.js';
 import { ModelsOverlay } from './ModelsOverlay.js';
 import { OverlayFrame } from './OverlayFrame.js';
@@ -37,16 +37,13 @@ import {
     ApprovalOverlay,
     LevelPickerOverlay,
     ModelPickerOverlay,
-    QuestionOverlay,
     RenameOverlay,
     SessionPickerOverlay,
 } from './OverlayPanels.js';
-import { ACCENTS } from './overlay-theme.js';
-import { SlashMenuPanel } from './SlashMenuPanel.js';
-import { BottomStatusBar, type StatusBarProps, TopStatusBar } from './StatusBar.js';
+import { type StatusBarProps, statusBarLayoutFromPolicy } from './StatusBar.js';
+import { useSpinnerFrame } from './spinner.js';
 import { Toast } from './Toast.js';
 import { WelcomeScreen } from './WelcomeScreen.js';
-import { useSpinnerFrame } from './spinner.js';
 import { basename } from 'node:path';
 
 /**
@@ -88,6 +85,83 @@ function AgentSpinner({ text }: { readonly text: string }): React.ReactNode {
     );
 }
 
+export type TerminalDimensions = {
+    readonly columns?: number;
+    readonly rows?: number;
+};
+
+export type RendererDimensions = {
+    readonly width: number;
+    readonly height: number;
+};
+
+export type PromptPanelRepaintKeyInput = {
+    readonly inputMirror: string;
+    readonly fileAutocompleteOpen: boolean;
+    readonly fileMatchCount: number;
+    readonly menuRows: number;
+};
+
+export function bottomDockPolicyForTerminal(terminal: TerminalDimensions): BottomDockPolicy {
+    return bottomDockPolicy({ columns: terminal.columns ?? 80, rows: terminal.rows ?? 24 });
+}
+
+export function terminalDimensionsFromRenderer(renderer: RendererDimensions): TerminalDimensions {
+    return { columns: renderer.width, rows: renderer.height };
+}
+
+export function promptPanelRepaintKey(input: PromptPanelRepaintKeyInput): string {
+    if (input.menuRows <= 0) return 'none';
+    if (input.inputMirror.startsWith('/')) return `slash:${input.inputMirror}`;
+    if (input.inputMirror.startsWith('#')) return `workflow:${input.inputMirror}`;
+    if (input.fileAutocompleteOpen) return `file:${input.inputMirror}:${input.fileMatchCount}`;
+    return 'none';
+}
+
+export type ChatAppSplitShellProps = {
+    readonly onMouseUp: () => void;
+    readonly upperOutputRegion: React.ReactNode;
+    readonly bottomDock: React.ReactNode;
+    readonly modalOverlays: React.ReactNode;
+};
+
+export function ChatAppSplitShell({
+    onMouseUp,
+    upperOutputRegion,
+    bottomDock,
+    modalOverlays,
+}: ChatAppSplitShellProps): React.ReactNode {
+    return (
+        // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive, not a DOM element; mouse-up only surfaces the copy-hint toast.
+        <box flexDirection="column" width="100%" height="100%" shouldFill={true} onMouseUp={onMouseUp}>
+            <box flexDirection="column" flexGrow={1} shouldFill={true}>
+                {upperOutputRegion}
+            </box>
+            {bottomDock}
+            {modalOverlays}
+        </box>
+    );
+}
+
+function useRendererDimensions(renderer: CliRenderer): RendererDimensions {
+    const [dimensions, setDimensions] = useState<RendererDimensions>({
+        width: renderer.width,
+        height: renderer.height,
+    });
+    useEffect(() => {
+        const sync = (): void => {
+            setDimensions((current) => {
+                if (current.width === renderer.width && current.height === renderer.height) return current;
+                return { width: renderer.width, height: renderer.height };
+            });
+        };
+        sync();
+        const timer = setInterval(sync, 250);
+        return (): void => clearInterval(timer);
+    }, [renderer]);
+    return dimensions;
+}
+
 export type ChatAppProps = {
     readonly store: ChatStore;
     readonly textareaRef: React.RefObject<TextareaRenderable | null>;
@@ -118,6 +192,7 @@ export function ChatApp({
 
     const keymap = useKeymap();
     const renderer = useRenderer();
+    const rendererDimensions = useRendererDimensions(renderer);
 
     // Transient toast (e.g. the selection-copy hint). Local state — presentational,
     // does not flow through ChatStore. Auto-dismisses; re-showing resets the timer.
@@ -171,8 +246,11 @@ export function ChatApp({
                     try {
                         if (captured.trim() === '') return;
                         const snap = store.getSnapshot();
+                        const promptMenuInteractionsEnabled =
+                            bottomDockPolicyForTerminal(terminalDimensionsFromRenderer(rendererDimensions)).menu.rows >
+                            0;
 
-                        if (captured.startsWith('#')) {
+                        if (promptMenuInteractionsEnabled && captured.startsWith('#')) {
                             const insertText = resolveWorkflowCommandMenuInsertText(
                                 captured,
                                 snap.menuState,
@@ -186,7 +264,7 @@ export function ChatApp({
                             }
                         }
 
-                        if (captured.startsWith('/')) {
+                        if (promptMenuInteractionsEnabled && captured.startsWith('/')) {
                             const insertText = resolveSlashCommandMenuInsertText(captured, snap.menuState);
                             if (insertText !== undefined && insertText.trimEnd() !== captured.trimEnd()) {
                                 textareaRef.current?.setText(insertText);
@@ -204,7 +282,7 @@ export function ChatApp({
                 }, 0);
             }, 0);
         };
-    }, [store, textareaRef]);
+    }, [rendererDimensions, store, textareaRef]);
 
     useKeyboard((key) => {
         const isCtrlC = key.ctrl && key.name === 'c';
@@ -337,6 +415,9 @@ export function ChatApp({
         const offLayer = keymap.registerLayer({
             priority: 200,
             enabled: (): boolean => {
+                if (bottomDockPolicyForTerminal(terminalDimensionsFromRenderer(rendererDimensions)).menu.rows <= 0) {
+                    return false;
+                }
                 const text = textareaRef.current?.plainText ?? '';
                 if (text.startsWith('/') || text.startsWith('#')) {
                     const token = text.slice(1);
@@ -383,7 +464,7 @@ export function ChatApp({
             ],
         });
         return offLayer;
-    }, [keymap, store, textareaRef]);
+    }, [keymap, rendererDimensions, store, textareaRef]);
 
     // messages.* scroll + copy layer (T10): SESSION-scoped (not textarea-gated); clipboard built from the renderer (OSC52 via opentui native core).
     useEffect(() => {
@@ -547,6 +628,14 @@ export function ChatApp({
     const messageBlocks = useStableMessageBlocks(snapshot.outputText);
     const overlayActive = snapshot.overlayMode !== 'none';
     const showWelcome = welcomeData !== undefined && snapshot.outputText === '' && !overlayActive;
+    const dockPolicy = bottomDockPolicyForTerminal(terminalDimensionsFromRenderer(rendererDimensions));
+    const dockStatusLayout = statusBarLayoutFromPolicy(dockPolicy);
+    const promptRepaintKey = promptPanelRepaintKey({
+        inputMirror: snapshot.inputMirror,
+        fileAutocompleteOpen: snapshot.fileAutocomplete.open,
+        fileMatchCount: snapshot.fileAutocomplete.matches.length,
+        menuRows: dockPolicy.menu.rows,
+    });
 
     // opentui's double-buffer diff can miss cells when a wide character (Korean
     // Hangul, emoji) is replaced by a narrow one — the continuation cell is not
@@ -561,6 +650,15 @@ export function ChatApp({
             renderer.requestRender();
         }
     }, [snapshot.overlayMode, renderer]);
+
+    const prevPromptRepaintKey = useRef(promptRepaintKey);
+    useEffect(() => {
+        if (prevPromptRepaintKey.current !== promptRepaintKey) {
+            prevPromptRepaintKey.current = promptRepaintKey;
+            Reflect.set(renderer, 'forceFullRepaintRequested', true);
+            renderer.requestRender();
+        }
+    }, [promptRepaintKey, renderer]);
 
     const prevGenerating = useRef(snapshot.generating);
     useEffect(() => {
@@ -644,121 +742,93 @@ export function ChatApp({
         );
     }
 
-    const showSlashMenu = snapshot.inputMirror.startsWith('/');
-    const showWorkflowMenu = snapshot.inputMirror.startsWith('#');
-    const showFileAutocomplete = !showSlashMenu && !showWorkflowMenu && snapshot.fileAutocomplete.open;
-
     const showAbgMinimap = snapshot.abgMinimapVisible && !overlayActive && abgOverlayController !== undefined;
 
     return (
-        // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive, not a DOM element; mouse-up only surfaces the copy-hint toast.
-        <box flexDirection="column" width="100%" height="100%" onMouseUp={handleSelectionMouseUp}>
-            <box flexDirection="column" flexGrow={1}>
-                {showWelcome ? (
-                    <WelcomeScreen
-                        data={welcomeData}
-                        {...(statusBarProps?.workspaceRoot !== undefined
-                            ? { projectLabel: basename(statusBarProps.workspaceRoot) }
-                            : {})}
-                        {...(statusBarProps?.gitBranch !== undefined ? { gitBranch: statusBarProps.gitBranch } : {})}
-                        {...(statusBarProps?.isWorktree !== undefined ? { isWorktree: statusBarProps.isWorktree } : {})}
-                    />
-                ) : (
-                    transcript
-                )}
-                {showAgentIndicator && snapshot.agentStatusText.length > 0 ? (
-                    <AgentSpinner text={snapshot.agentStatusText} />
-                ) : showAgentIndicator && snapshot.generating ? (
-                    <AgentSpinner text="Working..." />
-                ) : null}
-                {showSlashMenu || showWorkflowMenu ? (
-                    <SlashMenuPanel
-                        inputBuffer={snapshot.inputMirror}
-                        menuState={snapshot.menuState}
-                        workflowNames={snapshot.workflowNames}
-                    />
-                ) : null}
-                {showFileAutocomplete ? <FileAutocompletePanel fileAutocomplete={snapshot.fileAutocomplete} /> : null}
-                {toast !== null ? <Toast message={toast} /> : null}
-            </box>
-            {showAbgMinimap ? <AbgMinimap store={abgOverlayController.store} /> : null}
-            {statusBarProps !== undefined ? (
-                <TopStatusBar
-                    {...statusBarProps}
-                    {...(snapshot.currentModelSelection?.providerID !== undefined
-                        ? { providerID: snapshot.currentModelSelection.providerID }
-                        : {})}
-                    {...(snapshot.currentModelSelection?.modelID !== undefined
-                        ? { modelID: snapshot.currentModelSelection.modelID }
-                        : {})}
-                    {...(snapshot.currentModelVariantID !== undefined
-                        ? { variantID: snapshot.currentModelVariantID }
-                        : {})}
-                    {...(snapshot.contextTokensUsed !== undefined
-                        ? { contextTokensUsed: snapshot.contextTokensUsed }
-                        : {})}
-                    {...(snapshot.contextTokensMax !== undefined
-                        ? { contextTokensMax: snapshot.contextTokensMax }
-                        : {})}
-                />
-            ) : null}
-            {snapshot.overlayMode === 'question' ? (
-                <QuestionOverlay store={store} />
-            ) : (
-                <ChatInputArea
+        <ChatAppSplitShell
+            onMouseUp={handleSelectionMouseUp}
+            upperOutputRegion={
+                <>
+                    {showWelcome ? (
+                        <WelcomeScreen
+                            data={welcomeData}
+                            {...(statusBarProps?.workspaceRoot !== undefined
+                                ? { projectLabel: basename(statusBarProps.workspaceRoot) }
+                                : {})}
+                            {...(statusBarProps?.gitBranch !== undefined
+                                ? { gitBranch: statusBarProps.gitBranch }
+                                : {})}
+                            {...(statusBarProps?.isWorktree !== undefined
+                                ? { isWorktree: statusBarProps.isWorktree }
+                                : {})}
+                        />
+                    ) : (
+                        transcript
+                    )}
+                    {showAgentIndicator && snapshot.agentStatusText.length > 0 ? (
+                        <AgentSpinner text={snapshot.agentStatusText} />
+                    ) : showAgentIndicator && snapshot.generating ? (
+                        <AgentSpinner text="Working..." />
+                    ) : null}
+                    {toast !== null ? <Toast message={toast} /> : null}
+                    {showAbgMinimap ? <AbgMinimap store={abgOverlayController.store} /> : null}
+                </>
+            }
+            bottomDock={
+                <ChatBottomDock
                     store={store}
                     textareaRef={textareaRef}
                     scrollboxRef={scrollboxRef}
-                    focused={!overlayActive}
+                    inputFocused={!overlayActive}
+                    statusLayout={dockStatusLayout}
+                    menuPolicy={dockPolicy.menu}
+                    {...(statusBarProps !== undefined ? { statusBarProps } : {})}
                 />
-            )}
-            {statusBarProps !== undefined ? (
-                <BottomStatusBar
-                    {...statusBarProps}
-                    {...(snapshot.sessionId.length > 0 ? { sessionID: snapshot.sessionId } : {})}
-                    {...(snapshot.approvalLevel !== undefined ? { approvalLevel: snapshot.approvalLevel } : {})}
-                />
-            ) : null}
-            {snapshot.overlayMode === 'approval' ? (
-                <ModalPopup>
-                    <ApprovalOverlay store={store} />
-                </ModalPopup>
-            ) : null}
-            {snapshot.overlayMode === 'model-picker' ? (
-                <ModalPopup>
-                    <ModelPickerOverlay store={store} />
-                </ModalPopup>
-            ) : null}
-            {snapshot.overlayMode === 'level-picker' ? (
-                <ModalPopup>
-                    <LevelPickerOverlay store={store} />
-                </ModalPopup>
-            ) : null}
-            {snapshot.overlayMode === 'rename' ? (
-                <ModalPopup>
-                    <RenameOverlay store={store} />
-                </ModalPopup>
-            ) : null}
-            {snapshot.overlayMode === 'session-picker' ? (
-                <ModalPopup>
-                    <SessionPickerOverlay store={store} />
-                </ModalPopup>
-            ) : null}
-            {snapshot.overlayMode === 'agents-dashboard' ? (
-                <ModalPopup>
-                    <AgentsDashboardOverlay store={store} workspaceRoot={statusBarProps?.workspaceRoot} />
-                </ModalPopup>
-            ) : null}
-            {snapshot.overlayMode === 'mission-panel' ? (
-                <ModalPopup>
-                    <MissionPanelOverlay
-                        store={store}
-                        workspaceRoot={statusBarProps?.workspaceRoot}
-                        {...(missionControlServices !== undefined ? { services: missionControlServices } : {})}
-                    />
-                </ModalPopup>
-            ) : null}
-        </box>
+            }
+            modalOverlays={
+                <>
+                    {snapshot.overlayMode === 'approval' ? (
+                        <ModalPopup>
+                            <ApprovalOverlay store={store} />
+                        </ModalPopup>
+                    ) : null}
+                    {snapshot.overlayMode === 'model-picker' ? (
+                        <ModalPopup>
+                            <ModelPickerOverlay store={store} />
+                        </ModalPopup>
+                    ) : null}
+                    {snapshot.overlayMode === 'level-picker' ? (
+                        <ModalPopup>
+                            <LevelPickerOverlay store={store} />
+                        </ModalPopup>
+                    ) : null}
+                    {snapshot.overlayMode === 'rename' ? (
+                        <ModalPopup>
+                            <RenameOverlay store={store} />
+                        </ModalPopup>
+                    ) : null}
+                    {snapshot.overlayMode === 'session-picker' ? (
+                        <ModalPopup>
+                            <SessionPickerOverlay store={store} />
+                        </ModalPopup>
+                    ) : null}
+                    {snapshot.overlayMode === 'agents-dashboard' ? (
+                        <ModalPopup>
+                            <AgentsDashboardOverlay store={store} workspaceRoot={statusBarProps?.workspaceRoot} />
+                        </ModalPopup>
+                    ) : null}
+                    {snapshot.overlayMode === 'mission-panel' ? (
+                        <ModalPopup>
+                            <MissionPanelOverlay
+                                store={store}
+                                workspaceRoot={statusBarProps?.workspaceRoot}
+                                {...(missionControlServices !== undefined ? { services: missionControlServices } : {})}
+                            />
+                        </ModalPopup>
+                    ) : null}
+                </>
+            }
+        />
     );
 }
 

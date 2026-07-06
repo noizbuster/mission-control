@@ -26,7 +26,9 @@ import type {
     AbgGraphSpec,
     AgentDefinition,
     AgentEvent,
+    Mission,
     ModelProviderSelection,
+    Run,
     WorkflowSpec,
 } from '@mission-control/protocol';
 import type { ProviderAuthStore } from '../auth-store.js';
@@ -735,9 +737,7 @@ async function runRetryAction(
     const mission = await readMission(omoRoot, failed.missionId).catch(() => undefined);
     const workflowName = mission?.workflowName;
     if (workflowName === undefined) {
-        chatOutput.write(
-            `Last failed run (${failed.id.slice(0, 8)}) has no linked workflow. Re-invoke it manually.\n`,
-        );
+        chatOutput.write(`Last failed run (${failed.id.slice(0, 8)}) has no linked workflow. Re-invoke it manually.\n`);
         return actionResult(modelProviderSelection);
     }
     const spec = coding.workflowRegistry.lookup(workflowName);
@@ -958,10 +958,10 @@ export async function loadMissionPanelRows(workspaceRoot: string | undefined): P
     } catch {
         return [];
     }
-    const missions = await listMissions(omoRoot);
+    const missions = [...(await listMissions(omoRoot))].sort(compareMissionPanelMissions);
     const rows: MissionPanelRow[] = [];
     for (const mission of missions) {
-        const runs = await listRunsForMission(omoRoot, mission.id);
+        const runs = [...(await listRunsForMission(omoRoot, mission.id))].sort(compareMissionPanelRuns);
         if (runs.length === 0) {
             rows.push({
                 id: mission.id,
@@ -981,6 +981,28 @@ export async function loadMissionPanelRows(workspaceRoot: string | undefined): P
         }
     }
     return rows;
+}
+
+function compareMissionPanelMissions(left: Mission, right: Mission): number {
+    return (
+        compareText(left.createdAt, right.createdAt) ||
+        compareText(left.name, right.name) ||
+        compareText(left.id, right.id)
+    );
+}
+
+function compareMissionPanelRuns(left: Run, right: Run): number {
+    return (
+        compareText(left.startedAt ?? '', right.startedAt ?? '') ||
+        compareText(left.prompt ?? '', right.prompt ?? '') ||
+        compareText(left.id, right.id)
+    );
+}
+
+function compareText(left: string, right: string): number {
+    if (left < right) return -1;
+    if (left > right) return 1;
+    return 0;
 }
 
 async function runApprovalAction(

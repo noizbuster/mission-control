@@ -2,12 +2,13 @@ import {
     AgentRuntime,
     createAllowPermissionDecision,
     createMission,
+    createRun,
     ensureOmoDirs,
     materializeMission,
     resolveOmoRoot,
     startRun,
 } from '@mission-control/core';
-import type { ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
+import { MissionSchema, type ModelProviderSelection, RunSchema, type WorkflowSpec } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createChatStore, type MissionPanelRow } from './chat-store.js';
 import type { CodingActionContext } from './interactive-chat-actions.js';
@@ -141,20 +142,34 @@ describe('loadMissionPanelRows', () => {
         expect(firstId).not.toBe(secondId);
     });
 
-    it('produces rows for multiple Missions in list order', async () => {
+    it('produces rows for multiple Missions in deterministic projection order', async () => {
         const workspace = await makeWorkspace();
         const omoRoot = await resolveOmoRoot(workspace);
-        const missionWithRun = materializeMission(makeWorkflowSpec('planner'));
-        const missionWithoutRun = materializeMission(makeWorkflowSpec('runner'));
+        const missionWithoutRun = makeMissionRecord('mission-runner', 'runner', '2026-01-02T00:00:00.000Z');
+        const missionWithRun = makeMissionRecord('mission-planner', 'planner', '2026-01-01T00:00:00.000Z');
         await createMission(omoRoot, missionWithRun);
         await createMission(omoRoot, missionWithoutRun);
-        await startRun(omoRoot, missionWithRun.id, 'plan');
+        await createRun(omoRoot, makeRunRecord('run-plan', missionWithRun.id, 'plan', '2026-01-01T00:00:00.000Z'));
 
         const rows = await loadMissionPanelRows(workspace);
 
         expect(rows).toHaveLength(2);
         expect(rows[0]?.label).toBe('planner #1');
         expect(rows[1]?.label).toBe('runner');
+    });
+
+    it('produces Run rows in deterministic projection order', async () => {
+        const workspace = await makeWorkspace();
+        const omoRoot = await resolveOmoRoot(workspace);
+        const mission = makeMissionRecord('mission-planner', 'planner', '2026-01-01T00:00:00.000Z');
+        await createMission(omoRoot, mission);
+        await createRun(omoRoot, makeRunRecord('run-second', mission.id, 'second', '2026-01-02T00:00:00.000Z'));
+        await createRun(omoRoot, makeRunRecord('run-first', mission.id, 'first', '2026-01-01T00:00:00.000Z'));
+
+        const rows = await loadMissionPanelRows(workspace);
+
+        expect(rows.map((row) => row.id)).toEqual(['run-first', 'run-second']);
+        expect(rows.map((row) => row.label)).toEqual(['planner #1', 'planner #1']);
     });
 });
 
@@ -314,6 +329,31 @@ function makeWorkflowSpec(name: string): WorkflowSpec {
             policies: [],
         },
     };
+}
+
+function makeMissionRecord(id: string, name: string, createdAt: string) {
+    return MissionSchema.parse({
+        id,
+        name,
+        status: 'draft',
+        graph: makeWorkflowSpec(name).graph,
+        workflowName: name,
+        capabilities: { allow: [], deny: [] },
+        policies: [],
+        createdAt,
+        updatedAt: createdAt,
+    });
+}
+
+function makeRunRecord(id: string, missionId: string, prompt: string, startedAt: string) {
+    return RunSchema.parse({
+        id,
+        missionId,
+        status: 'running',
+        prompt,
+        attempt: 1,
+        startedAt,
+    });
 }
 
 function makeCodingContext(

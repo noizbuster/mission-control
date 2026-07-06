@@ -1,6 +1,58 @@
+import { Children, createElement, isValidElement, type ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
 import { type ChatBlock, parseMessageBlocks } from '../commands/chat-blocks.js';
-import { preserveBlockReferences } from './ChatApp.js';
+import { createChatStore } from '../commands/chat-store.js';
+import {
+    asScrollboxRef,
+    asTextareaRef,
+    createRecordingScrollbox,
+    createRecordingTextarea,
+} from '../commands/chat-test-support.js';
+import {
+    bottomDockPolicyForTerminal,
+    ChatAppSplitShell,
+    preserveBlockReferences,
+    promptPanelRepaintKey,
+    terminalDimensionsFromRenderer,
+} from './ChatApp.js';
+import { ChatBottomDock } from './ChatBottomDock.js';
+import { bottomDockPolicy } from './chat-bottom-dock-policy.js';
+import { statusBarLayoutFromPolicy } from './StatusBar.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+function readChatAppSource(): string {
+    return readFileSync(resolve(process.cwd(), 'apps/cli/src/components/ChatApp.tsx'), 'utf8');
+}
+
+function childAt(children: readonly ReactNode[], index: number): ReactNode {
+    const child = children.at(index);
+    if (child === undefined) {
+        throw new Error(`missing child at index ${index}`);
+    }
+    return child;
+}
+
+function propsFor<TProps>(node: ReactNode, type: string | ((props: TProps) => ReactNode)): TProps {
+    if (!isValidElement<TProps>(node)) {
+        throw new Error('expected a React element');
+    }
+    expect(node.type).toBe(type);
+    return node.props;
+}
+
+function matchCount(source: string, needle: string): number {
+    return source.split(needle).length - 1;
+}
+
+function sliceBetween(source: string, startNeedle: string, endNeedle: string): string {
+    const start = source.indexOf(startNeedle);
+    const end = source.indexOf(endNeedle, start);
+    if (start < 0 || end < 0) {
+        throw new Error(`missing source slice ${startNeedle}..${endNeedle}`);
+    }
+    return source.slice(start, end);
+}
 
 describe('preserveBlockReferences', () => {
     it('returns fresh block references when prev is empty (first render)', () => {
@@ -85,5 +137,148 @@ describe('preserveBlockReferences', () => {
     it('returns an empty array for empty fresh and empty prev', () => {
         const result = preserveBlockReferences([], []);
         expect(result).toEqual([]);
+    });
+});
+
+describe('bottomDockPolicyForTerminal', () => {
+    it('builds policy from live terminal dimensions with deterministic fallbacks', () => {
+        const fallback = bottomDockPolicyForTerminal({});
+        const wide = bottomDockPolicyForTerminal({ columns: 120, rows: 24 });
+
+        expect([fallback.columns, fallback.rows, fallback.menu.rows]).toEqual([80, 24, 5]);
+        expect([wide.columns, wide.rows, wide.menu.rows, wide.status.showSession]).toEqual([120, 24, 8, true]);
+    });
+
+    it('uses live renderer dimensions instead of stale process stdout dimensions', () => {
+        const dimensions = terminalDimensionsFromRenderer({ width: 140, height: 40 });
+        const policy = bottomDockPolicyForTerminal(dimensions);
+
+        expect([policy.columns, policy.rows, policy.menu.rows, policy.status.showSession]).toEqual([140, 40, 8, true]);
+    });
+});
+
+describe('promptPanelRepaintKey', () => {
+    it('changes when prompt-adjacent panel rows can shift around the native textarea', () => {
+        expect(
+            promptPanelRepaintKey({ inputMirror: '', fileAutocompleteOpen: false, fileMatchCount: 0, menuRows: 5 }),
+        ).toBe('none');
+        expect(
+            promptPanelRepaintKey({ inputMirror: '/', fileAutocompleteOpen: false, fileMatchCount: 0, menuRows: 5 }),
+        ).toBe('slash:/');
+        expect(
+            promptPanelRepaintKey({ inputMirror: '#', fileAutocompleteOpen: false, fileMatchCount: 0, menuRows: 5 }),
+        ).toBe('workflow:#');
+        expect(
+            promptPanelRepaintKey({ inputMirror: '@', fileAutocompleteOpen: true, fileMatchCount: 28, menuRows: 5 }),
+        ).toBe('file:@:28');
+        expect(
+            promptPanelRepaintKey({ inputMirror: '/', fileAutocompleteOpen: false, fileMatchCount: 0, menuRows: 0 }),
+        ).toBe('none');
+    });
+});
+
+describe('ChatAppSplitShell topology', () => {
+    it('constructs the upper output region above a single bottom dock sibling and leaves modals outside the dock', () => {
+        const store = createChatStore();
+        const textareaRef = asTextareaRef(createRecordingTextarea());
+        const scrollboxRef = asScrollboxRef(createRecordingScrollbox());
+        const policy = bottomDockPolicy({ columns: 120, rows: 24 });
+        const upperOutputRegion = createElement('text', { key: 'upper' }, 'upper output');
+        const bottomDock = createElement(ChatBottomDock, {
+            store,
+            textareaRef,
+            scrollboxRef,
+            statusLayout: statusBarLayoutFromPolicy(policy),
+            menuPolicy: policy.menu,
+        });
+        const modalOverlays = createElement('box', { key: 'modal' }, createElement('text', undefined, 'modal'));
+
+        const shell = ChatAppSplitShell({
+            onMouseUp: () => {},
+            upperOutputRegion,
+            bottomDock,
+            modalOverlays,
+        });
+
+        const shellProps = propsFor<{ readonly children?: ReactNode; readonly shouldFill?: boolean }>(shell, 'box');
+        expect(shellProps.shouldFill).toBe(true);
+        const children = Children.toArray(shellProps.children);
+        const upperProps = propsFor<{
+            readonly children?: ReactNode;
+            readonly flexGrow?: number;
+            readonly shouldFill?: boolean;
+        }>(childAt(children, 0), 'box');
+        expect([upperProps.flexGrow, upperProps.shouldFill]).toEqual([1, true]);
+        expect(upperProps.children).toBe(upperOutputRegion);
+        expect(propsFor(childAt(children, 1), ChatBottomDock)).toMatchObject({ store, textareaRef, scrollboxRef });
+        const modalProps = propsFor<{ readonly children?: ReactNode }>(childAt(children, 2), 'box');
+        const modalChildren = Children.toArray(modalProps.children);
+        expect(propsFor<{ readonly children?: string }>(childAt(modalChildren, 0), 'text').children).toBe('modal');
+    });
+});
+
+describe('ChatApp source topology', () => {
+    it('wires ChatBottomDock exactly once with refs, focus, status layout, and menu policy', () => {
+        const source = readChatAppSource();
+        const dockBlock = sliceBetween(source, '<ChatBottomDock', '/>');
+
+        expect(matchCount(source, '<ChatBottomDock')).toBe(1);
+        expect(dockBlock).toContain('store={store}');
+        expect(dockBlock).toContain('textareaRef={textareaRef}');
+        expect(dockBlock).toContain('scrollboxRef={scrollboxRef}');
+        expect(dockBlock).toContain('inputFocused={!overlayActive}');
+        expect(dockBlock).toContain('statusLayout={dockStatusLayout}');
+        expect(dockBlock).toContain('menuPolicy={dockPolicy.menu}');
+    });
+
+    it('keeps transcript output, spinner, toast, and minimap inside the upper output region', () => {
+        const source = readChatAppSource();
+        const upperBlock = sliceBetween(source, 'upperOutputRegion={', 'bottomDock={');
+
+        expect(upperBlock).toContain('<WelcomeScreen');
+        expect(upperBlock).toContain('transcript');
+        expect(upperBlock).toContain('<AgentSpinner');
+        expect(upperBlock).toContain('<Toast');
+        expect(upperBlock).toContain('<AbgMinimap');
+    });
+
+    it('does not import or directly render prompt-adjacent popover panels', () => {
+        const source = readChatAppSource();
+
+        expect(source).not.toContain('./SlashMenuPanel.js');
+        expect(source).not.toContain('./FileAutocompletePanel.js');
+        expect(source).not.toContain('<SlashMenuPanel');
+        expect(source).not.toContain('<FileAutocompletePanel');
+    });
+
+    it('keeps full-screen overlays as early returns before the dock shell', () => {
+        const source = readChatAppSource();
+        const shellIndex = source.indexOf('<ChatAppSplitShell');
+
+        expect(source.indexOf("snapshot.overlayMode === 'abg'")).toBeLessThan(shellIndex);
+        expect(source.indexOf("snapshot.overlayMode === 'diff-viewer'")).toBeLessThan(shellIndex);
+        expect(source.indexOf("snapshot.overlayMode === 'models-overlay'")).toBeLessThan(shellIndex);
+    });
+
+    it('keeps modal overlays in ChatApp through ModalPopup after the dock sibling', () => {
+        const source = readChatAppSource();
+        const modalStart = source.indexOf('modalOverlays={');
+        expect(modalStart).toBeGreaterThanOrEqual(0);
+        const modalBlock = source.slice(modalStart);
+
+        for (const mode of [
+            'approval',
+            'model-picker',
+            'level-picker',
+            'rename',
+            'session-picker',
+            'agents-dashboard',
+            'mission-panel',
+        ]) {
+            expect(modalBlock).toContain(`snapshot.overlayMode === '${mode}'`);
+        }
+        expect(matchCount(modalBlock, '<ModalPopup>')).toBe(7);
+        expect(modalBlock).toContain('<ApprovalOverlay store={store} />');
+        expect(modalBlock).toContain('<MissionPanelOverlay');
     });
 });
