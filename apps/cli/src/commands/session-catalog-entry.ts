@@ -3,20 +3,16 @@ import {
     ProjectTrustStore,
     type ReplayDiagnostic,
     readLocalSessionReplay,
-    resolveMissionControlDataDir,
-    type SessionIndexSessionRecord,
 } from '@mission-control/core';
 import type { AgentSnapshot } from '@mission-control/protocol';
 import {
-    indexStateLabel,
     readIndexDiagnosticsForSession,
     readSessionIndexState,
     type SessionIndexReadState,
 } from './session-catalog-index.js';
 import type { CliSessionCatalogEntry } from './session-catalog-types.js';
 import { parseCliSessionId } from './session-id.js';
-import { readSessionLockState } from './session-lock-status.js';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 type SessionProjectionResult =
     | { readonly kind: 'missing' }
@@ -51,23 +47,16 @@ export async function readSessionCatalogEntry(
     const parsedSessionId = requireValidSessionId(sessionId);
     const resolvedIndexState = indexState ?? (await readSessionIndexState());
     const indexRecord = resolvedIndexState.records.get(parsedSessionId);
-    const [projection, lockState] = await Promise.all([
-        readSessionProjection(parsedSessionId),
-        readSessionLockState({
-            sessionId: parsedSessionId,
-            lockPath: join(resolveMissionControlDataDir(), 'sessions', `${parsedSessionId}.lock`),
-        }),
-    ]);
+    const projection = await readSessionProjection(parsedSessionId);
     const indexDiagnostics = await readIndexDiagnosticsForSession(parsedSessionId, resolvedIndexState);
     if (projection.kind === 'missing') {
-        if (indexRecord !== undefined && resolvedIndexState.source === 'sqlite') {
+        if (indexRecord !== undefined) {
             return {
                 sessionId: parsedSessionId,
                 status: indexRecord.status,
                 ...(indexRecord.awaiting !== undefined ? { awaiting: indexRecord.awaiting } : {}),
                 eventCount: indexRecord.eventCount,
                 messageCount: 0,
-                lockState,
                 createdAt: indexRecord.startedAt,
                 updatedAt: indexRecord.updatedAt,
                 cwd: undefined,
@@ -76,8 +65,6 @@ export async function readSessionCatalogEntry(
                 activeLeafId: undefined,
                 parentSessionId: undefined,
                 trustStatus: 'unknown',
-                indexed: true,
-                indexState: indexStateLabel(true, resolvedIndexState),
                 diagnostics: [...resolvedIndexState.diagnostics, ...indexDiagnostics],
             };
         }
@@ -86,7 +73,6 @@ export async function readSessionCatalogEntry(
             status: 'missing',
             eventCount: 0,
             messageCount: 0,
-            lockState,
             createdAt: undefined,
             updatedAt: undefined,
             cwd: undefined,
@@ -95,35 +81,29 @@ export async function readSessionCatalogEntry(
             activeLeafId: undefined,
             parentSessionId: undefined,
             trustStatus: 'unknown',
-            indexed: false,
-            indexState: indexStateLabel(false, resolvedIndexState),
             diagnostics: [...resolvedIndexState.diagnostics, ...indexDiagnostics],
         };
     }
     const hasDiagnostics = projection.diagnostics.length > 0;
-    const canUseIndex = indexRecord !== undefined && !hasDiagnostics && isFreshIndexRecord(indexRecord, projection);
-    const canUseSqliteState = canUseIndex && resolvedIndexState.source === 'sqlite';
+    const canUseDbSummary = indexRecord !== undefined && !hasDiagnostics;
     return {
         sessionId: parsedSessionId,
-        status: hasDiagnostics ? 'corrupt' : canUseSqliteState ? indexRecord.status : projection.snapshot.status,
-        ...(canUseSqliteState && indexRecord.awaiting !== undefined
+        status: hasDiagnostics ? 'corrupt' : canUseDbSummary ? indexRecord.status : projection.snapshot.status,
+        ...(canUseDbSummary && indexRecord.awaiting !== undefined
             ? { awaiting: indexRecord.awaiting }
             : projection.snapshot.awaiting !== undefined
               ? { awaiting: projection.snapshot.awaiting }
               : {}),
         eventCount: projection.eventCount,
         messageCount: projection.messageCount,
-        lockState,
         createdAt: projection.createdAt,
-        updatedAt: canUseIndex ? indexRecord.updatedAt : projection.updatedAt,
+        updatedAt: indexRecord?.updatedAt ?? projection.updatedAt,
         cwd: projection.cwd,
         trustedRoot: projection.trustedRoot,
         name: projection.name,
         activeLeafId: projection.activeLeafId,
         parentSessionId: projection.parentSessionId,
         trustStatus: await readTrustStatus(projection.workspaceTrust, projection.trustedRoot ?? projection.cwd),
-        indexed: canUseIndex,
-        indexState: indexStateLabel(canUseIndex, resolvedIndexState),
         diagnostics: [...projection.diagnostics, ...resolvedIndexState.diagnostics, ...indexDiagnostics],
     };
 }
@@ -163,19 +143,6 @@ async function readTrustStatus(
         return 'unknown';
     }
     return new ProjectTrustStore().getDecision(workspaceRoot).then((trust) => trust.decision);
-}
-
-function isFreshIndexRecord(
-    record: SessionIndexSessionRecord,
-    projection: Extract<SessionProjectionResult, { readonly kind: 'projection' }>,
-): boolean {
-    if (record.eventCount !== projection.eventCount) {
-        return false;
-    }
-    if (projection.updatedAt === undefined) {
-        return false;
-    }
-    return record.updatedAt >= projection.updatedAt;
 }
 
 function requireValidSessionId(sessionId: string): string {

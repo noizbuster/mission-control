@@ -1,8 +1,10 @@
 use crate::desktop_command_test_support::{
     seed_pending_command_approval, seed_pending_file_patch_approval, temp_data_dir,
 };
-use crate::desktop_commands::{decide_approval_with_bridge, DesktopApprovalDecisionInput};
-use crate::sessions::{read_session_events_from_data_dir, SessionLogState};
+use crate::desktop_commands::{
+    DesktopApprovalDecisionInput, decide_approval_with_bridge, read_session_events_from_data_dir,
+};
+use crate::sessions::SessionLogState;
 use std::error::Error;
 use std::fs::{create_dir_all, read_to_string, remove_dir_all};
 use std::path::{Path, PathBuf};
@@ -48,8 +50,8 @@ fn approved_file_patch_writes_workspace_file_through_core_bridge() -> Result<(),
 }
 
 #[test]
-fn approved_command_run_persists_command_settlement_through_core_bridge(
-) -> Result<(), Box<dyn Error>> {
+fn approved_command_run_persists_command_settlement_through_core_bridge()
+-> Result<(), Box<dyn Error>> {
     let data_dir = temp_data_dir("approved-command-bridge")?;
     let workspace_root = repo_root()?;
     let bridge =

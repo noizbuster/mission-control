@@ -334,9 +334,9 @@ describe('README stage-01 contract', () => {
             'checksummed session archive file',
             '`mc session export <id> <path>`',
             '`mc session import <path>`',
-            '`mc session list` lists sessions with lock status',
+            '`mc session list` lists sessions with lifecycle status',
             '`mc session show <id>` shows the session snapshot',
-            "Each session's SQLite rows, compatibility JSONL log if present, lock file, and projection rows are removed",
+            "Each session's SQLite rows, compatibility JSONL log if present, and projection rows are removed",
             'durable compaction boundary event',
         ] as const;
 

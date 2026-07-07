@@ -19,7 +19,6 @@ export function SessionListPanel({
             {projection.sessions.map((session) => (
                 <button
                     className="session-item"
-                    data-lock-state={session.lockState ?? 'none'}
                     data-selected={session.sessionId === selectedSessionId}
                     data-state={session.state}
                     key={session.sessionId}
@@ -28,7 +27,6 @@ export function SessionListPanel({
                 >
                     <span className="session-item-title">{session.sessionId}</span>
                     <span>{session.eventCount} events</span>
-                    <span>lock {session.lockState ?? 'none'}</span>
                     {session.workspaceTrust !== undefined ? <span>trust {session.workspaceTrust}</span> : null}
                     {session.pendingApprovalCount !== undefined ? (
                         <span>pending {session.pendingApprovalCount}</span>

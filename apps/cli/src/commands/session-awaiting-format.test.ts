@@ -49,10 +49,7 @@ function catalogEntry(
         status,
         eventCount: 1,
         messageCount: 1,
-        lockState: 'none',
         trustStatus: 'unknown',
-        indexed: false,
-        indexState: 'jsonl',
         diagnostics: [],
         ...(awaiting !== undefined ? { awaiting } : {}),
     };

@@ -16,10 +16,7 @@ const baseEntry: CliSessionCatalogEntry = {
     status: 'stopped',
     eventCount: 0,
     messageCount: 0,
-    lockState: 'none',
     trustStatus: 'unknown',
-    indexed: false,
-    indexState: 'derived',
     diagnostics: [],
 };
 

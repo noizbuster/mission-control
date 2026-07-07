@@ -85,11 +85,6 @@ export type CliArgs = {
     readonly mcpEnabled?: boolean;
     /** When true, `session replay` mounts the opentui TUI overlay instead of dumping JSONL. */
     readonly replayInteractive?: boolean;
-    /**
-     * When true, `session delete` skips the live-lock safety check and removes the session tree
-     * even if a session in the tree appears to have a live lock. Other commands ignore this flag.
-     */
-    readonly force?: boolean;
     /** Raw argv tail forwarded to `parseAgentsSubcommand` by the `mctrl agents` command. */
     readonly agentsArgv?: readonly string[];
 };

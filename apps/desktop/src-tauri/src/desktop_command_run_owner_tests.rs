@@ -1,5 +1,7 @@
-use crate::desktop_commands::{DesktopPromptCommandInput, DesktopRunCommandInput};
-use crate::sessions::{SessionLogState, read_session_events_from_data_dir};
+use crate::desktop_commands::{
+    DesktopPromptCommandInput, DesktopRunCommandInput, read_session_events_from_data_dir,
+};
+use crate::sessions::SessionLogState;
 use std::error::Error;
 use std::fs::{create_dir_all, remove_dir_all};
 use std::path::PathBuf;

@@ -49,7 +49,7 @@ describe('Desktop read-only session inspector', () => {
         expect(html).toContain('No timeline events');
     });
 
-    it('renders indexed session lock status and update time', () => {
+    it('renders session update time from database summary metadata', () => {
         // Given
         const html = renderToStaticMarkup(
             <App
@@ -60,7 +60,6 @@ describe('Desktop read-only session inspector', () => {
                         state: 'available',
                         eventCount: 1,
                         diagnostics: [],
-                        lockState: 'stale',
                         updatedAt: '2026-06-09T00:10:00.000Z',
                     },
                 ]}
@@ -74,10 +73,8 @@ describe('Desktop read-only session inspector', () => {
             />,
         );
 
-        // When: the session list is rendered from indexed summary metadata.
+        // When: the session list is rendered from database summary metadata.
         // Then
-        expect(html).toContain('data-lock-state="stale"');
-        expect(html).toContain('lock stale');
         expect(html).toContain('updated 2026-06-09T00:10:00.000Z');
     });
 

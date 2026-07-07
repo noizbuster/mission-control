@@ -1,11 +1,10 @@
 import type { Client, InStatement } from '@libsql/client';
 import { type AgentEventEnvelope, AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-import { ensureLocalDbSchema } from '../db/local-libsql-schema.js';
 import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
+import { ensureLocalDbSchema } from '../db/local-libsql-schema.js';
 import { ensureLegacySessionImportTables } from './session-import-sql.js';
 import { deriveSessionIndexRecordsFromEnvelopes } from './session-index-projection.js';
-import type { SessionIndexSessionRecord } from './session-index-types.js';
 import { replaceStatements } from './sqlite-session-projection-statements.js';
 
 const exportEventRowSchema = z.object({
@@ -61,30 +60,6 @@ export async function importJsonlSessionRows(
                 }),
             ],
             'write',
-        );
-    });
-}
-
-export async function importSessionIndexRecord(
-    input: LocalLibsqlWriteTarget & {
-        readonly record: SessionIndexSessionRecord;
-        readonly importedAt: string;
-    },
-): Promise<void> {
-    await runLocalLibsqlWrite(input, async (client) => {
-        await ensureSqliteSessionProjectionTables(client);
-        await client.execute(
-            upsertSessionStatement({
-                sessionId: input.record.sessionId,
-                status: input.record.status,
-                createdAt: input.record.startedAt,
-                updatedAt: input.record.updatedAt,
-                lastActivityAt: input.record.updatedAt,
-                lastEventSeq: input.record.lastSequence ?? 0,
-                legacyJsonlPath: input.record.sourceFilePath,
-                importedAt: input.importedAt,
-                ...(input.record.stoppedAt !== undefined ? { stoppedAt: input.record.stoppedAt } : {}),
-            }),
         );
     });
 }

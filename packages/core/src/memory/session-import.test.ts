@@ -23,7 +23,7 @@ describe('legacy session import compatibility window', () => {
         await rm(TMP_ROOT, { recursive: true, force: true });
     });
 
-    it('imports JSONL, session-index, and run records while leaving legacy source bytes unchanged', async () => {
+    it('imports JSONL and run records while leaving legacy source bytes unchanged', async () => {
         const givenFixture = await writeLegacyFixture({ tmpRoot: TMP_ROOT, name: 'complete-import' });
         const runtime = await openMigratedTestDb();
         const client = runtime.client;
@@ -40,7 +40,6 @@ describe('legacy session import compatibility window', () => {
 
             expect(whenResult).toMatchObject({
                 importedEventCount: 2,
-                importedSessionIndexRecordCount: 1,
                 importedRunCount: 1,
                 skippedSourceCount: 0,
                 diagnostics: [],
@@ -59,7 +58,6 @@ describe('legacy session import compatibility window', () => {
             await expect(listLegacySessionImportLedger(client)).resolves.toEqual(
                 expect.arrayContaining([
                     expect.objectContaining({ sourceKind: 'jsonl', importedEventCount: 2 }),
-                    expect.objectContaining({ sourceKind: 'session_index', importedEventCount: 0 }),
                     expect.objectContaining({ sourceKind: 'mission_run', importedEventCount: 0 }),
                 ]),
             );
@@ -90,10 +88,9 @@ describe('legacy session import compatibility window', () => {
 
             expect(whenSecondImport.importedEventCount).toBe(0);
             expect(whenSecondImport.importedRunCount).toBe(0);
-            expect(whenSecondImport.importedSessionIndexRecordCount).toBe(0);
-            expect(whenSecondImport.skippedSourceCount).toBe(3);
+            expect(whenSecondImport.skippedSourceCount).toBe(2);
             await expect(countRows(client, 'session_events')).resolves.toBe(2);
-            await expect(countRows(client, 'legacy_session_imports')).resolves.toBe(3);
+            await expect(countRows(client, 'legacy_session_imports')).resolves.toBe(2);
         } finally {
             runtime.close();
         }
@@ -116,7 +113,6 @@ describe('legacy session import compatibility window', () => {
             });
 
             expect(whenResult.importedEventCount).toBe(0);
-            expect(whenResult.importedSessionIndexRecordCount).toBe(1);
             expect(whenResult.importedRunCount).toBe(0);
             expect(whenResult.diagnostics).toEqual(
                 expect.arrayContaining([
@@ -125,41 +121,7 @@ describe('legacy session import compatibility window', () => {
                 ]),
             );
             await expect(readSourceBytes(givenFixture)).resolves.toEqual(before);
-            await expect(countRows(client, 'legacy_session_imports')).resolves.toBe(3);
-        } finally {
-            runtime.close();
-        }
-    });
-
-    it('records diagnostics for malformed session-index JSON while preserving source bytes', async () => {
-        const givenFixture = await writeLegacyFixture({ tmpRoot: TMP_ROOT, name: 'malformed-session-index' });
-        await writeFile(
-            givenFixture.indexPath,
-            '{"version": 1, "records": "not-an-array", "diagnostics": []}\n',
-            'utf8',
-        );
-        const before = await readSourceBytes(givenFixture);
-        const runtime = await openMigratedTestDb();
-        const client = runtime.client;
-
-        try {
-            const whenResult = await importLegacySessionCompatibilityWindow({
-                ...runtime,
-                dataDir: givenFixture.dataDir,
-                omoRoot: givenFixture.omoRoot,
-                now: () => '2026-07-01T00:00:00.000Z',
-            });
-
-            expect(whenResult.importedEventCount).toBe(2);
-            expect(whenResult.importedSessionIndexRecordCount).toBe(0);
-            expect(whenResult.importedRunCount).toBe(1);
-            expect(whenResult.diagnostics).toEqual(
-                expect.arrayContaining([
-                    expect.objectContaining({ sourceKind: 'session_index', code: 'invalid_session_index' }),
-                ]),
-            );
-            await expect(readSourceBytes(givenFixture)).resolves.toEqual(before);
-            await expect(countRows(client, 'legacy_session_imports')).resolves.toBe(3);
+            await expect(countRows(client, 'legacy_session_imports')).resolves.toBe(2);
         } finally {
             runtime.close();
         }

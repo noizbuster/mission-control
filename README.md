@@ -318,7 +318,7 @@ Session storage:
 - The SQLite/libSQL session data model, table responsibilities, indexes, legacy import operation, and export behavior are documented in [`docs/session-data-model.md`](docs/session-data-model.md).
 - Remote Turso is out of scope for session storage: there are no remote URLs, auth tokens, replica configuration, or network sync steps.
 - Use --json for transient JSON Lines rendering and --jsonl for JSON Lines rendering plus replayable session persistence.
-- Launching the interactive TUI without an explicit `--session <id>` creates no session artifacts (no SQLite session rows, `sessions/<session-id>.jsonl`, or lock file) until the first prompt turn; non-interactive `--json`/`--jsonl` runs and an explicit `--session <id>` still create a session eagerly.
+- Launching the interactive TUI without an explicit `--session <id>` creates no session artifacts (no SQLite session rows or `sessions/<session-id>.jsonl`) until the first prompt turn; non-interactive `--json`/`--jsonl` runs and an explicit `--session <id>` still create a session eagerly.
 
 Workspace selection:
 
@@ -404,10 +404,10 @@ Session export, import, compaction, deletion, and stats:
 
 - `mc session export <id> <path>` writes a checksummed session archive file with manifest, events, and SHA-256 checksum.
 - `mc session import <path>` imports a session archive into a new durable session.
-- `mc session list` lists sessions with lock status, event counts, message counts, and trust status.
+- `mc session list` lists sessions with lifecycle status, event counts, message counts, and trust status.
 - `mc session show <id>` shows the session snapshot, approvals, tool outcomes, coding steps, and diagnostics.
 - `mc session replay <id> --jsonl` replays durable events and coding steps as JSON Lines.
-- `mc session delete <id> [--force]` deletes a session and all of its descendant subagent/child sessions. Each session's SQLite rows, compatibility JSONL log if present, lock file, and projection rows are removed. The command refuses to delete any session in the tree that has an active live lock unless `--force` is passed; stale and corrupt locks are cleaned up automatically.
+- `mc session delete <id>` deletes a session and all of its descendant subagent/child sessions. Each session's SQLite rows, compatibility JSONL log if present, and projection rows are removed.
 - `/compact` in interactive chat summarizes older session history into a durable compaction boundary event, reducing replay context while preserving the session tree.
 
 Desktop scope:

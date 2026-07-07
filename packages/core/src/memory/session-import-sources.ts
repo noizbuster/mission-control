@@ -1,26 +1,16 @@
-import { ZodError, type z } from 'zod';
 import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
 import { JsonlSessionEventStoreError } from './jsonl-errors.js';
 import { type ParsedJsonlSessionLog, parseJsonlSessionLog } from './jsonl-session-records.js';
-import { importJsonlSessionRows, importSessionIndexRecord } from './session-import-event-sql.js';
+import { importJsonlSessionRows } from './session-import-event-sql.js';
 import { readLegacySource } from './session-import-files.js';
 import { recordImport, skipImported } from './session-import-ledger.js';
-import {
-    jsonlImportDiagnostic,
-    parseLegacyRun,
-    sessionIndexSessionRecord,
-    sourceImportDiagnostic,
-} from './session-import-parse.js';
+import { jsonlImportDiagnostic, parseLegacyRun, sourceImportDiagnostic } from './session-import-parse.js';
 import { importMissionRunRow } from './session-import-run-sql.js';
 import type { LegacySessionImportDiagnostic } from './session-import-sql.js';
-import { SessionIndexFileSchema } from './session-index-file-format.js';
 import { basename } from 'node:path';
-
-type ParsedSessionIndexFile = z.infer<typeof SessionIndexFileSchema>;
 
 export type ImportAccumulator = {
     importedEventCount: number;
-    importedSessionIndexRecordCount: number;
     importedRunCount: number;
     skippedSourceCount: number;
     diagnostics: LegacySessionImportDiagnostic[];
@@ -70,39 +60,6 @@ export async function importJsonlSource(input: {
     });
 }
 
-export async function importSessionIndexSource(input: {
-    readonly writeTarget: LocalLibsqlWriteTarget;
-    readonly sourcePath: string;
-    readonly now: () => string;
-    readonly acc: ImportAccumulator;
-}): Promise<void> {
-    const source = await readLegacySource(input.sourcePath, 'session_index');
-    if (
-        source.kind === 'missing' ||
-        (await skipImported({ client: input.writeTarget.client, source, acc: input.acc }))
-    ) {
-        return;
-    }
-    const importedAt = input.now();
-    const parsed = parseSessionIndexFile(source.contents);
-    if (parsed.kind === 'invalid') {
-        const diagnostic = sourceImportDiagnostic({
-            source,
-            code: 'invalid_session_index',
-            message: parsed.message,
-        });
-        input.acc.diagnostics.push(diagnostic);
-        await recordImport({ writeTarget: input.writeTarget, source, importedAt, diagnostics: [diagnostic] });
-        return;
-    }
-    const sessionRecords = parsed.file.records.flatMap((record) => sessionIndexSessionRecord(record));
-    for (const record of sessionRecords) {
-        await importSessionIndexRecord({ ...input.writeTarget, record, importedAt });
-    }
-    input.acc.importedSessionIndexRecordCount += sessionRecords.length;
-    await recordImport({ writeTarget: input.writeTarget, source, importedAt });
-}
-
 export async function importRunSource(input: {
     readonly writeTarget: LocalLibsqlWriteTarget;
     readonly sourcePath: string;
@@ -134,19 +91,4 @@ export async function importRunSource(input: {
     });
     input.acc.diagnostics.push(diagnostic);
     await recordImport({ writeTarget: input.writeTarget, source, importedAt, diagnostics: [diagnostic] });
-}
-
-function parseSessionIndexFile(
-    contents: string,
-):
-    | { readonly kind: 'ok'; readonly file: ParsedSessionIndexFile }
-    | { readonly kind: 'invalid'; readonly message: string } {
-    try {
-        return { kind: 'ok', file: SessionIndexFileSchema.parse(JSON.parse(contents)) };
-    } catch (error: unknown) {
-        if (error instanceof SyntaxError || error instanceof ZodError) {
-            return { kind: 'invalid', message: error.message };
-        }
-        throw error;
-    }
 }

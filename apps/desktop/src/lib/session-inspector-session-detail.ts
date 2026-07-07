@@ -7,7 +7,6 @@ export type SessionListRow = {
     readonly fileName: string;
     readonly state: DesktopSessionSummary['state'];
     readonly eventCount: number;
-    readonly lockState: DesktopSessionSummary['lockState'];
     readonly updatedAt?: string;
     readonly workspaceTrust?: 'trusted' | 'denied' | 'unknown';
     readonly blockedRunCount?: number;
@@ -73,7 +72,6 @@ export function projectSessionDetail(input: {
             fileName: session.fileName,
             state: session.state,
             eventCount: session.eventCount,
-            lockState: session.lockState,
             ...(session.updatedAt !== undefined ? { updatedAt: session.updatedAt } : {}),
             ...(session.sessionTree?.workspaceTrust !== undefined
                 ? { workspaceTrust: session.sessionTree.workspaceTrust }

@@ -12,7 +12,9 @@ pub(crate) fn seed_pending_file_patch_approval(
     content: &str,
 ) -> Result<(), Box<dyn Error>> {
     create_dir_all(data_dir.join("sessions"))?;
-    let path = data_dir.join("sessions").join(format!("{session_id}.jsonl"));
+    let path = data_dir
+        .join("sessions")
+        .join(format!("{session_id}.jsonl"));
     if !path.exists() {
         write(
             &path,
@@ -127,7 +129,8 @@ pub(crate) fn seed_pending_file_patch_approval(
         .append(true)
         .open(path)?
         .write_all(
-            format!("{tool_call}\n{permission_requested}\n{approval_requested}\n{run_blocked}\n").as_bytes(),
+            format!("{tool_call}\n{permission_requested}\n{approval_requested}\n{run_blocked}\n")
+                .as_bytes(),
         )?;
     Ok(())
 }
@@ -138,7 +141,9 @@ pub(crate) fn seed_pending_command_approval(
     approval_id: &str,
 ) -> Result<(), Box<dyn Error>> {
     create_dir_all(data_dir.join("sessions"))?;
-    let path = data_dir.join("sessions").join(format!("{session_id}.jsonl"));
+    let path = data_dir
+        .join("sessions")
+        .join(format!("{session_id}.jsonl"));
     if !path.exists() {
         write(
             &path,
@@ -247,7 +252,8 @@ pub(crate) fn seed_pending_command_approval(
         .append(true)
         .open(path)?
         .write_all(
-            format!("{tool_call}\n{permission_requested}\n{approval_requested}\n{run_blocked}\n").as_bytes(),
+            format!("{tool_call}\n{permission_requested}\n{approval_requested}\n{run_blocked}\n")
+                .as_bytes(),
         )?;
     Ok(())
 }
@@ -257,7 +263,12 @@ pub(crate) fn temp_data_dir(label: &str) -> Result<PathBuf, Box<dyn Error>> {
     Ok(std::env::temp_dir().join(format!("mission-control-desktop-{label}-{nanos}")))
 }
 
-fn event_record(session_id: &str, event_id: String, sequence: usize, event: serde_json::Value) -> serde_json::Value {
+fn event_record(
+    session_id: &str,
+    event_id: String,
+    sequence: usize,
+    event: serde_json::Value,
+) -> serde_json::Value {
     serde_json::json!({
         "kind": "mission-control.session-event",
         "version": 1,

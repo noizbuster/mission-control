@@ -85,7 +85,7 @@ export function createHelpText(): string {
         '  mc session export session_demo /tmp/session_demo.mctrl-session.json',
         '  mc session import /tmp/session_demo.mctrl-session.json',
         '  mc session replay session_demo --jsonl',
-        '  mc session delete session_demo [--force]',
+        '  mc session delete session_demo',
         '  mc auth login --provider local --api-key <key>',
         '  mc auth login --provider anthropic --api-key <key>',
         '  mc auth login --provider openai --method oauth-headless',

@@ -1,10 +1,7 @@
 import { type Run, RunSchema } from '@mission-control/protocol';
-import { z } from 'zod';
 import { JsonlSessionEventStoreError } from './jsonl-errors.js';
 import type { FoundLegacySource } from './session-import-files.js';
 import type { LegacySessionImportDiagnostic } from './session-import-sql.js';
-import { SessionIndexFileSchema } from './session-index-file-format.js';
-import type { SessionIndexSessionRecord } from './session-index-types.js';
 
 export function parseLegacyRun(
     contents: string,
@@ -18,15 +15,6 @@ export function parseLegacyRun(
     } catch (error: unknown) {
         return { kind: 'invalid', message: error instanceof Error ? error.message : 'invalid run JSON' };
     }
-}
-
-export function sessionIndexSessionRecord(
-    record: z.infer<typeof SessionIndexFileSchema>['records'][number],
-): readonly SessionIndexSessionRecord[] {
-    if (record.kind === 'session') {
-        return [record];
-    }
-    return [];
 }
 
 export function jsonlImportDiagnostic(input: {

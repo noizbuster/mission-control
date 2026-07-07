@@ -1,12 +1,8 @@
-pub use crate::session_catalog::{list_sessions_in_data_dir, read_session_snapshot_from_data_dir};
-use crate::session_projection::{DesktopSessionStats, DesktopSessionTreeSummary};
-use crate::session_parse::{empty_log, parse_session_contents};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::fs::{metadata, read_to_string};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 #[cfg(test)]
 use std::sync::Mutex;
 
@@ -15,7 +11,7 @@ const DATA_DIR_ENV: &str = "MCTRL_DATA_DIR";
 #[cfg(test)]
 static TEST_DATA_DIR_OVERRIDE: Mutex<Option<PathBuf>> = Mutex::new(None);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionLogState {
     Available,
@@ -24,16 +20,15 @@ pub enum SessionLogState {
     Corrupt,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SessionLockState {
-    None,
-    Live,
-    Stale,
-    Corrupt,
+pub enum WorkspaceTrustState {
+    Trusted,
+    Denied,
+    Unknown,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionDiagnostic {
     pub code: String,
@@ -41,15 +36,53 @@ pub struct SessionDiagnostic {
     pub line_number: Option<usize>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopSessionTreeSummary {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trusted_root: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_trust: Option<WorkspaceTrustState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_leaf_id: Option<String>,
+    pub entry_count: usize,
+    pub branch_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fork_source_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clone_source_session_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopSessionStats {
+    pub event_count: usize,
+    pub pending_approval_count: usize,
+    pub blocked_run_count: usize,
+    pub command_event_count: usize,
+    pub diff_event_count: usize,
+    pub tool_outcome_count: usize,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopSessionSummary {
     pub session_id: String,
     pub file_name: String,
     pub state: SessionLogState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub awaiting: Option<Value>,
     pub event_count: usize,
-    pub lock_state: SessionLockState,
-    pub indexed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<String>,
     pub diagnostics: Vec<SessionDiagnostic>,
@@ -59,7 +92,7 @@ pub struct DesktopSessionSummary {
     pub stats: Option<DesktopSessionStats>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopSessionLog {
     pub session_id: String,
@@ -69,15 +102,19 @@ pub struct DesktopSessionLog {
     pub diagnostics: Vec<SessionDiagnostic>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopSessionSnapshot {
     pub session_id: String,
     pub state: SessionLogState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub awaiting: Option<Value>,
     pub event_count: usize,
     pub graph_ids: Vec<String>,
-    pub lock_state: SessionLockState,
-    pub indexed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<String>,
     pub diagnostics: Vec<SessionDiagnostic>,
@@ -116,43 +153,6 @@ pub fn resolve_data_dir() -> DesktopResult<PathBuf> {
         .map(PathBuf::from)
         .ok_or_else(|| session_error("HOME is required when MCTRL_DATA_DIR is not set"))?;
     Ok(home.join(".local").join("share").join("mission-control"))
-}
-
-pub fn read_session_events_from_data_dir(
-    data_dir: &Path,
-    session_id: &str,
-) -> DesktopResult<DesktopSessionLog> {
-    let parsed_session_id = parse_session_id(session_id)?;
-    let path = session_path(data_dir, &parsed_session_id);
-    if !path.exists() {
-        return Ok(empty_log(parsed_session_id, SessionLogState::Missing));
-    }
-    if metadata(&path)
-        .map_err(|error| session_error(format!("could not inspect {}: {error}", path.display())))?
-        .len()
-        == 0
-    {
-        return Ok(empty_log(parsed_session_id, SessionLogState::Empty));
-    }
-    let contents = read_to_string(&path)
-        .map_err(|error| session_error(format!("could not read {}: {error}", path.display())))?;
-    Ok(parse_session_contents(&parsed_session_id, contents))
-}
-
-pub(crate) fn parse_session_id(session_id: &str) -> DesktopResult<String> {
-    if session_id
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
-    {
-        return Ok(session_id.to_owned());
-    }
-    Err(session_error(format!("invalid session id {session_id}")))
-}
-
-pub(crate) fn session_path(data_dir: &Path, session_id: &str) -> PathBuf {
-    data_dir
-        .join("sessions")
-        .join(format!("{session_id}.jsonl"))
 }
 
 pub(crate) fn session_error(message: impl Into<String>) -> DesktopSessionError {

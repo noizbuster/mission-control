@@ -34,7 +34,6 @@ export async function runSessionCommand(args: CliArgs): Promise<string> {
         case 'session-delete':
             return deleteSessionTree({
                 sessionId: requireSessionId(args),
-                ...(args.force === true ? { force: true } : {}),
             });
         default:
             throw new CliSessionCommandError({
@@ -54,10 +53,7 @@ async function showSession(sessionId: string) {
         awaiting: summary.awaiting,
         eventCount: summary.eventCount,
         messageCount: summary.messageCount,
-        lockState: summary.lockState,
         createdAt: summary.createdAt,
-        indexed: summary.indexed,
-        indexState: summary.indexState,
         updatedAt: summary.updatedAt,
         cwd: summary.cwd,
         trustedRoot: summary.trustedRoot,

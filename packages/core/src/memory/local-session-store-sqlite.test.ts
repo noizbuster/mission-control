@@ -41,6 +41,7 @@ describe('local session store SQLite-native sessions', () => {
 
         // Then: callers observe the SQLite-native session without relying on a JSONL side file.
         await expect(stat(join(dataDir, 'sessions', `${sessionId}.jsonl`))).rejects.toMatchObject({ code: 'ENOENT' });
+        await expect(stat(join(dataDir, 'sessions', `${sessionId}.lock`))).rejects.toMatchObject({ code: 'ENOENT' });
         expect(replay.kind).toBe('found');
         expect(reopenedReplay.kind).toBe('found');
         expect(replay.kind === 'found' ? replay.replay.projection.envelopes.map((item) => item.eventId) : []).toEqual([

@@ -2,15 +2,10 @@ import type { Client } from '@libsql/client';
 import { z } from 'zod';
 import { legacyImportTableSql } from './session-import-schema.js';
 
-export const legacySessionSourceKinds = ['jsonl', 'session_index', 'mission_run'] as const;
+export const legacySessionSourceKinds = ['jsonl', 'mission_run'] as const;
 export type LegacySessionSourceKind = (typeof legacySessionSourceKinds)[number];
 
-export const legacySessionImportDiagnosticCodes = [
-    'corrupt_jsonl',
-    'invalid_session_index',
-    'invalid_run',
-    'read_failed',
-] as const;
+export const legacySessionImportDiagnosticCodes = ['corrupt_jsonl', 'invalid_run', 'read_failed'] as const;
 export type LegacySessionImportDiagnosticCode = (typeof legacySessionImportDiagnosticCodes)[number];
 
 export type LegacySessionImportDiagnostic = {

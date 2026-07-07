@@ -1,20 +1,15 @@
-import { createFileSessionIndexStore } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runSessionCommand } from './session.js';
 import {
     metadataEvent,
     pathExists,
-    sessionIndexRecord,
-    sessionLockPath,
     sessionLogPath,
     taskCompletedEvent,
     useTempDataDir,
-    writeSessionLock,
 } from './session-delete-test-support.js';
 import { writeSessionEvents } from './session-test-support.js';
 import { rm } from 'node:fs/promises';
-import { join } from 'node:path';
 
 describe('session delete', () => {
     afterEach(() => {
@@ -114,82 +109,6 @@ describe('session delete', () => {
         await expect(runSessionCommand(parseArgs(['session', 'delete', 'session_nonexistent']))).rejects.toMatchObject({
             code: 'session_not_found',
         });
-        await rm(dataDir, { recursive: true, force: true });
-    });
-
-    it('refuses to delete sessions with active live locks', async () => {
-        const dataDir = await useTempDataDir();
-        const sessionId = 'session_live_locked';
-        await writeSessionEvents({
-            dataDir,
-            sessionId,
-            events: [taskCompletedEvent(sessionId, 'locked run')],
-        });
-        await writeSessionLock(dataDir, sessionId, '2099-01-01T00:00:00.000Z');
-
-        await expect(runSessionCommand(parseArgs(['session', 'delete', sessionId]))).rejects.toMatchObject({
-            code: 'session_live_locked',
-        });
-        expect(await pathExists(sessionLogPath(dataDir, sessionId))).toBe(true);
-        await rm(dataDir, { recursive: true, force: true });
-    });
-
-    it('--force overrides the live lock check', async () => {
-        const dataDir = await useTempDataDir();
-        const sessionId = 'session_force_delete';
-        await writeSessionEvents({
-            dataDir,
-            sessionId,
-            events: [taskCompletedEvent(sessionId, 'locked run')],
-        });
-        await writeSessionLock(dataDir, sessionId, '2099-01-01T00:00:00.000Z');
-
-        const output = await runSessionCommand(parseArgs(['session', 'delete', sessionId, '--force']));
-
-        expect(output.trim()).toBe(`Deleted session ${sessionId} (1 events)`);
-        expect(await pathExists(sessionLogPath(dataDir, sessionId))).toBe(false);
-        expect(await pathExists(sessionLockPath(dataDir, sessionId))).toBe(false);
-        await rm(dataDir, { recursive: true, force: true });
-    });
-
-    it('deletes stale lock files alongside the session', async () => {
-        const dataDir = await useTempDataDir();
-        const sessionId = 'session_stale_lock';
-        await writeSessionEvents({
-            dataDir,
-            sessionId,
-            events: [taskCompletedEvent(sessionId, 'stale run')],
-        });
-        await writeSessionLock(dataDir, sessionId, '2020-01-01T00:00:00.000Z');
-
-        await runSessionCommand(parseArgs(['session', 'delete', sessionId]));
-
-        expect(await pathExists(sessionLogPath(dataDir, sessionId))).toBe(false);
-        expect(await pathExists(sessionLockPath(dataDir, sessionId))).toBe(false);
-        await rm(dataDir, { recursive: true, force: true });
-    });
-
-    it('removes session index entries after deletion', async () => {
-        const dataDir = await useTempDataDir();
-        const sessionId = 'session_indexed';
-        await writeSessionEvents({
-            dataDir,
-            sessionId,
-            events: [taskCompletedEvent(sessionId, 'indexed run')],
-        });
-        const indexPath = join(dataDir, 'session-index.json');
-        const index = createFileSessionIndexStore({ indexPath });
-        await index.replaceSessionIndex({
-            sessionId,
-            records: [sessionIndexRecord(dataDir, sessionId)],
-            diagnostics: [],
-        });
-        expect(await index.getSession(sessionId)).not.toBeNull();
-
-        await runSessionCommand(parseArgs(['session', 'delete', sessionId]));
-
-        const after = createFileSessionIndexStore({ indexPath });
-        expect(await after.getSession(sessionId)).toBeNull();
         await rm(dataDir, { recursive: true, force: true });
     });
 

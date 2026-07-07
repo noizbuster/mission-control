@@ -40,7 +40,7 @@ describe('CLI entrypoint', () => {
         expect(help).toContain('mc session export session_demo /tmp/session_demo.mctrl-session.json');
         expect(help).toContain('mc session import /tmp/session_demo.mctrl-session.json');
         expect(help).toContain('mc session replay session_demo --jsonl');
-        expect(help).toContain('mc session delete session_demo [--force]');
+        expect(help).toContain('mc session delete session_demo');
         expect(help).toContain('--version');
         expect(help).toContain('--help');
         expect(help).toContain('mc --no-tui --provider local --model local-echo');

@@ -1,30 +1,19 @@
 mod desktop_command_bridge;
 mod desktop_command_bridge_stream;
-mod desktop_commands;
 #[cfg(test)]
 mod desktop_command_test_support;
-mod session_catalog;
-mod session_datetime;
-mod session_index;
-mod session_index_format;
-mod session_index_format_fields;
-mod session_index_format_records;
-mod session_log_scan;
-mod session_parse;
-mod session_projection;
-mod session_protocol;
+mod desktop_commands;
 mod sessions;
 
 pub use desktop_commands::{
     DesktopApprovalDecisionInput, DesktopCommandReceipt, DesktopPromptCommandInput,
     DesktopProviderCredentialSummary, DesktopRunCommandInput, SaveDesktopProviderCredentialInput,
-    decide_approval, interrupt_run, list_provider_credentials, queue_follow_up, resume_run,
-    save_provider_credential, steer_run, submit_prompt,
+    decide_approval, interrupt_run, list_provider_credentials, list_sessions_in_data_dir,
+    queue_follow_up, read_session_events_from_data_dir, read_session_snapshot_from_data_dir,
+    resume_run, save_provider_credential, steer_run, submit_prompt,
 };
 pub use sessions::{
-    DesktopSessionLog, DesktopSessionSnapshot, DesktopSessionSummary, SessionLockState,
-    SessionLogState, list_sessions_in_data_dir, read_session_events_from_data_dir,
-    read_session_snapshot_from_data_dir,
+    DesktopSessionLog, DesktopSessionSnapshot, DesktopSessionSummary, SessionLogState,
 };
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
@@ -35,20 +24,20 @@ pub fn greet(name: &str) -> String {
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub fn list_sessions() -> Result<Vec<DesktopSessionSummary>, String> {
     let data_dir = sessions::resolve_data_dir().map_err(|error| error.to_string())?;
-    sessions::list_sessions_in_data_dir(&data_dir).map_err(|error| error.to_string())
+    desktop_commands::list_sessions_in_data_dir(&data_dir).map_err(|error| error.to_string())
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub fn read_session_events(session_id: &str) -> Result<DesktopSessionLog, String> {
     let data_dir = sessions::resolve_data_dir().map_err(|error| error.to_string())?;
-    sessions::read_session_events_from_data_dir(&data_dir, session_id)
+    desktop_commands::read_session_events_from_data_dir(&data_dir, session_id)
         .map_err(|error| error.to_string())
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub fn read_session_snapshot(session_id: &str) -> Result<DesktopSessionSnapshot, String> {
     let data_dir = sessions::resolve_data_dir().map_err(|error| error.to_string())?;
-    sessions::read_session_snapshot_from_data_dir(&data_dir, session_id)
+    desktop_commands::read_session_snapshot_from_data_dir(&data_dir, session_id)
         .map_err(|error| error.to_string())
 }
 
@@ -87,30 +76,6 @@ mod desktop_command_tests;
 
 #[cfg(test)]
 mod desktop_command_run_owner_tests;
-
-#[cfg(test)]
-mod session_log_invariant_tests;
-
-#[cfg(test)]
-mod session_index_fallback_tests;
-
-#[cfg(test)]
-mod session_index_security_tests;
-
-#[cfg(test)]
-mod session_index_shape_tests;
-
-#[cfg(test)]
-mod session_list_tests;
-
-#[cfg(test)]
-mod session_catalog_projection_tests;
-
-#[cfg(test)]
-mod session_catalog_projection_repair_tests;
-
-#[cfg(test)]
-mod session_read_validation_tests;
 
 #[cfg(test)]
 mod tests {

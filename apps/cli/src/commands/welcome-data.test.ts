@@ -19,10 +19,7 @@ function makeCatalogEntry(overrides: Partial<CliSessionCatalogEntry> = {}): CliS
         status: 'idle',
         eventCount: 10,
         messageCount: 5,
-        lockState: 'none',
         trustStatus: 'unknown',
-        indexed: false,
-        indexState: 'derived',
         diagnostics: [],
         ...overrides,
     };

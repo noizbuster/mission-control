@@ -27,10 +27,6 @@ export async function readJsonlRecords(filePath: string): Promise<readonly Recor
         .map(parseJsonRecord);
 }
 
-export async function readJsonRecord(filePath: string): Promise<Record<string, unknown>> {
-    return parseJsonRecord(await readFile(filePath, 'utf8'));
-}
-
 export function envelopeSequence(record: JsonlRecordView): unknown {
     const event = eventEnvelopeFromRecord(record);
     return event?.sequence;

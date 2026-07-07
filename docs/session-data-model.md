@@ -48,7 +48,7 @@ Core `<MCTRL_DATA_DIR>/memory.db` tables:
 | `approvals` | Approval projection keyed by `approval_id`, including subject, status, request/decision timestamps, and decision metadata. |
 | `tool_calls` | Tool-call projection keyed by `tool_call_id`, including name, status, arguments, result, approval id, timestamps, errors, and applied files. |
 | `provider_failures` | Provider failure projection keyed by a failure id, with unique `(session_id, event_id)` rows for request/provider-turn diagnostics. |
-| `legacy_session_imports` | Idempotent import ledger for JSONL logs, `session-index.json`, and `.omo/runs/*.json` files. Records source path, source kind, checksum, imported event count, import timestamp, and diagnostics. |
+| `legacy_session_imports` | Idempotent import ledger for JSONL logs and `.omo/runs/*.json` files. Records source path, source kind, checksum, imported event count, import timestamp, and diagnostics. |
 
 Shared local `memory.db` runtime tables:
 
@@ -202,11 +202,9 @@ statements. Legacy compatibility import is additive and idempotent:
    current schema, and then runs the legacy compatibility importer.
 2. JSONL logs under `<data-dir>/sessions/*.jsonl` are parsed as validated event
    envelopes and inserted into `session_events`.
-3. `session-index.json` records are imported into the `sessions` projection when
-   present.
-4. `.omo/runs/*.json` records are parsed through the mission-run protocol schema
+3. `.omo/runs/*.json` records are parsed through the mission-run protocol schema
    and upserted into `mission_runs`.
-5. `legacy_session_imports` records the source path, source kind, checksum,
+4. `legacy_session_imports` records the source path, source kind, checksum,
    imported event count, timestamp, and any diagnostics.
 
 The importer uses `(source_path, checksum)` to skip already imported files. It
@@ -240,18 +238,15 @@ directory when needed.
 agent/job mirror tables intentionally share `memory.db`. `:memory:` remains
 available for tests and ephemeral stores.
 
-Session lock files still use the legacy path shape under
-`<data-dir>/sessions/<session-id>.lock` so existing lock and stale-lock behavior
-does not change. Legacy JSONL logs, if present, remain at
-`<data-dir>/sessions/<session-id>.jsonl` and are treated as import/export
-compatibility artifacts.
+Legacy JSONL logs, if present, remain at `<data-dir>/sessions/<session-id>.jsonl`
+and are treated as import/export compatibility artifacts.
 
 ## Rollback And Operations
 
 Operational rollback is data-preserving:
 
-- Keep the original JSONL/session-index/run JSON files. Import never rewrites or
-  deletes them.
+- Keep the original JSONL and run JSON files. Import never rewrites or deletes
+  them.
 - Use `mctrl session export <id> <path>` to produce a checksummed replay archive
   from SQLite-native rows for older readers or rollback inspection.
 - Use `legacy_session_imports` to audit which legacy files were imported, which

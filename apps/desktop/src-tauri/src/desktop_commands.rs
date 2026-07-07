@@ -70,6 +70,12 @@ pub struct DesktopProviderCredentialSummary {
 #[serde(rename_all = "camelCase")]
 struct EmptyDesktopCommandInput {}
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopSessionReadInput {
+    session_id: String,
+}
+
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub fn submit_prompt(input: DesktopPromptCommandInput) -> Result<DesktopCommandReceipt, String> {
     let session_id = input.session_id.clone();
@@ -184,6 +190,38 @@ pub(crate) fn decide_approval_in_data_dir(
         }
     };
     invoke_default_bridge("decideApproval", input.session_id.clone(), &input, data_dir)
+}
+
+pub fn list_sessions_in_data_dir(
+    data_dir: &Path,
+) -> Result<Vec<sessions::DesktopSessionSummary>, String> {
+    invoke_default_bridge_json("listSessions", &EmptyDesktopCommandInput {}, data_dir)
+}
+
+pub fn read_session_events_from_data_dir(
+    data_dir: &Path,
+    session_id: &str,
+) -> Result<sessions::DesktopSessionLog, String> {
+    invoke_default_bridge_json(
+        "readSessionEvents",
+        &DesktopSessionReadInput {
+            session_id: session_id.to_owned(),
+        },
+        data_dir,
+    )
+}
+
+pub fn read_session_snapshot_from_data_dir(
+    data_dir: &Path,
+    session_id: &str,
+) -> Result<sessions::DesktopSessionSnapshot, String> {
+    invoke_default_bridge_json(
+        "readSessionSnapshot",
+        &DesktopSessionReadInput {
+            session_id: session_id.to_owned(),
+        },
+        data_dir,
+    )
 }
 
 fn with_resolved_data_dir(

@@ -1,8 +1,4 @@
-import {
-    createFileSessionIndexStore,
-    deleteLocalSessionRows,
-    resolveMissionControlDataDir,
-} from '@mission-control/core';
+import { deleteLocalSessionRows, resolveMissionControlDataDir } from '@mission-control/core';
 import { type CliSessionCatalogEntry, listSessionCatalogEntries } from './session-catalog.js';
 import { CliSessionCommandError } from './session-command-error.js';
 import { rm } from 'node:fs/promises';
@@ -10,7 +6,6 @@ import { join } from 'node:path';
 
 export async function deleteSessionTree(input: {
     readonly sessionId: string;
-    readonly force?: boolean;
 }): Promise<string> {
     const targetId = input.sessionId;
     const entries = await listSessionCatalogEntries();
@@ -26,32 +21,9 @@ export async function deleteSessionTree(input: {
     const childrenByParent = buildChildrenByParent(entries);
     const ordered = collectDescendants(target, childrenByParent);
 
-    if (input.force !== true) {
-        const liveLocked = ordered.filter((entry) => entry.lockState === 'live');
-        if (liveLocked.length > 0) {
-            throw new CliSessionCommandError({
-                code: 'session_live_locked',
-                message:
-                    `Refusing to delete ${liveLocked.length} session(s) with active locks: ` +
-                    `${liveLocked.map((entry) => entry.sessionId).join(', ')}. ` +
-                    `Close the active session(s) first or rerun with --force.`,
-                sessionId: targetId,
-            });
-        }
-    }
-
-    const indexStore = createFileSessionIndexStore({ indexPath: sessionIndexPath() });
     await deleteLocalSessionRows({ sessionIds: ordered.map((entry) => entry.sessionId) });
     await Promise.all(
-        ordered.flatMap((entry) => [
-            rm(sessionLogPath(entry.sessionId), { force: true }),
-            rm(sessionLockPath(entry.sessionId), { force: true }),
-            indexStore.replaceSessionIndex({
-                sessionId: entry.sessionId,
-                records: [],
-                diagnostics: [],
-            }),
-        ]),
+        ordered.map((entry) => rm(sessionLogPath(entry.sessionId), { force: true })),
     );
 
     const lines = ordered.map((entry) => `Deleted session ${entry.sessionId} (${entry.eventCount} events)`);
@@ -64,14 +36,6 @@ function sessionLogsDir(): string {
 
 function sessionLogPath(sessionId: string): string {
     return join(sessionLogsDir(), `${sessionId}.jsonl`);
-}
-
-function sessionLockPath(sessionId: string): string {
-    return join(sessionLogsDir(), `${sessionId}.lock`);
-}
-
-function sessionIndexPath(): string {
-    return join(resolveMissionControlDataDir(), 'session-index.json');
 }
 
 function buildChildrenByParent(

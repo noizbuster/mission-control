@@ -64,11 +64,7 @@ describe('session archive commands', () => {
             version: 1,
             manifest: { sessionId, cwd: workspaceRoot, trustedRoot: workspaceRoot },
         });
-        expect(JSON.parse(importedShow)).toMatchObject({
-            ...JSON.parse(originalShow),
-            indexed: true,
-            indexState: 'derived',
-        });
+        expect(JSON.parse(importedShow)).toEqual(JSON.parse(originalShow));
         await rm(archivePath, { force: true });
         await rm(sourceDataDir, { recursive: true, force: true });
         await rm(importDataDir, { recursive: true, force: true });

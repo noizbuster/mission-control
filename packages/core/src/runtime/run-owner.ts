@@ -71,8 +71,6 @@ export type SessionRunOwnerRegistryOptions = {
     readonly haltOnFailedToolSettlement?: boolean;
     readonly projectContext?: ProjectContextMessageOptions;
     readonly toolRegistry?: ToolRegistry;
-    readonly lockStaleAfterMs?: number;
-    readonly lockHeartbeatIntervalMs?: number;
     readonly createEventId?: JsonlSessionEventIdFactory;
     readonly createId?: (prefix: string, index: number) => string;
     /**
@@ -257,10 +255,6 @@ export class SessionRunOwnerRegistry {
             ...(this.options.dataDir !== undefined ? { dataDir: this.options.dataDir } : {}),
             ...(this.options.now !== undefined ? { now: this.options.now } : {}),
             ...(this.options.createEventId !== undefined ? { createEventId: this.options.createEventId } : {}),
-            ...(this.options.lockStaleAfterMs !== undefined ? { lockStaleAfterMs: this.options.lockStaleAfterMs } : {}),
-            ...(this.options.lockHeartbeatIntervalMs !== undefined
-                ? { lockHeartbeatIntervalMs: this.options.lockHeartbeatIntervalMs }
-                : {}),
         });
         const modelProviderSelection =
             input.modelProviderSelection ??

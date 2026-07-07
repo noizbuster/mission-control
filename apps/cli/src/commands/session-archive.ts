@@ -1,5 +1,4 @@
 import {
-    createFileSessionIndexStore,
     createSessionArchive,
     JSONL_SESSION_EVENT_RECORD_KIND,
     JSONL_SESSION_LOG_HEADER_KIND,
@@ -8,7 +7,6 @@ import {
     parseJsonlSessionLog,
     parseSessionArchive,
     readLocalSessionReplay,
-    rebuildSessionIndexFromJsonl,
     resolveMissionControlDataDir,
     validateSessionArchiveManifestForImport,
 } from '@mission-control/core';
@@ -126,7 +124,6 @@ export async function importSessionArchiveFile(input: { readonly filePath: strin
     });
     const sessionId = requireValidSessionId(archive.manifest.sessionId);
     const sessionPath = resolveSessionLogPath(sessionId);
-    const indexStore = createFileSessionIndexStore({ indexPath: sessionIndexPath() });
     parseJsonlSessionLog({
         contents: archive.eventsJsonl,
         filePath: sessionPath,
@@ -137,12 +134,13 @@ export async function importSessionArchiveFile(input: { readonly filePath: strin
     try {
         await writeFile(sessionPath, archive.eventsJsonl, { encoding: 'utf8', flag: 'wx' });
         wroteSessionPath = true;
-        await rebuildSessionIndexFromJsonl({
-            store: indexStore,
-            sessionId,
-            filePath: sessionPath,
-            contents: archive.eventsJsonl,
-        });
+        const replay = await readLocalSessionReplay({ sessionId });
+        if (replay.kind === 'missing') {
+            throw new SessionArchiveCommandError({
+                code: 'session_not_found',
+                message: `Imported session could not be projected: ${sessionId}`,
+            });
+        }
     } catch (error: unknown) {
         if (wroteSessionPath) {
             await rm(sessionPath, { force: true });
@@ -178,10 +176,6 @@ async function workspaceForArchive(
 
 function sessionLogsDir(): string {
     return join(resolveMissionControlDataDir(), 'sessions');
-}
-
-function sessionIndexPath(): string {
-    return join(resolveMissionControlDataDir(), 'session-index.json');
 }
 
 function requireValidSessionId(sessionId: string): string {

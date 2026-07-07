@@ -1,11 +1,11 @@
+use crate::desktop_command_test_support::{seed_pending_file_patch_approval, temp_data_dir};
 use crate::desktop_commands::{
     DesktopApprovalDecisionInput, DesktopPromptCommandInput, DesktopRunCommandInput,
     decide_approval_with_bridge, interrupt_run_in_data_dir, queue_follow_up_in_data_dir,
-    resume_run_in_data_dir, steer_run_in_data_dir, submit_prompt_in_data_dir,
-    submit_prompt_with_bridge,
+    read_session_events_from_data_dir, resume_run_in_data_dir, steer_run_in_data_dir,
+    submit_prompt_in_data_dir, submit_prompt_with_bridge,
 };
-use crate::desktop_command_test_support::{seed_pending_file_patch_approval, temp_data_dir};
-use crate::sessions::{SessionLogState, read_session_events_from_data_dir};
+use crate::sessions::SessionLogState;
 use std::error::Error;
 use std::fs::remove_dir_all;
 
@@ -37,23 +37,25 @@ fn prompt_commands_call_core_service_and_append_parseable_session_events()
 #[test]
 fn run_and_approval_commands_append_parseable_session_events() -> Result<(), Box<dyn Error>> {
     let data_dir = temp_data_dir("run-approval-bridge")?;
+    let run_session_id = "session_bridge_run";
+    let approval_session_id = "session_bridge_approval";
     let run = DesktopRunCommandInput {
-        session_id: "session_bridge_run".to_owned(),
+        session_id: run_session_id.to_owned(),
         reason: Some("manual stop".to_owned()),
     };
     let approval = DesktopApprovalDecisionInput {
-        session_id: "session_bridge_run".to_owned(),
+        session_id: approval_session_id.to_owned(),
         approval_id: "approval_permission_call_patch".to_owned(),
         state: "denied".to_owned(),
         reason: Some("denied".to_owned()),
     };
 
-    let queued = queue_follow_up_in_data_dir(prompt_input("session_bridge_run"), &data_dir)?;
+    let queued = queue_follow_up_in_data_dir(prompt_input(run_session_id), &data_dir)?;
     let resumed = resume_run_in_data_dir(run.clone(), &data_dir)?;
     let interrupted = interrupt_run_in_data_dir(run, &data_dir)?;
     seed_pending_file_patch_approval(
         &data_dir,
-        "session_bridge_run",
+        approval_session_id,
         "approval_permission_call_patch",
         ".mission-control-denied.txt",
         "denied write",
@@ -62,7 +64,8 @@ fn run_and_approval_commands_append_parseable_session_events() -> Result<(), Box
         std::env::current_dir()?,
     )?;
     let decided = decide_approval_with_bridge(approval, &data_dir, &bridge)?;
-    let log = read_session_events_from_data_dir(&data_dir, "session_bridge_run")?;
+    let run_log = read_session_events_from_data_dir(&data_dir, run_session_id)?;
+    let approval_log = read_session_events_from_data_dir(&data_dir, approval_session_id)?;
 
     assert_eq!(queued.status, "queued");
     assert_eq!(resumed.status, "completed");
@@ -72,11 +75,12 @@ fn run_and_approval_commands_append_parseable_session_events() -> Result<(), Box
     assert!(resumed.events_written > 0);
     assert!(interrupted.events_written > 0);
     assert!(decided.events_written > 0);
-    assert_eq!(log.state, SessionLogState::Available);
-    assert!(run_commands(&log).contains(&"resume".to_owned()));
-    assert!(run_commands(&log).contains(&"interrupt".to_owned()));
-    assert!(event_types(&log).contains(&"approval.updated".to_owned()));
-    assert!(event_types(&log).contains(&"approval.blocked".to_owned()));
+    assert_eq!(run_log.state, SessionLogState::Available);
+    assert_eq!(approval_log.state, SessionLogState::Available);
+    assert!(run_commands(&run_log).contains(&"resume".to_owned()));
+    assert!(run_commands(&run_log).contains(&"interrupt".to_owned()));
+    assert!(event_types(&approval_log).contains(&"approval.updated".to_owned()));
+    assert!(event_types(&approval_log).contains(&"approval.blocked".to_owned()));
     remove_dir_all(data_dir)?;
     Ok(())
 }

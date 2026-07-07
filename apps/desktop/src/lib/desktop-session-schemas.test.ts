@@ -87,8 +87,6 @@ describe('desktop session schemas', () => {
                     sessionTree,
                     stats,
                 }),
-                sessionId: 'session_summary',
-                lockState: 'live',
             }),
         ).toMatchObject({
             sessionTree,

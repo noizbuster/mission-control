@@ -14,13 +14,7 @@ import {
     type OpenedJsonlSessionFile,
     type OpenJsonlSessionFileOptions,
     openJsonlSessionFile,
-    releaseSessionLock,
 } from './jsonl-session-files.js';
-import {
-    DEFAULT_JSONL_SESSION_LOCK_STALE_AFTER_MS,
-    heartbeatJsonlSessionLock,
-    type JsonlSessionLockLease,
-} from './jsonl-session-lock.js';
 import { defaultSession, deriveSession } from './jsonl-session-projection.js';
 import { createJsonlSessionEventRecord, serializeJsonlRecord } from './jsonl-session-records.js';
 import type { MemoryStore, SessionCompactionRecordInput } from './memory-store.js';
@@ -34,57 +28,43 @@ export type JsonlSessionEventIdFactory = (event: AgentEvent, sequence: number) =
 export type JsonlSessionEventStoreOpenOptions = Omit<OpenJsonlSessionFileOptions, 'now'> & {
     readonly now?: () => string;
     readonly createEventId?: JsonlSessionEventIdFactory;
-    readonly lockHeartbeatIntervalMs?: number;
 };
 
 type JsonlSessionEventStoreInput = OpenedJsonlSessionFile & {
     readonly now: () => string;
     readonly createEventId: JsonlSessionEventIdFactory;
-    readonly lockHeartbeatIntervalMs: number;
 };
 
 export class JsonlSessionEventStore implements MemoryStore {
     readonly sessionId: string;
     readonly filePath: string;
-    readonly lockPath: string;
     private readonly fileHandle: OpenedJsonlSessionFile['fileHandle'];
     private readonly log: SessionEventLog;
     private readonly now: () => string;
     private readonly createEventId: JsonlSessionEventIdFactory;
-    private lockHandle: OpenedJsonlSessionFile['lockHandle'];
-    private lockLease: JsonlSessionLockLease;
     private nextSequence: number;
     private appendQueue: Promise<void> = Promise.resolve();
-    private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
-    private heartbeatFailure: unknown;
     private closed = false;
 
     private constructor(input: JsonlSessionEventStoreInput) {
         this.sessionId = input.sessionId;
         this.filePath = input.filePath;
-        this.lockPath = input.lockPath;
         this.fileHandle = input.fileHandle;
-        this.lockHandle = input.lockHandle;
         this.log = input.log;
         this.now = input.now;
         this.createEventId = input.createEventId;
-        this.lockLease = input.lockLease;
         this.nextSequence = input.nextSequence;
-        this.startHeartbeat(input.lockHeartbeatIntervalMs);
     }
 
     static async open(options: JsonlSessionEventStoreOpenOptions): Promise<JsonlSessionEventStore> {
         const now = options.now ?? (() => new Date().toISOString());
         const createEventId = options.createEventId ?? (() => randomUUID());
         const openedFile = await openJsonlSessionFile({ ...options, now });
-        const staleAfterMs = options.lockStaleAfterMs ?? DEFAULT_JSONL_SESSION_LOCK_STALE_AFTER_MS;
-        const lockHeartbeatIntervalMs = options.lockHeartbeatIntervalMs ?? Math.max(1_000, staleAfterMs / 3);
 
         return new JsonlSessionEventStore({
             ...openedFile,
             now,
             createEventId,
-            lockHeartbeatIntervalMs,
         });
     }
 
@@ -128,7 +108,6 @@ export class JsonlSessionEventStore implements MemoryStore {
 
     private async appendParsedEnvelope(envelope: AgentEventEnvelope): Promise<void> {
         this.ensureWritableEnvelope(envelope);
-        await this.refreshLockLease();
         await this.writeRecord(createJsonlSessionEventRecord(envelope));
         this.log.append(envelope.event);
         this.nextSequence = envelope.sequence + 1;
@@ -186,14 +165,9 @@ export class JsonlSessionEventStore implements MemoryStore {
         if (this.closed) {
             return;
         }
-        this.stopHeartbeat();
         await this.appendQueue;
         this.closed = true;
-        try {
-            await this.fileHandle.close();
-        } finally {
-            await releaseSessionLock(this.lockHandle, this.lockPath);
-        }
+        await this.fileHandle.close();
     }
 
     private async writeRecord(record: ReturnType<typeof createJsonlSessionEventRecord>): Promise<void> {
@@ -203,9 +177,6 @@ export class JsonlSessionEventStore implements MemoryStore {
     }
 
     private ensureOpen(): void {
-        if (this.heartbeatFailure !== undefined) {
-            throw this.heartbeatFailure;
-        }
         if (this.closed) {
             throw jsonlStoreError({
                 code: 'write_failed',
@@ -242,33 +213,5 @@ export class JsonlSessionEventStore implements MemoryStore {
                 path: this.filePath,
             });
         }
-    }
-
-    private startHeartbeat(intervalMs: number): void {
-        this.heartbeatTimer = setInterval(() => {
-            void this.enqueueAppend(() => this.refreshLockLease()).catch((error: unknown) => {
-                this.heartbeatFailure = error;
-                this.stopHeartbeat();
-            });
-        }, intervalMs);
-        this.heartbeatTimer.unref?.();
-    }
-
-    private stopHeartbeat(): void {
-        if (this.heartbeatTimer !== undefined) {
-            clearInterval(this.heartbeatTimer);
-            this.heartbeatTimer = undefined;
-        }
-    }
-
-    private async refreshLockLease(): Promise<void> {
-        const refreshed = await heartbeatJsonlSessionLock({
-            lockHandle: this.lockHandle,
-            lockPath: this.lockPath,
-            lockLease: this.lockLease,
-            now: this.now,
-        });
-        this.lockHandle = refreshed.lockHandle;
-        this.lockLease = refreshed.lockLease;
     }
 }

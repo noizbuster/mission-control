@@ -8,20 +8,11 @@ describe('session delete argument parsing', () => {
             command: 'session-delete',
             sessionId: 'session_cli',
         });
-        expect(result.force).toBeUndefined();
     });
 
-    it('parses delete with --force', () => {
-        expect(parseArgs(['session', 'delete', 'session_cli', '--force'])).toMatchObject({
-            command: 'session-delete',
-            sessionId: 'session_cli',
-            force: true,
-        });
-    });
-
-    it('rejects extra arguments after --force', () => {
-        expect(() => parseArgs(['session', 'delete', 'session_cli', '--force', 'extra'])).toThrow(
-            'Unsupported session delete argument: extra',
+    it('rejects unsupported arguments after the session id', () => {
+        expect(() => parseArgs(['session', 'delete', 'session_cli', '--force'])).toThrow(
+            'Unsupported session delete argument: --force',
         );
     });
 });

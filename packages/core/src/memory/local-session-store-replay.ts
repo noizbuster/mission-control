@@ -1,16 +1,10 @@
 import type { Client } from '@libsql/client';
 import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
-import {
-    type JsonlSessionReplayPrefixProjection,
-    projectJsonlSessionReplayPrefix,
-    projectSessionReplay,
-} from '../session-replay.js';
+import { type JsonlSessionReplayPrefixProjection, projectSessionReplay } from '../session-replay.js';
 import { resolveMissionControlDataDir } from './data-dir.js';
 import { ensureLocalSessionDatabase } from './local-session-store-database.js';
 import { localSessionDbUrl } from './local-session-store-paths.js';
 import { readExportEnvelopes } from './session-import-event-sql.js';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 
 export type LocalSessionReplayReadResult =
     | {
@@ -43,26 +37,7 @@ export async function readLocalSessionReplay(input: {
     } finally {
         runtime.close();
     }
-
-    const legacy = await readLegacyJsonlReplay(dataDir, input.sessionId);
-    return legacy === undefined ? { kind: 'missing' } : { kind: 'found', replay: legacy };
-}
-
-async function readLegacyJsonlReplay(
-    dataDir: string,
-    sessionId: string,
-): Promise<JsonlSessionReplayPrefixProjection | undefined> {
-    try {
-        return projectJsonlSessionReplayPrefix({
-            sessionId,
-            contents: await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8'),
-        });
-    } catch (error: unknown) {
-        if (isMissingFileError(error)) {
-            return undefined;
-        }
-        throw error;
-    }
+    return { kind: 'missing' };
 }
 
 async function hasSqliteSession(client: Client, sessionId: string): Promise<boolean> {
@@ -71,8 +46,4 @@ async function hasSqliteSession(client: Client, sessionId: string): Promise<bool
         args: [sessionId],
     });
     return result.rows.length > 0;
-}
-
-function isMissingFileError(error: unknown): boolean {
-    return error instanceof Error && Reflect.get(error, 'code') === 'ENOENT';
 }

@@ -17,7 +17,6 @@ export type LegacyFixture = {
     readonly dataDir: string;
     readonly omoRoot: string;
     readonly jsonlPath: string;
-    readonly indexPath: string;
     readonly runPath: string;
 };
 
@@ -42,19 +41,16 @@ export async function writeLegacyFixture(input: {
     await mkdir(runsDir, { recursive: true });
 
     const jsonlPath = join(sessionsDir, `${SESSION_IMPORT_TEST_SESSION_ID}.jsonl`);
-    const indexPath = join(dataDir, 'session-index.json');
     const runPath = join(runsDir, 'run_legacy.json');
     await writeFile(jsonlPath, legacyJsonl(), 'utf8');
-    await writeFile(indexPath, `${JSON.stringify(sessionIndexFile(jsonlPath))}\n`, 'utf8');
     await writeFile(runPath, `${JSON.stringify(runRecord())}\n`, 'utf8');
 
-    return { root, dataDir, omoRoot, jsonlPath, indexPath, runPath };
+    return { root, dataDir, omoRoot, jsonlPath, runPath };
 }
 
 export async function readSourceBytes(fixture: LegacyFixture): Promise<Readonly<Record<string, string>>> {
     return {
         jsonl: await readFile(fixture.jsonlPath, 'utf8'),
-        index: await readFile(fixture.indexPath, 'utf8'),
         run: await readFile(fixture.runPath, 'utf8'),
     };
 }
@@ -78,28 +74,6 @@ export async function readMissionRunDbRow(client: Client, runId: string): Promis
         args: [runId],
     });
     return result.rows[0] ?? {};
-}
-
-function sessionIndexFile(sourceFilePath: string): unknown {
-    return {
-        version: 1,
-        records: [
-            {
-                kind: 'session',
-                sessionId: SESSION_IMPORT_TEST_SESSION_ID,
-                status: 'stopped',
-                startedAt: SESSION_IMPORT_TEST_CREATED_AT,
-                stoppedAt: '2026-06-30T01:00:02.000Z',
-                eventCount: 2,
-                lastSequence: 1,
-                lastEventId: 'event_stopped',
-                lastEventType: 'session.stopped',
-                updatedAt: '2026-06-30T01:00:02.000Z',
-                sourceFilePath,
-            },
-        ],
-        diagnostics: [],
-    };
 }
 
 function runRecord(): unknown {

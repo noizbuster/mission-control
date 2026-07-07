@@ -57,7 +57,6 @@ export type {
     LegacySessionImportLedgerEntry,
     LegacySessionSourceKind,
 } from './session-import-sql.js';
-export { createFileSessionIndexStore, rebuildSessionIndexFromJsonl } from './session-index-file-store.js';
 export { deriveSessionIndexRecords } from './session-index-projection.js';
 export type {
     SessionIndexApprovalRecord,

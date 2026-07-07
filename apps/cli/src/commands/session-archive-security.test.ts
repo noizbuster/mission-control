@@ -55,44 +55,6 @@ describe('session archive security repairs', () => {
         await rm(dataDir, { recursive: true, force: true });
     });
 
-    it('removes partially written session log when import fails after admission starts', async () => {
-        const dataDir = await useTempDataDir();
-        const workspaceRoot = await mkdtemp(join(tmpdir(), 'mission-control-session-atomic-workspace-'));
-        const archivePath = join(tmpdir(), 'session-import-atomic.mctrl-session.json');
-        const sessionId = 'session_import_atomic';
-        await new ProjectTrustStore({ dataDir, now: fixedNow }).setDecision(workspaceRoot, 'trusted');
-        await writeFile(join(dataDir, 'session-index.json'), '{"broken":', 'utf8');
-        await writeFile(
-            archivePath,
-            createArchiveJson({
-                sessionId,
-                workspaceRoot,
-                eventsJsonl: createSessionLog({
-                    sessionId,
-                    createdAt: '2026-06-13T12:00:00.000Z',
-                    updatedAt: '2026-06-13T12:00:03.000Z',
-                    cwd: workspaceRoot,
-                    workspaceTrust: 'trusted',
-                    name: 'Atomic demo',
-                    activeLeafId: 'entry_root',
-                }),
-            }),
-            'utf8',
-        );
-
-        await expect(
-            withProcessCwd(workspaceRoot, async () => {
-                vi.stubEnv(missionControlDataDirEnvKey, dataDir);
-                return runSessionCommand(parseArgs(['session', 'import', archivePath]));
-            }),
-        ).rejects.toThrow();
-        await expect(stat(join(dataDir, 'sessions', `${sessionId}.jsonl`))).rejects.toThrow();
-        await expect(readFile(join(dataDir, 'session-index.json'), 'utf8')).resolves.toBe('{"broken":');
-        await rm(archivePath, { force: true });
-        await rm(workspaceRoot, { recursive: true, force: true });
-        await rm(dataDir, { recursive: true, force: true });
-    });
-
     it('does not overwrite an existing export destination', async () => {
         const dataDir = await useTempDataDir();
         const workspaceRoot = await mkdtemp(join(tmpdir(), 'mission-control-session-export-workspace-'));

@@ -7,12 +7,7 @@ import {
 } from './jsonl-session-records.js';
 import { markSessionExported, readExportEnvelopes } from './session-import-event-sql.js';
 import { jsonlSourcePaths, runSourcePaths } from './session-import-files.js';
-import {
-    type ImportAccumulator,
-    importJsonlSource,
-    importRunSource,
-    importSessionIndexSource,
-} from './session-import-sources.js';
+import { type ImportAccumulator, importJsonlSource, importRunSource } from './session-import-sources.js';
 import { ensureLegacySessionImportTables, type LegacySessionImportDiagnostic } from './session-import-sql.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -21,7 +16,6 @@ export { listLegacySessionImportLedger } from './session-import-sql.js';
 
 export type LegacySessionImportResult = {
     readonly importedEventCount: number;
-    readonly importedSessionIndexRecordCount: number;
     readonly importedRunCount: number;
     readonly skippedSourceCount: number;
     readonly diagnostics: readonly LegacySessionImportDiagnostic[];
@@ -43,7 +37,6 @@ export async function importLegacySessionCompatibilityWindow(input: {
     await runLocalLibsqlWrite(input, ensureLegacySessionImportTables);
     const acc: ImportAccumulator = {
         importedEventCount: 0,
-        importedSessionIndexRecordCount: 0,
         importedRunCount: 0,
         skippedSourceCount: 0,
         diagnostics: [],
@@ -54,19 +47,12 @@ export async function importLegacySessionCompatibilityWindow(input: {
     for (const sourcePath of await jsonlSourcePaths(input.dataDir)) {
         await importJsonlSource({ writeTarget: input, sourcePath, now, acc });
     }
-    await importSessionIndexSource({
-        writeTarget: input,
-        sourcePath: join(input.dataDir, 'session-index.json'),
-        now,
-        acc,
-    });
     for (const sourcePath of await runSourcePaths(omoRoot)) {
         await importRunSource({ writeTarget: input, sourcePath, now, acc });
     }
 
     return {
         importedEventCount: acc.importedEventCount,
-        importedSessionIndexRecordCount: acc.importedSessionIndexRecordCount,
         importedRunCount: acc.importedRunCount,
         skippedSourceCount: acc.skippedSourceCount,
         diagnostics: acc.diagnostics,
