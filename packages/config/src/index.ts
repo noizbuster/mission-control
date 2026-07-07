@@ -10,7 +10,7 @@ export type { RawModelsDevReasoningOption } from './models-dev-runtime.js';
 export { getModelContextLimit } from './models-dev-runtime.js';
 
 export const appName = 'mission-control';
-export const cliCommandName = 'mctrl';
+export const cliCommandName = 'mc';
 export const sidecarBinaryName = 'mission-control-sidecar';
 export const missionControlAuthFileEnvKey = 'MISSION_CONTROL_AUTH_FILE';
 export const missionControlAuthSchemaURL = 'https://mission-control.local/auth.schema.json';

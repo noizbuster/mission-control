@@ -8,6 +8,7 @@
     "dist"
   ],
   "bin": {
+    "mc": "./dist/index.js",
     "mctrl": "./dist/index.js"
   },
   "publishConfig": {

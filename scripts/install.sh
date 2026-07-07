@@ -32,15 +32,28 @@ curl -fsSL "$url" -o "${tmp_dir}/${artifact}"
 tar -xzf "${tmp_dir}/${artifact}" -C "$tmp_dir"
 mkdir -p "$install_dir"
 
+if [ -f "${tmp_dir}/mc" ]; then
+  cp "${tmp_dir}/mc" "${install_dir}/mc"
+elif [ -f "${tmp_dir}/bin/mc" ]; then
+  cp "${tmp_dir}/bin/mc" "${install_dir}/mc"
+elif [ -f "${tmp_dir}/mctrl" ]; then
+  cp "${tmp_dir}/mctrl" "${install_dir}/mc"
+elif [ -f "${tmp_dir}/bin/mctrl" ]; then
+  cp "${tmp_dir}/bin/mctrl" "${install_dir}/mc"
+else
+  echo "artifact did not contain mc or mctrl" >&2
+  exit 1
+fi
+
 if [ -f "${tmp_dir}/mctrl" ]; then
   cp "${tmp_dir}/mctrl" "${install_dir}/mctrl"
 elif [ -f "${tmp_dir}/bin/mctrl" ]; then
   cp "${tmp_dir}/bin/mctrl" "${install_dir}/mctrl"
 else
-  echo "artifact did not contain mctrl" >&2
-  exit 1
+  cp "${install_dir}/mc" "${install_dir}/mctrl"
 fi
 
+chmod +x "${install_dir}/mc"
 chmod +x "${install_dir}/mctrl"
 if [ -f "${tmp_dir}/mission-control-sidecar" ]; then
   cp "${tmp_dir}/mission-control-sidecar" "${install_dir}/mission-control-sidecar"
@@ -52,7 +65,8 @@ else
 fi
 
 chmod +x "${install_dir}/mission-control-sidecar"
-echo "installed mctrl to ${install_dir}/mctrl"
+echo "installed mc to ${install_dir}/mc"
+echo "installed mctrl alias to ${install_dir}/mctrl"
 echo "installed mission-control-sidecar to ${install_dir}/mission-control-sidecar"
 echo "ensure ${install_dir} is on PATH"
-echo "run: mctrl --version"
+echo "run: mc --version"

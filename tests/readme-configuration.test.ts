@@ -70,7 +70,7 @@ describe('README configuration profiles contract', () => {
 
     it('documents a quick-start example using --profile dev', () => {
         const content = readme();
-        expect(content).toContain('mctrl mcp list --profile dev');
+        expect(content).toContain('mc mcp list --profile dev');
     });
 
     it('does NOT document -p as a profile alias', () => {

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`apps/cli` owns the `mctrl` command-line application: argument parsing, command orchestration, auth/model/session commands, terminal interaction, and interactive chat rendered via opentui (`@opentui/react` over a node:ffi-loaded native core on Node 26.3+).
+`apps/cli` owns the `mc` command-line application (`mctrl` alias retained): argument parsing, command orchestration, auth/model/session commands, terminal interaction, and interactive chat rendered via opentui (`@opentui/react` over a node:ffi-loaded native core on Node 26.3+).
 
 The interactive chat uses `@opentui/react` + React 19 for terminal rendering, bridged to the existing imperative chat loop via `useSyncExternalStore`. The bridge pattern allows the imperative `runInteractiveChatSession` loop to stay unchanged while opentui owns all keyboard input and screen output.
 
@@ -51,7 +51,7 @@ Two native opentui renderables own what the old hand-rolled code used to. `<Chat
 
 Editing keys never reach the bridge. Printable input, backspace, arrow movement, word-move, the real cursor, and IME composition are all native `TextareaRenderable` behavior. The bridge intercepts only via the textarea's `onKeyDown` (`bridgeTextareaKeyDown`), where each handled chord calls `key.preventDefault()` first so the native binding is suppressed before the bridge logic runs.
 
-`mountOpenTui` (in `src/platform/opentui-renderer.ts`) is the mount/unmount seam. It dynamic-imports `createCliRenderer` from `@opentui/core` and `createRoot` from `@opentui/react`, mounts the React tree, and returns `{ renderer, root, unmount }`. The dynamic imports keep both packages out of the eager module graph for non-TUI CLI runs (plain/JSON), so `mctrl --no-tui` never loads the native renderer. `unmount()` tears down both the React root and the renderer and is idempotent.
+`mountOpenTui` (in `src/platform/opentui-renderer.ts`) is the mount/unmount seam. It dynamic-imports `createCliRenderer` from `@opentui/core` and `createRoot` from `@opentui/react`, mounts the React tree, and returns `{ renderer, root, unmount }`. The dynamic imports keep both packages out of the eager module graph for non-TUI CLI runs (plain/JSON), so `mc --no-tui` never loads the native renderer. `unmount()` tears down both the React root and the renderer and is idempotent.
 
 ### KeyEvent Adapter
 
@@ -227,7 +227,7 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | Code highlighting | `src/components/markdown/highlight.ts` | `highlightCode` is a thin re-export over `tree-sitter-highlighter.ts` (opentui tree-sitter backend with async cache-fill); scope→style table in `syntax-rules.ts`; 34-language grammar config in `parsers-config.ts`; zero raw ANSI leakage. |
 | Diff renderer | `src/components/diff/` | `render-diff.ts` classifies mctrl no-line-number diffs; `DiffView.tsx` renders green/red/cyan with inverse intra-line spans. `kindStyle`/`splitLineSpans` exported for tests. |
 | Tool card | `src/components/ToolCard.tsx` | Bordered card; `hasDiffContent` auto-routes to `<DiffView>` or yellow prose lines; `expanded` prop collapses to header. |
-| Executable entry, help, version | `src/index.tsx` | Package `bin` maps `mctrl` to `./dist/index.js`. |
+| Executable entry, help, version | `src/index.tsx` | Package `bin` maps `mc` and `mctrl` to `./dist/index.js`. |
 | Top-level flags and modes | `src/args.ts` | Keep command/mode string unions explicit. Default mode is `'tui'` (opentui); `--no-tui`/`--json`/`--jsonl` select the non-interactive renderers. `--profile <name>` is long-only: it selects a user-scope config profile (`parseProfileName`, regex `^[a-z0-9][a-z0-9_-]{0,63}$`); auth's `-p` short flag is provider shorthand, not a profile alias. `--profile` threads through `run` and `mcp list/test/add/remove --scope user`; non-MCP commands (auth/session/models/agents) reject or ignore it safely. |
 | Run and graph args | `src/run-args.ts` | Owns `--json`, `--jsonl`, provider/model, native, graph, `--workspace`, `--session`, `--engine` flags. |
 | Auth args | `src/auth-args.ts` | Delegates into `src/commands/auth*.ts`. |
@@ -237,7 +237,7 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | Command parsing | `src/commands/chat-commands.ts` | parseChatLine → ChatLineAction |
 | Slash command menu state | `src/commands/interactive-chat-command-menu.ts` | createSlashCommandMenuView, resolveSlashCommandMenuSubmission |
 | Model discovery | `src/commands/model-discovery.ts` | Per-provider API calls for live model lists |
-| Models command | `src/commands/models.ts` | `mctrl models` — runtime catalog + discovery union |
+| Models command | `src/commands/models.ts` | `mc models` — runtime catalog + discovery union |
 | Provider factory | `src/commands/provider-factory.ts` | Maps capability → adapter |
 | Runtime catalog | `packages/config/src/models-dev-runtime.ts` | Fetches models.dev with 5min disk cache |
 | Output modes | `src/ui/renderers.ts` | Plain, TUI (buffered summary), and JSON renderer contracts. |

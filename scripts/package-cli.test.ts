@@ -11,6 +11,7 @@ const root = process.cwd();
 type CliManifest = {
     readonly files?: readonly string[];
     readonly bin?: {
+        readonly mc?: string;
         readonly mctrl?: string;
     };
     readonly publishConfig?: {
@@ -27,6 +28,7 @@ describe('CLI package distribution contract', () => {
         const manifest = readCliManifest();
 
         expect(manifest.files).toEqual(['dist']);
+        expect(manifest.bin?.mc).toBe('./dist/index.js');
         expect(manifest.bin?.mctrl).toBe('./dist/index.js');
         expect(manifest.publishConfig?.access).toBe('public');
     });
@@ -56,6 +58,7 @@ describe('CLI package distribution contract', () => {
 
             expect(entries).toEqual(
                 expect.arrayContaining([
+                    './mc',
                     './mctrl',
                     './args.js',
                     './commands/local-coding-provider.js',
@@ -90,12 +93,14 @@ describe('CLI package distribution contract', () => {
                 const unpack = spawnSync('tar', ['-xzf', artifactPath, '-C', unpackRoot], { encoding: 'utf8' });
                 expect(unpack.status).toBe(0);
 
-                const mctrl = join(unpackRoot, 'mctrl');
-                const help = spawnSync(mctrl, ['--help'], { encoding: 'utf8' });
+                const mc = join(unpackRoot, 'mc');
+                const legacyMctrl = join(unpackRoot, 'mctrl');
+                const help = spawnSync(mc, ['--help'], { encoding: 'utf8' });
+                const legacyHelp = spawnSync(legacyMctrl, ['--help'], { encoding: 'utf8' });
                 const dataDir = join(unpackRoot, 'data');
                 const authFile = join(unpackRoot, 'auth.json');
                 const prompt = spawnSync(
-                    mctrl,
+                    mc,
                     ['run', 'package smoke', '--jsonl', '--provider', 'local', '--model', 'local-echo'],
                     {
                         encoding: 'utf8',
@@ -108,7 +113,9 @@ describe('CLI package distribution contract', () => {
                 );
 
                 expect(help.status).toBe(0);
-                expect(help.stdout).toContain('Usage: mctrl');
+                expect(help.stdout).toContain('Usage: mc');
+                expect(legacyHelp.status).toBe(0);
+                expect(legacyHelp.stdout).toContain('Usage: mc');
                 expect(prompt.status).toBe(0);
                 expect(prompt.stdout).toContain('received prompt: package smoke');
                 expect(existsSync(join(dataDir, 'session_fixture.jsonl'))).toBe(true);
@@ -140,6 +147,10 @@ function withPackageFixture(options: PackageFixtureOptions, run: (fixtureRoot: s
 }
 
 function writePackageFixture(fixtureRoot: string, options: PackageFixtureOptions): void {
+    writeFixtureFile(
+        join(fixtureRoot, 'apps/cli/package.json'),
+        packageJson('@mission-control/cli', { '.': './dist/index.js' }, { zod: 'fixture' }),
+    );
     writeFixtureFile(join(fixtureRoot, 'apps/cli/dist/index.js'), fixtureCliEntrypoint());
     writeFixtureFile(join(fixtureRoot, 'apps/cli/dist/args.js'), 'export const args = [];\n');
     writeFixtureFile(
@@ -188,8 +199,8 @@ function writeFixtureFile(path: string, contents: string): void {
     writeFileSync(path, contents);
 }
 
-function packageJson(name: string, exportsMap: Record<string, string>): string {
-    return `${JSON.stringify({ name, type: 'module', exports: exportsMap }, null, 2)}\n`;
+function packageJson(name: string, exportsMap: Record<string, string>, dependencies?: Record<string, string>): string {
+    return `${JSON.stringify({ name, type: 'module', exports: exportsMap, dependencies }, null, 2)}\n`;
 }
 
 function fixtureCliEntrypoint(): string {
@@ -199,7 +210,7 @@ function fixtureCliEntrypoint(): string {
         "import { join } from 'node:path';",
         '',
         "if (process.argv.includes('--help')) {",
-        "    console.log('Usage: mctrl');",
+        "    console.log('Usage: mc');",
         '    process.exit(0);',
         '}',
         '',

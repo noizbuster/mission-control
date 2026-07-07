@@ -10,7 +10,7 @@
 
 Product names:
 
-- CLI command: `mctrl`
+- CLI command: `mc` (`mctrl` alias retained)
 - Desktop app: `mission-control`
 - Native helper binary: `mission-control-sidecar`
 
@@ -25,7 +25,7 @@ Design references:
 
 ```text
 mission-control/
-|-- apps/cli/                 # mctrl CLI
+|-- apps/cli/                 # mc CLI
 |-- apps/desktop/             # React/Vite UI plus Tauri shell
 |-- packages/protocol/        # shared Zod schemas and exported protocol types
 |-- packages/core/            # runtime, sessions, providers, tools, sidecar fallback, ABG scaffolding, MCP clients, skills
@@ -55,7 +55,7 @@ Scoped guidance:
 
 | Task | Location | Notes |
 | --- | --- | --- |
-| CLI entry/help/version | `apps/cli/src/index.tsx` | `apps/cli/package.json` maps `mctrl` to `./dist/index.js`. |
+| CLI entry/help/version | `apps/cli/src/index.tsx` | `apps/cli/package.json` maps `mc` and `mctrl` to `./dist/index.js`. |
 | CLI command flow | `apps/cli/src/commands/run-agent.ts` | Chat, JSON/JSONL, graph, provider, sidecar selection. |
 | CLI output | `apps/cli/src/ui/renderers.ts` | Plain, TUI (buffered summary), and JSON renderer contracts. |
 | Interactive chat opentui bridge | `apps/cli/src/commands/opentui-chat-bridge.tsx` | opentui React tree (`@opentui/react` over a node:ffi-loaded Zig core) ↔ imperative chat loop bridge. |
@@ -260,6 +260,6 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 - Package/app tests are colocated as `*.test.ts` or `*.test.tsx`.
 - Rust sidecar tests are inline in `native/sidecar`; Tauri Rust tests live under `apps/desktop/src-tauri`.
 - `scripts/install.sh` still contains `OWNER_PLACEHOLDER/mission-control`; replace or override it before public release.
-- CLI release artifacts are named `mctrl-<os>-<arch>.tar.gz` and contain `mctrl` plus `mission-control-sidecar`.
+- CLI release artifacts are named `mctrl-<os>-<arch>.tar.gz` and contain `mc`, the `mctrl` alias, and `mission-control-sidecar`.
 - Desktop signing/notarization are TODOs until platform credentials exist.
 - If a generated artifact must become source, document why before changing `.gitignore`.

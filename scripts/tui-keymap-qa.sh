@@ -2,7 +2,7 @@
 # =============================================================================
 # TUI keymap QA harness (T18 deliverable b).
 #
-# Drives DETERMINISTIC paths against the built `mctrl` CLI inside a tmux
+# Drives DETERMINISTIC paths against the built `mc` CLI inside a tmux
 # session, asserting observable output via `tmux capture-pane`. It launches the
 # opentui TUI (native FFI, Node 26.3+ `--experimental-ffi`) against the offline
 # `local/local-echo` provider so no network or credentials are required.
@@ -136,7 +136,7 @@ fi
 # ----------------------------------------------------------------------------
 # Launch the TUI
 # ----------------------------------------------------------------------------
-log "launching mctrl TUI in tmux session '$SESSION' (local/local-echo, data=$DATA_DIR)"
+log "launching mc TUI in tmux session '$SESSION' (local/local-echo, data=$DATA_DIR)"
 tmux new-session -d -s "$SESSION" -x "$PANE_W" -y "$PANE_H" \
     "env MCTRL_DATA_DIR='$DATA_DIR' node --experimental-ffi '$CLI_DIST' --provider local --model local-echo; sleep 20"
 

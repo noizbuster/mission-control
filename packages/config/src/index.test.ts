@@ -1,6 +1,7 @@
 import { ProviderCatalogEntrySchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import {
+    cliCommandName,
     defaultModelProviderSelection,
     missionControlAuthFileEnvKey,
     missionControlAuthSchemaURL,
@@ -20,6 +21,7 @@ describe('config catalog constants', () => {
         const localProvider = modelProviderCatalog.find((provider) => provider.id === 'local');
         expect(localProvider?.models.map((model) => model.id)).toEqual(['local-echo']);
         expect(localProvider?.authLabel).toBe('API key');
+        expect(cliCommandName).toBe('mc');
         expect(missionControlAuthFileEnvKey).toBe('MISSION_CONTROL_AUTH_FILE');
         expect(missionControlAuthSchemaURL).toBe('https://mission-control.local/auth.schema.json');
     });

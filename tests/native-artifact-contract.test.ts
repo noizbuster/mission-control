@@ -149,13 +149,25 @@ describe('CLI release artifact names are unchanged', () => {
     it('scripts/package-cli.ts produces mctrl-<os>-<arch>.tar.gz for the current platform', () => {
         const source = readText('scripts/package-cli.ts');
 
-        expect(source).toContain('`mctrl-${platform.os}-${platform.arch}.tar.gz`');
+        expect(source).toMatch(/`mctrl-\$\{platform\.os\}-\$\{platform\.arch\}\.tar\.gz`/);
     });
 
     it('scripts/install.sh downloads mctrl-<os>-<arch>.tar.gz', () => {
         const source = readText('scripts/install.sh');
 
-        expect(source).toContain('artifact="mctrl-${os}-${arch}.tar.gz"');
+        expect(source).toMatch(/artifact="mctrl-\$\{os\}-\$\{arch\}\.tar\.gz"/);
+    });
+
+    it('release artifacts install mc as primary and mctrl as a legacy alias', () => {
+        const packageSource = readText('scripts/package-cli.ts');
+        const installSource = readText('scripts/install.sh');
+
+        expect(packageSource).toContain("join(stageDir, 'mc')");
+        expect(packageSource).toContain("join(stageDir, 'mctrl')");
+        expect(packageSource).toContain('bin: { mc: ');
+        expect(packageSource).toContain('mctrl: ');
+        expect(installSource).toMatch(/installed mc to \$\{install_dir\}\/mc/);
+        expect(installSource).toMatch(/installed mctrl alias to \$\{install_dir\}\/mctrl/);
     });
 
     it('the four documented release artifact names are still the canonical set', () => {

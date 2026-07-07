@@ -1,6 +1,6 @@
 # mission-control
 
-`mission-control` is a staged control surface for operating observable LLM-agent workflows. The command-line entrypoint is `mctrl`, the desktop app is `mission-control`, and the native helper binary is `mission-control-sidecar`.
+`mission-control` is a staged control surface for operating observable LLM-agent workflows. The primary command-line entrypoint is `mc`, `mctrl` remains available as an alias, the desktop app is `mission-control`, and the native helper binary is `mission-control-sidecar`.
 
 ## Architecture
 
@@ -8,7 +8,7 @@
 
 Directory structure:
 
-- `apps/cli`: `mctrl` command-line app.
+- `apps/cli`: `mc` command-line app (`mctrl` alias retained).
 - `apps/desktop`: Tauri + React desktop app.
 - `packages/protocol`: shared event/session/sidecar schemas.
 - `packages/core`: runtime services, durable session replay, provider turns, approval-gated tools, graph coordination, and sidecar client boundary.
@@ -21,13 +21,13 @@ Package responsibilities:
 - `@mission-control/protocol`: shared schemas and types for CLI, desktop, core runtime, and Rust sidecar boundaries.
 - `@mission-control/core`: runtime skeleton, event stream concepts, session snapshots, permissions, and native sidecar client boundaries.
 - `@mission-control/config`: shared configuration constants.
-- `@mission-control/cli`: opentui/plain/JSON command-line surface for `mctrl`.
+- `@mission-control/cli`: opentui/plain/JSON command-line surface for `mc`.
 - `@mission-control/desktop`: Tauri + React desktop surface for `mission-control`.
 - `native/sidecar`: Rust JSON Lines sidecar with protocol v1 `task.run` negotiation and opt-in protocol v2 compatibility tests.
 
 Confirmed names:
 
-- `apps/cli/package.json` maps the `mctrl` bin to `./dist/index.js`.
+- `apps/cli/package.json` maps the `mc` and `mctrl` bins to `./dist/index.js`.
 - Tauri desktop product name is `mission-control`.
 - `native/sidecar/Cargo.toml` builds the `mission-control-sidecar` binary.
 
@@ -61,31 +61,31 @@ pnpm smoke:coding-agent-built-dist
 node apps/cli/dist/index.js --no-tui
 ```
 
-## mctrl agents
+## mc agents
 
-The `mctrl agents` command inspects and manages discovered agents from the command line (non-interactive; the interactive equivalent is `/agents`).
+The `mc agents` command inspects and manages discovered agents from the command line (non-interactive; the interactive equivalent is `/agents`).
 
 ```bash
-mctrl agents list
-mctrl agents show <name>
-mctrl agents unpack [--all] [<name>] [--force] [--user|--project|--dir <path>] [--json]
-mctrl agents disable <name>
-mctrl agents enable <name>
-mctrl agents import <harness> <path>
+mc agents list
+mc agents show <name>
+mc agents unpack [--all] [<name>] [--force] [--user|--project|--dir <path>] [--json]
+mc agents disable <name>
+mc agents enable <name>
+mc agents import <harness> <path>
 ```
 
-- `mctrl agents list` lists every discovered agent with its source, model, and tier.
-- `mctrl agents show <name>` shows full details for one agent (description, tools, spawns, thinking level, max turns, recursion, file path, disabled status).
-- `mctrl agents unpack` copies bundled agent templates to `.mctrl/agents/`. With no flags it copies a single named agent; `--all` copies every bundled agent. `--force` overwrites existing files (bulk mode skips on collision by default). The default scope is the project directory (`<workspace>/.mctrl/agents/`); `--user` targets `<config-dir>/agents/`, `--project` is the explicit default, and `--dir <path>` targets a custom directory. `--json` emits machine-readable output.
-- `mctrl agents disable <name>` hides an agent from discovery so it cannot be spawned via `task()`.
-- `mctrl agents enable <name>` re-enables a previously disabled agent.
-- `mctrl agents import <harness> <path>` imports a harness agent file into `.mctrl/agents/`.
+- `mc agents list` lists every discovered agent with its source, model, and tier.
+- `mc agents show <name>` shows full details for one agent (description, tools, spawns, thinking level, max turns, recursion, file path, disabled status).
+- `mc agents unpack` copies bundled agent templates to `.mctrl/agents/`. With no flags it copies a single named agent; `--all` copies every bundled agent. `--force` overwrites existing files (bulk mode skips on collision by default). The default scope is the project directory (`<workspace>/.mctrl/agents/`); `--user` targets `<config-dir>/agents/`, `--project` is the explicit default, and `--dir <path>` targets a custom directory. `--json` emits machine-readable output.
+- `mc agents disable <name>` hides an agent from discovery so it cannot be spawned via `task()`.
+- `mc agents enable <name>` re-enables a previously disabled agent.
+- `mc agents import <harness> <path>` imports a harness agent file into `.mctrl/agents/`.
 
 ## Interactive chat commands
 
-`mctrl` opens a chat prompt by default. `/model opens a searchable model picker`, and `/model provider/model selects the model for the current chat only`. The selection updates the active chat model and does not persist credentials or auth defaults.
+`mc` opens a chat prompt by default; `mctrl` is a compatibility alias. `/model opens a searchable model picker`, and `/model provider/model selects the model for the current chat only`. The selection updates the active chat model and does not persist credentials or auth defaults.
 
-`/models` (plural) opens a full-width, two-column overlay for assigning models to the ten built-in agent roles, not for changing the active chat model. The left column lists the assignable models as `provider/model[#variant]` entries, and the right column lists each role with its current assignment or default-inheritance status. Arrow keys move the focus within a column, `Tab` switches columns, `Enter` assigns the focused model to the focused role, `Backspace` or `Delete` clears a role back to its default, and `Escape` closes the overlay. Assignments persist to the user auth file under the Mission Control data directory, so they are personal preferences and are not committed to the project. A role with no explicit assignment shows `Using default (<provider>/<model[#variant]>)`, except the default role itself, which shows `Using built-in/session default (<provider>/<model[#variant]>)`. A child agent that declares `model: 'mctrl/<role>'` resolves to the persisted assignment for that role when one exists. `/model` (the active-session selection) and `mctrl models` (the non-interactive listing) are unchanged.
+`/models` (plural) opens a full-width, two-column overlay for assigning models to the ten built-in agent roles, not for changing the active chat model. The left column lists the assignable models as `provider/model[#variant]` entries, and the right column lists each role with its current assignment or default-inheritance status. Arrow keys move the focus within a column, `Tab` switches columns, `Enter` assigns the focused model to the focused role, `Backspace` or `Delete` clears a role back to its default, and `Escape` closes the overlay. Assignments persist to the user auth file under the Mission Control data directory, so they are personal preferences and are not committed to the project. A role with no explicit assignment shows `Using default (<provider>/<model[#variant]>)`, except the default role itself, which shows `Using built-in/session default (<provider>/<model[#variant]>)`. A child agent that declares `model: 'mctrl/<role>'` resolves to the persisted assignment for that role when one exists. `/model` (the active-session selection) and `mc models` (the non-interactive listing) are unchanged.
 
 Session navigation stays on the durable SQLite/libSQL session surface: `/new [session-id]` starts a new durable session, `/session <session-id>` switches to an existing durable session, `/sessions` lists durable sessions, `/tree` shows the durable session tree and active leaf, `/branch <entry-id>` selects an existing branch leaf, `/branch <message-id> <prompt>` continues from a parent message in a new branch, `/fork <entry-id> [session-id]` forks from a tree entry into a new durable session, and `/clone [session-id]` clones the current durable session into a fresh one. JSONL remains an import/export/read compatibility path and is not deleted during import. `/compact` summarizes older session history into a durable compaction boundary event, keeping the session durable while reducing replay context. `/session` with no argument opens a searchable picker of sessions previously opened in the current project (selecting one attaches to it). `/resume` resumes the most recent session for this project. `/continue` resumes a blocked run that is waiting on an approval decision, re-entering the approval-blocked lifecycle.
 
@@ -95,7 +95,7 @@ Workspace trust is controlled interactively with `/trust` (trust the current wor
 
 `#<workflow-name> {prompt}` invokes a named workflow with the given prompt. Workflows are discovered from `.mctrl/workflows/`, `.agents/workflows/`, and the config workflows directory. A prompt without a `#` prefix runs the `default` workflow fallback. Four built-in workflows ship with the runtime: `default` (no-`#` fallback), `planner` (read-only planning), `runner` (plan execution), and `autopilot` (a mode overlay applied to any workflow). See Built-in Workflows below.
 
-`/agents` inspects and manages discovered agents. `/agents` with no argument opens the agent control dashboard in the TUI (or prints the discovered-agents list as text when the TUI is unavailable). `/agents list` prints the discovered-agents list as text with source, model, and tier. `/agents <name>` shows full details for one agent (description, tools, spawns, thinking level, max turns, recursion, file path, disabled status). `/agents reload` re-runs discovery without restarting the chat. `/agents disable <name>` disables a single agent so it cannot be spawned via `task()`. The reserved subcommands `dashboard`, `list`, `reload`, and `disable` take precedence over any agent literally named with those tokens; use `mctrl agents show <name>` to inspect an agent whose name collides. See Agent System below.
+`/agents` inspects and manages discovered agents. `/agents` with no argument opens the agent control dashboard in the TUI (or prints the discovered-agents list as text when the TUI is unavailable). `/agents list` prints the discovered-agents list as text with source, model, and tier. `/agents <name>` shows full details for one agent (description, tools, spawns, thinking level, max turns, recursion, file path, disabled status). `/agents reload` re-runs discovery without restarting the chat. `/agents disable <name>` disables a single agent so it cannot be spawned via `task()`. The reserved subcommands `dashboard`, `list`, `reload`, and `disable` take precedence over any agent literally named with those tokens; use `mc agents show <name>` to inspect an agent whose name collides. See Agent System below.
 
 The chat command surface is mixed: normal prompts can run through the deterministic local provider, OpenAI Responses, Anthropic Messages, Google Gemini, or the OpenAI-compatible adapter family for OpenRouter, Groq, DeepSeek, and Mistral when credentials are configured. Skill loading is real — the `SKILL.md` body becomes the next user prompt — but the default `local/local-echo` provider does not call tools, so a real tool-calling provider is required for loaded skills to drive agentic behavior.
 
@@ -115,7 +115,7 @@ Interactive chat chords are defined in the keybind registry (`apps/cli/src/platf
 
 Four built-in workflows ship with the workflow runtime. The first three are graph files discovered from `examples/abg/`; autopilot is a mode overlay, not a standalone graph. Both CLI invocation paths (interactive `#name` / plain prompt and non-interactive `--workflow` / plain prompt) route through the shared `materializeWorkflow` helper, which folds each declared mode (via `applyMode`) onto the executed graph so overlays like `planner-readonly` land on the live policy-gate, not only on the persisted Mission record. Plain prompts (no `#`) resolve to the materialized `default` fallback without creating Mission/Run records.
 
-- **`default`**: the no-`#` fallback. An intent gate classifies a prompt into one of five classes, states the chosen intent before routing, and routes: `trivial` (direct-respond), `exploratory-research` (read-only `research-explore`), `open-ended-planning` (`route-planner`, which routes to `#planner` or a single clarifying question and never implements directly), `explicit-implementation` (memory recall, maturity check, anti-dup and delegation-bias guard, todo planning, delegate wave via `task()` fan-out, per-task critic verification, evidence check demanding concrete verification, supervisor retry loop, final respond), or `ambiguous` (clarify loop). The supervisor carries a 3-strike budget: critic failures and missing-evidence findings route back into delegation until the budget is exhausted, then escalate to a final respond. Running `mctrl` with a plain prompt (no `#` prefix) invokes this workflow.
+- **`default`**: the no-`#` fallback. An intent gate classifies a prompt into one of five classes, states the chosen intent before routing, and routes: `trivial` (direct-respond), `exploratory-research` (read-only `research-explore`), `open-ended-planning` (`route-planner`, which routes to `#planner` or a single clarifying question and never implements directly), `explicit-implementation` (memory recall, maturity check, anti-dup and delegation-bias guard, todo planning, delegate wave via `task()` fan-out, per-task critic verification, evidence check demanding concrete verification, supervisor retry loop, final respond), or `ambiguous` (clarify loop). The supervisor carries a 3-strike budget: critic failures and missing-evidence findings route back into delegation until the budget is exhausted, then escalate to a final respond. Running `mc` with a plain prompt (no `#` prefix) invokes this workflow.
 - **`planner`**: read-only planning. Sticky plan-mode: it plans and never implements (no node declares exec/bash capability). An ambiguity gate (`assess-ambiguity`) routes clear requests through a two-filter stage (`explore-filter` to decide needs-exploration vs direct-draft, then optional `explore` before drafting), unclear requests through best-practice `research` and `adopt-defaults`, and on-the-fence requests through `ask-one-question`. Drafts go to `.omo/drafts/` first; a Metis/Momus-style `review-plan` gate runs an approve-biased executability floor (the draft passes if it is non-empty, cites file:line evidence, and is not a non-answer) before an `approval-gate` blocks on `plan.ready`; only a plan-ready route commits the scaffold to `.omo/plans/<slug>.md` via `write-plan`. The scaffold output is nine headers, `- [ ]` checkbox todos with references/acceptance/QA/commit, and a Final Verification Wave. The `planner-readonly` mode (applied to the executed graph via `materializeWorkflow`) denies all writes except `.omo/plans/**`, `.omo/specs/**`, and `.omo/drafts/**`. Invoke with `#planner {your planning request}`.
 - **`runner`**: plan execution. Entry is `admit-plan`, a plan-admission gate that rejects missing, malformed (missing required scaffold sections), or unapproved plans to a terminal node so no task delegation ever runs on an invalid plan. `parse-plan` is section-scoped: it counts only column-0 checkboxes under `## Todos` / `## TODOs` and `## Final Verification Wave` headings (ignoring Notes, Acceptance Criteria, Evidence, etc.) and surfaces `nextTaskLabel`. Delegation uses a six-section contract (TL;DR, Scope, Todos, Final Verification Wave, Acceptance Criteria, References) and a `delegate-wave` node that fans out per blackboard array item under bounded concurrency via `fanOutKey`. `checkbox-update` enforces verify-before-checkbox discipline: it MUST NOT flip a checkbox on a child "done" claim, must independently verify (tests pass, files modified, diagnostics clean) before flipping `- [ ]` to `- [x]`, and re-reads the plan to confirm the unchecked count decreased. The `final-verification-wave` parallel node aggregates four critic outputs (goal, constraints, tests, code quality) into a single `final.verdict` string (`APPROVE` only if all four approve, otherwise `REJECT`) via `aggregateFinalVerdict`. A `fix-loop` node carries a bounded 3-strike counter: under budget it reopens tasks and reuses the persisted child session id so the retried child resumes with full context; at budget it routes to a terminal `blocked-escalation` node that records which critics rejected and signals for human intervention. Invoke with `#runner {execute plan <slug>}`.
 - **`autopilot`**: a mode overlay, not a standalone graph. Prepends six operating directives (certainty before action, scenario before edit, test-driven discipline, QA verification, reviewer separation, completion discipline) to every LLM node and adds a hard policy-gate rule requiring approval before any edit. Applied to any workflow via `modeDeclarations` in the workflow spec. Autopilot is NOT auto-applied to the builtin `default` workflow (it declares no modes); it applies only when a workflow spec declares it in `modes`.
@@ -128,7 +128,7 @@ Deferred (not claimed as implemented):
 - Wholesale oh-my-openagent hook replication (pre/post turn, tool, session hooks) is deferred; parity is reached through ABG graph + policy-gate + mode-overlay, not a hook bus.
 - The planner draft-state runtime (parity matrix row 8) is `partial`: the runtime writes `plan.drafted` / `plan.approved` / `plan.ready` to the blackboard via the `outputKey` seam and the review-plan critic runs, but the critic is an approve-biased draft-heuristic floor, not a full LLM-backed Metis/Momus gap analysis.
 
-Non-interactive equivalent: `mctrl run --workflow <name> "<prompt>"` (mutually exclusive with `--graph`). The model can also self-invoke a workflow through the `workflow(name, prompt)` tool, which resolves the name via the workflow registry and returns a `started` or `not_found` status.
+Non-interactive equivalent: `mc run --workflow <name> "<prompt>"` (mutually exclusive with `--graph`). The model can also self-invoke a workflow through the `workflow(name, prompt)` tool, which resolves the name via the workflow registry and returns a `started` or `not_found` status.
 
 Discovered workflows are listed to the model in an `<available_workflows>` system-prompt block. Custom workflows follow the same `*.workflow.json` or `*.workflow.jsonc` format and the same three-scope first-wins discovery as skills (global config dir, `.mctrl/workflows/`, `.agents/workflows/`).
 
@@ -159,7 +159,7 @@ Managing agents in interactive chat:
 - `/agents <name>` shows full details for one agent.
 - `/agents reload` re-runs discovery without restarting the chat.
 - `/agents disable <name>` disables a single agent so it cannot be spawned via `task()`.
-- The reserved subcommands `dashboard`, `list`, `reload`, and `disable` shadow same-named agents; use `mctrl agents show <name>` to inspect a colliding agent.
+- The reserved subcommands `dashboard`, `list`, `reload`, and `disable` shadow same-named agents; use `mc agents show <name>` to inspect a colliding agent.
 
 Spawning child agents:
 
@@ -178,39 +178,39 @@ The CLI accepts provider/model selection for demo and coding-agent runs. The cat
 ```bash
 pnpm dev:cli -- --no-tui --provider local --model local-echo
 pnpm dev:cli -- --json --model local/local-echo
-mctrl auth login --provider local --api-key <key>
-mctrl auth login --provider anthropic --api-key <key>
-mctrl auth login --provider openai --method oauth-headless
-mctrl auth login --provider github-copilot --method oauth
-mctrl auth login --provider cloudflare-ai-gateway --credential apiToken=<token> --credential accountId=<account> --credential gatewayId=<gateway>
-mctrl auth login --provider amazon-bedrock --credential region=<region> --credential accessKeyId=<key-id> --credential secretAccessKey=<secret>
-mctrl auth login
-mctrl auth list
-mctrl auth logout --provider local
-mctrl models local
+mc auth login --provider local --api-key <key>
+mc auth login --provider anthropic --api-key <key>
+mc auth login --provider openai --method oauth-headless
+mc auth login --provider github-copilot --method oauth
+mc auth login --provider cloudflare-ai-gateway --credential apiToken=<token> --credential accountId=<account> --credential gatewayId=<gateway>
+mc auth login --provider amazon-bedrock --credential region=<region> --credential accessKeyId=<key-id> --credential secretAccessKey=<secret>
+mc auth login
+mc auth list
+mc auth logout --provider local
+mc models local
 ```
 
-Installed `mctrl` provider-backed examples should use isolated data and auth paths for repeatable local tests:
+Installed `mc` provider-backed examples should use isolated data and auth paths for repeatable local tests:
 
 ```bash
-MCTRL_DATA_DIR=/tmp/mctrl-demo-data MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-demo-auth.json mctrl auth login --provider local --api-key local_test_key
-MCTRL_DATA_DIR=/tmp/mctrl-demo-data MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-demo-auth.json mctrl run "summarize this repository" --session session_demo --jsonl --provider local --model local-echo
-MCTRL_DATA_DIR=/tmp/mctrl-demo-data MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-demo-auth.json mctrl session replay session_demo --jsonl
+MCTRL_DATA_DIR=/tmp/mctrl-demo-data MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-demo-auth.json mc auth login --provider local --api-key local_test_key
+MCTRL_DATA_DIR=/tmp/mctrl-demo-data MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-demo-auth.json mc run "summarize this repository" --session session_demo --jsonl --provider local --model local-echo
+MCTRL_DATA_DIR=/tmp/mctrl-demo-data MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-demo-auth.json mc session replay session_demo --jsonl
 ```
 
 The vendored Models.dev snapshot is generated from `https://models.dev/api.json` and is stored under `packages/config/src/generated/`. Refresh it with `node --experimental-strip-types scripts/sync-models-dev-catalog.ts`. Normal CLI commands use the vendored file only; there is no runtime fetch to Models.dev.
 
-`mctrl auth login` supports credential setup for every vendored OpenCode provider. Single-secret providers can use `--api-key <key>` as an alias for their primary secret. Multi-field providers use repeatable `--credential FIELD=VALUE` flags. OAuth-capable providers expose OpenCode-style `--method` choices: OpenAI supports browser and headless ChatGPT OAuth plus API key login, and GitHub Copilot supports OAuth device login plus API key login. Missing credential fields are resolved from explicit CLI values, matching environment variables, existing stored values, and interactive prompts, in that order.
+`mc auth login` supports credential setup for every vendored OpenCode provider. Single-secret providers can use `--api-key <key>` as an alias for their primary secret. Multi-field providers use repeatable `--credential FIELD=VALUE` flags. OAuth-capable providers expose OpenCode-style `--method` choices: OpenAI supports browser and headless ChatGPT OAuth plus API key login, and GitHub Copilot supports OAuth device login plus API key login. Missing credential fields are resolved from explicit CLI values, matching environment variables, existing stored values, and interactive prompts, in that order.
 
-`mctrl auth login` can prompt interactively for provider, auth method, and credential fields when flags are omitted. Stored credentials configure the default provider/model for later demo runs, so a later `mctrl --no-tui` can use the saved default when no `--provider` or `--model` flag is passed.
+`mc auth login` can prompt interactively for provider, auth method, and credential fields when flags are omitted. Stored credentials configure the default provider/model for later demo runs, so a later `mc --no-tui` can use the saved default when no `--provider` or `--model` flag is passed.
 
 Credential storage defaults to `$XDG_DATA_HOME/mission-control/auth.json` or `~/.local/share/mission-control/auth.json`. Set `MISSION_CONTROL_AUTH_FILE=/tmp/mctrl-auth.json` to use a specific auth file for tests, demos, or isolated workspaces.
 
 API keys, OAuth tokens, and multi-field provider credentials are stored as plaintext JSON in that auth file. This scaffold does not use encrypted OS keychain storage yet; this is not encrypted keychain storage.
 
-`mctrl models [provider]` lists scaffold and vendored provider models and shows whether each provider has a configured credential. Command output masks credentials and does not print raw API keys or raw multi-field secret values.
+`mc models [provider]` lists scaffold and vendored provider models and shows whether each provider has a configured credential. Command output masks credentials and does not print raw API keys or raw multi-field secret values.
 
-Interactive `/model` choices are narrower than `mctrl models`: they first require a logged-in provider, and API-key credentials for supported providers can call the provider's model-list API at chat startup. When discovery succeeds, `/model` intersects the live provider model IDs with the vendored catalog before showing, searching, or accepting a model selection. OAuth credentials, unsupported providers, failed requests, and malformed responses fall back to the vendored models for that logged-in provider.
+Interactive `/model` choices are narrower than `mc models`: they first require a logged-in provider, and API-key credentials for supported providers can call the provider's model-list API at chat startup. When discovery succeeds, `/model` intersects the live provider model IDs with the vendored catalog before showing, searching, or accepting a model selection. OAuth credentials, unsupported providers, failed requests, and malformed responses fall back to the vendored models for that logged-in provider.
 
 The desktop demo control surface exposes provider/model controls, an API key credential field, credential configured/missing state, and the active selection in the status area and event log. The Tauri desktop client saves and lists API-key credentials through the same auth file used by the CLI, and desktop prompt/resume/approval commands route through the core provider factory.
 
@@ -263,7 +263,7 @@ Mission Control separates configuration (how MCP servers and environment-variabl
 
 ### Global user config: `config.json`
 
-The global user config file is `config.json` in the config directory. It declares user-scope MCP servers and the environment-variable expansion allowlist (`mcp_env_allowlist`). A `${VAR}` reference in a server `command`, `args`, or `headers` is expanded only when `VAR` is listed in `mcp_env_allowlist`. User-scope `mctrl mcp add` and `mctrl mcp remove --scope user` rewrite this file.
+The global user config file is `config.json` in the config directory. It declares user-scope MCP servers and the environment-variable expansion allowlist (`mcp_env_allowlist`). A `${VAR}` reference in a server `command`, `args`, or `headers` is expanded only when `VAR` is listed in `mcp_env_allowlist`. User-scope `mc mcp add` and `mc mcp remove --scope user` rewrite this file.
 
 ### Project-local config: `.mcp.json`
 
@@ -288,15 +288,15 @@ Profile-not-found behavior: if no candidate file exists, the runtime surfaces a 
 
 Profile name rules: the name must match `^[a-z0-9][a-z0-9_-]{0,63}$` (lowercase letters, digits, `_`, `-`; must start with a letter or digit; max 64 characters). An invalid value is rejected with a message naming the offending value.
 
-User-scope writes with a profile: `mctrl mcp add` / `mctrl mcp remove --scope user --profile dev` rewrite an existing profile candidate (preserving its format) or create `mission-control.<profile>.jsonc` when none exists. `--scope project --profile dev` ignores the profile and still writes `.mcp.json`.
+User-scope writes with a profile: `mc mcp add` / `mc mcp remove --scope user --profile dev` rewrite an existing profile candidate (preserving its format) or create `mission-control.<profile>.jsonc` when none exists. `--scope project --profile dev` ignores the profile and still writes `.mcp.json`.
 
 `--profile` does not change the data directory, auth file (`MISSION_CONTROL_AUTH_FILE`), session logs, trust store, skills, workflows, agents, keybinds, or project `.mcp.json`. It is purely a user-config-file selector.
 
 Example:
 
 ```bash
-mctrl mcp list --profile dev
-mctrl run "summarize this repository" --profile dev --session session_dev --jsonl
+mc mcp list --profile dev
+mc run "summarize this repository" --profile dev --session session_dev --jsonl
 ```
 
 ## Coding Agent Runtime
@@ -394,7 +394,7 @@ Graph limits:
 
 Noninteractive JSON/JSONL run states:
 
-- `mctrl run "<prompt>" --no-tui` and `--json`/`--jsonl` modes run a single prompt through the coding-agent path with the full tool set.
+- `mc run "<prompt>" --no-tui` and `--json`/`--jsonl` modes run a single prompt through the coding-agent path with the full tool set.
 - Run receipts settle as `completed`, `failed`, `interrupted`, or `blocked_on_approval`.
 - `blocked_on_approval` means the run paused for an approval decision and can be resumed with `/continue` in interactive mode or by recording an approval decision in the durable session.
 - `--jsonl` persists a replayable durable session; `--json` emits transient JSON Lines without persistence.
@@ -402,12 +402,12 @@ Noninteractive JSON/JSONL run states:
 
 Session export, import, compaction, deletion, and stats:
 
-- `mctrl session export <id> <path>` writes a checksummed session archive file with manifest, events, and SHA-256 checksum.
-- `mctrl session import <path>` imports a session archive into a new durable session.
-- `mctrl session list` lists sessions with lock status, event counts, message counts, and trust status.
-- `mctrl session show <id>` shows the session snapshot, approvals, tool outcomes, coding steps, and diagnostics.
-- `mctrl session replay <id> --jsonl` replays durable events and coding steps as JSON Lines.
-- `mctrl session delete <id> [--force]` deletes a session and all of its descendant subagent/child sessions. Each session's SQLite rows, compatibility JSONL log if present, lock file, and projection rows are removed. The command refuses to delete any session in the tree that has an active live lock unless `--force` is passed; stale and corrupt locks are cleaned up automatically.
+- `mc session export <id> <path>` writes a checksummed session archive file with manifest, events, and SHA-256 checksum.
+- `mc session import <path>` imports a session archive into a new durable session.
+- `mc session list` lists sessions with lock status, event counts, message counts, and trust status.
+- `mc session show <id>` shows the session snapshot, approvals, tool outcomes, coding steps, and diagnostics.
+- `mc session replay <id> --jsonl` replays durable events and coding steps as JSON Lines.
+- `mc session delete <id> [--force]` deletes a session and all of its descendant subagent/child sessions. Each session's SQLite rows, compatibility JSONL log if present, lock file, and projection rows are removed. The command refuses to delete any session in the tree that has an active live lock unless `--force` is passed; stale and corrupt locks are cleaned up automatically.
 - `/compact` in interactive chat summarizes older session history into a durable compaction boundary event, reducing replay context while preserving the session tree.
 
 Desktop scope:
@@ -454,21 +454,21 @@ npm CLI install:
 
 ```bash
 npm install -g @mission-control/cli
-mctrl
+mc
 ```
 
 The current scoped package name is `@mission-control/cli`. A future unscoped package can use:
 
 ```bash
 npm install -g mission-control
-mctrl
+mc
 ```
 
 curl install:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/noizbuster/mission-control/main/scripts/install.sh | sh
-mctrl
+mc
 ```
 
 For forks or pre-release repositories, pass `MISSION_CONTROL_REPO=owner/repo` to the `sh` process that runs `scripts/install.sh`.
@@ -480,7 +480,7 @@ GitHub Release artifact naming:
 - `mctrl-darwin-x64.tar.gz`
 - `mctrl-darwin-arm64.tar.gz`
 
-The package helper creates the current-platform CLI artifact in `dist/release`. Each archive contains `mctrl` and `mission-control-sidecar`.
+The package helper creates the current-platform CLI artifact in `dist/release`. Each archive contains `mc`, the `mctrl` alias, and `mission-control-sidecar`.
 It also writes a sibling `.sha256` file for GitHub Release uploads.
 
 Desktop release:

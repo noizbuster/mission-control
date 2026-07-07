@@ -10,7 +10,8 @@ describe('CLI entrypoint', () => {
 
         expect(source.startsWith('#!/usr/bin/env -S node --experimental-ffi')).toBe(true);
         expect(getVersion()).toBe('0.1.0');
-        expect(help).toContain('mctrl');
+        expect(help).toContain('mc');
+        expect(help).toContain('mctrl remains available as an alias');
         expect(help).toContain('--no-tui');
         expect(help).toContain('--json');
         expect(help).toContain('--jsonl');
@@ -22,30 +23,28 @@ describe('CLI entrypoint', () => {
         expect(help).toContain('--graph <path>');
         expect(help).toContain('--session <id>');
         expect(help).toContain('--method <id>');
-        expect(help).toContain('mctrl auth login --provider local --api-key <key>');
-        expect(help).toContain('mctrl auth login --provider anthropic --api-key <key>');
-        expect(help).toContain('mctrl auth login --provider openai --method oauth-headless');
-        expect(help).toContain('mctrl auth login --provider github-copilot --method oauth');
+        expect(help).toContain('mc auth login --provider local --api-key <key>');
+        expect(help).toContain('mc auth login --provider anthropic --api-key <key>');
+        expect(help).toContain('mc auth login --provider openai --method oauth-headless');
+        expect(help).toContain('mc auth login --provider github-copilot --method oauth');
         expect(help).toContain(
-            'mctrl auth login --provider cloudflare-ai-gateway --credential apiToken=<token> --credential accountId=<account> --credential gatewayId=<gateway>',
+            'mc auth login --provider cloudflare-ai-gateway --credential apiToken=<token> --credential accountId=<account> --credential gatewayId=<gateway>',
         );
         expect(help).toContain('--credential FIELD=VALUE');
         expect(help).not.toContain('sk-test');
-        expect(help).toContain('mctrl auth list');
-        expect(help).toContain('mctrl models local');
-        expect(help).toContain('mctrl run "summarize this repository" --session session_demo --jsonl');
-        expect(help).toContain(
-            'mctrl graph run examples/abg/research-answer.graph.json --session session_graph --jsonl',
-        );
-        expect(help).toContain('mctrl session list');
-        expect(help).toContain('mctrl session export session_demo /tmp/session_demo.mctrl-session.json');
-        expect(help).toContain('mctrl session import /tmp/session_demo.mctrl-session.json');
-        expect(help).toContain('mctrl session replay session_demo --jsonl');
-        expect(help).toContain('mctrl session delete session_demo [--force]');
+        expect(help).toContain('mc auth list');
+        expect(help).toContain('mc models local');
+        expect(help).toContain('mc run "summarize this repository" --session session_demo --jsonl');
+        expect(help).toContain('mc graph run examples/abg/research-answer.graph.json --session session_graph --jsonl');
+        expect(help).toContain('mc session list');
+        expect(help).toContain('mc session export session_demo /tmp/session_demo.mctrl-session.json');
+        expect(help).toContain('mc session import /tmp/session_demo.mctrl-session.json');
+        expect(help).toContain('mc session replay session_demo --jsonl');
+        expect(help).toContain('mc session delete session_demo [--force]');
         expect(help).toContain('--version');
         expect(help).toContain('--help');
-        expect(help).toContain('mctrl --no-tui --provider local --model local-echo');
-        expect(help).toContain('mctrl --json --graph examples/abg/research-answer.graph.json');
+        expect(help).toContain('mc --no-tui --provider local --model local-echo');
+        expect(help).toContain('mc --json --graph examples/abg/research-answer.graph.json');
         expect(help).toContain('/model <provider>/<model>[#variant]');
         expect(help).toContain('/new [session-id]');
         expect(help).toContain('/session <session-id>');
