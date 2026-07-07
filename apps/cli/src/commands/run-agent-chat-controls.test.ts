@@ -1,4 +1,3 @@
-import { missionControlDataDirEnvKey } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
@@ -9,24 +8,23 @@ import {
     createScriptedChatInput,
     setTtyState,
 } from './run-agent-chat-test-support.js';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import {
+    type IsolatedMissionControlTestScope,
+    useIsolatedMissionControlTestScope,
+} from './run-agent-data-dir-test-support.js';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 describe('runAgent interactive chat controls', () => {
-    const tempDirs: string[] = [];
+    let testScope: IsolatedMissionControlTestScope | undefined;
 
     beforeEach(async () => {
-        const dataDir = await tempRoot('mctrl-run-agent-chat-data-');
-        vi.stubEnv(missionControlDataDirEnvKey, dataDir);
-    });
-
-    afterEach(() => {
-        vi.unstubAllEnvs();
+        testScope = await useIsolatedMissionControlTestScope('mctrl-run-agent-chat-data-');
     });
 
     afterEach(async () => {
-        await Promise.all(tempDirs.splice(0).map((path) => rm(path, { recursive: true, force: true })));
+        await testScope?.cleanup();
+        testScope = undefined;
     });
 
     it('closes chat input when a process SIGINT interrupts the terminal', async () => {
@@ -70,39 +68,32 @@ describe('runAgent interactive chat controls', () => {
     it('routes $skill invocations through real skill loading instead of the scaffold recorder', async () => {
         const chatOutput = createBufferedChatOutput();
         const events: AgentEvent[] = [];
-        const emptyWorkspace = await mkdtemp(join(tmpdir(), 'mctrl-skill-chat-'));
+        const emptyWorkspace = await tempRoot('mctrl-skill-chat-');
 
-        try {
-            const output = await runAgent(parseArgs([]), {
-                authStore: createEmptyAuthStore(),
-                workspaceRoot: emptyWorkspace,
-                chatInput: createScriptedChatInput([
-                    { type: 'line', value: '$planner draft a rollout checklist' },
-                    { type: 'interrupt' },
-                    { type: 'interrupt' },
-                ]),
-                chatOutput: chatOutput.output,
-                onRuntimeEvent: (event) => {
-                    events.push(event);
-                },
-            });
+        const output = await runAgent(parseArgs([]), {
+            authStore: createEmptyAuthStore(),
+            workspaceRoot: emptyWorkspace,
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: '$planner draft a rollout checklist' },
+                { type: 'interrupt' },
+                { type: 'interrupt' },
+            ]),
+            chatOutput: chatOutput.output,
+            onRuntimeEvent: (event) => {
+                events.push(event);
+            },
+        });
 
-            expect(output).not.toContain('Skill planner scaffolded');
-            expect(
-                events.some(
-                    (event) => event.type === 'permission.requested' && event.message?.includes('skill.invoke'),
-                ),
-            ).toBe(false);
-            expect(
-                events.some(
-                    (event) =>
-                        event.type === 'task.completed' && event.message?.includes('skill invocation scaffolded'),
-                ),
-            ).toBe(false);
-            expect(output).toContain('Unknown skill: planner');
-        } finally {
-            await rm(emptyWorkspace, { recursive: true, force: true });
-        }
+        expect(output).not.toContain('Skill planner scaffolded');
+        expect(
+            events.some((event) => event.type === 'permission.requested' && event.message?.includes('skill.invoke')),
+        ).toBe(false);
+        expect(
+            events.some(
+                (event) => event.type === 'task.completed' && event.message?.includes('skill invocation scaffolded'),
+            ),
+        ).toBe(false);
+        expect(output).toContain('Unknown skill: planner');
     });
 
     it('reports unknown slash commands without submitting a prompt task', async () => {
@@ -148,8 +139,12 @@ describe('runAgent interactive chat controls', () => {
     });
 
     async function tempRoot(prefix: string): Promise<string> {
-        const path = await mkdtemp(join(tmpdir(), prefix));
-        tempDirs.push(path);
+        const activeScope = testScope;
+        if (activeScope === undefined) {
+            throw new Error('test scope was not initialized');
+        }
+        const path = join(activeScope.dataDir, prefix);
+        await mkdir(path, { recursive: true });
         return path;
     }
 });
