@@ -1,8 +1,10 @@
-import { JsonlSessionEventStore, missionControlDataDirEnvKey } from '@mission-control/core';
+import { localSessionDbPath, missionControlDataDirEnvKey, readLocalSessionReplay } from '@mission-control/core';
+import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CliArgs, CliMode } from '../args.js';
+import { type CliArgs, type CliMode, parseArgs } from '../args.js';
+import { runAgent } from './run-agent.js';
 import { createRunEventRecorder } from './run-agent-session.js';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -25,7 +27,7 @@ describe('createRunEventRecorder lazy session creation', () => {
         await recorder.close();
     });
 
-    it('(b) ensureSession materializes and returns a sessionId and open store', async () => {
+    it('(b) ensureSession materializes and returns a sessionId and open SQLite-backed store', async () => {
         await useTempDataDir();
 
         const recorder = await createRunEventRecorder(makeArgs({ mode: 'tui' }));
@@ -33,8 +35,8 @@ describe('createRunEventRecorder lazy session creation', () => {
             const result = await recorder.ensureSession();
 
             expect(result.sessionId).toEqual(expect.any(String));
-            expect(result.store).toBeInstanceOf(JsonlSessionEventStore);
             expect(result.store.sessionId).toBe(result.sessionId);
+            await expect(access(localSessionDbPath())).resolves.toBeUndefined();
             expect(recorder.currentSessionId()).toBe(result.sessionId);
             expect(recorder.currentStore()).toBe(result.store);
         } finally {
@@ -72,26 +74,27 @@ describe('createRunEventRecorder lazy session creation', () => {
             await recorder.close();
         }
 
-        const eventTypes = await readSessionEventTypes(dataDir, sessionId);
+        const eventTypes = await readSessionEventTypes(sessionId);
         expect(eventTypes[0]).toBe('session.started');
         expect(eventTypes[1]).toBe('session.metadata.updated');
+        await expect(readdir(join(dataDir, 'sessions'))).resolves.not.toContain(`${sessionId}.jsonl`);
     });
 
-    it('(e) non-lazy jsonl run still opens eagerly at construction (regression guard)', async () => {
+    it('(e) non-lazy jsonl run still opens the SQLite-backed store eagerly at construction', async () => {
         const dataDir = await useTempDataDir();
 
         const recorder = await createRunEventRecorder(makeArgs({ mode: 'jsonl' }));
         try {
             expect(recorder.currentSessionId()).toEqual(expect.any(String));
-            expect(recorder.currentStore()).toBeInstanceOf(JsonlSessionEventStore);
+            expect(recorder.currentStore()?.sessionId).toBe(recorder.currentSessionId());
+            await expect(access(localSessionDbPath(dataDir))).resolves.toBeUndefined();
         } finally {
             await recorder.close();
         }
 
         const sessionId = recorder.currentSessionId();
         expect(sessionId).toEqual(expect.any(String));
-        const files = await readdir(join(dataDir, 'sessions'));
-        expect(files).toContain(`${sessionId}.jsonl`);
+        await expect(readdir(join(dataDir, 'sessions'))).resolves.not.toContain(`${sessionId}.jsonl`);
     });
 
     it('(f) explicit --session in TUI mode still opens eagerly', async () => {
@@ -101,13 +104,69 @@ describe('createRunEventRecorder lazy session creation', () => {
         const recorder = await createRunEventRecorder(makeArgs({ mode: 'tui', sessionId: explicitId }));
         try {
             expect(recorder.currentSessionId()).toBe(explicitId);
-            expect(recorder.currentStore()).toBeInstanceOf(JsonlSessionEventStore);
+            expect(recorder.currentStore()?.sessionId).toBe(explicitId);
+            await expect(access(localSessionDbPath(dataDir))).resolves.toBeUndefined();
         } finally {
             await recorder.close();
         }
 
-        const files = await readdir(join(dataDir, 'sessions'));
-        expect(files).toContain(`${explicitId}.jsonl`);
+        await expect(readdir(join(dataDir, 'sessions'))).resolves.not.toContain(`${explicitId}.jsonl`);
+    });
+
+    it('(g) explicit local/local-echo --session prompts resume without duplicate owner prompt id or failed partial append', async () => {
+        await useTempDataDir();
+        const sessionId = 'session_explicit_owner_resume';
+
+        await runAgent(
+            parseArgs([
+                '--no-tui',
+                '--no-native',
+                '--provider',
+                'local',
+                '--model',
+                'local-echo',
+                '--session',
+                sessionId,
+                'create a short explicit session',
+            ]),
+        );
+        const beforeSecondPrompt = await readSessionEvents(sessionId);
+
+        let secondError: unknown;
+        let secondOutput = '';
+        try {
+            secondOutput = await runAgent(
+                parseArgs([
+                    '--no-tui',
+                    '--no-native',
+                    '--provider',
+                    'local',
+                    '--model',
+                    'local-echo',
+                    '--session',
+                    sessionId,
+                    'resume the explicit session with a second prompt',
+                ]),
+            );
+        } catch (error: unknown) {
+            secondError = error;
+        }
+        const afterSecondPrompt = await readSessionEvents(sessionId);
+
+        if (secondError !== undefined) {
+            expect(afterSecondPrompt).toHaveLength(beforeSecondPrompt.length);
+        }
+        expect(errorMessage(secondError)).toBeUndefined();
+        expect(secondOutput).not.toContain('has already been promoted');
+        const promotedInputs = afterSecondPrompt
+            .filter((event) => event.type === 'prompt.promoted')
+            .map((event) => event.transcript?.inputId)
+            .filter((inputId): inputId is string => inputId !== undefined);
+        expect(promotedInputs.length).toBeGreaterThanOrEqual(2);
+        expect(new Set(promotedInputs).size).toBe(promotedInputs.length);
+        expect(afterSecondPrompt.map((event) => event.message).join('\n')).toContain(
+            'resume the explicit session with a second prompt',
+        );
     });
 
     async function useTempDataDir(): Promise<string> {
@@ -135,18 +194,21 @@ function makeArgs(overrides: { readonly mode?: CliMode; readonly sessionId?: str
     };
 }
 
-async function readSessionEventTypes(dataDir: string, sessionId: string): Promise<string[]> {
-    const contents = await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8');
-    return contents
-        .trim()
-        .split('\n')
-        .map(
-            (line) =>
-                JSON.parse(line) as {
-                    readonly kind?: string;
-                    readonly event?: { readonly event?: { readonly type?: string } };
-                },
-        )
-        .filter((record) => record.kind === 'mission-control.session-event')
-        .map((record) => record.event?.event?.type ?? '');
+async function readSessionEventTypes(sessionId: string): Promise<readonly string[]> {
+    return (await readSessionEvents(sessionId)).map((event) => event.type);
+}
+
+async function readSessionEvents(sessionId: string): Promise<readonly AgentEvent[]> {
+    const replay = await readLocalSessionReplay({ sessionId });
+    if (replay.kind !== 'found') {
+        throw new Error(`expected SQLite replay for ${sessionId}`);
+    }
+    return replay.replay.projection.events;
+}
+
+function errorMessage(error: unknown): string | undefined {
+    if (error === undefined) {
+        return undefined;
+    }
+    return error instanceof Error ? error.message : String(error);
 }

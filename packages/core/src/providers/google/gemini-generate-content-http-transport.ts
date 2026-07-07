@@ -1,9 +1,9 @@
+import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport.js';
 import {
     type GeminiGenerateContentTransport,
     GeminiGenerateContentTransportError,
     type GeminiGenerateContentTransportRequest,
 } from './gemini-generate-content-transport.js';
-import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport.js';
 
 const ERROR_FIELD = 'error';
 const STATUS_FIELD = 'status';
@@ -40,11 +40,13 @@ export function parseGeminiGenerateContentSseEvents(text: string): {
     readonly events: readonly unknown[];
     readonly remainder: string;
 } {
-    return parseSseFrames(text, () =>
-        new GeminiGenerateContentTransportError({
-            kind: 'network',
-            message: 'Gemini SSE frame contained invalid JSON',
-        }),
+    return parseSseFrames(
+        text,
+        () =>
+            new GeminiGenerateContentTransportError({
+                kind: 'network',
+                message: 'Gemini SSE frame contained invalid JSON',
+            }),
     );
 }
 

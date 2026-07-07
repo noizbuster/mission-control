@@ -137,15 +137,16 @@ describe('config catalog constants', () => {
             'reasoning-medium',
             'reasoning-high',
         ]);
-        expect(variantsForReasoningOptions('zai-coding-plan', [{ type: 'effort', values: ['high', 'max'] }])?.map((v) => v.id)).toEqual([
-            'reasoning-high',
-            'reasoning-max',
-        ]);
-        expect(variantsForReasoningOptions('anthropic', [{ type: 'effort', values: ['low', 'medium', 'high'] }])?.map((v) => v.id)).toEqual([
-            'thinking-low',
-            'thinking-medium',
-            'thinking-high',
-        ]);
+        expect(
+            variantsForReasoningOptions('zai-coding-plan', [{ type: 'effort', values: ['high', 'max'] }])?.map(
+                (v) => v.id,
+            ),
+        ).toEqual(['reasoning-high', 'reasoning-max']);
+        expect(
+            variantsForReasoningOptions('anthropic', [{ type: 'effort', values: ['low', 'medium', 'high'] }])?.map(
+                (v) => v.id,
+            ),
+        ).toEqual(['thinking-low', 'thinking-medium', 'thinking-high']);
     });
 
     it('derives thinking tiers for Google budget_tokens reasoning options', () => {

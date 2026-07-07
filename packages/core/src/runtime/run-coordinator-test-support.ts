@@ -1,8 +1,7 @@
 import type { AgentEvent, ProtocolError, ProviderStreamChunk } from '@mission-control/protocol';
 import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
 import type { ProviderAdapter, ProviderTurnRequest } from '../providers/provider-turn-types.js';
-import { type RunCoordinatorStore, SessionRunCoordinator } from './run-coordinator.js';
-import type { RunCoordinatorProviderTurnResult } from './run-coordinator-lifecycle.js';
+import { SessionRunCoordinator } from './run-coordinator.js';
 import type { RunCoordinatorTurnRunner } from './run-coordinator-types.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -56,12 +55,13 @@ export function providerFromRequests(
 ): ProviderAdapter {
     let index = 0;
     return {
-        async *streamTurn(request, context) {
+        async *streamTurn(request, context): AsyncGenerator<ProviderStreamChunk> {
             await onRequest(request, index);
             index += 1;
             if (context.signal.aborted) {
                 throw new Error('provider turn aborted');
             }
+            yield* [];
         },
     };
 }

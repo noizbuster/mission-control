@@ -1,51 +1,25 @@
-import { defaultModelProviderSelection, getRuntimeModelProviderCatalog } from '@mission-control/config';
+import { defaultModelProviderSelection } from '@mission-control/config';
 import {
-    type AgentModelLookup,
     AgentRuntime,
     type CommandExecutionRequest,
     type CommandExecutionResult,
-    completeRun,
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
-    createMission,
     createPersistentStore,
-    discoverAgents,
-    discoverWorkflows,
-    ensureOmoDirs,
-    failRun,
-    materializeMission,
     PermissionGateError,
-    type PersistentMemoryStore,
-    PluginManager,
     type ProviderAdapter,
-    registerBuiltinWorkflows,
     resolveMissionControlDataDir,
-    resolveOmoRoot,
-    resolveUserConfigDir,
     type SdkModelResolver,
-    startRun,
-    TursoPersistentStore,
-    WorkflowRegistry,
 } from '@mission-control/core';
-import type {
-    AbgGraphSpec,
-    AbgNodeModelOptions,
-    AgentEvent,
-    ModelProviderSelection,
-    WorkflowSpec,
-} from '@mission-control/protocol';
+import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
 import { closeTreeSitterClient } from '../components/markdown/highlight.js';
-import { type AgentUIRenderer, JsonRenderer, PlainRenderer, TuiRenderer } from '../ui/renderers.js';
-import { loadPersistedApprovalLevel, savePersistedApprovalLevel } from './approval-level-store.js';
-import { splitCommandParts } from './chat-command-parts.js';
 import type { NonInteractiveAutomationPolicy } from './cli-runtime-options.js';
 import { createCliRuntimeOptions } from './cli-runtime-options.js';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
-import { type ChatInput, type ChatOutput, type ModelSelector, runInteractiveChatSession } from './interactive-chat.js';
-import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
-import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
+import type { ChatInput, ChatOutput, ModelSelector, PlainPromptGraph } from './interactive-chat.js';
+import type { ModelDiscovery } from './model-discovery.js';
 import { loadPricingTable } from './pricing-table-store.js';
 import { createCliProviderForSelection } from './provider-factory.js';
 import { readGraphFile, validateGraphModelOptions, validateModelProviderSelection } from './run-agent-graph.js';
@@ -54,13 +28,26 @@ import {
     resolveGraphSdkModel,
     runCodingPromptOnGraph,
 } from './run-agent-graph-prompt.js';
+import { runInteractiveAgent } from './run-agent-interactive.js';
+import { buildAgentModelLookup, resolveModelProviderSelection } from './run-agent-model-selection.js';
 import { runOwnerPrompt } from './run-agent-owner-prompt.js';
+import { closePersistentStore, createRenderer } from './run-agent-rendering.js';
 import { createRunEventRecorder } from './run-agent-session.js';
-import { graphForDefaultFallback, graphForWorkflowSpec } from './workflow-materialization.js';
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import {
+    beginNoninteractiveWorkflowRun,
+    resolveNoninteractiveWorkflowSelection,
+    settleNoninteractiveWorkflowRun,
+    type WorkflowRunOutcome,
+} from './run-agent-workflow.js';
+import { resolveWorkspaceRoot } from './run-agent-workspace.js';
 
 export { createCliProviderForSelection } from './provider-factory.js';
+export {
+    resolveWorkflowInvocation,
+    type WorkflowInvocation,
+    type WorkflowInvocationInput,
+} from './run-agent-workflow.js';
+export { detectWorkspaceRoot, resolveWorkspaceRoot } from './run-agent-workspace.js';
 
 export type RunAgentOptions = {
     readonly authStore?: ProviderAuthStore;
@@ -79,6 +66,7 @@ export type RunAgentOptions = {
     readonly workspaceRoot?: string;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly nonInteractiveAutomationPolicy?: NonInteractiveAutomationPolicy;
+    readonly plainPromptGraph?: PlainPromptGraph;
 };
 
 export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Promise<string> {
@@ -110,64 +98,17 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         }),
     );
     if (shouldRunChat) {
-        const recorder = await createRunEventRecorder(args, { workspaceRoot });
-        const emitRuntimeEvent = (event: AgentEvent) => {
-            const recorded = recorder.record(event);
-            options.onRuntimeEvent?.(recorded);
-        };
-        const observeStoredEvent = (event: AgentEvent) => {
-            options.onRuntimeEvent?.(event);
-        };
-        const unsubscribeRuntimeEvents = runtime.onEvent(emitRuntimeEvent);
-        let didStart = false;
-        try {
-            const session = await runtime.start();
-            didStart = true;
-            const sessionStore = recorder.currentStore();
-            const interactiveSessionId = args.sessionId ?? recorder.currentSessionId();
-            const persistedApprovalLevel = await loadPersistedApprovalLevel();
-            return await runInteractiveChatSession(runtime, {
-                modelProviderSelection: selectedModelProvider,
-                provider,
-                authStore,
-                ...(interactiveSessionId !== undefined ? { sessionId: interactiveSessionId } : {}),
-                workspaceRoot,
-                modelChoices: await listAuthenticatedModelChoices(
-                    authStore,
-                    options.modelDiscovery ?? createDefaultModelDiscovery(),
-                ),
-                emitEvent: emitRuntimeEvent,
-                observeStoredEvent,
-                switchSessionStore: recorder.switchSession,
-                ensureSession: recorder.ensureSession,
-                ...(sessionStore !== undefined ? { sessionStore } : {}),
-                ...(options.provider === undefined ? { resolveProviderForSelection: createProvider } : {}),
-                persistModelProviderSelection: async (selection) => {
-                    await authStore.setDefaultSelection(selection);
-                },
-                ...(persistedApprovalLevel !== undefined ? { initialApprovalLevel: persistedApprovalLevel } : {}),
-                persistApprovalLevel: async (level) => {
-                    await savePersistedApprovalLevel(level);
-                },
-                ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
-                ...(options.chatInput !== undefined ? { input: options.chatInput } : {}),
-                ...(options.chatOutput !== undefined ? { output: options.chatOutput } : {}),
-                ...(options.selectModel !== undefined ? { selectModel: options.selectModel } : {}),
-                // Wire the graph into the interactive path. The flat loop is gone; the ABG graph
-                // is the only engine. `resolveSdkModel` is required (resolved below per turn).
-                engine: 'graph',
-                ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
-                ...(args.profileName !== undefined ? { profileName: args.profileName } : {}),
-            });
-        } finally {
-            if (didStart) {
-                await runtime.stop();
-            }
-            unsubscribeRuntimeEvents?.();
-            await recorder.close();
-            closePersistentStore(persistentStore);
-            await closeTreeSitterClient();
-        }
+        return await runInteractiveAgent({
+            args,
+            runtime,
+            authStore,
+            provider,
+            selectedModelProvider,
+            createProvider,
+            workspaceRoot,
+            ...(persistentStore !== undefined ? { persistentStore } : { persistentStore: undefined }),
+            options,
+        });
     }
 
     const recorder = await createRunEventRecorder(args, { workspaceRoot });
@@ -183,29 +124,11 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
     };
     let didStart = false;
     const pricingTable = await loadPricingTable();
-    const workflowInvocation = resolveWorkflowInvocation(args);
-    let effectivePrompt = args.prompt;
-    let workflowGraph: AbgGraphSpec | undefined;
-    let workflowSpec: WorkflowSpec | undefined;
-    if (workflowInvocation !== undefined) {
-        const registry = await discoverWorkflowRegistry(workspaceRoot);
-        const spec = registry.lookup(workflowInvocation.name);
-        if (spec === undefined) {
-            const names = registry.names();
-            const available = names.length === 0 ? '(none discovered)' : names.slice(0, 20).join(', ');
-            throw new Error(`Unknown workflow "${workflowInvocation.name}". Available workflows: ${available}.`);
-        }
-        workflowGraph = graphForWorkflowSpec(spec);
-        workflowSpec = spec;
-        effectivePrompt = workflowInvocation.prompt;
-    } else if (graph === undefined && effectivePrompt !== undefined) {
-        // Plain-prompt default fallback: `--graph` and `#name`/`--workflow` bypass this.
-        const registry = await discoverWorkflowRegistry(workspaceRoot);
-        const fallbackGraph = graphForDefaultFallback(registry);
-        if (fallbackGraph !== undefined) {
-            workflowGraph = fallbackGraph;
-        }
-    }
+    const { effectivePrompt, workflowGraph, workflowSpec } = await resolveNoninteractiveWorkflowSelection({
+        args,
+        workspaceRoot,
+        graph,
+    });
     const workflowRun = await beginNoninteractiveWorkflowRun(workspaceRoot, workflowSpec);
     try {
         await renderer.start(runtime);
@@ -336,292 +259,6 @@ function shouldRunInteractiveChat(args: CliArgs, graph: AbgGraphSpec | undefined
     );
 }
 
-const WORKFLOW_NAME_PATTERN = /^[A-Za-z0-9_.:/-]+$/;
-
-export type WorkflowInvocation = {
-    readonly name: string;
-    readonly prompt: string;
-};
-
-export type WorkflowInvocationInput = {
-    readonly workflowName?: string;
-    readonly prompt?: string;
-};
-
-export function resolveWorkflowInvocation(args: WorkflowInvocationInput): WorkflowInvocation | undefined {
-    if (args.workflowName !== undefined) {
-        return { name: args.workflowName, prompt: args.prompt ?? '' };
-    }
-    if (args.prompt?.startsWith('#')) {
-        const parts = splitCommandParts(args.prompt.slice(1));
-        if (parts.head.length === 0) {
-            throw new Error('Workflow invocation requires a name after "#"');
-        }
-        if (!WORKFLOW_NAME_PATTERN.test(parts.head)) {
-            throw new Error(`Invalid workflow name: "${parts.head}"`);
-        }
-        return { name: parts.head, prompt: parts.tail };
-    }
-    return undefined;
-}
-
-async function discoverWorkflowRegistry(workspaceRoot: string): Promise<WorkflowRegistry> {
-    const pluginManager = new PluginManager({ workspaceRoot });
-    let pluginWorkflowDirs: readonly string[] = [];
-    try {
-        await pluginManager.initialize();
-        pluginWorkflowDirs = pluginManager.getWorkflowDirs();
-        for (const diagnostic of pluginManager.getDiagnostics()) {
-            process.stderr.write(
-                `plugin discovery [${diagnostic.severity}] ${diagnostic.pluginName}: ${diagnostic.message}\n`,
-            );
-        }
-    } catch (error: unknown) {
-        process.stderr.write(
-            `plugin discovery [warning] skipped: ${error instanceof Error ? error.message : String(error)}\n`,
-        );
-    }
-
-    const result = await discoverWorkflows({
-        workspaceRoot,
-        ...(pluginWorkflowDirs.length > 0 ? { additionalWorkflowDirs: pluginWorkflowDirs } : {}),
-    });
-    for (const diagnostic of result.diagnostics) {
-        process.stderr.write(
-            `workflow discovery [${diagnostic.severity}] ${diagnostic.workflowName}: ${diagnostic.message}\n`,
-        );
-    }
-    const registry = new WorkflowRegistry(result.workflows);
-    registerBuiltinWorkflows(registry);
-    try {
-        await pluginManager.registerInto(registry);
-    } catch (error: unknown) {
-        process.stderr.write(
-            `plugin registration [warning] skipped: ${error instanceof Error ? error.message : String(error)}\n`,
-        );
-    }
-    return registry;
-}
-
-async function resolveModelProviderSelection(
-    args: CliArgs,
-    authStore: ProviderAuthStore,
-): Promise<ModelProviderSelection | undefined> {
-    if (args.modelProviderSelection !== undefined) {
-        return args.modelProviderSelection;
-    }
-    return authStore.getDefaultSelection();
-}
-
-async function listAuthenticatedProviderIDs(authStore: ProviderAuthStore): Promise<readonly string[]> {
-    const summaries = await authStore.listCredentialSummaries();
-    return summaries.filter((summary) => summary.authenticated).map((summary) => summary.providerID);
-}
-
-async function listAuthenticatedModelChoices(
-    authStore: ProviderAuthStore,
-    modelDiscovery: ModelDiscovery,
-): Promise<readonly ModelChoice[]> {
-    const authFile = await authStore.readAuthFile();
-    const providerIDs = await listAuthenticatedProviderIDs(authStore);
-    const runtimeCatalog = await getRuntimeModelProviderCatalog();
-    const baseChoices = createModelChoices({ catalog: runtimeCatalog, providerIDs });
-    const choices: ModelChoice[] = [];
-
-    for (const providerID of providerIDs) {
-        const provider = runtimeCatalog.find((entry) => entry.id === providerID);
-        const credential = authFile.credentials[providerID];
-        const providerChoices = baseChoices.filter((choice) => choice.selection.providerID === providerID);
-        if (provider === undefined || credential === undefined) {
-            choices.push(...providerChoices);
-            continue;
-        }
-
-        const discoveredModelIDs = await modelDiscovery({ provider, credential });
-        if (discoveredModelIDs === undefined) {
-            choices.push(...providerChoices);
-            continue;
-        }
-        const catalogModelIDs = new Set(providerChoices.map((choice) => choice.selection.modelID));
-        const extraChoices: ModelChoice[] = discoveredModelIDs
-            .filter((id) => !catalogModelIDs.has(id))
-            .map((id) => {
-                const label = `${providerID}/${id}`;
-                return {
-                    id: label,
-                    label,
-                    selection: { providerID, modelID: id },
-                    capabilityStatus: provider.capability.status,
-                    availableForCoding: true,
-                };
-            });
-        choices.push(...providerChoices, ...extraChoices);
-    }
-
-    return choices;
-}
-
 function createProviderForSelection(selection: ModelProviderSelection, authStore: ProviderAuthStore): ProviderAdapter {
     return createCliProviderForSelection(selection, authStore);
-}
-
-function closePersistentStore(store: PersistentMemoryStore | undefined): void {
-    if (store instanceof TursoPersistentStore) {
-        store.close();
-    }
-}
-
-function createRenderer(mode: CliArgs['mode'], thinking = false): AgentUIRenderer {
-    switch (mode) {
-        case 'plain':
-            return new PlainRenderer({ thinking });
-        case 'json':
-        case 'jsonl':
-            return new JsonRenderer();
-        case 'tui':
-            return new TuiRenderer({ thinking });
-        default:
-            return assertNever(mode);
-    }
-}
-
-function assertNever(value: never): never {
-    throw new Error(`Unexpected CLI mode: ${String(value)}`);
-}
-
-export function detectWorkspaceRoot(): string {
-    const cwd = process.cwd();
-    let dir = cwd;
-    for (let i = 0; i < 20; i++) {
-        if (existsSync(join(dir, '.git'))) {
-            return dir;
-        }
-        const pkgPath = join(dir, 'package.json');
-        if (existsSync(pkgPath)) {
-            try {
-                const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-                if (Array.isArray(pkg.workspaces) || typeof pkg.workspaces === 'object') {
-                    return dir;
-                }
-            } catch {
-                // ignore parse errors
-            }
-        }
-        const parent = dirname(dir);
-        if (parent === dir) break;
-        dir = parent;
-    }
-    return cwd;
-}
-
-/**
- * Workspace resolution precedence:
- *   1. `--workspace <path>` flag (`args.workspacePath`)
- *   2. `MCTRL_WORKSPACE` env var (lets tests/scripts pin without flags)
- *   3. `detectWorkspaceRoot()` heuristic (`.git` / workspaces `package.json`)
- *
- * An explicit `--workspace` value must point to an existing directory; failure is hard
- * because silently falling back would hide a typo from the user. Env/heuristic results
- * are trusted as-is to preserve existing behavior.
- */
-export function resolveWorkspaceRoot(explicitPath: string | undefined): string {
-    if (explicitPath !== undefined) {
-        const resolved = resolve(explicitPath);
-        if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
-            throw new Error(`--workspace path does not exist or is not a directory: ${explicitPath}`);
-        }
-        return resolved;
-    }
-    const envWorkspace = process.env['MCTRL_WORKSPACE'];
-    if (envWorkspace !== undefined && envWorkspace.length > 0) {
-        const resolved = resolve(envWorkspace);
-        if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
-            throw new Error(`MCTRL_WORKSPACE path does not exist or is not a directory: ${envWorkspace}`);
-        }
-        return resolved;
-    }
-    return detectWorkspaceRoot();
-}
-
-async function buildAgentModelLookup(workspaceRoot: string): Promise<AgentModelLookup | undefined> {
-    const result = await discoverAgents({
-        workspaceRoot,
-        userConfigDir: resolveUserConfigDir(),
-    });
-    const index = new Map<string, AbgNodeModelOptions>();
-    for (const agent of result.agents) {
-        if (agent.model === undefined || agent.disabled === true) continue;
-        const resolved = typeof agent.model === 'string' ? parseAgentModelString(agent.model) : agent.model;
-        if (resolved !== undefined) {
-            index.set(agent.name, resolved);
-        }
-    }
-    if (index.size === 0) return undefined;
-    return (name: string) => index.get(name);
-}
-
-function parseAgentModelString(value: string): AbgNodeModelOptions | undefined {
-    const sep = value.indexOf('/');
-    if (sep <= 0 || sep === value.length - 1) return undefined;
-    return { providerID: value.slice(0, sep), modelID: value.slice(sep + 1) };
-}
-
-type NoninteractiveWorkflowRunHandle = {
-    readonly omoRoot: string;
-    readonly runId: string;
-};
-
-type WorkflowRunOutcome = {
-    readonly failed: boolean;
-    readonly reason?: string;
-};
-
-/**
- * Materialize and start a Mission/Run pair for an explicit noninteractive
- * workflow invocation (`--workflow <name>` or `#name {prompt}`). Returns
- * `undefined` when there is no workflow spec or no `.omo` project root resolves,
- * so a plain prompt or a non-`.omo` workspace runs without record side effects.
- */
-async function beginNoninteractiveWorkflowRun(
-    workspaceRoot: string,
-    workflowSpec: WorkflowSpec | undefined,
-): Promise<NoninteractiveWorkflowRunHandle | undefined> {
-    if (workflowSpec === undefined) {
-        return undefined;
-    }
-    let omoRoot: string;
-    try {
-        omoRoot = await resolveOmoRoot(workspaceRoot);
-    } catch {
-        return undefined;
-    }
-    await ensureOmoDirs(omoRoot);
-    const mission = materializeMission(workflowSpec);
-    await createMission(omoRoot, mission);
-    const run = await startRun(omoRoot, mission.id, '');
-    return { omoRoot, runId: run.id };
-}
-
-/**
- * Transition the workflow Run to its terminal status (`completed` or `failed`).
- * Persistence is best-effort: a settle error is swallowed so it can never mask
- * the real run outcome or alter the JSON/JSONL output contract. No-op when no
- * Run was started.
- */
-async function settleNoninteractiveWorkflowRun(
-    handle: NoninteractiveWorkflowRunHandle | undefined,
-    outcome: WorkflowRunOutcome,
-): Promise<void> {
-    if (handle === undefined) {
-        return;
-    }
-    try {
-        if (outcome.failed) {
-            await failRun(handle.omoRoot, handle.runId, outcome.reason ?? 'run failed');
-        } else {
-            await completeRun(handle.omoRoot, handle.runId);
-        }
-    } catch {
-        // Best-effort: settle failures must not change the run's observable output.
-    }
 }

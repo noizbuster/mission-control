@@ -3,12 +3,14 @@ import { AgentEventSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
+import { writeToolWorkflow } from './run-agent-json-approval-test-support.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 describe('runAgent JSON blocked lifecycle', () => {
     const tempRoots: string[] = [];
+    const workflowName = 'json-blocked-tools';
 
     afterEach(async () => {
         vi.unstubAllEnvs();
@@ -20,9 +22,16 @@ describe('runAgent JSON blocked lifecycle', () => {
         const dataDir = await tempRoot('mctrl-json-blocked-data-');
         const workspaceRoot = await tempRoot('mctrl-json-blocked-workspace-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await writeToolWorkflow(workspaceRoot, workflowName);
 
         const output = await runAgent(
-            parseArgs(['run', 'apply a blocked patch', '--jsonl', '--session', 'session_json_blocked']),
+            parseArgs([
+                'run',
+                `#${workflowName} apply a blocked patch`,
+                '--jsonl',
+                '--session',
+                'session_json_blocked',
+            ]),
             {
                 workspaceRoot,
                 provider: createDeterministicProvider([

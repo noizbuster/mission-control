@@ -34,8 +34,7 @@ export class AppShell extends Component<AppShellProps, AppShellState> {
         return { hasError: true, error };
     }
 
-    override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    }
+    override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {}
 
     override render(): ReactNode {
         if (this.state.hasError) {

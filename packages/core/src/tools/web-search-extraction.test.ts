@@ -111,27 +111,27 @@ describe('extractSiteContent', () => {
                 return Promise.resolve(
                     new Response(
                         JSON.stringify({
-                            full_name: 'facebook/react',
-                            description: 'The library for web and native UIs.',
+                            full_name: 'vuejs/core',
+                            description: 'The progressive UI framework.',
                             stargazers_count: 220000,
                             forks_count: 45000,
                             language: 'JavaScript',
                             license: { spdx_id: 'MIT' },
                             default_branch: 'main',
-                            topics: ['javascript', 'react'],
+                            topics: ['javascript', 'ui'],
                         }),
                         { status: 200, headers: { 'content-type': 'application/json' } },
                     ),
                 );
             }
-            return Promise.resolve(new Response('# React\n\nA declarative library.', { status: 200 }));
+            return Promise.resolve(new Response('# Vue\n\nA progressive framework.', { status: 200 }));
         }) as typeof globalThis.fetch;
 
-        const result = await extractSiteContent('https://github.com/facebook/react', undefined, signal);
+        const result = await extractSiteContent('https://github.com/vuejs/core', undefined, signal);
 
         expect(result).toBeDefined();
         expect(result!.method).toBe('github');
-        expect(result!.markdown).toContain('# facebook/react');
+        expect(result!.markdown).toContain('# vuejs/core');
         expect(result!.markdown).toContain('Stars:');
         expect(result!.markdown).toContain('## README');
     });

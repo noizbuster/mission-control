@@ -7,6 +7,12 @@
 
 import type { Delivery } from '@mission-control/protocol';
 
+export {
+    SqlSessionInputDelivery,
+    type SqlSessionInputDeliveryOptions,
+    type SqlSessionInputDeliveryRecord,
+} from './session-input-delivery-sql.js';
+
 export interface SessionInputRecord {
     readonly inputId: string;
     readonly prompt: string;

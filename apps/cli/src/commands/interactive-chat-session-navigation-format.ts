@@ -1,12 +1,13 @@
 import type { JsonlSessionReplayPrefixProjection } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import { formatSessionStatusWithSource } from '../ui/session-status-format.js';
 
 export function formatSessionSummary(sessionId: string, replay: JsonlSessionReplayPrefixProjection): string {
     const selection = latestSelection(replay);
     const tree = replay.projection.sessionTree;
     const summary = [
         `Session: ${sessionId}`,
-        `Status: ${(replay.projection.snapshot.status ?? 'unknown').toString()}`,
+        `Status: ${formatSessionStatusWithSource(replay.projection.snapshot)}`,
         `Events: ${replay.projection.events.length}`,
         selection === undefined
             ? undefined

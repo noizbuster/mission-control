@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore } from '../auth-store.js';
 import { createCliProviderForSelection, runAgent } from './run-agent.js';
+import { useIsolatedMissionControlDataDir } from './run-agent-data-dir-test-support.js';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -58,8 +59,8 @@ function buildArgs(prompt: string, mode: CliArgs['mode']): CliArgs {
         useNative: false,
         command: 'run',
         showHelp: false,
-            showVersion: false,
-            thinking: false,
+        showVersion: false,
+        thinking: false,
         prompt,
         modelProviderSelection: LOCAL_SELECTION,
     };
@@ -69,8 +70,10 @@ describe('planner workflow CLI end-to-end', () => {
     let workspaceDir: string;
     let configDir: string;
     let provider: ProviderAdapter;
+    let cleanupDataDir: (() => Promise<void>) | undefined;
 
     beforeEach(async () => {
+        cleanupDataDir = await useIsolatedMissionControlDataDir('mctrl-planner-e2e-data-');
         workspaceDir = await createPlannerWorkspace();
         configDir = await mkdtemp(join(tmpdir(), 'mctrl-planner-e2e-cfg-'));
         vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
@@ -78,6 +81,8 @@ describe('planner workflow CLI end-to-end', () => {
     });
 
     afterEach(async () => {
+        await cleanupDataDir?.();
+        cleanupDataDir = undefined;
         vi.unstubAllEnvs();
         await rm(workspaceDir, { recursive: true, force: true });
         await rm(configDir, { recursive: true, force: true });

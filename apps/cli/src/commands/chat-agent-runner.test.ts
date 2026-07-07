@@ -1,16 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { ModelProviderSelection } from '@mission-control/protocol';
 import { AgentRuntime } from '@mission-control/core';
+import type { ModelProviderSelection } from '@mission-control/protocol';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ApprovalLevel } from './approval-level.js';
+import { type AgentRunnerHandle, type DispatchActionContext, startChatAgentRunner } from './chat-agent-runner.js';
+import type { ChatLineAction } from './chat-commands.js';
 import { ChatStore } from './chat-store.js';
-import {
-    startChatAgentRunner,
-    type AgentRunnerHandle,
-    type DispatchActionContext,
-} from './chat-agent-runner.js';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
-import type { ChatLineAction } from './chat-commands.js';
-import type { ApprovalLevel } from './approval-level.js';
 
 const SELECTION: ModelProviderSelection = { providerID: 'test', modelID: 'echo' };
 
@@ -63,10 +59,7 @@ function createControllableTurn(opts?: { readonly pendingApproval?: boolean }): 
 }
 
 type TestRunnerConfig = {
-    readonly dispatchAction?: (
-        action: ChatLineAction,
-        context: DispatchActionContext,
-    ) => Promise<ChatActionResult>;
+    readonly dispatchAction?: (action: ChatLineAction, context: DispatchActionContext) => Promise<ChatActionResult>;
     readonly parseLine?: (value: string) => ChatLineAction;
     readonly cleanup?: () => Promise<void>;
     readonly initialApprovalLevel?: ApprovalLevel;
@@ -106,9 +99,7 @@ function createTestRunner(config?: TestRunnerConfig): TestRunner {
         parseLine,
         appendHistory: async () => {},
         cleanup,
-        ...(config?.initialApprovalLevel !== undefined
-            ? { initialApprovalLevel: config.initialApprovalLevel }
-            : {}),
+        ...(config?.initialApprovalLevel !== undefined ? { initialApprovalLevel: config.initialApprovalLevel } : {}),
     });
 
     handlesToCleanup.push(handle);

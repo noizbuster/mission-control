@@ -4,6 +4,7 @@ import {
     createDeterministicProvider,
     missionControlDataDirEnvKey,
     type ProviderAdapter,
+    readLocalSessionReplay,
 } from '@mission-control/core';
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -15,7 +16,7 @@ import {
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
 import { runSessionCommand } from './session.js';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -138,7 +139,7 @@ describe('interactive coding-agent redaction', () => {
         expect(patchPreview).toContain('Patch preview for file.patch');
     });
 
-    it('redacts raw provider failures in CLI errors persisted JSONL and replay JSONL', async () => {
+    it('redacts raw provider failures in CLI errors persisted replay and replay JSONL', async () => {
         // Given
         const dataDir = await tempRoot('mctrl-redaction-failure-data-');
         const workspaceRoot = await tempRoot('mctrl-redaction-failure-workspace-');
@@ -156,13 +157,14 @@ describe('interactive coding-agent redaction', () => {
             provider: throwingProvider(`provider exploded ${secret}`),
         });
         const replay = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
-        const sessionLog = await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8');
+        const storedReplay = await readStoredReplay(dataDir, sessionId);
 
         // Then
         const chat = chatOutput.getOutput();
         expect(chat).toContain('Error:');
-        expect(JSON.stringify({ chat, replay, sessionLog })).toContain('[REDACTED_CREDENTIAL]');
-        expect(JSON.stringify({ chat, replay, sessionLog })).not.toContain(secret);
+        expect(storedReplay.projection.envelopes.some((envelope) => envelope.event.type === 'run.failed')).toBe(true);
+        expect(JSON.stringify({ chat, replay, storedReplay })).toContain('[REDACTED_CREDENTIAL]');
+        expect(JSON.stringify({ chat, replay, storedReplay })).not.toContain(secret);
     });
 
     async function tempRoot(prefix: string): Promise<string> {
@@ -171,6 +173,14 @@ describe('interactive coding-agent redaction', () => {
         return path;
     }
 });
+
+async function readStoredReplay(dataDir: string, sessionId: string) {
+    const result = await readLocalSessionReplay({ dataDir, sessionId });
+    if (result.kind !== 'found') {
+        throw new Error(`expected replay for ${sessionId}`);
+    }
+    return result.replay;
+}
 
 function fakeSecretCommandExecutor(
     secret: string,

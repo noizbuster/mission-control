@@ -1,13 +1,13 @@
 import {
-    JsonlSessionEventStore,
     missionControlDataDirEnvKey,
+    openLocalSessionEventStore,
     type ProviderAdapter,
     type ProviderTurnRequest,
-    projectJsonlSessionReplayPrefix,
+    readLocalSessionReplay,
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
-import { writeSessionEvents } from './session-test-support.js';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { writeLocalSessionEvents } from './session-test-support.js';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -27,7 +27,7 @@ export async function seedCompactionSession(
     sessionId: string,
     options: { readonly firstTask?: string } = {},
 ): Promise<void> {
-    await writeSessionEvents({
+    await writeLocalSessionEvents({
         dataDir,
         sessionId,
         events: [
@@ -45,7 +45,7 @@ export async function seedCompactedSession(dataDir: string, sessionId: string): 
     await seedCompactionSession(dataDir, sessionId, {
         firstTask: 'OLD_PROMPT_SHOULD_BE_PRUNED',
     });
-    const store = await JsonlSessionEventStore.open({
+    const store = await openLocalSessionEventStore({
         sessionId,
         dataDir,
         now: fixedNow,
@@ -162,10 +162,11 @@ export function captureWaitingProvider(): ProviderAdapter {
 }
 
 export async function readReplay(dataDir: string, sessionId: string) {
-    return projectJsonlSessionReplayPrefix({
-        sessionId,
-        contents: await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8'),
-    });
+    const result = await readLocalSessionReplay({ dataDir, sessionId });
+    if (result.kind === 'missing') {
+        throw new Error(`expected replay for ${sessionId}`);
+    }
+    return result.replay;
 }
 
 export function fixedNow(): string {

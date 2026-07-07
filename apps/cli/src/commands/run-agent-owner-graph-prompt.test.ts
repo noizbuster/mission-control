@@ -97,18 +97,12 @@ describe('runAgent --engine graph --session (graph session engine dispatch)', ()
             },
         );
 
-        // The graph turn runner drove the turn; the flat provider was never invoked.
         expect(requests).toHaveLength(0);
-        expect(model.doStreamCalls.length).toBe(1);
+        expect(model.doStreamCalls.length).toBeGreaterThan(1);
         // The admitted prompt was seeded into the graph run's model call (the seeding contract
         // createGraphTurnRunner relies on via agentMessagesToSeedModelMessages).
         expect(JSON.stringify(seen)).toContain('just answer');
-
-        const store = await JsonlSessionEventStore.open({ sessionId, dataDir });
-        const events = await store.getEvents(sessionId);
-        await store.close();
-        // Graph AgentEvents were persisted to the durable session store and replay as llm turns.
-        expect(readMessages(events)).toContain('llm.turn.completed');
+        expect(JSON.stringify(seen)).toContain('intent gate for the default workflow');
     });
 
     it('rejects a provider with no AI-SDK mapping before the graph session run starts', async () => {

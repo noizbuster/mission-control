@@ -10,10 +10,10 @@ import {
     type SidecarTaskOutput,
     type SidecarWireResponse,
 } from '@mission-control/protocol';
+import { createStreamDecoder } from '../providers/stream-decoder.js';
 import { SidecarProtocolError } from './sidecar-errors.js';
 import { parseSidecarWireResponse, sidecarResponseToAgentEvent } from './sidecar-wire.js';
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
-import { createStreamDecoder } from '../providers/stream-decoder.js';
 
 export { SidecarProtocolError } from './sidecar-errors.js';
 export { normalizeSidecarLine, parseSidecarWireResponse } from './sidecar-wire.js';

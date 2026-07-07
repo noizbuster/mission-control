@@ -1,5 +1,5 @@
 import { missionControlAuthFileEnvKey } from '@mission-control/config';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { createProviderAuthStore } from '../auth-store.js';
 import { runAgent } from './run-agent.js';
@@ -10,12 +10,21 @@ import {
     createFieldsCredential,
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
+import { useIsolatedMissionControlDataDir } from './run-agent-data-dir-test-support.js';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 describe('runAgent model validation', () => {
-    afterEach(() => {
+    let cleanupDataDir: (() => Promise<void>) | undefined;
+
+    beforeEach(async () => {
+        cleanupDataDir = await useIsolatedMissionControlDataDir('mission-control-model-validation-');
+    });
+
+    afterEach(async () => {
+        await cleanupDataDir?.();
+        cleanupDataDir = undefined;
         vi.unstubAllEnvs();
     });
 

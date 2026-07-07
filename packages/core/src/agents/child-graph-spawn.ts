@@ -49,7 +49,9 @@ export function defaultSpawnFn(context: ChildSpawnContext): Promise<ChildSpawnRe
  * result (captured via the `onYield` callback) becomes the child's `output`; if the
  * child never calls `yield`, the last assistant text is the fallback.
  */
-export function createChildGraphSpawnFn(deps: ChildGraphSpawnDeps): (context: ChildSpawnContext) => Promise<ChildSpawnResult> {
+export function createChildGraphSpawnFn(
+    deps: ChildGraphSpawnDeps,
+): (context: ChildSpawnContext) => Promise<ChildSpawnResult> {
     return async (context) => {
         let yieldedResult: { readonly value: unknown } | undefined;
 
@@ -82,8 +84,7 @@ export function createChildGraphSpawnFn(deps: ChildGraphSpawnDeps): (context: Ch
             ...(context.hostCallbacks !== undefined ? { hostCallbacks: context.hostCallbacks } : {}),
         });
 
-        const output =
-            yieldedResult !== undefined ? stringifyYieldResult(yieldedResult.value) : taskOutput.summary;
+        const output = yieldedResult !== undefined ? stringifyYieldResult(yieldedResult.value) : taskOutput.summary;
         return { sessionId: context.sessionId, status: taskOutput.status, output };
     };
 }

@@ -1,40 +1,83 @@
 import {
     createFileSessionIndexStore,
+    createLocalSessionIndexStore,
+    localSessionDbPath,
     resolveMissionControlDataDir,
     type SessionIndexDiagnostic,
     type SessionIndexSessionRecord,
     type SessionIndexStore,
 } from '@mission-control/core';
 import type { CliSessionCatalogDiagnostic, CliSessionCatalogIndexState } from './session-catalog.js';
+import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export type SessionIndexReadState = {
+    readonly source: 'file' | 'sqlite';
     readonly records: ReadonlyMap<string, SessionIndexSessionRecord>;
     readonly diagnostics: readonly CliSessionCatalogDiagnostic[];
     readonly store?: SessionIndexStore | undefined;
+    readonly diagnosticStore?: SessionIndexStore | undefined;
 };
 
 export async function readSessionIndexState(): Promise<SessionIndexReadState> {
     try {
-        const store = createFileSessionIndexStore({ indexPath: sessionIndexPath() });
-        const sessions = await store.listSessions();
-        return {
-            records: new Map(sessions.map((session) => [session.sessionId, session])),
-            diagnostics: [],
-            store,
-        };
+        const dataDir = resolveMissionControlDataDir();
+        if (await localSessionDbExists(dataDir)) {
+            const localState = await readStoreIndexState(await createLocalSessionIndexStore({ dataDir }));
+            const fileState = await readFileIndexState(dataDir);
+            if (localState.records.size > 0) {
+                return {
+                    ...localState,
+                    ...(fileState?.store !== undefined ? { diagnosticStore: fileState.store } : {}),
+                };
+            }
+            return fileState ?? localState;
+        }
+        return (await readFileIndexState(dataDir)) ?? { source: 'file', records: new Map(), diagnostics: [] };
     } catch (error: unknown) {
         if (isMissingFileError(error)) {
-            return { records: new Map(), diagnostics: [] };
+            return { source: 'file', records: new Map(), diagnostics: [] };
         }
         if (error instanceof Error) {
             return {
+                source: 'file',
                 records: new Map(),
                 diagnostics: [corruptIndexDiagnostic()],
             };
         }
         throw error;
     }
+}
+
+async function readFileIndexState(dataDir: string): Promise<SessionIndexReadState | undefined> {
+    try {
+        return await readFileStoreIndexState(createFileSessionIndexStore({ indexPath: sessionIndexPath(dataDir) }));
+    } catch (error: unknown) {
+        if (isMissingFileError(error)) {
+            return undefined;
+        }
+        throw error;
+    }
+}
+
+async function readStoreIndexState(store: SessionIndexStore): Promise<SessionIndexReadState> {
+    const sessions = await store.listSessions();
+    return {
+        source: 'sqlite',
+        records: new Map(sessions.map((session) => [session.sessionId, session])),
+        diagnostics: [],
+        store,
+    };
+}
+
+async function readFileStoreIndexState(store: SessionIndexStore): Promise<SessionIndexReadState> {
+    const sessions = await store.listSessions();
+    return {
+        source: 'file',
+        records: new Map(sessions.map((session) => [session.sessionId, session])),
+        diagnostics: [],
+        store,
+    };
 }
 
 export async function readIndexDiagnosticsForSession(
@@ -45,7 +88,11 @@ export async function readIndexDiagnosticsForSession(
         return [];
     }
     try {
-        return (await indexState.store.getDiagnostics(sessionId)).map(sanitizeIndexDiagnostic);
+        const primary = (await indexState.store.getDiagnostics(sessionId)).map(sanitizeIndexDiagnostic);
+        if (primary.length > 0 || indexState.diagnosticStore === undefined) {
+            return primary;
+        }
+        return (await indexState.diagnosticStore.getDiagnostics(sessionId)).map(sanitizeIndexDiagnostic);
     } catch (error: unknown) {
         if (isMissingFileError(error)) {
             return [];
@@ -84,8 +131,20 @@ function sanitizeIndexDiagnostic(diagnostic: SessionIndexDiagnostic): CliSession
     };
 }
 
-function sessionIndexPath(): string {
-    return join(resolveMissionControlDataDir(), 'session-index.json');
+async function localSessionDbExists(dataDir: string): Promise<boolean> {
+    try {
+        await stat(localSessionDbPath(dataDir));
+        return true;
+    } catch (error: unknown) {
+        if (isMissingFileError(error)) {
+            return false;
+        }
+        throw error;
+    }
+}
+
+function sessionIndexPath(dataDir: string): string {
+    return join(dataDir, 'session-index.json');
 }
 
 function isMissingFileError(error: unknown): boolean {

@@ -15,9 +15,10 @@
  * and opener; tests inject them to assert availability, fallback, and path resolution
  * deterministically without touching disk.
  */
-import { join } from 'node:path';
+
 import type { PersistentMemoryStore } from './persistent-memory-store.js';
 import { isTursoAvailable, TursoPersistentStore } from './turso-persistent-store.js';
+import { join } from 'node:path';
 
 const MEMORY_DB_FILENAME = 'memory.db';
 

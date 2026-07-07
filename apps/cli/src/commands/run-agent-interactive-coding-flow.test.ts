@@ -48,6 +48,7 @@ describe('runAgent interactive coding agent flow', () => {
             workspaceRoot,
             commandExecutor: task17CommandExecutor,
             provider: providerFromTask17Requests(requests),
+            plainPromptGraph: 'coding-agent',
         });
 
         // Then
@@ -81,6 +82,7 @@ describe('runAgent interactive coding agent flow', () => {
             onRuntimeEvent: (event) => {
                 events.push(event);
             },
+            plainPromptGraph: 'coding-agent',
         });
 
         // Then — a denial surfaces the tool failure to the model; the run does NOT hard-fail on a

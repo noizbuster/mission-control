@@ -36,10 +36,7 @@
           "systemPrompt": "Read the plan file from .omo/plans/{slug}.md and parse it with section-scoped counting: only column-0 checkboxes (`- [ ]` / `- [x]`) that fall under a `## Todos` / `## TODOs` or `## Final Verification Wave` heading are counted as actionable tasks. Ignore nested or indented checkboxes and ignore checkboxes under any other heading (Notes, Acceptance Criteria, Evidence, Definition of Done, etc.). Store the ordered task list under plan.todos and surface nextTaskLabel = the label of the first unchecked todo so the delegate-wave can name it. Set plan.parsed when complete.",
           "outputKey": "plan.parsed",
           "parser": "parsePlanSections",
-          "countedSections": [
-            "Todos",
-            "Final Verification Wave"
-          ]
+          "countedSections": ["Todos", "Final Verification Wave"]
         }
       },
       {
@@ -67,31 +64,20 @@
         "id": "delegate-wave",
         "kind": "parallel",
         "label": "Fan out task() delegation per wave task (6-section prompts, parallel-by-default)",
-        "children": [
-          "delegate-worker"
-        ],
+        "children": ["delegate-worker"],
         "config": {
           "fanOutKey": "wave.tasks",
           "completionKey": "delegate.complete",
           "parallelByDefault": true,
           "dependencyKey": "plan.dependencies",
-          "delegationSections": [
-            "TASK",
-            "EXPECTED OUTCOME",
-            "REQUIRED TOOLS",
-            "MUST DO",
-            "MUST NOT DO",
-            "CONTEXT"
-          ]
+          "delegationSections": ["TASK", "EXPECTED OUTCOME", "REQUIRED TOOLS", "MUST DO", "MUST NOT DO", "CONTEXT"]
         }
       },
       {
         "id": "delegate-worker",
         "kind": "llm",
         "label": "Single task() delegation — 6-section prompt contract",
-        "capabilities": [
-          "subagent"
-        ],
+        "capabilities": ["subagent"],
         "config": {
           "systemPrompt": "Execute the delegated sub-task via the task tool. The delegation prompt you receive MUST contain six sections: ## 1. TASK (exact checkbox item), ## 2. EXPECTED OUTCOME (files, functionality, verification command), ## 3. REQUIRED TOOLS, ## 4. MUST DO, ## 5. MUST NOT DO, ## 6. CONTEXT (notepad paths, inherited wisdom, dependencies). Follow every section. Append findings to the notepad after completion (never overwrite)."
         }
@@ -123,22 +109,12 @@
         "id": "final-verification-wave",
         "kind": "parallel",
         "label": "Final verification wave — F1-F4 parallel critics aggregated into final.verdict",
-        "children": [
-          "f1",
-          "f2",
-          "f3",
-          "f4"
-        ],
+        "children": ["f1", "f2", "f3", "f4"],
         "config": {
           "completionKey": "final.complete",
           "verdictKey": "final.verdict",
           "verdictStrategy": "all-approve",
-          "verdictSources": [
-            "final.f1",
-            "final.f2",
-            "final.f3",
-            "final.f4"
-          ],
+          "verdictSources": ["final.f1", "final.f2", "final.f3", "final.f4"],
           "aggregateKey": "final.critics"
         }
       },

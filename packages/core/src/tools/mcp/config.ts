@@ -79,7 +79,7 @@ const windowsAppDataEnvKey = 'APPDATA';
 const xdgConfigHomeEnvKey = 'XDG_CONFIG_HOME';
 const ENV_VAR_PATTERN = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
 
-// MUST stay in sync with apps/cli/src/args.ts:parseProfileName. Re-implemented one-way because core
+// MUST stay in sync with the CLI profile-name parser. Re-implemented one-way because core
 // must not depend on cli. The charset excludes `.`, `/`, `\`, and uppercase so a profile name can
 // never inject a path separator or traversal segment into a path join.
 const PROFILE_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;

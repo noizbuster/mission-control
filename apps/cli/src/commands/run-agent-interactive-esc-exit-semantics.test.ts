@@ -104,6 +104,7 @@ describe('runAgent interactive ESC vs Ctrl+C exit semantics', () => {
             onRuntimeEvent: (event) => {
                 events.push(event);
             },
+            plainPromptGraph: 'coding-agent',
         });
 
         expect(output).toContain('Interrupted active run');

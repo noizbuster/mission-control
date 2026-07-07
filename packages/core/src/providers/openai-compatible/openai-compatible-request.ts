@@ -88,11 +88,7 @@ function createRequestBody(
             retryable: false,
         });
     }
-    const reasoning = openAICompatibleReasoningForVariant(
-        request.providerID,
-        request.modelID,
-        request.variantID,
-    );
+    const reasoning = openAICompatibleReasoningForVariant(request.providerID, request.modelID, request.variantID);
     return {
         model: request.modelID,
         messages: request.messages.map((message) => chatMessageForAgentMessage(message, request.providerID)),
@@ -106,11 +102,13 @@ function openAICompatibleReasoningForVariant(
     providerID: string,
     modelID: string,
     variantID: string | undefined,
-): {
-    readonly reasoning_effort?: string;
-    readonly reasoning?: { readonly effort: string };
-    readonly thinking?: { readonly type: string };
-} | undefined {
+):
+    | {
+          readonly reasoning_effort?: string;
+          readonly reasoning?: { readonly effort: string };
+          readonly thinking?: { readonly type: string };
+      }
+    | undefined {
     if (variantID === undefined || !isConfiguredOpenAICompatibleVariant(providerID, modelID, variantID)) {
         return undefined;
     }

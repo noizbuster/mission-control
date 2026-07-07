@@ -75,6 +75,7 @@ export class SessionEventLog {
         return {
             sessionId: session.id,
             status: session.status,
+            ...(session.awaiting !== undefined ? { awaiting: session.awaiting } : {}),
             startedAt: session.startedAt,
             ...(stoppedAt !== undefined ? { stoppedAt } : {}),
             runningTaskCount,

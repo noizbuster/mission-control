@@ -283,10 +283,7 @@ export function DiffViewerOverlay({ entries, model, cursor }: DiffViewerOverlayP
                             return (
                                 // biome-ignore lint/suspicious/noArrayIndexKey: diff entries are positional within a single overlay render
                                 <box key={`dventry-${index}`} flexDirection="column">
-                                    <text
-                                        {...(isCurrent ? { bg: '#0000ff' } : {})}
-                                        {...{ bold: true }}
-                                    >
+                                    <text {...(isCurrent ? { bg: '#0000ff' } : {})} {...{ bold: true }}>
                                         {isCurrent ? '> ' : '  '}
                                         {entry.title}
                                     </text>
@@ -300,9 +297,7 @@ export function DiffViewerOverlay({ entries, model, cursor }: DiffViewerOverlayP
                             {`File ${currentEntryIndex + 1}/${entries.length} \u00b7 Line ${cursor + 1}/${model.totalLines}`}
                         </text>
                     </box>
-                    <text {...{ dim: true }}>
-                        {'j/k move \u00b7 ]/[ hunk \u00b7 n/p file \u00b7 Esc/q close'}
-                    </text>
+                    <text {...{ dim: true }}>{'j/k move \u00b7 ]/[ hunk \u00b7 n/p file \u00b7 Esc/q close'}</text>
                 </>
             )}
         </box>

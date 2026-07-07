@@ -1,9 +1,10 @@
 import {
-    JsonlSessionEventStore,
     type JsonlSessionReplayPrefixProjection,
+    type LocalSessionEventStore,
+    openLocalSessionEventStore,
     projectJsonlSessionReplayPrefix,
+    readLocalSessionReplay,
     resolveMissionControlDataDir,
-    type JsonlSessionEventStore as SessionStore,
 } from '@mission-control/core';
 import type { AgentEvent, AgentEventEnvelope, ModelProviderSelection } from '@mission-control/protocol';
 import { latestSelection } from './interactive-chat-session-navigation-format.js';
@@ -23,14 +24,35 @@ export class SessionNavigationError extends Error {
 export type PreparedTargetSession = {
     readonly sessionId: string;
     readonly selection: ModelProviderSelection;
-    readonly store: SessionStore;
+    readonly store: LocalSessionEventStore;
 };
 
 export async function readSessionNavigationReplay(sessionId: string): Promise<JsonlSessionReplayPrefixProjection> {
-    return projectJsonlSessionReplayPrefix({
-        sessionId,
-        contents: await readFile(join(resolveMissionControlDataDir(), 'sessions', `${sessionId}.jsonl`), 'utf8'),
-    });
+    const legacyReplay = await readCorruptLegacyNavigationReplay(sessionId);
+    if (legacyReplay !== undefined) {
+        return legacyReplay;
+    }
+    const replay = await readLocalSessionReplay({ sessionId });
+    if (replay.kind === 'found') {
+        return replay.replay;
+    }
+    return projectJsonlSessionReplayPrefix({ sessionId, contents: '' });
+}
+
+async function readCorruptLegacyNavigationReplay(
+    sessionId: string,
+): Promise<JsonlSessionReplayPrefixProjection | undefined> {
+    let contents: string;
+    try {
+        contents = await readFile(join(resolveMissionControlDataDir(), 'sessions', `${sessionId}.jsonl`), 'utf8');
+    } catch (error: unknown) {
+        if (isMissingFileError(error)) {
+            return undefined;
+        }
+        throw error;
+    }
+    const replay = projectJsonlSessionReplayPrefix({ sessionId, contents });
+    return replayHasDiagnostics(replay) ? replay : undefined;
 }
 
 export function assertReplayIsReadable(
@@ -38,9 +60,13 @@ export function assertReplayIsReadable(
     sessionId: string,
     action: string,
 ): void {
-    if (replay.diagnostics.length > 0 || replay.projection.sessionTree.diagnostics.length > 0) {
+    if (replayHasDiagnostics(replay)) {
         throw new SessionNavigationError(`Cannot ${action} corrupt session: ${sessionId}`);
     }
+}
+
+function replayHasDiagnostics(replay: JsonlSessionReplayPrefixProjection): boolean {
+    return replay.diagnostics.length > 0 || replay.projection.sessionTree.diagnostics.length > 0;
 }
 
 export async function prepareTargetSession(input: {
@@ -52,7 +78,7 @@ export async function prepareTargetSession(input: {
     readonly workspaceRoot?: string;
 }): Promise<PreparedTargetSession> {
     const sessionId = validatedSessionId(input.requestedSessionId ?? generatedSessionId());
-    const store = await JsonlSessionEventStore.open({ sessionId });
+    const store = await openLocalSessionEventStore({ sessionId });
     const existing = await store.getEvents(sessionId);
     if (existing.length > 0) {
         await store.close();
@@ -77,14 +103,14 @@ export async function prepareTargetSession(input: {
 
 export async function finalizeAndSwitchTargetSession(
     prepared: PreparedTargetSession,
-    switchSessionStore: (sessionId: string) => Promise<SessionStore>,
-): Promise<SessionStore> {
+    switchSessionStore: (sessionId: string) => Promise<LocalSessionEventStore>,
+): Promise<LocalSessionEventStore> {
     await prepared.store.close();
     return switchSessionStore(prepared.sessionId);
 }
 
 export async function copyDurableReplayEnvelopes(
-    store: SessionStore,
+    store: LocalSessionEventStore,
     sessionId: string,
     envelopes: readonly AgentEventEnvelope[],
     observeStoredEvent: SessionNavigationStoreObserver,
@@ -94,17 +120,13 @@ export async function copyDurableReplayEnvelopes(
             continue;
         }
         const copiedEvent = { ...envelope.event, sessionId };
-        await store.appendEnvelopeWithStoreSequence({
-            ...envelope,
-            sessionId,
-            event: copiedEvent,
-        });
+        await store.append(copiedEvent);
         observeStoredEvent?.(copiedEvent);
     }
 }
 
 export async function appendSessionNavigationEvent(
-    store: SessionStore,
+    store: LocalSessionEventStore,
     event: AgentEvent,
     observeStoredEvent: SessionNavigationStoreObserver,
 ): Promise<void> {
@@ -134,7 +156,7 @@ export function requireCurrentSessionId(sessionId: string | undefined): string {
     return sessionId;
 }
 
-export function requireCurrentStore(store: SessionStore | undefined): SessionStore {
+export function requireCurrentStore(store: LocalSessionEventStore | undefined): LocalSessionEventStore {
     if (store === undefined) {
         throw new SessionNavigationError('No durable session store is active');
     }
@@ -150,7 +172,7 @@ function generatedSessionId(): string {
 }
 
 async function appendStoredEvent(
-    store: SessionStore,
+    store: LocalSessionEventStore,
     event: AgentEvent,
     observeStoredEvent: SessionNavigationStoreObserver,
 ): Promise<void> {
@@ -171,6 +193,10 @@ function isSkippedDurableEventType(type: AgentEvent['type']): boolean {
         type.startsWith('permission.') ||
         type.startsWith('tool.')
     );
+}
+
+function isMissingFileError(error: unknown): boolean {
+    return error instanceof Error && Reflect.get(error, 'code') === 'ENOENT';
 }
 
 function sessionEvent(

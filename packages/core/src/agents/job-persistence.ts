@@ -22,11 +22,15 @@ const BackgroundJobResultSchema = z.object({
 const BackgroundJobHandleSchema = z.object({
     jobId: z.string().min(1),
     sessionId: z.string().min(1),
+    parentSessionId: z.string().min(1).optional(),
+    agentId: z.string().min(1).optional(),
+    blocking: z.boolean().optional(),
     status: z.enum(['queued', 'running', 'completed', 'failed', 'cancelled']),
     result: BackgroundJobResultSchema.optional(),
     error: z.string().optional(),
     startedAt: z.string().min(1),
     completedAt: z.string().optional(),
+    cancellationReason: z.string().optional(),
 });
 
 /**
@@ -91,11 +95,15 @@ async function tryReadJobFile(filePath: string): Promise<BackgroundJobHandle | u
     const handle: BackgroundJobHandle = {
         jobId: v.jobId,
         sessionId: v.sessionId,
+        ...(v.parentSessionId !== undefined ? { parentSessionId: v.parentSessionId } : {}),
+        ...(v.agentId !== undefined ? { agentId: v.agentId } : {}),
+        ...(v.blocking !== undefined ? { blocking: v.blocking } : {}),
         status: v.status,
         startedAt: v.startedAt,
         ...(v.result !== undefined ? { result: v.result } : {}),
         ...(v.error !== undefined ? { error: v.error } : {}),
         ...(v.completedAt !== undefined ? { completedAt: v.completedAt } : {}),
+        ...(v.cancellationReason !== undefined ? { cancellationReason: v.cancellationReason } : {}),
     };
     return handle;
 }

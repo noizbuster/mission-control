@@ -189,7 +189,6 @@ function scheduleAsyncHighlight(code: string, filetype: string): void {
             const result = await client.highlightOnce(code, filetype);
             if (result.error !== undefined) {
                 return;
-                return;
             }
             const highlights = result.highlights;
             if (highlights === undefined) return;
@@ -198,8 +197,7 @@ function scheduleAsyncHighlight(code: string, filetype: string): void {
             asyncResultCache.set(key, lines);
             clearRenderCache();
             notifyHighlightListeners();
-        } catch {
-        }
+        } catch {}
     })();
 
     inFlight.set(key, task);
@@ -260,8 +258,7 @@ export function highlightTreeSitter(code: string, lang?: string): readonly Highl
 
     try {
         scheduleAsyncHighlight(code, filetype);
-    } catch {
-    }
+    } catch {}
     return monochrome(code);
 }
 
@@ -280,8 +277,7 @@ export async function closeTreeSitterClient(): Promise<void> {
             syntaxStyle = null;
         }
         await runtime.destroyClient();
-    } catch {
-    }
+    } catch {}
     initPromise = null;
     parsersRegistered = false;
 }

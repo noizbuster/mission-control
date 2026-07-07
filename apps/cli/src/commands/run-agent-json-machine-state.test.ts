@@ -10,7 +10,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
 import { runSessionCommand } from './session.js';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readStoredSessionProjection } from './session-test-support.js';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -33,6 +34,9 @@ describe('runAgent JSON machine state', () => {
         await useTempDataDir(tempDirs);
         const output = await runAgent(
             parseArgs(['run', 'summarize this repository', '--json', '--session', 'session_json_completed_state']),
+            {
+                provider: createDeterministicProvider([{ kind: 'response_completed', content: 'summarized' }]),
+            },
         );
         const records = parseJsonRecords(output);
 
@@ -141,12 +145,13 @@ describe('runAgent JSON machine state', () => {
             },
         );
         const replay = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
-        const sessionLog = await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8');
+        const storedProjection = await readStoredSessionProjection({ dataDir, sessionId });
+        const storedProjectionJson = JSON.stringify(storedProjection);
 
         expect(output).toContain('[REDACTED_CREDENTIAL]');
         expect(replay).toContain('provider_auth_failed');
-        expect(sessionLog).toContain('provider_auth_failed');
-        expect(JSON.stringify({ output, replay, sessionLog })).not.toContain(secret);
+        expect(storedProjectionJson).toContain('provider_auth_failed');
+        expect(JSON.stringify({ output, replay, storedProjectionJson })).not.toContain(secret);
     });
 });
 

@@ -1,5 +1,7 @@
 import type { ProviderAdapter, ProviderTurnRequest } from '@mission-control/core';
 import type { ProviderStreamChunk } from '@mission-control/protocol';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 export const knownSafePatchPath = '.mctrl-known-safe-automation-patch.txt';
 
@@ -29,6 +31,33 @@ export function lastRecord(records: readonly Record<string, unknown>[]): Record<
         throw new Error('expected at least one JSON record');
     }
     return record;
+}
+
+export async function writeToolWorkflow(workspaceRoot: string, name: string): Promise<void> {
+    const workflowsDir = join(workspaceRoot, '.mctrl', 'workflows');
+    await mkdir(workflowsDir, { recursive: true });
+    await writeFile(
+        join(workflowsDir, `${name}.workflow.json`),
+        JSON.stringify({
+            name,
+            graph: {
+                id: name,
+                version: '0.1.0',
+                entryNodeId: 'llm-actor',
+                defaults: { maxNodeRuns: 4 },
+                nodes: [{ id: 'llm-actor', kind: 'llm', label: 'JSON approval test tool surface' }],
+                edges: [{ source: 'llm-actor', target: 'llm-actor', condition: 'llm-loop-active' }],
+                rules: [
+                    {
+                        id: 'llm-loop-active',
+                        when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true },
+                    },
+                ],
+                policies: [],
+            },
+        }),
+        'utf8',
+    );
 }
 
 function toolCallChunk(

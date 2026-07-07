@@ -319,7 +319,12 @@ describe('chat-store — multi-question batch', () => {
         const store = createChatStore();
         store.showQuestionBatch([
             { question: 'Lang?', header: 'Language', options: [{ label: 'TS' }, { label: 'Go' }], multiple: false },
-            { question: 'Level?', header: 'Level', options: [{ label: 'Junior' }, { label: 'Senior' }], multiple: false },
+            {
+                question: 'Level?',
+                header: 'Level',
+                options: [{ label: 'Junior' }, { label: 'Senior' }],
+                multiple: false,
+            },
         ]);
         const snapshot = store.getSnapshot();
         expect(snapshot.overlayMode).toBe('question');
@@ -332,7 +337,12 @@ describe('chat-store — multi-question batch', () => {
         const store = createChatStore();
         const promise = store.showQuestionBatch([
             { question: 'Lang?', header: 'Language', options: [{ label: 'TS' }, { label: 'Go' }], multiple: false },
-            { question: 'Level?', header: 'Level', options: [{ label: 'Junior' }, { label: 'Senior' }], multiple: false },
+            {
+                question: 'Level?',
+                header: 'Level',
+                options: [{ label: 'Junior' }, { label: 'Senior' }],
+                multiple: false,
+            },
         ]);
         store.selectQuestionByClick(0);
         expect(store.getSnapshot().questionTabIndex).toBe(1);
@@ -360,11 +370,20 @@ describe('chat-store — multi-question batch', () => {
     it('multi-select toggles membership and only resolves at confirm', async () => {
         const store = createChatStore();
         const promise = store.showQuestionBatch([
-            { question: 'Toppings?', header: 'Toppings', options: [{ label: 'cheese' }, { label: 'mushroom' }, { label: 'olive' }], multiple: true },
+            {
+                question: 'Toppings?',
+                header: 'Toppings',
+                options: [{ label: 'cheese' }, { label: 'mushroom' }, { label: 'olive' }],
+                multiple: true,
+            },
         ]);
         // single multiple-select question → multi batch (has confirm tab)
         expect(store.getSnapshot().questionConfirmActive).toBe(false);
-        store.navigateQuestion(1);        store.toggleQuestionOption();        store.navigateQuestion(1);        store.toggleQuestionOption();        expect(store.getSnapshot().questionSelectedIndices).toEqual(new Set<number>([1, 2]));
+        store.navigateQuestion(1);
+        store.toggleQuestionOption();
+        store.navigateQuestion(1);
+        store.toggleQuestionOption();
+        expect(store.getSnapshot().questionSelectedIndices).toEqual(new Set<number>([1, 2]));
         store.navigateQuestionTab(1); // to confirm tab
         expect(store.getSnapshot().questionConfirmActive).toBe(true);
         store.confirmQuestionBatch();

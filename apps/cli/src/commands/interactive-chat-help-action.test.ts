@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { Keybinds } from '../platform/keymap/keybind.js';
 import { parseChatLine } from './chat-commands.js';
 import { formatHelpText, runHelpAction } from './interactive-chat-help-action.js';
-import { Keybinds } from '../platform/keymap/keybind.js';
 
 type CapturingOutput = {
     readonly write: (text: string) => void;

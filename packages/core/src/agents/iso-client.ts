@@ -19,13 +19,13 @@ import {
     type SidecarIsoResolveResponse,
     SidecarIsoResolveResponseSchema,
 } from '@mission-control/protocol';
+import { createStreamDecoder } from '../providers/stream-decoder.js';
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createStreamDecoder } from '../providers/stream-decoder.js';
 
 /** Method the isolation backend selected, including the TS-side fallback. */
 export type IsoMethod = 'unsupported' | 'overlayfs' | 'rcopy' | 'apfs' | 'rcopy-fallback';

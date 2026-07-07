@@ -1,4 +1,4 @@
-import { missionControlDataDirEnvKey } from '@mission-control/core';
+import { createCodingAgentGraph, missionControlDataDirEnvKey } from '@mission-control/core';
 import { AgentEventSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
@@ -10,7 +10,7 @@ import {
     parseReplayRecords,
     providerFromPatchRequests,
 } from './session-test-support.js';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -23,9 +23,10 @@ describe('session replay coding projection', () => {
         // Given
         const dataDir = await useTempDataDir();
         const workspaceRoot = await mkdtemp(join(tmpdir(), 'mission-control-cli-replay-workspace-'));
+        await writeCodingReplayWorkflow(workspaceRoot);
         const sessionId = 'session_cli_replay_coding';
         const runOutput = await runAgent(
-            parseArgs(['run', 'patch then summarize', '--session', sessionId, '--jsonl']),
+            parseArgs(['run', '#coding-replay patch then summarize', '--session', sessionId, '--jsonl']),
             {
                 workspaceRoot,
                 provider: providerFromPatchRequests(),
@@ -79,6 +80,20 @@ async function useTempDataDir(): Promise<string> {
     const dataDir = await mkdtemp(join(tmpdir(), 'mission-control-cli-session-'));
     vi.stubEnv(missionControlDataDirEnvKey, dataDir);
     return dataDir;
+}
+
+async function writeCodingReplayWorkflow(workspaceRoot: string): Promise<void> {
+    const workflowsDir = join(workspaceRoot, '.mctrl', 'workflows');
+    await mkdir(workflowsDir, { recursive: true });
+    await writeFile(
+        join(workflowsDir, 'coding-replay.workflow.json'),
+        `${JSON.stringify({
+            name: 'coding-replay',
+            description: 'Test-only coding graph for session replay',
+            graph: createCodingAgentGraph({ model: { providerID: 'local', modelID: 'local-echo' } }),
+        })}\n`,
+        'utf8',
+    );
 }
 
 function parseEventLines(output: string) {

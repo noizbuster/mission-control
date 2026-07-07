@@ -66,15 +66,11 @@ describe('parseMessageBlocks', () => {
     });
 
     it('parses a single assistant block', () => {
-        expect(parseMessageBlocks('Assistant: hello')).toEqual([
-            { kind: 'assistant', lines: ['Assistant: hello'] },
-        ]);
+        expect(parseMessageBlocks('Assistant: hello')).toEqual([{ kind: 'assistant', lines: ['Assistant: hello'] }]);
     });
 
     it('parses a single thinking block', () => {
-        expect(parseMessageBlocks('Thinking: hmm')).toEqual([
-            { kind: 'thinking', lines: ['Thinking: hmm'] },
-        ]);
+        expect(parseMessageBlocks('Thinking: hmm')).toEqual([{ kind: 'thinking', lines: ['Thinking: hmm'] }]);
     });
 
     it('parses a single error block', () => {
@@ -86,16 +82,12 @@ describe('parseMessageBlocks', () => {
     });
 
     it('parses a single system block', () => {
-        expect(parseMessageBlocks('just some prose')).toEqual([
-            { kind: 'system', lines: ['just some prose'] },
-        ]);
+        expect(parseMessageBlocks('just some prose')).toEqual([{ kind: 'system', lines: ['just some prose'] }]);
     });
 
     it('keeps an interior blank line as a paragraph separator inside an assistant block', () => {
         const input = 'Assistant: para1\n\npara2';
-        expect(parseMessageBlocks(input)).toEqual([
-            { kind: 'assistant', lines: ['Assistant: para1', '', 'para2'] },
-        ]);
+        expect(parseMessageBlocks(input)).toEqual([{ kind: 'assistant', lines: ['Assistant: para1', '', 'para2'] }]);
     });
 
     it('absorbs plain-text continuation lines into an assistant block', () => {
@@ -153,9 +145,7 @@ describe('parseMessageBlocks', () => {
 
     it('trims trailing empty lines after an absorbing block too', () => {
         const input = 'Assistant: para1\n\npara2\n\n';
-        expect(parseMessageBlocks(input)).toEqual([
-            { kind: 'assistant', lines: ['Assistant: para1', '', 'para2'] },
-        ]);
+        expect(parseMessageBlocks(input)).toEqual([{ kind: 'assistant', lines: ['Assistant: para1', '', 'para2'] }]);
     });
 
     it('parses a multi-section outputText into ordered blocks of distinct kinds', () => {
@@ -182,16 +172,12 @@ describe('parseMessageBlocks', () => {
 
     it('groups consecutive same-kind system lines into one block', () => {
         const input = 'banner line one\nbanner line two';
-        expect(parseMessageBlocks(input)).toEqual([
-            { kind: 'system', lines: ['banner line one', 'banner line two'] },
-        ]);
+        expect(parseMessageBlocks(input)).toEqual([{ kind: 'system', lines: ['banner line one', 'banner line two'] }]);
     });
 
     it('starts a new block when classification changes between consecutive lines', () => {
         const input = 'You: a\nYou: b';
-        expect(parseMessageBlocks(input)).toEqual([
-            { kind: 'user', lines: ['You: a', 'You: b'] },
-        ]);
+        expect(parseMessageBlocks(input)).toEqual([{ kind: 'user', lines: ['You: a', 'You: b'] }]);
     });
 
     it('treats a user line after an assistant block as a strong boundary (new block)', () => {

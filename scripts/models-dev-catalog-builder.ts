@@ -309,21 +309,21 @@ function buildReasoningOptions(
         if (!isRecord(opt)) continue;
         const type = opt['type'];
         if (typeof type !== 'string' || !KNOWN_REASONING_TYPES.has(type)) continue;
-        const entry: GeneratedReasoningOption = { type: type as GeneratedReasoningOption['type'] };
         const values = opt['values'];
-        if (isStringArray(values)) entry.values = values;
         const min = opt['min'];
-        if (typeof min === 'number') entry.min = min;
         const max = opt['max'];
-        if (typeof max === 'number') entry.max = max;
+        const entry: GeneratedReasoningOption = {
+            type: type as GeneratedReasoningOption['type'],
+            ...(isStringArray(values) ? { values } : {}),
+            ...(typeof min === 'number' ? { min } : {}),
+            ...(typeof max === 'number' ? { max } : {}),
+        };
         result.push(entry);
     }
     return result.length > 0 ? result : undefined;
 }
 
-function parseReasoningOptions(
-    value: unknown,
-): readonly ModelsDevRawReasoningOption[] | null | undefined {
+function parseReasoningOptions(value: unknown): readonly ModelsDevRawReasoningOption[] | null | undefined {
     if (value === null) return null;
     if (value === undefined) return undefined;
     if (!Array.isArray(value)) return undefined;

@@ -1,15 +1,19 @@
-import {
-    createFileSessionIndexStore,
-    missionControlDataDirEnvKey,
-    type SessionIndexSessionRecord,
-} from '@mission-control/core';
-import { type AgentEvent } from '@mission-control/protocol';
+import { createFileSessionIndexStore } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runSessionCommand } from './session.js';
+import {
+    metadataEvent,
+    pathExists,
+    sessionIndexRecord,
+    sessionLockPath,
+    sessionLogPath,
+    taskCompletedEvent,
+    useTempDataDir,
+    writeSessionLock,
+} from './session-delete-test-support.js';
 import { writeSessionEvents } from './session-test-support.js';
-import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 describe('session delete', () => {
@@ -199,96 +203,3 @@ describe('session delete', () => {
         expect(() => parseArgs(['session', 'delete'])).toThrow('session delete requires a session id');
     });
 });
-
-describe('session delete argument parsing', () => {
-    it('parses delete with session id', () => {
-        const result = parseArgs(['session', 'delete', 'session_cli']);
-        expect(result).toMatchObject({
-            command: 'session-delete',
-            sessionId: 'session_cli',
-        });
-        expect(result.force).toBeUndefined();
-    });
-
-    it('parses delete with --force', () => {
-        expect(parseArgs(['session', 'delete', 'session_cli', '--force'])).toMatchObject({
-            command: 'session-delete',
-            sessionId: 'session_cli',
-            force: true,
-        });
-    });
-
-    it('rejects extra arguments after --force', () => {
-        expect(() => parseArgs(['session', 'delete', 'session_cli', '--force', 'extra'])).toThrow(
-            'Unsupported session delete argument: extra',
-        );
-    });
-});
-
-async function useTempDataDir(): Promise<string> {
-    const dataDir = await mkdtemp(join(tmpdir(), 'mission-control-cli-session-delete-'));
-    vi.stubEnv(missionControlDataDirEnvKey, dataDir);
-    return dataDir;
-}
-
-function taskCompletedEvent(sessionId: string, message: string): AgentEvent {
-    return {
-        type: 'task.completed',
-        timestamp: '2026-06-05T10:00:00.000Z',
-        sessionId,
-        message,
-    };
-}
-
-function metadataEvent(sessionId: string, parentSessionId: string): AgentEvent {
-    return {
-        type: 'session.metadata.updated',
-        timestamp: '2026-06-05T10:00:00.000Z',
-        sessionId,
-        message: 'session metadata updated',
-        sessionTree: { kind: 'metadata', parentSessionId },
-    };
-}
-
-function sessionIndexRecord(dataDir: string, sessionId: string): SessionIndexSessionRecord {
-    return {
-        kind: 'session',
-        sessionId,
-        status: 'stopped',
-        startedAt: '2026-06-05T10:00:00.000Z',
-        eventCount: 1,
-        updatedAt: '2026-06-05T10:01:00.000Z',
-        sourceFilePath: join(dataDir, 'sessions', `${sessionId}.jsonl`),
-    };
-}
-
-async function writeSessionLock(dataDir: string, sessionId: string, heartbeatAt: string): Promise<void> {
-    await writeFile(
-        join(dataDir, 'sessions', `${sessionId}.lock`),
-        `${JSON.stringify({
-            sessionId,
-            ownerId: `owner-${sessionId}`,
-            createdAt: '2020-01-01T00:00:00.000Z',
-            updatedAt: heartbeatAt,
-            heartbeatAt,
-        })}\n`,
-        'utf8',
-    );
-}
-
-function sessionLogPath(dataDir: string, sessionId: string): string {
-    return join(dataDir, 'sessions', `${sessionId}.jsonl`);
-}
-
-function sessionLockPath(dataDir: string, sessionId: string): string {
-    return join(dataDir, 'sessions', `${sessionId}.lock`);
-}
-
-async function pathExists(path: string): Promise<boolean> {
-    try {
-        await access(path);
-        return true;
-    } catch {
-        return false;
-    }
-}

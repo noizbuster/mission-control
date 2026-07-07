@@ -1,9 +1,9 @@
+import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport.js';
 import {
     type AnthropicMessagesTransport,
     AnthropicMessagesTransportError,
     type AnthropicMessagesTransportRequest,
 } from './anthropic-messages-transport.js';
-import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport.js';
 
 export function createNodeAnthropicMessagesTransport(): AnthropicMessagesTransport {
     return {
@@ -30,10 +30,12 @@ export function parseAnthropicMessagesSseEvents(text: string): {
     readonly events: readonly unknown[];
     readonly remainder: string;
 } {
-    return parseSseFrames(text, () =>
-        new AnthropicMessagesTransportError({
-            kind: 'network',
-            message: 'Anthropic SSE frame contained invalid JSON',
-        }),
+    return parseSseFrames(
+        text,
+        () =>
+            new AnthropicMessagesTransportError({
+                kind: 'network',
+                message: 'Anthropic SSE frame contained invalid JSON',
+            }),
     );
 }

@@ -42,10 +42,10 @@
 import type { Keymap, KeymapEvent } from '@opentui/keymap';
 import { useKeymap } from '@opentui/keymap/react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { padEndToDisplayWidth } from '../../commands/terminal-text.js';
 import { CommandMap } from './keybind.js';
 import type { OpenTuiKeymap } from './keymap-instance.js';
 import { BASE_MODE, useModeStack } from './mode-stack.js';
-import { padEndToDisplayWidth } from '../../commands/terminal-text.js';
 import { useKeymapSelectorReact } from './use-keymap-selector.js';
 
 // ---------------------------------------------------------------------------

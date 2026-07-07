@@ -6,13 +6,13 @@ import { useKeyboard } from '@opentui/react';
 import type * as React from 'react';
 import { useCallback, useSyncExternalStore } from 'react';
 import type { ChatStore } from '../commands/chat-store.js';
-import { padEndToDisplayWidth } from '../commands/terminal-text.js';
 import {
     createModelsOverlayView,
     formatRoleFallback,
     type ModelsOverlayRoleRow,
     type ModelsOverlayState,
 } from '../commands/models-overlay-state.js';
+import { padEndToDisplayWidth } from '../commands/terminal-text.js';
 import { OverlayFrame } from './OverlayFrame.js';
 import { SELECTED_BG } from './overlay-theme.js';
 

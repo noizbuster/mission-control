@@ -4,10 +4,10 @@ import { loadVariantOverrides, type VariantOverrides } from './model-variant-ove
 import { variantsForReasoningOptions } from './model-variant-presets.js';
 import { generatedDefaultProviderCapability, generatedProviderCapabilities } from './provider-capabilities.js';
 
-export { getModelContextLimit } from './models-dev-runtime.js';
-export { variantsForReasoningOptions } from './model-variant-presets.js';
 export { loadVariantOverrides, type VariantOverrideEntry, type VariantOverrides } from './model-variant-overrides.js';
+export { variantsForReasoningOptions } from './model-variant-presets.js';
 export type { RawModelsDevReasoningOption } from './models-dev-runtime.js';
+export { getModelContextLimit } from './models-dev-runtime.js';
 
 export const appName = 'mission-control';
 export const cliCommandName = 'mctrl';
@@ -170,8 +170,10 @@ const scaffoldModelProviderCatalog = [
     },
 ] as const satisfies readonly ModelProviderCatalogEntry[];
 
-export const opencodeProviderCatalog: readonly ModelProviderCatalogEntry[] =
-    transformRawCatalog(modelsDevCatalogSnapshot, loadVariantOverrides());
+export const opencodeProviderCatalog: readonly ModelProviderCatalogEntry[] = transformRawCatalog(
+    modelsDevCatalogSnapshot,
+    loadVariantOverrides(),
+);
 
 export const modelProviderCatalog: readonly ModelProviderCatalogEntry[] = [
     ...scaffoldModelProviderCatalog,

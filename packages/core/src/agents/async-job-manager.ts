@@ -6,18 +6,23 @@
  * shut down promptly when {@link cancelJob} is called or the caller-provided
  * signal aborts.
  *
- * In-memory only. Persistence is todo 32.
+ * In-memory coordination remains authoritative. Persistence is opt-in through
+ * a mirror observer that records handle snapshots.
  */
 import { randomBytes } from 'node:crypto';
 
 export interface BackgroundJobHandle {
     readonly jobId: string;
     readonly sessionId: string;
+    readonly parentSessionId?: string;
+    readonly agentId?: string;
+    readonly blocking?: boolean;
     status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
     result?: { status: 'completed' | 'failed'; output: string };
     error?: string;
     readonly startedAt: string;
     completedAt?: string;
+    cancellationReason?: string;
 }
 
 /**
@@ -28,9 +33,20 @@ export type JobExecuteFn = (signal: AbortSignal) => Promise<{ status: 'completed
 
 export interface StartJobInput {
     readonly sessionId: string;
+    readonly parentSessionId?: string;
+    readonly agentId?: string;
+    readonly blocking?: boolean;
     readonly execute: JobExecuteFn;
     /** When this signal aborts the job is cancelled automatically. */
     readonly signal?: AbortSignal;
+}
+
+export interface AsyncJobPersistenceMirror {
+    readonly recordJob: (handle: BackgroundJobHandle) => void;
+}
+
+export interface AsyncJobManagerOptions {
+    readonly mirror?: AsyncJobPersistenceMirror;
 }
 
 interface JobEntry {
@@ -46,8 +62,14 @@ export class AsyncJobManager {
     private readonly jobs = new Map<string, JobEntry>();
     private readonly queue: string[] = [];
     private active = 0;
+    private readonly mirror: AsyncJobPersistenceMirror | undefined;
 
-    constructor(private readonly maxConcurrency: number = 4) {}
+    constructor(
+        private readonly maxConcurrency: number = 4,
+        options: AsyncJobManagerOptions = {},
+    ) {
+        this.mirror = options.mirror;
+    }
 
     startJob(input: StartJobInput): BackgroundJobHandle {
         const jobId = `job_${Date.now()}_${randomBytes(4).toString('hex')}`;
@@ -55,11 +77,15 @@ export class AsyncJobManager {
         const handle: BackgroundJobHandle = {
             jobId,
             sessionId: input.sessionId,
+            ...(input.parentSessionId !== undefined ? { parentSessionId: input.parentSessionId } : {}),
+            ...(input.agentId !== undefined ? { agentId: input.agentId } : {}),
+            ...(input.blocking !== undefined ? { blocking: input.blocking } : {}),
             status: 'queued',
             startedAt: new Date().toISOString(),
         };
         const entry: JobEntry = { handle, execute: input.execute, controller, awaiters: [] };
         this.jobs.set(jobId, entry);
+        this.recordJob(entry);
 
         if (input.signal !== undefined) {
             if (input.signal.aborted) {
@@ -114,6 +140,7 @@ export class AsyncJobManager {
     private runJob(entry: JobEntry): void {
         this.active++;
         entry.handle.status = 'running';
+        this.recordJob(entry);
 
         entry
             .execute(entry.controller.signal)
@@ -121,16 +148,19 @@ export class AsyncJobManager {
                 if (entry.handle.status === 'cancelled') return;
                 entry.handle.status = result.status;
                 entry.handle.result = result;
+                this.recordJob(entry);
             })
             .catch((error: unknown) => {
                 if (entry.handle.status === 'cancelled') return;
                 entry.handle.status = 'failed';
                 entry.handle.error = error instanceof Error ? error.message : String(error);
+                this.recordJob(entry);
             })
             .finally(() => {
                 if (entry.handle.completedAt === undefined) {
                     entry.handle.completedAt = new Date().toISOString();
                 }
+                this.recordJob(entry);
                 this.active--;
                 this.resolveAwaiters(entry);
                 this.drainQueue();
@@ -143,7 +173,9 @@ export class AsyncJobManager {
         const wasQueued = entry.handle.status === 'queued';
         entry.controller.abort();
         entry.handle.status = 'cancelled';
+        entry.handle.cancellationReason = 'cancelled';
         entry.handle.completedAt = new Date().toISOString();
+        this.recordJob(entry);
 
         if (wasQueued) {
             // Queued job never entered runJob, so no promise .finally to handle
@@ -178,5 +210,9 @@ export class AsyncJobManager {
             if (entry === undefined || entry.handle.status !== 'queued') continue;
             this.runJob(entry);
         }
+    }
+
+    private recordJob(entry: JobEntry): void {
+        this.mirror?.recordJob(entry.handle);
     }
 }

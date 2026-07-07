@@ -100,8 +100,9 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
     });
 
     describe('QA: Failure (Metis 4.1) — observer throws is swallowed', () => {
-        it('completes the signal tap and swallows observer errors', async () => {
+        it('completes the signal tap and logs observer Error failures', async () => {
             const output = bufferedOutput();
+            const stderrWrite = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
 
             let calls = 0;
             const throwingObserver: (signal: AbgSignal) => void = () => {
@@ -124,6 +125,24 @@ describe('ABG overlay wiring — 33ms coalescing + non-throwing observer (Wave 2
 
             expect(calls).toBe(3);
             expect(output.getText()).toContain('Assistant: ');
+            expect(stderrWrite).toHaveBeenCalledWith(expect.stringContaining('boom from faulty observer'));
+            stderrWrite.mockRestore();
+        });
+
+        it('rethrows non-Error observer failures', async () => {
+            const output = bufferedOutput();
+            const throwingObserver: (signal: AbgSignal) => void = () => {
+                throw 'non-error observer failure';
+            };
+
+            const tap = interactiveGraphStreamSignal(
+                output,
+                { streamingText: false, streamingThinking: false, toolCount: 0, toolNames: [] },
+                '/ws',
+                [throwingObserver],
+            );
+
+            await expect(tap(emitDeltaSignal('n1', 'a'))).rejects.toBe('non-error observer failure');
         });
     });
 

@@ -8,7 +8,7 @@ describe('CLI entrypoint', () => {
         const source = readFileSync(join(process.cwd(), 'apps/cli/src/index.tsx'), 'utf8');
         const help = createHelpText();
 
-        expect(source.startsWith('#!/usr/bin/env node')).toBe(true);
+        expect(source.startsWith('#!/usr/bin/env -S node --experimental-ffi')).toBe(true);
         expect(getVersion()).toBe('0.1.0');
         expect(help).toContain('mctrl');
         expect(help).toContain('--no-tui');

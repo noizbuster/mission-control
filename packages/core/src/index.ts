@@ -46,6 +46,7 @@ export {
     createDefaultAbgNodeRegistry,
     runAbgNode,
 } from './behavior/node-registry.js';
+export { bustSkillCache } from './behavior/nodes/llm-actor/llm-actor-node-runner.js';
 export type { AbgRuleEvaluationInput, CompiledAbgRule } from './behavior/rule-compiler.js';
 export { AbgGraphValidationError, compileAbgRule } from './behavior/rule-compiler.js';
 export type { AbgSignalProjectionInput } from './behavior/signals.js';
@@ -186,7 +187,6 @@ export {
     type DeterministicProvider,
     type DeterministicProviderStep,
 } from './providers/deterministic-provider.js';
-export { createStreamDecoder, truncateToValidUtf8Boundary, type StreamDecoder } from './providers/stream-decoder.js';
 export {
     createGeminiGenerateContentProvider,
     createNodeGeminiGenerateContentTransport,
@@ -245,6 +245,7 @@ export type {
     ProviderTurnRunResult,
 } from './providers/provider-turn-types.js';
 export { ProviderTurnError } from './providers/provider-turn-types.js';
+export { createStreamDecoder, type StreamDecoder, truncateToValidUtf8Boundary } from './providers/stream-decoder.js';
 export {
     type ContinuationOptions,
     type ContinuationOutcome,
@@ -338,7 +339,6 @@ export {
     type ToolOutcomeStatus,
 } from './session-replay.js';
 export * from './skills/index.js';
-export { bustSkillCache } from './behavior/nodes/llm-actor/llm-actor-node-runner.js';
 export {
     type AskUserInput,
     type AskUserOutput,

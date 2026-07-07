@@ -1,0 +1,33 @@
+import type { ResultSet } from '@libsql/client';
+import type { AgentEvent } from '@mission-control/protocol';
+import { type AgentEventEnvelope, AgentEventEnvelopeSchema } from '@mission-control/protocol';
+import { z } from 'zod';
+import { SessionEventLog } from '../session-log.js';
+import { SqliteSessionEventStoreError } from './sqlite-session-event-store-errors.js';
+
+const nextSequenceRowSchema = z.object({ next_seq: z.number().int().nonnegative() });
+const envelopeRowSchema = z.object({ payload_json: z.string() });
+
+export function nextSequenceFrom(result: ResultSet, sessionId: string): number {
+    const row = result.rows[0];
+    if (row === undefined) {
+        throw new SqliteSessionEventStoreError({
+            code: 'write_failed',
+            sessionId,
+            message: `SQLite session log ${sessionId} is missing its sequence row`,
+        });
+    }
+    return nextSequenceRowSchema.parse(row).next_seq;
+}
+
+export function envelopeFromPayloadRow(row: unknown): AgentEventEnvelope {
+    return AgentEventEnvelopeSchema.parse(JSON.parse(envelopeRowSchema.parse(row).payload_json));
+}
+
+export function logFromEvents(events: readonly AgentEvent[]): SessionEventLog {
+    const log = new SessionEventLog();
+    for (const event of events) {
+        log.append(event);
+    }
+    return log;
+}

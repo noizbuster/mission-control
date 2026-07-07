@@ -45,7 +45,12 @@ function reasoningCompleted(requestId: string, sequence: number, text: string): 
 function toolCallCompleted(toolCallId: string, toolName: string, sequence: number, argumentsJson = '{}'): AgentEvent {
     return event({
         type: 'task.progress',
-        providerStreamChunk: { kind: 'tool_call_completed', requestId: 'req-tool', sequence, toolCall: { toolCallId, toolName, argumentsJson } },
+        providerStreamChunk: {
+            kind: 'tool_call_completed',
+            requestId: 'req-tool',
+            sequence,
+            toolCall: { toolCallId, toolName, argumentsJson },
+        },
     });
 }
 
@@ -70,10 +75,7 @@ describe('foldEvents — batch fold rules', () => {
     });
 
     it('prefers response_completed.message.content over accumulated deltas when they diverge', () => {
-        const blocks = foldEvents([
-            textDelta('r1', 1, 'partial'),
-            responseCompleted('r1', 2, 'authoritative final'),
-        ]);
+        const blocks = foldEvents([textDelta('r1', 1, 'partial'), responseCompleted('r1', 2, 'authoritative final')]);
         expect(blocks).toHaveLength(1);
         expect(blocks[0]).toEqual({ kind: 'assistant-text', text: 'authoritative final' });
     });
@@ -100,7 +102,11 @@ describe('foldEvents — batch fold rules', () => {
             toolCallCompleted('tc1', 'bash.run', 1),
             event({
                 type: 'tool.failed',
-                toolResult: { toolCallId: 'tc1', status: 'failed', error: { code: 'tool_failed', message: 'boom', retryable: false } },
+                toolResult: {
+                    toolCallId: 'tc1',
+                    status: 'failed',
+                    error: { code: 'tool_failed', message: 'boom', retryable: false },
+                },
             }),
         ]);
         const tools = blocks.filter((b) => b.kind === 'tool');
@@ -139,7 +145,12 @@ describe('foldEvents — batch fold rules', () => {
             }),
         ]);
         const header = blocks.find((b) => b.kind === 'session-header');
-        expect(header).toEqual({ kind: 'session-header', providerID: 'openai', modelID: 'gpt-5', variantID: 'reasoning-high' });
+        expect(header).toEqual({
+            kind: 'session-header',
+            providerID: 'openai',
+            modelID: 'gpt-5',
+            variantID: 'reasoning-high',
+        });
     });
 
     it('emits a session-header from task.started as well', () => {
@@ -213,7 +224,9 @@ describe('foldEvents — does not mutate input', () => {
         const snapshot = original.map((e) => ({ ...e }));
         foldEvents(original);
         expect(original).toHaveLength(snapshot.length);
-        expect(original.every((e, i) => e === snapshot[i] || JSON.stringify(e) === JSON.stringify(snapshot[i]))).toBe(true);
+        expect(original.every((e, i) => e === snapshot[i] || JSON.stringify(e) === JSON.stringify(snapshot[i]))).toBe(
+            true,
+        );
     });
 });
 

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { createProviderAuthStore } from '../auth-store.js';
 import { runAuthCommand } from './auth.js';
+import { getCatalogDefaultModelID } from './model-catalog-test-support.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,6 +23,7 @@ describe('runAuthCommand prompted auth logout', () => {
     it('logs out a prompted configured provider and displays masked settings', async () => {
         const authFilePath = await useTempAuthFile();
         const store = createProviderAuthStore();
+        const anthropicDefaultModelID = getCatalogDefaultModelID('anthropic');
         const providerPrompts: string[] = [];
         const providerChoices: Array<readonly (readonly [string, string])[]> = [];
 
@@ -52,7 +54,7 @@ describe('runAuthCommand prompted auth logout', () => {
         expect(providerChoices).toEqual([
             [
                 ['local', 'Local Sandbox - loca..._key'],
-                ['anthropic', 'Anthropic - anth..._key (1 field) - default anthropic/claude-3-5-haiku-20241022'],
+                ['anthropic', `Anthropic - anth..._key (1 field) - default anthropic/${anthropicDefaultModelID}`],
             ],
         ]);
         expect(list).toContain('local Local Sandbox - loca..._key');

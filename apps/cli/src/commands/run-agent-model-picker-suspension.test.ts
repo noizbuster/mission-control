@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
 import {
@@ -6,6 +6,7 @@ import {
     createBufferedChatOutput,
     createCredentialSummary,
 } from './run-agent-chat-test-support.js';
+import { useIsolatedMissionControlDataDir } from './run-agent-data-dir-test-support.js';
 
 type SuspendableScriptedChatEvent =
     | {
@@ -18,6 +19,17 @@ type SuspendableScriptedChatEvent =
       };
 
 describe('runAgent /model picker suspension', () => {
+    let cleanupDataDir: (() => Promise<void>) | undefined;
+
+    beforeEach(async () => {
+        cleanupDataDir = await useIsolatedMissionControlDataDir('mission-control-model-picker-suspension-');
+    });
+
+    afterEach(async () => {
+        await cleanupDataDir?.();
+        cleanupDataDir = undefined;
+    });
+
     it('suspends chat input while the /model picker owns raw keypresses', async () => {
         const chatOutput = createBufferedChatOutput();
         const chatInput = createSuspendableScriptedChatInput([

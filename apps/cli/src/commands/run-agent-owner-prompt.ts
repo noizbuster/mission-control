@@ -1,7 +1,7 @@
 import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
-    type JsonlSessionEventStore,
+    type LocalSessionEventStore,
     type LspClient,
     PermissionGate,
     type ProviderAdapter,
@@ -9,15 +9,21 @@ import {
     type SdkModelResolver,
     SessionRunOwner,
     type SessionRunOwnerReceipt,
+    type TaskToolRuntimeServices,
     type ToolRegistry,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { createCliPermissionDecision, type NonInteractiveAutomationPolicy } from './cli-permission-policy.js';
+import {
+    getOrCreateMissionControlServices,
+    isOmoRootNotFoundError,
+    type MissionControlServices,
+} from './mission-control-services.js';
 import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
 
 export type RunOwnerPromptInput = {
     readonly sessionId: string;
-    readonly store: JsonlSessionEventStore;
+    readonly store: LocalSessionEventStore;
     readonly provider: ProviderAdapter;
     readonly modelProviderSelection: ModelProviderSelection;
     readonly workspaceRoot: string;
@@ -43,10 +49,11 @@ export type RunOwnerPromptInput = {
     readonly resolveSdkModel?: SdkModelResolver;
     /** LSP seam: inject a real `LspClient` to register the `lsp` tool. Default undefined (off). */
     readonly lspClient?: LspClient;
+    readonly taskRuntimeServices?: TaskToolRuntimeServices;
 };
 
 export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> {
-    const taskId = 'task_prompt_1';
+    const taskId = await nextOwnerPromptTaskId(input.store, input.sessionId);
     let finalMessage: string | undefined;
     const gate = new PermissionGate({
         resolveDecision: (request) =>
@@ -60,6 +67,9 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
         now: () => new Date().toISOString(),
         pendingApprovalBehavior: 'block',
     });
+    const ownedServices =
+        input.taskRuntimeServices === undefined ? await resolveMissionControlServices(input.workspaceRoot) : undefined;
+    const taskRuntimeServices = input.taskRuntimeServices ?? ownedServices?.getTaskRuntimeServices();
     const { registry: toolRegistry, mcpConnectionManager } = await createNonInteractiveToolRegistry({
         workspaceRoot: input.workspaceRoot,
         requestPermission: (request) =>
@@ -73,6 +83,7 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
         sessionId: input.sessionId,
         ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
         ...(input.lspClient !== undefined ? { lspClient: input.lspClient } : {}),
+        ...(taskRuntimeServices !== undefined ? { services: taskRuntimeServices } : {}),
     });
     // When an alternate engine is requested, build its turn runner over the SAME permission-gated
     // tool surface so the graph's tool calls honor the same approval/blocking behavior as the flat
@@ -104,7 +115,11 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
             messageId: `message_${taskId}`,
         });
     } finally {
-        await mcpConnectionManager.disconnectAll();
+        try {
+            await mcpConnectionManager.disconnectAll();
+        } finally {
+            await ownedServices?.dispose();
+        }
     }
     if (receipt.status === 'completed') {
         emitTaskEvent(input, taskId, 'task.completed', finalMessage ?? 'run completed');
@@ -119,6 +134,68 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
             throw new Error(receipt.reason ?? `run ${receipt.status}`);
         }
     }
+}
+
+async function resolveMissionControlServices(workspaceRoot: string): Promise<MissionControlServices | undefined> {
+    try {
+        return await getOrCreateMissionControlServices(workspaceRoot);
+    } catch (error: unknown) {
+        if (isOmoRootNotFoundError(error)) {
+            return undefined;
+        }
+        throw error;
+    }
+}
+
+async function nextOwnerPromptTaskId(store: LocalSessionEventStore, sessionId: string): Promise<string> {
+    const events = await store.getEvents(sessionId);
+    let maxIndex = 0;
+    for (const event of events) {
+        if (event.sessionId !== sessionId) {
+            continue;
+        }
+        maxIndex = Math.max(maxIndex, maxNumericSuffix(ownerPromptIdsFromEvent(event)));
+    }
+    return `task_prompt_${maxIndex + 1}`;
+}
+
+function ownerPromptIdsFromEvent(event: AgentEvent): readonly (string | undefined)[] {
+    return [
+        event.taskId,
+        event.run?.runId,
+        event.run?.inputId,
+        event.run?.messageId,
+        event.run?.providerTurnId,
+        event.run?.toolCallId,
+        event.run?.graphId,
+        event.run?.nodeId,
+        event.transcript?.inputId,
+        event.transcript?.messageId,
+        event.transcript?.providerTurnId,
+        event.transcript?.toolCallId,
+        event.transcript?.graphId,
+        event.transcript?.nodeId,
+        event.providerStreamChunk?.requestId,
+    ];
+}
+
+function maxNumericSuffix(ids: readonly (string | undefined)[]): number {
+    let maxIndex = 0;
+    for (const id of ids) {
+        const index = numericSuffix(id);
+        if (index !== undefined) {
+            maxIndex = Math.max(maxIndex, index);
+        }
+    }
+    return maxIndex;
+}
+
+function numericSuffix(id: string | undefined): number | undefined {
+    const match = id?.match(/_(\d+)$/u);
+    if (match?.[1] === undefined) {
+        return undefined;
+    }
+    return Number.parseInt(match[1], 10);
 }
 
 function emitTaskEvent(

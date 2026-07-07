@@ -4,7 +4,7 @@
 
 ## Architecture
 
-`ABG.md` is the root design reference. The current runtime implements a bounded coding-agent MVP over the original scaffold: provider turns, durable JSONL sessions, approval-gated tools, replay projections, graph coordination, behavior/action graph execution for authorable graphs, CLI chat, desktop inspection, core desktop command services, and a versioned sidecar handshake.
+`ABG.md` is the root design reference. The current runtime implements a bounded coding-agent MVP over the original scaffold: provider turns, durable SQLite/libSQL sessions with JSONL import/export/read compatibility, approval-gated tools, replay projections, graph coordination, behavior/action graph execution for authorable graphs, CLI chat, desktop inspection, core desktop command services, and a versioned sidecar handshake.
 
 Directory structure:
 
@@ -87,7 +87,7 @@ mctrl agents import <harness> <path>
 
 `/models` (plural) opens a full-width, two-column overlay for assigning models to the ten built-in agent roles, not for changing the active chat model. The left column lists the assignable models as `provider/model[#variant]` entries, and the right column lists each role with its current assignment or default-inheritance status. Arrow keys move the focus within a column, `Tab` switches columns, `Enter` assigns the focused model to the focused role, `Backspace` or `Delete` clears a role back to its default, and `Escape` closes the overlay. Assignments persist to the user auth file under the Mission Control data directory, so they are personal preferences and are not committed to the project. A role with no explicit assignment shows `Using default (<provider>/<model[#variant]>)`, except the default role itself, which shows `Using built-in/session default (<provider>/<model[#variant]>)`. A child agent that declares `model: 'mctrl/<role>'` resolves to the persisted assignment for that role when one exists. `/model` (the active-session selection) and `mctrl models` (the non-interactive listing) are unchanged.
 
-Session navigation stays on the durable JSONL session surface: `/new [session-id]` starts a new durable session, `/session <session-id>` switches to an existing durable session, `/sessions` lists durable sessions, `/tree` shows the durable session tree and active leaf, `/branch <entry-id>` selects an existing branch leaf, `/branch <message-id> <prompt>` continues from a parent message in a new branch, `/fork <entry-id> [session-id]` forks from a tree entry into a new durable session, and `/clone [session-id]` clones the current durable session into a fresh one. `/compact` summarizes older session history into a durable compaction boundary event, keeping the session durable while reducing replay context. `/session` with no argument opens a searchable picker of sessions previously opened in the current project (selecting one attaches to it). `/resume` resumes the most recent session for this project. `/continue` resumes a blocked run that is waiting on an approval decision, re-entering the approval-blocked lifecycle.
+Session navigation stays on the durable SQLite/libSQL session surface: `/new [session-id]` starts a new durable session, `/session <session-id>` switches to an existing durable session, `/sessions` lists durable sessions, `/tree` shows the durable session tree and active leaf, `/branch <entry-id>` selects an existing branch leaf, `/branch <message-id> <prompt>` continues from a parent message in a new branch, `/fork <entry-id> [session-id]` forks from a tree entry into a new durable session, and `/clone [session-id]` clones the current durable session into a fresh one. JSONL remains an import/export/read compatibility path and is not deleted during import. `/compact` summarizes older session history into a durable compaction boundary event, keeping the session durable while reducing replay context. `/session` with no argument opens a searchable picker of sessions previously opened in the current project (selecting one attaches to it). `/resume` resumes the most recent session for this project. `/continue` resumes a blocked run that is waiting on an approval decision, re-entering the approval-blocked lifecycle.
 
 Workspace trust is controlled interactively with `/trust` (trust the current workspace for project-local resources), `/trust status` (show the current trust decision), `/trust deny` (deny project-local resources for the workspace), and `/trust reset` (clear the trust decision). Trust decisions persist in the project trust store under the Mission Control data directory. `bash.run`, `file.edit`, and `file.write` are only available when the workspace is trusted; read-only tools work regardless of trust but still enforce workspace path guards.
 
@@ -169,7 +169,7 @@ Spawning child agents:
 - Recursion is bounded. `DEFAULT_MAX_RECURSION_DEPTH=2` means a root agent (depth 0) may spawn a child (depth 1), and that child may spawn one grandchild (depth 2 is the blocked boundary). `HARD_RECURSION_CAP=10` bounds even `recursion: -1` unlimited configurations.
 - Approval tiers rank tools `read` (0), `write` (1), `exec` (2). The active `ApprovalMode` (`always-ask`, `write`, `yolo`) controls how many tiers auto-approve. Per-tool user policies (`prompt`/`deny`/`allow`) override the mode. Child `task()` sessions are forced to `yolo` mode, so the parent's `task()` approval is the authorization boundary for the whole child run.
 
-Adopted child agents run under an idle-to-parked-to-revived lifecycle (default 7 minute idle TTL) and a concurrency-bounded async job manager. Both are in-memory only; persistence is deferred.
+Adopted child agents run under an idle-to-parked-to-revived lifecycle (default 7 minute idle TTL) and a concurrency-bounded async job manager. The live managers still coordinate in memory, while the SQL task runtime mirrors visible runtime agent refs, async job handles, foreground subagent waits, and child-session relation rows into the shared local `memory.db` session store.
 
 ## Model Provider Selection
 
@@ -308,11 +308,17 @@ For release-adjacent local verification, `pnpm smoke:coding-agent-built-dist` ru
 Session storage:
 
 - `MCTRL_DATA_DIR` overrides the Mission Control data directory.
-- Without `MCTRL_DATA_DIR`, session logs use the platform application-data directory.
-- Session event logs live at `sessions/<session-id>.jsonl`.
-- JSONL logs contain durable event envelopes with stable event ids, sequence numbers, causation/correlation ids, and replay cursors.
+- Without `MCTRL_DATA_DIR`, the local session database uses the platform application-data directory.
+- New authoritative session event/replay writes use the local libSQL database at `<data-dir>/memory.db`, shared with persistent memory storage through the current schema initializer.
+- Future explicit local DB migrations can still use the migration runner and its `schema_migrations` ledger; this development-time file-to-DB transition does not preserve historical scripts for the current schema shape.
+- Runtime coordination SQL for session input delivery, Mission/Run records, context epochs, runtime agents, async jobs, and relation rows uses the same local `<data-dir>/memory.db` path as the public session projection; legacy JSON files remain compatibility import sources.
+- The append-only event ledger is `session_events`; projection tables derive session lists, transcript messages, approvals, tool calls, provider failures, and awaiting state from those events and runtime mirrors. Production `approval`, `user_input`, and foreground `subagent` waits surface through the public `memory.db` session-list/read path.
+- Legacy JSONL logs can still live at `sessions/<session-id>.jsonl` and are import/export compatibility artifacts. Import never deletes or rewrites them.
+- JSONL compatibility logs contain durable event envelopes with stable event ids, sequence numbers, causation/correlation ids, and replay cursors.
+- The SQLite/libSQL session data model, table responsibilities, indexes, legacy import operation, and export behavior are documented in [`docs/session-data-model.md`](docs/session-data-model.md).
+- Remote Turso is out of scope for session storage: there are no remote URLs, auth tokens, replica configuration, or network sync steps.
 - Use --json for transient JSON Lines rendering and --jsonl for JSON Lines rendering plus replayable session persistence.
-- Launching the interactive TUI without an explicit `--session <id>` creates no session artifacts (no `sessions/<session-id>.jsonl` or lock file) until the first prompt turn; non-interactive `--json`/`--jsonl` runs and an explicit `--session <id>` still create a session eagerly.
+- Launching the interactive TUI without an explicit `--session <id>` creates no session artifacts (no SQLite session rows, `sessions/<session-id>.jsonl`, or lock file) until the first prompt turn; non-interactive `--json`/`--jsonl` runs and an explicit `--session <id>` still create a session eagerly.
 
 Workspace selection:
 
@@ -390,8 +396,8 @@ Noninteractive JSON/JSONL run states:
 
 - `mctrl run "<prompt>" --no-tui` and `--json`/`--jsonl` modes run a single prompt through the coding-agent path with the full tool set.
 - Run receipts settle as `completed`, `failed`, `interrupted`, or `blocked_on_approval`.
-- `blocked_on_approval` means the run paused for an approval decision and can be resumed with `/continue` in interactive mode or by appending an approval decision to the session log.
-- `--jsonl` persists a replayable session log; `--json` emits transient JSON Lines without persistence.
+- `blocked_on_approval` means the run paused for an approval decision and can be resumed with `/continue` in interactive mode or by recording an approval decision in the durable session.
+- `--jsonl` persists a replayable durable session; `--json` emits transient JSON Lines without persistence.
 - Noninteractive runs do not auto-approve effectful tools; they block and wait for external approval.
 
 Session export, import, compaction, deletion, and stats:
@@ -401,12 +407,12 @@ Session export, import, compaction, deletion, and stats:
 - `mctrl session list` lists sessions with lock status, event counts, message counts, and trust status.
 - `mctrl session show <id>` shows the session snapshot, approvals, tool outcomes, coding steps, and diagnostics.
 - `mctrl session replay <id> --jsonl` replays durable events and coding steps as JSON Lines.
-- `mctrl session delete <id> [--force]` deletes a session and all of its descendant subagent/child sessions. Each session's JSONL log, lock file, and index entries are removed. The command refuses to delete any session in the tree that has an active live lock unless `--force` is passed; stale and corrupt locks are cleaned up automatically.
+- `mctrl session delete <id> [--force]` deletes a session and all of its descendant subagent/child sessions. Each session's SQLite rows, compatibility JSONL log if present, lock file, and projection rows are removed. The command refuses to delete any session in the tree that has an active live lock unless `--force` is passed; stale and corrupt locks are cleaned up automatically.
 - `/compact` in interactive chat summarizes older session history into a durable compaction boundary event, reducing replay context while preserving the session tree.
 
 Desktop scope:
 
-- The desktop reads durable JSONL logs, renders timeline/graph/session projections, and shows patch/test output.
+- The desktop reads durable local session projections, renders timeline/graph/session projections, and shows patch/test output.
 - `packages/core` contains desktop command services for prompt, queue follow-up, steer, interrupt, resume, and approval decisions.
 - desktop Tauri write commands call the core desktop session command service through the Rust shell bridge and return real `eventsWritten` counts.
 - desktop Tauri credential commands save and list API-key credentials through the shared auth file, and restarted prompt/resume/approval commands reuse the session's persisted provider selection.
@@ -440,7 +446,7 @@ Authorable graph files live in `examples/abg`:
 
 The JSON shape is `id`, `entryNodeId`, `nodes`, `edges`, `rules`, and `policies`. Nodes can specify `kind`, `children`, `capabilities`, `config`, and optional model metadata with `providerID`, `modelID`, `variantID`, and fallback model options. Rules use declarative predicates only; arbitrary JavaScript expressions are rejected.
 
-The full production ABG engine remains TODO. Provider adapter calls, durable JSONL replay, safe tools, and approval gates are implemented for the coding-agent MVP. The visual graph editor remains out of scope for this MVP.
+The full production ABG engine remains TODO. Provider adapter calls, durable SQLite/libSQL replay, safe tools, and approval gates are implemented for the coding-agent MVP. The visual graph editor remains out of scope for this MVP.
 
 ## Distribution
 
@@ -547,8 +553,8 @@ Scheduler/executor split:
 Memory/event model:
 
 - `MemoryStore` and `InMemoryEventStore` live in `packages/core/src/memory`.
-- JSONL session storage appends durable protocol events and derives replay projections, graph snapshots, approval state, branch summaries, and ABG timelines.
-- Persistent memory snapshot compaction, persistent memory store, and vector index are not implemented.
+- SQLite/libSQL session storage appends durable protocol events and derives replay projections, graph snapshots, approval state, branch summaries, and ABG timelines. JSONL remains an import/export/read compatibility path and is not deleted during import.
+- Persistent memory snapshot compaction and the persistent memory store are implemented; vector index storage is not implemented.
 
 Native sidecar future role:
 
@@ -575,7 +581,7 @@ ABG concepts used in this scaffold:
 - Snapshot projections are derived from durable events for graph, approval, branch, and session views.
 - Runtime boundary separation: UI packages talk through core/protocol boundaries instead of directly owning native process behavior.
 - Native execution slot: the Rust sidecar establishes a future place for scheduler and execution work without implementing the full engine.
-- Durable replay: JSONL event logs reconstruct chat, approval, graph, diff, and command output state after restart.
+- Durable replay: the local SQLite/libSQL `session_events` ledger reconstructs chat, approval, graph, diff, and command output state after restart; JSONL remains an import/export compatibility format. Blocking input and foreground subagent waits are mirrored into the public data-dir session DB.
 - Approval-gated tools: core enforces permission decisions before file or command effects.
 
 Boundary alignment:
@@ -585,11 +591,10 @@ Boundary alignment:
 - Sidecar boundary: `native/sidecar` communicates through JSON Lines and does not import TypeScript runtime internals.
 - UI/runtime separation: CLI renderers and the desktop event log consume protocol events instead of owning runtime execution.
 
-ABG reflection in this boilerplate is intentionally bounded: names, package boundaries, event schemas, fallback behavior, extension points, durable sessions, provider turns, approval-gated tools, graph snapshots, desktop inspection, and core desktop approval services are present; the full production ABG engine is not.
+ABG reflection in this boilerplate is intentionally bounded: names, package boundaries, event schemas, fallback behavior, extension points, durable sessions, provider turns, approval-gated tools, graph snapshots, desktop inspection, persistent memory store, and core desktop approval services are present; the full production ABG engine is not.
 
 ABG runtime TODOs:
 
-- SQLite indexes over persisted logs.
 - Full cancellation propagation through task handles.
 - Compensation policy.
 - Scheduler/executor separation beyond the current bounded coordinator.
@@ -603,14 +608,13 @@ ABG runtime TODOs:
 - TODO: unrestricted file-editing tools are not implemented. `file.edit`, `file.write`, and `bash.run` are approval-gated and workspace-contained only.
 - TODO: MCP tools, web tools (glob, todowrite, webfetch), subagent orchestration via the `task` tool, and skills are implemented; ACP protocol and a real LSP stdio transport are not implemented (the `lsp` tool seam exists but a JSON-RPC language-server client is deferred).
 - TODO: visual graph editor remains out of scope.
-- TODO: persistent memory store, vector index, and database storage are not implemented.
+- TODO: vector index storage is not implemented.
 - TODO: advanced scheduler, executor, cancellation propagation, and behavior/action graph engine are not implemented.
 - TODO: full desktop terminal parity is not implemented; the desktop shell never mutates files directly.
 
 ## Next Stage TODO
 
 - Add cancellation propagation and resume semantics to the runtime.
-- Add SQLite indexing for JSONL session logs.
 - Expand feature-flagged sidecar v2 beyond task status/failure/cancellation only after command/file parity tests.
 - Add release provenance, cross-compile coverage, and signing/notarization for npm, GitHub Releases, and Tauri artifacts.
 - Keep CI free of live provider credentials; live provider smoke tests stay opt-in.

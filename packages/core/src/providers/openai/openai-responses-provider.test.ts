@@ -397,45 +397,53 @@ describe('OpenAI Responses provider adapter', () => {
         // Given
         const provider = createOpenAIResponsesProvider({
             credentialResolver: createStaticProviderCredentialResolver([credential('openai', 'sk-test-secret')]),
-            transport: transportFromEvents([], [
-                { type: 'response.created', response: { id: 'resp_reason' }, sequence_number: 0 },
-                {
-                    type: 'response.reasoning_summary_text.delta',
-                    response_id: 'resp_reason',
-                    sequence_number: 1,
-                    delta: 'Thinking ',
-                },
-                {
-                    type: 'response.reasoning_summary_text.delta',
-                    response_id: 'resp_reason',
-                    sequence_number: 2,
-                    delta: 'hard.',
-                },
-                {
-                    type: 'response.reasoning_summary_text.done',
-                    response_id: 'resp_reason',
-                    sequence_number: 3,
-                    text: 'Thinking hard.',
-                },
-                { type: 'response.output_text.delta', response_id: 'resp_reason', sequence_number: 4, delta: 'Answer' },
-                {
-                    type: 'response.completed',
-                    sequence_number: 5,
-                    response: {
-                        id: 'resp_reason',
-                        status: 'completed',
-                        output: [
-                            {
-                                id: 'msg_reason',
-                                type: 'message',
-                                role: 'assistant',
-                                content: [{ type: 'output_text', text: 'Answer' }],
-                            },
-                        ],
-                        usage: { input_tokens: 3, output_tokens: 2, total_tokens: 5 },
+            transport: transportFromEvents(
+                [],
+                [
+                    { type: 'response.created', response: { id: 'resp_reason' }, sequence_number: 0 },
+                    {
+                        type: 'response.reasoning_summary_text.delta',
+                        response_id: 'resp_reason',
+                        sequence_number: 1,
+                        delta: 'Thinking ',
                     },
-                },
-            ]),
+                    {
+                        type: 'response.reasoning_summary_text.delta',
+                        response_id: 'resp_reason',
+                        sequence_number: 2,
+                        delta: 'hard.',
+                    },
+                    {
+                        type: 'response.reasoning_summary_text.done',
+                        response_id: 'resp_reason',
+                        sequence_number: 3,
+                        text: 'Thinking hard.',
+                    },
+                    {
+                        type: 'response.output_text.delta',
+                        response_id: 'resp_reason',
+                        sequence_number: 4,
+                        delta: 'Answer',
+                    },
+                    {
+                        type: 'response.completed',
+                        sequence_number: 5,
+                        response: {
+                            id: 'resp_reason',
+                            status: 'completed',
+                            output: [
+                                {
+                                    id: 'msg_reason',
+                                    type: 'message',
+                                    role: 'assistant',
+                                    content: [{ type: 'output_text', text: 'Answer' }],
+                                },
+                            ],
+                            usage: { input_tokens: 3, output_tokens: 2, total_tokens: 5 },
+                        },
+                    },
+                ],
+            ),
         });
 
         // When
@@ -463,36 +471,39 @@ describe('OpenAI Responses provider adapter', () => {
         // Given — encrypted/absent reasoning: .done with no text
         const provider = createOpenAIResponsesProvider({
             credentialResolver: createStaticProviderCredentialResolver([credential('openai', 'sk-test-secret')]),
-            transport: transportFromEvents([], [
-                { type: 'response.created', response: { id: 'resp_enc' }, sequence_number: 0 },
-                {
-                    type: 'response.reasoning_summary_text.delta',
-                    response_id: 'resp_enc',
-                    sequence_number: 1,
-                    delta: 'partial',
-                },
-                {
-                    type: 'response.reasoning_summary_text.done',
-                    response_id: 'resp_enc',
-                    sequence_number: 2,
-                },
-                {
-                    type: 'response.completed',
-                    sequence_number: 3,
-                    response: {
-                        id: 'resp_enc',
-                        status: 'completed',
-                        output: [
-                            {
-                                id: 'msg_enc',
-                                type: 'message',
-                                role: 'assistant',
-                                content: [{ type: 'output_text', text: 'visible' }],
-                            },
-                        ],
+            transport: transportFromEvents(
+                [],
+                [
+                    { type: 'response.created', response: { id: 'resp_enc' }, sequence_number: 0 },
+                    {
+                        type: 'response.reasoning_summary_text.delta',
+                        response_id: 'resp_enc',
+                        sequence_number: 1,
+                        delta: 'partial',
                     },
-                },
-            ]),
+                    {
+                        type: 'response.reasoning_summary_text.done',
+                        response_id: 'resp_enc',
+                        sequence_number: 2,
+                    },
+                    {
+                        type: 'response.completed',
+                        sequence_number: 3,
+                        response: {
+                            id: 'resp_enc',
+                            status: 'completed',
+                            output: [
+                                {
+                                    id: 'msg_enc',
+                                    type: 'message',
+                                    role: 'assistant',
+                                    content: [{ type: 'output_text', text: 'visible' }],
+                                },
+                            ],
+                        },
+                    },
+                ],
+            ),
         });
 
         // When
@@ -506,7 +517,8 @@ describe('OpenAI Responses provider adapter', () => {
         expect(completed).toMatchObject({ message: { content: 'visible' } });
     });
 
-    it('sends tool definitions and function call outputs for Responses continuation', async () => {        // Given
+    it('sends tool definitions and function call outputs for Responses continuation', async () => {
+        // Given
         const requests: OpenAIResponsesTransportRequest[] = [];
         const provider = createOpenAIResponsesProvider({
             credentialResolver: createStaticProviderCredentialResolver([credential('openai', 'sk-test-secret')]),

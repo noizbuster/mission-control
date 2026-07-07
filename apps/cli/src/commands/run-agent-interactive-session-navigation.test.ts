@@ -3,7 +3,6 @@ import {
     ProjectTrustStore,
     type ProviderAdapter,
     type ProviderTurnRequest,
-    projectJsonlSessionReplayPrefix,
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -14,8 +13,8 @@ import {
     createEmptyAuthStore,
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
-import { writeSessionEvents } from './session-test-support.js';
-import { appendFile, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readStoredSessionProjection, writeSessionEvents } from './session-test-support.js';
+import { appendFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -110,10 +109,10 @@ describe('runAgent interactive session navigation repairs', () => {
             provider: createDeterministicProvider([]),
         });
 
-        const cloneProjection = projectJsonlSessionReplayPrefix({
+        const cloneProjection = await readStoredSessionProjection({
+            dataDir,
             sessionId: 'session_navigation_blocked_clone',
-            contents: await readFile(join(dataDir, 'sessions', 'session_navigation_blocked_clone.jsonl'), 'utf8'),
-        }).projection;
+        });
 
         expect(output).toContain('Cloned session: session_navigation_blocked_clone');
         expect(cloneProjection.events.map((event) => event.type)).toEqual(
@@ -158,6 +157,7 @@ describe('runAgent interactive session navigation repairs', () => {
             chatOutput: chatOutput.output,
             provider: captureProvider(requests),
             workspaceRoot,
+            plainPromptGraph: 'coding-agent',
         });
 
         expect(requests).toHaveLength(3);

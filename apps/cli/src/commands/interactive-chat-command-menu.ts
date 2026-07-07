@@ -481,4 +481,3 @@ function getWindowStartIndex(selectedIndex: number, totalCount: number, visibleL
     const halfWindow = Math.floor(visibleLimit / 2);
     return Math.min(Math.max(selectedIndex - halfWindow, 0), totalCount - visibleLimit);
 }
-

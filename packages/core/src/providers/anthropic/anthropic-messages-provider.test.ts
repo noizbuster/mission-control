@@ -98,34 +98,41 @@ describe('Anthropic Messages provider adapter', () => {
             credentialResolver: createStaticProviderCredentialResolver([
                 anthropicCredential('anthropic', 'sk-ant-test-secret'),
             ]),
-            transport: transportFromEvents([], [
-                {
-                    type: 'message_start',
-                    message: { id: 'msg_thinking', type: 'message', role: 'assistant', content: [] },
-                },
-                {
-                    type: 'content_block_start',
-                    index: 0,
-                    content_block: { type: 'thinking', thinking: '' },
-                },
-                { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Let me ' } },
-                { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'reason.' } },
-                { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'cryptsig' } },
-                { type: 'content_block_stop', index: 0 },
-                {
-                    type: 'content_block_start',
-                    index: 1,
-                    content_block: { type: 'text', text: '' },
-                },
-                { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Answer' } },
-                { type: 'content_block_stop', index: 1 },
-                {
-                    type: 'message_delta',
-                    delta: { stop_reason: 'end_turn' },
-                    usage: { output_tokens: 5 },
-                },
-                { type: 'message_stop' },
-            ]),
+            transport: transportFromEvents(
+                [],
+                [
+                    {
+                        type: 'message_start',
+                        message: { id: 'msg_thinking', type: 'message', role: 'assistant', content: [] },
+                    },
+                    {
+                        type: 'content_block_start',
+                        index: 0,
+                        content_block: { type: 'thinking', thinking: '' },
+                    },
+                    { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Let me ' } },
+                    { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'reason.' } },
+                    {
+                        type: 'content_block_delta',
+                        index: 0,
+                        delta: { type: 'signature_delta', signature: 'cryptsig' },
+                    },
+                    { type: 'content_block_stop', index: 0 },
+                    {
+                        type: 'content_block_start',
+                        index: 1,
+                        content_block: { type: 'text', text: '' },
+                    },
+                    { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Answer' } },
+                    { type: 'content_block_stop', index: 1 },
+                    {
+                        type: 'message_delta',
+                        delta: { stop_reason: 'end_turn' },
+                        usage: { output_tokens: 5 },
+                    },
+                    { type: 'message_stop' },
+                ],
+            ),
         });
 
         // When
@@ -159,25 +166,28 @@ describe('Anthropic Messages provider adapter', () => {
             credentialResolver: createStaticProviderCredentialResolver([
                 anthropicCredential('anthropic', 'sk-ant-test-secret'),
             ]),
-            transport: transportFromEvents([], [
-                {
-                    type: 'message_start',
-                    message: { id: 'msg_plain', type: 'message', role: 'assistant', content: [] },
-                },
-                {
-                    type: 'content_block_start',
-                    index: 0,
-                    content_block: { type: 'text', text: '' },
-                },
-                { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'hi' } },
-                { type: 'content_block_stop', index: 0 },
-                {
-                    type: 'message_delta',
-                    delta: { stop_reason: 'end_turn' },
-                    usage: { output_tokens: 1 },
-                },
-                { type: 'message_stop' },
-            ]),
+            transport: transportFromEvents(
+                [],
+                [
+                    {
+                        type: 'message_start',
+                        message: { id: 'msg_plain', type: 'message', role: 'assistant', content: [] },
+                    },
+                    {
+                        type: 'content_block_start',
+                        index: 0,
+                        content_block: { type: 'text', text: '' },
+                    },
+                    { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'hi' } },
+                    { type: 'content_block_stop', index: 0 },
+                    {
+                        type: 'message_delta',
+                        delta: { stop_reason: 'end_turn' },
+                        usage: { output_tokens: 1 },
+                    },
+                    { type: 'message_stop' },
+                ],
+            ),
         });
 
         // When

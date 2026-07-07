@@ -1,8 +1,6 @@
 import type { CodingReplayStep } from '@mission-control/core';
-import { projectJsonlSessionReplayPrefix, resolveMissionControlDataDir } from '@mission-control/core';
+import { readLocalSessionReplay } from '@mission-control/core';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 
 /**
  * Minimal structural input for {@link reconstructSessionTranscript}. Narrowed from
@@ -105,19 +103,18 @@ export function reconstructSessionTranscript(input: SessionTranscriptInput): str
 }
 
 /**
- * Read a session's JSONL log from the mission-control data dir and reconstruct its
+ * Read a session's durable replay from the mission-control data dir and reconstruct its
  * transcript text. Returns an empty string when the log is missing, empty, or
  * corrupt so callers can resume unconditionally without a try/catch.
- *
- * Uses the same `resolveMissionControlDataDir()` + `projectJsonlSessionReplayPrefix`
- * pipeline as the session-navigation controllers.
  */
 export async function loadSessionTranscript(sessionId: string): Promise<string> {
-    let contents: string;
     try {
-        contents = await readFile(join(resolveMissionControlDataDir(), 'sessions', `${sessionId}.jsonl`), 'utf8');
-    } catch {
-        return '';
+        const replay = await readLocalSessionReplay({ sessionId });
+        return replay.kind === 'found' ? reconstructSessionTranscript(replay.replay.projection) : '';
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            return '';
+        }
+        throw error;
     }
-    return reconstructSessionTranscript(projectJsonlSessionReplayPrefix({ sessionId, contents }).projection);
 }

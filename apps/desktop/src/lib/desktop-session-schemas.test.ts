@@ -1,3 +1,4 @@
+import type { SessionStatus } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import {
     DesktopSessionSnapshotSchema,
@@ -5,7 +6,58 @@ import {
     parseDesktopSessionLogPayload,
 } from './desktop-session-schemas.js';
 
+type SessionPayloadFields = {
+    readonly sessionId: string;
+    readonly status?: SessionStatus;
+    readonly statusText?: string;
+    readonly awaiting?: unknown;
+    readonly eventCount?: number;
+    readonly graphIds?: readonly string[];
+    readonly sessionTree?: unknown;
+    readonly stats?: unknown;
+};
+
+function summaryPayload(input: SessionPayloadFields) {
+    return {
+        ...sharedPayload(input),
+        fileName: `${input.sessionId}.jsonl`,
+    };
+}
+
+function snapshotPayload(input: SessionPayloadFields) {
+    return {
+        ...sharedPayload(input),
+        graphIds: input.graphIds ?? [],
+    };
+}
+
+function sharedPayload(input: SessionPayloadFields) {
+    return {
+        sessionId: input.sessionId,
+        state: 'available' as const,
+        ...(input.status === undefined ? {} : { status: input.status }),
+        ...(input.statusText === undefined ? {} : { statusText: input.statusText }),
+        ...(input.awaiting === undefined ? {} : { awaiting: input.awaiting }),
+        eventCount: input.eventCount ?? 1,
+        diagnostics: [],
+        ...(input.sessionTree === undefined ? {} : { sessionTree: input.sessionTree }),
+        ...(input.stats === undefined ? {} : { stats: input.stats }),
+    };
+}
+
 describe('desktop session schemas', () => {
+    it('characterizes legacy lifecycle statuses on summaries and snapshots', () => {
+        for (const status of ['idle', 'running', 'stopped', 'failed'] as const) {
+            const fields = {
+                sessionId: `session_${status}`,
+                status,
+            };
+
+            expect(DesktopSessionSummarySchema.parse(summaryPayload(fields))).toEqual(summaryPayload(fields));
+            expect(DesktopSessionSnapshotSchema.parse(snapshotPayload(fields))).toEqual(snapshotPayload(fields));
+        }
+    });
+
     it('accepts coding-agent session tree and stats metadata on summaries and snapshots', () => {
         const sessionTree = {
             sessionName: 'Coding parity session',
@@ -29,14 +81,14 @@ describe('desktop session schemas', () => {
 
         expect(
             DesktopSessionSummarySchema.parse({
+                ...summaryPayload({
+                    sessionId: 'session_summary',
+                    eventCount: 12,
+                    sessionTree,
+                    stats,
+                }),
                 sessionId: 'session_summary',
-                fileName: 'session_summary.jsonl',
-                state: 'available',
-                eventCount: 12,
                 lockState: 'live',
-                diagnostics: [],
-                sessionTree,
-                stats,
             }),
         ).toMatchObject({
             sessionTree,
@@ -44,46 +96,111 @@ describe('desktop session schemas', () => {
         });
 
         expect(
-            DesktopSessionSnapshotSchema.parse({
-                sessionId: 'session_summary',
-                state: 'available',
-                eventCount: 12,
-                graphIds: ['coding-agent'],
-                diagnostics: [],
-                sessionTree,
-                stats,
-            }),
+            DesktopSessionSnapshotSchema.parse(
+                snapshotPayload({
+                    sessionId: 'session_summary',
+                    eventCount: 12,
+                    graphIds: ['coding-agent'],
+                    sessionTree,
+                    stats,
+                }),
+            ),
         ).toMatchObject({
             sessionTree,
             stats,
         });
     });
 
+    it('parses imported legacy sessions and SQLite-native awaiting sessions without loose payloads', () => {
+        const awaitingCases = [
+            {
+                reason: 'approval',
+                source: { approvalId: 'approval_patch', runId: 'run_1', toolCallId: 'patch_call' },
+            },
+            {
+                reason: 'user_input',
+                source: { runId: 'run_waiting' },
+            },
+            {
+                reason: 'subagent',
+                source: { jobId: 'job_child', childSessionId: 'session_child' },
+            },
+        ] as const;
+
+        expect(DesktopSessionSummarySchema.parse(summaryPayload({ sessionId: 'session_legacy' }))).toEqual(
+            summaryPayload({ sessionId: 'session_legacy' }),
+        );
+        for (const awaiting of awaitingCases) {
+            const fields = {
+                sessionId: `session_awaiting_${awaiting.reason}`,
+                status: 'awaiting',
+                statusText: `awaiting ${awaiting.reason}`,
+                awaiting,
+            } as const;
+
+            expect(DesktopSessionSummarySchema.parse(summaryPayload(fields))).toEqual(summaryPayload(fields));
+            expect(DesktopSessionSnapshotSchema.parse(snapshotPayload(fields))).toEqual(snapshotPayload(fields));
+        }
+    });
+
+    it('rejects malformed awaiting reason/source pairs deterministically', () => {
+        const malformedAwaitingDetails = [
+            {
+                reason: 'approval',
+                source: {
+                    runId: 'run_without_approval',
+                },
+            },
+            {
+                reason: 'user_input',
+                source: {
+                    approvalId: 'approval_wrong',
+                },
+            },
+            {
+                reason: 'subagent',
+                source: {
+                    runId: 'run_without_child',
+                },
+            },
+        ] as const;
+
+        for (const awaiting of malformedAwaitingDetails) {
+            expect(
+                DesktopSessionSummarySchema.safeParse(
+                    summaryPayload({
+                        sessionId: `session_invalid_${awaiting.reason}`,
+                        status: 'awaiting',
+                        awaiting,
+                    }),
+                ).success,
+            ).toBe(false);
+        }
+        expect(
+            DesktopSessionSnapshotSchema.safeParse(
+                snapshotPayload({
+                    sessionId: 'session_invalid_status',
+                    status: 'running',
+                    awaiting: { reason: 'user_input', source: { runId: 'run_wrong' } },
+                }),
+            ).success,
+        ).toBe(false);
+    });
+
     it('rejects unknown workspace trust states in desktop session payloads', () => {
-        const summary = {
-            sessionId: 'session_invalid_trust',
-            fileName: 'session_invalid_trust.jsonl',
-            state: 'available',
-            eventCount: 1,
-            diagnostics: [],
-            sessionTree: {
-                workspaceTrust: 'maybe',
-                entryCount: 1,
-                branchCount: 1,
-            },
+        const sessionTree = {
+            workspaceTrust: 'maybe',
+            entryCount: 1,
+            branchCount: 1,
         };
-        const snapshot = {
+        const summary = summaryPayload({
             sessionId: 'session_invalid_trust',
-            state: 'available',
-            eventCount: 1,
-            graphIds: [],
-            diagnostics: [],
-            sessionTree: {
-                workspaceTrust: 'maybe',
-                entryCount: 1,
-                branchCount: 1,
-            },
-        };
+            sessionTree,
+        });
+        const snapshot = snapshotPayload({
+            sessionId: 'session_invalid_trust',
+            sessionTree,
+        });
 
         expect(DesktopSessionSummarySchema.safeParse(summary).success).toBe(false);
         expect(DesktopSessionSnapshotSchema.safeParse(snapshot).success).toBe(false);

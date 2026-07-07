@@ -70,12 +70,7 @@ describe('runner final-wave verdict aggregation — graph wiring', () => {
     });
 
     it('reads all four critic outputs as its verdict sources', () => {
-        expect(configArray(finalWave, 'verdictSources')).toEqual([
-            'final.f1',
-            'final.f2',
-            'final.f3',
-            'final.f4',
-        ]);
+        expect(configArray(finalWave, 'verdictSources')).toEqual(['final.f1', 'final.f2', 'final.f3', 'final.f4']);
     });
 
     it('routes final-verification-wave to complete only on APPROVE and fix-loop on REJECT', () => {
@@ -194,9 +189,7 @@ describe('runner final-wave — graph loop bound still protects against bugs', (
     });
 
     it('the fix-loop -> next-wave retry edge plus blocked-escalation keeps the loop finite', () => {
-        const fixLoopEdges = graph.edges.filter(
-            (edge) => edge.source === 'fix-loop' && edge.source !== edge.target,
-        );
+        const fixLoopEdges = graph.edges.filter((edge) => edge.source === 'fix-loop' && edge.source !== edge.target);
         expect(fixLoopEdges).toHaveLength(2);
 
         const conditions = new Set(fixLoopEdges.map((edge) => edge.condition));

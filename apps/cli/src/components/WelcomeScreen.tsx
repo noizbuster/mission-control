@@ -1,8 +1,14 @@
 /** @jsxImportSource @opentui/react */
 import { TextAttributes } from '@opentui/core';
 import type * as React from 'react';
-import type { WelcomeData, WelcomeLspServer, WelcomeMcpServer, WelcomeSession, WelcomeSkill } from '../commands/welcome-data.js';
 import { padEndToDisplayWidth, terminalDisplayWidth, truncateTerminalText } from '../commands/terminal-text.js';
+import type {
+    WelcomeData,
+    WelcomeLspServer,
+    WelcomeMcpServer,
+    WelcomeSession,
+    WelcomeSkill,
+} from '../commands/welcome-data.js';
 
 export type WelcomeScreenProps = {
     readonly data: WelcomeData;
@@ -192,11 +198,7 @@ export function WelcomeScreen({ data, projectLabel, gitBranch, isWorktree }: Wel
             )}
 
             <SectionHeader title="LSP SERVERS" />
-            {lspGlyphs.length === 0 ? (
-                <EmptyHint text="no servers in catalog" />
-            ) : (
-                <LspGlyphRow glyphs={lspGlyphs} />
-            )}
+            {lspGlyphs.length === 0 ? <EmptyHint text="no servers in catalog" /> : <LspGlyphRow glyphs={lspGlyphs} />}
 
             <SectionHeader title="RECENT SESSIONS" />
             {data.recentSessions.length === 0 ? (

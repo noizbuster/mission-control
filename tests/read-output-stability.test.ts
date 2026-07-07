@@ -1,6 +1,5 @@
+import { registerReadOnlyRepoTools, ToolRegistry } from '@mission-control/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { registerReadOnlyRepoTools } from '@mission-control/core';
-import { ToolRegistry } from '@mission-control/core';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

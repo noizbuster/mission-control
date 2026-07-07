@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ClipboardService } from './clipboard-service.js';
-import { copy } from './selection-copy.js';
 import type { FocusableSelectionTarget, SelectionCopyRenderer, Toast } from './selection-copy.js';
+import { copy } from './selection-copy.js';
 
-function makeToast(): Toast & { messages: Array<[string, 'info' | 'success' | 'warning' | 'error']>; errors: unknown[] } {
+function makeToast(): Toast & {
+    messages: Array<[string, 'info' | 'success' | 'warning' | 'error']>;
+    errors: unknown[];
+} {
     const messages: Array<[string, 'info' | 'success' | 'warning' | 'error']> = [];
     const errors: unknown[] = [];
     return {

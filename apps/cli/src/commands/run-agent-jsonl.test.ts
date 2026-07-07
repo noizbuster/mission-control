@@ -1,4 +1,8 @@
-import { missionControlDataDirEnvKey, projectJsonlSessionReplayPrefix } from '@mission-control/core';
+import {
+    createDeterministicProvider,
+    missionControlDataDirEnvKey,
+    readLocalSessionReplay,
+} from '@mission-control/core';
 import { AgentEventSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
@@ -18,12 +22,12 @@ describe('runAgent JSONL session automation', () => {
 
         const output = await runAgent(
             parseArgs(['run', 'summarize this repository', '--session', sessionId, '--jsonl']),
+            {
+                provider: createDeterministicProvider([{ kind: 'response_completed', content: 'summarized' }]),
+            },
         );
         const events = parseEventLines(output);
-        const replay = projectJsonlSessionReplayPrefix({
-            sessionId,
-            contents: await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8'),
-        }).projection;
+        const replay = await readReplay(sessionId);
 
         expect(events.every((event) => event.sessionId === sessionId)).toBe(true);
         expect(events.map((event) => event.type)).toEqual(
@@ -43,6 +47,9 @@ describe('runAgent JSONL session automation', () => {
             expect.arrayContaining(events.map((event) => event.type)),
         );
         expect(replay.snapshot.sessionId).toBe(sessionId);
+        await expect(readFile(legacySessionPath(dataDir, sessionId), 'utf8')).rejects.toMatchObject({
+            code: 'ENOENT',
+        });
         await rm(dataDir, { recursive: true, force: true });
     });
 
@@ -63,10 +70,7 @@ describe('runAgent JSONL session automation', () => {
             ]),
         );
         const events = parseEventLines(output);
-        const replay = projectJsonlSessionReplayPrefix({
-            sessionId,
-            contents: await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8'),
-        }).projection;
+        const replay = await readReplay(sessionId);
 
         expect(events.map((event) => event.type)).toEqual(expect.arrayContaining(['graph.started', 'graph.completed']));
         expect(
@@ -77,6 +81,9 @@ describe('runAgent JSONL session automation', () => {
         expect(replay.graphSnapshots).toEqual(
             expect.arrayContaining([expect.objectContaining({ graphId: 'research-answer', status: 'completed' })]),
         );
+        await expect(readFile(legacySessionPath(dataDir, sessionId), 'utf8')).rejects.toMatchObject({
+            code: 'ENOENT',
+        });
         await rm(dataDir, { recursive: true, force: true });
     });
 });
@@ -92,6 +99,18 @@ function parseEventLines(output: string) {
         .trim()
         .split('\n')
         .map((line) => AgentEventSchema.parse(JSON.parse(line)));
+}
+
+async function readReplay(sessionId: string) {
+    const result = await readLocalSessionReplay({ sessionId });
+    if (result.kind !== 'found') {
+        throw new Error(`expected replay for ${sessionId}`);
+    }
+    return result.replay.projection;
+}
+
+function legacySessionPath(dataDir: string, sessionId: string): string {
+    return join(dataDir, 'sessions', `${sessionId}.jsonl`);
 }
 
 function parseJsonRecords(output: string): readonly Record<string, unknown>[] {

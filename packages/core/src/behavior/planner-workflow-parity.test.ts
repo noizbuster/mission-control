@@ -168,9 +168,7 @@ describe('planner workflow parity: draft state before final plan', () => {
 
     it('the draft precedes review-plan which precedes the approval gate', () => {
         const graph = createPlannerWorkflowGraph();
-        const draftToReview = graph.edges.find(
-            (edge) => edge.source === 'draft-plan' && edge.target === 'review-plan',
-        );
+        const draftToReview = graph.edges.find((edge) => edge.source === 'draft-plan' && edge.target === 'review-plan');
         const reviewToGate = graph.edges.find(
             (edge) => edge.source === 'review-plan' && edge.target === 'approval-gate',
         );
@@ -198,9 +196,7 @@ describe('planner workflow parity: approval gate blocks the final plan write', (
 
     it('approval-gate self-loops on plan-awaiting-approval (the wait state)', () => {
         const graph = createPlannerWorkflowGraph();
-        const selfLoop = graph.edges.find(
-            (edge) => edge.source === 'approval-gate' && edge.target === 'approval-gate',
-        );
+        const selfLoop = graph.edges.find((edge) => edge.source === 'approval-gate' && edge.target === 'approval-gate');
         expect(selfLoop?.condition).toBe('plan-awaiting-approval');
         const rule = graph.rules.find((candidate) => candidate.id === 'plan-awaiting-approval');
         expect(rule?.when).toEqual({ kind: 'blackboard.value.equals', key: 'plan.ready', value: false });
@@ -297,9 +293,7 @@ describe('planner workflow parity: runtime outputKey persistence', () => {
     it('draft-plan llm-actor writes plan.drafted to the blackboard from a model turn', async () => {
         const graph = createPlannerWorkflowGraph();
         const draftPlan = findNode(graph, 'draft-plan');
-        const context = runContextWithMessages([
-            { role: 'user', content: 'draft the plan' },
-        ]);
+        const context = runContextWithMessages([{ role: 'user', content: 'draft the plan' }]);
         await collectSignals(runLlmActorNode(draftPlan, context));
         expect(context.blackboard?.get('plan.drafted')).toBe(true);
     });

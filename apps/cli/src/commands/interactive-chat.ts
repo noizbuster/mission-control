@@ -5,7 +5,7 @@ import {
     type CommandExecutionResult,
     discoverSkills,
     discoverWorkflows,
-    type JsonlSessionEventStore,
+    type LocalSessionEventStore,
     PermissionRuleStore,
     PermissionSession,
     PluginManager,
@@ -39,7 +39,6 @@ import {
     createTerminalChatOutput,
     maxChatPromptLength,
 } from './interactive-chat-io.js';
-import type { QuestionBatchEntry, QuestionOption } from './question-types.js';
 import {
     areModelProviderSelectionsEqual,
     ChatInputPump,
@@ -54,8 +53,14 @@ import { createSessionNavigationController } from './interactive-chat-session-na
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import {
+    getOrCreateMissionControlServices,
+    isOmoRootNotFoundError,
+    type MissionControlServices,
+} from './mission-control-services.js';
 import type { ModelsOverlayRoleRow } from './models-overlay-state.js';
 import { loadPricingTable } from './pricing-table-store.js';
+import type { QuestionBatchEntry, QuestionOption } from './question-types.js';
 import type { EnsuredSession } from './run-agent-session.js';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
 import { loadSessionTranscript } from './session-transcript-reconstruction.js';
@@ -109,8 +114,8 @@ export type InteractiveChatOptions = {
     readonly workspaceRoot?: string;
     readonly emitEvent?: (event: AgentEvent) => void;
     readonly observeStoredEvent?: (event: AgentEvent) => void;
-    readonly sessionStore?: JsonlSessionEventStore;
-    readonly switchSessionStore?: (sessionId: string) => Promise<JsonlSessionEventStore>;
+    readonly sessionStore?: LocalSessionEventStore;
+    readonly switchSessionStore?: (sessionId: string) => Promise<LocalSessionEventStore>;
     readonly ensureSession?: () => Promise<EnsuredSession>;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly persistModelProviderSelection?: (selection: ModelProviderSelection) => Promise<void>;
@@ -123,7 +128,10 @@ export type InteractiveChatOptions = {
     readonly resolveSdkModel?: SdkModelResolver;
     readonly authStore?: ProviderAuthStore;
     readonly profileName?: string;
+    readonly plainPromptGraph?: PlainPromptGraph;
 };
+
+export type PlainPromptGraph = 'default-workflow' | 'coding-agent';
 
 export async function runInteractiveChatSession(
     runtime: AgentRuntime,
@@ -140,6 +148,7 @@ export async function runInteractiveChatSession(
     const initialHistoryEntries = useTui ? await loadInputHistoryEntries() : [];
     const initialAbgOverlayPrefs = useTui ? await loadAbgOverlayPrefs() : undefined;
     const pricingTableForSession = await loadPricingTable();
+    const missionControlServices = await resolveMissionControlServices(options.workspaceRoot);
     let tuiBridgeRef: OpenTuiChatBridge | undefined;
     const abgOverlayController = useTui
         ? createAbgOverlayController(createAbgOverlayStore(), {
@@ -267,7 +276,7 @@ export async function runInteractiveChatSession(
     // counter starts at 0 on every process restart, and the first new prompt collides with a
     // prior prompt.promoted event → SessionAdmissionError('input_conflict').
     const seedTurnCounterFromStore = async (
-        store: JsonlSessionEventStore | undefined,
+        store: LocalSessionEventStore | undefined,
         sessionId: string | undefined,
     ): Promise<void> => {
         if (store === undefined || sessionId === undefined) {
@@ -598,6 +607,7 @@ export async function runInteractiveChatSession(
                     skills: sessionSkills,
                     workflowRegistry: sessionWorkflowRegistry,
                     onWorkflowStarted,
+                    ...(options.plainPromptGraph !== undefined ? { plainPromptGraph: options.plainPromptGraph } : {}),
                     sessionDisplayName: sessionDisplayNameController,
                     onSessionRenamed: applySessionRenameEffects,
                     undoRedo: undoRedoController,
@@ -609,6 +619,9 @@ export async function runInteractiveChatSession(
                     ...(currentApprovalLevel !== undefined ? { approvalLevel: currentApprovalLevel } : {}),
                     permissionSession: sharedPermissionSession,
                     ...(options.profileName !== undefined ? { profileName: options.profileName } : {}),
+                    ...(missionControlServices !== undefined
+                        ? { taskRuntimeServices: missionControlServices.getTaskRuntimeServices() }
+                        : {}),
                     ...(tuiBridge !== undefined
                         ? {
                               onUsage: (inputTokens: number | undefined) => tuiBridge.setContextTokensUsed(inputTokens),
@@ -695,8 +708,7 @@ export async function runInteractiveChatSession(
                                   }));
                                   const answers = await tuiBridge.showQuestionBatch(entries);
                                   const lines = requests.map(
-                                      (request, i) =>
-                                          `  ${request.header ?? request.question}: ${answers[i] ?? ''}`,
+                                      (request, i) => `  ${request.header ?? request.question}: ${answers[i] ?? ''}`,
                                   );
                                   const count = requests.length;
                                   chatOutput.write(
@@ -761,8 +773,23 @@ export async function runInteractiveChatSession(
         abgOverlayController?.reset();
         chatInput.close();
         resetTerminalTitle();
+        await missionControlServices?.dispose();
         await closeTreeSitterClient();
     }
 
     return chatOutput.getOutput?.() ?? '';
+}
+
+async function resolveMissionControlServices(
+    workspaceRoot: string | undefined,
+): Promise<MissionControlServices | undefined> {
+    if (workspaceRoot === undefined) return undefined;
+    try {
+        return await getOrCreateMissionControlServices(workspaceRoot);
+    } catch (error: unknown) {
+        if (isOmoRootNotFoundError(error)) {
+            return undefined;
+        }
+        throw error;
+    }
 }

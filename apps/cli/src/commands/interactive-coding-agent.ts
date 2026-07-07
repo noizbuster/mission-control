@@ -6,11 +6,10 @@ import {
     createCodingAgentNodeRegistry,
     createGraphTurnRunner,
     extractUsageFromModelCallCompleted,
-    type JsonlSessionEventStore,
+    type LocalSessionEventStore,
     type LspClient,
     McpConnectionManager,
     type PricingTable,
-    type ProjectInstructionResource,
     ProjectTrustStore,
     type ProviderAdapter,
     type ProviderAuthStore,
@@ -19,7 +18,7 @@ import {
     type SdkModelResolver,
     SessionRunOwner,
     type SessionRunOwnerReceipt,
-    type SystemPromptEnvironment,
+    type TaskToolRuntimeServices,
     type ToolInvocationSettlement,
     type WorkflowRegistry,
 } from '@mission-control/core';
@@ -48,6 +47,10 @@ import type { ChatOutput } from './interactive-chat-io.js';
 import { parseFileWriteOutput } from './interactive-coding-file-write-preview.js';
 import { parseFileEditOutput, parseFilePatchOutput, renderToolPreview } from './interactive-coding-tool-preview.js';
 import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools.js';
+import {
+    type InteractiveGraphSignalObserver,
+    notifyInteractiveGraphSignalObservers,
+} from './interactive-graph-signal-observers.js';
 import { buildCodingAgentGraphForSelection, resolveGraphSdkModel } from './run-agent-graph-prompt.js';
 
 export type ActiveCodingAgentTurn = {
@@ -64,7 +67,7 @@ export type CodingAgentTurnOptions = {
     readonly prompt: string;
     readonly sessionId: string;
     readonly turnId: string;
-    readonly store: JsonlSessionEventStore;
+    readonly store: LocalSessionEventStore;
     readonly provider: ProviderAdapter;
     readonly modelProviderSelection: ModelProviderSelection;
     readonly workspaceRoot: string;
@@ -117,6 +120,7 @@ export type CodingAgentTurnOptions = {
     readonly workflowRegistry?: WorkflowRegistry;
     readonly onWorkflowStarted?: (spec: WorkflowSpec, prompt: string) => void;
     readonly profileName?: string;
+    readonly taskRuntimeServices?: TaskToolRuntimeServices;
 };
 
 export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Promise<ActiveCodingAgentTurn> {
@@ -218,6 +222,7 @@ async function createInteractiveRunOwner(
         ...(options.workflowRegistry !== undefined ? { workflowRegistry: options.workflowRegistry } : {}),
         ...(options.onWorkflowStarted !== undefined ? { onWorkflowStarted: options.onWorkflowStarted } : {}),
         ...(options.profileName !== undefined ? { profileName: options.profileName } : {}),
+        ...(options.taskRuntimeServices !== undefined ? { services: options.taskRuntimeServices } : {}),
     };
     const { registry: toolRegistry, mcpConnectionManager } = await createInteractiveToolRegistry(
         toolOptions,
@@ -232,7 +237,7 @@ async function createInteractiveRunOwner(
         options.abgOverlayController !== undefined
             ? wireAbgOverlay(options.abgOverlayController, graphSpec)
             : undefined;
-    const extraObservers: ReadonlyArray<(signal: AbgSignal) => void> =
+    const extraObservers: readonly InteractiveGraphSignalObserver[] =
         overlayWiring !== undefined ? [overlayWiring.observer] : [];
     const onSignal = interactiveGraphStreamSignal(options.output, renderState, options.workspaceRoot, extraObservers);
     // Late-bind the graph handlers onto the child-callbacks holder. The task tool closure does
@@ -505,97 +510,109 @@ export function interactiveGraphStreamSignal(
     output: ChatOutput,
     state: ProviderRenderState,
     workspaceRoot: string,
-    extraObservers: ReadonlyArray<(signal: AbgSignal) => void> = [],
+    extraObservers: readonly InteractiveGraphSignalObserver[] = [],
 ): (signal: AbgSignal) => Promise<void> {
     return async (signal) => {
+        let renderError: unknown;
         try {
-            if (signal.type === 'started') {
-                if (state.streamingText) {
-                    output.write('\n');
-                    state.streamingText = false;
-                }
-                if (state.streamingThinking) {
-                    output.write('\n');
-                    state.streamingThinking = false;
-                }
-                output.write(`▸ ${signal.nodeId}\n`);
-                output.setAgentStatus?.(`${formatNodeLabel(signal.nodeId)}...`);
-                return;
+            const renderResult = renderInteractiveGraphSignal(output, state, workspaceRoot, signal);
+            if (renderResult !== undefined) {
+                await renderResult;
             }
-            if (signal.type === 'failure') {
-                const errorMsg = extractSignalError(signal.error);
-                output.clearAgentStatus?.();
-                if (state.streamingText || state.streamingThinking) {
-                    output.write('\n');
-                    state.streamingText = false;
-                    state.streamingThinking = false;
-                }
-                output.write(`✗ ${signal.nodeId}: ${errorMsg}\n`);
-                return;
-            }
-            if (signal.type === 'emit' && signal.event.type === 'llm.turn.started') {
-                output.setAgentStatus?.('Thinking...');
-                return;
-            }
-            if (signal.type === 'emit' && signal.event.type === 'llm.reasoning.delta') {
-                if (output.isShowThinking?.() !== false) {
-                    const reasoningDelta = readReasoningDeltaFromSignal(signal);
-                    if (reasoningDelta !== undefined) {
-                        if (!state.streamingThinking) {
-                            if (state.streamingText) {
-                                output.write('\n');
-                                state.streamingText = false;
-                            }
-                            output.write('Thinking: ');
-                            state.streamingThinking = true;
-                        }
-                        output.write(reasoningDelta);
-                    } else {
-                        output.setAgentStatus?.('Thinking...');
-                    }
-                }
-                return;
-            }
-            const delta = readDeltaFromSignal(signal);
-            if (delta !== undefined) {
-                output.clearAgentStatus?.();
-                if (state.streamingThinking) {
-                    output.write('\n');
-                    state.streamingThinking = false;
-                }
-                if (!state.streamingText) {
-                    output.write('Assistant: ');
-                    state.streamingText = true;
-                }
-                output.write(delta);
-                return;
-            }
-            if (signal.type === 'emit' && signal.event.type === 'tool.started') {
-                const toolName = readStringField(signal.event.payload, 'toolName') ?? 'tool';
-                output.setAgentStatus?.(`Running ${toolName}...`);
-                return;
-            }
-            const proposal = readToolCallProposal(signal);
-            if (proposal !== undefined) {
-                output.setAgentStatus?.(`Calling ${proposal.toolName}...`);
-                if (state.streamingText) {
-                    output.write('\n');
-                    state.streamingText = false;
-                }
-                await renderToolPreview(proposal, output, workspaceRoot);
-            }
-        } finally {
-            // Observers MUST stay sync `(signal) => void`: an async wrap adds a microtask hop per signal
-            // and breaks the emit-coalesce guarantee (50ms during streaming, 16ms when idle). Non-throwing (Metis 4.1): errors logged +
-            // swallowed so a faulty observer cannot reject the awaited onSignal tap. Runs in `finally`
-            // so early returns in the render body above never skip the fan-out.
-            for (const observer of extraObservers) {
-                try {
-                    observer(signal);
-                } catch {}
-            }
+        } catch (error: unknown) {
+            renderError = error;
+        }
+
+        notifyInteractiveGraphSignalObservers(extraObservers, signal);
+
+        if (renderError !== undefined) {
+            throw renderError;
         }
     };
+}
+
+function renderInteractiveGraphSignal(
+    output: ChatOutput,
+    state: ProviderRenderState,
+    workspaceRoot: string,
+    signal: AbgSignal,
+): Promise<void> | undefined {
+    if (signal.type === 'started') {
+        if (state.streamingText) {
+            output.write('\n');
+            state.streamingText = false;
+        }
+        if (state.streamingThinking) {
+            output.write('\n');
+            state.streamingThinking = false;
+        }
+        output.write(`▸ ${signal.nodeId}\n`);
+        output.setAgentStatus?.(`${formatNodeLabel(signal.nodeId)}...`);
+        return;
+    }
+    if (signal.type === 'failure') {
+        const errorMsg = extractSignalError(signal.error);
+        output.clearAgentStatus?.();
+        if (state.streamingText || state.streamingThinking) {
+            output.write('\n');
+            state.streamingText = false;
+            state.streamingThinking = false;
+        }
+        output.write(`✗ ${signal.nodeId}: ${errorMsg}\n`);
+        return;
+    }
+    if (signal.type === 'emit' && signal.event.type === 'llm.turn.started') {
+        output.setAgentStatus?.('Thinking...');
+        return;
+    }
+    if (signal.type === 'emit' && signal.event.type === 'llm.reasoning.delta') {
+        if (output.isShowThinking?.() !== false) {
+            const reasoningDelta = readReasoningDeltaFromSignal(signal);
+            if (reasoningDelta !== undefined) {
+                if (!state.streamingThinking) {
+                    if (state.streamingText) {
+                        output.write('\n');
+                        state.streamingText = false;
+                    }
+                    output.write('Thinking: ');
+                    state.streamingThinking = true;
+                }
+                output.write(reasoningDelta);
+            } else {
+                output.setAgentStatus?.('Thinking...');
+            }
+        }
+        return;
+    }
+    const delta = readDeltaFromSignal(signal);
+    if (delta !== undefined) {
+        output.clearAgentStatus?.();
+        if (state.streamingThinking) {
+            output.write('\n');
+            state.streamingThinking = false;
+        }
+        if (!state.streamingText) {
+            output.write('Assistant: ');
+            state.streamingText = true;
+        }
+        output.write(delta);
+        return;
+    }
+    if (signal.type === 'emit' && signal.event.type === 'tool.started') {
+        const toolName = readStringField(signal.event.payload, 'toolName') ?? 'tool';
+        output.setAgentStatus?.(`Running ${toolName}...`);
+        return;
+    }
+    const proposal = readToolCallProposal(signal);
+    if (proposal !== undefined) {
+        output.setAgentStatus?.(`Calling ${proposal.toolName}...`);
+        if (state.streamingText) {
+            output.write('\n');
+            state.streamingText = false;
+        }
+        return renderToolPreview(proposal, output, workspaceRoot);
+    }
+    return undefined;
 }
 
 /**
@@ -766,12 +783,12 @@ function readToolCallProposal(signal: AbgSignal): ToolCall | undefined {
         return undefined;
     }
     const payload = signal.event.payload;
-    if (!isPlainObject(payload)) {
+    if (!isToolCallProposalPayload(payload)) {
         return undefined;
     }
-    const toolCallId = payload['toolCallId'];
-    const toolName = payload['toolName'];
-    const input = payload['input'];
+    const toolCallId = payload.toolCallId;
+    const toolName = payload.toolName;
+    const input = payload.input;
     if (typeof toolCallId !== 'string' || toolCallId.length === 0) {
         return undefined;
     }
@@ -788,6 +805,14 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isToolCallProposalPayload(value: unknown): value is {
+    readonly input: unknown;
+    readonly toolCallId: unknown;
+    readonly toolName: unknown;
+} {
+    return isPlainObject(value) && 'input' in value && 'toolCallId' in value && 'toolName' in value;
+}
+
 function readStringField(payload: unknown, field: string): string | undefined {
     if (!isPlainObject(payload)) {
         return undefined;
@@ -798,14 +823,18 @@ function readStringField(payload: unknown, field: string): string | undefined {
 
 /** Read a human-readable message off an emit payload's `error` field (string or `{ message }`). */
 function readErrorMessage(payload: unknown): string | undefined {
-    if (!isPlainObject(payload)) {
+    if (!isErrorPayload(payload)) {
         return undefined;
     }
-    const error = payload['error'];
+    const error = payload.error;
     if (typeof error === 'string') {
         return error;
     }
     return readStringField(error, 'message');
+}
+
+function isErrorPayload(value: unknown): value is { readonly error: unknown } {
+    return isPlainObject(value) && 'error' in value;
 }
 
 /**
@@ -819,8 +848,11 @@ function tryParseStructuredOutput(modelOutput: string | undefined): unknown {
     }
     try {
         return JSON.parse(modelOutput);
-    } catch {
-        return undefined;
+    } catch (error: unknown) {
+        if (error instanceof SyntaxError) {
+            return undefined;
+        }
+        throw error;
     }
 }
 
@@ -830,11 +862,15 @@ function tryParseStructuredOutput(modelOutput: string | undefined): unknown {
  * `settlement.structuredOutput`. `undefined` when the payload omits it or carries a non-object.
  */
 function readStructuredOutputField(payload: unknown): unknown {
-    if (!isPlainObject(payload)) {
+    if (!isStructuredOutputPayload(payload)) {
         return undefined;
     }
-    const value = payload['structuredOutput'];
+    const value = payload.structuredOutput;
     return isPlainObject(value) ? value : undefined;
+}
+
+function isStructuredOutputPayload(value: unknown): value is { readonly structuredOutput: unknown } {
+    return isPlainObject(value) && 'structuredOutput' in value;
 }
 
 function parseCommandRunStatus(value: unknown): 'completed' | 'failed' | undefined {

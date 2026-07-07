@@ -1,4 +1,4 @@
-import { type AbgGraphSpec, type AbgSignal } from '@mission-control/protocol';
+import { type AbgSignal, type AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { ABG_OVERLAY_TABS } from '../components/AbgOverlay.js';
 import { createAbgOverlayController } from './abg-overlay-controller.js';
@@ -13,8 +13,14 @@ function makeStarted(graphId: string, nodeId: string): AbgSignal {
 function makeSuccess(graphId: string, nodeId: string): AbgSignal {
     return { type: 'success', graphId, nodeId, result: {} };
 }
-function makeFailure(graphId: string, nodeId: string, message: string): AbgSignal {
-    return { type: 'failure', graphId, nodeId, error: { code: 'test', message } };
+function makeAbgEvent(type: AgentEvent['type'], abg: NonNullable<AgentEvent['abg']>): AgentEvent {
+    return {
+        type,
+        timestamp: '2026-01-01T00:00:00.000Z',
+        sessionId: 's1',
+        message: type,
+        abg,
+    };
 }
 
 describe('overlay integration: signal → store', () => {
@@ -39,13 +45,7 @@ describe('overlay integration: signal → store', () => {
         const controller = createAbgOverlayController(store);
         const wiring = wireAbgOverlay(controller);
 
-        wiring.onDurableEvent({
-            type: 'graph.started',
-            timestamp: new Date().toISOString(),
-            sessionId: 's1',
-            message: 'ABG graph started',
-            abg: { graphId: 'default' },
-        } as any);
+        wiring.onDurableEvent(makeAbgEvent('graph.started', { graphId: 'default' }));
         wiring.dispose();
 
         const snap = store.getSnapshot();
@@ -59,27 +59,13 @@ describe('overlay integration: signal → store', () => {
         const controller = createAbgOverlayController(store);
         const wiring = wireAbgOverlay(controller);
 
-        wiring.onDurableEvent({
-            type: 'graph.started',
-            timestamp: new Date().toISOString(),
-            sessionId: 's1',
-            message: 'ABG graph started',
-            abg: { graphId: 'default' },
-        } as any);
-        wiring.onDurableEvent({
-            type: 'node.started',
-            timestamp: new Date().toISOString(),
-            sessionId: 's1',
-            message: 'node started: intent-gate',
-            abg: { graphId: 'default', nodeId: 'intent-gate', nodeKind: 'llm' },
-        } as any);
-        wiring.onDurableEvent({
-            type: 'node.completed',
-            timestamp: new Date().toISOString(),
-            sessionId: 's1',
-            message: 'node completed: intent-gate',
-            abg: { graphId: 'default', nodeId: 'intent-gate', nodeKind: 'llm' },
-        } as any);
+        wiring.onDurableEvent(makeAbgEvent('graph.started', { graphId: 'default' }));
+        wiring.onDurableEvent(
+            makeAbgEvent('node.started', { graphId: 'default', nodeId: 'intent-gate', nodeKind: 'llm' }),
+        );
+        wiring.onDurableEvent(
+            makeAbgEvent('node.completed', { graphId: 'default', nodeId: 'intent-gate', nodeKind: 'llm' }),
+        );
         wiring.dispose();
 
         const snap = store.getSnapshot();
@@ -93,20 +79,10 @@ describe('overlay integration: signal → store', () => {
         const controller = createAbgOverlayController(store);
         const wiring = wireAbgOverlay(controller);
 
-        wiring.onDurableEvent({
-            type: 'graph.started',
-            timestamp: new Date().toISOString(),
-            sessionId: 's1',
-            message: 'ABG graph started',
-            abg: { graphId: 'default' },
-        } as any);
-        wiring.onDurableEvent({
-            type: 'node.started',
-            timestamp: new Date().toISOString(),
-            sessionId: 's1',
-            message: 'node started: intent-gate',
-            abg: { graphId: 'default', nodeId: 'intent-gate', nodeKind: 'llm' },
-        } as any);
+        wiring.onDurableEvent(makeAbgEvent('graph.started', { graphId: 'default' }));
+        wiring.onDurableEvent(
+            makeAbgEvent('node.started', { graphId: 'default', nodeId: 'intent-gate', nodeKind: 'llm' }),
+        );
         wiring.dispose();
 
         const snap = store.getSnapshot();

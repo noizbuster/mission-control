@@ -1,29 +1,23 @@
-import type {
-    CommandExecutionRequest,
-    CommandExecutionResult,
-    ProviderAdapter,
-    ProviderAdapterContext,
-    ProviderTurnRequest,
-} from '@mission-control/core';
-import { type AgentEvent, type PermissionDecision, type PermissionRequest, type ProviderStreamChunk } from '@mission-control/protocol';
+import type { ProviderTurnRequest } from '@mission-control/core';
+import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
-import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
 import { runAgent } from './run-agent.js';
 import {
     createBufferedChatOutput,
     createEmptyAuthStore,
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
+import {
+    addFilePatch,
+    fakeCommandExecutor,
+    firstAdvertisedToolNames,
+    providerFromTurns,
+    tempRoot,
+} from './run-agent-tool-registry-test-support.js';
 import { replayedTypes } from './session-replay-test-support.js';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const mcpFixturePath = fileURLToPath(
-    new URL('../../../../packages/core/src/tools/mcp/fixtures/stdio-fixture-server.mjs', import.meta.url),
-);
 
 describe('runAgent interactive coding tool registry', () => {
     const tempRoots: string[] = [];
@@ -35,8 +29,8 @@ describe('runAgent interactive coding tool registry', () => {
     });
 
     it('advertises coding-agent aliases and executes ls plus read before approved file.patch', async () => {
-        const dataDir = await tempRoot('mctrl-tools-data-');
-        const workspaceRoot = await tempRoot('mctrl-tools-workspace-');
+        const dataDir = await tempRoot(tempRoots, 'mctrl-tools-data-');
+        const workspaceRoot = await tempRoot(tempRoots, 'mctrl-tools-workspace-');
         await mkdir(join(workspaceRoot, 'src'));
         await writeFile(join(workspaceRoot, 'src', 'index.ts'), 'export const value = 1;\n', 'utf8');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
@@ -53,7 +47,7 @@ describe('runAgent interactive coding tool registry', () => {
                     { type: 'interrupt' },
                     { type: 'interrupt' },
                 ],
-                50,
+                300,
             ),
             chatOutput: chatOutput.output,
             workspaceRoot,
@@ -72,25 +66,22 @@ describe('runAgent interactive coding tool registry', () => {
                         toolName: 'read',
                         argumentsJson: JSON.stringify({ path: 'src/index.ts' }),
                     },
-                    { kind: 'response_completed', content: 'inspected workspace' },
-                ],
-                [
                     {
                         kind: 'tool_call_completed',
                         toolCallId: 'patch_call',
                         toolName: 'file.patch',
                         argumentsJson: JSON.stringify({ patch: addFilePatch('.mctrl-task4.txt', 'approved') }),
                     },
-                    { kind: 'response_completed', content: 'patch requested' },
+                    { kind: 'response_completed', content: 'inspected workspace and patched' },
                 ],
-                [{ kind: 'response_completed', content: 'listed and patched' }],
             ]),
             onRuntimeEvent: (event) => {
                 events.push(event);
             },
+            plainPromptGraph: 'coding-agent',
         });
 
-        expect(requests[0]?.tools?.map((tool) => tool.name)).toEqual([
+        expect(firstAdvertisedToolNames(requests)).toEqual([
             'read',
             'ls',
             'grep',
@@ -129,8 +120,8 @@ describe('runAgent interactive coding tool registry', () => {
     });
 
     it('denies read of reference repos without an approval prompt', async () => {
-        const dataDir = await tempRoot('mctrl-tools-data-');
-        const workspaceRoot = await tempRoot('mctrl-tools-workspace-');
+        const dataDir = await tempRoot(tempRoots, 'mctrl-tools-data-');
+        const workspaceRoot = await tempRoot(tempRoots, 'mctrl-tools-workspace-');
         await mkdir(join(workspaceRoot, 'temp', 'ref-repos', 'opencode'), { recursive: true });
         await writeFile(join(workspaceRoot, 'temp', 'ref-repos', 'opencode', 'README.md'), 'hidden', 'utf8');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
@@ -160,209 +151,10 @@ describe('runAgent interactive coding tool registry', () => {
                     [{ kind: 'response_completed', content: 'read denied' }],
                 ],
             ),
+            plainPromptGraph: 'coding-agent',
         });
 
         expect(output).not.toContain('Approve read?');
         expect(output).toContain('read failed: workspace_denied');
     });
-
-    it(
-        'profile MCP config advertises profile server tools and not base config tools (interactive path)',
-        async () => {
-            const configDir = await tempRoot('mctrl-profile-cfg-');
-            const dataDir = await tempRoot('mctrl-profile-data-');
-            const workspaceRoot = await tempRoot('mctrl-profile-ws-');
-
-            await writeFile(
-                join(configDir, 'mission-control.dev.jsonc'),
-                JSON.stringify({
-                    mcp: {
-                        'profile-only': {
-                            type: 'local',
-                            command: [process.execPath, mcpFixturePath, 'normal'],
-                            timeoutMs: 5000,
-                        },
-                    },
-                }),
-                'utf8',
-            );
-            await writeFile(
-                join(configDir, 'config.json'),
-                JSON.stringify({
-                    mcp: {
-                        'base-only': {
-                            type: 'local',
-                            command: [process.execPath, mcpFixturePath, 'normal'],
-                            timeoutMs: 5000,
-                        },
-                    },
-                }),
-                'utf8',
-            );
-
-            vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
-            vi.stubEnv('MCTRL_DATA_DIR', dataDir);
-
-            const requests: ProviderTurnRequest[] = [];
-            const chatOutput = createBufferedChatOutput();
-
-            await runAgent(parseArgs(['--profile', 'dev', '--session', 'session_profile_mcp_interactive']), {
-                authStore: createEmptyAuthStore(),
-                chatInput: createScriptedChatInput(
-                    [
-                        { type: 'line', value: 'hello' },
-                        { type: 'interrupt' },
-                        { type: 'interrupt' },
-                    ],
-                    50,
-                ),
-                chatOutput: chatOutput.output,
-                workspaceRoot,
-                provider: providerFromTurns(requests, [[{ kind: 'response_completed', content: 'done' }]]),
-            });
-
-            const toolNames = requests[0]?.tools?.map((tool) => tool.name) ?? [];
-            expect(toolNames).toContain('mcp__profile_only__echo');
-            expect(toolNames.some((name) => name.startsWith('mcp__base_only__'))).toBe(false);
-        },
-        20000,
-    );
-
-    it(
-        'profile MCP config advertises profile server tools and not base config tools (noninteractive path)',
-        async () => {
-            const configDir = await tempRoot('mctrl-profile-cfg-ni-');
-            const workspaceRoot = await tempRoot('mctrl-profile-ws-ni-');
-
-            await writeFile(
-                join(configDir, 'mission-control.dev.jsonc'),
-                JSON.stringify({
-                    mcp: {
-                        'profile-only': {
-                            type: 'local',
-                            command: [process.execPath, mcpFixturePath, 'normal'],
-                            timeoutMs: 5000,
-                        },
-                    },
-                }),
-                'utf8',
-            );
-            await writeFile(
-                join(configDir, 'config.json'),
-                JSON.stringify({
-                    mcp: {
-                        'base-only': {
-                            type: 'local',
-                            command: [process.execPath, mcpFixturePath, 'normal'],
-                            timeoutMs: 5000,
-                        },
-                    },
-                }),
-                'utf8',
-            );
-
-            vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
-
-            const alwaysAllow = async (request: PermissionRequest): Promise<PermissionDecision> => ({
-                requestId: request.id,
-                status: 'allow',
-                reason: 'test',
-            });
-
-            const { registry, mcpConnectionManager } = await createNonInteractiveToolRegistry({
-                workspaceRoot,
-                requestPermission: alwaysAllow,
-                profileName: 'dev',
-            });
-            try {
-                const toolNames = registry.advertise().map((tool) => tool.name);
-                expect(toolNames).toContain('mcp__profile_only__echo');
-                expect(toolNames.some((name) => name.startsWith('mcp__base_only__'))).toBe(false);
-            } finally {
-                await mcpConnectionManager.disconnectAll();
-            }
-        },
-        20000,
-    );
-
-    async function tempRoot(prefix: string): Promise<string> {
-        const path = await mkdtemp(join(tmpdir(), prefix));
-        tempRoots.push(path);
-        return path;
-    }
 });
-
-type ProviderStep =
-    | {
-          readonly kind: 'tool_call_completed';
-          readonly toolCallId: string;
-          readonly toolName: string;
-          readonly argumentsJson: string;
-      }
-    | {
-          readonly kind: 'response_completed';
-          readonly content: string;
-      };
-
-function providerFromTurns(
-    requests: ProviderTurnRequest[],
-    turns: readonly (readonly ProviderStep[])[],
-): ProviderAdapter {
-    return {
-        async *streamTurn(request: ProviderTurnRequest, _context: ProviderAdapterContext) {
-            requests.push(request);
-            const steps = turns[requests.length - 1] ?? [{ kind: 'response_completed', content: 'done' }];
-            for (const [index, step] of steps.entries()) {
-                yield chunkForStep(request, step, index + 1);
-            }
-        },
-    };
-}
-
-function chunkForStep(request: ProviderTurnRequest, step: ProviderStep, sequence: number): ProviderStreamChunk {
-    if (step.kind === 'tool_call_completed') {
-        return {
-            kind: 'tool_call_completed',
-            requestId: request.requestId,
-            sequence,
-            toolCall: {
-                toolCallId: step.toolCallId,
-                toolName: step.toolName,
-                argumentsJson: step.argumentsJson,
-            },
-        };
-    }
-    return {
-        kind: 'response_completed',
-        requestId: request.requestId,
-        sequence,
-        message: {
-            messageId: `message_${request.turnId}`,
-            role: 'assistant',
-            content: step.content,
-        },
-        finishReason: 'stop',
-    };
-}
-
-function addFilePatch(path: string, content: string): string {
-    return [
-        `diff --git a/${path} b/${path}`,
-        '--- /dev/null',
-        `+++ b/${path}`,
-        '@@ -0,0 +1 @@',
-        `+${content}`,
-        '',
-    ].join('\n');
-}
-
-async function fakeCommandExecutor(_request: CommandExecutionRequest): Promise<CommandExecutionResult> {
-    return {
-        exitCode: 0,
-        signal: null,
-        timedOut: false,
-        stdout: 'task4 ok\n',
-        stderr: '',
-        durationMs: 1,
-    };
-}

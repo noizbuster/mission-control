@@ -1,7 +1,7 @@
 import type { ModelProviderCatalogEntry, ProviderAuthField } from '@mission-control/config';
 import type { ProviderCredential } from '@mission-control/protocol';
 import type { AuthCredentialArg } from '../args.js';
-import type { ProviderAuthStore, SaveProviderCredentialFieldInput } from '../auth-store.js';
+import type { SaveProviderCredentialFieldInput } from '../auth-store.js';
 import type { AuthPrompt, AuthPromptOptions } from './auth-prompts.js';
 import { maskSecretHint } from './auth-prompts.js';
 

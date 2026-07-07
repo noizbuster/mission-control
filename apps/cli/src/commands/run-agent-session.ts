@@ -1,20 +1,20 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
-import { JsonlSessionEventStore } from '@mission-control/core';
+import { type LocalSessionEventStore, openLocalSessionEventStore } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { createSessionWorkspaceMetadataEvent, resolveSessionWorkspaceMetadata } from './session-workspace-metadata.js';
 
 export type EnsuredSession = {
     readonly sessionId: string;
-    readonly store: JsonlSessionEventStore;
+    readonly store: LocalSessionEventStore;
 };
 
 export type RunEventRecorder = {
     readonly record: (event: AgentEvent) => AgentEvent;
     readonly close: () => Promise<void>;
     readonly currentSessionId: () => string | undefined;
-    readonly currentStore: () => JsonlSessionEventStore | undefined;
-    readonly switchSession: (sessionId: string) => Promise<JsonlSessionEventStore>;
+    readonly currentStore: () => LocalSessionEventStore | undefined;
+    readonly switchSession: (sessionId: string) => Promise<LocalSessionEventStore>;
     readonly ensureSession: () => Promise<EnsuredSession>;
 };
 
@@ -25,7 +25,7 @@ export async function createRunEventRecorder(
     const lazy = args.mode === 'tui' && args.sessionId === undefined;
     const modelProviderSelection: ModelProviderSelection = args.modelProviderSelection ?? defaultModelProviderSelection;
     let currentSessionId: string | undefined;
-    let currentStore: JsonlSessionEventStore | undefined;
+    let currentStore: LocalSessionEventStore | undefined;
     let metadataRecorded: boolean;
     if (lazy) {
         currentSessionId = undefined;
@@ -36,7 +36,7 @@ export async function createRunEventRecorder(
         currentStore =
             currentSessionId === undefined
                 ? undefined
-                : await JsonlSessionEventStore.open({ sessionId: currentSessionId });
+                : await openLocalSessionEventStore({ sessionId: currentSessionId });
         metadataRecorded =
             currentSessionId === undefined || currentStore === undefined
                 ? false
@@ -52,26 +52,25 @@ export async function createRunEventRecorder(
         await Promise.all(pending);
     };
 
-    const openSessionStore = async (sessionId: string): Promise<JsonlSessionEventStore> => {
+    const openSessionStore = async (sessionId: string): Promise<LocalSessionEventStore> => {
         if (currentSessionId === sessionId && currentStore !== undefined) {
             return currentStore;
         }
         await flushAppends();
         await currentStore?.close();
         currentSessionId = sessionId;
-        currentStore = await JsonlSessionEventStore.open({ sessionId });
+        currentStore = await openLocalSessionEventStore({ sessionId });
         metadataRecorded = await hasWorkspaceMetadata(currentStore, sessionId);
         return currentStore;
     };
 
-    // Idempotent guard is mandatory: JsonlSessionEventStore.open() throws lockExists on double-open.
     // session.started is appended directly (not via record()) because record() short-circuits until materialized.
     const ensureSession = async (): Promise<EnsuredSession> => {
         if (currentSessionId !== undefined && currentStore !== undefined) {
             return { sessionId: currentSessionId, store: currentStore };
         }
         const sessionId = createSessionId();
-        const store = await JsonlSessionEventStore.open({ sessionId });
+        const store = await openLocalSessionEventStore({ sessionId });
         currentSessionId = sessionId;
         currentStore = store;
         metadataRecorded = false;
@@ -123,7 +122,7 @@ export async function createRunEventRecorder(
     };
 }
 
-async function hasWorkspaceMetadata(store: JsonlSessionEventStore, sessionId: string): Promise<boolean> {
+async function hasWorkspaceMetadata(store: LocalSessionEventStore, sessionId: string): Promise<boolean> {
     const events = await store.getEvents(sessionId);
     return events.some(
         (event) =>

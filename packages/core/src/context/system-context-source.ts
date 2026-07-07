@@ -49,7 +49,7 @@ export const jsonContextCodec: SystemContextCodec<unknown> = {
     encode: (value) => JSON.stringify(value),
     decode: (raw) => {
         try {
-            return JSON.parse(raw) as unknown;
+            return JSON.parse(raw);
         } catch {
             return null;
         }

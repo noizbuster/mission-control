@@ -1,0 +1,170 @@
+import {
+    completeRun,
+    createMission,
+    discoverWorkflows,
+    ensureOmoDirs,
+    failRun,
+    materializeMission,
+    PluginManager,
+    registerBuiltinWorkflows,
+    resolveOmoRoot,
+    startRun,
+    WorkflowRegistry,
+} from '@mission-control/core';
+import type { AbgGraphSpec, WorkflowSpec } from '@mission-control/protocol';
+import { splitCommandParts } from './chat-command-parts.js';
+import { graphForDefaultFallback, graphForWorkflowSpec } from './workflow-materialization.js';
+
+const WORKFLOW_NAME_PATTERN = /^[A-Za-z0-9_.:/-]+$/;
+
+export type WorkflowInvocation = {
+    readonly name: string;
+    readonly prompt: string;
+};
+
+export type WorkflowInvocationInput = {
+    readonly workflowName?: string;
+    readonly prompt?: string;
+};
+
+export type NoninteractiveWorkflowRunHandle = {
+    readonly omoRoot: string;
+    readonly runId: string;
+};
+
+export type WorkflowRunOutcome = {
+    readonly failed: boolean;
+    readonly reason?: string;
+};
+
+export type NoninteractiveWorkflowSelection = {
+    readonly effectivePrompt?: string;
+    readonly workflowGraph?: AbgGraphSpec;
+    readonly workflowSpec?: WorkflowSpec;
+};
+
+export function resolveWorkflowInvocation(args: WorkflowInvocationInput): WorkflowInvocation | undefined {
+    if (args.workflowName !== undefined) {
+        return { name: args.workflowName, prompt: args.prompt ?? '' };
+    }
+    if (args.prompt?.startsWith('#')) {
+        const parts = splitCommandParts(args.prompt.slice(1));
+        if (parts.head.length === 0) {
+            throw new Error('Workflow invocation requires a name after "#"');
+        }
+        if (!WORKFLOW_NAME_PATTERN.test(parts.head)) {
+            throw new Error(`Invalid workflow name: "${parts.head}"`);
+        }
+        return { name: parts.head, prompt: parts.tail };
+    }
+    return undefined;
+}
+
+export async function discoverWorkflowRegistry(workspaceRoot: string): Promise<WorkflowRegistry> {
+    const pluginManager = new PluginManager({ workspaceRoot });
+    let pluginWorkflowDirs: readonly string[] = [];
+    try {
+        await pluginManager.initialize();
+        pluginWorkflowDirs = pluginManager.getWorkflowDirs();
+        for (const diagnostic of pluginManager.getDiagnostics()) {
+            process.stderr.write(
+                `plugin discovery [${diagnostic.severity}] ${diagnostic.pluginName}: ${diagnostic.message}\n`,
+            );
+        }
+    } catch (error: unknown) {
+        process.stderr.write(
+            `plugin discovery [warning] skipped: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
+    }
+
+    const result = await discoverWorkflows({
+        workspaceRoot,
+        ...(pluginWorkflowDirs.length > 0 ? { additionalWorkflowDirs: pluginWorkflowDirs } : {}),
+    });
+    for (const diagnostic of result.diagnostics) {
+        process.stderr.write(
+            `workflow discovery [${diagnostic.severity}] ${diagnostic.workflowName}: ${diagnostic.message}\n`,
+        );
+    }
+    const registry = new WorkflowRegistry(result.workflows);
+    registerBuiltinWorkflows(registry);
+    try {
+        await pluginManager.registerInto(registry);
+    } catch (error: unknown) {
+        process.stderr.write(
+            `plugin registration [warning] skipped: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
+    }
+    return registry;
+}
+
+export async function resolveNoninteractiveWorkflowSelection(input: {
+    readonly args: WorkflowInvocationInput;
+    readonly workspaceRoot: string;
+    readonly graph: AbgGraphSpec | undefined;
+}): Promise<NoninteractiveWorkflowSelection> {
+    const workflowInvocation = resolveWorkflowInvocation(input.args);
+    if (workflowInvocation !== undefined) {
+        const registry = await discoverWorkflowRegistry(input.workspaceRoot);
+        const spec = registry.lookup(workflowInvocation.name);
+        if (spec === undefined) {
+            const names = registry.names();
+            const available = names.length === 0 ? '(none discovered)' : names.slice(0, 20).join(', ');
+            throw new Error(`Unknown workflow "${workflowInvocation.name}". Available workflows: ${available}.`);
+        }
+        return {
+            effectivePrompt: workflowInvocation.prompt,
+            workflowGraph: graphForWorkflowSpec(spec),
+            workflowSpec: spec,
+        };
+    }
+    if (input.graph === undefined && input.args.prompt !== undefined) {
+        const registry = await discoverWorkflowRegistry(input.workspaceRoot);
+        const fallbackGraph = graphForDefaultFallback(registry);
+        return fallbackGraph === undefined
+            ? { effectivePrompt: input.args.prompt }
+            : { effectivePrompt: input.args.prompt, workflowGraph: fallbackGraph };
+    }
+    return input.args.prompt === undefined ? {} : { effectivePrompt: input.args.prompt };
+}
+
+export async function beginNoninteractiveWorkflowRun(
+    workspaceRoot: string,
+    workflowSpec: WorkflowSpec | undefined,
+): Promise<NoninteractiveWorkflowRunHandle | undefined> {
+    if (workflowSpec === undefined) {
+        return undefined;
+    }
+    let omoRoot: string;
+    try {
+        omoRoot = await resolveOmoRoot(workspaceRoot);
+    } catch {
+        return undefined;
+    }
+    await ensureOmoDirs(omoRoot);
+    const mission = materializeMission(workflowSpec);
+    await createMission(omoRoot, mission);
+    const run = await startRun(omoRoot, mission.id, '');
+    return { omoRoot, runId: run.id };
+}
+
+export async function settleNoninteractiveWorkflowRun(
+    handle: NoninteractiveWorkflowRunHandle | undefined,
+    outcome: WorkflowRunOutcome,
+): Promise<void> {
+    if (handle === undefined) {
+        return;
+    }
+    try {
+        if (outcome.failed) {
+            await failRun(handle.omoRoot, handle.runId, outcome.reason ?? 'run failed');
+        } else {
+            await completeRun(handle.omoRoot, handle.runId);
+        }
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            return;
+        }
+        return;
+    }
+}

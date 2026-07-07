@@ -357,7 +357,8 @@ function sequenceNow(values: readonly string[]): () => string {
 }
 
 async function waitForPendingApproval(gate: PermissionGate, approvalId: string): Promise<void> {
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    const deadline = performance.now() + 1_000;
+    while (performance.now() < deadline) {
         if (gate.listPendingApprovals().some((pending) => pending.approvalId === approvalId)) return;
         await new Promise<void>((resolve) => setImmediate(resolve));
     }

@@ -17,7 +17,7 @@ import { type Blackboard, createBlackboard } from '../../../memory/blackboard.js
 import * as skillLoaderModule from '../../../skills/skill-loader.js';
 import { ToolRegistry } from '../../../tools/tool-registry.js';
 import type { AbgNodeRunContext } from '../../node-registry.js';
-import { bustSkillCache, _testResetSkillCache, runLlmActorNode } from './llm-actor-node-runner.js';
+import { _testResetSkillCache, bustSkillCache, runLlmActorNode } from './llm-actor-node-runner.js';
 import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

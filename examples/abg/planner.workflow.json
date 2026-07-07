@@ -40,9 +40,7 @@
         "id": "explore",
         "kind": "llm",
         "label": "Explore the codebase to ground the plan",
-        "capabilities": [
-          "read"
-        ],
+        "capabilities": ["read"],
         "config": {
           "systemPrompt": "Explore the relevant codebase areas to ground the plan in real structure. Cite file:line evidence for every claim. You are operating under planner-readonly. Any child agent you delegate to (explore/librarian) INHERITS the planner-readonly boundary: it may NOT write outside .omo/plans/**, .omo/specs/**, and .omo/drafts/**. Frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / VERIFY) and treat subagent output as claims until verified. Set explore.complete when exploration is done.",
           "outputKey": "explore.complete"
@@ -52,9 +50,7 @@
         "id": "research",
         "kind": "llm",
         "label": "Research best practices for an unclear request",
-        "capabilities": [
-          "read"
-        ],
+        "capabilities": ["read"],
         "config": {
           "systemPrompt": "The request outcome is fuzzy. Research best practices and prior art to make it plannable WITHOUT interrogating the user — adopt and ANNOUNCE defensible defaults (industry standard or repo convention) with rationale. You are operating under planner-readonly. Any child agent you delegate to (explore/librarian) INHERITS the planner-readonly boundary: it may NOT write outside .omo/plans/**, .omo/specs/**, and .omo/drafts/**. Frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / VERIFY) and treat subagent output as claims until verified. Set research.complete when research is done.",
           "outputKey": "research.complete"
@@ -82,10 +78,7 @@
         "id": "draft-plan",
         "kind": "llm",
         "label": "Draft the plan to .omo/drafts/{slug}.md",
-        "capabilities": [
-          "read",
-          "write"
-        ],
+        "capabilities": ["read", "write"],
         "config": {
           "systemPrompt": "Draft the plan as .omo/drafts/<slug>.md. This is the DRAFT, not the final plan — it is the durable, compaction-safe resume point. Record the topology ledger (1-6 independently-succeed/fail components), adopted defaults, and the pending approval gate. Do NOT write .omo/plans/<slug>.md yet — that is gated on explicit approval. Set plan.drafted when the draft is written.",
           "outputKey": "plan.drafted"
@@ -115,10 +108,7 @@
         "id": "write-plan",
         "kind": "llm",
         "label": "Write the scaffold-compatible final plan to .omo/plans/{slug}.md",
-        "capabilities": [
-          "read",
-          "write"
-        ],
+        "capabilities": ["read", "write"],
         "config": {
           "systemPrompt": "Only reached AFTER approval. Write the final plan to .omo/plans/<slug>.md with the scaffold headers in order: # <slug> - Work Plan | ## TL;DR (For humans) | ## Scope | ## Verification Strategy | ## Execution Strategy | ## Todos | ## Final Verification Wave | ## Commit Strategy | ## Success Criteria. Under Scope state explicit Must have / Must NOT have. Under Todos use \"- [ ]\" checkboxes, one Implementation+Test unit per todo, each with References, agent-executable Acceptance criteria, happy+failure QA scenarios, and a Commit line. Under Final Verification Wave list F1 plan-compliance, F2 code-quality, F3 real manual QA, F4 scope-fidelity. Near the top emit a \"Status: Approved\" line so the runner admission gate can verify the plan was explicitly approved before any task delegation. Set plan.written when the final plan is committed.",
           "outputKey": "plan.written"

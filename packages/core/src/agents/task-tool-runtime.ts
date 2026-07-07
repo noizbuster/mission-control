@@ -1,21 +1,3 @@
-/**
- * Concrete {@linkcode TaskToolRuntime} — bridges the full-parity `task()` tool
- * to real agent resolution, model resolution, child system-prompt assembly,
- * and child tool-surface construction.
- *
- * This runtime is the single place where the task tool's abstract spawn
- * contract meets the agent discovery index, the model resolver, the
- * yield tool, and the existing permission rule algebra. The actual graph
- * execution (runAbgGraph) is delegated to an injected `spawnFn` so tests
- * can mock everything; the default spawn fn throws `not_yet_implemented`
- * until the CLI wiring (todo 25) connects a real graph runner.
- *
- * Safety: the child tool surface always drops the `task` tool (registry-layer
- * recursion guard, ABG section 10.6), adds the `yield` tool (child result
- * submission), and removes tools whose capability classes are globally denied
- * by the derived path policies.
- */
-
 import type { AgentDefinition, PolicyEffectRule } from '@mission-control/protocol';
 import type { ChildHostCallbacks } from '../behavior/subagents/spawn-child.js';
 import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
@@ -38,25 +20,20 @@ import { type ModelPattern } from './model-resolver.js';
 import { deriveChildPathPolicies, evaluatePathPolicies } from './path-policy-derive.js';
 import { getRuntimeRegistry, MAIN_AGENT_ID, type RuntimeAgentRegistry } from './runtime-registry.js';
 import { buildChildSystemPrompt } from './spawn-prompt-builder.js';
+import type { TaskToolSubagentMirror } from './task-tool-runtime-types.js';
 import { randomBytes } from 'node:crypto';
 
-/**
- * Optional runtime services injected by the CLI session owner
- * ({@linkcode MissionControlServices}). When all three are present,
- * {@linkcode ConcreteTaskToolRuntime.startBackgroundSession} routes through the
- * {@linkcode AsyncJobManager} instead of throwing. When absent, the legacy
- * `not_yet_implemented` throw is preserved for backward compatibility.
- */
 export interface TaskToolRuntimeServices {
     readonly jobManager: AsyncJobManager;
     readonly lifecycleManager: AgentLifecycleManager;
     readonly runtimeRegistry: RuntimeAgentRegistry;
+    readonly mirror?: TaskToolSubagentMirror;
 }
 
-/** Resolves an agent's active model. Caller captures session defaults and role config. */
+export type { TaskToolSubagentMirror };
+
 export type ResolveAgentModelFn = (agent: AgentDefinition) => ModelPattern;
 
-/** Fully-resolved context passed to the spawn function. */
 export interface ChildSpawnContext {
     readonly sessionId: string;
     readonly prompt: string;
@@ -66,15 +43,9 @@ export interface ChildSpawnContext {
     readonly childToolRegistry: ToolRegistry;
     readonly childPermissions: readonly PolicyEffectRule[];
     readonly workspaceRoot: string;
-    /**
-     * Optional host-callback bag (ask_user overlay routing, event/signal taps). Forwarded to
-     * the spawn function and ultimately to {@linkcode spawnChildCodingAgent}; absent in
-     * pure-test spawns (no parent TUI attached).
-     */
     readonly hostCallbacks?: ChildHostCallbacks;
 }
 
-/** Builds and runs the child graph from a resolved context. */
 export type SpawnFn = (context: ChildSpawnContext) => Promise<ChildSpawnResult>;
 
 export interface ConcreteTaskToolRuntimeOptions {
@@ -85,18 +56,9 @@ export interface ConcreteTaskToolRuntimeOptions {
     readonly parentAgent: AgentDefinition;
     readonly spawnFn?: SpawnFn;
     readonly services?: TaskToolRuntimeServices;
-    /**
-     * SDK model resolver for the default graph-runner spawn path. When `spawnFn` is
-     * absent and this is present, the runtime builds a real child execution via
-     * {@linkcode createChildGraphSpawnFn}. When both are absent the runtime rejects
-     * (pure-test mode without a real provider).
-     */
+    readonly parentSessionId?: string;
     readonly resolveSdkModel?: SdkModelResolver;
     readonly summaryLimit?: number;
-    /**
-     * Optional host-callback bag forwarded into every spawn context so the child graph can
-     * route ask_user / events / signals back to the parent TUI. Absent in pure-test spawns.
-     */
     readonly hostCallbacks?: ChildHostCallbacks;
 }
 
@@ -123,6 +85,7 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
     private readonly spawnFn: SpawnFn;
     private readonly services: TaskToolRuntimeServices | undefined;
     private readonly hostCallbacks: ChildHostCallbacks | undefined;
+    private readonly parentSessionId: string;
 
     constructor(options: ConcreteTaskToolRuntimeOptions) {
         this.agentIndex = options.agentIndex;
@@ -133,10 +96,11 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
         this.spawnFn = resolveSpawnFn(options);
         this.services = options.services;
         this.hostCallbacks = options.hostCallbacks;
+        this.parentSessionId = options.parentSessionId ?? MAIN_AGENT_ID;
     }
 
     async runChildSession(request: ChildSpawnRequest): Promise<ChildSpawnResult> {
-        return this.executeSpawn(request.sessionId, request);
+        return this.runForegroundChildSession(request.sessionId, request);
     }
 
     startBackgroundSession(request: ChildSpawnRequest): TaskToolBackgroundHandle {
@@ -147,7 +111,7 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
     }
 
     async resumeChildSession(sessionId: string, request: ChildSpawnRequest): Promise<ChildSpawnResult> {
-        return this.executeSpawn(sessionId, request);
+        return this.runForegroundChildSession(sessionId, request);
     }
 
     sessionExists(sessionId: string): boolean {
@@ -164,10 +128,11 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
     ): TaskToolBackgroundHandle {
         const { jobManager, runtimeRegistry } = services;
         const sessionId = request.sessionId;
+        const agentId = childDisplayName(request);
 
         runtimeRegistry.adopt({
             id: sessionId,
-            displayName: request.subagentType ?? request.category?.id ?? sessionId,
+            displayName: agentId,
             kind: 'sub',
             parentId: MAIN_AGENT_ID,
             status: 'running',
@@ -187,8 +152,55 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
             }
         };
 
-        const handle = jobManager.startJob({ sessionId, execute });
+        const handle = jobManager.startJob({
+            sessionId,
+            parentSessionId: this.parentSessionId,
+            agentId,
+            blocking: false,
+            execute,
+        });
         return { sessionId, backgroundId: handle.jobId };
+    }
+
+    private async runForegroundChildSession(sessionId: string, request: ChildSpawnRequest): Promise<ChildSpawnResult> {
+        const agentId = childDisplayName(request);
+        this.services?.runtimeRegistry.adopt({
+            id: sessionId,
+            displayName: agentId,
+            kind: 'sub',
+            parentId: MAIN_AGENT_ID,
+            status: 'running',
+            sessionId,
+        });
+        await this.services?.mirror?.startSubagentWait({
+            parentSessionId: this.parentSessionId,
+            childSessionId: sessionId,
+            agentId,
+            mode: 'sync',
+        });
+
+        try {
+            const result = await this.executeSpawn(sessionId, request);
+            this.services?.runtimeRegistry.update(sessionId, {
+                status: result.status === 'failed' ? 'aborted' : 'idle',
+            });
+            await this.services?.mirror?.resolveSubagentWait({
+                parentSessionId: this.parentSessionId,
+                childSessionId: sessionId,
+                status: result.status,
+                output: result.output,
+            });
+            return result;
+        } catch (error: unknown) {
+            this.services?.runtimeRegistry.update(sessionId, { status: 'aborted' });
+            await this.services?.mirror?.resolveSubagentWait({
+                parentSessionId: this.parentSessionId,
+                childSessionId: sessionId,
+                status: 'failed',
+                output: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+        }
     }
 
     private async executeSpawn(sessionId: string, request: ChildSpawnRequest): Promise<ChildSpawnResult> {
@@ -253,6 +265,10 @@ export class ConcreteTaskToolRuntime implements TaskToolRuntime {
         registry.register(createYieldToolRegistration({}));
         return registry;
     }
+}
+
+function childDisplayName(request: ChildSpawnRequest): string {
+    return request.subagentType ?? request.category?.id ?? request.sessionId;
 }
 
 function isToolDeniedByPathPolicies(

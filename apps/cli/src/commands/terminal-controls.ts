@@ -20,9 +20,7 @@ export function suppressTitleManagement(value: boolean): void {
 
 export function shouldManageTerminalTitle(): boolean {
     return (
-        !titleManagementSuppressed &&
-        process.env[TERMINAL_TITLE_DISABLE_ENV] !== '1' &&
-        process.stdout.isTTY === true
+        !titleManagementSuppressed && process.env[TERMINAL_TITLE_DISABLE_ENV] !== '1' && process.stdout.isTTY === true
     );
 }
 
@@ -86,7 +84,10 @@ export const editorControls = {
     },
 };
 
-export const LINUX_CLIPBOARD_IMAGE_COMMANDS = ['xclip -selection clipboard -t image/png -o', 'wl-paste -t image/png'] as const;
+export const LINUX_CLIPBOARD_IMAGE_COMMANDS = [
+    'xclip -selection clipboard -t image/png -o',
+    'wl-paste -t image/png',
+] as const;
 
 /**
  * Clipboard image paste controls. Exported so unit tests can spy on

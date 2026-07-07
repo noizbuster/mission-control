@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createStaticProviderCredentialResolver } from '../credential-resolver.js';
 import type { ProviderTurnRequest } from '../provider-turn-types.js';
 import {
-    createAnthropicMessagesProvider,
     type AnthropicMessagesTransportRequest,
+    createAnthropicMessagesProvider,
 } from './anthropic-messages-provider.js';
 import { anthropicCredential, collectChunks, transportFromEvents } from './anthropic-messages-test-support.js';
 
@@ -92,10 +92,10 @@ describe('Anthropic Messages provider variants', () => {
         const provider = providerCapturing(requests);
 
         await collectChunks(
-            provider.streamTurn(
-                turnRequest({ modelID: 'claude-3-5-sonnet-20241022', variantID: 'thinking-high' }),
-                { attempt: 1, signal: new AbortController().signal },
-            ),
+            provider.streamTurn(turnRequest({ modelID: 'claude-3-5-sonnet-20241022', variantID: 'thinking-high' }), {
+                attempt: 1,
+                signal: new AbortController().signal,
+            }),
         );
 
         const body = requests[0]?.body;

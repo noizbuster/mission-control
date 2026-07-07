@@ -5,9 +5,10 @@ import {
     missionControlDataDirEnvKey,
     type OpenAIResponsesTransport,
     OpenAIResponsesTransportError,
+    readLocalSessionReplay,
 } from '@mission-control/core';
 import { AgentEventSchema } from '@mission-control/protocol';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
 import { runSessionCommand } from './session.js';
@@ -26,6 +27,10 @@ type JsonOutputRecord = Record<string, unknown> & {
 
 describe('runAgent JSON reporter', () => {
     const tempDirs: string[] = [];
+
+    beforeEach(async () => {
+        await useTempDataDir(tempDirs);
+    });
 
     afterEach(() => {
         vi.unstubAllEnvs();
@@ -52,13 +57,10 @@ describe('runAgent JSON reporter', () => {
     });
 
     it('json output exposes machine-readable final run state for completed prompts', async () => {
-        await useTempDataDir(tempDirs);
         const output = await runAgent(
             parseArgs(['run', 'summarize this repository', '--json', '--session', 'session_json_completed_state']),
             {
-                provider: createDeterministicProvider([
-                    { kind: 'response_completed', content: 'summarized' },
-                ]),
+                provider: createDeterministicProvider([{ kind: 'response_completed', content: 'summarized' }]),
             },
         );
         const records = parseJsonRecords(output);
@@ -168,32 +170,23 @@ describe('runAgent JSON reporter', () => {
         });
     });
 
-    it('json reporter surfaces approval-required for non-interactive effectful provider tools', async () => {
+    it('json reporter surfaces approval-required for non-interactive approval gates', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'mission-control-headless-tools-'));
-        let commandCalls = 0;
-        const output = await runAgent(parseArgs(['run', 'try a headless command', '--json']), {
-            workspaceRoot: directory,
-            commandExecutor: async () => {
-                commandCalls += 1;
-                throw new Error('command executor must not run in headless approval-required flow');
+        const graphPath = join(directory, 'approval-required.graph.json');
+        await writeFile(graphPath, JSON.stringify(createApprovalGraphSpec()), 'utf8');
+
+        const output = await runAgent({
+            mode: 'json',
+            useNative: false,
+            command: 'run',
+            showHelp: false,
+            showVersion: false,
+            thinking: false,
+            graphPath,
+            modelProviderSelection: {
+                providerID: 'local',
+                modelID: 'local-echo',
             },
-            provider: createDeterministicProvider([
-                {
-                    kind: 'tool_call_completed',
-                    toolCallId: 'json_patch_call',
-                    toolName: 'file.patch',
-                    argumentsJson: JSON.stringify({
-                        patch: addFilePatch('.headless-approval-required.txt', 'should not apply'),
-                    }),
-                },
-                {
-                    kind: 'tool_call_completed',
-                    toolCallId: 'json_command_call',
-                    toolName: 'command.run',
-                    argumentsJson: JSON.stringify({ command: 'pnpm', args: ['test'] }),
-                },
-                { kind: 'response_completed', content: 'should not complete task' },
-            ]),
         });
         const parsed = output
             .trim()
@@ -201,28 +194,22 @@ describe('runAgent JSON reporter', () => {
             .map((line) => AgentEventSchema.parse(JSON.parse(line)));
 
         expect(parsed.map((event) => event.type)).toEqual(
-            expect.arrayContaining(['approval.requested', 'approval.blocked', 'run.blocked']),
+            expect.arrayContaining(['approval.requested', 'policy.blocked', 'graph.failed']),
         );
         expect(parsed.some((event) => event.type === 'task.completed')).toBe(false);
         expect(parsed.some((event) => event.type === 'task.failed')).toBe(false);
         expect(JSON.stringify(parsed)).toContain('"policyDecision":"requires_approval"');
-        expect(JSON.stringify(parsed)).toContain('"id":"file.patch"');
-        expect(parsed.find((event) => event.type === 'run.blocked')?.run).toMatchObject({
-            state: 'blocked_on_approval',
-            toolCallId: 'json_patch_call',
+        expect(parsed.find((event) => event.type === 'graph.failed')?.abg).toMatchObject({
+            graphId: 'cli-approval-required',
         });
-        expect(commandCalls).toBe(0);
         await expect(readFile(join(directory, '.headless-approval-required.txt'), 'utf8')).rejects.toThrow();
         await rm(directory, { recursive: true, force: true });
     });
 
     it('redacts OpenAI auth failures from JSON output and replay JSONL', async () => {
         // Given
-        const dataDir = await mkdtemp(join(tmpdir(), 'mission-control-openai-redaction-'));
-        tempDirs.push(dataDir);
         const sessionId = 'session_openai_redaction_json';
         const secret = 'sk-test-cli-json-secret';
-        vi.stubEnv(missionControlDataDirEnvKey, dataDir);
 
         // When
         const output = await runAgent(
@@ -240,17 +227,16 @@ describe('runAgent JSON reporter', () => {
             },
         );
         const replay = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
-        const sessionLog = await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8');
+        const storedReplay = await readReplay(sessionId);
 
         // Then
         expect(output).toContain('[REDACTED_CREDENTIAL]');
         expect(replay).toContain('provider_auth_failed');
-        expect(sessionLog).toContain('provider_auth_failed');
-        expect(JSON.stringify({ output, replay, sessionLog })).not.toContain(secret);
+        expect(storedReplay.projection.envelopes.some((envelope) => envelope.event.type === 'run.failed')).toBe(true);
+        expect(JSON.stringify({ output, replay, storedReplay })).not.toContain(secret);
     });
 
     it('returns machine-readable failed state instead of rejecting on provider failure', async () => {
-        await useTempDataDir(tempDirs);
         const output = await runAgent(
             parseArgs(['run', 'fail provider', '--json', '--session', 'session_json_failed']),
             {
@@ -285,7 +271,6 @@ describe('runAgent JSON reporter', () => {
     });
 
     it('returns machine-readable interrupted state instead of rejecting on provider abort', async () => {
-        await useTempDataDir(tempDirs);
         const output = await runAgent(
             parseArgs(['run', 'interrupt provider', '--json', '--session', 'session_json_interrupted']),
             {
@@ -337,22 +322,19 @@ function lastRecord(records: readonly JsonOutputRecord[]): JsonOutputRecord {
     return record;
 }
 
+async function readReplay(sessionId: string) {
+    const result = await readLocalSessionReplay({ sessionId });
+    if (result.kind !== 'found') {
+        throw new Error(`expected replay for ${sessionId}`);
+    }
+    return result.replay;
+}
+
 async function useTempDataDir(tempDirs: string[]): Promise<string> {
     const dataDir = await mkdtemp(join(tmpdir(), 'mission-control-cli-json-data-'));
     tempDirs.push(dataDir);
     vi.stubEnv(missionControlDataDirEnvKey, dataDir);
     return dataDir;
-}
-
-function addFilePatch(path: string, content: string): string {
-    return [
-        `diff --git a/${path} b/${path}`,
-        '--- /dev/null',
-        `+++ b/${path}`,
-        '@@ -0,0 +1 @@',
-        `+${content}`,
-        '',
-    ].join('\n');
 }
 
 function createGraphSpec() {
@@ -363,6 +345,26 @@ function createGraphSpec() {
             {
                 id: 'answer',
                 kind: 'llm',
+            },
+        ],
+        edges: [],
+        rules: [],
+        policies: [],
+    };
+}
+
+function createApprovalGraphSpec() {
+    return {
+        id: 'cli-approval-required',
+        entryNodeId: 'approval',
+        nodes: [
+            {
+                id: 'approval',
+                kind: 'human-approval',
+                config: {
+                    action: 'file.patch',
+                    reason: 'non-interactive approval gate requires approval',
+                },
             },
         ],
         edges: [],

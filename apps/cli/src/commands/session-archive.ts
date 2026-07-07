@@ -1,13 +1,18 @@
 import {
     createFileSessionIndexStore,
     createSessionArchive,
+    JSONL_SESSION_EVENT_RECORD_KIND,
+    JSONL_SESSION_LOG_HEADER_KIND,
+    JSONL_SESSION_LOG_RECORD_VERSION,
     ProjectTrustStore,
     parseJsonlSessionLog,
     parseSessionArchive,
+    readLocalSessionReplay,
     rebuildSessionIndexFromJsonl,
     resolveMissionControlDataDir,
     validateSessionArchiveManifestForImport,
 } from '@mission-control/core';
+import type { AgentEventEnvelope } from '@mission-control/protocol';
 import { deriveSessionCatalogProjection } from './session-catalog-projection.js';
 import { parseCliSessionId } from './session-id.js';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -35,25 +40,15 @@ export async function exportSessionArchiveFile(input: {
     readonly filePath: string;
 }): Promise<string> {
     const sessionId = requireValidSessionId(input.sessionId);
-    const sessionPath = resolveSessionLogPath(sessionId);
-    const contents = await readFile(sessionPath, 'utf8').catch((error: unknown) => {
-        if (isMissingFileError(error)) {
-            throw new SessionArchiveCommandError({
-                code: 'session_not_found',
-                message: `Session log not found: ${sessionId}`,
-            });
-        }
-        throw error;
-    });
-    parseJsonlSessionLog({ contents, filePath: sessionPath, sessionId });
-    const projection = deriveSessionCatalogProjection({ sessionId, contents });
+    const source = await readArchiveSource(sessionId);
+    const projection = deriveSessionCatalogProjection({ sessionId, contents: source.contents });
     const workspace = await workspaceForArchive(projection);
     const archive = createSessionArchive({
         sessionId,
         cwd: workspace.cwd,
         trustedRoot: workspace.trustedRoot,
         createdAt: projection.createdAt ?? new Date().toISOString(),
-        eventsJsonl: contents,
+        eventsJsonl: source.contents,
     });
     await mkdir(dirname(input.filePath), { recursive: true });
     try {
@@ -68,6 +63,50 @@ export async function exportSessionArchiveFile(input: {
         throw error;
     }
     return `Exported session ${sessionId} to ${input.filePath}\n`;
+}
+
+async function readArchiveSource(sessionId: string): Promise<{ readonly contents: string }> {
+    const sessionPath = resolveSessionLogPath(sessionId);
+    try {
+        const contents = await readFile(sessionPath, 'utf8');
+        parseJsonlSessionLog({ contents, filePath: sessionPath, sessionId });
+        return { contents };
+    } catch (error: unknown) {
+        if (!isMissingFileError(error)) {
+            throw error;
+        }
+    }
+    const replay = await readLocalSessionReplay({ sessionId });
+    if (replay.kind === 'missing') {
+        throw new SessionArchiveCommandError({
+            code: 'session_not_found',
+            message: `Session log not found: ${sessionId}`,
+        });
+    }
+    return { contents: serializeReplayAsJsonl(sessionId, replay.replay.projection.envelopes) };
+}
+
+function serializeReplayAsJsonl(sessionId: string, envelopes: readonly AgentEventEnvelope[]): string {
+    const createdAt = envelopes.at(0)?.createdAt ?? new Date().toISOString();
+    return [
+        serializeJsonlRecord({
+            kind: JSONL_SESSION_LOG_HEADER_KIND,
+            version: JSONL_SESSION_LOG_RECORD_VERSION,
+            sessionId,
+            createdAt,
+        }),
+        ...envelopes.map((envelope) =>
+            serializeJsonlRecord({
+                kind: JSONL_SESSION_EVENT_RECORD_KIND,
+                version: JSONL_SESSION_LOG_RECORD_VERSION,
+                event: envelope,
+            }),
+        ),
+    ].join('');
+}
+
+function serializeJsonlRecord(record: unknown): string {
+    return `${JSON.stringify(record)}\n`;
 }
 
 export async function importSessionArchiveFile(input: { readonly filePath: string }): Promise<string> {

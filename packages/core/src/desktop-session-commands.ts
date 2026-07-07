@@ -19,7 +19,8 @@ import {
     ensureRuntimeOwnedPermissionRequestForBlockedToolCall,
     settleDesktopApproval,
 } from './desktop-tool-approvals.js';
-import { type JsonlSessionEventIdFactory, JsonlSessionEventStore } from './memory/jsonl-session-event-store.js';
+import type { JsonlSessionEventIdFactory } from './memory/jsonl-session-event-store.js';
+import type { LocalSessionEventStore } from './memory/local-session-store.js';
 import { wrapFlatProviderAsSdkModel } from './providers/ai-sdk/flat-provider-bridge.js';
 import { createProviderAuthStoreCredentialResolver } from './providers/provider-auth-resolver.js';
 import { createProviderAuthStore } from './providers/provider-auth-store.js';
@@ -158,7 +159,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
     }
 
     async decideApproval(input: DesktopApprovalDecisionInput): Promise<DesktopCommandReceipt> {
-        let activeStore: JsonlSessionEventStore | undefined;
+        let activeStore: LocalSessionEventStore | undefined;
         return this.withOwner(
             input.sessionId,
             {
@@ -213,7 +214,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
             readonly modelProviderSelection?: ModelProviderSelection;
             readonly readMessages?: RunCoordinatorReadMessages;
         },
-        action: (owner: SessionRunOwner, store: JsonlSessionEventStore) => Promise<DesktopCommandReceipt['status']>,
+        action: (owner: SessionRunOwner, store: LocalSessionEventStore) => Promise<DesktopCommandReceipt['status']>,
     ): Promise<DesktopCommandReceipt> {
         return this.runOwners.withOwner(
             {
@@ -292,6 +293,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
         await registerCommandRunTool(registry, {
             workspaceRoot: this.options.workspaceRoot,
             requestPermission,
+            requirePermissionForAllowlisted: true,
             ...(this.options.commandExecutor !== undefined ? { executor: this.options.commandExecutor } : {}),
         });
         return registry;
@@ -307,7 +309,7 @@ function selectionToModelOptions(selection: ModelProviderSelection): AbgNodeMode
 }
 
 async function ensureSessionStarted(
-    store: JsonlSessionEventStore,
+    store: LocalSessionEventStore,
     sessionId: string,
     modelProviderSelection: ModelProviderSelection,
     now: () => string,
@@ -370,7 +372,7 @@ function createDefaultDesktopProvider(): ProviderAdapter {
 }
 
 async function backfillCurrentBlockedDesktopApproval(
-    store: JsonlSessionEventStore,
+    store: LocalSessionEventStore,
     sessionId: string,
     modelProviderSelection: ModelProviderSelection,
     now: () => string,

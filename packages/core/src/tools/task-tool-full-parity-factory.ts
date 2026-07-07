@@ -20,7 +20,7 @@ import type {
     ProtocolError,
 } from '@mission-control/protocol';
 import { z } from 'zod';
-import { parseAgentFile } from '../agents/agent-parser.js';
+import { AgentParseError, parseAgentFile } from '../agents/agent-parser.js';
 import { AgentIndex } from '../agents/agent-registry.js';
 import { BUNDLED_AGENT_TEMPLATES } from '../agents/bundled/index.js';
 import { type ModelPattern, resolveAgentModel } from '../agents/model-resolver.js';
@@ -126,6 +126,7 @@ export async function createFullParityTaskToolRegistrationForCli(
             parentToolRegistry: options.parentToolRegistry,
             parentAgent,
             resolveSdkModel: options.resolveSdkModel,
+            ...(options.parentSessionId !== undefined ? { parentSessionId: options.parentSessionId } : {}),
             ...(options.summaryLimit !== undefined ? { summaryLimit: options.summaryLimit } : {}),
             ...(options.services !== undefined ? { services: options.services } : {}),
             ...(options.hostCallbacks !== undefined ? { hostCallbacks: options.hostCallbacks } : {}),
@@ -164,12 +165,30 @@ export async function createFullParityTaskToolRegistrationForCli(
 }
 
 function buildBundledAgentIndex(): AgentIndex {
+    return buildBundledAgentIndexFromTemplates({
+        templates: BUNDLED_AGENT_TEMPLATES,
+        parseAgent: (template) => parseAgentFile('<bundled>', template, 'bundled'),
+        onRecoverableError: (error) => {
+            process.stderr.write(`Skipping bundled agent template: ${error.message}\n`);
+        },
+    });
+}
+
+export function buildBundledAgentIndexFromTemplates(input: {
+    readonly templates: readonly string[];
+    readonly parseAgent: (template: string) => AgentDefinition;
+    readonly onRecoverableError?: (error: AgentParseError) => void;
+}): AgentIndex {
     const index = new AgentIndex();
-    for (const template of BUNDLED_AGENT_TEMPLATES) {
+    for (const template of input.templates) {
         try {
-            index.register(parseAgentFile('<bundled>', template, 'bundled'));
-        } catch {
-            void 0;
+            index.register(input.parseAgent(template));
+        } catch (error: unknown) {
+            if (error instanceof AgentParseError) {
+                input.onRecoverableError?.(error);
+                continue;
+            }
+            throw error;
         }
     }
     return index;

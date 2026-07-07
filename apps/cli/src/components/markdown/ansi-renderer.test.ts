@@ -1,9 +1,9 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { terminalDisplayWidth } from '../../commands/terminal-text.js';
 import { RESET } from '../../ui/ansi-theme.js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { resetHighlighterForTest, setHighlighterRuntime } from './tree-sitter-highlighter.js';
 import { renderMarkdownAnsi } from './ansi-renderer.js';
 import { darkTheme, noColorTheme } from './theme.js';
+import { resetHighlighterForTest, setHighlighterRuntime } from './tree-sitter-highlighter.js';
 
 /**
  * The ANSI renderer flattens the same `tokenToBlocks` IR the interactive

@@ -1,3 +1,4 @@
+import { createStreamDecoder } from '@mission-control/core';
 import {
     createProviderPromptKeypressState,
     createProviderPromptView,
@@ -5,10 +6,9 @@ import {
     type ProviderPromptKeypressChoice,
     reduceProviderPromptKeypress,
 } from './auth-provider-keypress.js';
+import { truncateTerminalText } from './terminal-text.js';
 import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
-import { createStreamDecoder } from '@mission-control/core';
-import { truncateTerminalText } from './terminal-text.js';
 
 export type AuthPromptOptions = {
     readonly defaultValue?: string;

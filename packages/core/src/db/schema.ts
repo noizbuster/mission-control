@@ -4,9 +4,14 @@
  * Mirrors the on-disk shape from `memory/sqlite-persistent-store.ts` exactly so the
  * Turso/libSQL adapter is a behaviorally identical drop-in for the dead better-sqlite3
  * adapter. The table is created via `CREATE TABLE IF NOT EXISTS` (raw SQL in the store)
- * — drizzle-kit migrations are intentionally NOT used here.
+ * — drizzle-kit schema generation is intentionally NOT used here.
  */
-import { text, primaryKey, sqliteTable } from 'drizzle-orm/sqlite-core';
+import { primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+
+export * from './session-agent-schema.js';
+export * from './session-core-schema.js';
+export * from './session-projection-schema.js';
+export * from './session-schema-literals.js';
 
 export const memoryEntries = sqliteTable(
     'memory_entries',

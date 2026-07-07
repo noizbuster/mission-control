@@ -1,22 +1,33 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../apps/cli/src/args.js';
 import { createProviderAuthStore } from '../apps/cli/src/auth-store.js';
 import { runAuthCommand } from '../apps/cli/src/commands/auth.js';
 import { createCliProviderForSelection, runAgent } from '../apps/cli/src/commands/run-agent.js';
 import { missionControlAuthFileEnvKey } from '../packages/config/src/index.js';
+import { missionControlDataDirEnvKey } from '../packages/core/src/memory/data-dir.js';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+const tempDirs: string[] = [];
+
+async function useTempDataDir(): Promise<string> {
+    const directory = await mkdtemp(join(tmpdir(), 'mission-control-cli-integration-data-'));
+    tempDirs.push(directory);
+    vi.stubEnv(missionControlDataDirEnvKey, directory);
+    return directory;
+}
+
 async function useTempAuthFile(): Promise<string> {
     const directory = await mkdtemp(join(tmpdir(), 'mission-control-cli-integration-'));
+    tempDirs.push(directory);
     const authFilePath = join(directory, 'auth.json');
     vi.stubEnv(missionControlAuthFileEnvKey, authFilePath);
     return authFilePath;
 }
 
 const SMOKE_WORKFLOW_SPEC = {
-    name: 'default',
+    name: 'smoke',
     description: 'Smoke-test default workflow for CLI integration',
     graph: {
         id: 'default-smoke',
@@ -35,23 +46,42 @@ const SMOKE_WORKFLOW_SPEC = {
 
 async function createWorkflowWorkspace(): Promise<string> {
     const dir = await mkdtemp(join(tmpdir(), 'mctrl-cli-wf-ws-'));
+    tempDirs.push(dir);
     const workflowsDir = join(dir, '.mctrl', 'workflows');
     await mkdir(workflowsDir, { recursive: true });
     await writeFile(join(workflowsDir, 'default.workflow.json'), JSON.stringify(SMOKE_WORKFLOW_SPEC), 'utf8');
     return dir;
 }
 
+async function captureStdout<T>(run: () => Promise<T>): Promise<{ readonly result: T; readonly stdout: string }> {
+    const writes: string[] = [];
+    const spy = vi.spyOn(process.stdout, 'write').mockImplementation((data: unknown) => {
+        writes.push(typeof data === 'string' ? data : String(data));
+        return true;
+    });
+    try {
+        const result = await run();
+        return { result, stdout: writes.join('') };
+    } finally {
+        spy.mockRestore();
+    }
+}
+
 describe('CLI integration', () => {
-    afterEach(() => {
-        vi.unstubAllEnvs();
+    beforeEach(async () => {
+        await useTempDataDir();
     });
 
-    it('emits the plain mode demo report', async () => {
-        const output = await runAgent(parseArgs(['--no-tui']));
+    afterEach(async () => {
+        vi.unstubAllEnvs();
+        await Promise.all(tempDirs.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+    });
 
-        expect(output).toContain('mission-control');
-        expect(output).toContain('mctrl');
-        expect(output).toContain('task.completed');
+    it('streams the plain mode demo report', async () => {
+        const { result, stdout } = await captureStdout(() => runAgent(parseArgs(['--no-tui'])));
+
+        expect(result).toBe('');
+        expect(stdout).toMatch(/\n> \S+ · \S+\n/u);
     });
 
     it('emits JSON Lines demo events', async () => {
@@ -66,12 +96,12 @@ describe('CLI integration', () => {
     });
 
     it('emits selected provider and model through CLI integration', async () => {
-        const output = await runAgent(parseArgs(['--no-tui', '--provider', 'local', '--model', 'local-echo']));
+        const { result, stdout } = await captureStdout(() =>
+            runAgent(parseArgs(['--no-tui', '--provider', 'local', '--model', 'local-echo'])),
+        );
 
-        expect(output).toContain('provider: local');
-        expect(output).toContain('model: local-echo');
-        expect(output).toContain('selection: local/local-echo');
-        expect(output).toContain('task.completed');
+        expect(result).toBe('');
+        expect(stdout).toContain('> local · local-echo');
     });
 
     it('uses auth configured provider defaults through CLI integration', async () => {
@@ -81,11 +111,10 @@ describe('CLI integration', () => {
             store: createProviderAuthStore(),
         });
 
-        const output = await runAgent(parseArgs(['--no-tui']));
+        const { result, stdout } = await captureStdout(() => runAgent(parseArgs(['--no-tui'])));
 
-        expect(output).toContain('provider: local');
-        expect(output).toContain('model: local-echo');
-        expect(output).toContain('selection: local/local-echo');
+        expect(result).toBe('');
+        expect(stdout).toContain('> local · local-echo');
         await rm(authFilePath, { force: true });
     });
 
@@ -96,17 +125,15 @@ describe('CLI integration', () => {
             store: createProviderAuthStore(),
         });
 
-        const output = await runAgent(parseArgs(['--no-tui']));
+        const { result, stdout } = await captureStdout(() => runAgent(parseArgs(['--no-tui'])));
 
-        expect(output).toContain('provider: anthropic');
-        expect(output).toContain('model: claude-3-5-haiku-20241022');
-        expect(output).toContain('selection: anthropic/claude-3-5-haiku-20241022');
-        expect(output).toContain('task.completed');
-        expect(output).not.toContain('anthropic_key');
+        expect(result).toBe('');
+        expect(stdout).toContain('> anthropic · claude-3-5-sonnet-20240620');
+        expect(stdout).not.toContain('anthropic_key');
         await rm(authFilePath, { force: true });
     });
 
-    it('routes #default hello through workflow discovery to graph dispatch', async () => {
+    it('routes a discovered workflow through graph dispatch', async () => {
         const workspaceDir = await createWorkflowWorkspace();
         const configDir = await mkdtemp(join(tmpdir(), 'mctrl-cli-wf-cfg-'));
         vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
@@ -117,10 +144,10 @@ describe('CLI integration', () => {
             );
             const output = await runAgent(
                 parseArgs([
-                    '--no-tui',
+                    '--json',
                     '--workspace',
                     workspaceDir,
-                    '#default hello',
+                    '#smoke hello',
                     '--provider',
                     'local',
                     '--model',
@@ -128,9 +155,37 @@ describe('CLI integration', () => {
                 ]),
                 { provider, workspaceRoot: workspaceDir },
             );
+            const records = output
+                .trim()
+                .split('\n')
+                .map(
+                    (line) =>
+                        JSON.parse(line) as {
+                            readonly type?: string;
+                            readonly abg?: {
+                                readonly graphId?: string;
+                                readonly nodeId?: string;
+                                readonly nodeKind?: string;
+                            };
+                        },
+                );
 
-            expect(output).toContain('graph=default-smoke');
-            expect(output).toContain('node=smoke-entry mode=llm');
+            expect(records).toContainEqual(
+                expect.objectContaining({
+                    type: 'graph.started',
+                    abg: expect.objectContaining({ graphId: 'default-smoke' }),
+                }),
+            );
+            expect(records).toContainEqual(
+                expect.objectContaining({
+                    type: 'node.started',
+                    abg: expect.objectContaining({
+                        graphId: 'default-smoke',
+                        nodeId: 'smoke-entry',
+                        nodeKind: 'llm',
+                    }),
+                }),
+            );
         } finally {
             await rm(workspaceDir, { recursive: true, force: true });
             await rm(configDir, { recursive: true, force: true });

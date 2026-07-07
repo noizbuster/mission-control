@@ -135,7 +135,8 @@ export function extractLastAssistantText(outputText: string): string {
 }
 
 export const TOOL_TITLE_PATTERN = /^(?:Edit|Patch|Command|Write|Replace|Create) preview for (\S+)/u;
-export const TOOL_TITLE_PATTERN_2 = /^(?:Applied (?:patch|edit):|Created file:|Replaced file:|Command output for) (.+)$/u;
+export const TOOL_TITLE_PATTERN_2 =
+    /^(?:Applied (?:patch|edit):|Created file:|Replaced file:|Command output for) (.+)$/u;
 
 export function readToolBlockTitle(lines: readonly string[]): string | undefined {
     for (const line of lines) {

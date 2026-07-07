@@ -1,8 +1,6 @@
 import { AgentEventEnvelopeSchema } from '@mission-control/protocol';
+import { readLocalSessionReplay } from './memory/local-session-store.js';
 import type { DeterministicProviderStep } from './providers/deterministic-provider.js';
-import { projectJsonlSessionReplayPrefix } from './session-replay.js';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 
 export function fixedNow(): string {
     return '2026-06-09T00:00:00.000Z';
@@ -39,8 +37,11 @@ export function commandRunCall(toolCallId: string): DeterministicProviderStep {
 }
 
 export async function readReplay(dataDir: string, sessionId: string) {
-    const contents = await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8');
-    const replay = projectJsonlSessionReplayPrefix({ sessionId, contents }).projection;
+    const result = await readLocalSessionReplay({ dataDir, sessionId });
+    if (result.kind === 'missing') {
+        throw new Error(`Session replay not found: ${sessionId}`);
+    }
+    const replay = result.replay.projection;
     return {
         ...replay,
         envelopes: replay.envelopes.map((envelope) => AgentEventEnvelopeSchema.parse(envelope)),

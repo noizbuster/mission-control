@@ -10,7 +10,6 @@ import { useCallback, useState, useSyncExternalStore } from 'react';
 import { toggleDisabled } from '../commands/agents-disabled-config.js';
 import { parseModelPatternString, setOverride } from '../commands/agents-model-overrides-config.js';
 import { createProviderPromptView } from '../commands/auth-provider-keypress-view.js';
-import { padEndToDisplayWidth } from '../commands/terminal-text.js';
 import {
     APPROVAL_LEVEL_PICKER_ENTRIES,
     APPROVAL_OPTIONS,
@@ -19,6 +18,7 @@ import {
     createSessionPickerView,
 } from '../commands/chat-store.js';
 import { loadDashboardAgentEntries } from '../commands/interactive-chat-actions.js';
+import { padEndToDisplayWidth } from '../commands/terminal-text.js';
 import { OverlayFrame } from './OverlayFrame.js';
 import { printableCharFromKey } from './overlay-key-input.js';
 import {
@@ -241,7 +241,9 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
         >
             <box height={1}>
                 <text fg={ACCENTS.question} attributes={TextAttributes.BOLD}>
-                    {multiBatch ? ` Question (${snapshot.questionTabIndex + 1}/${snapshot.questionTabs.length}) ` : ' Question '}
+                    {multiBatch
+                        ? ` Question (${snapshot.questionTabIndex + 1}/${snapshot.questionTabs.length}) `
+                        : ' Question '}
                 </text>
             </box>
             {multiBatch && !snapshot.questionCustomMode ? (
@@ -254,7 +256,7 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                             return (
                                 // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; Left/Right/Tab nav already exists, mouse is an enhancement
                                 <box
-                                    key={`q-tab-${index}-${tab.header}`}
+                                    key={`q-tab-${tab.header}-${tab.question}`}
                                     paddingLeft={1}
                                     paddingRight={1}
                                     onMouseOver={onTabHover(index)}
@@ -262,16 +264,17 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                                 >
                                     <text
                                         {...(isActive
-                                              ? { fg: '#000000' }
-                                              : isAnswered
-                                                ? {}
-                                                : { attributes: TextAttributes.DIM })}
+                                            ? { fg: '#000000' }
+                                            : isAnswered
+                                              ? {}
+                                              : { attributes: TextAttributes.DIM })}
                                     >
                                         {`${index + 1}. ${tab.header.length > 0 ? tab.header : tab.question.slice(0, 20)}`}
                                     </text>
                                 </box>
                             );
                         })}
+                        {/* biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; Left/Right/Tab nav already exists, mouse is an enhancement */}
                         <box
                             paddingLeft={1}
                             paddingRight={1}
@@ -280,8 +283,8 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                         >
                             <text
                                 {...(snapshot.questionConfirmActive
-                                      ? { fg: '#000000' }
-                                      : { attributes: TextAttributes.DIM })}
+                                    ? { fg: '#000000' }
+                                    : { attributes: TextAttributes.DIM })}
                             >
                                 Confirm
                             </text>
@@ -298,8 +301,10 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                         const value = snapshot.questionAnswers[index]?.join(', ') ?? '';
                         const answered = value.length > 0;
                         return (
-                            <box key={`q-rev-${index}-${tab.header}`} flexDirection="row" paddingLeft={1}>
-                                <text attributes={TextAttributes.DIM}>{`${tab.header.length > 0 ? tab.header : tab.question}: `}</text>
+                            <box key={`q-rev-${tab.header}-${tab.question}`} flexDirection="row" paddingLeft={1}>
+                                <text
+                                    attributes={TextAttributes.DIM}
+                                >{`${tab.header.length > 0 ? tab.header : tab.question}: `}</text>
                                 <text fg={answered ? QUESTION_SELECTED_FG : '#ff6b6b'}>
                                     {answered ? value : '(not answered)'}
                                 </text>
@@ -343,9 +348,7 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): React.ReactNod
                         const labelStyle = isCursor
                             ? { fg: QUESTION_SELECTED_FG, attributes: TextAttributes.BOLD }
                             : {};
-                        const descStyle = isCursor
-                            ? { fg: QUESTION_SELECTED_FG }
-                            : { attributes: TextAttributes.DIM };
+                        const descStyle = isCursor ? { fg: QUESTION_SELECTED_FG } : { attributes: TextAttributes.DIM };
                         return (
                             // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; Up/Down/Enter/Space keyboard nav already exists, mouse is an enhancement
                             <box

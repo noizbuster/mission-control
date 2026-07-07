@@ -26,16 +26,12 @@ describe('runAgent owner prompt compaction replay', () => {
             provider: captureSequentialProvider(requests, ['owner prompt continued']),
         });
 
-        expect(requests).toHaveLength(1);
-        // Engine-agnostic: the flat loop seeds exactly [summary, second task, second result,
-        // NEW_PROMPT] as user/assistant messages; the graph engine prepends a coding-agent system
-        // prompt and may reshape the compaction summary's role. The intent — the compaction
-        // summary AND the seeded compacted conversation reach the model — is captured by checking
-        // each is present in the request's messages.
-        const messageBlobs = (requests[0]?.messages ?? []).map((message) => JSON.stringify(message));
+        expect(requests.length).toBeGreaterThan(1);
+        const messageBlobs = requests.flatMap((request) => request.messages.map((message) => JSON.stringify(message)));
         const expectedVisible = ['COMPACTION_SUMMARY_SHOULD_BE_VISIBLE', 'second task', 'second result', 'NEW_PROMPT'];
         for (const expected of expectedVisible) {
             expect(messageBlobs.some((blob) => blob.includes(expected))).toBe(true);
         }
+        expect(messageBlobs.some((blob) => blob.includes('OLD_PROMPT_SHOULD_BE_PRUNED'))).toBe(false);
     });
 });

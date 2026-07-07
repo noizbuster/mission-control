@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { createNativesClient } from '../packages/core/src/native/natives-client.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createNativesClient } from '../packages/core/src/native/natives-client.js';
 
 const root = process.cwd();
 
@@ -75,28 +75,22 @@ describe('N-API addon artifact path convention', () => {
 });
 
 describe('createNativesClient availability', () => {
-    it.skipIf(!addonBuilt)(
-        'reports available: true when the .node artifact is present and loadable',
-        () => {
-            const client = createNativesClient({ onWarning: () => {} });
+    it.skipIf(!addonBuilt)('reports available: true when the .node artifact is present and loadable', () => {
+        const client = createNativesClient({ onWarning: () => {} });
 
-            expect(client.available).toBe(true);
-            expect(client.countTokens('hello world', 'gpt-4o')).not.toBeNull();
-        },
-    );
+        expect(client.available).toBe(true);
+        expect(client.countTokens('hello world', 'gpt-4o')).not.toBeNull();
+    });
 
-    it.skipIf(addonBuilt)(
-        'gracefully reports available: false (no thrown error) when the addon is absent',
-        () => {
-            const client = createNativesClient({
-                addonPath: '/nonexistent/mission-control-natives.node',
-                onWarning: () => {},
-            });
+    it.skipIf(addonBuilt)('gracefully reports available: false (no thrown error) when the addon is absent', () => {
+        const client = createNativesClient({
+            addonPath: '/nonexistent/mission-control-natives.node',
+            onWarning: () => {},
+        });
 
-            expect(client.available).toBe(false);
-            expect(client.countTokens('hello world', 'gpt-4o')).toBeNull();
-        },
-    );
+        expect(client.available).toBe(false);
+        expect(client.countTokens('hello world', 'gpt-4o')).toBeNull();
+    });
 });
 
 describe('platform addon package naming convention', () => {
@@ -114,10 +108,7 @@ describe('platform addon package naming convention', () => {
         const deps = optionalDependencies as Record<string, string>;
         for (const { os, arch } of RELEASE_PLATFORMS) {
             const expected = `@mission-control/natives-${os}-${arch}`;
-            expect(
-                deps[expected],
-                `optionalDependencies must list ${expected}`,
-            ).toBeTruthy();
+            expect(deps[expected], `optionalDependencies must list ${expected}`).toBeTruthy();
         }
     });
 
@@ -171,9 +162,7 @@ describe('CLI release artifact names are unchanged', () => {
         const readme = readText('README.md');
 
         for (const { os, arch } of RELEASE_PLATFORMS) {
-            expect(readme, `README must list mctrl-${os}-${arch}.tar.gz`).toContain(
-                `mctrl-${os}-${arch}.tar.gz`,
-            );
+            expect(readme, `README must list mctrl-${os}-${arch}.tar.gz`).toContain(`mctrl-${os}-${arch}.tar.gz`);
         }
     });
 
@@ -202,12 +191,8 @@ describe('CI builds both Rust crates on every release platform', () => {
     it('runs cargo build --release for both native/natives and native/sidecar in the matrix', () => {
         const ci = readText('.github/workflows/ci.yml');
 
-        expect(ci).toContain(
-            'cargo build --release --manifest-path native/natives/Cargo.toml',
-        );
-        expect(ci).toContain(
-            'cargo build --release --manifest-path native/sidecar/Cargo.toml',
-        );
+        expect(ci).toContain('cargo build --release --manifest-path native/natives/Cargo.toml');
+        expect(ci).toContain('cargo build --release --manifest-path native/sidecar/Cargo.toml');
     });
 
     it('does not add npm publish steps (release distribution is a future task)', () => {

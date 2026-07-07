@@ -61,9 +61,7 @@ export function copy(renderer: SelectionCopyRenderer, toast: Toast, clipboardSer
 
     const focus = renderer.currentFocusedRenderable;
     const clipboardText =
-        focus?.getClipboardText && selection.selectedRenderables.includes(focus)
-            ? focus.getClipboardText(text)
-            : text;
+        focus?.getClipboardText && selection.selectedRenderables.includes(focus) ? focus.getClipboardText(text) : text;
 
     clipboardService
         .copyToClipboard(clipboardText)

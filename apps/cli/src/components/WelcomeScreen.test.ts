@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest';
+import type {
+    WelcomeData,
+    WelcomeLspServer,
+    WelcomeMcpServer,
+    WelcomeSession,
+    WelcomeSkill,
+} from '../commands/welcome-data.js';
 import {
     buildProjectDescriptor,
     formatLspGlyphs,
-    formatModelLine,
     formatMcpServerRow,
+    formatModelLine,
     formatRelativeTime,
     formatSessionRow,
     formatSkillRow,
     padToWidth,
     truncateSessionId,
 } from './WelcomeScreen.js';
-import type { WelcomeData, WelcomeLspServer, WelcomeMcpServer, WelcomeSession, WelcomeSkill } from '../commands/welcome-data.js';
 
 const NOW = new Date('2026-07-01T12:00:00Z');
 const isoMinutesAgo = (mins: number): string => new Date(NOW.getTime() - mins * 60_000).toISOString();
@@ -181,8 +187,6 @@ describe('formatSessionRow', () => {
 
 describe('buildProjectDescriptor', () => {
     it('appends branch and worktree marker', () => {
-        expect(buildProjectDescriptor('mission-control', 'main', true)).toBe(
-            'mission-control:main (worktree)',
-        );
+        expect(buildProjectDescriptor('mission-control', 'main', true)).toBe('mission-control:main (worktree)');
     });
 });

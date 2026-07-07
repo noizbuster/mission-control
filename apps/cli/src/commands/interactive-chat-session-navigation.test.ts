@@ -1,14 +1,14 @@
 import {
-    JsonlSessionEventStore,
+    openLocalSessionEventStore,
     type ProviderAdapter,
-    projectJsonlSessionReplayPrefix,
+    readLocalSessionReplay,
     SessionRunOwner,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection, ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSessionNavigationController } from './interactive-chat-session-navigation.js';
 import { writeSessionEvents } from './session-test-support.js';
-import { appendFile, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { appendFile, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -77,7 +77,7 @@ describe('interactive chat session navigation', () => {
             events: [sessionEvent(sessionId, 'task.completed', 'root task', { kind: 'entry', entryId: 'entry_root' })],
         });
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
-        const store = await JsonlSessionEventStore.open({ dataDir, sessionId });
+        const store = await openLocalSessionEventStore({ dataDir, sessionId });
         await appendFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), '{"corrupt": true}\n', 'utf8');
         const before = await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8');
         const navigation = createSessionNavigationController({
@@ -142,7 +142,7 @@ describe('interactive chat session navigation', () => {
             getCurrentSessionId: () => sourceSessionId,
             getCurrentStore: () => undefined,
             switchSessionStore: async (sessionId) => {
-                const store = await JsonlSessionEventStore.open({ dataDir, sessionId });
+                const store = await openLocalSessionEventStore({ dataDir, sessionId });
                 await store.close();
                 return store;
             },
@@ -175,6 +175,48 @@ describe('interactive chat session navigation', () => {
         );
     });
 
+    it('clones from a SQLite-native source session without requiring a legacy JSONL log', async () => {
+        const dataDir = await tempRoot('mctrl-session-navigation-sqlite-');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        const sourceSessionId = 'session_navigation_sqlite_source';
+        await writeLocalSessionEvents({
+            dataDir,
+            sessionId: sourceSessionId,
+            events: [
+                sessionEvent(sourceSessionId, 'session.started', 'seed source'),
+                sessionEvent(sourceSessionId, 'prompt.admitted', 'queued prompt'),
+                sessionEvent(sourceSessionId, 'task.completed', 'root prompt', {
+                    kind: 'entry',
+                    entryId: 'entry_root',
+                }),
+            ],
+        });
+        const navigation = createSessionNavigationController({
+            getCurrentSessionId: () => sourceSessionId,
+            getCurrentStore: () => undefined,
+            switchSessionStore: async (sessionId) => {
+                const store = await openLocalSessionEventStore({ dataDir, sessionId });
+                await store.close();
+                return store;
+            },
+        });
+
+        await navigation.cloneSession({
+            modelProviderSelection: selection,
+            sessionId: 'session_navigation_sqlite_clone',
+        });
+
+        const cloneProjection = await readProjection(dataDir, 'session_navigation_sqlite_clone');
+        expect(eventTypes(cloneProjection)).toEqual(
+            expect.arrayContaining(['session.started', 'prompt.admitted', 'task.completed', 'session.cloned']),
+        );
+        expect(cloneProjection.sessionTree.cloneSource).toMatchObject({
+            sessionId: sourceSessionId,
+            entryId: 'entry_root',
+        });
+        await expect(readdir(join(dataDir, 'sessions'))).resolves.not.toContain(`${sourceSessionId}.jsonl`);
+    });
+
     it('does not preserve copied blocked run state when a cloned session is resumed', async () => {
         const dataDir = await tempRoot('mctrl-session-navigation-resume-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
@@ -197,7 +239,7 @@ describe('interactive chat session navigation', () => {
             getCurrentSessionId: () => sourceSessionId,
             getCurrentStore: () => undefined,
             switchSessionStore: async (sessionId) => {
-                const store = await JsonlSessionEventStore.open({ dataDir, sessionId });
+                const store = await openLocalSessionEventStore({ dataDir, sessionId });
                 await store.close();
                 return store;
             },
@@ -208,7 +250,7 @@ describe('interactive chat session navigation', () => {
             sessionId: 'session_navigation_clone',
         });
 
-        const store = await JsonlSessionEventStore.open({ dataDir, sessionId: 'session_navigation_clone' });
+        const store = await openLocalSessionEventStore({ dataDir, sessionId: 'session_navigation_clone' });
         try {
             const owner = new SessionRunOwner({
                 sessionId: 'session_navigation_clone',
@@ -242,7 +284,7 @@ describe('interactive chat session navigation', () => {
                 sessionEvent(sessionId, 'task.completed', 'root', { kind: 'entry', entryId: 'entry_root' }),
             ],
         });
-        const store = await JsonlSessionEventStore.open({ dataDir, sessionId });
+        const store = await openLocalSessionEventStore({ dataDir, sessionId });
         const observed: AgentEvent[] = [];
         const navigation = createSessionNavigationController({
             getCurrentSessionId: () => sessionId,
@@ -256,7 +298,10 @@ describe('interactive chat session navigation', () => {
         });
 
         try {
-            const result = await navigation.renameSession({ name: 'investigate parser', modelProviderSelection: selection });
+            const result = await navigation.renameSession({
+                name: 'investigate parser',
+                modelProviderSelection: selection,
+            });
 
             expect(result.message).toContain('investigate parser');
             expect(observed.length).toBe(1);
@@ -279,9 +324,9 @@ describe('interactive chat session navigation', () => {
             },
         });
 
-        await expect(
-            navigation.renameSession({ name: 'orphan', modelProviderSelection: selection }),
-        ).rejects.toThrow('No durable session is active');
+        await expect(navigation.renameSession({ name: 'orphan', modelProviderSelection: selection })).rejects.toThrow(
+            'No durable session is active',
+        );
     });
 });
 
@@ -298,10 +343,31 @@ async function createCorruptSession(): Promise<{ readonly dataDir: string; reado
 }
 
 async function readProjection(dataDir: string, sessionId: string) {
-    return projectJsonlSessionReplayPrefix({
-        sessionId,
-        contents: await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8'),
-    }).projection;
+    const replay = await readLocalSessionReplay({ dataDir, sessionId });
+    if (replay.kind !== 'found') {
+        throw new Error(`expected replay for ${sessionId}`);
+    }
+    return replay.replay.projection;
+}
+
+async function writeLocalSessionEvents(input: {
+    readonly dataDir: string;
+    readonly sessionId: string;
+    readonly events: readonly AgentEvent[];
+}): Promise<void> {
+    const store = await openLocalSessionEventStore({
+        dataDir: input.dataDir,
+        sessionId: input.sessionId,
+        now: () => '2026-06-05T10:00:00.000Z',
+        createEventId: (event, sequence) => `${input.sessionId}_${sequence}_${event.type.replaceAll('.', '_')}`,
+    });
+    try {
+        for (const event of input.events) {
+            await store.append(event);
+        }
+    } finally {
+        await store.close();
+    }
 }
 
 function eventTypes(projection: Awaited<ReturnType<typeof readProjection>>): readonly string[] {

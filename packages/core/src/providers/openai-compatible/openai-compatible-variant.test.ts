@@ -13,45 +13,35 @@ describe('OpenAI-compatible provider reasoning variants', () => {
         ['openrouter', '~anthropic/claude-fable-latest', 'reasoning-high'],
         ['openrouter', '~google/gemini-pro-latest', 'reasoning-low'],
         ['openrouter', '~google/gemini-flash-latest', 'reasoning-medium'],
-    ] as const)(
-        'maps %s %s reasoning variant into reasoning object body field',
-        async (providerID, modelID, variantID) => {
-            const requests: OpenAICompatibleTransportRequest[] = [];
-            const provider = createProviderWithRequests(providerID, requests);
+    ] as const)('maps %s %s reasoning variant into reasoning object body field', async (providerID, modelID, variantID) => {
+        const requests: OpenAICompatibleTransportRequest[] = [];
+        const provider = createProviderWithRequests(providerID, requests);
 
-            await collectChunks(
-                provider.streamTurn(turnRequest({ providerID, modelID, variantID }), providerContext()),
-            );
+        await collectChunks(provider.streamTurn(turnRequest({ providerID, modelID, variantID }), providerContext()));
 
-            expect(hasOwn(requests[0]?.body, 'reasoning')).toBe(true);
-            expect(hasOwn(requests[0]?.body, 'reasoning_effort')).toBe(false);
-            expect(requests[0]?.body.reasoning).toEqual({
-                effort: variantID.replace('reasoning-', ''),
-            });
-        },
-    );
+        expect(hasOwn(requests[0]?.body, 'reasoning')).toBe(true);
+        expect(hasOwn(requests[0]?.body, 'reasoning_effort')).toBe(false);
+        expect(requests[0]?.body.reasoning).toEqual({
+            effort: variantID.replace('reasoning-', ''),
+        });
+    });
 
     it.each([
-        ['groq', 'qwen-qwq-32b', 'reasoning-none', 'none'],
-        ['groq', 'qwen-qwq-32b', 'reasoning-low', 'low'],
-        ['groq', 'qwen-qwq-32b', 'reasoning-medium', 'medium'],
-        ['groq', 'qwen-qwq-32b', 'reasoning-high', 'high'],
-        ['groq', 'deepseek-r1-distill-llama-70b', 'reasoning-high', 'high'],
-    ] as const)(
-        'maps %s %s reasoning variant into reasoning_effort scalar body field',
-        async (providerID, modelID, variantID, expected) => {
-            const requests: OpenAICompatibleTransportRequest[] = [];
-            const provider = createProviderWithRequests(providerID, requests);
+        ['groq', 'qwen/qwen3-32b', 'reasoning-none', 'none'],
+        ['groq', 'qwen/qwen3-32b', 'reasoning-default', 'default'],
+        ['groq', 'openai/gpt-oss-120b', 'reasoning-low', 'low'],
+        ['groq', 'openai/gpt-oss-120b', 'reasoning-medium', 'medium'],
+        ['groq', 'openai/gpt-oss-120b', 'reasoning-high', 'high'],
+    ] as const)('maps %s %s reasoning variant into reasoning_effort scalar body field', async (providerID, modelID, variantID, expected) => {
+        const requests: OpenAICompatibleTransportRequest[] = [];
+        const provider = createProviderWithRequests(providerID, requests);
 
-            await collectChunks(
-                provider.streamTurn(turnRequest({ providerID, modelID, variantID }), providerContext()),
-            );
+        await collectChunks(provider.streamTurn(turnRequest({ providerID, modelID, variantID }), providerContext()));
 
-            expect(hasOwn(requests[0]?.body, 'reasoning_effort')).toBe(true);
-            expect(hasOwn(requests[0]?.body, 'reasoning')).toBe(false);
-            expect(requests[0]?.body.reasoning_effort).toBe(expected);
-        },
-    );
+        expect(hasOwn(requests[0]?.body, 'reasoning_effort')).toBe(true);
+        expect(hasOwn(requests[0]?.body, 'reasoning')).toBe(false);
+        expect(requests[0]?.body.reasoning_effort).toBe(expected);
+    });
 
     it('maps mistral reasoning-high into reasoning_effort high', async () => {
         const requests: OpenAICompatibleTransportRequest[] = [];
@@ -84,23 +74,20 @@ describe('OpenAI-compatible provider reasoning variants', () => {
     it.each([
         ['reasoning-high', { thinking: { type: 'enabled' }, reasoning_effort: 'high' }],
         ['reasoning-max', { thinking: { type: 'enabled' }, reasoning_effort: 'max' }],
-    ] as const)(
-        'maps zai-coding-plan glm-5.2 %s into thinking toggle + reasoning_effort',
-        async (variantID, expectedBody) => {
-            const requests: OpenAICompatibleTransportRequest[] = [];
-            const provider = createProviderWithRequests('zai-coding-plan', requests);
+    ] as const)('maps zai-coding-plan glm-5.2 %s into thinking toggle + reasoning_effort', async (variantID, expectedBody) => {
+        const requests: OpenAICompatibleTransportRequest[] = [];
+        const provider = createProviderWithRequests('zai-coding-plan', requests);
 
-            await collectChunks(
-                provider.streamTurn(
-                    turnRequest({ providerID: 'zai-coding-plan', modelID: 'glm-5.2', variantID }),
-                    providerContext(),
-                ),
-            );
+        await collectChunks(
+            provider.streamTurn(
+                turnRequest({ providerID: 'zai-coding-plan', modelID: 'glm-5.2', variantID }),
+                providerContext(),
+            ),
+        );
 
-            expect(requests[0]?.body.thinking).toEqual(expectedBody.thinking);
-            expect(requests[0]?.body.reasoning_effort).toBe(expectedBody.reasoning_effort);
-        },
-    );
+        expect(requests[0]?.body.thinking).toEqual(expectedBody.thinking);
+        expect(requests[0]?.body.reasoning_effort).toBe(expectedBody.reasoning_effort);
+    });
 
     it('silently drops reasoning variant on non-reasoning zai-coding-plan model (glm-4.6)', async () => {
         const requests: OpenAICompatibleTransportRequest[] = [];

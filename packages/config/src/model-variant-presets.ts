@@ -51,10 +51,7 @@ export function variantsForReasoningOptions(
     return undefined;
 }
 
-function effortVariants(
-    providerID: string,
-    values: readonly string[],
-): readonly ModelVariantPreset[] {
+function effortVariants(providerID: string, values: readonly string[]): readonly ModelVariantPreset[] {
     const prefix = THINKING_PREFIX_PROVIDERS.has(providerID) ? 'thinking-' : 'reasoning-';
     return values.map((value) => ({
         id: `${prefix}${value}`,

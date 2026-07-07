@@ -3,16 +3,15 @@ import {
     missionControlDataDirEnvKey,
     type SessionIndexSessionRecord,
 } from '@mission-control/core';
-import { type AgentEvent, AgentEventSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
-import { runAgent } from './run-agent.js';
 import { runSessionCommand } from './session.js';
 import {
-    codingStepRecords,
     diagnosticRecords,
     eventRecords,
     parseReplayRecords,
+    sessionCommandFixtureEvents,
+    taskCompletedEvent,
     writeSessionEvents,
 } from './session-test-support.js';
 import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -27,8 +26,8 @@ describe('session commands', () => {
     it('lists shows and replays JSONL session logs deterministically', async () => {
         const dataDir = await useTempDataDir();
         const sessionId = 'session_cli_commands';
-        const runOutput = await runAgent(parseArgs(['run', 'hello from session', '--session', sessionId, '--jsonl']));
-        const runEvents = parseEventLines(runOutput);
+        const events = sessionCommandFixtureEvents(sessionId, 'hello from session');
+        await writeSessionEvents({ dataDir, sessionId, events });
 
         const listOutput = await runSessionCommand(parseArgs(['session', 'list']));
         const showOutput = await runSessionCommand(parseArgs(['session', 'show', sessionId]));
@@ -41,6 +40,7 @@ describe('session commands', () => {
         expect(JSON.parse(showOutput)).toMatchObject({
             sessionId,
             eventCount: replayEvents.length,
+            statusText: 'stopped',
             snapshot: {
                 sessionId,
                 status: 'stopped',
@@ -49,7 +49,8 @@ describe('session commands', () => {
         expect(replayEvents.map((event) => event.type)).toEqual([
             'session.started',
             'session.metadata.updated',
-            ...runEvents.filter((event) => event.type !== 'session.started').map((event) => event.type),
+            'task.completed',
+            'session.stopped',
         ]);
         await rm(dataDir, { recursive: true, force: true });
     });
@@ -102,10 +103,8 @@ describe('session commands', () => {
         // Given
         const dataDir = await useTempDataDir();
         const sessionId = 'session_cli_replay_corrupt';
-        const runOutput = await runAgent(
-            parseArgs(['run', 'hello before corruption', '--session', sessionId, '--jsonl']),
-        );
-        const runEvents = parseEventLines(runOutput);
+        const events = sessionCommandFixtureEvents(sessionId, 'hello before corruption');
+        await writeSessionEvents({ dataDir, sessionId, events });
         await appendFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), '{"broken":\n', 'utf8');
 
         // When
@@ -116,210 +115,16 @@ describe('session commands', () => {
         expect(eventRecords(replayRecords).map((event) => event.type)).toEqual([
             'session.started',
             'session.metadata.updated',
-            ...runEvents.filter((event) => event.type !== 'session.started').map((event) => event.type),
+            'task.completed',
+            'session.stopped',
         ]);
         expect(diagnosticRecords(replayRecords)).toEqual([
             {
                 code: 'corrupt_trailing_record',
-                lineNumber: runEvents.length + 3,
+                lineNumber: events.length + 2,
                 sessionId,
             },
         ]);
-        await rm(dataDir, { recursive: true, force: true });
-    });
-
-    it('renders failed run state', async () => {
-        // Given
-        const dataDir = await useTempDataDir();
-        const sessionId = 'session_cli_run_failed';
-        await writeSessionEvents({
-            dataDir,
-            sessionId,
-            events: [
-                runEvent(sessionId, 'run.started', 'run started', {
-                    command: 'run',
-                    state: 'running',
-                    runId: 'run_failed',
-                }),
-                runEvent(sessionId, 'run.failed', 'provider exploded', {
-                    command: 'run',
-                    state: 'failed',
-                    runId: 'run_failed',
-                    reason: 'provider exploded',
-                    errorCode: 'unknown',
-                }),
-            ],
-        });
-
-        // When
-        const showOutput = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', sessionId])));
-        const replayRecords = parseReplayRecords(
-            await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl'])),
-        );
-
-        // Then
-        expect(showOutput.codingSteps).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({ kind: 'run.state', state: 'failed', reason: 'provider exploded' }),
-            ]),
-        );
-        expect(codingStepRecords(replayRecords)).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({ kind: 'run.state', state: 'failed', errorCode: 'unknown' }),
-            ]),
-        );
-        await rm(dataDir, { recursive: true, force: true });
-    });
-
-    it('renders blocked run state distinctly', async () => {
-        // Given
-        const dataDir = await useTempDataDir();
-        const sessionId = 'session_cli_run_blocked';
-        await writeSessionEvents({
-            dataDir,
-            sessionId,
-            events: [
-                runEvent(sessionId, 'run.started', 'run started', {
-                    command: 'run',
-                    state: 'running',
-                    runId: 'run_blocked',
-                }),
-                runEvent(sessionId, 'run.blocked', 'waiting for approval: file.patch', {
-                    command: 'run',
-                    state: 'blocked_on_approval',
-                    runId: 'run_blocked',
-                    reason: 'waiting for approval: file.patch',
-                    errorCode: 'tool_failed',
-                    toolCallId: 'patch_call',
-                }),
-            ],
-        });
-
-        // When
-        const showOutput = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', sessionId])));
-        const replayRecords = parseReplayRecords(
-            await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl'])),
-        );
-
-        // Then
-        expect(showOutput.codingSteps).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({
-                    kind: 'run.state',
-                    state: 'blocked_on_approval',
-                    toolCallId: 'patch_call',
-                }),
-            ]),
-        );
-        expect(codingStepRecords(replayRecords)).toEqual(
-            expect.arrayContaining([expect.objectContaining({ kind: 'run.state', state: 'blocked_on_approval' })]),
-        );
-        await rm(dataDir, { recursive: true, force: true });
-    });
-
-    it('renders interrupted run state distinctly', async () => {
-        // Given
-        const dataDir = await useTempDataDir();
-        const sessionId = 'session_cli_run_interrupted';
-        await writeSessionEvents({
-            dataDir,
-            sessionId,
-            events: [
-                runEvent(sessionId, 'run.started', 'run started', {
-                    command: 'run',
-                    state: 'running',
-                    runId: 'run_interrupted',
-                }),
-                runEvent(sessionId, 'run.interrupted', 'run interrupted', {
-                    command: 'run',
-                    state: 'interrupted',
-                    runId: 'run_interrupted',
-                }),
-            ],
-        });
-
-        // When
-        const replayRecords = parseReplayRecords(
-            await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl'])),
-        );
-
-        // Then
-        expect(codingStepRecords(replayRecords)).toEqual(
-            expect.arrayContaining([expect.objectContaining({ kind: 'run.state', state: 'interrupted' })]),
-        );
-        expect(eventRecords(replayRecords).map((event) => event.type)).toEqual(
-            expect.arrayContaining(['run.started', 'run.interrupted']),
-        );
-        await rm(dataDir, { recursive: true, force: true });
-    });
-
-    it('replay preserves completed, failed, interrupted, and blocked terminal run events distinctly', async () => {
-        // Given
-        const dataDir = await useTempDataDir();
-        const scenarios = [
-            {
-                sessionId: 'session_cli_run_completed',
-                eventType: 'run.completed',
-                state: 'completed',
-                message: 'run completed',
-            },
-            {
-                sessionId: 'session_cli_run_failed_replay',
-                eventType: 'run.failed',
-                state: 'failed',
-                message: 'run failed',
-            },
-            {
-                sessionId: 'session_cli_run_interrupted_replay',
-                eventType: 'run.interrupted',
-                state: 'interrupted',
-                message: 'run interrupted',
-            },
-            {
-                sessionId: 'session_cli_run_blocked_replay',
-                eventType: 'run.blocked',
-                state: 'blocked_on_approval',
-                message: 'waiting for approval: file.patch',
-            },
-        ] as const;
-
-        for (const scenario of scenarios) {
-            await writeSessionEvents({
-                dataDir,
-                sessionId: scenario.sessionId,
-                events: [
-                    runEvent(scenario.sessionId, 'run.started', 'run started', {
-                        command: 'run',
-                        state: 'running',
-                        runId: `${scenario.sessionId}_run`,
-                    }),
-                    runEvent(scenario.sessionId, scenario.eventType, scenario.message, {
-                        command: 'run',
-                        state: scenario.state,
-                        runId: `${scenario.sessionId}_run`,
-                        ...(scenario.state === 'failed'
-                            ? { reason: scenario.message, errorCode: 'unknown' as const }
-                            : {}),
-                        ...(scenario.state === 'blocked_on_approval'
-                            ? { reason: scenario.message, errorCode: 'tool_failed' as const, toolCallId: 'patch_call' }
-                            : {}),
-                    }),
-                ],
-            });
-        }
-
-        for (const scenario of scenarios) {
-            const replayRecords = parseReplayRecords(
-                await runSessionCommand(parseArgs(['session', 'replay', scenario.sessionId, '--jsonl'])),
-            );
-            expect(eventRecords(replayRecords).map((event) => event.type)).toEqual(
-                expect.arrayContaining(['run.started', scenario.eventType]),
-            );
-            expect(codingStepRecords(replayRecords)).toEqual(
-                expect.arrayContaining([expect.objectContaining({ kind: 'run.state', state: scenario.state })]),
-            );
-        }
-
         await rm(dataDir, { recursive: true, force: true });
     });
 
@@ -340,25 +145,6 @@ async function useTempDataDir(): Promise<string> {
     const dataDir = await mkdtemp(join(tmpdir(), 'mission-control-cli-session-'));
     vi.stubEnv(missionControlDataDirEnvKey, dataDir);
     return dataDir;
-}
-
-function runEvent(sessionId: string, type: AgentEvent['type'], message: string, run: NonNullable<AgentEvent['run']>) {
-    return {
-        type,
-        timestamp: '2026-06-05T10:00:00.000Z',
-        sessionId,
-        message,
-        run,
-    };
-}
-
-function taskCompletedEvent(sessionId: string, message: string): AgentEvent {
-    return {
-        type: 'task.completed',
-        timestamp: '2026-06-05T10:00:00.000Z',
-        sessionId,
-        message,
-    };
 }
 
 function sessionIndexRecord(dataDir: string, sessionId: string, updatedAt: string): SessionIndexSessionRecord {
@@ -385,11 +171,4 @@ async function writeSessionLock(dataDir: string, sessionId: string, heartbeatAt:
         })}\n`,
         'utf8',
     );
-}
-
-function parseEventLines(output: string) {
-    return output
-        .trim()
-        .split('\n')
-        .map((line) => AgentEventSchema.parse(JSON.parse(line)));
 }

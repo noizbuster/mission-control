@@ -1,5 +1,5 @@
-import type { ModelProviderSelection } from '@mission-control/protocol';
 import { createStreamDecoder } from '@mission-control/core';
+import type { ModelProviderSelection } from '@mission-control/protocol';
 import {
     createProviderPromptKeypressState,
     createProviderPromptView,

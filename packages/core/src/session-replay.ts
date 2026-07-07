@@ -3,7 +3,6 @@ import {
     type AgentEventEnvelope,
     AgentEventEnvelopeSchema,
     AgentEventLogSchema,
-    type AgentSession,
 } from '@mission-control/protocol';
 import { deriveAbgGraphSnapshot } from './behavior/graph-state.js';
 import { projectAbgTimeline } from './behavior/timeline.js';
@@ -17,6 +16,7 @@ import { projectBranchSummaries, projectSessionBranchTree } from './session-bran
 import { SessionEventLog } from './session-log.js';
 import { projectCodingSteps, projectReplayDiagnostics } from './session-replay-coding.js';
 import { projectApprovals, projectToolOutcomes } from './session-replay-event-projections.js';
+import { deriveReplaySession } from './session-replay-session.js';
 import type {
     JsonlSessionReplayPrefixProjection,
     ReplayDiagnostic,
@@ -64,7 +64,7 @@ export function projectSessionReplay(input: {
         sessionId: input.sessionId,
         envelopes,
         events,
-        snapshot: log.getSnapshot(deriveSession(input.sessionId, events)),
+        snapshot: log.getSnapshot(deriveReplaySession(input.sessionId, events)),
         timeline: projectAbgTimeline(events),
         graphSnapshots: graphIdsFor(events).map((graphId) => deriveAbgGraphSnapshot(events, graphId)),
         branchTree,
@@ -116,22 +116,6 @@ function graphIdsFor(events: readonly AgentEvent[]): readonly string[] {
         }
     }
     return [...graphIds];
-}
-
-function deriveSession(sessionId: string, events: readonly AgentEvent[]): AgentSession {
-    const sessionStarted = events.find((event) => event.type === 'session.started');
-    let stoppedAt: string | undefined;
-    for (const event of events) {
-        if (event.type === 'session.stopped') {
-            stoppedAt = event.timestamp;
-        }
-    }
-    return {
-        id: sessionId,
-        status: stoppedAt === undefined ? 'running' : 'stopped',
-        startedAt: sessionStarted?.timestamp ?? new Date(0).toISOString(),
-        ...(stoppedAt !== undefined ? { stoppedAt } : {}),
-    };
 }
 
 function nonEmptyLines(contents: string): readonly { readonly text: string; readonly lineNumber: number }[] {

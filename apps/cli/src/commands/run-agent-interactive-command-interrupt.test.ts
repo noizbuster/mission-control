@@ -1,6 +1,7 @@
 import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
+    createCodingAgentGraph,
     createDeterministicProvider,
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
@@ -13,7 +14,7 @@ import {
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
 import { replayedTypes } from './session-replay-test-support.js';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -30,6 +31,7 @@ describe('runAgent interactive command interruption', () => {
         // Given
         const dataDir = await tempRoot('mctrl-chat-data-');
         const workspaceRoot = await tempRoot('mctrl-chat-workspace-');
+        await writeCodingCommandWorkflow(workspaceRoot);
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const chatOutput = createBufferedChatOutput();
         const events: AgentEvent[] = [];
@@ -38,7 +40,7 @@ describe('runAgent interactive command interruption', () => {
         const output = await runAgent(parseArgs(['--session', 'session_task20_command_interrupt']), {
             authStore: createEmptyAuthStore(),
             chatInput: createScriptedChatInput([
-                { type: 'line', value: 'run a command that should be interrupted' },
+                { type: 'line', value: '#coding-command run a command that should be interrupted' },
                 { type: 'line', value: 'y' },
                 { type: 'line', value: '/interrupt' },
                 { type: 'interrupt' },
@@ -54,7 +56,7 @@ describe('runAgent interactive command interruption', () => {
                     toolName: 'command.run',
                     argumentsJson: JSON.stringify({
                         command: 'node',
-                        args: ['--eval', "console.log('mission-control command.run harness ok')"],
+                        args: ['--eval', "console.log('mission-control command.run interrupt approval ok')"],
                     }),
                 },
                 { kind: 'response_completed', content: 'command started' },
@@ -83,6 +85,19 @@ describe('runAgent interactive command interruption', () => {
         return path;
     }
 });
+
+async function writeCodingCommandWorkflow(workspaceRoot: string): Promise<void> {
+    const workflowsDir = join(workspaceRoot, '.mctrl', 'workflows');
+    await mkdir(workflowsDir, { recursive: true });
+    await writeFile(
+        join(workflowsDir, 'coding-command.workflow.json'),
+        `${JSON.stringify({
+            name: 'coding-command',
+            description: 'Test-only coding graph for command interruption',
+            graph: createCodingAgentGraph({ model: { providerID: 'local', modelID: 'local-echo' } }),
+        })}\n`,
+    );
+}
 
 function interruptibleCommandExecutor(request: CommandExecutionRequest): Promise<CommandExecutionResult> {
     if (request.signal.aborted) {

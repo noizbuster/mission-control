@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { createProviderAuthStore } from '../auth-store.js';
 import { runAuthCommand } from './auth.js';
+import { getCatalogDefaultModelID } from './model-catalog-test-support.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -39,6 +40,7 @@ describe('runAuthCommand auth list and logout', () => {
     it('lists provider display names and default selection when providers are configured', async () => {
         const authFilePath = await useTempAuthFile();
         const store = createProviderAuthStore();
+        const anthropicDefaultModelID = getCatalogDefaultModelID('anthropic');
 
         await runAuthCommand(parseArgs(['auth', 'login', '--provider', 'local', '--api-key', 'local_secret_key']), {
             now: '2026-06-03T10:00:00.000Z',
@@ -55,8 +57,7 @@ describe('runAuthCommand auth list and logout', () => {
         const output = await runAuthCommand(parseArgs(['auth', 'list']), { store });
 
         const localLine = 'local Local Sandbox - loca..._key';
-        const anthropicLine =
-            'anthropic Anthropic - anth..._key (1 field) - default anthropic/claude-3-5-haiku-20241022';
+        const anthropicLine = `anthropic Anthropic - anth..._key (1 field) - default anthropic/${anthropicDefaultModelID}`;
         expect(output).toContain('Authenticated providers');
         expect(output.indexOf(localLine)).toBeLessThan(output.indexOf(anthropicLine));
         expect(output).toContain(anthropicLine);
@@ -157,6 +158,7 @@ describe('runAuthCommand auth list and logout', () => {
     it('lists configured OpenCode providers in catalog order with masked field summaries', async () => {
         const authFilePath = await useTempAuthFile();
         const store = createProviderAuthStore();
+        const anthropicDefaultModelID = getCatalogDefaultModelID('anthropic');
 
         await runAuthCommand(parseArgs(['auth', 'login', '--provider', 'cloudflare-ai-gateway']), {
             now: '2026-06-03T10:00:00.000Z',
@@ -181,7 +183,9 @@ describe('runAuthCommand auth list and logout', () => {
 
         expect(output).toContain('Authenticated providers');
         expect(
-            output.indexOf('anthropic Anthropic - anth..._key (1 field) - default anthropic/claude-3-5-haiku-20241022'),
+            output.indexOf(
+                `anthropic Anthropic - anth..._key (1 field) - default anthropic/${anthropicDefaultModelID}`,
+            ),
         ).toBeLessThan(output.indexOf('cloudflare-ai-gateway Cloudflare AI Gateway - cf_s...oken (3 fields)'));
         expect(output).not.toContain('anthropic_key');
         expect(output).not.toContain('cf_secret_token');

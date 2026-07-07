@@ -5,7 +5,7 @@
  * `@libsql/client` + `drizzle-orm`, so it is a drop-in production backend. It is the
  * intended replacement for the dead `better-sqlite3` adapter (`SqlitePersistentStore`):
  * libSQL ships prebuilt binaries (no node-gyp), speaks the same SQL dialect, and accepts
- * an embedded `file:` URL (no server, no network) or `:memory:` (for tests). The JSONL
+ * an embedded local `file:` URL (no server, no network) or `:memory:` (for tests). The JSONL
  * event ledger stays untouched — this is only the queryable key/value view whose
  * namespaces map to Blackboard slots.
  *
@@ -13,34 +13,15 @@
  * in `sqlite-persistent-store.ts` so this adapter behaves identically to
  * `InMemoryPersistentStore` and `SqlitePersistentStore` for every observable outcome.
  *
- * DDL uses `CREATE TABLE IF NOT EXISTS` (raw SQL on the libSQL client) rather than the
- * drizzle migrator: the schema is fixed and local, and pulling in drizzle-kit migrations
- * would add toolchain weight this boundary does not need.
+ * DDL is applied by the shared local DB schema initializer so memory and session tables
+ * share one local database without adding drizzle-kit.
  */
-import type { Client } from '@libsql/client';
-import { createClient } from '@libsql/client';
 import { and, eq, isNotNull, lte } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/libsql';
-import type { LibSQLDatabase } from 'drizzle-orm/libsql';
+import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
 import { memoryEntries } from '../db/schema.js';
+import { deserializeValue, entryMatchesQuery, isExpired, serializeValue } from './persistent-memory-helpers.js';
 import type { MemoryEntry, MemoryQuery, PersistentMemoryStore } from './persistent-memory-store.js';
-import {
-    deserializeValue,
-    entryMatchesQuery,
-    isExpired,
-    serializeValue,
-} from './persistent-memory-helpers.js';
-
-const CREATE_TABLE_SQL = /* sql */ `
-    CREATE TABLE IF NOT EXISTS memory_entries (
-        namespace  TEXT NOT NULL,
-        key        TEXT NOT NULL,
-        value      TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        expires_at TEXT,
-        PRIMARY KEY (namespace, key)
-    );
-`;
 
 type MemoryRow = {
     readonly namespace: string;
@@ -51,29 +32,23 @@ type MemoryRow = {
 };
 
 /**
- * Open (or create) a libSQL-backed store at `url`. Accepts `:memory:` for an ephemeral
- * in-memory DB, `file:./path.db` for an embedded file, or a `libsql://` URL for a remote
- * Turso instance. The table is created on open and the underlying client is held for the
- * life of the store; `close()` releases it.
+ * Open (or create) a local libSQL-backed store at `url`. Accepts `:memory:` for an
+ * ephemeral in-memory DB or `file:./path.db` for an embedded file. Remote Turso URLs are
+ * intentionally rejected; `close()` releases the underlying client.
  */
 export class TursoPersistentStore implements PersistentMemoryStore {
-    private readonly client: Client;
-    private readonly db: LibSQLDatabase<Record<string, never>>;
+    private readonly runtime: LocalLibsqlDb;
 
-    private constructor(client: Client) {
-        this.client = client;
-        this.db = drizzle(client);
+    private constructor(runtime: LocalLibsqlDb) {
+        this.runtime = runtime;
     }
 
     static async open(url: string): Promise<TursoPersistentStore> {
-        const client = createClient({ url });
-        const store = new TursoPersistentStore(client);
-        await client.execute(CREATE_TABLE_SQL);
-        return store;
+        return new TursoPersistentStore(await openLocalLibsqlDb({ url }));
     }
 
     async get(key: string, namespace: string): Promise<unknown | undefined> {
-        const rows = await this.db
+        const rows = await this.runtime.db
             .select({ value: memoryEntries.value, expiresAt: memoryEntries.expiresAt })
             .from(memoryEntries)
             .where(and(eq(memoryEntries.namespace, namespace), eq(memoryEntries.key, key)));
@@ -82,7 +57,7 @@ export class TursoPersistentStore implements PersistentMemoryStore {
             return undefined;
         }
         if (isExpired({ expiresAt: row.expiresAt ?? undefined }, Date.now())) {
-            await this.db
+            await this.runtime.db
                 .delete(memoryEntries)
                 .where(and(eq(memoryEntries.namespace, namespace), eq(memoryEntries.key, key)));
             return undefined;
@@ -96,7 +71,7 @@ export class TursoPersistentStore implements PersistentMemoryStore {
         // null (not undefined) so the column receives SQL NULL and the object literal stays
         // compatible with exactOptionalPropertyTypes.
         const expiresAt = ttlMs !== undefined ? new Date(now + ttlMs).toISOString() : null;
-        await this.db
+        await this.runtime.db
             .insert(memoryEntries)
             .values({
                 namespace,
@@ -116,12 +91,12 @@ export class TursoPersistentStore implements PersistentMemoryStore {
     }
 
     async list(namespace: string): Promise<readonly MemoryEntry[]> {
-        const rows = await this.db.select().from(memoryEntries).where(eq(memoryEntries.namespace, namespace));
+        const rows = await this.runtime.db.select().from(memoryEntries).where(eq(memoryEntries.namespace, namespace));
         return rows.map(rowToEntry).filter((entry) => !isExpired(entry, Date.now()));
     }
 
     async query(query: MemoryQuery): Promise<readonly MemoryEntry[]> {
-        const rows = await this.db.select().from(memoryEntries);
+        const rows = await this.runtime.db.select().from(memoryEntries);
         let results = rows
             .map(rowToEntry)
             .filter((entry) => !isExpired(entry, Date.now()) && entryMatchesQuery(entry, query));
@@ -132,7 +107,7 @@ export class TursoPersistentStore implements PersistentMemoryStore {
     }
 
     async prune(now: string): Promise<number> {
-        const deleted = await this.db
+        const deleted = await this.runtime.db
             .delete(memoryEntries)
             .where(and(isNotNull(memoryEntries.expiresAt), lte(memoryEntries.expiresAt, now)))
             .returning();
@@ -140,7 +115,7 @@ export class TursoPersistentStore implements PersistentMemoryStore {
     }
 
     close(): void {
-        this.client.close();
+        this.runtime.close();
     }
 }
 

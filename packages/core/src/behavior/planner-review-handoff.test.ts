@@ -148,9 +148,7 @@ describe('planner review-plan: routing loops to revision and reaches handoff', (
             (edge) => edge.source === 'write-plan' && edge.target === 'present',
         );
         expect(writePlanToPresent?.condition).toBe('plan-written');
-        const incomingToPresent = graph.edges.filter(
-            (edge) => edge.target === 'present' && edge.source !== 'present',
-        );
+        const incomingToPresent = graph.edges.filter((edge) => edge.target === 'present' && edge.source !== 'present');
         expect(incomingToPresent.length).toBe(1);
         expect(incomingToPresent[0]?.source).toBe('write-plan');
     });

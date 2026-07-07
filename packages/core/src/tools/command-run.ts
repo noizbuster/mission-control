@@ -62,6 +62,7 @@ async function resolveOptions(options: CommandRunToolOptions): Promise<ResolvedC
         requestPermission: options.requestPermission,
         executor: options.executor ?? executeCommand,
         policyProfile: options.policyProfile ?? defaultCommandRunPolicyProfile,
+        requirePermissionForAllowlisted: options.requirePermissionForAllowlisted ?? false,
         timeoutMs: options.timeoutMs ?? defaultCommandRunTimeoutMs,
         maxOutputBytes: options.maxOutputBytes ?? 64 * 1024,
         maxModelOutputChars: options.maxModelOutputChars ?? 8 * 1024,
@@ -82,7 +83,10 @@ async function runCommandTool(
         commandMetadata(command, options.workspaceRoot, 'started'),
     );
     try {
-        if (!isAllowlistedCommand(input.command, input.args, options.policyProfile)) {
+        if (
+            options.requirePermissionForAllowlisted ||
+            !isAllowlistedCommand(input.command, input.args, options.policyProfile)
+        ) {
             await requireApproval(options, context.toolCallId, command);
         }
         if (context.signal.aborted) {

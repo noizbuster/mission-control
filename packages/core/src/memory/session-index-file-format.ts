@@ -6,6 +6,8 @@ import {
     RunCoordinatorCommandSchema,
     RunCoordinatorStateSchema,
     SESSION_STATUSES,
+    SessionAwaitingDetailsSchema,
+    type SessionStatus,
     ToolResultSchema,
 } from '@mission-control/protocol';
 import { z } from 'zod';
@@ -26,6 +28,7 @@ export const SessionIndexSessionRecordSchema = z
         kind: z.literal('session'),
         sessionId: SessionIdSchema,
         status: z.enum(SESSION_STATUSES),
+        awaiting: SessionAwaitingDetailsSchema.optional(),
         startedAt: TimestampSchema,
         stoppedAt: TimestampSchema.optional(),
         eventCount: z.number().int().nonnegative(),
@@ -35,7 +38,31 @@ export const SessionIndexSessionRecordSchema = z
         updatedAt: TimestampSchema,
         sourceFilePath: SourceFilePathSchema,
     })
-    .strict();
+    .strict()
+    .superRefine(refineSessionRecordAwaitingContract);
+
+function refineSessionRecordAwaitingContract(
+    value: { readonly status: SessionStatus; readonly awaiting?: unknown },
+    context: z.RefinementCtx,
+): void {
+    if (value.status === 'awaiting') {
+        if (value.awaiting === undefined) {
+            context.addIssue({
+                code: 'custom',
+                message: 'awaiting session index status requires awaiting details',
+                path: ['awaiting'],
+            });
+        }
+        return;
+    }
+    if (value.awaiting !== undefined) {
+        context.addIssue({
+            code: 'custom',
+            message: 'awaiting details require awaiting session index status',
+            path: ['awaiting'],
+        });
+    }
+}
 
 export const SessionIndexRunRecordSchema = z
     .object({

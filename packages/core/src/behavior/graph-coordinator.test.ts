@@ -184,7 +184,10 @@ describe('bounded ABG graph coordinator', () => {
 
     it('retries a provider_aborted failure up to the cap instead of failing terminally (no abort signal)', async () => {
         const registry = createAbgNodeRegistry();
-        registry.register('always-provider-aborted', failTimesBeforeSuccessWithCode(Number.POSITIVE_INFINITY, 'provider_aborted'));
+        registry.register(
+            'always-provider-aborted',
+            failTimesBeforeSuccessWithCode(Number.POSITIVE_INFINITY, 'provider_aborted'),
+        );
 
         const result = await runAbgGraph({
             ...baseInput,

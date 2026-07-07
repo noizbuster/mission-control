@@ -10,7 +10,6 @@ import {
     LspServerManager,
     type LspServerManagerDeps,
     type McpConnectionManager,
-    type NativesClient,
     type ProviderAuthStore,
     registerAskUserTool,
     registerAstGrepTool,
@@ -33,8 +32,8 @@ import {
     ToolRegistry,
     type ToolRegistryWithMcp,
     todoWriteToolRegistration,
-    wireNativesFsCacheInvalidator,
     type WorkflowRegistry,
+    wireNativesFsCacheInvalidator,
 } from '@mission-control/core';
 import type {
     AbgNodeModelOptions,

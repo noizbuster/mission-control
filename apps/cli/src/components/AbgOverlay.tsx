@@ -2,10 +2,10 @@
 import { useSyncExternalStore } from 'react';
 import type { AbgOverlayState, AbgOverlayStore } from '../commands/abg-overlay-state.js';
 import { DEFAULT_REFRESH_MS } from '../commands/abg-overlay-state.js';
+import { truncateTerminalText } from '../commands/terminal-text.js';
 import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA.js';
 import { ApprovalsPane, BlackboardPane, CostPolicyPane, TimelinePane, ToolsPane } from './AbgOverlayPanesB.js';
 import { graphStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
-import { truncateTerminalText } from '../commands/terminal-text.js';
 
 export type AbgOverlayTab =
     | 'overview'

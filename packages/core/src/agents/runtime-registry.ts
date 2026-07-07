@@ -6,7 +6,7 @@
  * rosters (`listVisibleTo`) and are never messageable.
  *
  * This registry tracks state only. Idle/park/revive lifecycle is owned by
- * AgentLifecycleManager (todo 16). In-memory only; no persistence.
+ * AgentLifecycleManager. Persistence is opt-in through a mirror observer.
  */
 
 export const MAIN_AGENT_ID = 'Main';
@@ -40,8 +40,28 @@ export interface AdoptOptions {
 
 export type AgentUpdatePatch = Partial<Pick<AgentRef, 'status' | 'lastActivity' | 'activity' | 'sessionFile'>>;
 
+export interface RuntimeAgentPersistenceMirror {
+    readonly recordRuntimeAgent: (ref: AgentRef) => void;
+    readonly releaseRuntimeAgent: (agentId: string) => void;
+}
+
+export interface RuntimeAgentRegistryOptions {
+    readonly mirror?: RuntimeAgentPersistenceMirror;
+    readonly initialRefs?: readonly AgentRef[];
+}
+
 export class RuntimeAgentRegistry {
     private readonly refs = new Map<string, AgentRef>();
+    private readonly mirror: RuntimeAgentPersistenceMirror | undefined;
+
+    constructor(options: RuntimeAgentRegistryOptions = {}) {
+        this.mirror = options.mirror;
+        for (const ref of options.initialRefs ?? []) {
+            if (ref.id !== MAIN_AGENT_ID) {
+                this.refs.set(ref.id, { ...ref });
+            }
+        }
+    }
 
     /**
      * Register a live agent ref, stamping `createdAt` and `lastActivity`.
@@ -60,11 +80,13 @@ export class RuntimeAgentRegistry {
             lastActivity: now,
         };
         this.refs.set(stamped.id, stamped);
+        this.mirror?.recordRuntimeAgent(stamped);
     }
 
     /** Remove a ref from the registry. Unknown ids are a no-op. */
     release(id: string): void {
         this.refs.delete(id);
+        this.mirror?.releaseRuntimeAgent(id);
     }
 
     lookup(id: string): AgentRef | undefined {
@@ -98,6 +120,7 @@ export class RuntimeAgentRegistry {
         if (patch.lastActivity !== undefined) ref.lastActivity = patch.lastActivity;
         if (patch.activity !== undefined) ref.activity = patch.activity;
         if (patch.sessionFile !== undefined) ref.sessionFile = patch.sessionFile;
+        this.mirror?.recordRuntimeAgent(ref);
     }
 
     /** Remove every tracked ref. */

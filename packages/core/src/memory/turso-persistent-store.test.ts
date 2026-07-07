@@ -181,4 +181,10 @@ describe('TursoPersistentStore', () => {
         const available = await isTursoAvailable();
         expect(available).toBe(true);
     });
+
+    it('rejects remote Turso URLs because this store is local-only', async () => {
+        const opening = TursoPersistentStore.open('libsql://remote.example.com/app');
+
+        await expect(opening).rejects.toMatchObject({ code: 'remote_url' });
+    });
 });

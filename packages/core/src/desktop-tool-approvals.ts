@@ -201,6 +201,7 @@ async function invokeApprovedTool(
     await registerCommandRunTool(registry, {
         workspaceRoot: options.workspaceRoot,
         requestPermission: permissionResolver(record),
+        requirePermissionForAllowlisted: true,
         ...(options.commandExecutor !== undefined ? { executor: options.commandExecutor } : {}),
     });
     const advertisement = registry.advertise().find((tool) => tool.name === toolCall.toolName);

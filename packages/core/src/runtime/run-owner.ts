@@ -1,6 +1,7 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ProjectContextMessageOptions } from '../context/project-context-messages.js';
-import { type JsonlSessionEventIdFactory, JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
+import type { JsonlSessionEventIdFactory } from '../memory/jsonl-session-event-store.js';
+import { type LocalSessionEventStore, openLocalSessionEventStore } from '../memory/local-session-store.js';
 import type { ProviderAdapter } from '../providers/provider-turn-types.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import { type RunCoordinatorResult, SessionRunCoordinator } from './run-coordinator.js';
@@ -34,7 +35,7 @@ type RunOwnerObserverOptions = {
 
 export type SessionRunOwnerOptions = {
     readonly sessionId: string;
-    readonly store: JsonlSessionEventStore;
+    readonly store: LocalSessionEventStore;
     readonly provider: ProviderAdapter;
     readonly modelProviderSelection: ModelProviderSelection;
     readonly now?: () => string;
@@ -59,7 +60,7 @@ export type SessionRunOwnerRegistryOptions = {
     readonly provider: ProviderAdapter;
     readonly modelProviderSelection: ModelProviderSelection;
     readonly resolveModelProviderSelection?: (
-        store: JsonlSessionEventStore,
+        store: LocalSessionEventStore,
         sessionId: string,
         fallback: ModelProviderSelection,
     ) => Promise<ModelProviderSelection>;
@@ -98,7 +99,7 @@ export type SessionRunOwnerLeaseInput = {
     readonly readMessages?: RunCoordinatorReadMessages;
 };
 
-type OwnerEntry = { readonly owner: SessionRunOwner; readonly store: JsonlSessionEventStore; refCount: number };
+type OwnerEntry = { readonly owner: SessionRunOwner; readonly store: LocalSessionEventStore; refCount: number };
 
 type OwnerEntryRecord = { readonly promise: Promise<OwnerEntry> };
 
@@ -106,7 +107,7 @@ type OwnerEntryRecord = { readonly promise: Promise<OwnerEntry> };
 // The owner is process-local; durable recovery comes from the JSONL session log.
 export class SessionRunOwner {
     readonly sessionId: string;
-    readonly store: JsonlSessionEventStore;
+    readonly store: LocalSessionEventStore;
     readonly modelProviderSelection: ModelProviderSelection;
     private readonly coordinator: SessionRunCoordinator;
 
@@ -164,7 +165,7 @@ export class SessionRunOwner {
     }
 
     close(): Promise<void> {
-        return this.store.close();
+        return Promise.resolve(this.store.close());
     }
 
     private receipt(result: RunCoordinatorResult): SessionRunOwnerReceipt {
@@ -219,7 +220,7 @@ export class SessionRunOwnerRegistry {
 
     async withOwner<Result>(
         input: SessionRunOwnerLeaseInput,
-        action: (owner: SessionRunOwner, store: JsonlSessionEventStore) => Promise<Result> | Result,
+        action: (owner: SessionRunOwner, store: LocalSessionEventStore) => Promise<Result> | Result,
     ): Promise<Result> {
         const record = this.entryRecord(input);
         let entry: OwnerEntry;
@@ -251,7 +252,7 @@ export class SessionRunOwnerRegistry {
     }
 
     private async createEntry(input: SessionRunOwnerLeaseInput): Promise<OwnerEntry> {
-        const store = await JsonlSessionEventStore.open({
+        const store = await openLocalSessionEventStore({
             sessionId: input.sessionId,
             ...(this.options.dataDir !== undefined ? { dataDir: this.options.dataDir } : {}),
             ...(this.options.now !== undefined ? { now: this.options.now } : {}),

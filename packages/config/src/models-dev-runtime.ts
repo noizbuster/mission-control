@@ -260,9 +260,7 @@ function buildLimitFromAPI(value: unknown): { readonly context?: number; readonl
 
 const KNOWN_REASONING_OPTION_TYPES = new Set(['effort', 'budget_tokens', 'toggle']);
 
-function buildReasoningOptionsFromAPI(
-    value: unknown,
-): readonly RawModelsDevReasoningOption[] | undefined {
+function buildReasoningOptionsFromAPI(value: unknown): readonly RawModelsDevReasoningOption[] | undefined {
     if (!Array.isArray(value)) return undefined;
     const result: RawModelsDevReasoningOption[] = [];
     for (const entry of value) {

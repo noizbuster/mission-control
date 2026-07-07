@@ -1,7 +1,7 @@
 import type { AgentEvent } from '@mission-control/protocol';
-import { writeFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { JsonRenderer, PlainRenderer, TuiRenderer } from './renderers.js';
+import { writeFileSync } from 'node:fs';
 
 const TS = '2026-07-05T00:00:00.000Z';
 
@@ -113,7 +113,10 @@ describe('PlainRenderer streaming', () => {
         writeSpy.mockRestore();
 
         expect(writesDuringRender).toBe(0);
-        const records = output.trim().split('\n').map((line) => JSON.parse(line) as Record<string, unknown>);
+        const records = output
+            .trim()
+            .split('\n')
+            .map((line) => JSON.parse(line) as Record<string, unknown>);
         expect(records).toHaveLength(3);
     });
 
@@ -142,9 +145,7 @@ describe('PlainRenderer streaming', () => {
         const renderer = new PlainRenderer();
         const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
-        expect(() =>
-            renderer.render(event({ type: 'session.stopped', sessionId: 's', message: 'bye' })),
-        ).not.toThrow();
+        expect(() => renderer.render(event({ type: 'session.stopped', sessionId: 's', message: 'bye' }))).not.toThrow();
 
         const writes = writeSpy.mock.calls.length;
         const output = renderer.getOutput();

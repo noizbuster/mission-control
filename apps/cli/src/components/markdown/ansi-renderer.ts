@@ -27,10 +27,10 @@
 
 import type { Token } from 'marked';
 import { marked } from 'marked';
+import { terminalTextStyleToAnsi, wrap } from '../../ui/ansi-theme.js';
 import type { InlineRun, RenderLine } from './Markdown.js';
 import { buildOsc8Hyperlink, tokenToBlocks } from './Markdown.js';
 import type { TerminalMarkdownTheme } from './theme.js';
-import { terminalTextStyleToAnsi, wrap } from '../../ui/ansi-theme.js';
 
 /**
  * Render a markdown source string into ANSI-styled terminal lines.
@@ -79,7 +79,6 @@ function flattenLine(line: RenderLine, colorize: boolean): string {
 /** Convert one styled run to an ANSI-styled string (OSC 8 hyperlinks when colorized). */
 function flattenRun(run: InlineRun, colorize: boolean): string {
     const open = terminalTextStyleToAnsi(run.style, colorize);
-    const visible =
-        run.href !== undefined && colorize ? buildOsc8Hyperlink(run.href, run.text) : run.text;
+    const visible = run.href !== undefined && colorize ? buildOsc8Hyperlink(run.href, run.text) : run.text;
     return wrap(visible, open);
 }

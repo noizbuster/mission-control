@@ -1,8 +1,10 @@
 import type { ReplayDiagnostic } from '@mission-control/core';
 import { projectJsonlSessionReplayPrefix } from '@mission-control/core';
+import type { AgentSnapshot } from '@mission-control/protocol';
 
 export type SessionCatalogProjection = {
-    readonly status: 'corrupt' | 'idle' | 'running' | 'stopped' | 'failed';
+    readonly status: AgentSnapshot['status'] | 'corrupt';
+    readonly awaiting?: AgentSnapshot['awaiting'];
     readonly eventCount: number;
     readonly updatedAt?: string;
     readonly createdAt?: string;
@@ -28,6 +30,7 @@ export function deriveSessionCatalogProjection(input: {
     const workspaceTrust = treeTrust(replay.projection.sessionTree);
     return {
         status: replay.diagnostics.length > 0 ? 'corrupt' : replay.projection.snapshot.status,
+        ...(replay.projection.snapshot.awaiting !== undefined ? { awaiting: replay.projection.snapshot.awaiting } : {}),
         eventCount: replay.projection.events.length,
         messageCount: replay.projection.events.filter((event) => event.message !== undefined).length,
         diagnostics: replay.diagnostics,

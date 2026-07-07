@@ -454,7 +454,10 @@ describe('ConcreteTaskToolRuntime', () => {
             ];
         }
 
-        function buildDefaultSpawnRuntime(modelCallCount: { value: number }, chunksFor: (call: number) => LanguageModelV3StreamPart[]): ConcreteTaskToolRuntime {
+        function buildDefaultSpawnRuntime(
+            modelCallCount: { value: number },
+            chunksFor: (call: number) => LanguageModelV3StreamPart[],
+        ): ConcreteTaskToolRuntime {
             const child = makeAgent({ systemPrompt: 'You are a deep coding agent. Explore, decide, act.' });
             const parent = makeParentAgent();
             const agentIndex = new AgentIndex();

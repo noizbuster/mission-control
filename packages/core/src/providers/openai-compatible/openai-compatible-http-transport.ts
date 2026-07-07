@@ -1,9 +1,9 @@
+import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport.js';
 import {
     type OpenAICompatibleTransport,
     OpenAICompatibleTransportError,
     type OpenAICompatibleTransportRequest,
 } from './openai-compatible-transport.js';
-import { parseSseFrames, readSseStream } from '../shared/sse-stream-transport.js';
 
 export function createNodeOpenAICompatibleTransport(): OpenAICompatibleTransport {
     return {
@@ -32,10 +32,12 @@ export function parseOpenAICompatibleSseEvents(text: string): {
     readonly events: readonly unknown[];
     readonly remainder: string;
 } {
-    return parseSseFrames(text, () =>
-        new OpenAICompatibleTransportError({
-            kind: 'network',
-            message: 'OpenAI-compatible SSE frame contained invalid JSON',
-        }),
+    return parseSseFrames(
+        text,
+        () =>
+            new OpenAICompatibleTransportError({
+                kind: 'network',
+                message: 'OpenAI-compatible SSE frame contained invalid JSON',
+            }),
     );
 }

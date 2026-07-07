@@ -1,9 +1,10 @@
+import type { WorkflowRegistry } from '@mission-control/core';
 import {
     type AgentRuntime,
     type AskUserQuestionRequest,
     type CommandExecutionRequest,
     type CommandExecutionResult,
-    type JsonlSessionEventStore,
+    type LocalSessionEventStore,
     type PermissionSession,
     type PricingTable,
     type ProviderAdapter,
@@ -11,13 +12,13 @@ import {
     ProviderTurnRunner,
     prependProjectContextMessages,
     type SdkModelResolver,
+    type TaskToolRuntimeServices,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AgentEvent, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
 import type { ApprovalLevel } from './approval-level.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { type ActiveCodingAgentTurn, startCodingAgentTurn } from './interactive-coding-agent.js';
-import type { WorkflowRegistry } from '@mission-control/core';
 
 export type WorkflowStartedCallback = (spec: WorkflowSpec, prompt: string) => void;
 
@@ -29,7 +30,7 @@ export type PromptTurnContext = {
     readonly emitEvent: ((event: AgentEvent) => void) | undefined;
     readonly observeStoredEvent: ((event: AgentEvent) => void) | undefined;
     readonly nextTurnId: () => string;
-    readonly sessionStore: JsonlSessionEventStore | undefined;
+    readonly sessionStore: LocalSessionEventStore | undefined;
     readonly engine?: 'graph';
     readonly resolveSdkModel?: SdkModelResolver;
     readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
@@ -44,6 +45,7 @@ export type PromptTurnContext = {
     readonly workflowRegistry?: WorkflowRegistry;
     readonly onWorkflowStarted?: WorkflowStartedCallback;
     readonly profileName?: string;
+    readonly taskRuntimeServices?: TaskToolRuntimeServices;
 };
 
 export async function startPromptTurn(
@@ -151,6 +153,7 @@ export async function startPromptTurn(
         ...(coding.workflowRegistry !== undefined ? { workflowRegistry: coding.workflowRegistry } : {}),
         ...(coding.onWorkflowStarted !== undefined ? { onWorkflowStarted: coding.onWorkflowStarted } : {}),
         ...(coding.profileName !== undefined ? { profileName: coding.profileName } : {}),
+        ...(coding.taskRuntimeServices !== undefined ? { taskRuntimeServices: coding.taskRuntimeServices } : {}),
     });
 }
 

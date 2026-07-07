@@ -100,10 +100,7 @@ describe('Gemini GenerateContent provider adapter', () => {
                             index: 0,
                             content: {
                                 role: 'model',
-                                parts: [
-                                    { text: 'Let me think.', thought: true },
-                                    { text: 'Final answer.' },
-                                ],
+                                parts: [{ text: 'Let me think.', thought: true }, { text: 'Final answer.' }],
                             },
                         },
                     ],
@@ -111,9 +108,7 @@ describe('Gemini GenerateContent provider adapter', () => {
                 },
                 {
                     responseId: 'resp_thought',
-                    candidates: [
-                        { index: 0, content: { role: 'model', parts: [] }, finishReason: 'STOP' },
-                    ],
+                    candidates: [{ index: 0, content: { role: 'model', parts: [] }, finishReason: 'STOP' }],
                     usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 3, totalTokenCount: 8 },
                 },
             ]),
@@ -144,22 +139,25 @@ describe('Gemini GenerateContent provider adapter', () => {
             credentialResolver: createStaticProviderCredentialResolver([
                 geminiCredential('google', 'sk-gemini-test-secret'),
             ]),
-            transport: transportFromEvents([], [
-                {
-                    responseId: 'resp_plain',
-                    candidates: [
-                        {
-                            index: 0,
-                            content: {
-                                role: 'model',
-                                parts: [{ text: 'hello', thought: false }, { text: ' world' }],
+            transport: transportFromEvents(
+                [],
+                [
+                    {
+                        responseId: 'resp_plain',
+                        candidates: [
+                            {
+                                index: 0,
+                                content: {
+                                    role: 'model',
+                                    parts: [{ text: 'hello', thought: false }, { text: ' world' }],
+                                },
+                                finishReason: 'STOP',
                             },
-                            finishReason: 'STOP',
-                        },
-                    ],
-                    usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 2, totalTokenCount: 4 },
-                },
-            ]),
+                        ],
+                        usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 2, totalTokenCount: 4 },
+                    },
+                ],
+            ),
         });
 
         // When
@@ -170,10 +168,7 @@ describe('Gemini GenerateContent provider adapter', () => {
         // Then — all parts are text_delta, no reasoning chunks
         expect(chunks.filter((c) => c.kind === 'reasoning_delta')).toHaveLength(0);
         expect(chunks.filter((c) => c.kind === 'reasoning_completed')).toHaveLength(0);
-        expect(chunks.filter((c) => c.kind === 'text_delta')).toMatchObject([
-            { delta: 'hello' },
-            { delta: ' world' },
-        ]);
+        expect(chunks.filter((c) => c.kind === 'text_delta')).toMatchObject([{ delta: 'hello' }, { delta: ' world' }]);
         const completed = chunks.find((c) => c.kind === 'response_completed');
         expect(completed).toMatchObject({ message: { content: 'hello world' } });
         expect(completed && 'reasoning' in (completed as { message: Record<string, unknown> }).message).toBe(false);

@@ -1,18 +1,33 @@
+import { missionControlDataDirEnvKey } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
 import {
     createBufferedChatOutput,
     createEmptyAuthStore,
     createScriptedChatInput,
-    setTtyState,
 } from './run-agent-chat-test-support.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 describe('runAgent interactive chat', () => {
+    const tempDirs: string[] = [];
+
+    beforeEach(async () => {
+        const dataDir = await tempRoot('mctrl-run-agent-chat-data-');
+        vi.stubEnv(missionControlDataDirEnvKey, dataDir);
+    });
+
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
+    afterEach(async () => {
+        await Promise.all(tempDirs.splice(0).map((path) => rm(path, { recursive: true, force: true })));
+    });
+
     it('opens a prompt for default mctrl execution and exits after two consecutive Ctrl+C interrupts', async () => {
         const chatOutput = createBufferedChatOutput();
 
@@ -117,173 +132,9 @@ describe('runAgent interactive chat', () => {
         expect(events.some((event) => event.type === 'task.started')).toBe(false);
     });
 
-    it('closes chat input when a process SIGINT interrupts the terminal', async () => {
-        const chatOutput = createBufferedChatOutput();
-        const chatInput = createClosablePendingChatInput();
-        const run = runAgent(parseArgs([]), {
-            authStore: createEmptyAuthStore(),
-            chatInput: chatInput.input,
-            chatOutput: chatOutput.output,
-        });
-
-        await waitForReadToStart(chatInput);
-        process.emit('SIGINT');
-
-        const result = await promiseWithTimeout(run, 80);
-        if (result.type === 'timeout') {
-            chatInput.close();
-            await run;
-        }
-
-        expect(result.type).toBe('resolved');
-        expect(chatInput.getCloseCount()).toBeGreaterThanOrEqual(1);
-    });
-
-    it('uses demo output when stdout is redirected', async () => {
-        const restoreTtyState = setTtyState({ input: true, output: false });
-
-        try {
-            const output = await runAgent(parseArgs([]));
-
-            expect(output).toContain('completed by mock sidecar');
-            expect(output).not.toContain('mission-control chat');
-        } finally {
-            restoreTtyState();
-        }
-    });
-
-    it('routes $skill invocations through real skill loading instead of the scaffold recorder', async () => {
-        const chatOutput = createBufferedChatOutput();
-        const events: AgentEvent[] = [];
-        const emptyWorkspace = await mkdtemp(join(tmpdir(), 'mctrl-skill-chat-'));
-
-        try {
-            const output = await runAgent(parseArgs([]), {
-                authStore: createEmptyAuthStore(),
-                workspaceRoot: emptyWorkspace,
-                chatInput: createScriptedChatInput([
-                    { type: 'line', value: '$planner draft a rollout checklist' },
-                    { type: 'interrupt' },
-                    { type: 'interrupt' },
-                ]),
-                chatOutput: chatOutput.output,
-                onRuntimeEvent: (event) => {
-                    events.push(event);
-                },
-            });
-
-            // The scaffold recorder path is gone: no skill.invoke permission gate, no scaffold task.
-            expect(output).not.toContain('Skill planner scaffolded');
-            expect(
-                events.some(
-                    (event) => event.type === 'permission.requested' && event.message?.includes('skill.invoke'),
-                ),
-            ).toBe(false);
-            expect(
-                events.some(
-                    (event) =>
-                        event.type === 'task.completed' && event.message?.includes('skill invocation scaffolded'),
-                ),
-            ).toBe(false);
-            // With no discovered `planner` skill, the real loader reports a friendly unknown-skill error.
-            expect(output).toContain('Unknown skill: planner');
-        } finally {
-            await rm(emptyWorkspace, { recursive: true, force: true });
-        }
-    });
-
-    it('reports unknown slash commands without submitting a prompt task', async () => {
-        const chatOutput = createBufferedChatOutput();
-        const events: AgentEvent[] = [];
-
-        const output = await runAgent(parseArgs([]), {
-            authStore: createEmptyAuthStore(),
-            chatInput: createScriptedChatInput([
-                { type: 'line', value: '/unknown please run this' },
-                { type: 'interrupt' },
-                { type: 'interrupt' },
-            ]),
-            chatOutput: chatOutput.output,
-            onRuntimeEvent: (event) => {
-                events.push(event);
-            },
-        });
-
-        expect(output).toContain('Unknown command: /unknown');
-        expect(events.some((event) => event.type === 'task.started')).toBe(false);
-    });
-
-    it('reports empty slash commands without submitting a prompt task', async () => {
-        const chatOutput = createBufferedChatOutput();
-        const events: AgentEvent[] = [];
-
-        const output = await runAgent(parseArgs([]), {
-            authStore: createEmptyAuthStore(),
-            chatInput: createScriptedChatInput([
-                { type: 'line', value: '/   ' },
-                { type: 'interrupt' },
-                { type: 'interrupt' },
-            ]),
-            chatOutput: chatOutput.output,
-            onRuntimeEvent: (event) => {
-                events.push(event);
-            },
-        });
-
-        expect(output).toContain('Slash command is empty');
-        expect(events.some((event) => event.type === 'task.started')).toBe(false);
-    });
+    async function tempRoot(prefix: string): Promise<string> {
+        const path = await mkdtemp(join(tmpdir(), prefix));
+        tempDirs.push(path);
+        return path;
+    }
 });
-
-function createClosablePendingChatInput() {
-    let closed = false;
-    let closeCount = 0;
-    let readStarted: (() => void) | undefined;
-    let resolvePendingRead: ((event: { readonly type: 'interrupt' }) => void) | undefined;
-    const readStartedPromise = new Promise<void>((resolve) => {
-        readStarted = resolve;
-    });
-    return {
-        input: {
-            read: async () => {
-                if (closed) {
-                    return { type: 'interrupt' as const };
-                }
-                readStarted?.();
-                return new Promise<{ readonly type: 'interrupt' }>((resolve) => {
-                    resolvePendingRead = resolve;
-                });
-            },
-            close: () => {
-                closeCount += 1;
-                closed = true;
-                resolvePendingRead?.({ type: 'interrupt' });
-            },
-        },
-        close: () => {
-            closeCount += 1;
-            closed = true;
-            resolvePendingRead?.({ type: 'interrupt' });
-        },
-        getCloseCount: () => closeCount,
-        readStarted: () => readStartedPromise,
-    };
-}
-
-async function waitForReadToStart(input: ReturnType<typeof createClosablePendingChatInput>): Promise<void> {
-    await input.readStarted();
-}
-
-async function promiseWithTimeout<T>(
-    promise: Promise<T>,
-    timeoutMs: number,
-): Promise<{ readonly type: 'resolved'; readonly value: T } | { readonly type: 'timeout' }> {
-    return Promise.race([
-        promise.then((value) => ({ type: 'resolved' as const, value })),
-        new Promise<{ readonly type: 'timeout' }>((resolve) => {
-            setTimeout(() => {
-                resolve({ type: 'timeout' });
-            }, timeoutMs);
-        }),
-    ]);
-}

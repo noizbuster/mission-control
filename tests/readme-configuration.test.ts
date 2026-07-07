@@ -11,10 +11,7 @@ function readme(): string {
 describe('README configuration profiles contract', () => {
     it('documents the --profile long-only flag', () => {
         const content = readme();
-        const requiredTerms = [
-            '--profile <name>',
-            'there is no `-p` alias for profile',
-        ] as const;
+        const requiredTerms = ['--profile <name>', 'there is no `-p` alias for profile'] as const;
 
         for (const term of requiredTerms) {
             expect(content, `README missing ${term}`).toContain(term);

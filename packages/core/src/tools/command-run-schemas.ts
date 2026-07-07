@@ -40,6 +40,7 @@ export type CommandRunToolOptions = {
     readonly requestPermission: (request: PermissionRequest) => PermissionDecision | Promise<PermissionDecision>;
     readonly executor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly policyProfile?: CommandRunPolicyProfile;
+    readonly requirePermissionForAllowlisted?: boolean;
     readonly timeoutMs?: number;
     readonly maxOutputBytes?: number;
     readonly maxModelOutputChars?: number;
@@ -50,6 +51,7 @@ export type ResolvedCommandRunToolOptions = {
     readonly requestPermission: CommandRunToolOptions['requestPermission'];
     readonly executor: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly policyProfile: CommandRunPolicyProfile;
+    readonly requirePermissionForAllowlisted: boolean;
     readonly timeoutMs: number;
     readonly maxOutputBytes: number;
     readonly maxModelOutputChars: number;

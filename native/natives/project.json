@@ -1,23 +1,23 @@
 {
-    "$schema": "../../node_modules/nx/schemas/project-schema.json",
-    "name": "natives",
-    "projectType": "library",
-    "root": "native/natives",
-    "sourceRoot": "native/natives/src",
-    "targets": {
-        "build": {
-            "executor": "nx:run-commands",
-            "outputs": ["{projectRoot}/target"],
-            "options": {
-                "command": "cargo build --manifest-path native/natives/Cargo.toml"
-            }
-        },
-        "test": {
-            "executor": "nx:run-commands",
-            "outputs": [],
-            "options": {
-                "command": "cargo test --manifest-path native/natives/Cargo.toml"
-            }
-        }
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "natives",
+  "projectType": "library",
+  "root": "native/natives",
+  "sourceRoot": "native/natives/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/target"],
+      "options": {
+        "command": "cargo build --manifest-path native/natives/Cargo.toml"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "cargo test --manifest-path native/natives/Cargo.toml"
+      }
     }
+  }
 }

@@ -286,9 +286,7 @@ describe('parseArgs', () => {
         expect(() => parseArgs(['mcp', 'list', '--profile'])).toThrow('--profile requires a value');
         // Mirror the implementation's JSON.stringify formatting so backslash/space escaping stays correct.
         for (const bad of ['../bad', '.', '..', '.hidden', 'a/b', 'a\\b', 'UPPER', 'has space']) {
-            expect(() => parseArgs(['--profile', bad])).toThrow(
-                `Invalid --profile value: ${JSON.stringify(bad)}`,
-            );
+            expect(() => parseArgs(['--profile', bad])).toThrow(`Invalid --profile value: ${JSON.stringify(bad)}`);
         }
     });
 });

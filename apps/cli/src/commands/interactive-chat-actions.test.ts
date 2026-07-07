@@ -1,5 +1,11 @@
-import { AgentRuntime, type Skill, WorkflowRegistry } from '@mission-control/core';
 import * as missionControlCore from '@mission-control/core';
+import {
+    AgentRuntime,
+    openLocalSessionEventStore,
+    registerBuiltinWorkflows,
+    type Skill,
+    WorkflowRegistry,
+} from '@mission-control/core';
 import type { ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SessionPickerEntry } from './chat-store.js';
@@ -7,6 +13,7 @@ import type { CodingActionContext } from './interactive-chat-actions.js';
 import { runChatAction } from './interactive-chat-actions.js';
 import type { SessionNavigationController } from './interactive-chat-session-navigation.js';
 import { SessionNavigationError } from './interactive-chat-session-navigation-store.js';
+import { providerFromTurns } from './run-agent-tool-registry-test-support.js';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -438,6 +445,52 @@ describe('interactive chat actions', () => {
     });
 
     describe('workflow action', () => {
+        const tempRoots: string[] = [];
+
+        afterEach(async () => {
+            await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
+            tempRoots.length = 0;
+        });
+
+        it('routes a plain prompt through the default workflow fallback', async () => {
+            const runtime = new AgentRuntime();
+            const output = createOutput();
+            const dataDir = await mkdtemp(join(tmpdir(), 'plain-default-routing-'));
+            tempRoots.push(dataDir);
+            const sessionStore = await openLocalSessionEventStore({
+                dataDir,
+                sessionId: 'session_default_workflow',
+            });
+            const registry = new WorkflowRegistry();
+            registerBuiltinWorkflows(registry);
+
+            const result = await runChatAction(
+                runtime,
+                output,
+                { kind: 'prompt', prompt: 'hello' },
+                currentSelection,
+                async () => undefined,
+                [],
+                createCodingContext({
+                    provider: providerFromTurns(
+                        [],
+                        [
+                            [{ kind: 'response_completed', content: 'trivial' }],
+                            [{ kind: 'response_completed', content: 'hello from default' }],
+                        ],
+                    ),
+                    sessionId: 'session_default_workflow',
+                    sessionStore,
+                    workflowRegistry: registry,
+                    workspaceRoot: dataDir,
+                }),
+            );
+            await result.activeTurn?.done;
+
+            expect(output.getOutput()).toContain('▸ intent-gate');
+            expect(output.getOutput()).toContain('Assistant: hello from default');
+        });
+
         it('dispatches a known workflow by threading its graph through the prompt turn', async () => {
             const runtime = new AgentRuntime();
             const output = createOutput();

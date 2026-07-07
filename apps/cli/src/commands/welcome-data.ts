@@ -1,16 +1,16 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import {
+    DEFAULT_LSP_SERVERS,
+    discoverSkills,
     type LspServerConfig,
     type LspServerManager,
-    DEFAULT_LSP_SERVERS,
+    loadResolvedMcpConfig,
     type ResolvedMcpServer,
     type Skill,
-    discoverSkills,
-    loadResolvedMcpConfig,
 } from '@mission-control/core';
+import { getVersion } from '../index.js';
 import type { CliSessionCatalogEntry } from './session-catalog.js';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
-import { getVersion } from '../index.js';
 
 /**
  * A configured MCP server surfaced on the welcome screen. We collapse the
@@ -160,9 +160,7 @@ async function gatherProjectSkills(workspaceRoot: string | undefined): Promise<r
     }
 }
 
-async function gatherRecentSessions(
-    workspaceRoot: string | undefined,
-): Promise<readonly WelcomeSession[]> {
+async function gatherRecentSessions(workspaceRoot: string | undefined): Promise<readonly WelcomeSession[]> {
     if (workspaceRoot === undefined) return [];
     try {
         const entries = await listSessionCatalogEntriesForWorkspace(workspaceRoot);
@@ -172,9 +170,7 @@ async function gatherRecentSessions(
     }
 }
 
-async function gatherLspServers(
-    deps: GatherWelcomeDataDeps | undefined,
-): Promise<readonly WelcomeLspServer[]> {
+async function gatherLspServers(deps: GatherWelcomeDataDeps | undefined): Promise<readonly WelcomeLspServer[]> {
     const probe = deps?.detectLspServers;
     if (probe !== undefined) {
         try {
@@ -188,11 +184,7 @@ async function gatherLspServers(
     try {
         const { LspServerManager } = await import('@mission-control/core');
         const manager = new LspServerManager({ workspaceRoot: process.cwd() });
-        const available = await raceWithTimeout(
-            manager.detectAvailableServers(),
-            LSP_PROBE_TIMEOUT_MS,
-            [],
-        );
+        const available = await raceWithTimeout(manager.detectAvailableServers(), LSP_PROBE_TIMEOUT_MS, []);
         return buildWelcomeLspServers(DEFAULT_LSP_SERVERS, available);
     } catch {
         return buildWelcomeLspServers(DEFAULT_LSP_SERVERS, []);

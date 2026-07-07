@@ -353,7 +353,12 @@ describe('interactive chat command menu', () => {
 
         expect(view.visibleChoices.length).toBeGreaterThan(0);
         expect(view.visibleChoices[0]?.id).not.toBe('/export');
-        expect(view.visibleChoices.slice(0, 2).map((c) => c.id).sort()).toEqual(['/exit', '/export']);
+        expect(
+            view.visibleChoices
+                .slice(0, 2)
+                .map((c) => c.id)
+                .sort(),
+        ).toEqual(['/exit', '/export']);
     });
 
     it('selects the prefix-matched command by default so Enter submits it without arrow navigation', () => {

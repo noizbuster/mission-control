@@ -6,6 +6,12 @@
  */
 
 export type { AgentDefinition } from '@mission-control/protocol';
+export {
+    type AgentJobRecoveryReport,
+    type ResolveSubagentWaitInput,
+    SqlAgentJobMirror,
+    type StartSubagentWaitInput,
+} from './agent-job-sql-mirror.js';
 export type { AgentDiscoveryDiagnostic, DiscoverAgentsOptions, DiscoverAgentsResult } from './agent-loader.js';
 export { discoverAgents } from './agent-loader.js';
 export { AgentParseError, parseAgentFile } from './agent-parser.js';
@@ -34,8 +40,15 @@ export {
     type AgentUpdatePatch,
     getRuntimeRegistry,
     MAIN_AGENT_ID,
+    type RuntimeAgentPersistenceMirror,
     RuntimeAgentRegistry,
+    type RuntimeAgentRegistryOptions,
 } from './runtime-registry.js';
+export {
+    createSqlTaskRuntimeServices,
+    type SqlTaskRuntimeServices,
+    type SqlTaskRuntimeServicesOptions,
+} from './sql-task-runtime-services.js';
 export {
     type ChildSpawnContext,
     ConcreteTaskToolRuntime,
@@ -43,4 +56,5 @@ export {
     type ResolveAgentModelFn,
     type SpawnFn,
     type TaskToolRuntimeServices,
+    type TaskToolSubagentMirror,
 } from './task-tool-runtime.js';

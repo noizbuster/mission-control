@@ -96,8 +96,8 @@ function buildArgs(prompt: string, mode: CliArgs['mode']): CliArgs {
         useNative: false,
         command: 'run',
         showHelp: false,
-            showVersion: false,
-            thinking: false,
+        showVersion: false,
+        thinking: false,
         prompt,
         modelProviderSelection: LOCAL_SELECTION,
     };
@@ -106,12 +106,15 @@ function buildArgs(prompt: string, mode: CliArgs['mode']): CliArgs {
 describe('workflow dispatch end-to-end', () => {
     let workspaceDir: string;
     let configDir: string;
+    let dataDir: string;
     let provider: ProviderAdapter;
 
     beforeEach(async () => {
         workspaceDir = await createE2eWorkspace();
         configDir = await mkdtemp(join(tmpdir(), 'mctrl-wf-e2e-cfg-'));
+        dataDir = await mkdtemp(join(tmpdir(), 'mctrl-wf-e2e-data-'));
         vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         provider = createLocalProvider();
     });
 
@@ -119,6 +122,7 @@ describe('workflow dispatch end-to-end', () => {
         vi.unstubAllEnvs();
         await rm(workspaceDir, { recursive: true, force: true });
         await rm(configDir, { recursive: true, force: true });
+        await rm(dataDir, { recursive: true, force: true });
     });
 
     it('discovers a custom workflow and dispatches its graph via #name', async () => {
@@ -185,6 +189,7 @@ describe('workflow dispatch end-to-end', () => {
 describe('default workflow (production fixture) end-to-end', () => {
     let workspaceDir: string;
     let configDir: string;
+    let dataDir: string;
     let provider: ProviderAdapter;
 
     beforeEach(async () => {
@@ -194,7 +199,9 @@ describe('default workflow (production fixture) end-to-end', () => {
         const fixture = await readFile(PRODUCTION_DEFAULT_FIXTURE, 'utf8');
         await writeFile(join(workflowsDir, 'default.workflow.json'), fixture, 'utf8');
         configDir = await mkdtemp(join(tmpdir(), 'mctrl-default-prod-cfg-'));
+        dataDir = await mkdtemp(join(tmpdir(), 'mctrl-default-prod-data-'));
         vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         provider = createLocalProvider();
     });
 
@@ -202,6 +209,7 @@ describe('default workflow (production fixture) end-to-end', () => {
         vi.unstubAllEnvs();
         await rm(workspaceDir, { recursive: true, force: true });
         await rm(configDir, { recursive: true, force: true });
+        await rm(dataDir, { recursive: true, force: true });
     });
 
     it('discovers the production default workflow with the 5-class intent-gate entry node', async () => {

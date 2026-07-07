@@ -1,6 +1,6 @@
-import { Buffer } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
 import { createStreamDecoder, truncateToValidUtf8Boundary } from './stream-decoder.js';
+import { Buffer } from 'node:buffer';
 
 describe('createStreamDecoder', () => {
     it('passes string chunks through unchanged', () => {

@@ -2,6 +2,7 @@ import { createDeterministicProvider } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
+import { writeToolWorkflow } from './run-agent-json-approval-test-support.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,6 +17,7 @@ type JsonOutputRecord = Record<string, unknown> & {
 
 describe('runAgent JSON headless final state', () => {
     const tempRoots: string[] = [];
+    const workflowName = 'json-headless-tools';
 
     afterEach(async () => {
         vi.unstubAllEnvs();
@@ -26,7 +28,9 @@ describe('runAgent JSON headless final state', () => {
         const dataDir = await tempRoot('mctrl-json-headless-completed-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
 
-        const output = await runAgent(parseArgs(['run', 'summarize this repository', '--json']));
+        const output = await runAgent(parseArgs(['run', 'summarize this repository', '--json']), {
+            provider: createDeterministicProvider([{ kind: 'response_completed', content: 'summarized' }]),
+        });
         const finalRecord = lastRecord(parseJsonRecords(output));
 
         expect(finalRecord).toMatchObject({
@@ -98,9 +102,10 @@ describe('runAgent JSON headless final state', () => {
         const dataDir = await tempRoot('mctrl-json-headless-command-blocked-data-');
         const workspaceRoot = await tempRoot('mctrl-json-headless-command-blocked-workspace-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await writeToolWorkflow(workspaceRoot, workflowName);
         let commandCalls = 0;
 
-        const output = await runAgent(parseArgs(['run', 'try a trusted headless command', '--json']), {
+        const output = await runAgent(parseArgs(['run', `#${workflowName} try a headless command`, '--json']), {
             workspaceRoot,
             commandExecutor: async () => {
                 commandCalls += 1;
@@ -113,7 +118,7 @@ describe('runAgent JSON headless final state', () => {
                     toolName: 'command.run',
                     argumentsJson: JSON.stringify({
                         command: 'node',
-                        args: ['--eval', "console.log('mission-control command.run harness ok')"],
+                        args: ['--eval', "console.log('mission-control command.run approval required')"],
                     }),
                 },
                 { kind: 'response_completed', content: 'should not complete task' },
@@ -131,13 +136,14 @@ describe('runAgent JSON headless final state', () => {
         });
     });
 
-    it('emits failed when headless command.run is denied before execution', async () => {
+    it('emits blocked_on_approval when headless command.run is not auto-approved', async () => {
         const dataDir = await tempRoot('mctrl-json-headless-command-data-');
         const workspaceRoot = await tempRoot('mctrl-json-headless-command-workspace-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await writeToolWorkflow(workspaceRoot, workflowName);
         let commandCalls = 0;
 
-        const output = await runAgent(parseArgs(['run', 'try a headless command', '--json']), {
+        const output = await runAgent(parseArgs(['run', `#${workflowName} try another headless command`, '--json']), {
             workspaceRoot,
             commandExecutor: async () => {
                 commandCalls += 1;
@@ -158,9 +164,10 @@ describe('runAgent JSON headless final state', () => {
         expect(commandCalls).toBe(0);
         expect(finalRecord).toMatchObject({
             type: 'session.stopped',
-            status: 'failed',
+            status: 'blocked_on_approval',
             runId: expect.stringMatching(/^run_.+/),
             toolCallId: 'json_command_call',
+            approvalId: expect.stringMatching(/^approval_.+/),
         });
     });
 

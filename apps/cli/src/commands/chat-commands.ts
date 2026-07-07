@@ -7,9 +7,7 @@ import { splitCommandParts } from './chat-command-parts.js';
 import { parseSessionSlashCommand } from './chat-session-commands.js';
 import { formatModelSelection, type ModelChoice, resolveModelCommand } from './interactive-chat-model.js';
 
-export type SkillsCommand =
-    | { readonly kind: 'reload' }
-    | { readonly kind: 'invalid'; readonly message: string };
+export type SkillsCommand = { readonly kind: 'reload' } | { readonly kind: 'invalid'; readonly message: string };
 
 export type ChatLineAction =
     | {

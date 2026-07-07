@@ -3,7 +3,7 @@ import { detectGitBranch, detectGitWorktree, formatAppTitle, formatSessionTitle 
 import { execSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 const repoRoot = process.cwd();
 
@@ -65,11 +65,16 @@ describe('terminal-controls — detectGitWorktree', () => {
         }
     });
 
-    it('returns { isWorktree: false, name: undefined } for the main checkout of this repo', () => {
-        // Given: this repo is a main checkout (git-dir == git-common-dir).
-        // When: detecting the worktree status.
-        // Then: it is NOT reported as a linked worktree.
-        expect(detectGitWorktree(repoRoot)).toEqual({ isWorktree: false, name: undefined });
+    it('returns the actual worktree status for the current checkout', () => {
+        const gitDir = execSync('git rev-parse --git-dir', { encoding: 'utf8' }).trim();
+        const commonDir = execSync('git rev-parse --git-common-dir', { encoding: 'utf8' }).trim();
+        const topLevel = execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim();
+        const isWorktree = resolve(repoRoot, gitDir) !== resolve(repoRoot, commonDir);
+
+        expect(detectGitWorktree(repoRoot)).toEqual({
+            isWorktree,
+            name: isWorktree ? basename(topLevel) : undefined,
+        });
     });
 
     it('returns { isWorktree: false, name: undefined } for a main checkout with a fresh commit', () => {

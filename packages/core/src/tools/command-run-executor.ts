@@ -1,6 +1,6 @@
+import { truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
 import type { ChainOperator } from './bash-run-command-guard.js';
 import { type ChildProcess, spawn } from 'node:child_process';
-import { truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
 
 const forceColorEnvKey = 'FORCE_COLOR';
 

@@ -1,6 +1,6 @@
 import type { ProviderAdapter, ProviderTurnRequest } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args.js';
 import type { ModelChoice } from './interactive-chat-model.js';
 import { runAgent } from './run-agent.js';
@@ -11,8 +11,20 @@ import {
     createFieldsCredential,
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
+import { useIsolatedMissionControlDataDir } from './run-agent-data-dir-test-support.js';
 
 describe('runAgent /model provider variant picker', () => {
+    let cleanupDataDir: (() => Promise<void>) | undefined;
+
+    beforeEach(async () => {
+        cleanupDataDir = await useIsolatedMissionControlDataDir('mission-control-model-variant-picker-');
+    });
+
+    afterEach(async () => {
+        await cleanupDataDir?.();
+        cleanupDataDir = undefined;
+    });
+
     it('opens a provider-specific variant picker after model selection', async () => {
         const chatOutput = createBufferedChatOutput();
         const pickerLabels: string[][] = [];

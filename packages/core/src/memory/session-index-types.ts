@@ -6,6 +6,7 @@ import type {
     ProtocolError,
     RunCoordinatorCommand,
     RunCoordinatorState,
+    SessionAwaitingDetails,
     ToolResult,
 } from '@mission-control/protocol';
 import type { ToolOutcomeStatus } from '../session-replay-types.js';
@@ -15,6 +16,7 @@ export type SessionIndexSessionRecord = {
     readonly kind: 'session';
     readonly sessionId: string;
     readonly status: AgentSnapshot['status'];
+    readonly awaiting?: SessionAwaitingDetails | undefined;
     readonly startedAt: string;
     readonly stoppedAt?: string | undefined;
     readonly eventCount: number;

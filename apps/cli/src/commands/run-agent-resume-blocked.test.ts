@@ -1,4 +1,4 @@
-import { createDeterministicProvider, JsonlSessionEventStore } from '@mission-control/core';
+import { createDeterministicProvider, JsonlSessionEventStore, readLocalSessionReplay } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
@@ -231,17 +231,14 @@ function fixedNow(): string {
 }
 
 async function replayEvents(dataDir: string, sessionId: string): Promise<readonly AgentEvent[]> {
-    const store = await JsonlSessionEventStore.open({
+    const replay = await readLocalSessionReplay({
         dataDir,
         sessionId,
-        now: fixedNow,
-        createEventId: (_event, sequence) => `read_event_${sequence}`,
     });
-    try {
-        return await store.getEvents(sessionId);
-    } finally {
-        await store.close();
+    if (replay.kind === 'missing') {
+        return [];
     }
+    return replay.replay.projection.events;
 }
 
 function addFilePatch(path: string, content: string): string {

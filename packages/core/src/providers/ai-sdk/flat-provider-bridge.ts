@@ -333,7 +333,11 @@ function bridgeFlatStream(
                                 const reasoningText = chunk.text;
                                 if (typeof reasoningText === 'string' && reasoningText.length > 0) {
                                     controller.enqueue({ type: 'reasoning-start', id: reasoningId });
-                                    controller.enqueue({ type: 'reasoning-delta', id: reasoningId, delta: reasoningText });
+                                    controller.enqueue({
+                                        type: 'reasoning-delta',
+                                        id: reasoningId,
+                                        delta: reasoningText,
+                                    });
                                     controller.enqueue({ type: 'reasoning-end', id: reasoningId });
                                 }
                             }

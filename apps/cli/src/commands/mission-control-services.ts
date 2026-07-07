@@ -13,13 +13,17 @@
  */
 
 import {
-    AgentLifecycleManager,
+    type AgentLifecycleManager,
     type AgentStatus,
-    AsyncJobManager,
+    type AsyncJobManager,
     type BackgroundJobHandle,
+    createSqlTaskRuntimeServices,
     MAIN_AGENT_ID,
-    RuntimeAgentRegistry,
+    type RuntimeAgentRegistry,
+    resolveMissionControlDataDir,
     resolveOmoRoot,
+    type SqlTaskRuntimeServices,
+    type TaskToolRuntimeServices,
 } from '@mission-control/core';
 import { resolve } from 'node:path';
 
@@ -65,21 +69,17 @@ export interface MissionControlServicesSnapshot {
  * tests can build an instance without touching disk.
  */
 export class MissionControlServices {
-    private readonly jobManager: AsyncJobManager;
-    private readonly lifecycleManager: AgentLifecycleManager;
-    private readonly runtimeRegistry: RuntimeAgentRegistry;
+    private readonly sqlServices: SqlTaskRuntimeServices;
     private readonly omoRoot: string;
     private readonly maxConcurrency: number;
     private readonly defaultIdleTtlMs: number;
     private disposed = false;
 
-    private constructor(omoRoot: string, options: MissionControlServicesOptions) {
+    private constructor(omoRoot: string, options: MissionControlServicesOptions, sqlServices: SqlTaskRuntimeServices) {
         this.omoRoot = omoRoot;
         this.maxConcurrency = options.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY;
         this.defaultIdleTtlMs = options.defaultIdleTtlMs ?? DEFAULT_IDLE_TTL_MS;
-        this.runtimeRegistry = new RuntimeAgentRegistry();
-        this.jobManager = new AsyncJobManager(this.maxConcurrency);
-        this.lifecycleManager = new AgentLifecycleManager(this.runtimeRegistry);
+        this.sqlServices = sqlServices;
     }
 
     /** Resolve the `.omo` root from `workspaceRoot`, then construct. */
@@ -88,19 +88,27 @@ export class MissionControlServices {
         options?: MissionControlServicesOptions,
     ): Promise<MissionControlServices> {
         const omoRoot = await resolveOmoRoot(workspaceRoot);
-        return new MissionControlServices(omoRoot, options ?? {});
+        const resolvedOptions = options ?? {};
+        const sqlServices = await createSqlTaskRuntimeServices(resolveMissionControlDataDir(), {
+            maxConcurrency: resolvedOptions.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY,
+        });
+        return new MissionControlServices(omoRoot, resolvedOptions, sqlServices);
     }
 
     getJobManager(): AsyncJobManager {
-        return this.jobManager;
+        return this.sqlServices.jobManager;
     }
 
     getLifecycleManager(): AgentLifecycleManager {
-        return this.lifecycleManager;
+        return this.sqlServices.lifecycleManager;
     }
 
     getRuntimeRegistry(): RuntimeAgentRegistry {
-        return this.runtimeRegistry;
+        return this.sqlServices.runtimeRegistry;
+    }
+
+    getTaskRuntimeServices(): TaskToolRuntimeServices {
+        return this.sqlServices;
     }
 
     getOmoRoot(): string {
@@ -126,7 +134,7 @@ export class MissionControlServices {
      * panel never reaches into manager internals.
      */
     snapshot(): MissionControlServicesSnapshot {
-        const jobs = this.jobManager.listJobs();
+        const jobs = this.sqlServices.jobManager.listJobs();
         const jobByStatus: Record<BackgroundJobHandle['status'], number> = {
             queued: 0,
             running: 0,
@@ -136,7 +144,7 @@ export class MissionControlServices {
         };
         for (const job of jobs) jobByStatus[job.status] += 1;
 
-        const visible = this.runtimeRegistry.listVisibleTo(MAIN_AGENT_ID);
+        const visible = this.sqlServices.runtimeRegistry.listVisibleTo(MAIN_AGENT_ID);
         const agentByStatus: Record<AgentStatus, number> = {
             running: 0,
             idle: 0,
@@ -151,7 +159,7 @@ export class MissionControlServices {
             defaultIdleTtlMs: this.defaultIdleTtlMs,
             disposed: this.disposed,
             jobs: {
-                activeCount: this.jobManager.getActiveCount(),
+                activeCount: this.sqlServices.jobManager.getActiveCount(),
                 total: jobs.length,
                 byStatus: jobByStatus,
             },
@@ -171,15 +179,16 @@ export class MissionControlServices {
     async dispose(): Promise<void> {
         if (this.disposed) return;
         this.disposed = true;
-        for (const job of this.jobManager.listJobs()) {
+        for (const job of this.sqlServices.jobManager.listJobs()) {
             if (job.status === 'queued' || job.status === 'running') {
-                this.jobManager.cancelJob(job.jobId);
+                this.sqlServices.jobManager.cancelJob(job.jobId);
             }
         }
-        for (const ref of this.runtimeRegistry.listVisibleTo(MAIN_AGENT_ID)) {
-            await this.lifecycleManager.release(ref.id);
+        for (const ref of this.sqlServices.runtimeRegistry.listVisibleTo(MAIN_AGENT_ID)) {
+            await this.sqlServices.lifecycleManager.release(ref.id);
         }
-        this.runtimeRegistry.clear();
+        this.sqlServices.runtimeRegistry.clear();
+        await this.sqlServices.close();
     }
 }
 
@@ -208,6 +217,15 @@ export async function getOrCreateMissionControlServices(
         if (instances.get(key) === pending) instances.delete(key);
     });
     return pending;
+}
+
+export function isOmoRootNotFoundError(error: unknown): boolean {
+    return (
+        error instanceof Error &&
+        error.name === 'OmoPersistenceError' &&
+        'code' in error &&
+        error.code === 'omo_root_not_found'
+    );
 }
 
 /**

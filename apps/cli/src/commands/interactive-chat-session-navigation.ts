@@ -1,4 +1,4 @@
-import { type JsonlSessionEventStore as SessionStore } from '@mission-control/core';
+import { type LocalSessionEventStore as SessionStore } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import {
     formatSessionSummary,

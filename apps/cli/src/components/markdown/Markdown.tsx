@@ -21,12 +21,13 @@
  * re-render of unchanged input returns the same instance.
  */
 
+import { SyntaxStyle } from '@opentui/core';
 import type { Token, Tokens } from 'marked';
 import { marked } from 'marked';
 import type React from 'react';
 import { useMemo, useSyncExternalStore } from 'react';
-import { SyntaxStyle } from '@opentui/core';
 import wrapAnsi from 'wrap-ansi';
+import { terminalDisplayWidth } from '../../commands/terminal-text.js';
 // MUST come after ./theme.js: the module graph highlight -> tree-sitter-highlighter
 // -> render-cache -> theme -> highlight is circular. Loading render-cache first
 // (via the import above) ensures theme.ts body runs AFTER highlight.ts finishes,
@@ -35,7 +36,6 @@ import { getHighlightVersion, subscribeHighlight } from './highlight.js';
 import { getCachedBlocks } from './render-cache.js';
 import { streamBlocks } from './stream.js';
 import { terminalStyleToTextProps } from './text-attributes.js';
-import { terminalDisplayWidth } from '../../commands/terminal-text.js';
 import type { TerminalMarkdownTheme, TerminalTextStyle } from './theme.js';
 import { darkTheme } from './theme.js';
 
@@ -706,12 +706,5 @@ export function Markdown({ text, streaming, theme }: MarkdownProps): React.React
             return SyntaxStyle.create();
         }
     }, [theme]);
-    return (
-        <markdown
-            content={text}
-            streaming={streaming ?? false}
-            syntaxStyle={syntaxStyle}
-            conceal={true}
-        />
-    );
+    return <markdown content={text} streaming={streaming ?? false} syntaxStyle={syntaxStyle} conceal={true} />;
 }

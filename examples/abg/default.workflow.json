@@ -35,9 +35,7 @@
         "id": "research-explore",
         "kind": "llm",
         "label": "Exploratory research — read-only, NO edits",
-        "capabilities": [
-          "read"
-        ],
+        "capabilities": ["read"],
         "config": {
           "systemPrompt": "Exploratory/research intent. Explore the codebase and/or external docs to answer the user's question, then synthesize a grounded answer. You are READ-ONLY: you must NOT edit, write, patch, or run effectful tools. Cite file:line evidence for every claim about the codebase. Do NOT begin implementation — if the exploration reveals the user actually wants implementation, say so and stop.\nPATH RESILIENCE: paths mentioned in project docs (AGENTS.md, CLAUDE.md) may be stale after refactors. If a documented path returns not_found, do NOT conclude the file or feature is missing — fall back to glob with the basename (e.g. \"**/<basename>\"), grep for a distinctive symbol from the docs, or list the parent directory. Only conclude \"not present\" after at least one alternative search has returned empty. A failed read is NOT explored ground — it tells you nothing about whether the file exists elsewhere.\nSet explore.complete when synthesis is ready.",
           "outputKey": "explore.complete"
@@ -47,9 +45,7 @@
         "id": "route-planner",
         "kind": "llm",
         "label": "Open-ended planning — route to #planner or ask ONE question, NEVER implement",
-        "capabilities": [
-          "workflow"
-        ],
+        "capabilities": ["workflow"],
         "config": {
           "systemPrompt": "Open-ended/planning intent (\"improve\", \"refactor\", \"make X better\"). You MUST NOT implement directly. Do exactly one of:\n1. Route to the planner workflow via the workflow tool: workflow(\"planner\", \"<the user's request>\"). Use this when the request needs a real plan before any code.\n2. Ask exactly ONE high-signal clarifying question (with 2-4 options and your recommended default first). Use this when one answer would unblock planning.\nNever implement, never edit files, never run effectful tools. Planning mode is STICKY: \"do/fix/build\" all mean \"plan X\" here, not \"implement X\". Set planner.routed when you have routed to #planner or asked the question.",
           "outputKey": "planner.routed"
@@ -69,9 +65,7 @@
         "id": "maturity-check",
         "kind": "llm",
         "label": "Assess codebase maturity and existing patterns before implementing",
-        "capabilities": [
-          "read"
-        ],
+        "capabilities": ["read"],
         "config": {
           "systemPrompt": "Before following existing patterns, assess whether they are worth following. Sample config files (linter, formatter, type config) and 2-3 similar files. Classify the codebase state and record it so downstream nodes follow the right discipline:\n- disciplined (consistent patterns, configs present, tests exist) -> follow existing style strictly.\n- transitional (mixed patterns, some structure) -> note which pattern to follow.\n- legacy (no consistency, outdated patterns) -> propose an approach, do not copy.\n- greenfield (new/empty) -> apply modern best practices.\nIf the codebase looks undisciplined, verify before assuming — different patterns may serve different purposes intentionally. Write the classification to explore.maturity.",
           "outputKey": "explore.maturity"
@@ -102,9 +96,7 @@
         "id": "delegate-wave",
         "kind": "parallel",
         "label": "Fan out task() delegation per todo",
-        "children": [
-          "delegate-worker"
-        ],
+        "children": ["delegate-worker"],
         "config": {
           "fanOutKey": "plan.todos",
           "completionKey": "delegate.complete"
@@ -114,9 +106,7 @@
         "id": "delegate-worker",
         "kind": "llm",
         "label": "Single task() delegation",
-        "capabilities": [
-          "subagent"
-        ],
+        "capabilities": ["subagent"],
         "config": {
           "systemPrompt": "Execute the delegated sub-task via the task tool. Frame the delegation with TASK, EXPECTED OUTCOME, REQUIRED TOOLS, MUST DO, MUST NOT DO, and CONTEXT."
         }

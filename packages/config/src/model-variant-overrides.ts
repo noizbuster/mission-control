@@ -12,11 +12,7 @@ export type VariantOverrides = Readonly<Record<string, readonly VariantOverrideE
 
 const VARIANT_OVERRIDE_PATHS: readonly string[] = [
     join(process.cwd(), '.mctrl', 'model-variants.json'),
-    join(
-        process.env['XDG_CONFIG_HOME'] ?? join(homedir(), '.config'),
-        'mission-control',
-        'model-variants.json',
-    ),
+    join(process.env['XDG_CONFIG_HOME'] ?? join(homedir(), '.config'), 'mission-control', 'model-variants.json'),
 ];
 
 let cached: VariantOverrides | undefined;

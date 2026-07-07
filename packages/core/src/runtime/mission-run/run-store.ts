@@ -1,10 +1,11 @@
 /**
- * Run store — JSON-backed CRUD for Run state objects with status-transition enforcement.
+ * Run store — SQL-backed CRUD for Run state objects with status-transition enforcement.
  *
- * Each Run is a single JSON file under `.omo/runs/{runId}.json`. Like Missions,
- * Runs are mutable state objects (not append-only event logs): writes replace
- * the file atomically. The allowed-transition state machine is enforced inside
- * `updateRunStatus`; direct field mutation is intentionally not exposed.
+ * New writes go to the shared local libSQL database at `<data-dir>/memory.db`.
+ * During the compatibility window, missing SQL rows fall back to legacy
+ * `.omo/runs/{runId}.json` files and import them into SQL after schema validation.
+ * The allowed-transition state machine is enforced inside `updateRunStatus`;
+ * direct field mutation is intentionally not exposed.
  *
  * Transition map (Task 1.4 contract):
  *   pending → running
@@ -15,48 +16,25 @@
 
 import { type Run, type RunCost, RunSchema, type RunStatus, type TaskRetryState } from '@mission-control/protocol';
 import { OmoPersistenceError, omoFilePath } from '../../persistence/paths.js';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { findMostRecentFailedRunRecord } from './failed-run-store.js';
+import { listRunsFromDb, readRunFromDb, writeRunToDb } from './mission-run-db.js';
+import {
+    ALLOWED_RUN_TRANSITIONS,
+    assertRunTransition,
+    MissionRunTransitionError,
+    TERMINAL_RUN_STATUSES,
+} from './run-status-transitions.js';
+import { readdir, readFile } from 'node:fs/promises';
 
 const RUNS_DIR = 'runs';
 const JSON_EXTENSION = '.json';
 
-/**
- * Allowed outgoing transitions for each RunStatus. Terminal statuses map to
- * empty arrays — once terminal, a Run cannot transition further.
- */
-export const ALLOWED_RUN_TRANSITIONS: Readonly<Record<RunStatus, readonly RunStatus[]>> = {
-    pending: ['running'],
-    running: ['blocked', 'completed', 'failed', 'cancelled'],
-    blocked: ['running'],
-    completed: [],
-    failed: [],
-    cancelled: [],
-};
-
-export const TERMINAL_RUN_STATUSES: ReadonlySet<RunStatus> = new Set(['completed', 'failed', 'cancelled']);
+export { ALLOWED_RUN_TRANSITIONS, assertRunTransition, MissionRunTransitionError, TERMINAL_RUN_STATUSES };
 
 export class RunStoreError extends OmoPersistenceError {
     constructor(message: string, code: string, path?: string, cause?: unknown) {
         super(message, code, path, cause !== undefined ? { cause } : undefined);
         this.name = 'RunStoreError';
-    }
-}
-
-/**
- * Thrown when a `updateRunStatus` call requests a transition that is not in
- * {@linkcode ALLOWED_RUN_TRANSITIONS}. This is a domain-logic error (illegal
- * state-machine move), not a persistence error.
- */
-export class MissionRunTransitionError extends Error {
-    constructor(
-        message: string,
-        readonly fromStatus: RunStatus,
-        readonly toStatus: RunStatus,
-    ) {
-        super(message);
-        this.name = 'MissionRunTransitionError';
     }
 }
 
@@ -86,7 +64,7 @@ export function runFilePath(root: string, runId: string): string {
  */
 export async function createRun(root: string, run: Run): Promise<Run> {
     const validated = RunSchema.parse(run);
-    await atomicWriteJson(runFilePath(root, validated.id), validated);
+    await writeRunToDb(root, validated);
     return validated;
 }
 
@@ -96,6 +74,16 @@ export async function createRun(root: string, run: Run): Promise<Run> {
  * validation failure.
  */
 export async function readRun(root: string, runId: string): Promise<Run> {
+    const dbRun = await readRunFromDb(root, runId);
+    if (dbRun !== undefined) {
+        return dbRun;
+    }
+    const legacyRun = await readRunJson(root, runId);
+    await writeRunToDb(root, legacyRun);
+    return legacyRun;
+}
+
+async function readRunJson(root: string, runId: string): Promise<Run> {
     const filePath = runFilePath(root, runId);
     let contents: string;
     try {
@@ -160,7 +148,7 @@ export async function updateRunStatus(
     };
 
     const validated = RunSchema.parse(next);
-    await atomicWriteJson(runFilePath(root, runId), validated);
+    await writeRunToDb(root, validated);
     return validated;
 }
 
@@ -177,43 +165,44 @@ export async function listRunsForMission(
     missionId: string,
     filter: { readonly parentId?: string } = {},
 ): Promise<readonly Run[]> {
+    const runs = [
+        ...(await listRunsFromDb(root, {
+            missionId,
+            ...(filter.parentId !== undefined ? { parentId: filter.parentId } : {}),
+        })),
+    ];
+    const seenIds = new Set(runs.map((run) => run.id));
     const dir = omoFilePath(root, RUNS_DIR);
     let entries: readonly string[];
     try {
         entries = await readdir(dir);
     } catch (error: unknown) {
         if (isErrorCode(error, 'ENOENT')) {
-            return [];
+            return runs;
         }
         throw error;
     }
 
-    const runs: Run[] = [];
     for (const entry of entries) {
         if (!entry.endsWith(JSON_EXTENSION)) {
             continue;
         }
         const runId = entry.slice(0, -JSON_EXTENSION.length);
-        const run = await readRun(root, runId);
+        if (seenIds.has(runId)) {
+            continue;
+        }
+        const run = await readRunJson(root, runId);
         if (run.missionId !== missionId) {
             continue;
         }
         if (filter.parentId !== undefined && run.parentRunId !== filter.parentId) {
             continue;
         }
+        await writeRunToDb(root, run);
         runs.push(run);
+        seenIds.add(run.id);
     }
     return runs;
-}
-
-export function assertRunTransition(from: RunStatus, to: RunStatus): void {
-    if (from === to) {
-        return;
-    }
-    const allowed = ALLOWED_RUN_TRANSITIONS[from];
-    if (!allowed.includes(to)) {
-        throw new MissionRunTransitionError(`Invalid run status transition: ${from} -> ${to}`, from, to);
-    }
 }
 
 /**
@@ -223,40 +212,7 @@ export function assertRunTransition(from: RunStatus, to: RunStatus): void {
  * failed runs (or no runs directory).
  */
 export async function findMostRecentFailedRun(root: string): Promise<Run | undefined> {
-    const dir = omoFilePath(root, RUNS_DIR);
-    let entries: readonly string[];
-    try {
-        entries = await readdir(dir);
-    } catch (error: unknown) {
-        if (isErrorCode(error, 'ENOENT')) {
-            return undefined;
-        }
-        throw error;
-    }
-    let latest: Run | undefined;
-    for (const entry of entries) {
-        if (!entry.endsWith(JSON_EXTENSION)) continue;
-        const runId = entry.slice(0, -JSON_EXTENSION.length);
-        const run = await readRun(root, runId).catch((error: unknown) => {
-            if (error instanceof RunStoreError && (error.code === 'run_missing' || error.code === 'run_corrupt')) {
-                return undefined;
-            }
-            throw error;
-        });
-        if (run === undefined || run.status !== 'failed') continue;
-        if (latest === undefined || compareEndedAt(run, latest) > 0) {
-            latest = run;
-        }
-    }
-    return latest;
-}
-
-function compareEndedAt(a: Run, b: Run): number {
-    const aTime = a.endedAt ?? '';
-    const bTime = b.endedAt ?? '';
-    if (aTime < bTime) return -1;
-    if (aTime > bTime) return 1;
-    return 0;
+    return findMostRecentFailedRunRecord(root);
 }
 
 export async function appendChildSession(root: string, runId: string, childSessionId: string): Promise<Run> {
@@ -269,7 +225,7 @@ export async function appendChildSession(root: string, runId: string, childSessi
         ...existing,
         childSessionIds: [...existingChildren, childSessionId],
     });
-    await atomicWriteJson(runFilePath(root, runId), validated);
+    await writeRunToDb(root, validated);
     return validated;
 }
 
@@ -285,17 +241,8 @@ export async function recordTaskRetry(root: string, runId: string, taskKey: stri
         ...existing,
         taskRetryState: { ...current, [taskKey]: nextEntry },
     });
-    await atomicWriteJson(runFilePath(root, runId), validated);
+    await writeRunToDb(root, validated);
     return validated;
-}
-
-async function atomicWriteJson(filePath: string, value: unknown): Promise<void> {
-    const serialized = `${JSON.stringify(value, null, 2)}\n`;
-    const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
-    await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(tempPath, serialized, { encoding: 'utf8', flag: 'wx' });
-    await rename(tempPath, filePath);
-    await rm(tempPath, { force: true });
 }
 
 function isErrorCode(error: unknown, code: string): boolean {

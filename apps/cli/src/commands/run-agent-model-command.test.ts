@@ -1,6 +1,6 @@
 import type { ProviderAdapter, ProviderTurnRequest } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
 import {
@@ -11,11 +11,23 @@ import {
     createFieldsCredential,
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
+import { useIsolatedMissionControlDataDir } from './run-agent-data-dir-test-support.js';
 
 describe('runAgent /model chat command', () => {
+    let cleanupDataDir: (() => Promise<void>) | undefined;
+
+    beforeEach(async () => {
+        cleanupDataDir = await useIsolatedMissionControlDataDir('mission-control-model-command-');
+    });
+
+    afterEach(async () => {
+        await cleanupDataDir?.();
+        cleanupDataDir = undefined;
+    });
+
     it('changes the current chat model with the /model command before later prompts', async () => {
         const chatOutput = createBufferedChatOutput();
-        const events: AgentEvent[] = [];
+        let promptModelCall: AgentEvent | undefined;
 
         const output = await runAgent(parseArgs([]), {
             authStore: createAuthStoreWithSummaries([createCredentialSummary('anthropic')]),
@@ -27,7 +39,9 @@ describe('runAgent /model chat command', () => {
             ]),
             chatOutput: chatOutput.output,
             onRuntimeEvent: (event) => {
-                events.push(event);
+                if (isModelCallCompletedMessage(event, 'received prompt: explain model routing')) {
+                    promptModelCall = event;
+                }
             },
             createProvider: () => createEchoProvider(),
         });
@@ -39,10 +53,7 @@ describe('runAgent /model chat command', () => {
         expect(output).toContain('model: claude-3-5-haiku-20241022');
         expect(output).toContain('selection: anthropic/claude-3-5-haiku-20241022');
         expect(output).toContain('Assistant: received prompt: explain model routing');
-        const promptCompleted = events.find(
-            (event) => event.type === 'task.completed' && event.message === 'received prompt: explain model routing',
-        );
-        expect(promptCompleted?.modelProviderSelection).toEqual({
+        expect(promptModelCall?.modelProviderSelection).toEqual({
             providerID: 'anthropic',
             modelID: 'claude-3-5-haiku-20241022',
         });
@@ -50,7 +61,7 @@ describe('runAgent /model chat command', () => {
 
     it('changes the current chat model variant with the /model command before later prompts', async () => {
         const chatOutput = createBufferedChatOutput();
-        const events: AgentEvent[] = [];
+        let promptModelCall: AgentEvent | undefined;
 
         const output = await runAgent(parseArgs([]), {
             authStore: createAuthStoreWithSummaries([createCredentialSummary('local')]),
@@ -62,21 +73,20 @@ describe('runAgent /model chat command', () => {
             ]),
             chatOutput: chatOutput.output,
             onRuntimeEvent: (event) => {
-                events.push(event);
+                if (isModelCallCompletedMessage(event, 'received prompt: explain variant routing')) {
+                    promptModelCall = event;
+                }
             },
         });
 
         expect(output).toContain('variant: fast');
         expect(output).toContain('selection: local/local-echo#fast');
         expect(output).toContain('Assistant: received prompt: explain variant routing');
-        const promptCompleted = events.find(
-            (event) => event.type === 'task.completed' && event.message === 'received prompt: explain variant routing',
-        );
-        expect(promptCompleted?.modelProviderSelection).toEqual({
+        expect(promptModelCall?.modelProviderSelection).toEqual({
             providerID: 'local',
             modelID: 'local-echo',
-            variantID: 'fast',
         });
+        expect(promptModelCall?.abg?.model?.variantID).toBe('fast');
     });
 
     it('opens a model picker for /model without arguments', async () => {
@@ -204,7 +214,7 @@ describe('runAgent /model chat command', () => {
 
     it('rejects /model direct selection for providers that are not logged in', async () => {
         const chatOutput = createBufferedChatOutput();
-        const events: AgentEvent[] = [];
+        let promptModelCall: AgentEvent | undefined;
 
         const output = await runAgent(parseArgs([]), {
             authStore: createEmptyAuthStore(),
@@ -216,16 +226,15 @@ describe('runAgent /model chat command', () => {
             ]),
             chatOutput: chatOutput.output,
             onRuntimeEvent: (event) => {
-                events.push(event);
+                if (isModelCallCompletedMessage(event, 'received prompt: after rejected model')) {
+                    promptModelCall = event;
+                }
             },
         });
 
         expect(output).toContain('Provider is not logged in: anthropic');
         expect(output).not.toContain('selection: anthropic/claude-3-5-haiku-20241022');
-        const promptCompleted = events.find(
-            (event) => event.type === 'task.completed' && event.message === 'received prompt: after rejected model',
-        );
-        expect(promptCompleted?.modelProviderSelection).toEqual({
+        expect(promptModelCall?.modelProviderSelection).toEqual({
             providerID: 'local',
             modelID: 'local-echo',
         });
@@ -245,7 +254,8 @@ describe('runAgent /model chat command', () => {
         });
 
         const modelListOutput = output.slice(output.indexOf('Showing 1-'));
-        expect(output).toContain('anthropic/claude-3-5-haiku-20241022');
+        expect(modelListOutput).toContain('anthropic/');
+        expect(modelListOutput).toContain('[executable]');
         expect(modelListOutput).not.toContain('local/local-echo');
         expect(modelListOutput).not.toContain('openai/');
     });
@@ -295,15 +305,6 @@ describe('runAgent /model chat command', () => {
     });
 });
 
-function sliceModelListOutput(output: string, marker: string): string {
-    const startIndex = output.indexOf(marker);
-    if (startIndex === -1) {
-        return '';
-    }
-    const nextPromptIndex = output.indexOf('> ', startIndex);
-    return output.slice(startIndex, nextPromptIndex === -1 ? undefined : nextPromptIndex);
-}
-
 function createEchoProvider(): ProviderAdapter {
     return {
         async *streamTurn(request) {
@@ -325,4 +326,8 @@ function createEchoProvider(): ProviderAdapter {
 
 function lastUserPrompt(request: ProviderTurnRequest): string {
     return [...request.messages].reverse().find((message) => message.role === 'user')?.content ?? '';
+}
+
+function isModelCallCompletedMessage(event: AgentEvent, message: string): boolean {
+    return event.type === 'model.call.completed' && event.message === message;
 }

@@ -13,6 +13,7 @@ import {
     lastRecord,
     parseJsonRecords,
     providerWithWrite,
+    writeToolWorkflow,
 } from './run-agent-json-approval-test-support.js';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -20,6 +21,7 @@ import { join } from 'node:path';
 
 describe('runAgent JSON non-interactive approvals', () => {
     const tempRoots: string[] = [];
+    const workflowName = 'json-approval-tools';
 
     afterEach(async () => {
         vi.unstubAllEnvs();
@@ -32,12 +34,13 @@ describe('runAgent JSON non-interactive approvals', () => {
         const dataDir = await tempRoot('mctrl-task18-data-');
         const workspaceRoot = await tempRoot('mctrl-task18-workspace-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await writeToolWorkflow(workspaceRoot, workflowName);
         await writeFile(join(workspaceRoot, 'README.md'), 'task18 read result\n', 'utf8');
         const requests: ProviderTurnRequest[] = [];
 
         // When
         const output = await runAgent(
-            parseArgs(['run', 'read README', '--jsonl', '--session', 'session_task18_read']),
+            parseArgs(['run', `#${workflowName} read README`, '--jsonl', '--session', 'session_task18_read']),
             {
                 workspaceRoot,
                 provider: providerFromReadRequests(requests),
@@ -46,26 +49,8 @@ describe('runAgent JSON non-interactive approvals', () => {
         const events = parseJsonEvents(output);
 
         // Then
-        expect(requestAt(requests, 0).tools?.map((tool) => tool.name)).toEqual([
-            'repo.read',
-            'repo.list',
-            'repo.search',
-            'repo.read.tagged',
-            'glob',
-            'ast_grep',
-            'todowrite',
-            'skill',
-            'webfetch',
-            'ask_user',
-            'file.edit',
-            'file.write',
-            'file.patch',
-            'command.run',
-            'task',
-            'lsp',
-        ]);
-        expect(requestAt(requests, 0).tools?.map((tool) => tool.name)).not.toEqual(
-            expect.arrayContaining(['read', 'ls', 'grep', 'find']),
+        expect(requestAt(requests, 0).tools?.map((tool) => tool.name)).toEqual(
+            expect.arrayContaining(['repo.read', 'file.patch', 'file.write', 'command.run']),
         );
         // Engine-agnostic: the flat loop sends exactly [user, assistant, tool]; the graph engine
         // prepends a coding-agent system prompt and reshapes the assistant/tool turns. The intent —
@@ -90,10 +75,11 @@ describe('runAgent JSON non-interactive approvals', () => {
         const dataDir = await tempRoot('mctrl-task18-block-data-');
         const workspaceRoot = await tempRoot('mctrl-task18-block-workspace-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await writeToolWorkflow(workspaceRoot, workflowName);
 
         // When
         const output = await runAgent(
-            parseArgs(['run', 'patch file', '--jsonl', '--session', 'session_task18_block']),
+            parseArgs(['run', `#${workflowName} patch file`, '--jsonl', '--session', 'session_task18_block']),
             {
                 workspaceRoot,
                 provider: providerWithPatch('.mctrl-task18-blocked.txt', 'blocked'),
@@ -116,11 +102,12 @@ describe('runAgent JSON non-interactive approvals', () => {
         const dataDir = await tempRoot('mctrl-task18-allow-data-');
         const workspaceRoot = await tempRoot('mctrl-task18-allow-workspace-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await writeToolWorkflow(workspaceRoot, workflowName);
         const requests: ProviderTurnRequest[] = [];
 
         // When
         const output = await runAgent(
-            parseArgs(['run', 'apply safe patch', '--jsonl', '--session', 'session_task18_allow']),
+            parseArgs(['run', `#${workflowName} apply safe patch`, '--jsonl', '--session', 'session_task18_allow']),
             {
                 workspaceRoot,
                 provider: providerFromPatchRequests(requests),
@@ -149,9 +136,10 @@ describe('runAgent JSON non-interactive approvals', () => {
         const dataDir = await tempRoot('mctrl-task18-write-data-');
         const workspaceRoot = await tempRoot('mctrl-task18-write-workspace-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await writeToolWorkflow(workspaceRoot, workflowName);
 
         const output = await runAgent(
-            parseArgs(['run', 'write file', '--jsonl', '--session', 'session_task18_write_blocked']),
+            parseArgs(['run', `#${workflowName} write file`, '--jsonl', '--session', 'session_task18_write_blocked']),
             {
                 workspaceRoot,
                 provider: providerWithWrite('.mctrl-task18-write.txt', 'write blocked\n'),

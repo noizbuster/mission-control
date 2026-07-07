@@ -1,7 +1,7 @@
 import type { AgentEvent } from '@mission-control/protocol';
-import { writeFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { type AgentUIRenderer, JsonRenderer, PlainRenderer, TuiRenderer } from '../ui/renderers.js';
+import { writeFileSync } from 'node:fs';
 
 const TS = '2026-07-05T02:00:00.000Z';
 
@@ -154,7 +154,10 @@ describe('runAgent streaming seam (T8)', () => {
         expect(returnValue).not.toBe('');
         expect(returnValue.trim().length).toBeGreaterThan(0);
         expect(writesAfterTail).toBe(1);
-        const records = returnValue.trim().split('\n').map((line) => JSON.parse(line) as Record<string, unknown>);
+        const records = returnValue
+            .trim()
+            .split('\n')
+            .map((line) => JSON.parse(line) as Record<string, unknown>);
         expect(records).toHaveLength(3);
 
         dumpEvidence('json', returnValue, capturedCalls, writesDuringRender, '');
@@ -202,6 +205,7 @@ function dumpEvidence(
         i += 1;
         lines.push(`  [write #${i}] ${JSON.stringify(String(call[0]))}`);
     }
-    const filename = mode === 'json' ? 'task-8-opencode-style-block-output-json.txt' : 'task-8-opencode-style-block-output.txt';
+    const filename =
+        mode === 'json' ? 'task-8-opencode-style-block-output-json.txt' : 'task-8-opencode-style-block-output.txt';
     writeFileSync(`.omo/evidence/${filename}`, `${lines.join('\n')}\n`);
 }

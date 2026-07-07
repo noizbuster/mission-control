@@ -13,11 +13,11 @@
  * Node runtime with no Bun dependency.
  */
 
+import { createStreamDecoder } from '../providers/stream-decoder.js';
 import type { EvalRunResult } from './eval-context-manager.js';
 import { EVAL_PYTHON_RUNNER_SOURCE } from './eval-python-runner-source.js';
 import { type EvalToolBridge } from './eval-tool-bridge.js';
 import { type ChildProcess, spawn } from 'node:child_process';
-import { createStreamDecoder } from '../providers/stream-decoder.js';
 
 const DEFAULT_PYTHON_BIN = 'python3';
 const DEFAULT_TIMEOUT_MS = 30_000;

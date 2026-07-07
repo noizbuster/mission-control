@@ -89,6 +89,7 @@ function buildRuntimeWithServices(
             return { sessionId: context.sessionId, status: result.status, output: result.output };
         },
         services,
+        parentSessionId: 'parent-session',
     });
 }
 

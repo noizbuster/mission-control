@@ -9,7 +9,7 @@ import {
     resolveFileAutocomplete,
     updateFileAutocomplete,
 } from './interactive-chat-file-autocomplete.js';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -64,8 +64,22 @@ describe('interactive chat file autocomplete — updateFileAutocomplete against 
 });
 
 describe('interactive chat file autocomplete — denylist', () => {
+    let tempRoot: string;
+
+    beforeEach(() => {
+        tempRoot = mkdtempSync(join(tmpdir(), 'mctrl-file-ac-deny-'));
+        for (const name of ['node_modules', '.git', '.nx', 'dist', '.omo']) {
+            mkdirSync(join(tempRoot, name), { recursive: true });
+        }
+        mkdirSync(join(tempRoot, 'temp', 'ref-repos'), { recursive: true });
+    });
+
+    afterEach(() => {
+        rmSync(tempRoot, { recursive: true, force: true });
+    });
+
     it('never lists node_modules, .git at the workspace root', () => {
-        const state = updateFileAutocomplete(createFileAutocompleteState(), '', repoRoot);
+        const state = updateFileAutocomplete(createFileAutocompleteState(), '', tempRoot);
         const names = findMatchNames(state);
         expect(names).not.toContain('node_modules');
         expect(names).not.toContain('.git');
@@ -75,18 +89,18 @@ describe('interactive chat file autocomplete — denylist', () => {
     });
 
     it('never lists ref-repos inside temp/', () => {
-        const state = updateFileAutocomplete(createFileAutocompleteState(), 'temp/', repoRoot);
+        const state = updateFileAutocomplete(createFileAutocompleteState(), 'temp/', tempRoot);
         const names = findMatchNames(state);
         expect(names).not.toContain('ref-repos');
     });
 
     it('still lists the non-denied temp/ parent directory at the root', () => {
-        const state = updateFileAutocomplete(createFileAutocompleteState(), 'tem', repoRoot);
+        const state = updateFileAutocomplete(createFileAutocompleteState(), 'tem', tempRoot);
         expect(hasMatch(state, 'temp')).toBe(true);
     });
 
     it('does not escape the workspace via a ../ prefix', () => {
-        const state = updateFileAutocomplete(createFileAutocompleteState(), '../', repoRoot);
+        const state = updateFileAutocomplete(createFileAutocompleteState(), '../', tempRoot);
         expect(state.matches).toEqual([]);
     });
 });
@@ -196,8 +210,22 @@ describe('interactive chat file autocomplete — completion', () => {
 });
 
 describe('interactive chat file autocomplete — empty prefix shows top-level minus denied', () => {
-    it('lists real top-level workspace entries but never denied ones', () => {
-        const state = updateFileAutocomplete(createFileAutocompleteState(), '', repoRoot);
+    let tempRoot: string;
+
+    beforeEach(() => {
+        tempRoot = mkdtempSync(join(tmpdir(), 'mctrl-file-ac-root-'));
+        for (const name of ['apps', 'packages', 'temp', 'node_modules', '.git', '.nx', 'dist', '.omo']) {
+            mkdirSync(join(tempRoot, name), { recursive: true });
+        }
+        writeFileSync(join(tempRoot, 'pack-file.txt'), 'x', 'utf-8');
+    });
+
+    afterEach(() => {
+        rmSync(tempRoot, { recursive: true, force: true });
+    });
+
+    it('lists top-level fixture entries but never denied ones', () => {
+        const state = updateFileAutocomplete(createFileAutocompleteState(), '', tempRoot);
         expect(state.open).toBe(true);
         expect(state.prefix).toBe('');
         expect(hasMatch(state, 'packages')).toBe(true);
@@ -208,7 +236,7 @@ describe('interactive chat file autocomplete — empty prefix shows top-level mi
     });
 
     it('sorts directories first', () => {
-        const state = updateFileAutocomplete(createFileAutocompleteState(), 'pack', repoRoot);
+        const state = updateFileAutocomplete(createFileAutocompleteState(), 'pack', tempRoot);
         const first = state.matches[0];
         expect(first?.isDirectory).toBe(true);
     });

@@ -1,4 +1,11 @@
-import { JsonlSessionEventStore, type ProviderAdapter, type ProviderTurnRequest } from '@mission-control/core';
+import type { JsonlSessionReplayPrefixProjection } from '@mission-control/core';
+import {
+    JsonlSessionEventStore,
+    openLocalSessionEventStore,
+    type ProviderAdapter,
+    type ProviderTurnRequest,
+    readLocalSessionReplay,
+} from '@mission-control/core';
 import { type AgentEvent, AgentEventSchema, type ProviderStreamChunk } from '@mission-control/protocol';
 
 export type ReplayRecord =
@@ -51,6 +58,78 @@ export async function writeSessionEvents(input: {
     } finally {
         await store.close();
     }
+}
+
+export async function writeLocalSessionEvents(input: {
+    readonly dataDir: string;
+    readonly sessionId: string;
+    readonly events: readonly AgentEvent[];
+}): Promise<void> {
+    const store = await openLocalSessionEventStore({
+        dataDir: input.dataDir,
+        sessionId: input.sessionId,
+        now: () => '2026-06-05T10:00:00.000Z',
+        createEventId: (event, sequence) => `${input.sessionId}_${sequence}_${event.type.replaceAll('.', '_')}`,
+    });
+    try {
+        for (const event of input.events) {
+            await store.append(event);
+        }
+    } finally {
+        await store.close();
+    }
+}
+
+export async function readStoredSessionProjection(input: {
+    readonly dataDir: string;
+    readonly sessionId: string;
+}): Promise<JsonlSessionReplayPrefixProjection['projection']> {
+    const replay = await readLocalSessionReplay(input);
+    if (replay.kind === 'missing') {
+        throw new Error(`expected stored session replay: ${input.sessionId}`);
+    }
+    return replay.replay.projection;
+}
+
+export function taskCompletedEvent(sessionId: string, message: string): AgentEvent {
+    return {
+        type: 'task.completed',
+        timestamp: '2026-06-05T10:00:00.000Z',
+        sessionId,
+        message,
+    };
+}
+
+export function sessionCommandFixtureEvents(sessionId: string, prompt: string): readonly AgentEvent[] {
+    return [
+        {
+            type: 'session.started',
+            timestamp: '2026-06-05T10:00:00.000Z',
+            sessionId,
+            message: 'mission-control session started',
+            nativeSidecarStatus: 'mock',
+            modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+        },
+        {
+            type: 'session.metadata.updated',
+            timestamp: '2026-06-05T10:00:01.000Z',
+            sessionId,
+            message: 'session metadata updated',
+            sessionTree: {
+                kind: 'metadata',
+                cwd: '/workspace/mission-control',
+                trustedRoot: '/workspace/mission-control',
+                workspaceTrust: 'trusted',
+            },
+        },
+        taskCompletedEvent(sessionId, `user prompt: ${prompt}`),
+        {
+            type: 'session.stopped',
+            timestamp: '2026-06-05T10:00:03.000Z',
+            sessionId,
+            message: 'mission-control session stopped',
+        },
+    ];
 }
 
 export function providerFromPatchRequests(): ProviderAdapter {

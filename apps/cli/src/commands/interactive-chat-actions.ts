@@ -39,7 +39,7 @@ import type { ApprovalLevel } from './approval-level.js';
 import { APPROVAL_LEVEL_META } from './approval-level.js';
 import type { ChatLineAction, SkillsCommand, WorkflowInvocationAction } from './chat-commands.js';
 import type { DashboardAgentEntry, MissionPanelRow, SessionPickerEntry } from './chat-store.js';
-import type { ModelSelector } from './interactive-chat.js';
+import type { ModelSelector, PlainPromptGraph } from './interactive-chat.js';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import { runBashAction, runBashDisplayOnlyAction } from './interactive-chat-bash-action.js';
 import { runClearAction } from './interactive-chat-clear-action.js';
@@ -85,6 +85,7 @@ export type CodingActionContext = PromptTurnContext & {
      * report that workflow invocation is unavailable.
      */
     readonly workflowRegistry?: WorkflowRegistry;
+    readonly plainPromptGraph?: PlainPromptGraph;
     /**
      * In-memory session display name controller for `/rename`. When omitted, the
      * rename action still runs but cannot persist the name across the StatusBar.
@@ -350,8 +351,10 @@ async function runPromptAction(
         emitPromptAdmission(chatOutput, coding, 'queue', prompt);
         return actionResult(modelProviderSelection, coding.activeTurn);
     }
-    // Plain-prompt default fallback; explicit `#name` arrives with coding.graph set.
-    const fallbackGraph = coding.graph === undefined ? graphForDefaultFallback(coding.workflowRegistry) : undefined;
+    const fallbackGraph =
+        coding.graph === undefined && coding.plainPromptGraph !== 'coding-agent'
+            ? graphForDefaultFallback(coding.workflowRegistry)
+            : undefined;
     const effectiveCoding = fallbackGraph !== undefined ? { ...coding, graph: fallbackGraph } : coding;
     return actionResult(
         modelProviderSelection,

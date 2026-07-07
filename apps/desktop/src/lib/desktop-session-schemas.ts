@@ -1,5 +1,5 @@
-import type { AgentEventEnvelope } from '@mission-control/protocol';
-import { AgentEventEnvelopeSchema } from '@mission-control/protocol';
+import type { AgentEventEnvelope, SessionAwaitingDetails, SessionStatus } from '@mission-control/protocol';
+import { AgentEventEnvelopeSchema, SessionAwaitingDetailsSchema, SessionStatusSchema } from '@mission-control/protocol';
 import { z } from 'zod';
 
 export const DESKTOP_SESSION_STATES = ['available', 'empty', 'missing', 'corrupt'] as const;
@@ -51,11 +51,53 @@ export const DesktopSessionStatsSchema = z
     .strict();
 export type DesktopSessionStats = z.infer<typeof DesktopSessionStatsSchema>;
 
+const DesktopSessionLifecycleShape = {
+    status: SessionStatusSchema.optional(),
+    statusText: z.string().min(1).optional(),
+    awaiting: SessionAwaitingDetailsSchema.optional(),
+} as const;
+
+type DesktopSessionLifecycleFields = {
+    readonly status?: SessionStatus | undefined;
+    readonly awaiting?: SessionAwaitingDetails | undefined;
+};
+
+function refineDesktopSessionLifecycle(value: DesktopSessionLifecycleFields, context: z.RefinementCtx): void {
+    if (value.status === undefined) {
+        if (value.awaiting !== undefined) {
+            context.addIssue({
+                code: 'custom',
+                message: 'awaiting details require a session lifecycle status',
+                path: ['awaiting'],
+            });
+        }
+        return;
+    }
+    if (value.status === 'awaiting') {
+        if (value.awaiting === undefined) {
+            context.addIssue({
+                code: 'custom',
+                message: 'awaiting session status requires awaiting details',
+                path: ['awaiting'],
+            });
+        }
+        return;
+    }
+    if (value.awaiting !== undefined) {
+        context.addIssue({
+            code: 'custom',
+            message: 'awaiting details require awaiting session status',
+            path: ['awaiting'],
+        });
+    }
+}
+
 export const DesktopSessionSummarySchema = z
     .object({
         sessionId: z.string().min(1),
         fileName: z.string().min(1),
         state: DesktopSessionStateSchema,
+        ...DesktopSessionLifecycleShape,
         eventCount: z.number().int().nonnegative(),
         lockState: DesktopSessionLockStateSchema.optional(),
         indexed: z.boolean().optional(),
@@ -64,7 +106,8 @@ export const DesktopSessionSummarySchema = z
         sessionTree: DesktopSessionTreeSummarySchema.optional(),
         stats: DesktopSessionStatsSchema.optional(),
     })
-    .strict();
+    .strict()
+    .superRefine(refineDesktopSessionLifecycle);
 export const DesktopSessionSummaryListSchema = z.array(DesktopSessionSummarySchema);
 export type DesktopSessionSummary = z.infer<typeof DesktopSessionSummarySchema>;
 
@@ -93,6 +136,7 @@ export const DesktopSessionSnapshotSchema = z
     .object({
         sessionId: z.string().min(1),
         state: DesktopSessionStateSchema,
+        ...DesktopSessionLifecycleShape,
         eventCount: z.number().int().nonnegative(),
         graphIds: z.array(z.string().min(1)),
         lockState: DesktopSessionLockStateSchema.optional(),
@@ -102,7 +146,8 @@ export const DesktopSessionSnapshotSchema = z
         sessionTree: DesktopSessionTreeSummarySchema.optional(),
         stats: DesktopSessionStatsSchema.optional(),
     })
-    .strict();
+    .strict()
+    .superRefine(refineDesktopSessionLifecycle);
 export type DesktopSessionSnapshot = z.infer<typeof DesktopSessionSnapshotSchema>;
 
 export function parseDesktopSessionLogPayload(payload: unknown): DesktopSessionLog {

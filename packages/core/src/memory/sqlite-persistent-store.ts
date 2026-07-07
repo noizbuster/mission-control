@@ -15,17 +15,13 @@
  * The serialization / TTL / query-matching LOGIC is extracted into pure helpers below so it
  * is unit-tested WITHOUT the native binding (the binding only gates the DB round-trip).
  */
-import type { MemoryEntry, MemoryQuery, PersistentMemoryStore } from './persistent-memory-store.js';
 
 // The pure helpers live in `persistent-memory-helpers.ts` (binding-free, shared with
 // TursoPersistentStore). Imported for local use and re-exported to preserve this module's
 // historical public API.
-import {
-    deserializeValue,
-    entryMatchesQuery,
-    isExpired,
-    serializeValue,
-} from './persistent-memory-helpers.js';
+import { deserializeValue, entryMatchesQuery, isExpired, serializeValue } from './persistent-memory-helpers.js';
+import type { MemoryEntry, MemoryQuery, PersistentMemoryStore } from './persistent-memory-store.js';
+
 export { deserializeValue, entryMatchesQuery, isExpired, serializeValue };
 
 /**

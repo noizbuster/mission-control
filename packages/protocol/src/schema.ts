@@ -8,137 +8,16 @@ import { PermissionDecisionSchema, PermissionReplySchema, PermissionRequestSchem
 import { ModelProviderSelectionSchema } from './provider-auth.js';
 import { ProviderStreamChunkSchema, ToolResultSchema } from './provider-events.js';
 import { RunCoordinatorEventMetadataSchema } from './run-coordinator.js';
+import {
+    refineSessionAwaitingContract,
+    SessionAwaitingDetailsSchema,
+    SessionStatusSchema,
+} from './session-lifecycle.js';
 import { SESSION_TREE_EVENT_TYPES, SessionTreeEventMetadataSchema } from './session-tree.js';
 import { NativeSidecarStatusSchema } from './sidecar.js';
 import { TranscriptEventMetadataSchema } from './transcript.js';
 
-export {
-    APPROVAL_LIFECYCLE_STATES,
-    APPROVAL_POLICY_DECISIONS,
-    type ApprovalLifecycleState,
-    ApprovalLifecycleStateSchema,
-    type ApprovalPolicyDecision,
-    ApprovalPolicyDecisionSchema,
-    type ApprovalRecord,
-    ApprovalRecordSchema,
-    type ApprovalSubject,
-    ApprovalSubjectSchema,
-} from './approval.js';
-export {
-    PERMISSION_KINDS,
-    PERMISSION_REPLY_VALUES,
-    PERMISSION_RULE_DECISIONS,
-    type PermissionDecision,
-    PermissionDecisionSchema,
-    type PermissionKind,
-    PermissionKindSchema,
-    type PermissionReply,
-    PermissionReplySchema,
-    type PermissionReplyValue,
-    PermissionReplyValueSchema,
-    type PermissionRequest,
-    PermissionRequestSchema,
-    type PermissionRule,
-    type PermissionRuleDecision,
-    PermissionRuleDecisionSchema,
-    PermissionRuleSchema,
-    type PermissionScope,
-    PermissionScopeSchema,
-} from './permission-profile.js';
-export {
-    MODEL_CATALOG_STATUSES,
-    type ModelCatalogEntry,
-    ModelCatalogEntrySchema,
-    type ModelCatalogStatus,
-    ModelCatalogStatusSchema,
-    type ModelProviderSelection,
-    ModelProviderSelectionSchema,
-    type ModelVariantEntry,
-    ModelVariantEntrySchema,
-    type ProviderApiKeyCredential,
-    ProviderApiKeyCredentialSchema,
-    type ProviderAuthFile,
-    ProviderAuthFileSchema,
-    type ProviderCatalogEntry,
-    ProviderCatalogEntrySchema,
-    type ProviderCredential,
-    type ProviderCredentialField,
-    ProviderCredentialFieldSchema,
-    ProviderCredentialSchema,
-    type ProviderCredentialSummary,
-    ProviderCredentialSummarySchema,
-    type ProviderFieldsCredential,
-    ProviderFieldsCredentialSchema,
-    type ProviderOAuthCredential,
-    ProviderOAuthCredentialSchema,
-} from './provider-auth.js';
-export {
-    RUN_COORDINATOR_COMMANDS,
-    RUN_COORDINATOR_STATES,
-    type RunCoordinatorCommand,
-    RunCoordinatorCommandSchema,
-    type RunCoordinatorEventMetadata,
-    RunCoordinatorEventMetadataSchema,
-    type RunCoordinatorState,
-    RunCoordinatorStateSchema,
-} from './run-coordinator.js';
-export {
-    NATIVE_SIDECAR_STATUSES,
-    type NativeSidecarStatus,
-    NativeSidecarStatusSchema,
-    SIDECAR_CAPABILITIES,
-    SIDECAR_PROTOCOL_V2_VERSION,
-    SIDECAR_PROTOCOL_V3_VERSION,
-    SIDECAR_PROTOCOL_VERSION,
-    SIDECAR_PROTOCOL_VERSIONS,
-    SIDECAR_V1_CAPABILITIES,
-    SIDECAR_V3_CAPABILITIES,
-    type SidecarCancelTaskCommand,
-    SidecarCancelTaskCommandSchema,
-    type SidecarCapability,
-    SidecarCapabilitySchema,
-    type SidecarHandshakeCommand,
-    SidecarHandshakeCommandSchema,
-    type SidecarHandshakeResponse,
-    SidecarHandshakeResponseSchema,
-    type SidecarIsoDiffRequest,
-    SidecarIsoDiffRequestSchema,
-    type SidecarIsoDiffResponse,
-    SidecarIsoDiffResponseSchema,
-    type SidecarIsoResolveRequest,
-    SidecarIsoResolveRequestSchema,
-    type SidecarIsoResolveResponse,
-    SidecarIsoResolveResponseSchema,
-    type SidecarProtocolVersion,
-    SidecarProtocolVersionSchema,
-    type SidecarPtyAllocRequest,
-    SidecarPtyAllocRequestSchema,
-    type SidecarShellOutput,
-    SidecarShellOutputSchema,
-    type SidecarShellRunRequest,
-    SidecarShellRunRequestSchema,
-    type SidecarStreamCloseCommand,
-    SidecarStreamCloseCommandSchema,
-    type SidecarStreamFrame,
-    type SidecarStreamFrameResponse,
-    SidecarStreamFrameResponseSchema,
-    SidecarStreamFrameSchema,
-    type SidecarStreamKind,
-    SidecarStreamKindSchema,
-    type SidecarStreamOpenRequest,
-    SidecarStreamOpenRequestSchema,
-    type SidecarTaskCancelledResponse,
-    SidecarTaskCancelledResponseSchema,
-    type SidecarTaskFailedResponse,
-    SidecarTaskFailedResponseSchema,
-    type SidecarTaskInput,
-    SidecarTaskInputSchema,
-    type SidecarTaskOutput,
-    SidecarTaskOutputSchema,
-    type SidecarWireResponse,
-    SidecarWireResponseSchema,
-    validateSidecarStreamFrames,
-} from './sidecar.js';
+export * from './schema-exports.js';
 
 export const AGENT_EVENT_TYPES = [
     'session.started',
@@ -209,8 +88,6 @@ export const AGENT_EVENT_TYPES = [
     'blackboard.set',
     'blackboard.delete',
 ] as const;
-
-export const SESSION_STATUSES = ['idle', 'running', 'stopped', 'failed'] as const;
 
 export const PERMISSION_STATUSES = APPROVAL_POLICY_DECISIONS;
 
@@ -296,40 +173,31 @@ export const ReplayCursorSchema = z.object({
 });
 export type ReplayCursor = z.infer<typeof ReplayCursorSchema>;
 
-export const AgentSessionSchema = z.object({
-    id: z.string().min(1),
-    status: z.enum(SESSION_STATUSES),
-    startedAt: z.string().datetime(),
-    stoppedAt: z.string().datetime().optional(),
-});
+export const AgentSessionSchema = z
+    .object({
+        id: z.string().min(1),
+        status: SessionStatusSchema,
+        awaiting: SessionAwaitingDetailsSchema.optional(),
+        startedAt: z.string().datetime(),
+        stoppedAt: z.string().datetime().optional(),
+    })
+    .superRefine(refineSessionAwaitingContract);
 export type AgentSession = z.infer<typeof AgentSessionSchema>;
 
-export const AgentSnapshotSchema = z.object({
-    sessionId: z.string().min(1),
-    status: z.enum(SESSION_STATUSES),
-    startedAt: z.string().datetime(),
-    stoppedAt: z.string().datetime().optional(),
-    runningTaskCount: z.number().int().nonnegative(),
-    completedTaskCount: z.number().int().nonnegative(),
-    failedTaskCount: z.number().int().nonnegative(),
-    lastEvent: AgentEventSchema.optional(),
-    lastMessage: z.string().optional(),
-    nativeSidecarStatus: NativeSidecarStatusSchema,
-    modelProviderSelection: ModelProviderSelectionSchema.optional(),
-});
+export const AgentSnapshotSchema = z
+    .object({
+        sessionId: z.string().min(1),
+        status: SessionStatusSchema,
+        awaiting: SessionAwaitingDetailsSchema.optional(),
+        startedAt: z.string().datetime(),
+        stoppedAt: z.string().datetime().optional(),
+        runningTaskCount: z.number().int().nonnegative(),
+        completedTaskCount: z.number().int().nonnegative(),
+        failedTaskCount: z.number().int().nonnegative(),
+        lastEvent: AgentEventSchema.optional(),
+        lastMessage: z.string().optional(),
+        nativeSidecarStatus: NativeSidecarStatusSchema,
+        modelProviderSelection: ModelProviderSelectionSchema.optional(),
+    })
+    .superRefine(refineSessionAwaitingContract);
 export type AgentSnapshot = z.infer<typeof AgentSnapshotSchema>;
-
-export {
-    type AgentMessage,
-    AgentMessageSchema,
-    type EventId,
-    EventIdSchema,
-    type EventSequence,
-    EventSequenceSchema,
-    type ProviderToolCallTranscript,
-    ProviderToolCallTranscriptSchema,
-    type TextAgentMessage,
-    TextAgentMessageSchema,
-    type ToolAgentMessage,
-    ToolAgentMessageSchema,
-} from './event-primitives.js';

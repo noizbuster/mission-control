@@ -1,19 +1,18 @@
 import {
-    type JsonlSessionEventStore,
+    type LocalSessionEventStore,
     type ProviderAdapter,
     ProviderTurnError,
     ProviderTurnRunner,
     prepareSessionCompaction,
-    projectJsonlSessionReplayPrefix,
+    readLocalSessionReplay,
 } from '@mission-control/core';
 import type { AgentEvent, AgentMessage, ModelProviderSelection } from '@mission-control/protocol';
 import type { ChatOutput } from './interactive-chat-io.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
-import { readFile } from 'node:fs/promises';
 
 type CompactionTurnOptions = {
     readonly sessionId: string;
-    readonly store: JsonlSessionEventStore;
+    readonly store: LocalSessionEventStore;
     readonly provider: ProviderAdapter;
     readonly modelProviderSelection: ModelProviderSelection;
     readonly output: ChatOutput;
@@ -44,12 +43,15 @@ export function startCompactionTurn(options: CompactionTurnOptions): ActiveCodin
 }
 
 async function runCompactionTurn(options: CompactionTurnOptions, signal: AbortSignal): Promise<void> {
+    const replay = await readLocalSessionReplay({ sessionId: options.sessionId });
+    if (replay.kind === 'missing') {
+        options.output.write(`Compaction failed: session not found: ${options.sessionId}\n`);
+        return;
+    }
+    const projection = replay.replay.projection;
     const preparation = prepareSessionCompaction({
         sessionId: options.sessionId,
-        replay: projectJsonlSessionReplayPrefix({
-            sessionId: options.sessionId,
-            contents: await readFile(options.store.filePath, 'utf8'),
-        }),
+        replay: { projection, diagnostics: projection.diagnostics },
     });
     if (preparation.status === 'denied') {
         options.output.write(`${preparation.message}\n`);

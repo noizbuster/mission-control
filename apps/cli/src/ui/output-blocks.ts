@@ -39,12 +39,7 @@ export type ErrorBlock = {
     message: string;
 };
 
-export type OutputBlock =
-    | SessionHeaderBlock
-    | AssistantTextBlock
-    | ReasoningBlock
-    | ToolBlock
-    | ErrorBlock;
+export type OutputBlock = SessionHeaderBlock | AssistantTextBlock | ReasoningBlock | ToolBlock | ErrorBlock;
 
 interface DeltaEntry {
     openSeq: number;

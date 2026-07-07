@@ -85,11 +85,7 @@ export function MarkdownPanelBase({
         <box flexDirection="row" {...(marginTop !== undefined ? { marginTop } : {})}>
             <box width={barWidth} backgroundColor={barColor} shouldFill={true} />
             <box flexDirection="column" flexGrow={1}>
-                <Markdown
-                    text={text}
-                    theme={theme}
-                    {...(streaming ? { streaming: true } : {})}
-                />
+                <Markdown text={text} theme={theme} {...(streaming ? { streaming: true } : {})} />
             </box>
         </box>
     );
@@ -171,9 +167,7 @@ export function MessageBlockBase({
     const isError = block.kind === 'error';
     return (
         <box flexDirection="row">
-            {leftHex !== undefined ? (
-                <box width={1} backgroundColor={leftHex} shouldFill={true} />
-            ) : null}
+            {leftHex !== undefined ? <box width={1} backgroundColor={leftHex} shouldFill={true} /> : null}
             <box flexDirection="column" flexGrow={1}>
                 {block.lines.map((line, index) => {
                     const content = prefix.length > 0 && line.startsWith(prefix) ? line.slice(prefix.length) : line;

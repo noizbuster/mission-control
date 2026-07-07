@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
 import {
@@ -8,8 +8,20 @@ import {
     createFieldsCredential,
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
+import { useIsolatedMissionControlDataDir } from './run-agent-data-dir-test-support.js';
 
 describe('runAgent /model provider capability', () => {
+    let cleanupDataDir: (() => Promise<void>) | undefined;
+
+    beforeEach(async () => {
+        cleanupDataDir = await useIsolatedMissionControlDataDir('mission-control-model-capability-');
+    });
+
+    afterEach(async () => {
+        await cleanupDataDir?.();
+        cleanupDataDir = undefined;
+    });
+
     it('shows authenticated discovery-only providers but rejects them for coding selection', async () => {
         const chatOutput = createBufferedChatOutput();
         const fieldSecret = 'perplexity_secret_key';

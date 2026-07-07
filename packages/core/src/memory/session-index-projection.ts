@@ -45,6 +45,18 @@ export function deriveSessionIndexRecords(input: {
     };
 }
 
+export function deriveSessionIndexRecordsFromEnvelopes(input: {
+    readonly sessionId: string;
+    readonly filePath: string;
+    readonly envelopes: readonly Parameters<typeof projectSessionReplay>[0]['envelopes'][number][];
+}): SessionIndexProjection {
+    const projection = projectSessionReplay({ sessionId: input.sessionId, envelopes: input.envelopes });
+    return {
+        records: recordsForProjection(projection, input.filePath),
+        diagnostics: [],
+    };
+}
+
 class SessionIndexProjectionError extends Error {
     readonly name = 'SessionIndexProjectionError';
 
@@ -98,6 +110,7 @@ function sessionRecord(projection: SessionReplayProjection, filePath: string): S
         kind: 'session',
         sessionId: projection.sessionId,
         status: projection.snapshot.status,
+        ...(projection.snapshot.awaiting !== undefined ? { awaiting: projection.snapshot.awaiting } : {}),
         startedAt: projection.snapshot.startedAt,
         ...(projection.snapshot.stoppedAt !== undefined ? { stoppedAt: projection.snapshot.stoppedAt } : {}),
         eventCount: projection.envelopes.length,

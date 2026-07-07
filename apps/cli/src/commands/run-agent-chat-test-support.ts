@@ -13,13 +13,16 @@ type ScriptedChatEvent =
           readonly source?: 'ctrl-c' | 'esc';
       };
 
-export function createScriptedChatInput(events: readonly ScriptedChatEvent[], delayMs = 50) {
+const MIN_SCRIPTED_CHAT_DELAY_MS = 300;
+
+export function createScriptedChatInput(events: readonly ScriptedChatEvent[], delayMs = MIN_SCRIPTED_CHAT_DELAY_MS) {
+    const effectiveDelayMs = delayMs <= 0 ? 0 : Math.max(delayMs, MIN_SCRIPTED_CHAT_DELAY_MS);
     let index = 0;
     return {
         read: async () => {
-            if (delayMs > 0) {
+            if (effectiveDelayMs > 0) {
                 await new Promise((resolve) => {
-                    setTimeout(resolve, delayMs);
+                    setTimeout(resolve, effectiveDelayMs);
                 });
             }
             const event = events[index] ?? { type: 'interrupt' as const };

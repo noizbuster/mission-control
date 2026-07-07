@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { TerminalTextStyle } from '../components/markdown/theme.js';
 import {
     RESET,
+    sgr,
     TEXT_DANGER,
     TEXT_DANGER_BOLD,
     TEXT_DIM,
@@ -16,7 +17,6 @@ import {
     TEXT_SUCCESS_BOLD,
     TEXT_WARNING,
     TEXT_WARNING_BOLD,
-    sgr,
     terminalTextStyleToAnsi,
     wrap,
 } from './ansi-theme.js';
@@ -170,9 +170,7 @@ describe('terminalTextStyleToAnsi', () => {
     });
 
     it('combines bold + fg hex (darkTheme.heading parity)', () => {
-        expect(terminalTextStyleToAnsi({ bold: true, fg: '#00ffff' }, true)).toBe(
-            '\x1b[1m\x1b[38;2;0;255;255m',
-        );
+        expect(terminalTextStyleToAnsi({ bold: true, fg: '#00ffff' }, true)).toBe('\x1b[1m\x1b[38;2;0;255;255m');
     });
 
     it('does not throw on malformed hex and emits no fg segment', () => {

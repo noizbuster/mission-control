@@ -8,6 +8,10 @@ function readme(): string {
     return readFileSync(join(root, 'README.md'), 'utf8');
 }
 
+function readDoc(path: string): string {
+    return readFileSync(join(root, path), 'utf8');
+}
+
 describe('README stage-01 contract', () => {
     it('documents required run and build commands', () => {
         const content = readme();
@@ -189,6 +193,11 @@ describe('README stage-01 contract', () => {
             'OpenAI Responses adapter is implemented behind stored provider credentials',
             'MCTRL_DATA_DIR',
             'sessions/<session-id>.jsonl',
+            'New authoritative session event/replay writes use the local libSQL database at `<data-dir>/memory.db`',
+            'Runtime coordination SQL for session input delivery, Mission/Run records, context epochs, runtime agents, async jobs, and relation rows uses the same local `<data-dir>/memory.db` path as the public session projection',
+            'Production `approval`, `user_input`, and foreground `subagent` waits surface through the public `memory.db` session-list/read path',
+            '[`docs/session-data-model.md`](docs/session-data-model.md)',
+            'Remote Turso is out of scope for session storage',
             'Use --json for transient JSON Lines rendering and --jsonl for JSON Lines rendering plus replayable session persistence',
             'approval.requested',
             'approval.updated',
@@ -236,6 +245,55 @@ describe('README stage-01 contract', () => {
                 forbiddenClaim,
             );
         }
+
+        const forbiddenSessionStoreClaims = [
+            'The append-only event ledger is `session_events`; projection tables derive session lists, transcript messages, approvals, tool calls, provider failures, awaiting state, subagent lineage, and async jobs from those events and runtime mirrors.',
+            'New authoritative session writes use the local libSQL database at `<data-dir>/memory.db`, shared with persistent memory storage through the `schema_migrations` ledger.',
+            '`user_input` and `subagent` wait adapters exist on the runtime ' +
+                'DB ' +
+                'path, but are not yet ' +
+                'surfaced by the public data-dir session-list path without a unifying ' +
+                'projection',
+        ] as const;
+
+        for (const forbiddenClaim of forbiddenSessionStoreClaims) {
+            expect(content, `README must not overstate unified session storage: ${forbiddenClaim}`).not.toContain(
+                forbiddenClaim,
+            );
+        }
+    });
+
+    it('documents the current local session DB awaiting projection without stale blocker claims', () => {
+        const content = readDoc('docs/session-data-model.md');
+        const requiredTerms = [
+            '`<MCTRL_DATA_DIR>/memory.db` is the authoritative session event/replay',
+            '`user_input` and foreground `subagent` waits are mirrored there',
+            'Runtime coordination SQL',
+            'async jobs, and relation rows uses the same local-only data-dir `memory.db`',
+            'The full `approval` / `user_input` / `subagent` priority order is production-wired',
+            '`session_awaits` stores active waits in the public `memory.db` projection',
+            'agent/job mirror tables intentionally share `memory.db`',
+            "Foreground subagent waits and persisted async job rows insert `session_relations` rows with `kind = 'subagent'`",
+            'Remote Turso is out of scope',
+        ] as const;
+
+        for (const term of requiredTerms) {
+            expect(content, `session data model missing ${term}`).toContain(term);
+        }
+
+        const forbiddenTerms = [
+            '`<workspace>/.omo/mission-control' + '.db`',
+            'so migrations for memory, sessions, run state, input delivery, and subagent jobs share one `schema_migrations` ledger',
+            'The same file also stores persistent memory rows',
+            'does not yet ' + 'populate relation rows',
+            'not yet ' + 'unified into the data-dir `memory.db` public session-list surface',
+            'Production `user_input` and foreground `subagent` wait adapters currently write the runtime ' + 'DB',
+            '`memory.db` remains follow-up ' + 'work',
+        ] as const;
+
+        for (const term of forbiddenTerms) {
+            expect(content, `session data model must not contain stale claim ${term}`).not.toContain(term);
+        }
     });
 
     it('documents workspace trust permission profiles and expanded coding-agent tool set', () => {
@@ -271,12 +329,13 @@ describe('README stage-01 contract', () => {
             'Noninteractive JSON/JSONL run states',
             'Run receipts settle as `completed`, `failed`, `interrupted`, or `blocked_on_approval`',
             'blocked_on_approval',
-            'Session export, import, compaction, and stats',
+            'Session export, import, compaction, deletion, and stats',
             'checksummed session archive file',
             '`mctrl session export <id> <path>`',
             '`mctrl session import <path>`',
             '`mctrl session list` lists sessions with lock status',
             '`mctrl session show <id>` shows the session snapshot',
+            "Each session's SQLite rows, compatibility JSONL log if present, lock file, and projection rows are removed",
             'durable compaction boundary event',
         ] as const;
 

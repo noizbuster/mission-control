@@ -1,3 +1,4 @@
+import { modelProviderCatalog } from '@mission-control/config';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { App } from './App.js';
@@ -77,14 +78,18 @@ describe('Desktop App', () => {
 
     it('renders and resolves generated provider catalog options without assuming the full list', () => {
         const html = renderToStaticMarkup(<App />);
+        const anthropicProvider = modelProviderCatalog.find((provider) => provider.id === 'anthropic');
+        const anthropicModelIDs = getModelsForProvider('anthropic').map((model) => model.id);
 
         expect(html).toContain('Local Sandbox');
         expect(html).toContain('Anthropic');
         expect(html).toContain('Cloudflare AI Gateway');
-        expect(getModelsForProvider('anthropic').map((model) => model.id)).toContain('claude-3-5-haiku-20241022');
+        expect(anthropicModelIDs.length).toBeGreaterThan(0);
+        expect(anthropicModelIDs).toEqual(anthropicProvider?.models.map((model) => model.id));
+        expect(anthropicModelIDs).toContain(anthropicProvider?.defaultModelID);
         expect(resolveSelectionForProviderChange('anthropic', 'removed-model')).toEqual({
             providerID: 'anthropic',
-            modelID: 'claude-3-5-haiku-20241022',
+            modelID: anthropicProvider?.defaultModelID,
         });
     });
 

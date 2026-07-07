@@ -3,7 +3,7 @@ import { type AgentEvent, type AgentEventEnvelope } from '@mission-control/proto
 import { useKeyboard } from '@opentui/react';
 import { useState } from 'react';
 import { AbgOverlay } from '../components/AbgOverlay.js';
-import { type OpenTuiMountResult, mountOpenTui } from '../platform/opentui-renderer.js';
+import { mountOpenTui, type OpenTuiMountResult } from '../platform/opentui-renderer.js';
 import { createAbgOverlayStore, projectAgentEvent } from './abg-overlay-state.js';
 
 export type ReplayOverlayOptions = {

@@ -1,4 +1,4 @@
-import { createDeterministicProvider, JsonlSessionEventStore } from '@mission-control/core';
+import { createDeterministicProvider, openLocalSessionEventStore } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
@@ -66,7 +66,7 @@ describe('runAgent interactive resume turn-id advancement', () => {
 const FIXED_NOW = '2026-06-13T00:00:00.000Z';
 
 async function seedPriorInteractiveTurn(dataDir: string, sessionId: string): Promise<void> {
-    const store = await JsonlSessionEventStore.open({
+    const store = await openLocalSessionEventStore({
         dataDir,
         sessionId,
         now: () => FIXED_NOW,
@@ -122,7 +122,7 @@ async function seedPriorInteractiveTurn(dataDir: string, sessionId: string): Pro
 }
 
 async function replayEvents(dataDir: string, sessionId: string): Promise<readonly AgentEvent[]> {
-    const store = await JsonlSessionEventStore.open({
+    const store = await openLocalSessionEventStore({
         dataDir,
         sessionId,
         now: () => FIXED_NOW,
