@@ -51,6 +51,8 @@ export type TopStatusRowShape = TopStatusShape & {
 
 export type BottomStatusRowShape = BottomStatusShape & { readonly dimApproval: boolean; readonly fillCount: number };
 
+const STATUS_DIVIDER = '-';
+
 export function statusBarLayoutFromPolicy(policy: Pick<BottomDockPolicy, 'columns' | 'status'>): StatusBarLayout {
     return {
         columns: policy.columns,
@@ -81,6 +83,10 @@ function statusRowFillCount({
 }): number {
     const rightLength = rightSegments.reduce((total, segment) => total + terminalDisplayWidth(segment) + 1, 0);
     return Math.max(0, columns - terminalDisplayWidth(leftText) - 1 - rightLength);
+}
+
+export function buildStatusDivider(fillCount: number): string {
+    return STATUS_DIVIDER.repeat(fillCount);
 }
 
 /**
@@ -209,7 +215,7 @@ export function formatBottomStatusRow(props: StatusBarProps): BottomStatusRowSha
 /**
  * Top status line: provider (dim) + model (bold) + ` - ` variant (default) on
  * the left; policy-visible humanized context usage on the right. The gap
- * between the segments is filled with a dim horizontal rule (`─`) so the line
+ * between the segments is filled with a dim divider so the line
  * reads as a continuous divider. Full-width dark-navy bg.
  */
 export function TopStatusBar(props: StatusBarProps): React.ReactNode {
@@ -223,7 +229,7 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
             </text>
             <text selectable> </text>
             <text selectable attributes={TextAttributes.DIM}>
-                {'\u2500'.repeat(fillCount)}
+                {buildStatusDivider(fillCount)}
             </text>
             {contextLabel !== undefined ? <text selectable>{` ${contextLabel}`}</text> : null}
         </box>
@@ -236,7 +242,7 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
  * session id on the right (each segment omitted when absent). The session
  * segment always shows the durable session id; the human-readable title
  * (Ctrl+R / `/rename`) does not appear here. The gap between the segments is
- * filled with a dim horizontal rule (`─`). Full-width dark-navy bg.
+ * filled with a dim divider. Full-width dark-navy bg.
  */
 export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
     const { approvalLabel, approvalColor, projectLabel, sessionLabel, dimApproval, fillCount } =
@@ -252,7 +258,7 @@ export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
             </text>
             <text selectable> </text>
             <text selectable attributes={TextAttributes.DIM}>
-                {'\u2500'.repeat(fillCount)}
+                {buildStatusDivider(fillCount)}
             </text>
             {projectLabel !== undefined ? <text selectable>{` ${projectLabel}`}</text> : null}
             {sessionLabel !== undefined ? (

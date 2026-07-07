@@ -72,7 +72,7 @@ export function bottomDockPolicy(input: BottomDockPolicyInput): BottomDockPolicy
             showCommandHint: columns >= BOTTOM_DOCK_WIDTH_BREAKPOINTS.commandHint,
             showContextUsage: columns >= BOTTOM_DOCK_WIDTH_BREAKPOINTS.normal,
             showProject: columns >= BOTTOM_DOCK_WIDTH_BREAKPOINTS.normal,
-            showSession: columns >= BOTTOM_DOCK_WIDTH_BREAKPOINTS.wide,
+            showSession: columns >= BOTTOM_DOCK_WIDTH_BREAKPOINTS.normal,
         },
         menu: {
             rows: menuRows,

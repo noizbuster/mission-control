@@ -3,6 +3,7 @@ import { APPROVAL_LEVELS, type ApprovalLevel } from '../commands/approval-level.
 import { bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import {
     approvalLevelColor,
+    buildStatusDivider,
     formatBottomStatus,
     formatBottomStatusRow,
     formatTopStatus,
@@ -173,6 +174,20 @@ describe('formatBottomStatus', () => {
     });
 });
 
+describe('status divider rendering', () => {
+    it('uses a single-column ASCII divider for long fillers', () => {
+        // Given: a filler long enough to cover wide terminal status rows.
+        const fillCount = 103;
+
+        // When: the status divider is built for rendering.
+        const divider = buildStatusDivider(fillCount);
+
+        // Then: it avoids multi-byte box drawing glyphs that can fragment in OpenTUI captures.
+        expect(divider).toBe('-'.repeat(fillCount));
+        expect(divider).not.toContain('\u2500');
+    });
+});
+
 describe('policy-derived status rows', () => {
     it('hides optional context, project, and session segments at narrow widths', () => {
         // Given: complete status data but a narrow policy layout.
@@ -203,7 +218,7 @@ describe('policy-derived status rows', () => {
         expect(bottom.fillCount).toBeGreaterThanOrEqual(0);
     });
 
-    it('shows context usage and project at 80 columns while keeping session hidden', () => {
+    it('shows context usage, project, and session at 80 columns', () => {
         // Given: the normal-width policy threshold and complete status data.
         const statusLayout = statusLayoutForColumns(80);
         const props: StatusBarProps = {
@@ -220,10 +235,10 @@ describe('policy-derived status rows', () => {
         const top = formatTopStatusRow(props);
         const bottom = formatBottomStatusRow(props);
 
-        // Then: context/project follow the >=80 policy gate and session remains gated off.
+        // Then: context/project/session follow the >=80 policy gate.
         expect(top.contextLabel).toBe('12.3k / 200k');
         expect(bottom.projectLabel).toBe('mission-control:feature-x');
-        expect(bottom.sessionLabel).toBe(undefined);
+        expect(bottom.sessionLabel).toBe('session_abc123');
         expect(top.fillCount).toBeGreaterThanOrEqual(0);
         expect(bottom.fillCount).toBeGreaterThanOrEqual(0);
     });
@@ -248,8 +263,8 @@ describe('policy-derived status rows', () => {
     });
 
     it('never produces negative filler for long project and session labels', () => {
-        // Given: visible project/session gates with labels longer than the available row width.
-        const statusLayout = statusLayoutForColumns(120);
+        // Given: visible project/session gates at normal width with labels longer than the available row width.
+        const statusLayout = statusLayoutForColumns(80);
         const longSessionID = `session_${'x'.repeat(80)}`;
         const props: StatusBarProps = {
             ...baseProps,
@@ -260,7 +275,7 @@ describe('policy-derived status rows', () => {
             sessionID: longSessionID,
         };
 
-        // When: the bottom row computes filler against the policy width.
+        // When: the bottom row computes filler against the normal-width policy.
         const bottom = formatBottomStatusRow(props);
 
         // Then: both labels stay visible, but the filler clamps to zero instead of underflowing.
