@@ -116,6 +116,42 @@ describe('runAgent interactive ESC vs Ctrl+C exit semantics', () => {
         expect(output).toContain('Exiting mission-control chat');
     });
 
+    it('rapid duplicate ESC during an active run records one interruption side effect', async () => {
+        const dataDir = await tempRoot('mctrl-esc-duplicate-data-');
+        const workspaceRoot = await tempRoot('mctrl-esc-duplicate-workspace-');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        const chatOutput = createBufferedChatOutput();
+        const events: AgentEvent[] = [];
+
+        const output = await runAgent(parseArgs(['--session', 'session_esc_duplicate_active']), {
+            authStore: createEmptyAuthStore(),
+            chatInput: createScriptedChatInput(
+                [
+                    { type: 'line', value: 'start a slow provider turn' },
+                    { type: 'interrupt', source: 'esc' },
+                    { type: 'interrupt', source: 'esc' },
+                    { type: 'line', value: '/exit' },
+                ],
+                0,
+            ),
+            chatOutput: chatOutput.output,
+            workspaceRoot,
+            provider: createDeterministicProvider([
+                { kind: 'wait', ms: 30_000 },
+                { kind: 'response_completed', content: 'too late' },
+            ]),
+            onRuntimeEvent: (event) => {
+                events.push(event);
+            },
+        });
+
+        expect(output.match(/Interrupted active run/g)).toHaveLength(1);
+        expect(events.filter((event) => event.type === 'run.interrupted')).toHaveLength(1);
+        expect(events.filter((event) => event.type === 'task.failed')).toHaveLength(1);
+        expect(output).toContain('Exiting mission-control chat');
+        expect(output).not.toContain('too late');
+    });
+
     async function tempRoot(prefix: string): Promise<string> {
         const path = await mkdtemp(join(tmpdir(), prefix));
         tempRoots.push(path);
