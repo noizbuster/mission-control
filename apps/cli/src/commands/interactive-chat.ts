@@ -138,7 +138,7 @@ export async function runInteractiveChatSession(
     options: InteractiveChatOptions,
 ): Promise<string> {
     const useTui = options.input === undefined && process.stdin.isTTY === true;
-    suppressTitleManagement(useTui);
+    suppressTitleManagement(false);
     type SessionBridgeOptions = Omit<OpenTuiChatBridgeOptions, 'providerID' | 'modelID' | 'variantID'> & {
         providerID: string;
         modelID: string;

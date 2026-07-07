@@ -1,11 +1,31 @@
-import { describe, expect, it } from 'vitest';
-import { detectGitBranch, detectGitWorktree, formatAppTitle, formatSessionTitle } from './terminal-controls.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { setTtyState } from './run-agent-chat-test-support.js';
+import {
+    detectGitBranch,
+    detectGitWorktree,
+    formatAppTitle,
+    formatSessionTitle,
+    resetTerminalTitle,
+    setTerminalTitle,
+    shouldManageTerminalTitle,
+    suppressTitleManagement,
+    TERMINAL_TITLE_DISABLE_ENV,
+    TERMINAL_TITLE_RESET,
+    TERMINAL_TITLE_SET_PREFIX,
+    TERMINAL_TITLE_SET_SUFFIX,
+} from './terminal-controls.js';
 import { execSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 
 const repoRoot = process.cwd();
+
+afterEach(() => {
+    suppressTitleManagement(false);
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+});
 
 /**
  * Real git operations (init / commit / worktree add / submodule add) against
@@ -174,3 +194,80 @@ describe('terminal-controls — title formatters', () => {
         expect(formatSessionTitle(undefined, undefined)).toBe('Mission Control ');
     });
 });
+
+describe('terminal-controls — title management gates', () => {
+    it('writes OSC title escapes when stdout is TTY and title management is enabled', () => {
+        const restoreTtyState = setTtyState({ input: true, output: true });
+        try {
+            suppressTitleManagement(false);
+
+            const { result, stderr } = captureStderr(() => ({
+                set: setTerminalTitle('TUI title'),
+                reset: resetTerminalTitle(),
+            }));
+
+            expect(shouldManageTerminalTitle()).toBe(true);
+            expect(result).toEqual({ set: true, reset: true });
+            expect(stderr).toBe(
+                `${TERMINAL_TITLE_SET_PREFIX}TUI title${TERMINAL_TITLE_SET_SUFFIX}${TERMINAL_TITLE_RESET}`,
+            );
+        } finally {
+            restoreTtyState();
+        }
+    });
+
+    it('suppresses OSC title escapes when stdout is not TTY', () => {
+        const restoreTtyState = setTtyState({ input: true, output: false });
+        try {
+            const { result, stderr } = captureStderr(() => setTerminalTitle('hidden'));
+
+            expect(shouldManageTerminalTitle()).toBe(false);
+            expect(result).toBe(false);
+            expect(stderr).toBe('');
+        } finally {
+            restoreTtyState();
+        }
+    });
+
+    it('suppresses OSC title escapes when MCTRL_DISABLE_TERMINAL_TITLE is set', () => {
+        const restoreTtyState = setTtyState({ input: true, output: true });
+        vi.stubEnv(TERMINAL_TITLE_DISABLE_ENV, '1');
+        try {
+            const { result, stderr } = captureStderr(() => setTerminalTitle('hidden'));
+
+            expect(shouldManageTerminalTitle()).toBe(false);
+            expect(result).toBe(false);
+            expect(stderr).toBe('');
+        } finally {
+            restoreTtyState();
+        }
+    });
+
+    it('suppresses OSC title escapes when title management is explicitly suppressed', () => {
+        const restoreTtyState = setTtyState({ input: true, output: true });
+        try {
+            suppressTitleManagement(true);
+            const { result, stderr } = captureStderr(() => setTerminalTitle('hidden'));
+
+            expect(shouldManageTerminalTitle()).toBe(false);
+            expect(result).toBe(false);
+            expect(stderr).toBe('');
+        } finally {
+            restoreTtyState();
+        }
+    });
+});
+
+function captureStderr<T>(fn: () => T): { readonly result: T; readonly stderr: string } {
+    const writes: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((data: unknown) => {
+        writes.push(typeof data === 'string' ? data : String(data));
+        return true;
+    });
+    try {
+        const result = fn();
+        return { result, stderr: writes.join('') };
+    } finally {
+        spy.mockRestore();
+    }
+}
