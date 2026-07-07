@@ -1,13 +1,18 @@
 import { AgentRuntime, createDeterministicProvider } from '@mission-control/core';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createChatStore } from './chat-store.js';
 import type { OpenTuiChatBridge } from './chat-tui-types.js';
 import { createChatTuiHandle } from './create-chat-tui.js';
 import { runInteractiveChatSession } from './interactive-chat.js';
 import { setTtyState } from './run-agent-chat-test-support.js';
+import {
+    type IsolatedMissionControlTestScope,
+    useIsolatedMissionControlTestScope,
+} from './run-agent-data-dir-test-support.js';
 import { TERMINAL_TITLE_RESET, TERMINAL_TITLE_SET_PREFIX } from './terminal-controls.js';
 
 const createChatTuiMock = vi.hoisted(() => vi.fn());
+let testScope: IsolatedMissionControlTestScope | undefined;
 
 vi.mock('./create-chat-tui.js', async () => {
     const actual = await vi.importActual<typeof import('./create-chat-tui.js')>('./create-chat-tui.js');
@@ -17,10 +22,15 @@ vi.mock('./create-chat-tui.js', async () => {
     };
 });
 
-afterEach(() => {
+beforeEach(async () => {
+    testScope = await useIsolatedMissionControlTestScope('mctrl-terminal-title-data-');
+});
+
+afterEach(async () => {
     createChatTuiMock.mockReset();
     vi.restoreAllMocks();
-    vi.unstubAllEnvs();
+    await testScope?.cleanup();
+    testScope = undefined;
 });
 
 describe('runInteractiveChatSession terminal title management', () => {

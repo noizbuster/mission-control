@@ -4,7 +4,7 @@ import {
     createDeterministicProvider,
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runAgent } from './run-agent.js';
 import {
@@ -12,23 +12,27 @@ import {
     createEmptyAuthStore,
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import {
+    type IsolatedMissionControlTestScope,
+    useIsolatedMissionControlTestScope,
+} from './run-agent-data-dir-test-support.js';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 describe('runAgent interactive ESC vs Ctrl+C exit semantics', () => {
-    const tempRoots: string[] = [];
+    let testScope: IsolatedMissionControlTestScope | undefined;
+
+    beforeEach(async () => {
+        testScope = await useIsolatedMissionControlTestScope('mctrl-esc-semantics-data-');
+    });
 
     afterEach(async () => {
-        vi.unstubAllEnvs();
-        await Promise.all(tempRoots.map((path) => rm(path, { recursive: true, force: true })));
-        tempRoots.length = 0;
+        await testScope?.cleanup();
+        testScope = undefined;
     });
 
     it('ESC-sourced interrupts never exit the chat loop, even on rapid double-press', async () => {
-        const dataDir = await tempRoot('mctrl-esc-exit-data-');
         const workspaceRoot = await tempRoot('mctrl-esc-exit-workspace-');
-        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const chatOutput = createBufferedChatOutput();
 
         const output = await runAgent(parseArgs(['--session', 'session_esc_no_exit']), {
@@ -52,9 +56,7 @@ describe('runAgent interactive ESC vs Ctrl+C exit semantics', () => {
     });
 
     it('Ctrl+C-sourced interrupts still exit on second consecutive press when idle', async () => {
-        const dataDir = await tempRoot('mctrl-ctrlc-exit-data-');
         const workspaceRoot = await tempRoot('mctrl-ctrlc-exit-workspace-');
-        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const chatOutput = createBufferedChatOutput();
 
         const output = await runAgent(parseArgs(['--session', 'session_ctrlc_exit']), {
@@ -72,9 +74,7 @@ describe('runAgent interactive ESC vs Ctrl+C exit semantics', () => {
     });
 
     it('ESC interrupt stops an active run without exiting (run still accepts /exit afterward)', async () => {
-        const dataDir = await tempRoot('mctrl-esc-stop-data-');
         const workspaceRoot = await tempRoot('mctrl-esc-stop-workspace-');
-        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const chatOutput = createBufferedChatOutput();
         const events: AgentEvent[] = [];
 
@@ -117,9 +117,7 @@ describe('runAgent interactive ESC vs Ctrl+C exit semantics', () => {
     });
 
     it('rapid duplicate ESC during an active run records one interruption side effect', async () => {
-        const dataDir = await tempRoot('mctrl-esc-duplicate-data-');
         const workspaceRoot = await tempRoot('mctrl-esc-duplicate-workspace-');
-        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const chatOutput = createBufferedChatOutput();
         const events: AgentEvent[] = [];
 
@@ -153,8 +151,12 @@ describe('runAgent interactive ESC vs Ctrl+C exit semantics', () => {
     });
 
     async function tempRoot(prefix: string): Promise<string> {
-        const path = await mkdtemp(join(tmpdir(), prefix));
-        tempRoots.push(path);
+        const activeScope = testScope;
+        if (activeScope === undefined) {
+            throw new Error('test scope was not initialized');
+        }
+        const path = join(activeScope.dataDir, prefix);
+        await mkdir(path, { recursive: true });
         return path;
     }
 });
