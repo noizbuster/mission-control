@@ -91,7 +91,7 @@ export function App({
                 if (isMounted) {
                     setSessionSummaries(sessions);
                     setSourceState('ready');
-                    setSourceMessage(`${sessions.length} session logs available`);
+                    setSourceMessage(`${sessions.length} sessions available`);
                 }
             },
             (error: unknown) => {
@@ -132,7 +132,7 @@ export function App({
             const sessions = await client.listSessions();
             setSessionSummaries(sessions);
             setSourceState('ready');
-            setSourceMessage(`${sessions.length} session logs available`);
+            setSourceMessage(`${sessions.length} sessions available`);
         } catch (error: unknown) {
             setSourceState('error');
             setSourceMessage(`session source unavailable: ${errorMessage(error)}`);

@@ -6,7 +6,7 @@
  * `ast-edit.ts`): it requests approval via `requestPermission` BEFORE applying
  * the edit, emits `file.diff.proposed` + `file.diff.applied` events through
  * `fileMutationDiffEvents`, and produces `DiffFile[]` in the output so the
- * session log records the mutation.
+ * session store records the mutation.
  *
  * The tool-definition shape is clean-room reimplemented from the
  * oh-my-openagent lsp-core rename tool surface: same input fields
@@ -14,7 +14,7 @@
  * returned workspace edit), but fresh Zod schemas and mission-control's own
  * diff-event types.
  */
-import type { AgentEvent, DiffFile, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
+import type { AgentEvent, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { DiffFileSchema } from '@mission-control/protocol';
 import { z } from 'zod';
 import { fileMutationDiffEvents } from './file-mutation.js';

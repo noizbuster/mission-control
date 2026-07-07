@@ -1,15 +1,15 @@
 import type { AgentEventEnvelope } from '@mission-control/protocol';
 import { AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-import type { SessionIndexDiagnostic } from './session-index-types.js';
+import type { SessionProjectionDiagnostic } from './session-projection-types.js';
 
 export type ParsedSqliteProjectionInput =
     | { readonly kind: 'ok'; readonly envelopes: readonly AgentEventEnvelope[] }
-    | { readonly kind: 'diagnostic'; readonly diagnostic: SessionIndexDiagnostic };
+    | { readonly kind: 'diagnostic'; readonly diagnostic: SessionProjectionDiagnostic };
 
 export function parseSqliteProjectionInput(input: {
     readonly sessionId: string;
-    readonly sourceFilePath: string;
+    readonly sourcePath: string;
     readonly envelopes: readonly unknown[];
 }): ParsedSqliteProjectionInput {
     const envelopes: AgentEventEnvelope[] = [];
@@ -30,13 +30,13 @@ export function parseSqliteProjectionInput(input: {
 }
 
 function malformedDiagnostic(
-    input: { readonly sessionId: string; readonly sourceFilePath: string },
+    input: { readonly sessionId: string; readonly sourcePath: string },
     message: string,
-): SessionIndexDiagnostic {
+): SessionProjectionDiagnostic {
     return {
         kind: 'corrupt_jsonl',
         sessionId: input.sessionId,
-        filePath: input.sourceFilePath,
+        filePath: input.sourcePath,
         code: 'unknown',
         message,
     };

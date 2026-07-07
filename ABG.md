@@ -2289,7 +2289,7 @@ The current `mission-control` implementation is a bounded ABG coding-agent MVP, 
 
 Implemented runtime surfaces:
 
-- Durable JSONL session event storage under `MCTRL_DATA_DIR` or the platform application-data directory.
+- Durable local SQLite/libSQL session event storage under `MCTRL_DATA_DIR` or the platform application-data directory, with JSONL retained for replay/export/import compatibility.
 - Replay projections for chat, graph snapshots, transcript branches, approval state, file diffs, and command output.
 - Deterministic local provider execution, OpenAI Responses, Anthropic Messages, Google Gemini, and OpenAI-compatible adapters for OpenRouter, Groq, DeepSeek, and Mistral behind stored credentials.
 - Provider capability docs distinguish executable adapters from catalog/auth/model-discovery entries; a provider needs executable adapter proof before it can be documented as runnable.
@@ -2310,6 +2310,6 @@ Still deferred:
 
 - Full production ABG engine semantics, compensation policies, and autonomous long-running schedulers.
 - Visual graph editing.
-- Vector memory, persistent memory stores, and database indexes beyond JSONL storage.
+- Vector memory indexes, remote synchronization, and database indexes beyond the local session/persistent-memory store.
 - Unrestricted tools, automatic rollback, and default sidecar execution for `file.patch` or `command.run`.
 - Provider adapters beyond the deterministic local path, OpenAI Responses, Anthropic Messages, Google Gemini, and the OpenAI-compatible provider family.

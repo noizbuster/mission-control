@@ -22,7 +22,7 @@ const ARCHIVE_MANIFEST = {
 };
 
 describe('session tree projection', () => {
-    it('projects linear and branched entries from durable JSONL envelopes', () => {
+    it('projects linear and branched entries from replay envelopes', () => {
         // Given
         const envelopes = [
             envelope({

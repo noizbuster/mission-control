@@ -2,7 +2,7 @@
 
 ## Overview
 
-`packages/protocol` owns the shared Zod schemas and TypeScript types for values that cross packages, apps, CLI output, desktop payloads, provider boundaries, session logs, and the Rust sidecar protocol.
+`packages/protocol` owns the shared Zod schemas and TypeScript types for values that cross packages, apps, CLI output, desktop payloads, provider boundaries, session data, and the Rust sidecar protocol.
 
 ## Where To Look
 

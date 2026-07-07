@@ -101,8 +101,8 @@ type OwnerEntry = { readonly owner: SessionRunOwner; readonly store: LocalSessio
 
 type OwnerEntryRecord = { readonly promise: Promise<OwnerEntry> };
 
-// Session-scoped facade over one `SessionRunCoordinator` and one JSONL store lease.
-// The owner is process-local; durable recovery comes from the JSONL session log.
+// Session-scoped facade over one `SessionRunCoordinator` and one session-store lease.
+// The owner is process-local; durable recovery comes from the session store.
 export class SessionRunOwner {
     readonly sessionId: string;
     readonly store: LocalSessionEventStore;

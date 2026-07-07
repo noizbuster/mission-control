@@ -1,7 +1,7 @@
 import { createClient } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { localSessionDbPath } from '../memory/local-session-store-paths.js';
-import { createSqliteSessionIndexStore } from '../memory/sqlite-session-projection.js';
+import { openSqliteSessionProjectionStore } from '../memory/sqlite-session-projection.js';
 import { localRuntimeDbUrl } from './local-runtime-db.js';
 import {
     SessionInputDelivery,
@@ -105,7 +105,7 @@ describe('SqlSessionInputDelivery', () => {
             blocking: true,
         });
         delivery.close();
-        const publicStore = await createSqliteSessionIndexStore({ url: localRuntimeDbUrl(root) });
+        const publicStore = await openSqliteSessionProjectionStore({ url: localRuntimeDbUrl(root) });
         const waitingSession = await publicStore.getSession('session_public_wait');
 
         const resumedDelivery = await SqlSessionInputDelivery.open(root);
@@ -161,7 +161,7 @@ describe('SqlSessionInputDelivery', () => {
         await resumedDelivery.promoteNextQueued('session_running_wait');
         const lifecycle = await resumedDelivery.deriveLifecycle('session_running_wait');
         resumedDelivery.close();
-        const publicStore = await createSqliteSessionIndexStore({ url: localRuntimeDbUrl(root) });
+        const publicStore = await openSqliteSessionProjectionStore({ url: localRuntimeDbUrl(root) });
         const resumedSession = await publicStore.getSession('session_running_wait');
         publicStore.close();
 
@@ -193,7 +193,7 @@ describe('SqlSessionInputDelivery', () => {
         const resumedDelivery = await SqlSessionInputDelivery.open(root);
         await resumedDelivery.promoteNextQueued('session_stopped_wait');
         resumedDelivery.close();
-        const publicStore = await createSqliteSessionIndexStore({ url: localRuntimeDbUrl(root) });
+        const publicStore = await openSqliteSessionProjectionStore({ url: localRuntimeDbUrl(root) });
         const resumedSession = await publicStore.getSession('session_stopped_wait');
         publicStore.close();
 

@@ -1,4 +1,4 @@
-export { createLocalSessionIndexStore, deleteLocalSessionRows } from './local-session-store-database.js';
+export { deleteLocalSessionRows, openLocalSessionProjectionStore } from './local-session-store-database.js';
 export {
     type LocalSessionEventStore,
     type OpenLocalSessionEventStoreOptions,

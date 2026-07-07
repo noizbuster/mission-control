@@ -13,10 +13,10 @@ describe('legacy session import source error boundaries', () => {
     });
 
     it('rejects JSONL import when event storage fails instead of recording corrupt legacy input', async () => {
-        const givenFixture = await writeLegacyFixture({ tmpRoot: TMP_ROOT, name: 'jsonl-storage-failure' });
+        const givenFixture = await writeLegacyFixture({ tmpRoot: TMP_ROOT, name: 'jsonl-import-write-failure' });
         const runtime = await openMigratedTestDb();
         const givenAcc = emptyImportAccumulator();
-        const givenFailure = new Error('injected JSONL storage failure');
+        const givenFailure = new Error('injected JSONL import write failure');
         const givenClient = new Proxy(runtime.client, {
             get(target, property, receiver) {
                 if (property === 'batch') {
@@ -38,7 +38,7 @@ describe('legacy session import source error boundaries', () => {
                     now: () => '2026-07-01T00:00:00.000Z',
                     acc: givenAcc,
                 }),
-            ).rejects.toThrow('injected JSONL storage failure');
+            ).rejects.toThrow('injected JSONL import write failure');
 
             expect(givenAcc.diagnostics).toEqual([]);
             await expect(countRows(runtime.client, 'legacy_session_imports')).resolves.toBe(0);
@@ -46,7 +46,6 @@ describe('legacy session import source error boundaries', () => {
             runtime.close();
         }
     });
-
 });
 
 function emptyImportAccumulator(): ImportAccumulator {

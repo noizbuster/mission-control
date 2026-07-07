@@ -66,7 +66,6 @@ describe('legacy session import detailed projections', () => {
             // Then: imported events populate the same detailed SQLite projections append writes use.
             expect(whenResult).toMatchObject({
                 importedEventCount: 10,
-                importedSessionIndexRecordCount: 0,
                 importedRunCount: 0,
                 skippedSourceCount: 0,
                 diagnostics: [],

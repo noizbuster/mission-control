@@ -1,12 +1,3 @@
-/**
- * `session_search` tool — full-text search across durable session messages.
- *
- * Read layer over the EXISTING `<dataDir>/sessions/<id>.jsonl` store (see
- * `session-tools-shared.ts`). Capability class `['read']`, no approval. Bounded: a 60s overall
- * timeout and a 50-session scan cap when no `session_id` is given. Matched excerpts are
- * defensively redacted.
- */
-
 import { z } from 'zod';
 import {
     DEFAULT_SEARCH_LIMIT,

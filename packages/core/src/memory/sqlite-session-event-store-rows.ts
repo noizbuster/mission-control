@@ -14,7 +14,7 @@ export function nextSequenceFrom(result: ResultSet, sessionId: string): number {
         throw new SqliteSessionEventStoreError({
             code: 'write_failed',
             sessionId,
-            message: `SQLite session log ${sessionId} is missing its sequence row`,
+            message: `SQLite session store ${sessionId} is missing its sequence row`,
         });
     }
     return nextSequenceRowSchema.parse(row).next_seq;

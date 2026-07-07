@@ -3,7 +3,7 @@
  *
  * The stack stores message pairs that were REMOVED from the in-memory
  * conversation display by `/undo`, so `/redo` can restore them. It is
- * intentionally separate from the durable JSONL session log — undo/redo
+ * intentionally separate from the durable session store — undo/redo
  * never touches persisted state.
  *
  * All operations are immutable: they return a new {@link UndoRedoStack}

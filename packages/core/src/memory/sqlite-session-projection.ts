@@ -1,17 +1,16 @@
 import type { AgentEventEnvelope } from '@mission-control/protocol';
 import { type LocalLibsqlDb, openLocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
-import { deriveSessionIndexRecordsFromEnvelopes } from './session-index-projection.js';
+import { deriveSessionProjectionRecordsFromEnvelopes } from './session-projection.js';
 import type {
-    SessionIndexApprovalRecord,
-    SessionIndexDiagnostic,
-    SessionIndexProviderFailureRecord,
-    SessionIndexRebuildResult,
-    SessionIndexRecord,
-    SessionIndexRunRecord,
-    SessionIndexSessionRecord,
-    SessionIndexStore,
-    SessionIndexToolRecord,
-} from './session-index-types.js';
+    SessionProjectionApprovalRecord,
+    SessionProjectionDiagnostic,
+    SessionProjectionProviderFailureRecord,
+    SessionProjectionRebuildResult,
+    SessionProjectionRecord,
+    SessionProjectionRunRecord,
+    SessionProjectionSessionRecord,
+    SessionProjectionToolRecord,
+} from './session-projection-types.js';
 import { parseSqliteProjectionInput } from './sqlite-session-projection-input.js';
 import {
     approvalRecordFromRow,
@@ -29,27 +28,36 @@ import {
 } from './sqlite-session-projection-rows.js';
 import { replaceStatements } from './sqlite-session-projection-statements.js';
 
-export type SqliteSessionIndexStore = SessionIndexStore & {
+export type SqliteSessionProjectionStore = {
     replaceSessionProjection(input: {
         readonly sessionId: string;
-        readonly records: readonly SessionIndexRecord[];
-        readonly diagnostics: readonly SessionIndexDiagnostic[];
+        readonly records: readonly SessionProjectionRecord[];
+        readonly diagnostics: readonly SessionProjectionDiagnostic[];
         readonly envelopes: readonly AgentEventEnvelope[];
     }): Promise<void>;
+    listSessions(): Promise<readonly SessionProjectionSessionRecord[]>;
+    getSession(sessionId: string): Promise<SessionProjectionSessionRecord | null>;
+    getRuns(sessionId: string): Promise<readonly SessionProjectionRunRecord[]>;
+    getApprovals(sessionId: string): Promise<readonly SessionProjectionApprovalRecord[]>;
+    getTools(sessionId: string): Promise<readonly SessionProjectionToolRecord[]>;
+    getProviderFailures(sessionId: string): Promise<readonly SessionProjectionProviderFailureRecord[]>;
+    getDiagnostics(sessionId: string): Promise<readonly SessionProjectionDiagnostic[]>;
     close(): void;
 };
 
-export async function createSqliteSessionIndexStore(input: { readonly url: string }): Promise<SqliteSessionIndexStore> {
+export async function openSqliteSessionProjectionStore(input: {
+    readonly url: string;
+}): Promise<SqliteSessionProjectionStore> {
     const runtime = await openLocalLibsqlDb({ url: input.url });
-    return new LibsqlSessionIndexStore(runtime);
+    return new LibsqlSessionProjectionStore(runtime);
 }
 
 export async function projectSessionEventsToSqlite(input: {
-    readonly store: SqliteSessionIndexStore;
+    readonly store: SqliteSessionProjectionStore;
     readonly sessionId: string;
-    readonly sourceFilePath: string;
+    readonly sourcePath: string;
     readonly envelopes: readonly unknown[];
-}): Promise<SessionIndexRebuildResult> {
+}): Promise<SessionProjectionRebuildResult> {
     const parsed = parseSqliteProjectionInput(input);
     if (parsed.kind === 'diagnostic') {
         await input.store.replaceSessionProjection({
@@ -58,11 +66,11 @@ export async function projectSessionEventsToSqlite(input: {
             diagnostics: [parsed.diagnostic],
             envelopes: [],
         });
-        return { sessionId: input.sessionId, indexedRecords: 0, diagnostics: [parsed.diagnostic] };
+        return { sessionId: input.sessionId, projectedRecords: 0, diagnostics: [parsed.diagnostic] };
     }
-    const projection = deriveSessionIndexRecordsFromEnvelopes({
+    const projection = deriveSessionProjectionRecordsFromEnvelopes({
         sessionId: input.sessionId,
-        filePath: input.sourceFilePath,
+        filePath: input.sourcePath,
         envelopes: parsed.envelopes,
     });
     await input.store.replaceSessionProjection({
@@ -73,41 +81,33 @@ export async function projectSessionEventsToSqlite(input: {
     });
     return {
         sessionId: input.sessionId,
-        indexedRecords: projection.records.length,
+        projectedRecords: projection.records.length,
         diagnostics: projection.diagnostics,
     };
 }
 
-class LibsqlSessionIndexStore implements SqliteSessionIndexStore {
+class LibsqlSessionProjectionStore implements SqliteSessionProjectionStore {
     private readonly runtime: LocalLibsqlDb;
 
     constructor(runtime: LocalLibsqlDb) {
         this.runtime = runtime;
     }
 
-    async replaceSessionIndex(input: {
-        readonly sessionId: string;
-        readonly records: readonly SessionIndexRecord[];
-        readonly diagnostics: readonly SessionIndexDiagnostic[];
-    }): Promise<void> {
-        await this.replaceSessionProjection({ ...input, envelopes: [] });
-    }
-
     async replaceSessionProjection(input: {
         readonly sessionId: string;
-        readonly records: readonly SessionIndexRecord[];
-        readonly diagnostics: readonly SessionIndexDiagnostic[];
+        readonly records: readonly SessionProjectionRecord[];
+        readonly diagnostics: readonly SessionProjectionDiagnostic[];
         readonly envelopes: readonly AgentEventEnvelope[];
     }): Promise<void> {
         await runLocalLibsqlWrite(this.runtime, (client) => client.batch([...replaceStatements(input)], 'write'));
     }
 
-    async listSessions(): Promise<readonly SessionIndexSessionRecord[]> {
+    async listSessions(): Promise<readonly SessionProjectionSessionRecord[]> {
         const result = await this.runtime.client.execute(sessionSelectSql('ORDER BY s.updated_at, s.session_id'));
         return result.rows.map((row) => sessionRowSchema.parse(row)).map(sessionRecordFromRow);
     }
 
-    async getSession(sessionId: string): Promise<SessionIndexSessionRecord | null> {
+    async getSession(sessionId: string): Promise<SessionProjectionSessionRecord | null> {
         const result = await this.runtime.client.execute({
             sql: sessionSelectSql('WHERE s.session_id = ?'),
             args: [sessionId],
@@ -116,15 +116,15 @@ class LibsqlSessionIndexStore implements SqliteSessionIndexStore {
         return row === undefined ? null : sessionRecordFromRow(sessionRowSchema.parse(row));
     }
 
-    async getRuns(sessionId: string): Promise<readonly SessionIndexRunRecord[]> {
+    async getRuns(sessionId: string): Promise<readonly SessionProjectionRunRecord[]> {
         const result = await this.runtime.client.execute({
-            sql: 'SELECT * FROM session_index_runs WHERE session_id = ? ORDER BY sequence, event_id',
+            sql: 'SELECT * FROM session_projection_runs WHERE session_id = ? ORDER BY sequence, event_id',
             args: [sessionId],
         });
         return result.rows.map((row) => runRecordFromRow(runRowSchema.parse(row)));
     }
 
-    async getApprovals(sessionId: string): Promise<readonly SessionIndexApprovalRecord[]> {
+    async getApprovals(sessionId: string): Promise<readonly SessionProjectionApprovalRecord[]> {
         const result = await this.runtime.client.execute({
             sql: 'SELECT * FROM approvals WHERE session_id = ? ORDER BY approval_id',
             args: [sessionId],
@@ -132,7 +132,7 @@ class LibsqlSessionIndexStore implements SqliteSessionIndexStore {
         return result.rows.map((row) => approvalRecordFromRow(approvalRowSchema.parse(row)));
     }
 
-    async getTools(sessionId: string): Promise<readonly SessionIndexToolRecord[]> {
+    async getTools(sessionId: string): Promise<readonly SessionProjectionToolRecord[]> {
         const result = await this.runtime.client.execute({
             sql: 'SELECT * FROM tool_calls WHERE session_id = ? ORDER BY tool_call_id',
             args: [sessionId],
@@ -140,7 +140,7 @@ class LibsqlSessionIndexStore implements SqliteSessionIndexStore {
         return result.rows.map((row) => toolRecordFromRow(toolRowSchema.parse(row)));
     }
 
-    async getProviderFailures(sessionId: string): Promise<readonly SessionIndexProviderFailureRecord[]> {
+    async getProviderFailures(sessionId: string): Promise<readonly SessionProjectionProviderFailureRecord[]> {
         const result = await this.runtime.client.execute({
             sql: 'SELECT * FROM provider_failures WHERE session_id = ? ORDER BY event_id',
             args: [sessionId],
@@ -148,10 +148,10 @@ class LibsqlSessionIndexStore implements SqliteSessionIndexStore {
         return result.rows.map((row) => providerFailureRecordFromRow(providerFailureRowSchema.parse(row)));
     }
 
-    async getDiagnostics(sessionId: string): Promise<readonly SessionIndexDiagnostic[]> {
+    async getDiagnostics(sessionId: string): Promise<readonly SessionProjectionDiagnostic[]> {
         const result = await this.runtime.client.execute({
             sql: `
-                SELECT * FROM session_index_diagnostics
+                SELECT * FROM session_projection_diagnostics
                 WHERE session_id = ?
                 ORDER BY file_path, code, COALESCE(line_number, 0), message
             `,

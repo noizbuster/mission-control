@@ -9,7 +9,7 @@
  * NON-DESTRUCTIVE by design. Undo hides the last `You:` + `Assistant:`
  * exchange from the bridge's `outputText` VIEW (the chat display text) by
  * stashing the removed substring; redo re-appends it byte-exact. The durable
- * JSONL session log is NEVER touched: the layer's only mutation surface is the
+ * session store is NEVER touched: the layer's only mutation surface is the
  * injected `replaceOutputText` dep, which the bridge wires to
  * `replaceCoreOutputText` — a function that sets `core.outputText` and
  * publishes a snapshot and nothing else (no session-store call). The durable

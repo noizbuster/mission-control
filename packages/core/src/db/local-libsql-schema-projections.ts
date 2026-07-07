@@ -83,7 +83,7 @@ export const sessionProjectionSchemaSql = [
             );
         `,
     `
-            CREATE TABLE IF NOT EXISTS session_index_runs (
+            CREATE TABLE IF NOT EXISTS session_projection_runs (
                 session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
                 event_id TEXT NOT NULL,
                 sequence INTEGER NOT NULL,
@@ -100,7 +100,7 @@ export const sessionProjectionSchemaSql = [
             );
         `,
     `
-            CREATE TABLE IF NOT EXISTS session_index_diagnostics (
+            CREATE TABLE IF NOT EXISTS session_projection_diagnostics (
                 session_id TEXT NOT NULL,
                 file_path TEXT NOT NULL,
                 code TEXT NOT NULL,
@@ -118,5 +118,5 @@ export const sessionProjectionSchemaSql = [
     'CREATE INDEX IF NOT EXISTS tool_calls_approval_idx ON tool_calls (approval_id);',
     'CREATE INDEX IF NOT EXISTS provider_failures_request_idx ON provider_failures (session_id, request_id);',
     'CREATE INDEX IF NOT EXISTS legacy_session_imports_source_idx ON legacy_session_imports (source_path);',
-    'CREATE INDEX IF NOT EXISTS session_index_runs_by_sequence ON session_index_runs (session_id, sequence);',
+    'CREATE INDEX IF NOT EXISTS session_projection_runs_by_sequence ON session_projection_runs (session_id, sequence);',
 ] as const;

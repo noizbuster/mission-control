@@ -43,7 +43,7 @@ Core `<MCTRL_DATA_DIR>/memory.db` tables:
 | `session_events` | Append-only durable event ledger. Each row contains `session_id`, `seq`, globally unique `event_id`, event `type`, timestamp, optional run/turn/causation/correlation ids, and the validated protocol envelope in `payload_json`. |
 | `session_messages` | Transcript read projection by message. Used by CLI and desktop inspection without replaying all events. |
 | `session_parts` | Normalized message parts such as text, tool call, tool result, reasoning, file, and data parts. |
-| `session_awaits` | Wait projection rows for approval-blocked runs, blocking `user_input`, foreground `subagent` waits, and compatibility projection/import paths when awaiting metadata is present. |
+| `session_awaits` | Wait projection rows for approval-blocked runs, blocking `user_input`, foreground `subagent` waits, and imported legacy awaiting metadata. |
 | `mission_runs` | Legacy `.omo/runs/*.json` compatibility import target and new Mission/Run SQL write target in `memory.db`. |
 | `approvals` | Approval projection keyed by `approval_id`, including subject, status, request/decision timestamps, and decision metadata. |
 | `tool_calls` | Tool-call projection keyed by `tool_call_id`, including name, status, arguments, result, approval id, timestamps, errors, and applied files. |
@@ -54,7 +54,7 @@ Shared local `memory.db` runtime tables:
 
 | Table | Responsibility |
 | --- | --- |
-| `sessions` | Legacy runtime coordination session row used by compatibility adapters. Public session-list projection is data-dir `memory.db`. |
+| `sessions` | Runtime coordination session row shared with the public session-list projection in data-dir `memory.db`. |
 | `session_inputs` | Durable input delivery rows for `steer` and `queue` prompts. Tracks admitted/promoted sequence numbers and cancellation. |
 | `session_awaits` | Runtime wait rows for blocking input delivery and foreground child-agent waits. |
 | `missions` | Materialized workflow mission records mirrored into SQL. The original mission payload is preserved as JSON. |
@@ -63,12 +63,12 @@ Shared local `memory.db` runtime tables:
 | `runtime_agents` | Durable mirror of visible runtime agent references when a `SqlAgentJobMirror` is injected. |
 | `async_jobs` | Durable mirror of background and foreground child-agent jobs when a `SqlAgentJobMirror` is injected. |
 
-Compatibility projection tables:
+Session projection tables:
 
 | Table | Responsibility |
 | --- | --- |
-| `session_index_runs` | Compatibility run-event projection for the existing session index contract. It records event id, sequence, event type, command/state, run/input/provider ids, reason, and error code. |
-| `session_index_diagnostics` | Compatibility diagnostics produced while projecting or importing legacy session data. |
+| `session_projection_runs` | Run-event projection for session list/detail reads. It records event id, sequence, event type, command/state, run/input/provider ids, reason, and error code. |
+| `session_projection_diagnostics` | Projection diagnostics produced while importing legacy session data. |
 
 ## Key Indexes
 
@@ -110,7 +110,7 @@ awaiting-state rendering, child lookup, and import diagnostics:
 | `async_jobs_agent_idx` | `agent_id` | Agent-scoped job lookup. |
 | `legacy_session_imports_source_checksum_unique` | `(source_path, checksum)` | Idempotent legacy import. |
 | `legacy_session_imports_source_idx` | `source_path` | Import audit by source file. |
-| `session_index_runs_by_sequence` | `(session_id, sequence)` | Compatibility run-event ordering. |
+| `session_projection_runs_by_sequence` | `(session_id, sequence)` | Run-event projection ordering. |
 
 ## Event And Projection Contract
 
@@ -123,8 +123,8 @@ to change history.
 Projection tables are read models derived from event envelopes or runtime
 state. They may be deleted and rebuilt for a session from `session_events` and
 legacy import sources. This applies to `session_messages`, `session_parts`,
-`approvals`, `tool_calls`, `provider_failures`, `session_index_runs`,
-`session_index_diagnostics`, and the summary columns on `sessions`.
+`approvals`, `tool_calls`, `provider_failures`, `session_projection_runs`,
+`session_projection_diagnostics`, and the summary columns on `sessions`.
 
 JSON columns such as `payload_json`, `metadata_json`, `result_json`,
 `error_json`, `passthrough_json`, and `diagnostics_json` are boundary payloads.

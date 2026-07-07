@@ -1,17 +1,17 @@
 import type { InStatement } from '@libsql/client';
 import type { ToolOutcomeStatus } from '../session-replay-types.js';
 import type {
-    SessionIndexApprovalRecord,
-    SessionIndexDiagnostic,
-    SessionIndexProviderFailureRecord,
-    SessionIndexRunRecord,
-    SessionIndexToolRecord,
-} from './session-index-types.js';
+    SessionProjectionApprovalRecord,
+    SessionProjectionDiagnostic,
+    SessionProjectionProviderFailureRecord,
+    SessionProjectionRunRecord,
+    SessionProjectionToolRecord,
+} from './session-projection-types.js';
 
-export function insertRunStatement(record: SessionIndexRunRecord): InStatement {
+export function insertRunStatement(record: SessionProjectionRunRecord): InStatement {
     return {
         sql: `
-            INSERT INTO session_index_runs (
+            INSERT INTO session_projection_runs (
                 session_id, event_id, sequence, timestamp, event_type, command, state, run_id,
                 input_id, provider_turn_id, reason, error_code
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -33,7 +33,7 @@ export function insertRunStatement(record: SessionIndexRunRecord): InStatement {
     };
 }
 
-export function insertApprovalStatement(record: SessionIndexApprovalRecord): InStatement {
+export function insertApprovalStatement(record: SessionProjectionApprovalRecord): InStatement {
     return {
         sql: `
             INSERT INTO approvals (
@@ -56,7 +56,7 @@ export function insertApprovalStatement(record: SessionIndexApprovalRecord): InS
 export function insertToolStatement(
     namesById: ReadonlyMap<string, string>,
     argumentsById: ReadonlyMap<string, string>,
-): (record: SessionIndexToolRecord) => InStatement {
+): (record: SessionProjectionToolRecord) => InStatement {
     return (record) => ({
         sql: `
             INSERT INTO tool_calls (
@@ -81,7 +81,7 @@ export function insertToolStatement(
     });
 }
 
-export function insertProviderFailureStatement(record: SessionIndexProviderFailureRecord): InStatement {
+export function insertProviderFailureStatement(record: SessionProjectionProviderFailureRecord): InStatement {
     return {
         sql: `
             INSERT INTO provider_failures (
@@ -100,10 +100,10 @@ export function insertProviderFailureStatement(record: SessionIndexProviderFailu
     };
 }
 
-export function insertDiagnosticStatement(record: SessionIndexDiagnostic): InStatement {
+export function insertDiagnosticStatement(record: SessionProjectionDiagnostic): InStatement {
     return {
         sql: `
-            INSERT INTO session_index_diagnostics (session_id, file_path, code, message, line_number)
+            INSERT INTO session_projection_diagnostics (session_id, file_path, code, message, line_number)
             VALUES (?, ?, ?, ?, ?)
         `,
         args: [record.sessionId, record.filePath, record.code, record.message, record.lineNumber ?? null],

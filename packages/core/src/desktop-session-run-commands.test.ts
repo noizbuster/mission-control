@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 describe('desktop session run commands', () => {
-    it('records queue, resume, steer, and interrupt commands in the durable session log', async () => {
+    it('records queue, resume, steer, and interrupt commands in the durable session store', async () => {
         // Given
         const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-desktop-run-commands-'));
         const sessionId = 'session_desktop_run_commands';

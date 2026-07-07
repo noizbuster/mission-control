@@ -2,15 +2,12 @@ import {
     type JsonlSessionReplayPrefixProjection,
     type LocalSessionEventStore,
     openLocalSessionEventStore,
-    projectJsonlSessionReplayPrefix,
+    projectSessionReplay,
     readLocalSessionReplay,
-    resolveMissionControlDataDir,
 } from '@mission-control/core';
 import type { AgentEvent, AgentEventEnvelope, ModelProviderSelection } from '@mission-control/protocol';
 import { latestSelection } from './interactive-chat-session-navigation-format.js';
 import { createSessionWorkspaceMetadataEvent, resolveSessionWorkspaceMetadata } from './session-workspace-metadata.js';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 
 export type SessionNavigationStoreObserver = ((event: AgentEvent) => void) | undefined;
 
@@ -28,31 +25,11 @@ export type PreparedTargetSession = {
 };
 
 export async function readSessionNavigationReplay(sessionId: string): Promise<JsonlSessionReplayPrefixProjection> {
-    const legacyReplay = await readCorruptLegacyNavigationReplay(sessionId);
-    if (legacyReplay !== undefined) {
-        return legacyReplay;
-    }
     const replay = await readLocalSessionReplay({ sessionId });
     if (replay.kind === 'found') {
         return replay.replay;
     }
-    return projectJsonlSessionReplayPrefix({ sessionId, contents: '' });
-}
-
-async function readCorruptLegacyNavigationReplay(
-    sessionId: string,
-): Promise<JsonlSessionReplayPrefixProjection | undefined> {
-    let contents: string;
-    try {
-        contents = await readFile(join(resolveMissionControlDataDir(), 'sessions', `${sessionId}.jsonl`), 'utf8');
-    } catch (error: unknown) {
-        if (isMissingFileError(error)) {
-            return undefined;
-        }
-        throw error;
-    }
-    const replay = projectJsonlSessionReplayPrefix({ sessionId, contents });
-    return replayHasDiagnostics(replay) ? replay : undefined;
+    return { projection: projectSessionReplay({ sessionId, envelopes: [] }), diagnostics: [] };
 }
 
 export function assertReplayIsReadable(
@@ -193,10 +170,6 @@ function isSkippedDurableEventType(type: AgentEvent['type']): boolean {
         type.startsWith('permission.') ||
         type.startsWith('tool.')
     );
-}
-
-function isMissingFileError(error: unknown): boolean {
-    return error instanceof Error && Reflect.get(error, 'code') === 'ENOENT';
 }
 
 function sessionEvent(

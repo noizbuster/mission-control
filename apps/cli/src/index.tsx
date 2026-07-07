@@ -25,7 +25,7 @@ export function createHelpText(): string {
         'Options:',
         '  --no-tui       Use plain text output',
         '  --json         Emit legacy JSON Lines events',
-        '  --jsonl        Emit JSON Lines events and persist a replayable session log',
+        '  --jsonl        Emit JSON Lines events and persist a replayable session',
         '  --native       Try the Rust sidecar',
         '  --no-native    Force mock sidecar',
         '  --provider <id>  Select provider for the demo run',

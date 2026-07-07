@@ -8,13 +8,13 @@ import {
 import { z } from 'zod';
 import type { ToolOutcomeStatus } from '../session-replay-types.js';
 import type {
-    SessionIndexApprovalRecord,
-    SessionIndexDiagnostic,
-    SessionIndexProviderFailureRecord,
-    SessionIndexRunRecord,
-    SessionIndexSessionRecord,
-    SessionIndexToolRecord,
-} from './session-index-types.js';
+    SessionProjectionApprovalRecord,
+    SessionProjectionDiagnostic,
+    SessionProjectionProviderFailureRecord,
+    SessionProjectionRunRecord,
+    SessionProjectionSessionRecord,
+    SessionProjectionToolRecord,
+} from './session-projection-types.js';
 import {
     approvalRowSchema,
     diagnosticRowSchema,
@@ -24,7 +24,7 @@ import {
     toolRowSchema,
 } from './sqlite-session-projection-row-schemas.js';
 
-export function sessionRecordFromRow(row: z.infer<typeof sessionRowSchema>): SessionIndexSessionRecord {
+export function sessionRecordFromRow(row: z.infer<typeof sessionRowSchema>): SessionProjectionSessionRecord {
     const metadata = sessionMetadata(row.metadata_json);
     const awaiting = awaitingDetailsFromRow(row);
     return {
@@ -39,11 +39,11 @@ export function sessionRecordFromRow(row: z.infer<typeof sessionRowSchema>): Ses
         ...(metadata.lastEventId !== undefined ? { lastEventId: metadata.lastEventId } : {}),
         ...(metadata.lastEventType !== undefined ? { lastEventType: metadata.lastEventType } : {}),
         updatedAt: row.updated_at,
-        sourceFilePath: row.legacy_jsonl_path ?? '',
+        sourcePath: row.legacy_jsonl_path ?? '',
     };
 }
 
-export function runRecordFromRow(row: z.infer<typeof runRowSchema>): SessionIndexRunRecord {
+export function runRecordFromRow(row: z.infer<typeof runRowSchema>): SessionProjectionRunRecord {
     return {
         kind: 'run',
         sessionId: row.session_id,
@@ -61,7 +61,7 @@ export function runRecordFromRow(row: z.infer<typeof runRowSchema>): SessionInde
     };
 }
 
-export function approvalRecordFromRow(row: z.infer<typeof approvalRowSchema>): SessionIndexApprovalRecord {
+export function approvalRecordFromRow(row: z.infer<typeof approvalRowSchema>): SessionProjectionApprovalRecord {
     const metadata = metadataForApproval(row.metadata_json);
     return {
         kind: 'approval',
@@ -76,7 +76,7 @@ export function approvalRecordFromRow(row: z.infer<typeof approvalRowSchema>): S
     };
 }
 
-export function toolRecordFromRow(row: z.infer<typeof toolRowSchema>): SessionIndexToolRecord {
+export function toolRecordFromRow(row: z.infer<typeof toolRowSchema>): SessionProjectionToolRecord {
     const result = row.result_json !== null ? parseJson(row.result_json, ToolResultSchema) : undefined;
     const appliedFiles =
         row.applied_files_json !== null ? parseJson(row.applied_files_json, z.array(z.string())) : undefined;
@@ -96,7 +96,7 @@ export function toolRecordFromRow(row: z.infer<typeof toolRowSchema>): SessionIn
 
 export function providerFailureRecordFromRow(
     row: z.infer<typeof providerFailureRowSchema>,
-): SessionIndexProviderFailureRecord {
+): SessionProjectionProviderFailureRecord {
     return {
         kind: 'provider_failure',
         sessionId: row.session_id,
@@ -108,7 +108,7 @@ export function providerFailureRecordFromRow(
     };
 }
 
-export function diagnosticFromRow(row: z.infer<typeof diagnosticRowSchema>): SessionIndexDiagnostic {
+export function diagnosticFromRow(row: z.infer<typeof diagnosticRowSchema>): SessionProjectionDiagnostic {
     return {
         kind: 'corrupt_jsonl',
         sessionId: row.session_id,

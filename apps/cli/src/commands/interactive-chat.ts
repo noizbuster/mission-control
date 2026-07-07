@@ -217,7 +217,7 @@ export async function runInteractiveChatSession(
               }
             : createTerminalChatOutput());
     // Mirror of the conversation text for /undo and /redo. This is display-only;
-    // the durable JSONL session log is never modified by undo/redo.
+    // the durable session store is never modified by undo/redo.
     let conversationText = '';
     let undoRedoStack = createUndoRedoStack();
     const chatOutput: ChatOutput = {
@@ -271,7 +271,7 @@ export async function runInteractiveChatSession(
     let currentSessionStore = options.sessionStore;
     let currentApprovalLevel: ApprovalLevel | undefined = options.initialApprovalLevel;
 
-    // Seed the interactive turn counter from the durable session log so resumed or switched
+    // Seed the interactive turn counter from the durable session store so resumed or switched
     // sessions never reuse an already-promoted input_turn_interactive_N id. Without this, the
     // counter starts at 0 on every process restart, and the first new prompt collides with a
     // prior prompt.promoted event → SessionAdmissionError('input_conflict').

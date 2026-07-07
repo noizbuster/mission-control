@@ -4,11 +4,11 @@ import { parsePlanChecklistText } from './plan-store.js';
 
 function sampleContent(overrides: Partial<PlanContent> = {}): PlanContent {
     return {
-        tldr: 'Add a search command that reads durable session logs and returns matching excerpts.',
+        tldr: 'Add a search command that reads durable sessions and returns matching excerpts.',
         todos: ['Add protocol schema for search results', 'Implement searchSessions in core', 'Wire CLI subcommand'],
         finalWave: [
             'Reviewer: confirm JSON output validates against schema',
-            'Reviewer: confirm no session logs are mutated',
+            'Reviewer: confirm no sessions are mutated',
         ],
         ...overrides,
     };

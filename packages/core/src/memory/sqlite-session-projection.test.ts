@@ -1,7 +1,10 @@
 import { createClient } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { SessionIndexStore } from './session-index-types.js';
-import { createSqliteSessionIndexStore, projectSessionEventsToSqlite } from './sqlite-session-projection.js';
+import {
+    openSqliteSessionProjectionStore,
+    projectSessionEventsToSqlite,
+    type SqliteSessionProjectionStore,
+} from './sqlite-session-projection.js';
 import {
     CREATED_AT,
     cleanupSqliteSessionProjectionTestDirs,
@@ -15,22 +18,22 @@ describe('sqlite session projection', () => {
         await cleanupSqliteSessionProjectionTestDirs();
     });
 
-    it('persists SessionIndexStore-compatible records across reopen', async () => {
-        // Given: a SQLite session projection store receives the same event stream as the file index.
+    it('persists SQLite projection records across reopen', async () => {
+        // Given: a SQLite session projection store receives a durable event stream.
         const url = await tempDbUrl('reopen');
-        const store = await createSqliteSessionIndexStore({ url });
+        const store = await openSqliteSessionProjectionStore({ url });
 
-        // When: events are projected, the DB is closed, and a public adapter is reopened.
+        // When: events are projected, the DB is closed, and the store is reopened.
         await projectSessionEventsToSqlite({
             store,
             sessionId: SESSION_ID,
-            sourceFilePath: 'sessions/session_sqlite_projection_test.jsonl',
+            sourcePath: 'sessions/session_sqlite_projection_test.jsonl',
             envelopes: completeProjectionEvents(SESSION_ID),
         });
         store.close();
-        const reopened = await createSqliteSessionIndexStore({ url });
+        const reopened = await openSqliteSessionProjectionStore({ url });
 
-        // Then: callers see the same query semantics without replaying JSONL.
+        // Then: callers see direct projection query semantics without replaying JSONL.
         await expectQueryCoverage(reopened, SESSION_ID);
         reopened.close();
     });
@@ -38,13 +41,13 @@ describe('sqlite session projection', () => {
     it('writes sessions, messages, tools, approvals, and provider failures rows from events', async () => {
         // Given: a projected session with assistant messages, a tool call, approval, and provider failure.
         const url = await tempDbUrl('projection-rows');
-        const store = await createSqliteSessionIndexStore({ url });
+        const store = await openSqliteSessionProjectionStore({ url });
 
         // When: the post-append projection path runs.
         await projectSessionEventsToSqlite({
             store,
             sessionId: SESSION_ID,
-            sourceFilePath: 'sessions/session_sqlite_projection_test.jsonl',
+            sourcePath: 'sessions/session_sqlite_projection_test.jsonl',
             envelopes: completeProjectionEvents(SESSION_ID),
         });
         store.close();
@@ -110,7 +113,7 @@ describe('sqlite session projection', () => {
     it('updates session projections without deleting append-only session rows', async () => {
         // Given: an append-only event ledger row exists and deletes from sessions are forbidden.
         const url = await tempDbUrl('append-only-safe');
-        const store = await createSqliteSessionIndexStore({ url });
+        const store = await openSqliteSessionProjectionStore({ url });
         const client = createClient({ url });
         await client.execute({
             sql: `
@@ -138,7 +141,7 @@ describe('sqlite session projection', () => {
         await projectSessionEventsToSqlite({
             store,
             sessionId: SESSION_ID,
-            sourceFilePath: 'sessions/session_sqlite_projection_test.jsonl',
+            sourcePath: 'sessions/session_sqlite_projection_test.jsonl',
             envelopes: completeProjectionEvents(SESSION_ID),
         });
         const eventRows = await client.execute({
@@ -158,7 +161,7 @@ describe('sqlite session projection', () => {
     });
 });
 
-async function expectQueryCoverage(store: SessionIndexStore, sessionId: string): Promise<void> {
+async function expectQueryCoverage(store: SqliteSessionProjectionStore, sessionId: string): Promise<void> {
     await expect(store.getSession(sessionId)).resolves.toMatchObject({
         sessionId,
         status: 'stopped',

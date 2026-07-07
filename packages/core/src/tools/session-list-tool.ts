@@ -1,10 +1,3 @@
-/**
- * `session_list` tool — list durable sessions with optional filtering.
- *
- * Read layer over the EXISTING `<dataDir>/sessions/<id>.jsonl` store (see
- * `session-tools-shared.ts`). Capability class `['read']`, no approval.
- */
-
 import { z } from 'zod';
 import {
     listSessionIds,

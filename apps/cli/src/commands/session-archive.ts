@@ -78,7 +78,7 @@ async function readArchiveSource(sessionId: string): Promise<{ readonly contents
     if (replay.kind === 'missing') {
         throw new SessionArchiveCommandError({
             code: 'session_not_found',
-            message: `Session log not found: ${sessionId}`,
+            message: `Session not found: ${sessionId}`,
         });
     }
     return { contents: serializeReplayAsJsonl(sessionId, replay.replay.projection.envelopes) };

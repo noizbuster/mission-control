@@ -1,6 +1,55 @@
-import type { ReplayDiagnostic } from '@mission-control/core';
-import { projectJsonlSessionReplayPrefix } from '@mission-control/core';
+import {
+    openLocalSessionProjectionStore,
+    projectJsonlSessionReplayPrefix,
+    type ReplayDiagnostic,
+    resolveMissionControlDataDir,
+    type SessionProjectionDiagnostic,
+    type SessionProjectionSessionRecord,
+    type SqliteSessionProjectionStore,
+} from '@mission-control/core';
 import type { AgentSnapshot } from '@mission-control/protocol';
+import type { CliSessionCatalogDiagnostic } from './session-catalog.js';
+
+export type SessionProjectionReadState = {
+    readonly records: ReadonlyMap<string, SessionProjectionSessionRecord>;
+    readonly diagnostics: readonly CliSessionCatalogDiagnostic[];
+    readonly store: SqliteSessionProjectionStore;
+};
+
+export async function readSessionProjectionState(): Promise<SessionProjectionReadState> {
+    const store = await openLocalSessionProjectionStore({ dataDir: resolveMissionControlDataDir() });
+    try {
+        return await readStoreProjectionState(store);
+    } catch (error: unknown) {
+        store.close();
+        throw error;
+    }
+}
+
+async function readStoreProjectionState(store: SqliteSessionProjectionStore): Promise<SessionProjectionReadState> {
+    const sessions = await store.listSessions();
+    return {
+        records: new Map(sessions.map((session) => [session.sessionId, session])),
+        diagnostics: [],
+        store,
+    };
+}
+
+export async function readProjectionDiagnosticsForSession(
+    sessionId: string,
+    projectionState: SessionProjectionReadState,
+): Promise<readonly CliSessionCatalogDiagnostic[]> {
+    return (await projectionState.store.getDiagnostics(sessionId)).map(sanitizeProjectionDiagnostic);
+}
+
+function sanitizeProjectionDiagnostic(diagnostic: SessionProjectionDiagnostic): CliSessionCatalogDiagnostic {
+    return {
+        code: 'projection_diagnostic',
+        sessionId: diagnostic.sessionId,
+        message: 'session projection contains a diagnostic record',
+        lineNumber: diagnostic.lineNumber,
+    };
+}
 
 export type SessionCatalogProjection = {
     readonly status: AgentSnapshot['status'] | 'corrupt';
@@ -62,8 +111,11 @@ function headerCreatedAt(contents: string): string | undefined {
     try {
         const parsed = JSON.parse(firstLine);
         return isRecord(parsed) && typeof parsed.createdAt === 'string' ? parsed.createdAt : undefined;
-    } catch {
-        return undefined;
+    } catch (error: unknown) {
+        if (error instanceof SyntaxError) {
+            return undefined;
+        }
+        throw error;
     }
 }
 

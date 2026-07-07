@@ -100,7 +100,7 @@ export type CodingActionContext = PromptTurnContext & {
     /**
      * In-memory undo/redo controller for `/undo` and `/redo`. When omitted, the
      * actions report that conversation tracking is unavailable. The controller
-     * never touches the durable JSONL session log.
+     * never touches the durable session store.
      */
     readonly undoRedo?: UndoRedoConversationController;
     readonly selectApprovalLevel?: (currentLevel?: ApprovalLevel) => Promise<ApprovalLevel | undefined>;

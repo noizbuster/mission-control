@@ -252,7 +252,7 @@ describe('runClearAction', () => {
     });
 });
 
-describe('runClearAction preserves old session log', () => {
+describe('runClearAction preserves old session history', () => {
     let tempDir: string;
 
     beforeEach(() => {

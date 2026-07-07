@@ -1,7 +1,7 @@
 import type { InStatement } from '@libsql/client';
-import type { SessionIndexSessionRecord } from './session-index-types.js';
+import type { SessionProjectionSessionRecord } from './session-projection-types.js';
 
-export function insertSessionStatement(record: SessionIndexSessionRecord): InStatement {
+export function insertSessionStatement(record: SessionProjectionSessionRecord): InStatement {
     return {
         sql: `
             INSERT INTO sessions (
@@ -29,7 +29,7 @@ export function insertSessionStatement(record: SessionIndexSessionRecord): InSta
             record.lastSequence ?? 0,
             record.awaiting?.reason ?? null,
             primaryAwaitingSource(record)?.sourceId ?? null,
-            record.sourceFilePath,
+            record.sourcePath,
             JSON.stringify({
                 eventCount: record.eventCount,
                 lastEventId: record.lastEventId ?? null,
@@ -39,7 +39,7 @@ export function insertSessionStatement(record: SessionIndexSessionRecord): InSta
     };
 }
 
-export function insertAwaitingStatement(record: SessionIndexSessionRecord): InStatement | undefined {
+export function insertAwaitingStatement(record: SessionProjectionSessionRecord): InStatement | undefined {
     const awaiting = record.awaiting;
     if (awaiting === undefined) {
         return undefined;
@@ -89,7 +89,7 @@ export function insertAwaitingStatement(record: SessionIndexSessionRecord): InSt
 }
 
 function primaryAwaitingSource(
-    record: SessionIndexSessionRecord,
+    record: SessionProjectionSessionRecord,
 ):
     | { readonly sourceKind: 'approval' | 'run' | 'tool_call' | 'job' | 'child_session'; readonly sourceId: string }
     | undefined {

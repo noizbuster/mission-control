@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-    createLocalSessionIndexStore,
     openLocalSessionEventStore,
+    openLocalSessionProjectionStore,
     readLocalSessionReplay,
 } from './local-session-store.js';
 import {
@@ -18,7 +18,7 @@ import { join } from 'node:path';
 
 describe('local session store SQLite-native sessions', () => {
     it('reads, lists, archives, and reopens SQLite-native sessions without a JSONL file', async () => {
-        // Given: a new session is written through the local SQLite event-store adapter.
+        // Given: a new session is written through the local SQLite event store.
         const dataDir = await tempDataDir('native');
         const sessionId = 'session_sqlite_native_core';
         const store = await openLocalSessionEventStore({
@@ -33,10 +33,10 @@ describe('local session store SQLite-native sessions', () => {
 
         // When: core read/list/archive paths reopen the local database.
         const replay = await readLocalSessionReplay({ dataDir, sessionId });
-        const indexStore = await createLocalSessionIndexStore({ dataDir });
-        const listed = await indexStore.listSessions();
-        const session = await indexStore.getSession(sessionId);
-        indexStore.close();
+        const projectionStore = await openLocalSessionProjectionStore({ dataDir });
+        const listed = await projectionStore.listSessions();
+        const session = await projectionStore.getSession(sessionId);
+        projectionStore.close();
         const reopenedReplay = await readLocalSessionReplay({ dataDir, sessionId });
 
         // Then: callers observe the SQLite-native session without relying on a JSONL side file.

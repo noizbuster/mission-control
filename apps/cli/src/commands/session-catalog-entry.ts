@@ -6,10 +6,10 @@ import {
 } from '@mission-control/core';
 import type { AgentSnapshot } from '@mission-control/protocol';
 import {
-    readIndexDiagnosticsForSession,
-    readSessionIndexState,
-    type SessionIndexReadState,
-} from './session-catalog-index.js';
+    readProjectionDiagnosticsForSession,
+    readSessionProjectionState,
+    type SessionProjectionReadState,
+} from './session-catalog-projection.js';
 import type { CliSessionCatalogEntry } from './session-catalog-types.js';
 import { parseCliSessionId } from './session-id.js';
 import { resolve } from 'node:path';
@@ -42,30 +42,44 @@ export async function normalizeWorkspaceRootWithFallback(workspaceRoot: string):
 
 export async function readSessionCatalogEntry(
     sessionId: string,
-    indexState?: SessionIndexReadState,
+    projectionState?: SessionProjectionReadState,
 ): Promise<CliSessionCatalogEntry> {
     const parsedSessionId = requireValidSessionId(sessionId);
-    const resolvedIndexState = indexState ?? (await readSessionIndexState());
-    const indexRecord = resolvedIndexState.records.get(parsedSessionId);
+    if (projectionState !== undefined) {
+        return readSessionCatalogEntryFromProjectionState(parsedSessionId, projectionState);
+    }
+    const openedProjectionState = await readSessionProjectionState();
+    try {
+        return await readSessionCatalogEntryFromProjectionState(parsedSessionId, openedProjectionState);
+    } finally {
+        openedProjectionState.store.close();
+    }
+}
+
+async function readSessionCatalogEntryFromProjectionState(
+    parsedSessionId: string,
+    projectionState: SessionProjectionReadState,
+): Promise<CliSessionCatalogEntry> {
+    const projectionRecord = projectionState.records.get(parsedSessionId);
     const projection = await readSessionProjection(parsedSessionId);
-    const indexDiagnostics = await readIndexDiagnosticsForSession(parsedSessionId, resolvedIndexState);
+    const projectionDiagnostics = await readProjectionDiagnosticsForSession(parsedSessionId, projectionState);
     if (projection.kind === 'missing') {
-        if (indexRecord !== undefined) {
+        if (projectionRecord !== undefined) {
             return {
                 sessionId: parsedSessionId,
-                status: indexRecord.status,
-                ...(indexRecord.awaiting !== undefined ? { awaiting: indexRecord.awaiting } : {}),
-                eventCount: indexRecord.eventCount,
+                status: projectionRecord.status,
+                ...(projectionRecord.awaiting !== undefined ? { awaiting: projectionRecord.awaiting } : {}),
+                eventCount: projectionRecord.eventCount,
                 messageCount: 0,
-                createdAt: indexRecord.startedAt,
-                updatedAt: indexRecord.updatedAt,
+                createdAt: projectionRecord.startedAt,
+                updatedAt: projectionRecord.updatedAt,
                 cwd: undefined,
                 trustedRoot: undefined,
                 name: undefined,
                 activeLeafId: undefined,
                 parentSessionId: undefined,
                 trustStatus: 'unknown',
-                diagnostics: [...resolvedIndexState.diagnostics, ...indexDiagnostics],
+                diagnostics: [...projectionState.diagnostics, ...projectionDiagnostics],
             };
         }
         return {
@@ -81,30 +95,30 @@ export async function readSessionCatalogEntry(
             activeLeafId: undefined,
             parentSessionId: undefined,
             trustStatus: 'unknown',
-            diagnostics: [...resolvedIndexState.diagnostics, ...indexDiagnostics],
+            diagnostics: [...projectionState.diagnostics, ...projectionDiagnostics],
         };
     }
     const hasDiagnostics = projection.diagnostics.length > 0;
-    const canUseDbSummary = indexRecord !== undefined && !hasDiagnostics;
+    const canUseDbSummary = projectionRecord !== undefined && !hasDiagnostics;
     return {
         sessionId: parsedSessionId,
-        status: hasDiagnostics ? 'corrupt' : canUseDbSummary ? indexRecord.status : projection.snapshot.status,
-        ...(canUseDbSummary && indexRecord.awaiting !== undefined
-            ? { awaiting: indexRecord.awaiting }
+        status: hasDiagnostics ? 'corrupt' : canUseDbSummary ? projectionRecord.status : projection.snapshot.status,
+        ...(canUseDbSummary && projectionRecord.awaiting !== undefined
+            ? { awaiting: projectionRecord.awaiting }
             : projection.snapshot.awaiting !== undefined
               ? { awaiting: projection.snapshot.awaiting }
               : {}),
         eventCount: projection.eventCount,
         messageCount: projection.messageCount,
         createdAt: projection.createdAt,
-        updatedAt: indexRecord?.updatedAt ?? projection.updatedAt,
+        updatedAt: projectionRecord?.updatedAt ?? projection.updatedAt,
         cwd: projection.cwd,
         trustedRoot: projection.trustedRoot,
         name: projection.name,
         activeLeafId: projection.activeLeafId,
         parentSessionId: projection.parentSessionId,
         trustStatus: await readTrustStatus(projection.workspaceTrust, projection.trustedRoot ?? projection.cwd),
-        diagnostics: [...projection.diagnostics, ...resolvedIndexState.diagnostics, ...indexDiagnostics],
+        diagnostics: [...projection.diagnostics, ...projectionState.diagnostics, ...projectionDiagnostics],
     };
 }
 

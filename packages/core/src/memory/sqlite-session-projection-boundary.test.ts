@@ -2,7 +2,7 @@ import { createClient } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { envelope } from '../session-replay-coding-test-support.js';
 import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql.js';
-import { createSqliteSessionIndexStore, projectSessionEventsToSqlite } from './sqlite-session-projection.js';
+import { openSqliteSessionProjectionStore, projectSessionEventsToSqlite } from './sqlite-session-projection.js';
 import {
     CREATED_AT,
     cleanupSqliteSessionProjectionTestDirs,
@@ -17,13 +17,13 @@ describe('sqlite session projection boundary cases', () => {
         await cleanupSqliteSessionProjectionTestDirs();
     });
 
-    it('round trips awaiting reason and source through public session index reads', async () => {
+    it('round trips awaiting reason and source through public session projection reads', async () => {
         // Given: a SQLite-native session summary with approval wait metadata.
         const url = await tempDbUrl('awaiting');
-        const store = await createSqliteSessionIndexStore({ url });
+        const store = await openSqliteSessionProjectionStore({ url });
 
-        // When: the public projection adapter stores and reads the awaiting summary.
-        await store.replaceSessionIndex({
+        // When: the public projection store writes and reads the awaiting summary.
+        await store.replaceSessionProjection({
             sessionId: SESSION_ID,
             records: [
                 {
@@ -42,10 +42,11 @@ describe('sqlite session projection boundary cases', () => {
                     eventCount: 4,
                     lastSequence: 4,
                     updatedAt: '2026-06-05T10:04:00.000Z',
-                    sourceFilePath: 'sessions/session_sqlite_projection_test.jsonl',
+                    sourcePath: 'sessions/session_sqlite_projection_test.jsonl',
                 },
             ],
             diagnostics: [],
+            envelopes: [],
         });
         const session = await store.getSession(SESSION_ID);
         const client = createClient({ url });
@@ -94,8 +95,8 @@ describe('sqlite session projection boundary cases', () => {
     it('clears stale pending awaits when an authoritative projection replacement is no longer awaiting', async () => {
         // Given: a projected session is currently awaiting approval.
         const url = await tempDbUrl('awaiting-replacement');
-        const store = await createSqliteSessionIndexStore({ url });
-        await store.replaceSessionIndex({
+        const store = await openSqliteSessionProjectionStore({ url });
+        await store.replaceSessionProjection({
             sessionId: SESSION_ID,
             records: [
                 {
@@ -114,17 +115,18 @@ describe('sqlite session projection boundary cases', () => {
                     eventCount: 4,
                     lastSequence: 4,
                     updatedAt: '2026-06-05T10:04:00.000Z',
-                    sourceFilePath: 'sessions/session_sqlite_projection_test.jsonl',
+                    sourcePath: 'sessions/session_sqlite_projection_test.jsonl',
                 },
             ],
             diagnostics: [],
+            envelopes: [],
         });
 
         // When: a later complete projection replaces that snapshot after the approval is approved and stopped.
         await projectSessionEventsToSqlite({
             store,
             sessionId: SESSION_ID,
-            sourceFilePath: 'sessions/session_sqlite_projection_test.jsonl',
+            sourcePath: 'sessions/session_sqlite_projection_test.jsonl',
             envelopes: completeProjectionEvents(SESSION_ID),
         });
         const client = createClient({ url });
@@ -158,11 +160,11 @@ describe('sqlite session projection boundary cases', () => {
     it('fails closed with a diagnostic for malformed event payloads', async () => {
         // Given: a stale projection already exists for a session.
         const url = await tempDbUrl('malformed');
-        const store = await createSqliteSessionIndexStore({ url });
+        const store = await openSqliteSessionProjectionStore({ url });
         await projectSessionEventsToSqlite({
             store,
             sessionId: SESSION_ID,
-            sourceFilePath: 'sessions/session_sqlite_projection_test.jsonl',
+            sourcePath: 'sessions/session_sqlite_projection_test.jsonl',
             envelopes: [envelope(sessionStartedEvent(SESSION_ID), 1, 'event_session_started')],
         });
 
@@ -170,7 +172,7 @@ describe('sqlite session projection boundary cases', () => {
         await projectSessionEventsToSqlite({
             store,
             sessionId: SESSION_ID,
-            sourceFilePath: 'sessions/session_sqlite_projection_test.jsonl',
+            sourcePath: 'sessions/session_sqlite_projection_test.jsonl',
             envelopes: [{ malformed: true }],
         });
 

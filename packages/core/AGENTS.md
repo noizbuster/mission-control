@@ -13,7 +13,7 @@
 | Run coordination | `src/runtime/` | Prompt admission, wake/run/resume/interrupt, scheduler. |
 | Provider turns | `src/providers/` | Adapters, retries, timeouts, redaction, OpenAI Responses mapping. |
 | Native sidecar | `src/native/` | Process spawn, handshake, status, timeout, mock fallback. |
-| Durable logs | `src/memory/` | JSONL event store, data-dir resolution, projections. |
+| Durable sessions | `src/memory/` | SQLite/libSQL session event store, data-dir resolution, projections, JSONL replay/import/export compatibility. |
 | Replay | `src/session-replay.ts`, `src/session-*.ts` | Branch, approval, tool outcome, prompt admission projections. |
 | Tools | `src/tools/` | Tool registry, read-only repo tools, `file.patch`, `command.run`, `glob`/`todowrite`/`webfetch`, `task` subagent, `mcp` proxy + namespaced `mcp__*` clients, `skill` on-demand loader, opt-in `lsp` seam. |
 | Skills | `src/skills/` | `SKILL.md` discovery (multi-scope, first-wins) and on-demand body loading. |
@@ -47,7 +47,7 @@
 
 ## Anti-Patterns
 
-- Do not write around the durable JSONL store by hand.
+- Do not write around the durable local session store by hand.
 - Do not emit protocol-shaped objects without schema validation when crossing a boundary.
 - Do not treat provider catalog entries as implemented adapters.
 - Do not edit `dist`.

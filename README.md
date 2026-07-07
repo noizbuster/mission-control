@@ -4,7 +4,7 @@
 
 ## Architecture
 
-`ABG.md` is the root design reference. The current runtime implements a bounded coding-agent MVP over the original scaffold: provider turns, durable SQLite/libSQL sessions with JSONL import/export/read compatibility, approval-gated tools, replay projections, graph coordination, behavior/action graph execution for authorable graphs, CLI chat, desktop inspection, core desktop command services, and a versioned sidecar handshake.
+`ABG.md` is the root design reference. The current runtime implements a bounded coding-agent MVP over the original scaffold: provider turns, durable SQLite/libSQL sessions with JSONL replay/import/export compatibility, approval-gated tools, replay projections, graph coordination, behavior/action graph execution for authorable graphs, CLI chat, desktop inspection, core desktop command services, and a versioned sidecar handshake.
 
 Directory structure:
 
@@ -87,7 +87,7 @@ mc agents import <harness> <path>
 
 `/models` (plural) opens a full-width, two-column overlay for assigning models to the ten built-in agent roles, not for changing the active chat model. The left column lists the assignable models as `provider/model[#variant]` entries, and the right column lists each role with its current assignment or default-inheritance status. Arrow keys move the focus within a column, `Tab` switches columns, `Enter` assigns the focused model to the focused role, `Backspace` or `Delete` clears a role back to its default, and `Escape` closes the overlay. Assignments persist to the user auth file under the Mission Control data directory, so they are personal preferences and are not committed to the project. A role with no explicit assignment shows `Using default (<provider>/<model[#variant]>)`, except the default role itself, which shows `Using built-in/session default (<provider>/<model[#variant]>)`. A child agent that declares `model: 'mctrl/<role>'` resolves to the persisted assignment for that role when one exists. `/model` (the active-session selection) and `mc models` (the non-interactive listing) are unchanged.
 
-Session navigation stays on the durable SQLite/libSQL session surface: `/new [session-id]` starts a new durable session, `/session <session-id>` switches to an existing durable session, `/sessions` lists durable sessions, `/tree` shows the durable session tree and active leaf, `/branch <entry-id>` selects an existing branch leaf, `/branch <message-id> <prompt>` continues from a parent message in a new branch, `/fork <entry-id> [session-id]` forks from a tree entry into a new durable session, and `/clone [session-id]` clones the current durable session into a fresh one. JSONL remains an import/export/read compatibility path and is not deleted during import. `/compact` summarizes older session history into a durable compaction boundary event, keeping the session durable while reducing replay context. `/session` with no argument opens a searchable picker of sessions previously opened in the current project (selecting one attaches to it). `/resume` resumes the most recent session for this project. `/continue` resumes a blocked run that is waiting on an approval decision, re-entering the approval-blocked lifecycle.
+Session navigation stays on the durable SQLite/libSQL session surface: `/new [session-id]` starts a new durable session, `/session <session-id>` switches to an existing durable session, `/sessions` lists durable sessions, `/tree` shows the durable session tree and active leaf, `/branch <entry-id>` selects an existing branch leaf, `/branch <message-id> <prompt>` continues from a parent message in a new branch, `/fork <entry-id> [session-id]` forks from a tree entry into a new durable session, and `/clone [session-id]` clones the current durable session into a fresh one. JSONL remains a replay/import/export compatibility format and is not deleted during import. `/compact` summarizes older session history into a durable compaction boundary event, keeping the session durable while reducing replay context. `/session` with no argument opens a searchable picker of sessions previously opened in the current project (selecting one attaches to it). `/resume` resumes the most recent session for this project. `/continue` resumes a blocked run that is waiting on an approval decision, re-entering the approval-blocked lifecycle.
 
 Workspace trust is controlled interactively with `/trust` (trust the current workspace for project-local resources), `/trust status` (show the current trust decision), `/trust deny` (deny project-local resources for the workspace), and `/trust reset` (clear the trust decision). Trust decisions persist in the project trust store under the Mission Control data directory. `bash.run`, `file.edit`, and `file.write` are only available when the workspace is trusted; read-only tools work regardless of trust but still enforce workspace path guards.
 
@@ -259,7 +259,7 @@ Mission Control separates configuration (how MCP servers and environment-variabl
 ### Config directory vs data directory
 
 - Config directory: `MCTRL_CONFIG_DIR` overrides it directly (used as-is). Without an override, the platform application-config directory joined with `mission-control` is used (`$XDG_CONFIG_HOME/mission-control` or `~/.config/mission-control` on Linux, `%APPDATA%\mission-control` on Windows, `~/Library/Application Support/mission-control` on macOS). The global user config and profile files live here.
-- Data directory: `MCTRL_DATA_DIR` overrides it; otherwise the platform application-data directory is used. Session logs, the auth file (`MISSION_CONTROL_AUTH_FILE`), and the project trust store (`trust/projects.json`) live here. The data directory is independent of `--profile`.
+- Data directory: `MCTRL_DATA_DIR` overrides it; otherwise the platform application-data directory is used. Session data, the auth file (`MISSION_CONTROL_AUTH_FILE`), and the project trust store (`trust/projects.json`) live here. The data directory is independent of `--profile`.
 
 ### Global user config: `config.json`
 
@@ -290,7 +290,7 @@ Profile name rules: the name must match `^[a-z0-9][a-z0-9_-]{0,63}$` (lowercase 
 
 User-scope writes with a profile: `mc mcp add` / `mc mcp remove --scope user --profile dev` rewrite an existing profile candidate (preserving its format) or create `mission-control.<profile>.jsonc` when none exists. `--scope project --profile dev` ignores the profile and still writes `.mcp.json`.
 
-`--profile` does not change the data directory, auth file (`MISSION_CONTROL_AUTH_FILE`), session logs, trust store, skills, workflows, agents, keybinds, or project `.mcp.json`. It is purely a user-config-file selector.
+`--profile` does not change the data directory, auth file (`MISSION_CONTROL_AUTH_FILE`), session database, trust store, skills, workflows, agents, keybinds, or project `.mcp.json`. It is purely a user-config-file selector.
 
 Example:
 
@@ -303,7 +303,7 @@ mc run "summarize this repository" --profile dev --session session_dev --jsonl
 
 The coding-agent MVP now includes durable chat sessions, provider streaming, approval-gated local tools, replay projections, bounded graph orchestration, CLI chat, core desktop approval services, project workspace trust, permission profiles, an expanded coding-agent tool set, session tree navigation, manual compaction, and session export/import.
 
-For release-adjacent local verification, `pnpm smoke:coding-agent-built-dist` runs the built-dist coding-agent smoke against a temporary trusted workspace and temporary auth/data paths, prints the captured command output plus the temp `sessions/<session-id>.jsonl` path, and fails if either the blocked replay preview or the resumed replay emits diagnostics. This is intentionally a built-dist coding-agent smoke, not a tarball artifact smoke; Todo 18 owns the tarball artifact smoke.
+For release-adjacent local verification, `pnpm smoke:coding-agent-built-dist` runs the built-dist coding-agent smoke against a temporary trusted workspace and temporary auth/data paths, prints the captured command output plus the temp session database path, and fails if either the blocked replay preview or the resumed replay emits diagnostics. This is intentionally a built-dist coding-agent smoke, not a tarball artifact smoke; Todo 18 owns the tarball artifact smoke.
 
 Session storage:
 
@@ -318,7 +318,7 @@ Session storage:
 - The SQLite/libSQL session data model, table responsibilities, indexes, legacy import operation, and export behavior are documented in [`docs/session-data-model.md`](docs/session-data-model.md).
 - Remote Turso is out of scope for session storage: there are no remote URLs, auth tokens, replica configuration, or network sync steps.
 - Use --json for transient JSON Lines rendering and --jsonl for JSON Lines rendering plus replayable session persistence.
-- Launching the interactive TUI without an explicit `--session <id>` creates no session artifacts (no SQLite session rows or `sessions/<session-id>.jsonl`) until the first prompt turn; non-interactive `--json`/`--jsonl` runs and an explicit `--session <id>` still create a session eagerly.
+- Launching the interactive TUI without an explicit `--session <id>` creates no session artifacts until the first prompt turn; non-interactive `--jsonl` runs and an explicit `--session <id>` still create a SQLite session eagerly.
 
 Workspace selection:
 
@@ -379,7 +379,7 @@ Coding-agent tool set:
 Skills + MCP:
 
 - Skills are implemented: `SKILL.md` files are discovered (global, project `.mctrl/skills`, project `.agents/skills`), listed to the model in an `<available_skills>` system-prompt block, and loaded on demand via the `skill` tool or the `/<skill-name>` and `$skill <name>` chat inputs. Skill bodies are framed as reference DATA, never as trusted policy.
-- MCP tools are implemented: configured MCP servers (stdio or remote) connect eagerly at session start, surface their tools as namespaced `mcp__<server>__<tool>` merged with the built-in registry, and disconnect cleanly on stop. A crashing or hanging server is skipped at its deadline with a warning so the run continues without it. Arbitrary MCP server output is framed as untrusted DATA and capped before reaching the model; expanded env/header secret values are redacted from tool output, errors, and session logs.
+- MCP tools are implemented: configured MCP servers (stdio or remote) connect eagerly at session start, surface their tools as namespaced `mcp__<server>__<tool>` merged with the built-in registry, and disconnect cleanly on stop. A crashing or hanging server is skipped at its deadline with a warning so the run continues without it. Arbitrary MCP server output is framed as untrusted DATA and capped before reaching the model; expanded env/header secret values are redacted from tool output, errors, and persisted session events.
 - web tools (glob, todowrite, webfetch) are implemented: `glob` and `todowrite` are read-class (no approval), `webfetch` is network-class and approval-required on both flat and graph paths.
 - subagent orchestration via the task tool is implemented: `task` delegates a bounded sub-task to a child coding agent whose tool surface is recursively restricted (no nested `task`, no network, no `mcp__*`).
 - A real tool-calling provider is required for agentic behavior — the default `local/local-echo` provider does not call tools, so skills, MCP tools, and the coding-agent tools only take effect when a tool-calling provider is configured.
@@ -553,7 +553,7 @@ Scheduler/executor split:
 Memory/event model:
 
 - `MemoryStore` and `InMemoryEventStore` live in `packages/core/src/memory`.
-- SQLite/libSQL session storage appends durable protocol events and derives replay projections, graph snapshots, approval state, branch summaries, and ABG timelines. JSONL remains an import/export/read compatibility path and is not deleted during import.
+- SQLite/libSQL session storage appends durable protocol events and derives replay projections, graph snapshots, approval state, branch summaries, and ABG timelines. JSONL remains a replay/import/export compatibility format and is not deleted during import.
 - Persistent memory snapshot compaction and the persistent memory store are implemented; vector index storage is not implemented.
 
 Native sidecar future role:

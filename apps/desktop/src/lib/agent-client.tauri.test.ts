@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createTauriDesktopAgentClient } from './agent-client.js';
 
 describe('tauri desktop agent client', () => {
-    it('lists and reads durable session logs through Tauri commands', async () => {
+    it('lists and reads durable sessions through Tauri commands', async () => {
         // Given
         const envelope = AgentEventEnvelopeSchema.parse({
             eventId: 'event_1',

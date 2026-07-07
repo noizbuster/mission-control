@@ -3,22 +3,22 @@ import type { CodingReplayStep, SessionReplayProjection } from '../session-repla
 import { JsonlSessionEventStoreError } from './jsonl-errors.js';
 import { parseJsonlSessionLog } from './jsonl-session-records.js';
 import type {
-    SessionIndexDiagnostic,
-    SessionIndexProviderFailureRecord,
-    SessionIndexRecord,
-    SessionIndexRunRecord,
-} from './session-index-types.js';
+    SessionProjectionDiagnostic,
+    SessionProjectionProviderFailureRecord,
+    SessionProjectionRecord,
+    SessionProjectionRunRecord,
+} from './session-projection-types.js';
 
-export type SessionIndexProjection = {
-    readonly records: readonly SessionIndexRecord[];
-    readonly diagnostics: readonly SessionIndexDiagnostic[];
+export type SessionProjectionResult = {
+    readonly records: readonly SessionProjectionRecord[];
+    readonly diagnostics: readonly SessionProjectionDiagnostic[];
 };
 
-export function deriveSessionIndexRecords(input: {
+export function deriveSessionProjectionRecords(input: {
     readonly sessionId: string;
     readonly filePath: string;
     readonly contents: string;
-}): SessionIndexProjection {
+}): SessionProjectionResult {
     const parsed = (() => {
         try {
             return parseJsonlSessionLog(input);
@@ -45,11 +45,11 @@ export function deriveSessionIndexRecords(input: {
     };
 }
 
-export function deriveSessionIndexRecordsFromEnvelopes(input: {
+export function deriveSessionProjectionRecordsFromEnvelopes(input: {
     readonly sessionId: string;
     readonly filePath: string;
     readonly envelopes: readonly Parameters<typeof projectSessionReplay>[0]['envelopes'][number][];
-}): SessionIndexProjection {
+}): SessionProjectionResult {
     const projection = projectSessionReplay({ sessionId: input.sessionId, envelopes: input.envelopes });
     return {
         records: recordsForProjection(projection, input.filePath),
@@ -57,15 +57,18 @@ export function deriveSessionIndexRecordsFromEnvelopes(input: {
     };
 }
 
-class SessionIndexProjectionError extends Error {
-    readonly name = 'SessionIndexProjectionError';
+class SessionProjectionError extends Error {
+    readonly name = 'SessionProjectionError';
 
     constructor(readonly eventId: string) {
-        super(`session index projection lost event sequence for ${eventId}`);
+        super(`session projection lost event sequence for ${eventId}`);
     }
 }
 
-function recordsForProjection(projection: SessionReplayProjection, filePath: string): readonly SessionIndexRecord[] {
+function recordsForProjection(
+    projection: SessionReplayProjection,
+    filePath: string,
+): readonly SessionProjectionRecord[] {
     const sequenceByEventId = new Map(projection.envelopes.map((envelope) => [envelope.eventId, envelope.sequence]));
     return [
         sessionRecord(projection, filePath),
@@ -99,12 +102,12 @@ function recordsForProjection(projection: SessionReplayProjection, filePath: str
 function eventSequence(eventId: string, sequenceByEventId: ReadonlyMap<string, number>): number {
     const sequence = sequenceByEventId.get(eventId);
     if (sequence === undefined) {
-        throw new SessionIndexProjectionError(eventId);
+        throw new SessionProjectionError(eventId);
     }
     return sequence;
 }
 
-function sessionRecord(projection: SessionReplayProjection, filePath: string): SessionIndexRecord {
+function sessionRecord(projection: SessionReplayProjection, filePath: string): SessionProjectionRecord {
     const lastEnvelope = projection.envelopes.at(-1);
     return {
         kind: 'session',
@@ -118,7 +121,7 @@ function sessionRecord(projection: SessionReplayProjection, filePath: string): S
         ...(lastEnvelope !== undefined ? { lastEventId: lastEnvelope.eventId } : {}),
         ...(lastEnvelope !== undefined ? { lastEventType: lastEnvelope.event.type } : {}),
         updatedAt: lastEnvelope?.createdAt ?? projection.snapshot.startedAt,
-        sourceFilePath: filePath,
+        sourcePath: filePath,
     };
 }
 
@@ -126,7 +129,7 @@ function recordsForStep(
     sessionId: string,
     step: CodingReplayStep,
     sequenceByEventId: ReadonlyMap<string, number>,
-): readonly (SessionIndexRunRecord | SessionIndexProviderFailureRecord)[] {
+): readonly (SessionProjectionRunRecord | SessionProjectionProviderFailureRecord)[] {
     switch (step.kind) {
         case 'run.state':
             return [
@@ -171,7 +174,7 @@ function recordsForStep(
 function diagnosticForError(
     input: { readonly sessionId: string; readonly filePath: string },
     error: unknown,
-): SessionIndexDiagnostic {
+): SessionProjectionDiagnostic {
     return {
         kind: 'corrupt_jsonl',
         sessionId: input.sessionId,
@@ -184,7 +187,7 @@ function diagnosticForError(
     };
 }
 
-function jsonlErrorCode(error: unknown): SessionIndexDiagnostic['code'] {
+function jsonlErrorCode(error: unknown): SessionProjectionDiagnostic['code'] {
     if (error instanceof JsonlSessionEventStoreError) {
         return error.code;
     }
@@ -195,9 +198,9 @@ function errorMessage(error: unknown): string {
     if (error instanceof Error) {
         return error.message;
     }
-    return 'unknown JSONL index projection error';
+    return 'unknown JSONL session projection error';
 }
 
 function assertNever(value: never): never {
-    throw new Error(`Unhandled session index projection variant: ${JSON.stringify(value)}`);
+    throw new Error(`Unhandled session projection variant: ${JSON.stringify(value)}`);
 }

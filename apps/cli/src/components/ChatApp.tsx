@@ -585,7 +585,7 @@ export function ChatApp({
         };
     }, [keymap, store, textareaRef]);
 
-    // message undo/redo layer (T15): leader+u/r hides/restores the last exchange in the VIEW only (durable JSONL untouched); single-level.
+    // message undo/redo layer (T15): leader+u/r hides/restores the last exchange in the VIEW only (durable session store untouched); single-level.
     useEffect(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;

@@ -1,25 +1,21 @@
-import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
+import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import {
-    createJsonlSessionEventRecord,
-    createJsonlSessionLogHeader,
-    serializeJsonlRecord,
-} from '../memory/jsonl-session-records.js';
-import { createSessionInfoToolRegistration, formatSessionInfoModelOutput } from './session-info-tool.js';
-import { createSessionListToolRegistration, formatSessionListModelOutput } from './session-list-tool.js';
+import { openLocalSessionEventStore } from '../memory/local-session-store.js';
+import { createSessionInfoToolRegistration } from './session-info-tool.js';
+import { createSessionListToolRegistration } from './session-list-tool.js';
 import { createSessionReadToolRegistration, formatSessionReadModelOutput } from './session-read-tool.js';
 import { createSessionSearchToolRegistration, formatSessionSearchModelOutput } from './session-search-tool.js';
 import { MAX_SESSIONS_TO_SCAN, SESSION_REDACTED, SESSION_SEARCH_TIMEOUT_MS } from './session-tools-shared.js';
 import { ToolRegistry } from './tool-registry.js';
 import type { ToolExecutionContext } from './tool-registry-types.js';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const neverAbort = new AbortController().signal;
 const fixtureContext: ToolExecutionContext = { toolCallId: 'call_test', toolName: 'session_test', signal: neverAbort };
 
-describe('session_* tools over durable JSONL sessions', () => {
+describe('session_* tools over database sessions', () => {
     it('list/read/search/info against fixture sessions', async () => {
         const dataDir = await freshDataDir();
         await writeSession(dataDir, 'ses_alpha', [
@@ -101,13 +97,20 @@ describe('session_* tools over durable JSONL sessions', () => {
     it('redacts raw API keys from read + search output', async () => {
         const dataDir = await freshDataDir();
         const leakedKey = 'sk-leaked-9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d';
+        const bearerToken = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.sessionpayload.signaturevalue';
         await writeSession(dataDir, 'ses_secret', [
             userPromptEvent('ses_secret', 'check this token', '2026-07-03T08:00:00.000Z'),
             assistantEvent(
                 'ses_secret',
                 'turn_secret',
-                `Sure, the key ${leakedKey} is configured for the provider.`,
+                `Sure, the key ${leakedKey} is configured for the provider. Authorization: Bearer ${bearerToken}`,
                 '2026-07-03T08:00:05.000Z',
+            ),
+            assistantEvent(
+                'ses_secret',
+                'turn_bearer',
+                `The retry header is Bearer ${bearerToken}`,
+                '2026-07-03T08:00:06.000Z',
             ),
         ]);
 
@@ -115,14 +118,35 @@ describe('session_* tools over durable JSONL sessions', () => {
         const readOutput = await read.execute({ session_id: 'ses_secret' }, fixtureContext);
         const readText = formatSessionReadModelOutput(readOutput);
         expect(readText).not.toContain(leakedKey);
+        expect(readText).not.toContain(bearerToken);
         expect(readText).toContain(SESSION_REDACTED);
         expect(readOutput.messages.every((message) => !message.text.includes(leakedKey))).toBe(true);
+        expect(readOutput.messages.every((message) => !message.text.includes(bearerToken))).toBe(true);
 
         const search = createSessionSearchToolRegistration({ dataDir });
         const searchOutput = await search.execute({ query: 'token' }, fixtureContext);
         const searchText = formatSessionSearchModelOutput(searchOutput);
         expect(searchText).not.toContain(leakedKey);
+        expect(searchText).not.toContain(bearerToken);
         expect(searchOutput.results.every((result) => !result.excerpt.includes(leakedKey))).toBe(true);
+        expect(searchOutput.results.every((result) => !result.excerpt.includes(bearerToken))).toBe(true);
+
+        const bearerSearchOutput = await search.execute({ query: 'Bearer' }, fixtureContext);
+        const bearerSearchText = formatSessionSearchModelOutput(bearerSearchOutput);
+        expect(bearerSearchOutput.results.length).toBeGreaterThan(0);
+        expect(bearerSearchText).not.toContain(bearerToken);
+        expect(bearerSearchText).toContain(SESSION_REDACTED);
+        expect(bearerSearchOutput.results.every((result) => !result.excerpt.includes(bearerToken))).toBe(true);
+    });
+
+    it('distinguishes an empty database from a session database read failure', async () => {
+        const dataDir = await freshDataDir();
+        const emptyList = createSessionListToolRegistration({ dataDir });
+        await expect(emptyList.execute({}, fixtureContext)).resolves.toEqual({ sessions: [], truncated: false });
+
+        const fileDataDir = await tempFilePath();
+        const failingList = createSessionListToolRegistration({ dataDir: fileDataDir });
+        await expect(failingList.execute({}, fixtureContext)).rejects.toThrow();
     });
 
     it('session_search is bounded by the 50-session scan cap and 60s timeout constant', async () => {
@@ -191,26 +215,27 @@ async function freshDataDir(): Promise<string> {
     return mkdtemp(join(tmpdir(), 'mctrl-session-tools-'));
 }
 
+async function tempFilePath(): Promise<string> {
+    const root = await freshDataDir();
+    const filePath = join(root, 'not-a-directory');
+    await writeFile(filePath, 'not a directory', 'utf8');
+    return filePath;
+}
+
 async function writeSession(dataDir: string, sessionId: string, events: readonly AgentEvent[]): Promise<void> {
-    const sessionsDir = join(dataDir, 'sessions');
-    await mkdir(sessionsDir, { recursive: true });
-    const lines: string[] = [
-        serializeJsonlRecord(
-            createJsonlSessionLogHeader({ sessionId, createdAt: events[0]?.timestamp ?? '2026-07-01T00:00:00.000Z' }),
-        ),
-    ];
-    events.forEach((event, index) => {
-        const envelope: AgentEventEnvelope = {
-            eventId: `evt_${sessionId}_${index}`,
-            sequence: index,
-            createdAt: event.timestamp,
-            sessionId,
-            durability: 'durable',
-            event,
-        };
-        lines.push(serializeJsonlRecord(createJsonlSessionEventRecord(envelope)));
+    const store = await openLocalSessionEventStore({
+        dataDir,
+        sessionId,
+        now: () => events[0]?.timestamp ?? '2026-07-01T00:00:00.000Z',
+        createEventId: (_event, sequence) => `evt_${sessionId}_${sequence}`,
     });
-    await writeFile(join(sessionsDir, `${sessionId}.jsonl`), lines.join(''), 'utf8');
+    try {
+        for (const event of events) {
+            await store.append(event);
+        }
+    } finally {
+        await store.close();
+    }
 }
 
 function userPromptEvent(sessionId: string, prompt: string, timestamp: string): AgentEvent {

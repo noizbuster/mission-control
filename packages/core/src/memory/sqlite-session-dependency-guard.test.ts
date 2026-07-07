@@ -20,7 +20,7 @@ const PackageManifestSchema = z
     })
     .catchall(z.unknown());
 
-describe('session index dependency guard', () => {
+describe('session projection dependency guard', () => {
     it('does not add an unauthorized SQLite dependency', async () => {
         // Given: this wave only approves a schema-ready boundary, not a SQLite adapter dependency.
         const root = process.cwd();

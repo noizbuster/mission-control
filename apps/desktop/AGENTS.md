@@ -2,7 +2,7 @@
 
 ## Overview
 
-`apps/desktop` owns the React/Vite desktop UI and the Tauri command bridge. Browser-facing code stays in `src`; native command handlers and session-log reading stay in `src-tauri`.
+`apps/desktop` owns the React/Vite desktop UI and the Tauri command bridge. Browser-facing code stays in `src`; native command handlers and session reading stay in `src-tauri`.
 
 ## Where To Look
 
@@ -16,13 +16,13 @@
 | Inspector projection | `src/lib/session-inspector.ts` | Timeline, graph, approval, patch, command views. |
 | Redaction | `src/lib/redaction.ts`, `src/lib/tool-call-preview.ts` | User-visible secret masking. |
 | Tauri command surface | `src-tauri/src/lib.rs` | Registered command names and Rust tests. |
-| Session log parsing | `src-tauri/src/session_*.rs`, `src-tauri/src/sessions.rs` | JSONL header, event, sequence, timestamp invariants. |
+| Session reading | `src-tauri/src/session_*.rs`, `src-tauri/src/sessions.rs` | Session header, event, sequence, timestamp invariants. |
 | Tauri config | `src-tauri/tauri.conf.json` | Product metadata and Vite build hooks. |
 
 ## Conventions
 
 - `src` is UI/client-only. It must talk through `DesktopAgentClient`, not directly through native files or runtime internals.
-- `src-tauri` owns native command handlers, session-file access, and snapshot parsing only. The desktop shell must not directly mutate workspace files.
+- `src-tauri` owns native command handlers, session access, and snapshot parsing only. The desktop shell must not directly mutate workspace files.
 - Keep the mock desktop client first-class; it is deliberate scaffold/demo behavior.
 - Tauri command names and payload shapes are shared contracts. Update `src/lib/agent-client.ts`, `src/lib/desktop-command-schemas.ts`, `src-tauri/src/lib.rs`, and tests together.
 - Parse every native response with Zod before rendering it.

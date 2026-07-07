@@ -3,7 +3,7 @@ import type { AgentDefinition } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { deriveSessionLifecycle } from '../memory/session-status-derivation.js';
-import { createSqliteSessionIndexStore } from '../memory/sqlite-session-projection.js';
+import { openSqliteSessionProjectionStore } from '../memory/sqlite-session-projection.js';
 import type { ChildSpawnRequest } from '../tools/task/task-tool.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import type { ToolRegistration } from '../tools/tool-registry-types.js';
@@ -95,7 +95,7 @@ function buildRuntime(
 describe('ConcreteTaskToolRuntime awaiting/subagent mirror', () => {
     it('recomputes a resolved foreground subagent wait back to running when the parent has an active run', async () => {
         const url = makeTempDbUrl();
-        const publicStore = await createSqliteSessionIndexStore({ url });
+        const publicStore = await openSqliteSessionProjectionStore({ url });
         const client = createClient({ url });
         try {
             const mirror = await SqlAgentJobMirror.create(client);
@@ -142,7 +142,7 @@ describe('ConcreteTaskToolRuntime awaiting/subagent mirror', () => {
 
     it('records awaiting/subagent only while a foreground child blocks the parent', async () => {
         const url = makeTempDbUrl();
-        const publicStore = await createSqliteSessionIndexStore({ url });
+        const publicStore = await openSqliteSessionProjectionStore({ url });
         const client = createClient({ url });
         try {
             const mirror = await SqlAgentJobMirror.create(client);

@@ -1,11 +1,3 @@
-/**
- * `session_read` tool — read messages and history from a durable session.
- *
- * Read layer over the EXISTING `<dataDir>/sessions/<id>.jsonl` store (see
- * `session-tools-shared.ts`). Capability class `['read']`, no approval. Surfaced text is
- * defensively redacted so raw credentials never reach tool output.
- */
-
 import { z } from 'zod';
 import {
     extractMessages,

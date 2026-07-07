@@ -7,6 +7,7 @@ import {
     openLocalLibsqlDb,
     runLocalDbMigrations,
 } from './local-libsql-db.js';
+import { runtimePersistenceSchemaSql } from './local-libsql-schema-runtime.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -84,16 +85,113 @@ describe('local libSQL database runtime', () => {
                 'session_awaits',
                 'session_event_sequences',
                 'session_events',
-                'session_index_diagnostics',
-                'session_index_runs',
                 'session_inputs',
                 'session_messages',
                 'session_parts',
+                'session_projection_diagnostics',
+                'session_projection_runs',
                 'session_relations',
                 'sessions',
                 'tool_calls',
             ]),
         );
+    });
+
+    it('migrates legacy session projection table names during schema setup', async () => {
+        const givenUrl = await tempDbUrl();
+        const legacy = createClient({ url: givenUrl });
+        await legacy.batch(
+            runtimePersistenceSchemaSql.map((sql) => ({ sql })),
+            'write',
+        );
+        await legacy.batch(
+            [
+                {
+                    sql: `
+                        CREATE TABLE session_index_runs (
+                            session_id TEXT NOT NULL,
+                            event_id TEXT NOT NULL,
+                            sequence INTEGER NOT NULL,
+                            timestamp TEXT NOT NULL,
+                            event_type TEXT NOT NULL,
+                            command TEXT,
+                            state TEXT,
+                            run_id TEXT,
+                            input_id TEXT,
+                            provider_turn_id TEXT,
+                            reason TEXT,
+                            error_code TEXT,
+                            PRIMARY KEY (session_id, event_id)
+                        )
+                    `,
+                },
+                {
+                    sql: `
+                        CREATE TABLE session_index_diagnostics (
+                            session_id TEXT NOT NULL,
+                            file_path TEXT NOT NULL,
+                            code TEXT NOT NULL,
+                            message TEXT NOT NULL,
+                            line_number INTEGER,
+                            PRIMARY KEY (session_id, file_path, code, message)
+                        )
+                    `,
+                },
+                {
+                    sql:
+                        'INSERT INTO sessions (session_id, status, last_event_seq, created_at, updated_at, last_activity_at) ' +
+                        'VALUES (?, ?, ?, ?, ?, ?)',
+                    args: [
+                        'session_legacy_projection',
+                        'running',
+                        1,
+                        '2026-07-07T00:00:00.000Z',
+                        '2026-07-07T00:00:00.000Z',
+                        '2026-07-07T00:00:00.000Z',
+                    ],
+                },
+                {
+                    sql:
+                        'INSERT INTO session_index_runs ' +
+                        '(session_id, event_id, sequence, timestamp, event_type, command, state, run_id, input_id, provider_turn_id, reason, error_code) ' +
+                        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    args: [
+                        'session_legacy_projection',
+                        'event_1',
+                        0,
+                        '2026-07-07T00:00:00.000Z',
+                        'run.completed',
+                        'run',
+                        'completed',
+                        'run_1',
+                        null,
+                        null,
+                        null,
+                        null,
+                    ],
+                },
+                {
+                    sql:
+                        'INSERT INTO session_index_diagnostics (session_id, file_path, code, message, line_number) ' +
+                        'VALUES (?, ?, ?, ?, ?)',
+                    args: ['session_legacy_projection', '/tmp/session.jsonl', 'legacy_warning', 'legacy warning', 7],
+                },
+            ],
+            'write',
+        );
+        legacy.close();
+
+        const db = await openLocalLibsqlDb({ url: givenUrl });
+        const migratedRun = await db.client.execute('SELECT event_id FROM session_projection_runs');
+        const migratedDiagnostic = await db.client.execute('SELECT code FROM session_projection_diagnostics');
+        const legacyTables = await db.client.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'session_index_%' ORDER BY name",
+        );
+        db.close();
+
+        expect(migratedRun.rows).toEqual([{ event_id: 'event_1' }]);
+        expect(migratedDiagnostic.rows).toEqual([{ code: 'legacy_warning' }]);
+        expect(legacyTables.rows).toEqual([]);
     });
 
     it('rejects remote libSQL URLs before opening a client', async () => {

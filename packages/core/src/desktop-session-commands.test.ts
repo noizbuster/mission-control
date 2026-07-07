@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 describe('desktop session command service', () => {
-    it('writes a submitted desktop prompt to the durable JSONL session log', async () => {
+    it('writes a submitted desktop prompt to the durable session store', async () => {
         // Given
         const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-desktop-prompt-'));
         const service = createDesktopSessionCommandService({

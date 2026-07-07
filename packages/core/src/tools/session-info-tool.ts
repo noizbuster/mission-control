@@ -1,10 +1,3 @@
-/**
- * `session_info` tool — metadata and statistics for a single durable session.
- *
- * Read layer over the EXISTING `<dataDir>/sessions/<id>.jsonl` store (see
- * `session-tools-shared.ts`). Capability class `['read']`, no approval.
- */
-
 import { z } from 'zod';
 import { readSessionProjection, type SessionToolsOptions, summarizeProjection } from './session-tools-shared.js';
 import type { ToolRegistration } from './tool-registry-types.js';

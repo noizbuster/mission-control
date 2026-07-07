@@ -143,7 +143,7 @@ describe('export action handler', () => {
 
     it('surfaces export failures as error output', async () => {
         mockedExport.mockReset();
-        mockedExport.mockRejectedValue(new Error('session log not found'));
+        mockedExport.mockRejectedValue(new Error('session not found'));
 
         const output = createCapturingOutput();
         await runExportAction(
@@ -157,6 +157,6 @@ describe('export action handler', () => {
             sessionId: 'session_missing',
             filePath: '/tmp/missing.html',
         });
-        expect(output.text()).toContain('Error: session log not found');
+        expect(output.text()).toContain('Error: session not found');
     });
 });

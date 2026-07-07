@@ -1,14 +1,14 @@
 import type { InStatement } from '@libsql/client';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
 import type {
-    SessionIndexApprovalRecord,
-    SessionIndexDiagnostic,
-    SessionIndexProviderFailureRecord,
-    SessionIndexRecord,
-    SessionIndexRunRecord,
-    SessionIndexSessionRecord,
-    SessionIndexToolRecord,
-} from './session-index-types.js';
+    SessionProjectionApprovalRecord,
+    SessionProjectionDiagnostic,
+    SessionProjectionProviderFailureRecord,
+    SessionProjectionRecord,
+    SessionProjectionRunRecord,
+    SessionProjectionSessionRecord,
+    SessionProjectionToolRecord,
+} from './session-projection-types.js';
 import {
     messageProjectionStatements,
     toolArgumentsById,
@@ -25,8 +25,8 @@ import { insertAwaitingStatement, insertSessionStatement } from './sqlite-sessio
 
 export function replaceStatements(input: {
     readonly sessionId: string;
-    readonly records: readonly SessionIndexRecord[];
-    readonly diagnostics: readonly SessionIndexDiagnostic[];
+    readonly records: readonly SessionProjectionRecord[];
+    readonly diagnostics: readonly SessionProjectionDiagnostic[];
     readonly envelopes: readonly AgentEventEnvelope[];
 }): readonly InStatement[] {
     const records = splitRecords(input.records);
@@ -54,8 +54,8 @@ function deleteStatements(sessionId: string): readonly InStatement[] {
         'approvals',
         'tool_calls',
         'provider_failures',
-        'session_index_runs',
-        'session_index_diagnostics',
+        'session_projection_runs',
+        'session_projection_diagnostics',
     ];
     return [
         {
@@ -93,19 +93,19 @@ function refreshAwaitingStatement(sessionId: string): InStatement {
 }
 
 type SplitRecords = {
-    readonly sessions: readonly SessionIndexSessionRecord[];
-    readonly runs: readonly SessionIndexRunRecord[];
-    readonly approvals: readonly SessionIndexApprovalRecord[];
-    readonly tools: readonly SessionIndexToolRecord[];
-    readonly providerFailures: readonly SessionIndexProviderFailureRecord[];
+    readonly sessions: readonly SessionProjectionSessionRecord[];
+    readonly runs: readonly SessionProjectionRunRecord[];
+    readonly approvals: readonly SessionProjectionApprovalRecord[];
+    readonly tools: readonly SessionProjectionToolRecord[];
+    readonly providerFailures: readonly SessionProjectionProviderFailureRecord[];
 };
 
-function splitRecords(records: readonly SessionIndexRecord[]): SplitRecords {
-    const sessions: SessionIndexSessionRecord[] = [];
-    const runs: SessionIndexRunRecord[] = [];
-    const approvals: SessionIndexApprovalRecord[] = [];
-    const tools: SessionIndexToolRecord[] = [];
-    const providerFailures: SessionIndexProviderFailureRecord[] = [];
+function splitRecords(records: readonly SessionProjectionRecord[]): SplitRecords {
+    const sessions: SessionProjectionSessionRecord[] = [];
+    const runs: SessionProjectionRunRecord[] = [];
+    const approvals: SessionProjectionApprovalRecord[] = [];
+    const tools: SessionProjectionToolRecord[] = [];
+    const providerFailures: SessionProjectionProviderFailureRecord[] = [];
     for (const record of records) {
         switch (record.kind) {
             case 'session':

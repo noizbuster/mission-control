@@ -26,7 +26,7 @@ export type RedoAction = { readonly kind: 'redo' };
  *   correct.
  * - {@link getStack}/{@link setStack}: the LIFO undo/redo stack.
  *
- * **The durable JSONL session log is never touched by this controller
+ * **The durable session store is never touched by this controller
  * or the undo/redo actions.** All state is in-memory display only.
  */
 export type UndoRedoConversationController = {

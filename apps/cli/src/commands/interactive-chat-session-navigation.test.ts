@@ -25,7 +25,7 @@ describe('interactive chat session navigation', () => {
         tempRoots.length = 0;
     });
 
-    it('refuses to fork a corrupt durable session log', async () => {
+    it('refuses to fork a corrupt legacy session file', async () => {
         const { dataDir, sessionId } = await createCorruptSession();
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const switchSessionStore = vi.fn(async () => {
@@ -47,7 +47,7 @@ describe('interactive chat session navigation', () => {
         expect(switchSessionStore).not.toHaveBeenCalled();
     });
 
-    it('refuses to clone a corrupt durable session log', async () => {
+    it('refuses to clone a corrupt legacy session file', async () => {
         const { dataDir, sessionId } = await createCorruptSession();
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const switchSessionStore = vi.fn(async () => {
@@ -68,7 +68,7 @@ describe('interactive chat session navigation', () => {
         expect(switchSessionStore).not.toHaveBeenCalled();
     });
 
-    it('refuses to select a branch on a corrupt durable session log without appending state', async () => {
+    it('selects a branch from database state without touching a corrupt legacy JSONL artifact', async () => {
         const dataDir = await tempRoot('mctrl-session-navigation-corrupt-');
         const sessionId = 'session_corrupt_source';
         await writeSessionEvents({
@@ -94,7 +94,7 @@ describe('interactive chat session navigation', () => {
                     entryId: 'entry_root',
                     modelProviderSelection: selection,
                 }),
-            ).rejects.toThrow(`Cannot select branch corrupt session: ${sessionId}`);
+            ).resolves.toMatchObject({ message: expect.stringContaining('Active branch: entry_root') });
             const after = await readFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), 'utf8');
             expect(after).toBe(before);
         } finally {
@@ -214,7 +214,7 @@ describe('interactive chat session navigation', () => {
             sessionId: sourceSessionId,
             entryId: 'entry_root',
         });
-        await expect(readdir(join(dataDir, 'sessions'))).resolves.not.toContain(`${sourceSessionId}.jsonl`);
+        await expect(readdir(join(dataDir, 'sessions'))).rejects.toMatchObject({ code: 'ENOENT' });
     });
 
     it('does not preserve copied blocked run state when a cloned session is resumed', async () => {

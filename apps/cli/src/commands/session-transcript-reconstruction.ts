@@ -27,7 +27,7 @@ export type SessionTranscriptInput = {
  *   - Successful tool results are omitted, matching the live collapsed view where
  *     `renderInteractiveToolSettlement` early-returns when tool output is not expanded.
  *
- * Reconstruction is best-effort and read-only: the durable JSONL log is never
+ * Reconstruction is best-effort and read-only: the durable session store is never
  * touched. The pure function never throws; {@link loadSessionTranscript} swallows
  * file-read errors so resume proceeds with a blank transcript when the log is
  * missing or corrupt.

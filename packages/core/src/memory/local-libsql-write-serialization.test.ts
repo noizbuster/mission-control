@@ -6,7 +6,7 @@ import { envelope, sessionStoppedEvent } from '../session-replay-coding-test-sup
 import { exportLegacySessionJsonl, importLegacySessionCompatibilityWindow } from './session-import.js';
 import { SESSION_IMPORT_TEST_SESSION_ID, writeLegacyFixture } from './session-import-test-support.js';
 import { SqliteSessionEventStore } from './sqlite-session-event-store.js';
-import { createSqliteSessionIndexStore, projectSessionEventsToSqlite } from './sqlite-session-projection.js';
+import { openSqliteSessionProjectionStore, projectSessionEventsToSqlite } from './sqlite-session-projection.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -29,7 +29,7 @@ describe('local libSQL write serialization', () => {
         });
         await appendStore.append(sessionStartedEvent('projection_serialized'));
         await appendStore.close();
-        const store = await createSqliteSessionIndexStore({ url });
+        const store = await openSqliteSessionProjectionStore({ url });
         const client = createClient({ url });
         const releaseLane = deferred();
         const holdingWrite = holdWriteLaneWithSessionStatus({
@@ -44,7 +44,7 @@ describe('local libSQL write serialization', () => {
         const projecting = projectSessionEventsToSqlite({
             store,
             sessionId: 'projection_serialized',
-            sourceFilePath: 'sessions/projection_serialized.jsonl',
+            sourcePath: 'sessions/projection_serialized.jsonl',
             envelopes: [
                 envelope(sessionStartedEvent('projection_serialized'), 0, 'event_projection_started'),
                 envelope(sessionStoppedEvent('projection_serialized'), 1, 'event_projection_stopped'),

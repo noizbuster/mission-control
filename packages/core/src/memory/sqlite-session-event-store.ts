@@ -182,7 +182,7 @@ export class SqliteSessionEventStore implements MemoryStore {
             throw new SqliteSessionEventStoreError({
                 code: 'write_failed',
                 sessionId: this.sessionId,
-                message: `SQLite session log ${this.sessionId} is already closed`,
+                message: `SQLite session store ${this.sessionId} is already closed`,
             });
         }
     }

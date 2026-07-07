@@ -48,7 +48,7 @@ export function ensureWritableEvent(input: { readonly sessionId: string; readonl
         throw new SqliteSessionEventStoreError({
             code: 'invalid_event',
             sessionId: input.sessionId,
-            message: `SQLite session log ${input.sessionId} cannot append an event without sessionId`,
+            message: `SQLite session store ${input.sessionId} cannot append an event without sessionId`,
         });
     }
     if (input.event.sessionId !== input.sessionId) {
@@ -68,7 +68,7 @@ function ensureWritableEnvelope(input: {
         throw new SqliteSessionEventStoreError({
             code: 'invalid_sequence',
             sessionId: input.sessionId,
-            message: `SQLite session log ${input.sessionId} expected sequence ${input.expectedSequence} but received ${input.envelope.sequence}`,
+            message: `SQLite session store ${input.sessionId} expected sequence ${input.expectedSequence} but received ${input.envelope.sequence}`,
         });
     }
 }
@@ -82,7 +82,7 @@ async function rejectDuplicateEventId(input: {
         throw new SqliteSessionEventStoreError({
             code: 'duplicate_event_id',
             sessionId: input.sessionId,
-            message: `SQLite session log ${input.sessionId} already has event id ${input.eventId}`,
+            message: `SQLite session store ${input.sessionId} already has event id ${input.eventId}`,
         });
     }
 }
@@ -91,6 +91,6 @@ function throwSessionMismatch(sessionId: string): never {
     throw new SqliteSessionEventStoreError({
         code: 'session_mismatch',
         sessionId,
-        message: `SQLite session log ${sessionId} cannot store an event for another session`,
+        message: `SQLite session store ${sessionId} cannot store an event for another session`,
     });
 }

@@ -1,5 +1,5 @@
 import { normalizeWorkspaceRootWithFallback, readSessionCatalogEntry } from './session-catalog-entry.js';
-import { readSessionIndexState } from './session-catalog-index.js';
+import { readSessionProjectionState } from './session-catalog-projection.js';
 import type { CliSessionCatalogEntry } from './session-catalog-types.js';
 import { parseCliSessionId } from './session-id.js';
 
@@ -12,12 +12,18 @@ export type {
 } from './session-catalog-types.js';
 
 export async function listSessionCatalogEntries(): Promise<readonly CliSessionCatalogEntry[]> {
-    const indexState = await readSessionIndexState();
-    const ids = [...indexState.records.values()]
-        .map((record) => record.sessionId)
-        .filter((sessionId) => parseCliSessionId(sessionId) !== undefined);
-    const entries = await Promise.all([...ids].map((sessionId) => readSessionCatalogEntry(sessionId, indexState)));
-    return entries.sort(compareCatalogEntries);
+    const projectionState = await readSessionProjectionState();
+    try {
+        const ids = [...projectionState.records.values()]
+            .map((record) => record.sessionId)
+            .filter((sessionId) => parseCliSessionId(sessionId) !== undefined);
+        const entries = await Promise.all(
+            [...ids].map((sessionId) => readSessionCatalogEntry(sessionId, projectionState)),
+        );
+        return entries.sort(compareCatalogEntries);
+    } finally {
+        projectionState.store.close();
+    }
 }
 
 export function filterCatalogEntriesByWorkspace(

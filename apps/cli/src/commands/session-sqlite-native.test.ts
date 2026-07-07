@@ -53,7 +53,7 @@ describe('SQLite-native session commands', () => {
         expect(archive.manifest.sessionId).toBe(sessionId);
         expect(archive.eventsJsonl).toContain('"kind":"mission-control.session-event"');
         await expect(access(localSessionDbPath(dataDir))).resolves.toBeUndefined();
-        await expect(readdir(join(dataDir, 'sessions'))).resolves.not.toContain(`${sessionId}.jsonl`);
+        await expect(readdir(join(dataDir, 'sessions'))).rejects.toMatchObject({ code: 'ENOENT' });
         await rm(dataDir, { recursive: true, force: true });
     });
 });

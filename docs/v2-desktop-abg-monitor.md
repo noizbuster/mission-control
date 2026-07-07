@@ -11,7 +11,7 @@ Bring the ABG overlay (currently CLI Ink-only) to the desktop app as a live obse
 The CLI Ink overlay (`apps/cli/src/components/AbgOverlay.tsx`) consumes `AbgOverlayState` projected from `AbgSignal` + `AgentEvent` streams. The projector (`apps/cli/src/commands/abg-overlay-state.ts`) is pure: feed it signals/events, get a state shape back. This is reusable.
 
 The desktop (`apps/desktop/`) currently:
-- Reads durable JSONL logs via `projectJsonlSessionReplayPrefix`
+- Reads durable local DB sessions through the desktop command bridge and replay projection helpers
 - Renders Timeline/Graph/Session views from the projected snapshot
 - Uses a **reload-after-write** model — there is no live event stream today
 
@@ -25,11 +25,11 @@ Move `AbgOverlayState` and the pure projectors (`projectAbgSignal`, `projectAgen
 
 The desktop needs live events. Three options, ranked by implementation cost:
 
-1. **Tauri event bridge** — Add a Tauri command `subscribe_session_events(sessionId)` that emits `tauri::Window::emit` for each new event appended to the JSONL log. The Rust shell watches the session file (or hooks into the JSONL store's append path). The desktop React layer subscribes via `listen()` from `@tauri-apps/api/event`.
-2. **File-watch polling** — Node-side watcher (chokidar or `fs.watch`) on the session JSONL file; on change, read appended bytes, parse envelopes, dispatch.
+1. **Tauri event bridge** — Add a Tauri command `subscribe_session_events(sessionId)` that emits `tauri::Window::emit` for each new event appended to the local session database. The bridge can poll a session sequence cursor through the existing command service until a native notification path exists. The desktop React layer subscribes via `listen()` from `@tauri-apps/api/event`.
+2. **DB cursor polling** — Node-side polling of new session envelopes by sequence through the command bridge; on change, dispatch newly observed envelopes.
 3. **WebSocket from core** — Core opens a WebSocket server when a run starts; desktop connects and consumes the live event stream.
 
-Option 1 is the cleanest (no Node-side polling, no port management) and matches Tauri's command bridge pattern.
+Option 1 is the cleanest (no file watcher, no port management) and matches Tauri's command bridge pattern.
 
 ### Phase 3 — React components (low-medium effort)
 
@@ -50,8 +50,6 @@ Desktop already has keyboard shortcuts (`Cmd+R` reload, etc.). Add `Cmd+G` to to
 
 ```rust
 use tauri::{Window, State};
-use std::fs::File;
-use std::io::{BufRead, BufReader, Seek, SeekFrom};
 
 #[tauri::command]
 pub async fn subscribe_session_events(
@@ -59,23 +57,22 @@ pub async fn subscribe_session_events(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<(), String> {
-    let path = state.data_dir.join("sessions").join(format!("{}.jsonl", session_id));
-    let mut file = File::open(&path).map_err(|e| e.to_string())?;
-    let mut pos = 0u64;
+    let mut next_seq = 0u64;
     loop {
-        file.seek(SeekFrom::Start(pos)).map_err(|e| e.to_string())?;
-        let reader = BufReader::new(&file);
-        for line in reader.lines() {
-            let line = line.map_err(|e| e.to_string())?;
-            window.emit("abg-event", &line).map_err(|e| e.to_string())?;
-            pos += line.len() as u64 + 1; // +1 for newline
+        let events = state
+            .desktop_bridge
+            .read_session_events_after(&session_id, next_seq)
+            .await?;
+        for envelope in events {
+            next_seq = envelope.sequence + 1;
+            window.emit("abg-event", &envelope).map_err(|e| e.to_string())?;
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
 }
 ```
 
-This is illustrative — production needs bounded retries, error recovery, file rotation handling, and a clean cancel path. Documented here as the architectural shape.
+This is illustrative — production needs bounded retries, error recovery, cursor persistence, and a clean cancel path. Documented here as the architectural shape.
 
 ## Scope Boundary
 

@@ -2,18 +2,18 @@ import { openLocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js
 import { resolveMissionControlDataDir } from './data-dir.js';
 import { localSessionDbUrl } from './local-session-store-paths.js';
 import { importLegacySessionCompatibilityWindow } from './session-import.js';
-import { createSqliteSessionIndexStore, type SqliteSessionIndexStore } from './sqlite-session-projection.js';
+import { openSqliteSessionProjectionStore, type SqliteSessionProjectionStore } from './sqlite-session-projection.js';
 import { mkdir } from 'node:fs/promises';
 
-export async function createLocalSessionIndexStore(
+export async function openLocalSessionProjectionStore(
     input: { readonly dataDir?: string; readonly now?: () => string } = {},
-): Promise<SqliteSessionIndexStore> {
+): Promise<SqliteSessionProjectionStore> {
     const dataDir = input.dataDir ?? resolveMissionControlDataDir();
     await ensureLocalSessionDatabase({
         dataDir,
         ...(input.now !== undefined ? { now: input.now } : {}),
     });
-    return createSqliteSessionIndexStore({ url: localSessionDbUrl(dataDir) });
+    return openSqliteSessionProjectionStore({ url: localSessionDbUrl(dataDir) });
 }
 
 export async function deleteLocalSessionRows(input: {
@@ -36,8 +36,8 @@ export async function deleteLocalSessionRows(input: {
                         { sql: 'DELETE FROM session_messages WHERE session_id = ?', args: [sessionId] },
                         { sql: 'DELETE FROM session_events WHERE session_id = ?', args: [sessionId] },
                         { sql: 'DELETE FROM session_event_sequences WHERE session_id = ?', args: [sessionId] },
-                        { sql: 'DELETE FROM session_index_runs WHERE session_id = ?', args: [sessionId] },
-                        { sql: 'DELETE FROM session_index_diagnostics WHERE session_id = ?', args: [sessionId] },
+                        { sql: 'DELETE FROM session_projection_runs WHERE session_id = ?', args: [sessionId] },
+                        { sql: 'DELETE FROM session_projection_diagnostics WHERE session_id = ?', args: [sessionId] },
                         { sql: 'DELETE FROM approvals WHERE session_id = ?', args: [sessionId] },
                         { sql: 'DELETE FROM tool_calls WHERE session_id = ?', args: [sessionId] },
                         { sql: 'DELETE FROM provider_failures WHERE session_id = ?', args: [sessionId] },
@@ -87,6 +87,6 @@ export async function ensureLocalSessionDatabase(input: {
     } finally {
         runtime.close();
     }
-    const projectionStore = await createSqliteSessionIndexStore({ url: localSessionDbUrl(input.dataDir) });
+    const projectionStore = await openSqliteSessionProjectionStore({ url: localSessionDbUrl(input.dataDir) });
     projectionStore.close();
 }

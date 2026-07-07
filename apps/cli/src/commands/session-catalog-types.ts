@@ -5,7 +5,7 @@ export type CliSessionListStatus = AgentSnapshot['status'] | 'corrupt' | 'missin
 export type CliSessionCatalogDiagnostic =
     | ReplayDiagnostic
     | {
-          readonly code: 'corrupt_index' | 'index_diagnostic';
+          readonly code: 'projection_diagnostic';
           readonly sessionId: string;
           readonly message: string;
           readonly lineNumber?: number | undefined;

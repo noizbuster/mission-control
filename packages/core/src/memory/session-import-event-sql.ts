@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
 import { ensureLocalDbSchema } from '../db/local-libsql-schema.js';
 import { ensureLegacySessionImportTables } from './session-import-sql.js';
-import { deriveSessionIndexRecordsFromEnvelopes } from './session-index-projection.js';
+import { deriveSessionProjectionRecordsFromEnvelopes } from './session-projection.js';
 import { replaceStatements } from './sqlite-session-projection-statements.js';
 
 const exportEventRowSchema = z.object({
@@ -26,7 +26,7 @@ export async function importJsonlSessionRows(
     const lastEnvelope = input.envelopes.at(-1);
     const lastActivityAt = lastEnvelope?.event.timestamp ?? input.createdAt;
     const stoppedAt = stoppedAtFor(input.envelopes);
-    const projection = deriveSessionIndexRecordsFromEnvelopes({
+    const projection = deriveSessionProjectionRecordsFromEnvelopes({
         sessionId: input.sessionId,
         filePath: input.sourcePath,
         envelopes: input.envelopes,

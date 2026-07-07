@@ -3,10 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
 import { runSessionCommand } from './session.js';
 import {
+    diagnosticRecords,
     eventRecords,
     parseReplayRecords,
     sessionCommandFixtureEvents,
     taskCompletedEvent,
+    writeLocalSessionEvents,
     writeSessionEvents,
 } from './session-test-support.js';
 import { appendFile, mkdtemp, rm } from 'node:fs/promises';
@@ -18,11 +20,11 @@ describe('session commands', () => {
         vi.unstubAllEnvs();
     });
 
-    it('lists shows and replays JSONL session logs deterministically', async () => {
+    it('lists shows and replays database sessions deterministically', async () => {
         const dataDir = await useTempDataDir();
         const sessionId = 'session_cli_commands';
         const events = sessionCommandFixtureEvents(sessionId, 'hello from session');
-        await writeSessionEvents({ dataDir, sessionId, events });
+        await writeLocalSessionEvents({ dataDir, sessionId, events });
 
         const listOutput = await runSessionCommand(parseArgs(['session', 'list']));
         const showOutput = await runSessionCommand(parseArgs(['session', 'show', sessionId]));
@@ -77,7 +79,7 @@ describe('session commands', () => {
         await rm(dataDir, { recursive: true, force: true });
     });
 
-    it('does not replay corrupt legacy JSONL after database import rejects it', async () => {
+    it('replays corrupt legacy JSONL as diagnostics after database import rejects it', async () => {
         // Given
         const dataDir = await useTempDataDir();
         const sessionId = 'session_cli_replay_corrupt';
@@ -85,11 +87,15 @@ describe('session commands', () => {
         await writeSessionEvents({ dataDir, sessionId, events });
         await appendFile(join(dataDir, 'sessions', `${sessionId}.jsonl`), '{"broken":\n', 'utf8');
 
-        // When / Then
-        await expect(runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']))).rejects.toMatchObject({
-            code: 'session_not_found',
-            sessionId,
-        });
+        // When
+        const replayOutput = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
+        const replayRecords = parseReplayRecords(replayOutput);
+
+        // Then
+        expect(eventRecords(replayRecords)).toEqual([]);
+        expect(diagnosticRecords(replayRecords)).toEqual([
+            { code: 'corrupt_trailing_record', lineNumber: 6, sessionId },
+        ]);
         await rm(dataDir, { recursive: true, force: true });
     });
 

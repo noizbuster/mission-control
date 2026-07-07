@@ -14,7 +14,7 @@ import {
     sessionStartedEvent,
     taskCompletedEvent,
 } from './sqlite-session-event-store-test-support.js';
-import { createSqliteSessionIndexStore } from './sqlite-session-projection.js';
+import { openSqliteSessionProjectionStore } from './sqlite-session-projection.js';
 
 afterEach(async () => {
     await cleanupSqliteSessionEventStoreTestDirs();
@@ -166,7 +166,7 @@ describe('SqliteSessionEventStore', () => {
             await store.close();
         }
 
-        const publicStore = await createSqliteSessionIndexStore({ url: sqliteUrl });
+        const publicStore = await openSqliteSessionProjectionStore({ url: sqliteUrl });
         const client = createClient({ url: sqliteUrl });
         const waits = await client.execute(
             'SELECT wait_id, reason, source_kind, source_id, status FROM session_awaits WHERE session_id = ? ORDER BY wait_id',
@@ -222,7 +222,7 @@ describe('SqliteSessionEventStore', () => {
             await store.close();
         }
 
-        const publicStore = await createSqliteSessionIndexStore({ url: sqliteUrl });
+        const publicStore = await openSqliteSessionProjectionStore({ url: sqliteUrl });
         const waits = await client.execute(
             'SELECT wait_id, reason, source_kind, source_id, status FROM session_awaits WHERE session_id = ? ORDER BY wait_id',
             [sessionId],

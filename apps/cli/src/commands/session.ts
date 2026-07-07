@@ -115,7 +115,7 @@ async function requireSessionReplay(sessionId: string) {
     }
     throw new CliSessionCommandError({
         code: 'session_not_found',
-        message: `Session log not found: ${parsedSessionId}`,
+        message: `Session not found: ${parsedSessionId}`,
         sessionId: parsedSessionId,
     });
 }

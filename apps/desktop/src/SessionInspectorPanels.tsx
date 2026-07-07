@@ -15,7 +15,7 @@ export function SessionListPanel({
     return (
         <aside className="session-list" aria-label="sessions">
             <h2>Sessions</h2>
-            {projection.sessions.length === 0 ? <p className="empty-state">No session logs</p> : null}
+            {projection.sessions.length === 0 ? <p className="empty-state">No sessions</p> : null}
             {projection.sessions.map((session) => (
                 <button
                     className="session-item"

@@ -10,7 +10,6 @@ export {
     parseJsonlSessionLog,
 } from './jsonl-session-records.js';
 export {
-    createLocalSessionIndexStore,
     deleteLocalSessionRows,
     type LocalSessionEventStore,
     type LocalSessionReplayReadResult,
@@ -18,6 +17,7 @@ export {
     localSessionDbUrl,
     type OpenLocalSessionEventStoreOptions,
     openLocalSessionEventStore,
+    openLocalSessionProjectionStore,
     readLocalSessionReplay,
 } from './local-session-store.js';
 export type { MemoryStore, SessionCompactionRecordInput } from './memory-store.js';
@@ -57,26 +57,25 @@ export type {
     LegacySessionImportLedgerEntry,
     LegacySessionSourceKind,
 } from './session-import-sql.js';
-export { deriveSessionIndexRecords } from './session-index-projection.js';
+export { deriveSessionProjectionRecords } from './session-projection.js';
 export type {
-    SessionIndexApprovalRecord,
-    SessionIndexDiagnostic,
-    SessionIndexProviderFailureRecord,
-    SessionIndexRebuildResult,
-    SessionIndexRecord,
-    SessionIndexRunRecord,
-    SessionIndexSessionRecord,
-    SessionIndexStore,
-    SessionIndexToolRecord,
-} from './session-index-types.js';
+    SessionProjectionApprovalRecord,
+    SessionProjectionDiagnostic,
+    SessionProjectionProviderFailureRecord,
+    SessionProjectionRebuildResult,
+    SessionProjectionRecord,
+    SessionProjectionRunRecord,
+    SessionProjectionSessionRecord,
+    SessionProjectionToolRecord,
+} from './session-projection-types.js';
 export {
     SqliteSessionEventStore,
     SqliteSessionEventStoreError,
     type SqliteSessionEventStoreOpenOptions,
 } from './sqlite-session-event-store.js';
 export {
-    createSqliteSessionIndexStore,
+    openSqliteSessionProjectionStore,
     projectSessionEventsToSqlite,
-    type SqliteSessionIndexStore,
+    type SqliteSessionProjectionStore,
 } from './sqlite-session-projection.js';
 export { isTursoAvailable, TursoPersistentStore } from './turso-persistent-store.js';

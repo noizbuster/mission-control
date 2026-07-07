@@ -2130,7 +2130,7 @@ Async Behavior Graph는 이 모든 것을 묶는 mission runtime이다.
 
 구현된 runtime surface:
 
-- `MCTRL_DATA_DIR` 또는 플랫폼 application-data 디렉터리 아래의 durable JSONL session event storage.
+- `MCTRL_DATA_DIR` 또는 플랫폼 application-data 디렉터리 아래의 durable local SQLite/libSQL session event storage. JSONL은 replay/export/import compatibility format으로 유지된다.
 - chat, graph snapshot, transcript branch, approval state, file diff, command output을 재구성하는 replay projection.
 - deterministic local provider 실행, 저장된 credential 뒤의 OpenAI Responses, Anthropic Messages, Google Gemini, 그리고 OpenRouter, Groq, DeepSeek, Mistral용 OpenAI-compatible adapter.
 - provider capability 문서는 executable adapter와 catalog/auth/model-discovery entry를 구분한다. provider가 runnable로 문서화되려면 executable adapter proof가 필요하다.
@@ -2150,6 +2150,6 @@ Async Behavior Graph는 이 모든 것을 묶는 mission runtime이다.
 
 - full production ABG engine semantics, compensation policy, autonomous long-running scheduler.
 - visual graph editing.
-- vector memory, persistent memory store, JSONL을 넘어서는 database index.
+- vector memory index, remote synchronization, local session/persistent-memory store를 넘어서는 database index.
 - unrestricted tool, automatic rollback, `file.patch` 또는 `command.run`의 기본 sidecar 실행.
 - deterministic local path, OpenAI Responses, Anthropic Messages, Google Gemini, OpenAI-compatible provider family를 넘어서는 provider adapter.
