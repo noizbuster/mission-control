@@ -20,7 +20,7 @@
     "./slash-mapping": "./dist/platform/keymap/slash-mapping.js",
     "./opentui-renderer": "./dist/platform/opentui-renderer.js",
     "./keymap-provider": "./dist/platform/keymap/keymap-provider.js",
-    "./terminal-viewport-react": "./dist/platform/terminal-viewport-react.js",
+    "./terminal-viewport-solid": "./dist/platform/terminal-viewport-solid.js",
     "./status-bar": "./dist/components/StatusBar.js",
     "./abg-overlay": "./dist/components/AbgOverlay.js",
     "./chat-app": "./dist/components/ChatApp.js",
@@ -34,17 +34,21 @@
     "@mission-control/protocol": "workspace:*",
     "@opentui/core": "^0.4.3",
     "@opentui/keymap": "^0.4.3",
-    "@opentui/react": "^0.4.3",
-    "@types/react": "^19.2.17",
+    "@opentui/solid": "^0.4.3",
     "diff": "^9.0.0",
     "marked": "^18.0.5",
-    "react": "^19.0.0",
     "remend": "^1.3.0",
+    "solid-js": "^1.9.12",
     "web-tree-sitter": "^0.25.10",
     "wrap-ansi": "^10.0.0"
   },
+  "devDependencies": {
+    "babel-plugin-module-resolver": "^5.0.3",
+    "vite": "^8.0.16",
+    "vite-plugin-solid": "^2.11.12"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "vite build",
     "test": "sh -c 'cd ../.. && while [ \"${1:-}\" = \"--\" ]; do shift; done; vitest run --reporter verbose \"$@\"' --",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }

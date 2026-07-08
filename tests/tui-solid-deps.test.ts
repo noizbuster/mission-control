@@ -54,7 +54,7 @@ describe('@mission-control/tui Solid dependency contract', () => {
         expect(Object.keys(manifest.dependencies).length).toBeGreaterThan(0);
     });
 
-    it.skip('uses Solid OpenTUI dependencies after Todo 2 swaps the renderer binding', () => {
+    it('uses Solid OpenTUI dependencies after Todo 2 swaps the renderer binding', () => {
         const manifest = readPackageManifest('apps/tui/package.json');
 
         expect(manifest.dependencies['@opentui/react']).toBeUndefined();

@@ -4,7 +4,7 @@ import { useKeyboard } from '@opentui/react';
 import { useState } from 'react';
 import { AbgOverlay } from './components/AbgOverlay.js';
 import { mountOpenTui, type OpenTuiMountResult } from './platform/opentui-renderer.js';
-import { useTerminalViewport } from './platform/terminal-viewport-react.js';
+import { useTerminalViewport } from './platform/terminal-viewport-solid.js';
 import { createAbgOverlayStore, projectAgentEvent } from './state/index.js';
 
 export type ReplayOverlayOptions = {

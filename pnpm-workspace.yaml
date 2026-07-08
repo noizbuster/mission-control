@@ -1,6 +1,3 @@
 packages:
   - apps/*
   - packages/*
-
-patchedDependencies:
-  '@opentui/react@0.4.3': patches/@opentui__react@0.4.3.patch

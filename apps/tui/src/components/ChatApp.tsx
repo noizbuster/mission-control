@@ -18,7 +18,7 @@ import {
 } from '../platform/keymap/diff-viewer.js';
 import { hardResetRendererSurface } from '../platform/opentui-renderer.js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
-import { useTerminalViewport } from '../platform/terminal-viewport-react.js';
+import { useTerminalViewport } from '../platform/terminal-viewport-solid.js';
 import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
 import type { ChatAppActions } from '../state/chat-app-actions.js';
 import type { ChatStore } from '../state/chat-store.js';

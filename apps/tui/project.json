@@ -10,7 +10,7 @@
       "outputs": ["{projectRoot}/dist"],
       "options": {
         "cwd": "apps/tui",
-        "command": "tsc -p tsconfig.json"
+        "command": "vite build"
       }
     },
     "typecheck": {
