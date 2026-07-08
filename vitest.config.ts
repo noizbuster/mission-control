@@ -39,8 +39,8 @@ export default defineConfig({
             { find: '@mission-control/tui/opentui-renderer', replacement: `${tuiSrc}platform/opentui-renderer.ts` },
             { find: '@mission-control/tui/keymap-provider', replacement: `${tuiSrc}platform/keymap/keymap-provider.tsx` },
             {
-                find: '@mission-control/tui/terminal-viewport-react',
-                replacement: `${tuiSrc}platform/terminal-viewport-react.ts`,
+                find: '@mission-control/tui/terminal-viewport-solid',
+                replacement: `${tuiSrc}platform/terminal-viewport-solid.ts`,
             },
             { find: '@mission-control/tui/status-bar', replacement: `${tuiSrc}components/StatusBar.tsx` },
             { find: '@mission-control/tui/abg-overlay', replacement: `${tuiSrc}components/AbgOverlay.tsx` },

@@ -9,6 +9,7 @@ type PackageManifest = {
     readonly scripts?: Record<string, string>;
     readonly dependencies?: Record<string, string>;
     readonly devDependencies?: Record<string, string>;
+    readonly exports?: Record<string, string>;
     readonly private?: boolean;
 };
 
@@ -66,6 +67,13 @@ describe('workspace build integration', () => {
             expect(manifest.scripts?.['build']).toBeTruthy();
         }
         expect(tuiManifest.private, 'tui must be private').toBe(true);
+        expect(tuiManifest.dependencies?.['@opentui/solid'], 'tui must depend on OpenTUI Solid bindings').toBeTruthy();
+        expect(tuiManifest.dependencies?.['solid-js'], 'tui must depend on Solid').toBeTruthy();
+        expect(tuiManifest.dependencies?.['@opentui/react'], 'tui must not depend on OpenTUI React bindings').toBeUndefined();
+        expect(tuiManifest.exports?.['./terminal-viewport-solid'], 'tui must export the Solid viewport hook').toBe(
+            './dist/platform/terminal-viewport-solid.js',
+        );
+        expect(tuiManifest.exports?.['./terminal-viewport-react'], 'tui must not export the old viewport hook').toBeUndefined();
         expectWorkspaceDependency(cliManifest, '@mission-control/tui');
     });
 });

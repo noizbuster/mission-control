@@ -4,7 +4,7 @@
 
 `apps/cli` owns the `mc` command-line application (`mctrl` alias retained): argument parsing, command orchestration, auth/model/session commands, terminal interaction, noninteractive renderers (plain/JSON/JSONL), and the interactive chat loop that drives the TUI surface.
 
-The interactive chat loop (`runInteractiveChatSession` in `interactive-chat.ts`) consumes a `ChatTuiHandle` produced by `@mission-control/tui/create-chat-tui`. The TUI mount, React/OpenTUI components, keymap platform, markdown/diff renderers, and the `ChatStore` reactive store all live in `apps/tui` now. `apps/cli` lazy-loads them only when the TUI is active (`useTui === true`); the noninteractive path (`--no-tui`, `--json`, `--jsonl`) never touches opentui or react.
+The interactive chat loop (`runInteractiveChatSession` in `interactive-chat.ts`) consumes a `ChatTuiHandle` produced by `@mission-control/tui/create-chat-tui`. The TUI mount, Solid/OpenTUI components, keymap platform, markdown/diff renderers, and the `ChatStore` state cluster all live in `apps/tui` now. `apps/cli` lazy-loads them only when the TUI is active (`useTui === true`); the noninteractive path (`--no-tui`, `--json`, `--jsonl`) never touches opentui or the Solid TUI runtime.
 
 CLI-owned runtime pieces that still live here: the imperative chat loop, the background agent-runner state machine (`chat-agent-runner.ts`), command parsing (`chat-commands.ts`), interactive chat actions (`interactive-chat-actions.ts`), approval brokering (`interactive-approval-broker.ts`), provider/model selection, auth, sessions, models, and the noninteractive renderers (`renderers.ts`). See `apps/tui/AGENTS.md` for the TUI rendering, components, platform code, and store internals.
 
@@ -14,7 +14,7 @@ The CLI reaches the TUI exclusively through `@mission-control/tui` lazy imports.
 
 The CLI provides `ChatAppActions` implementations (wrapping `interactive-chat-actions.ts`, `agents-disabled-config.ts`, `agents-model-overrides-config.ts`) and the `MissionControlServices` instance to `createChatTui` via `ChatTuiRuntimeOptions`. The TUI package receives them as injected callbacks and a structural interface, so it never imports CLI runtime code.
 
-For the TUI handle pattern, keyboard routing, JSX pragma, ChatStore internals, output rendering, screen layout, markdown pipeline, diff renderer, and all component/platform details, see `apps/tui/AGENTS.md`.
+For the TUI handle pattern, keyboard routing, Solid JSX setup, ChatStore internals, output rendering, screen layout, markdown pipeline, diff renderer, and all component/platform details, see `apps/tui/AGENTS.md`.
 
 ## Error Handling
 
@@ -54,7 +54,7 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | Agents config (disabled) | `src/commands/agents-disabled-config.ts` | Writes agent config to disk; used by CLI runtime. Components call it via injected `ChatAppActions.toggleAgentDisabled`. |
 | Agents config (model overrides) | `src/commands/agents-model-overrides-config.ts` | Writes model override config; used by CLI runtime. Components call it via injected `ChatAppActions.setAgentModelOverride` + `isValidModelPattern`. |
 | Retryable tool errors | `packages/core/src/tools/read-tools-errors.ts` | Repo tool failures are `retryable: true` - the model can adjust and retry instead of the run dying. |
-| TUI components, platform, store, mount | see `apps/tui/AGENTS.md` | OpenTUI React components, keymap platform, `ChatStore`, `createChatTui`, markdown/diff renderers, clipboard, terminal viewport - all live in `apps/tui`. |
+| TUI components, platform, store, mount | see `apps/tui/AGENTS.md` | Solid/OpenTUI components, keymap platform, `ChatStore`, `createChatTui`, markdown/diff renderers, clipboard, terminal viewport - all live in `apps/tui`. |
 
 ## Conventions
 
@@ -65,9 +65,9 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 - Argument parsing stays parse-only. Runtime effects belong in command modules.
 - Renderer code should consume protocol/core events, not private runtime fields.
 - The noninteractive renderers consume already-redacted output (provider/tool output is redacted upstream in `packages/core`). Never read raw provider or tool structured output in a renderer.
-- `react-test-renderer` is intentionally not a dependency. Test renderer logic via the pure exported helpers or opentui's headless render path (in `apps/tui`). Never mount a full React tree in a unit test.
+- Legacy component test-renderer packages are intentionally not dependencies. Test renderer logic via pure exported helpers or OpenTUI/Solid headless render paths (in `apps/tui`). Never mount the full TUI tree in a unit test.
 - Interactive TUI layout must derive from `TerminalViewport { columns, rows }` via `useTerminalViewport()` (now in `apps/tui/src/platform/`). Direct `process.stdout.columns/rows` reads are reserved for noninteractive stdout renderers (`src/ui/renderers.ts`) and low-level terminal seams, not interactive code.
-- The CLI must never statically import `@opentui/*` or `react`. All TUI access goes through `@mission-control/tui` lazy imports inside the `useTui` branch so `mc --no-tui` stays opentui-free.
+- The CLI must never statically import `@opentui/*` or `solid-js`. All TUI access goes through `@mission-control/tui` lazy imports inside the `useTui` branch so `mc --no-tui` stays opentui-free.
 - `exactOptionalPropertyTypes` is active - use conditional spreads for optional props (`...(cond ? { prop: val } : {})`), and when sourcing opentui props from `| undefined` helpers, assign to a local first and narrow before spreading.
 - User input echoed to outputText uses `You: ` prefix so `parseMessageBlocks` can classify it.
 - Error messages use `Error: ` prefix for the same reason.
@@ -90,7 +90,7 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 - Do NOT statically import `create-chat-tui`, TUI components, platform code, or `@opentui/*` in `apps/cli`. The CLI reaches the TUI through `@mission-control/tui` lazy imports only.
 - Do NOT use `process.stdin.setRawMode()` directly - opentui's `createCliRenderer` manages raw mode (in `apps/tui`).
 - Do NOT add deprecated terminal UI companion packages or compatibility input/select layers. All components are custom-built on opentui intrinsics (in `apps/tui`).
-- Do NOT import deprecated terminal UI frameworks. OpenTUI is the only React terminal renderer for TUI mode.
+- Do NOT import deprecated terminal UI frameworks. OpenTUI with Solid bindings is the only terminal renderer for TUI mode.
 - Do NOT call `console.log` in TUI mode - the renderer may patch the stream. Use `process.stderr.write()` for debugging.
 - Do NOT remove the non-TUI terminal fallback path - tests depend on it via scripted input injection.
 - Do NOT bypass `createAllowPermissionDecision` or approval plumbing for write-capable command paths.

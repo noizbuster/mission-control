@@ -56,6 +56,10 @@ describe('README stage-01 contract', () => {
     it('documents @mission-control/tui as private internal', () => {
         const content = readme();
         expect(content, 'README must document @mission-control/tui').toContain('@mission-control/tui');
+        expect(content, 'README must document the TUI as Solid/OpenTUI').toContain('Solid/OpenTUI TUI app');
+        expect(content, 'README must document @opentui/solid').toContain('@opentui/solid');
+        expect(content, 'README must document solid-js').toContain('solid-js');
+        expect(content, 'README must document the Solid viewport module').toContain('terminal-viewport-solid.ts');
         expect(content, 'README must state @mission-control/tui is private/not publishable').toContain(
             'Not publishable',
         );
@@ -63,6 +67,10 @@ describe('README stage-01 contract', () => {
             'npm install -g @mission-control/tui',
         );
         expect(content, 'README must not claim a dev:tui script').not.toContain('pnpm dev:tui');
+        expect(content, 'README must not document the private TUI as OpenTUI React').not.toContain('@opentui/react');
+        expect(content, 'README must not keep stale private TUI React prose').not.toContain(
+            'React components, TUI mount/store seam, keymap platform',
+        );
     });
 
     it('documents native fallback, ABG reflection, and next-stage TODOs', () => {

@@ -1,5 +1,5 @@
-import { useRenderer } from '@opentui/react';
-import { useCallback, useSyncExternalStore } from 'react';
+import { useRenderer } from '@opentui/solid';
+import { createSignal, onCleanup, onMount } from 'solid-js';
 import {
     createTerminalViewportCache,
     type OpenTuiTerminalDimensions,
@@ -8,19 +8,23 @@ import {
 
 export function useTerminalViewport(): TerminalViewport {
     const renderer = useRenderer();
-    const cache = useCallback(() => createTerminalViewportCache(), [])();
-    const subscribe = useCallback(
-        (cb: () => void) => {
-            renderer.on('resize', cb);
-            return () => {
-                renderer.off('resize', cb);
-            };
-        },
-        [renderer],
-    );
-    const getSnapshot = useCallback((): TerminalViewport => {
+    const cache = createTerminalViewportCache();
+    const readViewport = (): TerminalViewport => {
         const dims: OpenTuiTerminalDimensions = { width: renderer.width, height: renderer.height };
         return cache(dims);
-    }, [renderer, cache]);
-    return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+    };
+    const [viewport, setViewport] = createSignal(readViewport(), { equals: Object.is });
+
+    onMount(() => {
+        const handleResize = (): void => {
+            setViewport(() => cache({ width: renderer.width, height: renderer.height }));
+        };
+
+        renderer.on('resize', handleResize);
+        onCleanup(() => {
+            renderer.off('resize', handleResize);
+        });
+    });
+
+    return viewport();
 }

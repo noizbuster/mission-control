@@ -9,7 +9,7 @@
 Directory structure:
 
 - `apps/cli`: `mc` command-line app (`mctrl` alias retained). Owns argument parsing, command orchestration, and the noninteractive renderers.
-- `apps/tui`: private OpenTUI TUI app consumed by `apps/cli` (React components, keymap platform, TUI mount/store seam). Not publishable.
+- `apps/tui`: private Solid/OpenTUI TUI app consumed by `apps/cli` (Solid JSX components, keymap platform, TUI mount/store seam). Not publishable.
 - `apps/desktop`: Tauri + React desktop app.
 - `packages/protocol`: shared event/session/sidecar schemas.
 - `packages/core`: runtime services, durable session replay, provider turns, approval-gated tools, graph coordination, and sidecar client boundary.
@@ -22,8 +22,8 @@ Package responsibilities:
 - `@mission-control/protocol`: shared schemas and types for CLI, desktop, core runtime, and Rust sidecar boundaries.
 - `@mission-control/core`: runtime skeleton, event stream concepts, session snapshots, permissions, and native sidecar client boundaries.
 - `@mission-control/config`: shared configuration constants.
-- `@mission-control/cli`: opentui/plain/JSON command-line surface for `mc`. Lazy-loads the TUI mount from `@mission-control/tui` only when the interactive TUI is active; noninteractive `--no-tui`/`--json`/`--jsonl` runs never touch opentui or react.
-- `@mission-control/tui`: private internal OpenTUI app (React components, TUI mount/store seam, keymap platform). Not publishable; consumed by `@mission-control/cli` via lazy import.
+- `@mission-control/cli`: opentui/plain/JSON command-line surface for `mc`. Lazy-loads the TUI mount from `@mission-control/tui` only when the interactive TUI is active; noninteractive `--no-tui`/`--json`/`--jsonl` runs never touch opentui or the Solid TUI runtime.
+- `@mission-control/tui`: private internal Solid/OpenTUI app (`@opentui/solid` + `solid-js`, TUI mount/store seam, keymap platform). Not publishable; consumed by `@mission-control/cli` via lazy import.
 - `@mission-control/desktop`: Tauri + React desktop surface for `mission-control`.
 - `native/sidecar`: Rust JSON Lines sidecar with protocol v1 `task.run` negotiation and opt-in protocol v2 compatibility tests.
 
@@ -525,7 +525,7 @@ Renderer contract:
 
 The built-in renderers are `TuiRenderer`, `PlainRenderer`, and `JsonRenderer`. To add a renderer, implement `AgentUIRenderer`, render from protocol events instead of runtime internals, and add the renderer selection in `apps/cli/src/commands/run-agent.ts`.
 
-The interactive chat surface is driven by the OpenTUI mount/handle seam: `apps/tui/src/create-chat-tui.tsx` builds the `ChatStore`, mounts a React component tree under `@opentui/react` (over a node:ffi-loaded native core on Node 26.3+), and returns the `ChatTuiHandle` consumed by the imperative chat loop. Interactive layout uses the normalized `TerminalViewport` from `apps/tui/src/platform/terminal-viewport*.ts` so the shell, overlays, prompt dock, graph panes, and scroll deltas reflow from the same live terminal dimensions. A hand-rolled terminal input system remains as the non-TTY fallback path.
+The interactive chat surface is driven by the OpenTUI mount/handle seam: `apps/tui/src/create-chat-tui.tsx` builds the `ChatStore`, mounts a Solid component tree under `@opentui/solid` (over a node:ffi-loaded native core on Node 26.3+), and returns the `ChatTuiHandle` consumed by the imperative chat loop. Interactive layout uses the normalized `TerminalViewport` from `apps/tui/src/platform/terminal-viewport.ts` and `apps/tui/src/platform/terminal-viewport-solid.ts` so the shell, overlays, prompt dock, graph panes, and scroll deltas reflow from the same live terminal dimensions. A hand-rolled terminal input system remains as the non-TTY fallback path.
 
 Permission flow is implemented for the coding-agent tool path. The runtime emits permission and approval lifecycle events, default policy remains conservative, CLI can prompt synchronously, and the core desktop command service can append approval decisions over the same event stream.
 

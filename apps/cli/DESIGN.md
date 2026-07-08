@@ -9,7 +9,7 @@
 > by the graph/minimap work in T2/T3, not yet rendered).
 
 Rendering stack is **terminal-cell-based**, not web. All output is ANSI escape
-codes drawn through opentui (`@opentui/react` over a node:ffi native core on
+codes drawn through opentui (`@opentui/solid` over a node:ffi native core on
 Node 26.3+). `dagre` is used **only** for deterministic coordinate calculation
 (x/y positions); every glyph and color is drawn by existing opentui intrinsics.
 
@@ -99,7 +99,7 @@ as the main canvas (shared coordinates, scaled down) so the two never drift.
 ### Node status glyphs `[EXISTING]`
 
 Defined centrally in `abg-status-theme.ts` (`nodeStatusTheme()`, lines 36-58).
-`renderVisualGraph` (`visual-graph.ts:97`) and the React panes
+`renderVisualGraph` (`visual-graph.ts:97`) and the Solid panes
 (`AbgOverlayPanesA.tsx:187-189, 267-269`) both resolve glyphs through it, so
 the layered list and the panes can no longer drift:
 
@@ -186,7 +186,7 @@ A single source: `nodeStatusTheme()` (`abg-status-theme.ts:36-58`) returns a
 `abg-status-theme.ts:24-29`) for each `AbgNodeStatus`. `foreground` is
 optional — `idle` and `starting` carry none, so the caller renders them with
 its own dim/default style. Glyphs are the ones listed in section 4. Both
-`renderVisualGraph` (`visual-graph.ts:97`) and the React panes
+`renderVisualGraph` (`visual-graph.ts:97`) and the Solid panes
 (`AbgOverlayPanesA.tsx:187-189, 267-269`) resolve glyph + foreground through
 `nodeStatusTheme`, so the layered list and the panes can no longer drift:
 
@@ -218,7 +218,7 @@ the eye, then settles.
 | Highlight attribute | `bold` + `bright` (opentui `TextAttributes.BOLD`) |
 | Border during pulse | double-line `╔═╗╚═╝` (section 4) |
 | Termination | pulse auto-clears after one cycle; no re-arm on re-render |
-| Timer driver | `setInterval` bound to the React effect lifecycle (mirrors `useSpinnerFrame`, `spinner.ts:36-52`) |
+| Timer driver | `setInterval` bound to the Solid effect lifecycle (mirrors `useSpinnerFrame`, `spinner.ts:36-52`) |
 
 Testability: pulse timing is driven by a single injected clock so unit tests
 use Vitest fake timers (`vi.useFakeTimers()`) and advance with
