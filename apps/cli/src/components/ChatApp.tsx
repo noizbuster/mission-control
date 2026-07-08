@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/react */
 
-import { type CliRenderer, type ScrollBoxRenderable, TextAttributes, type TextareaRenderable } from '@opentui/core';
+import { type ScrollBoxRenderable, TextAttributes, type TextareaRenderable } from '@opentui/core';
 import { useKeymap } from '@opentui/keymap/react';
 import { useKeyboard, useRenderer } from '@opentui/react';
 import type * as React from 'react';
@@ -24,6 +24,8 @@ import {
     prevFile,
     prevHunk,
 } from '../platform/keymap/diff-viewer.js';
+import type { TerminalViewport } from '../platform/terminal-viewport.js';
+import { useTerminalViewport } from '../platform/terminal-viewport-react.js';
 import { AbgMinimap } from './AbgMinimap.js';
 import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from './AbgOverlay.js';
 import { ChatBottomDock } from './ChatBottomDock.js';
@@ -85,16 +87,6 @@ function AgentSpinner({ text }: { readonly text: string }): React.ReactNode {
     );
 }
 
-export type TerminalDimensions = {
-    readonly columns?: number;
-    readonly rows?: number;
-};
-
-export type RendererDimensions = {
-    readonly width: number;
-    readonly height: number;
-};
-
 export type PromptPanelRepaintKeyInput = {
     readonly inputMirror: string;
     readonly fileAutocompleteOpen: boolean;
@@ -102,12 +94,25 @@ export type PromptPanelRepaintKeyInput = {
     readonly menuRows: number;
 };
 
-export function bottomDockPolicyForTerminal(terminal: TerminalDimensions): BottomDockPolicy {
-    return bottomDockPolicy({ columns: terminal.columns ?? 80, rows: terminal.rows ?? 24 });
+export type ChatAppViewportLayout = {
+    readonly width: number;
+    readonly height: number;
+    readonly dockPolicy: BottomDockPolicy;
+    readonly promptMenuInteractionsEnabled: boolean;
+};
+
+export function bottomDockPolicyForTerminal(viewport: TerminalViewport): BottomDockPolicy {
+    return bottomDockPolicy(viewport);
 }
 
-export function terminalDimensionsFromRenderer(renderer: RendererDimensions): TerminalDimensions {
-    return { columns: renderer.width, rows: renderer.height };
+export function chatAppViewportLayout(viewport: TerminalViewport): ChatAppViewportLayout {
+    const dockPolicy = bottomDockPolicyForTerminal(viewport);
+    return {
+        width: viewport.columns,
+        height: viewport.rows,
+        dockPolicy,
+        promptMenuInteractionsEnabled: dockPolicy.menu.rows > 0,
+    };
 }
 
 export function promptPanelRepaintKey(input: PromptPanelRepaintKeyInput): string {
@@ -119,6 +124,8 @@ export function promptPanelRepaintKey(input: PromptPanelRepaintKeyInput): string
 }
 
 export type ChatAppSplitShellProps = {
+    readonly width: number;
+    readonly height: number;
     readonly onMouseUp: () => void;
     readonly upperOutputRegion: React.ReactNode;
     readonly bottomDock: React.ReactNode;
@@ -126,6 +133,8 @@ export type ChatAppSplitShellProps = {
 };
 
 export function ChatAppSplitShell({
+    width,
+    height,
     onMouseUp,
     upperOutputRegion,
     bottomDock,
@@ -133,7 +142,7 @@ export function ChatAppSplitShell({
 }: ChatAppSplitShellProps): React.ReactNode {
     return (
         // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive, not a DOM element; mouse-up only surfaces the copy-hint toast.
-        <box flexDirection="column" width="100%" height="100%" shouldFill={true} onMouseUp={onMouseUp}>
+        <box flexDirection="column" width={width} height={height} shouldFill={true} onMouseUp={onMouseUp}>
             <box flexDirection="column" flexGrow={1} shouldFill={true}>
                 {upperOutputRegion}
             </box>
@@ -141,25 +150,6 @@ export function ChatAppSplitShell({
             {modalOverlays}
         </box>
     );
-}
-
-function useRendererDimensions(renderer: CliRenderer): RendererDimensions {
-    const [dimensions, setDimensions] = useState<RendererDimensions>({
-        width: renderer.width,
-        height: renderer.height,
-    });
-    useEffect(() => {
-        const sync = (): void => {
-            setDimensions((current) => {
-                if (current.width === renderer.width && current.height === renderer.height) return current;
-                return { width: renderer.width, height: renderer.height };
-            });
-        };
-        sync();
-        const timer = setInterval(sync, 250);
-        return (): void => clearInterval(timer);
-    }, [renderer]);
-    return dimensions;
 }
 
 export type ChatAppProps = {
@@ -192,7 +182,15 @@ export function ChatApp({
 
     const keymap = useKeymap();
     const renderer = useRenderer();
-    const rendererDimensions = useRendererDimensions(renderer);
+    const viewport = useTerminalViewport();
+    const viewportRowsRef = useRef(viewport.rows);
+    viewportRowsRef.current = viewport.rows;
+    const viewportLayout = useMemo(() => chatAppViewportLayout(viewport), [viewport]);
+    const shellWidth = viewportLayout.width;
+    const shellHeight = viewportLayout.height;
+    const dockPolicy = viewportLayout.dockPolicy;
+    const promptMenuInteractionsEnabled = viewportLayout.promptMenuInteractionsEnabled;
+    const dockStatusLayout = useMemo(() => statusBarLayoutFromPolicy(dockPolicy), [dockPolicy]);
 
     // Transient toast (e.g. the selection-copy hint). Local state — presentational,
     // does not flow through ChatStore. Auto-dismisses; re-showing resets the timer.
@@ -246,10 +244,6 @@ export function ChatApp({
                     try {
                         if (captured.trim() === '') return;
                         const snap = store.getSnapshot();
-                        const promptMenuInteractionsEnabled =
-                            bottomDockPolicyForTerminal(terminalDimensionsFromRenderer(rendererDimensions)).menu.rows >
-                            0;
-
                         if (promptMenuInteractionsEnabled && captured.startsWith('#')) {
                             const insertText = resolveWorkflowCommandMenuInsertText(
                                 captured,
@@ -282,7 +276,7 @@ export function ChatApp({
                 }, 0);
             }, 0);
         };
-    }, [rendererDimensions, store, textareaRef]);
+    }, [promptMenuInteractionsEnabled, store, textareaRef]);
 
     useKeyboard((key) => {
         const isCtrlC = key.ctrl && key.name === 'c';
@@ -415,7 +409,7 @@ export function ChatApp({
         const offLayer = keymap.registerLayer({
             priority: 200,
             enabled: (): boolean => {
-                if (bottomDockPolicyForTerminal(terminalDimensionsFromRenderer(rendererDimensions)).menu.rows <= 0) {
+                if (!promptMenuInteractionsEnabled) {
                     return false;
                 }
                 const text = textareaRef.current?.plainText ?? '';
@@ -464,7 +458,7 @@ export function ChatApp({
             ],
         });
         return offLayer;
-    }, [keymap, rendererDimensions, store, textareaRef]);
+    }, [keymap, promptMenuInteractionsEnabled, store, textareaRef]);
 
     // messages.* scroll + copy layer (T10): SESSION-scoped (not textarea-gated); clipboard built from the renderer (OSC52 via opentui native core).
     useEffect(() => {
@@ -477,6 +471,7 @@ export function ChatApp({
                 {
                     scrollboxRef,
                     clipboardService: createClipboardService(renderer),
+                    getViewportRows: () => viewportRowsRef.current,
                     getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
                     getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
                     clearSelection: () => renderer.clearSelection(),
@@ -503,6 +498,7 @@ export function ChatApp({
                 {
                     scrollboxRef,
                     clipboardService: createClipboardService(renderer),
+                    getViewportRows: () => viewportRowsRef.current,
                     getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
                     getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
                     clearSelection: () => renderer.clearSelection(),
@@ -628,8 +624,6 @@ export function ChatApp({
     const messageBlocks = useStableMessageBlocks(snapshot.outputText);
     const overlayActive = snapshot.overlayMode !== 'none';
     const showWelcome = welcomeData !== undefined && snapshot.outputText === '' && !overlayActive;
-    const dockPolicy = bottomDockPolicyForTerminal(terminalDimensionsFromRenderer(rendererDimensions));
-    const dockStatusLayout = statusBarLayoutFromPolicy(dockPolicy);
     const promptRepaintKey = promptPanelRepaintKey({
         inputMirror: snapshot.inputMirror,
         fileAutocompleteOpen: snapshot.fileAutocomplete.open,
@@ -698,7 +692,7 @@ export function ChatApp({
     if (snapshot.overlayMode === 'abg') {
         if (abgOverlayController === undefined) {
             return (
-                <box flexDirection="column" width="100%" height="100%" shouldFill={true}>
+                <box flexDirection="column" width={shellWidth} height={shellHeight} shouldFill={true}>
                     <OverlayFrame variant="view" title="ABG Overlay" hint="(Ctrl+G or Esc to close)">
                         <text attributes={TextAttributes.DIM}>{'ABG overlay unavailable in this session.'}</text>
                     </OverlayFrame>
@@ -712,12 +706,13 @@ export function ChatApp({
         const modelLabel = `${providerID}/${modelID}${variantID !== undefined ? `#${variantID}` : ''}`;
         const activeTab: AbgOverlayTab = ABG_OVERLAY_TABS[abgActiveTab] ?? 'overview';
         return (
-            <box flexDirection="column" width="100%" height="100%" shouldFill={true}>
+            <box flexDirection="column" width={shellWidth} height={shellHeight} shouldFill={true}>
                 <AbgOverlay
                     store={abgOverlayController.store}
                     activeTab={activeTab}
                     scrollOffset={abgScrollOffset}
                     modelLabel={modelLabel}
+                    viewport={viewport}
                 />
             </box>
         );
@@ -728,7 +723,7 @@ export function ChatApp({
         const cursor = snapshot.diffViewerCursor;
         const model = buildDiffViewerModel(entries);
         return (
-            <box flexDirection="column" width="100%" height="100%" shouldFill={true}>
+            <box flexDirection="column" width={shellWidth} height={shellHeight} shouldFill={true}>
                 <DiffViewerOverlay entries={entries} model={model} cursor={cursor} />
             </box>
         );
@@ -736,7 +731,7 @@ export function ChatApp({
 
     if (snapshot.overlayMode === 'models-overlay') {
         return (
-            <box flexDirection="column" width="100%" height="100%" shouldFill={true}>
+            <box flexDirection="column" width={shellWidth} height={shellHeight} shouldFill={true}>
                 <ModelsOverlay store={store} />
             </box>
         );
@@ -746,6 +741,8 @@ export function ChatApp({
 
     return (
         <ChatAppSplitShell
+            width={shellWidth}
+            height={shellHeight}
             onMouseUp={handleSelectionMouseUp}
             upperOutputRegion={
                 <>
@@ -771,7 +768,7 @@ export function ChatApp({
                         <AgentSpinner text="Working..." />
                     ) : null}
                     {toast !== null ? <Toast message={toast} /> : null}
-                    {showAbgMinimap ? <AbgMinimap store={abgOverlayController.store} /> : null}
+                    {showAbgMinimap ? <AbgMinimap store={abgOverlayController.store} viewport={viewport} /> : null}
                 </>
             }
             bottomDock={
@@ -780,6 +777,8 @@ export function ChatApp({
                     textareaRef={textareaRef}
                     scrollboxRef={scrollboxRef}
                     inputFocused={!overlayActive}
+                    viewportColumns={viewport.columns}
+                    viewportRows={viewport.rows}
                     statusLayout={dockStatusLayout}
                     menuPolicy={dockPolicy.menu}
                     {...(statusBarProps !== undefined ? { statusBarProps } : {})}

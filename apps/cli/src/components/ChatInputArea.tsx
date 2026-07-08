@@ -24,6 +24,7 @@ import {
 } from '../commands/terminal-controls.js';
 import { evaluatePaste, makeMarker } from '../platform/keymap/bracketed-paste.js';
 import { collectDiffEntries } from '../platform/keymap/diff-viewer.js';
+import { halfPageScrollDelta } from '../platform/keymap/messages-scroll.js';
 import { ChatInputTextarea } from './ChatInputTextarea.js';
 import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -61,6 +62,7 @@ export type ChatInputAreaProps = {
     readonly textareaRef: React.RefObject<TextareaRenderable | null>;
     readonly scrollboxRef: React.RefObject<ScrollBoxRenderable | null>;
     readonly focused: boolean;
+    readonly viewportRows: number;
     readonly promptMenuInteractionsEnabled?: boolean;
 };
 
@@ -69,6 +71,7 @@ export function ChatInputArea({
     textareaRef,
     scrollboxRef,
     focused,
+    viewportRows,
     promptMenuInteractionsEnabled = true,
 }: ChatInputAreaProps): React.ReactNode {
     const selectorStoreRef = useRef<ChatSelectorStore<ReturnType<typeof selectInputAreaSlice>> | null>(null);
@@ -316,13 +319,13 @@ export function ChatInputArea({
             }
             if (key.name === 'pageup') {
                 key.preventDefault();
-                const half = Math.floor((process.stdout.rows ?? 24) / 2);
+                const half = halfPageScrollDelta(viewportRows);
                 scrollboxRef.current?.scrollBy(-half);
                 return;
             }
             if (key.name === 'pagedown') {
                 key.preventDefault();
-                const half = Math.floor((process.stdout.rows ?? 24) / 2);
+                const half = halfPageScrollDelta(viewportRows);
                 scrollboxRef.current?.scrollBy(half);
                 return;
             }
@@ -364,7 +367,16 @@ export function ChatInputArea({
                 }
             }
         },
-        [store, textareaRef, scrollboxRef, plainText, applyFileCompletion, handleSubmit, promptMenuInteractionsEnabled],
+        [
+            store,
+            textareaRef,
+            scrollboxRef,
+            plainText,
+            applyFileCompletion,
+            handleSubmit,
+            promptMenuInteractionsEnabled,
+            viewportRows,
+        ],
     );
 
     const handlePaste = useCallback(

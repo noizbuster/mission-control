@@ -81,16 +81,18 @@ function createFakeClipboard(supported = true): FakeClipboard {
     };
 }
 
+type BuildDepsOptions = {
+    readonly selectionText?: string;
+    readonly osc52?: boolean;
+    readonly getViewportRows?: () => number;
+};
+
 /** Build a deps bag around a recording scrollbox + fake clipboard + text provider. */
-function buildDeps(
-    scrollHeight: number,
-    lastAssistantText: string,
-    selection: { text: string; osc52?: boolean } = { text: '' },
-) {
+function buildDeps(scrollHeight: number, lastAssistantText: string, options: BuildDepsOptions = {}) {
     const scrollbox = createRecordingScrollbox(scrollHeight);
-    const clipboard = createFakeClipboard(selection.osc52 ?? true);
+    const clipboard = createFakeClipboard(options.osc52 ?? true);
     const clearCalls: number[] = [];
-    const selectionState = { text: selection.text };
+    const selectionState = { text: options.selectionText ?? '' };
     return {
         scrollbox,
         clipboard,
@@ -100,6 +102,7 @@ function buildDeps(
             clipboardService: clipboard,
             getLastAssistantText: () => lastAssistantText,
             getSelectionText: () => selectionState.text,
+            getViewportRows: options.getViewportRows ?? (() => 24),
             clearSelection: () => {
                 clearCalls.push(1);
                 selectionState.text = '';
@@ -128,7 +131,7 @@ describe('halfPageScrollDelta', () => {
 describe('T10 messages scroll layer — scroll dispatch', () => {
     // Not tautological: the pure halfPageScrollDelta test independently pins
     // floor(rows/2), so a handler bug (scrolling by `rows`) fails this.
-    const expectedHalf = halfPageScrollDelta(process.stdout.rows ?? 24);
+    const expectedHalf = halfPageScrollDelta(24);
 
     it('messages.line.up (ctrl+alt+y) scrollBy(-1)', () => {
         const harness = createTestKeymap({ defaultKeys: true });
@@ -183,6 +186,23 @@ describe('T10 messages scroll layer — scroll dispatch', () => {
         harness.host.press('d', { ctrl: true, meta: true });
 
         expect(scrollbox.scrollByCalls).toEqual([expectedHalf]);
+
+        off();
+        harness.cleanup();
+    });
+
+    it('messages.half_page.down uses the current viewport rows from the getter after 40 -> 20 resize', () => {
+        const harness = createTestKeymap({ defaultKeys: true });
+        harness.host.focus(harness.root);
+        let viewportRows = 40;
+        const { scrollbox, deps } = buildDeps(200, '', { getViewportRows: () => viewportRows });
+        const off = registerMessagesScrollLayer(harness.keymap, deps);
+
+        harness.host.press('d', { ctrl: true, meta: true });
+        viewportRows = 20;
+        harness.host.press('d', { ctrl: true, meta: true });
+
+        expect(scrollbox.scrollByCalls).toEqual([20, 10]);
 
         off();
         harness.cleanup();
@@ -292,7 +312,7 @@ describe('selection.copy (ctrl+d, high-priority selection-gated layer)', () => {
         const harness = createTestKeymap({ defaultKeys: true });
         harness.host.focus(harness.root);
         const expected = 'selected block';
-        const { clipboard, clearCalls, deps } = buildDeps(100, '', { text: expected });
+        const { clipboard, clearCalls, deps } = buildDeps(100, '', { selectionText: expected });
         const off = registerSelectionCopyLayer(harness.keymap, deps);
 
         harness.host.press('d', { ctrl: true });
@@ -324,7 +344,7 @@ describe('selection.copy (ctrl+d, high-priority selection-gated layer)', () => {
     it('does NOT copy or clear when OSC52 is unsupported', () => {
         const harness = createTestKeymap({ defaultKeys: true });
         harness.host.focus(harness.root);
-        const { clipboard, clearCalls, deps } = buildDeps(100, '', { text: 'block', osc52: false });
+        const { clipboard, clearCalls, deps } = buildDeps(100, '', { selectionText: 'block', osc52: false });
         const off = registerSelectionCopyLayer(harness.keymap, deps);
 
         harness.host.press('d', { ctrl: true });

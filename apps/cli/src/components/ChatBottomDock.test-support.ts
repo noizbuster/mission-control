@@ -76,6 +76,7 @@ export function dockNodeForSlice(
     dockSlice: ChatBottomDockSlice,
     menuPolicy: BottomDockMenuPolicy,
     promptAdjacentPanel?: ReactNode,
+    viewportColumns?: number,
 ): ReactNode {
     const store = createChatStore();
     return ChatBottomDockBase({
@@ -85,6 +86,7 @@ export function dockNodeForSlice(
         statusBarProps: baseStatusProps(),
         statusLayout,
         menuPolicy,
+        ...(viewportColumns !== undefined ? { viewportColumns } : {}),
         ...(promptAdjacentPanel !== undefined ? { promptAdjacentPanel } : {}),
         dockSlice,
     });

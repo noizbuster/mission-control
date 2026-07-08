@@ -16,12 +16,12 @@
  * <leader>y) fire regardless of textarea focus because no higher-priority layer
  * binds them — the keymap continues to lower-priority layers for unbound chords.
  *
- * The existing Home/End/PgUp/PgDn branches in bridgeTextareaKeyDown stay (bare
+ * The existing Home/End/PgUp/PgDn branches in the textarea keydown handler stay (bare
  * keys); T10 ADDS finer-grained ctrl+alt/ctrl+shift chords alongside them.
  *
  * Module-graph safety: imports only @opentui/keymap types (erased at compile
  * time) and the pure-data keybind.ts registry. NO @opentui/core. Dynamically
- * imported by the opentui bridge (TUI path only) so --no-tui stays clean.
+ * imported by the opentui TUI path only so --no-tui stays clean.
  */
 
 import type { Command, Keymap, KeymapEvent } from '@opentui/keymap';
@@ -51,6 +51,7 @@ export interface ScrollboxRef {
 export interface MessagesScrollDeps {
     readonly scrollboxRef: ScrollboxRef;
     readonly clipboardService: ClipboardService;
+    readonly getViewportRows: () => number;
     /** Returns the last `Assistant:` block text; empty when none exists. */
     readonly getLastAssistantText: () => string;
     /** Returns the renderer's active drag-selection text, or '' when none. */
@@ -60,18 +61,9 @@ export interface MessagesScrollDeps {
 }
 
 // ---------------------------------------------------------------------------
-// Terminal-rows helper
-// ---------------------------------------------------------------------------
-
-const DEFAULT_TERMINAL_ROWS = 24;
-
-function terminalRows(): number {
-    return process.stdout.rows ?? DEFAULT_TERMINAL_ROWS;
-}
-
 /**
  * Half-page scroll delta: `floor(rows / 2)`. Mirrors the existing PgUp/PgDn
- * branch in `bridgeTextareaKeyDown` so half-page scroll is consistent with
+ * branch in the textarea keydown handler so half-page scroll is consistent with
  * full-page scroll. Exported as a pure function for deterministic unit testing.
  */
 export function halfPageScrollDelta(rows: number): number {
@@ -84,7 +76,7 @@ export function halfPageScrollDelta(rows: number): number {
 
 /**
  * The 7 messages.* commands T10 owns. messages.page.up/down (bare pageup/
- * pagedown) stay on the existing bridgeTextareaKeyDown handlers; messages.undo/
+ * pagedown) stay on the existing textarea keydown handlers; messages.undo/
  * messages.redo are deferred. Listed explicitly so the SET of commands is
  * clear even as the chords remain rebindable via keybind.ts.
  */
@@ -164,7 +156,7 @@ export function registerMessagesScrollLayer<TTarget extends object, TEvent exten
     deps: MessagesScrollDeps,
     options: { readonly isEnabled?: () => boolean } = {},
 ): () => void {
-    const { scrollboxRef, clipboardService, getLastAssistantText } = deps;
+    const { scrollboxRef, clipboardService, getViewportRows, getLastAssistantText } = deps;
 
     const commands: readonly Command<TTarget, TEvent>[] = [
         {
@@ -187,7 +179,7 @@ export function registerMessagesScrollLayer<TTarget extends object, TEvent exten
             name: 'messages.half_page.up',
             desc: 'Scroll messages up by half page',
             run: () => {
-                scrollboxRef.current?.scrollBy(-halfPageScrollDelta(terminalRows()));
+                scrollboxRef.current?.scrollBy(-halfPageScrollDelta(getViewportRows()));
                 return true;
             },
         },
@@ -195,7 +187,7 @@ export function registerMessagesScrollLayer<TTarget extends object, TEvent exten
             name: 'messages.half_page.down',
             desc: 'Scroll messages down by half page',
             run: () => {
-                scrollboxRef.current?.scrollBy(halfPageScrollDelta(terminalRows()));
+                scrollboxRef.current?.scrollBy(halfPageScrollDelta(getViewportRows()));
                 return true;
             },
         },

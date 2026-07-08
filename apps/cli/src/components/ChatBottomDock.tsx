@@ -7,10 +7,13 @@ import { type ChatSelectorStore, createChatSelectorStore } from '../commands/cha
 import type { ChatStore, ChatStoreState } from '../commands/chat-store.js';
 import type { SlashCommandMenuState } from '../commands/interactive-chat-command-menu.js';
 import type { FileAutocompleteState } from '../commands/interactive-chat-file-autocomplete.js';
+import { resolveSeparatorState } from '../commands/separator-state.js';
+import { DEFAULT_TERMINAL_VIEWPORT } from '../platform/terminal-viewport.js';
 import { ChatInputArea } from './ChatInputArea.js';
 import { type BottomDockMenuPolicy, bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { FileAutocompletePanel } from './FileAutocompletePanel.js';
 import { QuestionOverlay } from './OverlayPanels.js';
+import { Separator, type SeparatorState } from './Separator.js';
 import { SlashMenuPanel } from './SlashMenuPanel.js';
 import { BottomStatusBar, type StatusBarLayout, type StatusBarProps, TopStatusBar } from './StatusBar.js';
 
@@ -27,6 +30,7 @@ export type ChatBottomDockSlice = {
     readonly contextTokensMax: number | undefined;
     readonly sessionId: string;
     readonly approvalLevel: ChatStoreState['approvalLevel'];
+    readonly separatorState: SeparatorState;
 };
 
 export type ChatBottomDockProps = {
@@ -34,6 +38,8 @@ export type ChatBottomDockProps = {
     readonly textareaRef: React.RefObject<TextareaRenderable | null>;
     readonly scrollboxRef: React.RefObject<ScrollBoxRenderable | null>;
     readonly inputFocused?: boolean;
+    readonly viewportColumns?: number;
+    readonly viewportRows?: number;
     readonly statusBarProps?: StatusBarProps;
     readonly statusLayout?: StatusBarLayout;
     readonly menuPolicy?: BottomDockMenuPolicy;
@@ -72,6 +78,11 @@ export function selectChatBottomDockSlice(snapshot: ChatStoreState): ChatBottomD
         contextTokensMax: snapshot.contextTokensMax,
         sessionId: snapshot.sessionId,
         approvalLevel: snapshot.approvalLevel,
+        separatorState: resolveSeparatorState({
+            generating: snapshot.generating,
+            approvalActive: snapshot.overlayMode === 'approval',
+            questionActive: snapshot.overlayMode === 'question',
+        }),
     };
 }
 
@@ -146,6 +157,8 @@ export function ChatBottomDockBase({
     textareaRef,
     scrollboxRef,
     inputFocused = true,
+    viewportColumns = DEFAULT_TERMINAL_VIEWPORT.columns,
+    viewportRows = DEFAULT_TERMINAL_VIEWPORT.rows,
     statusBarProps,
     statusLayout,
     menuPolicy = DEFAULT_MENU_POLICY,
@@ -161,6 +174,7 @@ export function ChatBottomDockBase({
         <box flexDirection="column" flexShrink={0}>
             {topStatusBarProps !== undefined ? <TopStatusBar {...topStatusBarProps} /> : null}
             {promptPanels}
+            <Separator state={dockSlice.separatorState} width={Math.max(1, viewportColumns)} />
             {dockSlice.inputMode === 'question' ? (
                 <QuestionOverlay store={store} />
             ) : (
@@ -169,6 +183,7 @@ export function ChatBottomDockBase({
                     textareaRef={textareaRef}
                     scrollboxRef={scrollboxRef}
                     focused={inputFocused}
+                    viewportRows={viewportRows}
                     promptMenuInteractionsEnabled={menuPolicy.rows > 0}
                 />
             )}

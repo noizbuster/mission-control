@@ -34,8 +34,15 @@ import { ChatInputArea, type ChatInputAreaProps } from './ChatInputArea.js';
 import { bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { FileAutocompletePanel, type FileAutocompletePanelProps } from './FileAutocompletePanel.js';
 import { QuestionOverlay } from './OverlayPanels.js';
+import { Separator, type SeparatorProps } from './Separator.js';
 import { SlashMenuPanel, type SlashMenuPanelProps } from './SlashMenuPanel.js';
 import { BottomStatusBar, type StatusBarProps, TopStatusBar } from './StatusBar.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+function readChatInputAreaSource(): string {
+    return readFileSync(resolve(process.cwd(), 'apps/cli/src/components/ChatInputArea.tsx'), 'utf8');
+}
 
 describe('ChatBottomDockBase composition', () => {
     it('constructs normal input mode in status, panel, input, status order', () => {
@@ -60,6 +67,8 @@ describe('ChatBottomDockBase composition', () => {
             store,
             textareaRef,
             scrollboxRef,
+            viewportColumns: 121,
+            viewportRows: 40,
             statusBarProps: baseStatusProps(onCopySessionID),
             statusLayout,
             promptAdjacentPanel,
@@ -68,7 +77,7 @@ describe('ChatBottomDockBase composition', () => {
 
         // Then: the dock composes the expected children and passes runtime refs/status through.
         const children = elementChildren(node);
-        expect(children.length).toBe(4);
+        expect(children.length).toBe(5);
         const topStatusProps = propsFor<StatusBarProps>(childAt(children, 0), TopStatusBar);
         expect([
             topStatusProps.providerID,
@@ -79,14 +88,17 @@ describe('ChatBottomDockBase composition', () => {
             topStatusProps.statusLayout,
         ]).toEqual(['openai', 'gpt-5', 'reasoning-high', 12345, 200000, statusLayout]);
         expect(dockPromptPanelChildren(node).length).toBe(1);
-        const inputProps = propsFor<ChatInputAreaProps>(childAt(children, 2), ChatInputArea);
+        const separatorProps = propsFor<SeparatorProps>(childAt(children, 2), Separator);
+        expect([separatorProps.state, separatorProps.width]).toEqual(['idle', 121]);
+        const inputProps = propsFor<ChatInputAreaProps>(childAt(children, 3), ChatInputArea);
         expect([inputProps.store, inputProps.textareaRef, inputProps.scrollboxRef, inputProps.focused]).toEqual([
             store,
             textareaRef,
             scrollboxRef,
             true,
         ]);
-        const bottomStatusProps = propsFor<StatusBarProps>(childAt(children, 3), BottomStatusBar);
+        expect(inputProps.viewportRows).toBe(40);
+        const bottomStatusProps = propsFor<StatusBarProps>(childAt(children, 4), BottomStatusBar);
         expect([
             bottomStatusProps.sessionID,
             bottomStatusProps.approvalLevel,
@@ -107,15 +119,19 @@ describe('ChatBottomDockBase composition', () => {
             store,
             textareaRef,
             scrollboxRef,
+            viewportColumns: 80,
+            viewportRows: 24,
             statusBarProps: baseStatusProps(),
             dockSlice: selectChatBottomDockSlice(store.getSnapshot()),
         });
 
         // Then: the question panel occupies the input slot instead of ChatInputArea.
         const children = elementChildren(node);
-        expect(children.length).toBe(3);
+        expect(children.length).toBe(4);
+        const separatorProps = propsFor<SeparatorProps>(childAt(children, 1), Separator);
+        expect([separatorProps.state, separatorProps.width]).toEqual(['awaiting_input', 80]);
         const questionProps = propsFor<{ readonly store: ReturnType<typeof createChatStore> }>(
-            childAt(children, 1),
+            childAt(children, 2),
             QuestionOverlay,
         );
         expect(questionProps.store).toBe(store);
@@ -133,6 +149,8 @@ describe('ChatBottomDockBase composition', () => {
             store,
             textareaRef,
             scrollboxRef,
+            viewportColumns: 80,
+            viewportRows: 24,
             statusBarProps: baseStatusProps(),
             inputFocused: false,
             dockSlice: selectChatBottomDockSlice(store.getSnapshot()),
@@ -140,8 +158,35 @@ describe('ChatBottomDockBase composition', () => {
 
         // Then: it still renders ChatInputArea with caller-owned focus and no approval modal child appears.
         const children = elementChildren(node);
-        const inputProps = propsFor<ChatInputAreaProps>(childAt(children, 1), ChatInputArea);
-        expect([children.length, inputProps.focused]).toEqual([3, false]);
+        const separatorProps = propsFor<SeparatorProps>(childAt(children, 1), Separator);
+        const inputProps = propsFor<ChatInputAreaProps>(childAt(children, 2), ChatInputArea);
+        expect([children.length, separatorProps.state, inputProps.focused]).toEqual([4, 'awaiting_input', false]);
+    });
+});
+
+describe('ChatBottomDockBase separator', () => {
+    it('derives separator state from the selected slice and width from viewport columns', () => {
+        const node = dockNodeForSlice(
+            dockSliceWith({ separatorState: 'running' }),
+            bottomDockPolicy({ columns: 120, rows: 24 }).menu,
+            undefined,
+            40,
+        );
+        const children = elementChildren(node);
+
+        const separatorProps = propsFor<SeparatorProps>(childAt(children, 1), Separator);
+        expect([separatorProps.state, separatorProps.width]).toEqual(['running', 40]);
+    });
+});
+
+describe('ChatInputArea viewport contract', () => {
+    it('uses injected viewportRows for PgUp/PgDn scroll and does not read process stdout rows', () => {
+        const source = readChatInputAreaSource();
+        const stdoutRowsToken = ['process', 'stdout', 'rows'].join('.');
+
+        expect(source).toContain('viewportRows');
+        expect(source).toContain('halfPageScrollDelta(viewportRows)');
+        expect(source).not.toContain(stdoutRowsToken);
     });
 });
 
@@ -214,8 +259,8 @@ describe('ChatBottomDockBase prompt-adjacent panels', () => {
 
         // Then: the dock renders status/input/status only, avoiding a negative-height or overflow-like panel.
         expect(policy.menu.rows).toBe(0);
-        expect(nodes.map((node) => elementChildren(node).length)).toEqual([3, 3]);
-        const inputProps = propsFor<ChatInputAreaProps>(childAt(elementChildren(nodes[0]), 1), ChatInputArea);
+        expect(nodes.map((node) => elementChildren(node).length)).toEqual([4, 4]);
+        const inputProps = propsFor<ChatInputAreaProps>(childAt(elementChildren(nodes[0]), 2), ChatInputArea);
         expect(inputProps.promptMenuInteractionsEnabled).toBe(false);
     });
 
@@ -237,7 +282,7 @@ describe('ChatBottomDockBase prompt-adjacent panels', () => {
 
         // Then: the same column wrapper is present and contains only the custom panel.
         const children = elementChildren(node);
-        expect(children.length).toBe(4);
+        expect(children.length).toBe(5);
         const panelChildren = dockPromptPanelChildren(node);
         expect(panelChildren.length).toBe(1);
         const customPanelProps = propsFor<{ readonly children?: ReactNode }>(childAt(panelChildren, 0), 'box');
@@ -290,7 +335,7 @@ describe('selectChatBottomDockSlice', () => {
         dispose();
     });
 
-    it('does not notify when a non-question modal overlay opens', () => {
+    it('notifies when approval changes the live separator state but keeps approval modal out of the input slot', () => {
         // Given: a dock selector snapshot in normal input mode.
         const store = createChatStore();
         const selectorStore = createChatSelectorStore(store, selectChatBottomDockSlice);
@@ -301,10 +346,13 @@ describe('selectChatBottomDockSlice', () => {
         // When: a modal overlay that ChatApp owns opens.
         store.showApproval('bash.run', 'run tests');
 
-        // Then: the dock slice treats it as the same input mode and stays stable.
+        // Then: the dock slice updates only the separator state; approval modal rendering stays outside the dock.
         expect(store.getSnapshot().overlayMode).toBe('approval');
-        expect(listener).not.toHaveBeenCalled();
-        expect(selectorStore.getSnapshot()).toBe(before);
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(selectorStore.getSnapshot()).toMatchObject({
+            inputMode: before.inputMode,
+            separatorState: 'awaiting_input',
+        });
         dispose();
     });
 });

@@ -18,6 +18,11 @@ type TextareaPropShape = {
     readonly cursorColor: string;
 };
 
+type TextareaFramePropShape = {
+    readonly border?: readonly string[];
+    readonly width?: string;
+};
+
 const noopCallbacks = {
     onSubmit: (): void => {},
     onContentChange: (_text: string): void => {},
@@ -44,7 +49,28 @@ function mountTextarea(props: ChatInputTextareaProps): TextareaPropShape {
     return boxChildren.props as TextareaPropShape;
 }
 
+function mountTextareaFrame(props: ChatInputTextareaProps): TextareaFramePropShape {
+    const node: ReactNode = ChatInputTextareaBase(props);
+    if (!isValidElement(node)) {
+        throw new Error('ChatInputTextarea did not return a valid element');
+    }
+    return node.props as TextareaFramePropShape;
+}
+
 describe('ChatInputTextarea', () => {
+    describe('frame', () => {
+        it('renders a full-width left and right input frame so wrapped prompt rows align', () => {
+            const frameProps = mountTextareaFrame({
+                ...noopCallbacks,
+                textareaRef: { current: null } as RefObject<TextareaRenderable | null>,
+                focused: true,
+            });
+
+            expect(frameProps.border).toEqual(['left', 'right']);
+            expect(frameProps.width).toBe('100%');
+        });
+    });
+
     describe('onContentChange', () => {
         it('forwards ref.current.plainText to the parent callback when the textarea content changes', () => {
             const received: string[] = [];
