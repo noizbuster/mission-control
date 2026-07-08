@@ -5,9 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@opentui/react':
-    hash: f6390c536c950acf0c830de14b199ff10c3d2f274b1bb9acf4d1da4b0b364f8f
-    path: patches/@opentui__react.patch
+  '@opentui/react@0.4.3':
+    hash: 84f565e973cc426189ef6462d869e4aa326ddbdea5acbb390924c89e776b8111
+    path: patches/@opentui__react@0.4.3.patch
 
 importers:
 
@@ -47,14 +47,14 @@ importers:
         specifier: workspace:*
         version: link:../../packages/protocol
       '@opentui/core':
-        specifier: ^0.4.2
-        version: 0.4.2(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)
+        specifier: ^0.4.3
+        version: 0.4.3(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)
       '@opentui/keymap':
-        specifier: ^0.4.2
-        version: 0.4.2(@opentui/react@0.4.2(patch_hash=f6390c536c950acf0c830de14b199ff10c3d2f274b1bb9acf4d1da4b0b364f8f)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)(ws@8.21.0))(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)
+        specifier: ^0.4.3
+        version: 0.4.3(@opentui/react@0.4.3(patch_hash=84f565e973cc426189ef6462d869e4aa326ddbdea5acbb390924c89e776b8111)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)(ws@8.21.0))(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)
       '@opentui/react':
-        specifier: ^0.4.2
-        version: 0.4.2(patch_hash=f6390c536c950acf0c830de14b199ff10c3d2f274b1bb9acf4d1da4b0b364f8f)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)(ws@8.21.0)
+        specifier: ^0.4.3
+        version: 0.4.3(patch_hash=84f565e973cc426189ef6462d869e4aa326ddbdea5acbb390924c89e776b8111)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)(ws@8.21.0)
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17
@@ -103,7 +103,7 @@ importers:
         version: 2.11.1
       '@vitejs/plugin-react':
         specifier: ^6.0.2
-        version: 6.0.2(vite@8.0.16(@types/node@26.0.0)(esbuild@0.27.7)(yaml@2.9.0))
+        version: 6.0.2(vite@8.0.16(@types/node@26.1.1)(esbuild@0.27.7)(yaml@2.9.0))
       react:
         specifier: ^19.0.0
         version: 19.2.7
@@ -112,7 +112,7 @@ importers:
         version: 19.2.7(react@19.2.7)
       vite:
         specifier: ^8.0.16
-        version: 8.0.16(@types/node@26.0.0)(esbuild@0.27.7)(yaml@2.9.0)
+        version: 8.0.16(@types/node@26.1.1)(esbuild@0.27.7)(yaml@2.9.0)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -594,56 +594,56 @@ packages:
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
     engines: {node: '>=8.0.0'}
 
-  '@opentui/core-darwin-arm64@0.4.2':
-    resolution: {integrity: sha512-is+O+sS/l3E9cZXyM9pRF1WhqnE+hYSPYoZkbseR9CthJcaWPGi3R3jUJa1cLj325252jWgxVupnDqFUtKg36w==}
+  '@opentui/core-darwin-arm64@0.4.3':
+    resolution: {integrity: sha512-p5+7AAxpxGuDGagyQfewKtmTFnN7THvTVY4FyKqUtJomNaHdQXPHztapNNzMx0DGWbwOUbVKzpL+yc3CZY3chQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@opentui/core-darwin-x64@0.4.2':
-    resolution: {integrity: sha512-ACi42h81DurSeybUAD1XyKT6xmXZcKeTxS54lZFi0CVZh46w0g99vNj8PlQzIFXvvFLT0e0IlRS//eWSWS2zGQ==}
+  '@opentui/core-darwin-x64@0.4.3':
+    resolution: {integrity: sha512-+fh0vEUE0lwVC7RW5ijYLRlTLp5NfvCRj8SzxDVd7IL2j2ssB6YXcfIbXq2EW7UGnrejwPRXf1tgUrIXW9KmOw==}
     cpu: [x64]
     os: [darwin]
 
-  '@opentui/core-linux-arm64-musl@0.4.2':
-    resolution: {integrity: sha512-heNciL2ngPU+kq1h01PHLsxn6Fr8iqTFtbxSdVbhaY3XihuIjkuXyEhFeuoa1lsXY7Bb2gpWnX5EQVWnZsAuDQ==}
+  '@opentui/core-linux-arm64-musl@0.4.3':
+    resolution: {integrity: sha512-8p8g8/AEq/xFGpQ7XcIFKcAqjc0QwsZcv+Ll9RbCDpUA56FGH6jfLDir0KYTNTgYXJTIrBIENI9K46VuxMUMQA==}
     cpu: [arm64]
     os: [linux]
 
-  '@opentui/core-linux-arm64@0.4.2':
-    resolution: {integrity: sha512-RjOx2HcjLRtGSy9WrAGSdr5M9SpJuPifPORpImx6Mciovw0ltnE0uoYjIyor82uf6/LExWC7YA2AcAl+YBxayA==}
+  '@opentui/core-linux-arm64@0.4.3':
+    resolution: {integrity: sha512-gl6qA5QJy6u8Cbt7gOtHbhhfMZ4qQDb0kEwFXHcMGmbnKzz4OHoq74D6tNjyvSQB9saoC7C6C0tvn2DcJOuNog==}
     cpu: [arm64]
     os: [linux]
 
-  '@opentui/core-linux-x64-musl@0.4.2':
-    resolution: {integrity: sha512-Cjv6Bv7l3p/KLNJr5RyqCS0FmRlAGJnkA2IK3S+HkHhCOv/O02S1G+DBUY6POnyjp1eNy95vauustApobhdbig==}
+  '@opentui/core-linux-x64-musl@0.4.3':
+    resolution: {integrity: sha512-/QiFpCrpU2O7vy8QYmLIQYbvAtKDgmqcVjR7dGtqSzkiQk3ktNJoo5RozG7ueXnjung1Wp0nKldKxo2Csg/OrA==}
     cpu: [x64]
     os: [linux]
 
-  '@opentui/core-linux-x64@0.4.2':
-    resolution: {integrity: sha512-9s0s/ooK+AhWP306By3gu+XhzcVEThC2sqKMPK1nQmGDujQhd+xOrtbtfCVcJSx62UzAovC2VNqypvP8vHByOg==}
+  '@opentui/core-linux-x64@0.4.3':
+    resolution: {integrity: sha512-dXpJitiZdYE3hq2Pvx6e9I0uPQSOcnaLLp1pDgWAHv+3kvKSHEX//9Yr/pV/Ua6qqT7p+2D/K4vXNap/NKVo2w==}
     cpu: [x64]
     os: [linux]
 
-  '@opentui/core-win32-arm64@0.4.2':
-    resolution: {integrity: sha512-mfJZrJ0TNPFRZUzXNsxAPe1YdiWsy/vbTl93+yeXGHPI1B8Qnk9V5hpzSxxEyBGhlTHSfGNtgiO+VrrdRC3kZA==}
+  '@opentui/core-win32-arm64@0.4.3':
+    resolution: {integrity: sha512-Mx2zuOjrhm/z2SDS6RExIyjP/SnN/8QhhagxURUw0jQi/NssGSeAllu1cBAFFnhobJL5QLTE4FU4CRhUK9svgg==}
     cpu: [arm64]
     os: [win32]
 
-  '@opentui/core-win32-x64@0.4.2':
-    resolution: {integrity: sha512-P2oguG3ng3OMjAdasFSA3GhHaQXtzDUsIRDGbzWFOimpZ/zMemidp+JQ0V8V6XwK6Utk5G0aQ03oBaRCoLyYDw==}
+  '@opentui/core-win32-x64@0.4.3':
+    resolution: {integrity: sha512-NuoqvWKGXaYnmlqvu7Gg2lLI6yVMnS9OfWBvxp+7Q+McSgHFSTQmYBXaPpvQ8HikpQXE1nCeMPtuSG4PdZHe2w==}
     cpu: [x64]
     os: [win32]
 
-  '@opentui/core@0.4.2':
-    resolution: {integrity: sha512-ulx6RMqftf2fm7Itf9e81GcCDMNY6NAhmnKYhllDOMYD+PxYXR+vomy2bxQNV5ow31RE7s8WQFnb7hWTRUbx2g==}
+  '@opentui/core@0.4.3':
+    resolution: {integrity: sha512-rrJfAk13tALDqldYjhc78eWQ+aKq1iknJgffIOg3OwyZoqQo+p6gtuqyhmWvXIfQzlNUbpgpCPcxbXlhMnlaHQ==}
     peerDependencies:
       web-tree-sitter: 0.25.10
 
-  '@opentui/keymap@0.4.2':
-    resolution: {integrity: sha512-wxBEFfWgm3feqCRLckWg1JH4tbMJinpyK3yobkLTsWJ7PDsM+fPoFMyQ8ieKVdUL2eP6ELTmHvM1bHKShZ7SUQ==}
+  '@opentui/keymap@0.4.3':
+    resolution: {integrity: sha512-sinX0pyQBRrEvo89PSSUbSUDIYpL3xWo81VEfec58VFoVRB5FG48/deAtvRTQfJ8w1kgbzN8hzdOXdSm61zBmw==}
     peerDependencies:
-      '@opentui/react': 0.4.2
-      '@opentui/solid': 0.4.2
+      '@opentui/react': 0.4.3
+      '@opentui/solid': 0.4.3
       react: '>=19.2.0'
       solid-js: 1.9.12
     peerDependenciesMeta:
@@ -656,8 +656,8 @@ packages:
       solid-js:
         optional: true
 
-  '@opentui/react@0.4.2':
-    resolution: {integrity: sha512-SsteuclEw72gUBzp/mZjADSNS1jJJr4htB89euicn+Atl62ZvO22wuLE9hBFDCpumtgG3sbSe+7XtV6vW1orXA==}
+  '@opentui/react@0.4.3':
+    resolution: {integrity: sha512-HtC/+lMURaZlifiJNVsn84YqKMywXQmkeSNbUTlbbeS6YM6reahaacnZEYZdnEUgklO6+r/J1tG8UBhqO26X7Q==}
     peerDependencies:
       react: '>=19.2.0'
       react-devtools-core: ^7.0.1
@@ -781,6 +781,9 @@ packages:
 
   '@types/node@26.0.0':
     resolution: {integrity: sha512-vf2YFi1iY9lHGwNJMs01biZFbKJkrZR1T6/MlzjhJLPdntOHLhTrDSnSVcdtvjihi4VQNlrFRIxLsDBlQpAipA==}
+
+  '@types/node@26.1.1':
+    resolution: {integrity: sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw==}
 
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
@@ -1041,8 +1044,8 @@ packages:
   buffer@5.7.1:
     resolution: {integrity: sha512-EHcyIPBQ4BSGlvjB16k5KgAJ27CIsHY/2JBmCRReo48y9rQ3MaUzWX3KVlBa4U7MyX02HdVj0K7C3WaB3ju7FQ==}
 
-  bun-ffi-structs@0.2.3:
-    resolution: {integrity: sha512-pgJiXP+hEgFo9qG51J6ItfY4ocs3vniwNzJ9WhoakB3QB2GdzQxX2EXssentPYlB2hOfJrTjO6iIQkWYzUodpg==}
+  bun-ffi-structs@0.2.4:
+    resolution: {integrity: sha512-AJzsqoVFs1KBbJbWHIYrVZLDC3NhTqqh25awRXqzoLzmBAKr5oqk6+CwuYHAekKx+VBCYVohBoKuRq40dV+TYg==}
     peerDependencies:
       typescript: ^5
 
@@ -1859,8 +1862,8 @@ packages:
     resolution: {integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==}
     engines: {node: '>=8'}
 
-  shell-quote@1.8.4:
-    resolution: {integrity: sha512-VsC6n6vz1ihYYyZZwX7YZSF5l5x36ca17OC+a69h94YqB7X6XLwf+5MOgynYir2SLFUbl8gIYvBo8K8RoNQ6bQ==}
+  shell-quote@1.9.0:
+    resolution: {integrity: sha512-Iov+JwFv/2HcTpcwNMKd8+IWNb8tboQJNQTkAY/LLVK7gGH9jy+LGkVqPxfekHl+yMmiqXszdGWXgkfml7hjqA==}
     engines: {node: '>= 0.4'}
 
   side-channel-list@1.0.1:
@@ -2483,63 +2486,63 @@ snapshots:
 
   '@opentelemetry/api@1.9.1': {}
 
-  '@opentui/core-darwin-arm64@0.4.2':
+  '@opentui/core-darwin-arm64@0.4.3':
     optional: true
 
-  '@opentui/core-darwin-x64@0.4.2':
+  '@opentui/core-darwin-x64@0.4.3':
     optional: true
 
-  '@opentui/core-linux-arm64-musl@0.4.2':
+  '@opentui/core-linux-arm64-musl@0.4.3':
     optional: true
 
-  '@opentui/core-linux-arm64@0.4.2':
+  '@opentui/core-linux-arm64@0.4.3':
     optional: true
 
-  '@opentui/core-linux-x64-musl@0.4.2':
+  '@opentui/core-linux-x64-musl@0.4.3':
     optional: true
 
-  '@opentui/core-linux-x64@0.4.2':
+  '@opentui/core-linux-x64@0.4.3':
     optional: true
 
-  '@opentui/core-win32-arm64@0.4.2':
+  '@opentui/core-win32-arm64@0.4.3':
     optional: true
 
-  '@opentui/core-win32-x64@0.4.2':
+  '@opentui/core-win32-x64@0.4.3':
     optional: true
 
-  '@opentui/core@0.4.2(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)':
+  '@opentui/core@0.4.3(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)':
     dependencies:
-      bun-ffi-structs: 0.2.3(typescript@7.0.1-rc)
+      bun-ffi-structs: 0.2.4(typescript@7.0.1-rc)
       diff: 9.0.0
       marked: 17.0.1
       string-width: 7.2.0
       strip-ansi: 7.1.2
       web-tree-sitter: 0.25.10
     optionalDependencies:
-      '@opentui/core-darwin-arm64': 0.4.2
-      '@opentui/core-darwin-x64': 0.4.2
-      '@opentui/core-linux-arm64': 0.4.2
-      '@opentui/core-linux-arm64-musl': 0.4.2
-      '@opentui/core-linux-x64': 0.4.2
-      '@opentui/core-linux-x64-musl': 0.4.2
-      '@opentui/core-win32-arm64': 0.4.2
-      '@opentui/core-win32-x64': 0.4.2
+      '@opentui/core-darwin-arm64': 0.4.3
+      '@opentui/core-darwin-x64': 0.4.3
+      '@opentui/core-linux-arm64': 0.4.3
+      '@opentui/core-linux-arm64-musl': 0.4.3
+      '@opentui/core-linux-x64': 0.4.3
+      '@opentui/core-linux-x64-musl': 0.4.3
+      '@opentui/core-win32-arm64': 0.4.3
+      '@opentui/core-win32-x64': 0.4.3
     transitivePeerDependencies:
       - typescript
 
-  '@opentui/keymap@0.4.2(@opentui/react@0.4.2(patch_hash=f6390c536c950acf0c830de14b199ff10c3d2f274b1bb9acf4d1da4b0b364f8f)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)(ws@8.21.0))(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)':
+  '@opentui/keymap@0.4.3(@opentui/react@0.4.3(patch_hash=84f565e973cc426189ef6462d869e4aa326ddbdea5acbb390924c89e776b8111)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)(ws@8.21.0))(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)':
     dependencies:
-      '@opentui/core': 0.4.2(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)
+      '@opentui/core': 0.4.3(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)
     optionalDependencies:
-      '@opentui/react': 0.4.2(patch_hash=f6390c536c950acf0c830de14b199ff10c3d2f274b1bb9acf4d1da4b0b364f8f)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)(ws@8.21.0)
+      '@opentui/react': 0.4.3(patch_hash=84f565e973cc426189ef6462d869e4aa326ddbdea5acbb390924c89e776b8111)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)(ws@8.21.0)
       react: 19.2.7
     transitivePeerDependencies:
       - typescript
       - web-tree-sitter
 
-  '@opentui/react@0.4.2(patch_hash=f6390c536c950acf0c830de14b199ff10c3d2f274b1bb9acf4d1da4b0b364f8f)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)(ws@8.21.0)':
+  '@opentui/react@0.4.3(patch_hash=84f565e973cc426189ef6462d869e4aa326ddbdea5acbb390924c89e776b8111)(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)(ws@8.21.0)':
     dependencies:
-      '@opentui/core': 0.4.2(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)
+      '@opentui/core': 0.4.3(typescript@7.0.1-rc)(web-tree-sitter@0.25.10)
       react: 19.2.7
       react-devtools-core: 7.0.1
       react-reconciler: 0.33.0(react@19.2.7)
@@ -2627,6 +2630,11 @@ snapshots:
     dependencies:
       undici-types: 8.3.0
 
+  '@types/node@26.1.1':
+    dependencies:
+      undici-types: 8.3.0
+    optional: true
+
   '@types/react-dom@19.2.3(@types/react@19.2.17)':
     dependencies:
       '@types/react': 19.2.17
@@ -2701,10 +2709,10 @@ snapshots:
 
   '@vercel/oidc@3.2.0': {}
 
-  '@vitejs/plugin-react@6.0.2(vite@8.0.16(@types/node@26.0.0)(esbuild@0.27.7)(yaml@2.9.0))':
+  '@vitejs/plugin-react@6.0.2(vite@8.0.16(@types/node@26.1.1)(esbuild@0.27.7)(yaml@2.9.0))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.0.16(@types/node@26.0.0)(esbuild@0.27.7)(yaml@2.9.0)
+      vite: 8.0.16(@types/node@26.1.1)(esbuild@0.27.7)(yaml@2.9.0)
 
   '@vitest/expect@4.1.9':
     dependencies:
@@ -2836,7 +2844,7 @@ snapshots:
       base64-js: 1.5.1
       ieee754: 1.2.1
 
-  bun-ffi-structs@0.2.3(typescript@7.0.1-rc):
+  bun-ffi-structs@0.2.4(typescript@7.0.1-rc):
     dependencies:
       typescript: 7.0.1-rc
 
@@ -3526,7 +3534,7 @@ snapshots:
 
   react-devtools-core@7.0.1:
     dependencies:
-      shell-quote: 1.8.4
+      shell-quote: 1.9.0
       ws: 7.5.11
     transitivePeerDependencies:
       - bufferutil
@@ -3635,7 +3643,7 @@ snapshots:
 
   shebang-regex@3.0.0: {}
 
-  shell-quote@1.8.4: {}
+  shell-quote@1.9.0: {}
 
   side-channel-list@1.0.1:
     dependencies:
@@ -3795,6 +3803,19 @@ snapshots:
       tinyglobby: 0.2.17
     optionalDependencies:
       '@types/node': 26.0.0
+      esbuild: 0.27.7
+      fsevents: 2.3.3
+      yaml: 2.9.0
+
+  vite@8.0.16(@types/node@26.1.1)(esbuild@0.27.7)(yaml@2.9.0):
+    dependencies:
+      lightningcss: 1.32.0
+      picomatch: 4.0.4
+      postcss: 8.5.15
+      rolldown: 1.0.3
+      tinyglobby: 0.2.17
+    optionalDependencies:
+      '@types/node': 26.1.1
       esbuild: 0.27.7
       fsevents: 2.3.3
       yaml: 2.9.0

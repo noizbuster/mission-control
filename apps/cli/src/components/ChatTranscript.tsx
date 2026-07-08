@@ -32,6 +32,7 @@ export type ChatTranscriptProps = {
     readonly scrollboxRef: React.RefObject<ScrollBoxRenderable | null>;
     readonly generating: boolean;
     readonly toolOutputExpanded: boolean;
+    readonly viewportColumns: number;
 };
 
 export type ChatTranscriptScrollboxProps = {
@@ -73,6 +74,7 @@ export function MarkdownPanelBase({
     barWidth,
     streaming,
     marginTop,
+    viewportColumns,
 }: {
     readonly text: string;
     readonly theme: TerminalMarkdownTheme;
@@ -80,12 +82,18 @@ export function MarkdownPanelBase({
     readonly barWidth: number;
     readonly streaming?: boolean;
     readonly marginTop?: number;
+    readonly viewportColumns: number;
 }): React.ReactNode {
     return (
         <box flexDirection="row" {...(marginTop !== undefined ? { marginTop } : {})}>
             <box width={barWidth} backgroundColor={barColor} shouldFill={true} />
             <box flexDirection="column" flexGrow={1}>
-                <Markdown text={text} theme={theme} {...(streaming ? { streaming: true } : {})} />
+                <Markdown
+                    key={viewportColumns}
+                    text={text}
+                    theme={theme}
+                    {...(streaming ? { streaming: true } : {})}
+                />
             </box>
         </box>
     );
@@ -103,10 +111,12 @@ export function MessageBlockBase({
     block,
     isStreaming,
     toolOutputExpanded,
+    viewportColumns,
 }: {
     readonly block: ChatBlock;
     readonly isStreaming?: boolean;
     readonly toolOutputExpanded: boolean;
+    readonly viewportColumns: number;
 }): React.ReactNode {
     const prefix = blockPrefix[block.kind];
 
@@ -145,6 +155,7 @@ export function MessageBlockBase({
                 barColor="#ff00ff"
                 barWidth={2}
                 marginTop={1}
+                viewportColumns={viewportColumns}
                 {...(isStreaming ? { streaming: true } : {})}
             />
         );
@@ -158,6 +169,7 @@ export function MessageBlockBase({
                 theme={darkTheme}
                 barColor="#00ff00"
                 barWidth={1}
+                viewportColumns={viewportColumns}
                 {...(isStreaming ? { streaming: true } : {})}
             />
         );
@@ -201,6 +213,7 @@ export function ChatTranscript({
     scrollboxRef,
     generating,
     toolOutputExpanded,
+    viewportColumns,
 }: ChatTranscriptProps): React.ReactNode {
     if (blocks.length === 0) {
         return (
@@ -220,6 +233,7 @@ export function ChatTranscript({
                         key={`msg-${block.kind}-${index}`}
                         block={block}
                         toolOutputExpanded={toolOutputExpanded}
+                        viewportColumns={viewportColumns}
                         {...(streaming ? { isStreaming: true } : {})}
                     />
                 );

@@ -693,6 +693,7 @@ export function ChatApp({
             scrollboxRef={scrollboxRef}
             generating={snapshot.generating}
             toolOutputExpanded={snapshot.toolOutputExpanded}
+            viewportColumns={viewport.columns}
         />
     );
 

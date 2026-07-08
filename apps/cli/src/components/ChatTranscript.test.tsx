@@ -116,6 +116,7 @@ describe('MessageBlock component (memoized)', () => {
                     block={{ kind: 'assistant', lines: ['Assistant: hello'] }}
                     isStreaming={true}
                     toolOutputExpanded={false}
+                    viewportColumns={80}
                 />
             );
         }).not.toThrow();
@@ -127,6 +128,7 @@ describe('MessageBlock component (memoized)', () => {
                 <MessageBlock
                     block={{ kind: 'tool', lines: ['Command preview for command.run', '$ ls'] }}
                     toolOutputExpanded={false}
+                    viewportColumns={80}
                 />
             );
         }).not.toThrow();
@@ -137,14 +139,30 @@ describe('MarkdownPanel component (memoized)', () => {
     it('does not throw when constructed with streaming enabled', () => {
         expect(() => {
             void (
-                <MarkdownPanel text="# heading" theme={darkTheme} barColor="#00ff00" barWidth={1} streaming={true} />
+                <MarkdownPanel
+                    text="# heading"
+                    theme={darkTheme}
+                    barColor="#00ff00"
+                    barWidth={1}
+                    streaming={true}
+                    viewportColumns={80}
+                />
             );
         }).not.toThrow();
     });
 
     it('does not throw when constructed without streaming and a marginTop', () => {
         expect(() => {
-            void (<MarkdownPanel text="plain text" theme={darkTheme} barColor="#ff00ff" barWidth={2} marginTop={1} />);
+            void (
+                <MarkdownPanel
+                    text="plain text"
+                    theme={darkTheme}
+                    barColor="#ff00ff"
+                    barWidth={2}
+                    marginTop={1}
+                    viewportColumns={80}
+                />
+            );
         }).not.toThrow();
     });
 });

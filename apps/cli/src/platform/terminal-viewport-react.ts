@@ -1,9 +1,26 @@
-import { useTerminalDimensions } from '@opentui/react';
-import { useMemo } from 'react';
-import { createTerminalViewportCache, type TerminalViewport } from './terminal-viewport.js';
+import { useRenderer } from '@opentui/react';
+import {
+    createTerminalViewportCache,
+    type TerminalViewport,
+    type OpenTuiTerminalDimensions,
+} from './terminal-viewport.js';
+import { useCallback, useSyncExternalStore } from 'react';
 
 export function useTerminalViewport(): TerminalViewport {
-    const dimensions = useTerminalDimensions();
-    const normalize = useMemo(() => createTerminalViewportCache(), []);
-    return normalize(dimensions);
+    const renderer = useRenderer();
+    const cache = useCallback(() => createTerminalViewportCache(), [])();
+    const subscribe = useCallback(
+        (cb: () => void) => {
+            renderer.on('resize', cb);
+            return () => {
+                renderer.off('resize', cb);
+            };
+        },
+        [renderer],
+    );
+    const getSnapshot = useCallback((): TerminalViewport => {
+        const dims: OpenTuiTerminalDimensions = { width: renderer.width, height: renderer.height };
+        return cache(dims);
+    }, [renderer, cache]);
+    return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

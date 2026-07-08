@@ -8,6 +8,22 @@
  * module graph when the CLI runs in non-TUI mode (plain / JSON output). The
  * native FFI backend is selected automatically by opentui: `bun:ffi` under Bun,
  * or `node:ffi` under Node 26.3+ (requires `--experimental-ffi`).
+ *
+ * Resize handling: OpenTUI's CliRenderer auto-wires `process.on("SIGWINCH")`
+ * when stdout === process.stdout. The handler reads stdout.columns/rows,
+ * resizes native buffers, emits a "resize" event, and calls requestRender().
+ * React's useTerminalDimensions() subscribes to that event and triggers
+ * re-renders.
+ *
+ * A polling fallback (`attachRendererResizeSync`) supplements SIGWINCH because
+ * SIGWINCH alone is unreliable under tmux pane resizes and certain terminal
+ * multiplexers where `stdout.columns`/`stdout.rows` may be stale when the
+ * signal handler runs. The poll probes the terminal size every 250ms (and on
+ * `source.on('resize')`) and calls `renderer.resize()` when dimensions differ.
+ * `renderer.resize()` internally early-returns if dimensions already match,
+ * so redundant calls are harmless. No raw ANSI screen clears are emitted —
+ * those previously bypassed OpenTUI's render pipeline and corrupted the
+ * visual state that `processResize` had just set up.
  */
 
 import type { CliRenderer } from '@opentui/core';
@@ -28,7 +44,19 @@ export type TerminalResizeSource = {
     off?: (event: 'resize', listener: () => void) => unknown;
 };
 
-type RendererResizeListener = (width: number, height: number) => void;
+export type RendererResizeTarget = {
+    readonly width: number;
+    readonly height: number;
+    resize(width: number, height: number): void;
+    requestRender?: () => void;
+};
+
+export type RendererResizeSyncOptions = {
+    readonly pollIntervalMs?: number;
+    readonly sizeProbe?: TerminalSizeProbe;
+};
+
+const DEFAULT_RESIZE_POLL_INTERVAL_MS = 250;
 
 export type TerminalSizeProbe = () => TerminalSize | undefined;
 
@@ -38,74 +66,10 @@ export type TmuxPaneEnvironment = {
     readonly TMUX_PANE?: string;
 };
 
-export type RendererResizeTarget = {
-    readonly width: number;
-    readonly height: number;
-    resize(width: number, height: number): void;
-    requestRender?: () => void;
-    on?: (event: 'resize', listener: RendererResizeListener) => unknown;
-    off?: (event: 'resize', listener: RendererResizeListener) => unknown;
-};
-
-export type RendererResizeSyncOptions = {
-    readonly pollIntervalMs?: number;
-    readonly sizeProbe?: TerminalSizeProbe;
-};
-
-const DEFAULT_RESIZE_POLL_INTERVAL_MS = 250;
-const CLEAR_TERMINAL_SURFACE = '\x1B[r\x1B[0m\x1B[H\x1B[2J\x1B[3J\x1B[H';
-
-type RendererWriteOut = (this: RendererResizeTarget, chunk: string) => unknown;
-type RendererBufferClear = (this: unknown, backgroundColor: unknown) => unknown;
-
-/** Result of mounting an opentui renderer: the live handles plus an unmount function. */
-export interface OpenTuiMountResult {
-    readonly renderer: CliRenderer;
-    readonly root: Root;
-    unmount(): void;
-}
-
 function positiveInteger(value: number | undefined): number | undefined {
     if (value === undefined) return undefined;
     if (!Number.isInteger(value) || value <= 0) return undefined;
     return value;
-}
-
-function isRendererWriteOut(value: unknown): value is RendererWriteOut {
-    return typeof value === 'function';
-}
-
-function isRendererBufferClear(value: unknown): value is RendererBufferClear {
-    return typeof value === 'function';
-}
-
-function isTerminalShrinking(renderer: RendererResizeTarget, size: TerminalSize): boolean {
-    return size.columns < renderer.width || size.rows < renderer.height;
-}
-
-function clearTerminalSurface(renderer: RendererResizeTarget): void {
-    const writeOut: unknown = Reflect.get(renderer, 'writeOut');
-    if (!isRendererWriteOut(writeOut)) return;
-    writeOut.call(renderer, CLEAR_TERMINAL_SURFACE);
-}
-
-function clearRendererBuffer(buffer: unknown, backgroundColor: unknown): void {
-    const clear: unknown = Reflect.get(Object(buffer), 'clear');
-    if (!isRendererBufferClear(clear)) return;
-    clear.call(buffer, backgroundColor);
-}
-
-function clearRendererBuffers(renderer: RendererResizeTarget): void {
-    const backgroundColor: unknown = Reflect.get(renderer, 'backgroundColor');
-    clearRendererBuffer(Reflect.get(renderer, 'currentRenderBuffer'), backgroundColor);
-    clearRendererBuffer(Reflect.get(renderer, 'nextRenderBuffer'), backgroundColor);
-}
-
-export function hardResetRendererSurface(renderer: RendererResizeTarget): void {
-    clearTerminalSurface(renderer);
-    clearRendererBuffers(renderer);
-    Reflect.set(renderer, 'forceFullRepaintRequested', true);
-    renderer.requestRender?.();
 }
 
 export function parseTmuxPaneSize(output: string): TerminalSize | undefined {
@@ -152,6 +116,23 @@ export function readTerminalSize(
     };
 }
 
+/**
+ * Read the live terminal size and call `renderer.resize()` when it differs
+ * from the renderer's current dimensions.
+ *
+ * This supplements OpenTUI's built-in SIGWINCH handler, which is unreliable
+ * under tmux pane resizes and certain terminal multiplexers where
+ * `stdout.columns`/`stdout.rows` may be stale when the signal fires. The
+ * renderer's internal `processResize` early-returns when dimensions match,
+ * so redundant calls (e.g. SIGWINCH already handled it) are harmless no-ops.
+ *
+ * No raw ANSI screen clears are emitted. The `forceFullRepaintRequested` flag
+ * is set so the next render writes every cell, and `requestRender()` is called
+ * to schedule it. OpenTUI's `processResize` already handles buffer resizing,
+ * root renderable resizing, and the "resize" event emission internally.
+ *
+ * @returns `true` if the renderer was resized, `false` if dimensions matched.
+ */
 export function syncRendererToTerminalSize(
     renderer: RendererResizeTarget,
     source: TerminalResizeSource = process.stdout,
@@ -159,33 +140,36 @@ export function syncRendererToTerminalSize(
 ): boolean {
     const size = readTerminalSize(source, options.sizeProbe);
     if (renderer.width === size.columns && renderer.height === size.rows) return false;
-    if (isTerminalShrinking(renderer, size)) clearTerminalSurface(renderer);
     Reflect.set(renderer, 'forceFullRepaintRequested', true);
     renderer.resize(size.columns, size.rows);
     renderer.requestRender?.();
     return true;
 }
 
+/**
+ * Attach ongoing terminal resize synchronization to a renderer.
+ *
+ * Three mechanisms work together:
+ * 1. **Immediate sync** — calls `syncRendererToTerminalSize` once on attach so
+ *    the renderer matches the real terminal size before the first frame.
+ * 2. **`source.on('resize')`** — listens for Node.js `stdout` resize events
+ *    (fired by some terminal emulators independently of SIGWINCH).
+ * 3. **Polling fallback** — probes every `pollIntervalMs` (default 250ms) to
+ *    catch resizes that neither SIGWINCH nor `source.on('resize')` delivered,
+ *    which is common under tmux pane resizes.
+ *
+ * The returned cleanup function removes all listeners and clears the timer.
+ * Pass `pollIntervalMs: 0` to disable polling (only `source.on('resize')`
+ * remains).
+ */
 export function attachRendererResizeSync(
     renderer: RendererResizeTarget,
     source: TerminalResizeSource = process.stdout,
     options: RendererResizeSyncOptions = {},
 ): () => void {
-    let lastRendererSize: TerminalSize = { columns: renderer.width, rows: renderer.height };
-    const handleRendererResize = (width: number, height: number): void => {
-        const nextSize = {
-            columns: positiveInteger(width) ?? renderer.width,
-            rows: positiveInteger(height) ?? renderer.height,
-        };
-        const shrinking = nextSize.columns < lastRendererSize.columns || nextSize.rows < lastRendererSize.rows;
-        lastRendererSize = nextSize;
-        if (!shrinking) return;
-        hardResetRendererSurface(renderer);
-    };
     const sync = (): void => {
         syncRendererToTerminalSize(renderer, source, options);
     };
-    renderer.on?.('resize', handleRendererResize);
     sync();
     source.on?.('resize', sync);
     const intervalMs = options.pollIntervalMs ?? DEFAULT_RESIZE_POLL_INTERVAL_MS;
@@ -195,9 +179,58 @@ export function attachRendererResizeSync(
         if (!attached) return;
         attached = false;
         source.off?.('resize', sync);
-        renderer.off?.('resize', handleRendererResize);
         if (timer !== undefined) clearInterval(timer);
     };
+}
+
+export type RendererSurfaceResetTarget = {
+    requestRender?: () => void;
+};
+
+type BufferClearFn = (this: unknown, backgroundColor: unknown) => unknown;
+
+function isBufferClearFn(value: unknown): value is BufferClearFn {
+    return typeof value === 'function';
+}
+
+function clearRendererBuffer(buffer: unknown, backgroundColor: unknown): void {
+    const clear: unknown = Reflect.get(Object(buffer), 'clear');
+    if (!isBufferClearFn(clear)) return;
+    clear.call(buffer, backgroundColor);
+}
+
+/**
+ * Force a full repaint of the OpenTUI renderer.
+ *
+ * OpenTUI's double-buffer diff can miss cells when a wide character (Korean
+ * Hangul, emoji) is replaced by a narrow one — the continuation cell is not
+ * marked dirty, leaving stale pixels that look like garbled text. This function
+ * clears the internal render buffers and sets the forceFullRepaintRequested
+ * flag so the next render skips the diff and writes every cell.
+ *
+ * Uses Reflect to access internal renderer fields because OpenTUI does not
+ * expose a public "force full repaint" API. The fields accessed are:
+ * - `backgroundColor` (read): used to clear buffers with the correct bg color
+ * - `currentRenderBuffer` / `nextRenderBuffer` (read + clear): the swap buffers
+ * - `forceFullRepaintRequested` (write): the internal flag that skips diffing
+ *
+ * Unlike the previous implementation, this does NOT write raw ANSI escape
+ * sequences to clear the terminal surface — that bypassed OpenTUI's render
+ * pipeline and could corrupt the visual state that processResize just set up.
+ */
+export function hardResetRendererSurface(renderer: RendererSurfaceResetTarget): void {
+    const backgroundColor: unknown = Reflect.get(renderer, 'backgroundColor');
+    clearRendererBuffer(Reflect.get(renderer, 'currentRenderBuffer'), backgroundColor);
+    clearRendererBuffer(Reflect.get(renderer, 'nextRenderBuffer'), backgroundColor);
+    Reflect.set(renderer, 'forceFullRepaintRequested', true);
+    renderer.requestRender?.();
+}
+
+/** Result of mounting an opentui renderer: the live handles plus an unmount function. */
+export interface OpenTuiMountResult {
+    readonly renderer: CliRenderer;
+    readonly root: Root;
+    unmount(): void;
 }
 
 /**
@@ -207,6 +240,12 @@ export function attachRendererResizeSync(
  * the React tree via `createRoot(renderer).render(element)`, and returns a
  * handle whose `unmount()` tears down both the React root and the renderer.
  * `unmount()` is idempotent — calling it more than once is a no-op.
+ *
+ * Resize synchronization is attached via `attachRendererResizeSync`, which
+ * supplements OpenTUI's built-in SIGWINCH handler with a 250ms polling
+ * fallback and a `stdout.on('resize')` listener. Under tmux, SIGWINCH alone
+ * is unreliable because `stdout.columns`/`stdout.rows` may be stale when the
+ * signal handler runs.
  */
 export async function mountOpenTui(element: ReactNode): Promise<OpenTuiMountResult> {
     const { createCliRenderer } = await import('@opentui/core');
@@ -214,6 +253,7 @@ export async function mountOpenTui(element: ReactNode): Promise<OpenTuiMountResu
 
     const renderer = await createCliRenderer({ exitOnCtrlC: false });
     const detachResizeSync = attachRendererResizeSync(renderer, process.stdout, { sizeProbe: readTmuxPaneSize });
+
     const root = createRoot(renderer);
     root.render(element);
 
