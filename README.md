@@ -523,7 +523,7 @@ Renderer contract:
 
 The built-in renderers are `TuiRenderer`, `PlainRenderer`, and `JsonRenderer`. To add a renderer, implement `AgentUIRenderer`, render from protocol events instead of runtime internals, and add the renderer selection in `apps/cli/src/commands/run-agent.ts`.
 
-The interactive chat surface is driven by the opentui bridge: it mounts a React component tree under `@opentui/react` (over a node:ffi-loaded native core on Node 26.3+), using `useKeyboard` plus a KeyEvent adapter for keyboard handling and React components (TextInput, SlashCommandMenu, ModelSelector, MessageList, StatusBar, ApprovalPrompt) for rendering. The opentui React tree bridges to the imperative chat loop through `apps/cli/src/commands/opentui-chat-bridge.tsx`. A hand-rolled terminal input system remains as the non-TTY fallback path.
+The interactive chat surface is driven by the OpenTUI mount/handle seam: `apps/cli/src/commands/create-chat-tui.tsx` builds the `ChatStore`, mounts a React component tree under `@opentui/react` (over a node:ffi-loaded native core on Node 26.3+), and returns the `ChatTuiHandle` consumed by the imperative chat loop. Interactive layout uses the normalized `TerminalViewport` from `apps/cli/src/platform/terminal-viewport*.ts` so the shell, overlays, prompt dock, graph panes, and scroll deltas reflow from the same live terminal dimensions. A hand-rolled terminal input system remains as the non-TTY fallback path.
 
 Permission flow is implemented for the coding-agent tool path. The runtime emits permission and approval lifecycle events, default policy remains conservative, CLI can prompt synchronously, and the core desktop command service can append approval decisions over the same event stream.
 

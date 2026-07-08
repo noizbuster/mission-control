@@ -4,9 +4,9 @@
 
 `apps/cli` owns the `mc` command-line application (`mctrl` alias retained): argument parsing, command orchestration, auth/model/session commands, terminal interaction, and interactive chat rendered via opentui (`@opentui/react` over a node:ffi-loaded native core on Node 26.3+).
 
-The interactive chat uses `@opentui/react` + React 19 for terminal rendering, bridged to the existing imperative chat loop via `useSyncExternalStore`. The bridge pattern allows the imperative `runInteractiveChatSession` loop to stay unchanged while opentui owns all keyboard input and screen output.
+The interactive chat uses `@opentui/react` + React 19 for terminal rendering. A `ChatStore` plus TUI-handle seam adapts the imperative `runInteractiveChatSession` loop through `useSyncExternalStore`, so opentui owns keyboard input and screen output while the loop keeps its `ChatInput`/`ChatOutput` contracts.
 
-A reactive-store migration is superseding the legacy monolithic `opentui-chat-bridge.tsx`. The new architecture splits the bridge into: a `ChatStore` reactive store (`chat-store.ts`), a background agent-runner state machine (`chat-agent-runner.ts`), a testable mount factory (`create-chat-tui.tsx`), and pure React components (`ChatApp`, `ChatInputArea`, `OverlayPanels`) that read the store snapshot and use native opentui props (`fg`/`bg`/`attributes`) directly. The old Ink-prop translation shims (`opentui-types.ts`, `opentui-chat-input.ts`, `opentui-chat-output.ts`, `opentui-model-selector.ts`) have been removed. The legacy bridge file is retained until `interactive-chat.ts`, `create-chat-tui.tsx`, `Banner.tsx`, and `diff-viewer.tsx` no longer import its types.
+The current architecture is split across a `ChatStore` reactive store (`chat-store.ts`), a background agent-runner state machine (`chat-agent-runner.ts`), a testable mount factory (`create-chat-tui.tsx`), and React components (`ChatApp`, `ChatInputArea`, `OverlayPanels`) that read the store snapshot and use native opentui props (`fg`/`bg`/`attributes`) directly. Removed compatibility shims are not part of the live module graph.
 
 ## opentui Chat Architecture
 
@@ -16,7 +16,7 @@ opentui ships a Zig native core (`libopentui.so` / `.dylib` / `.dll`) accessed t
 
 The struct layer (`bun-ffi-structs`) is pure JavaScript — it computes offsets/sizes with arithmetic and packs into `ArrayBuffer` via `DataView`. Only its `ptr()` and `toArrayBuffer()` primitives touch native code, and both route through the same node:ffi backend. No per-struct rewrite is needed.
 
-### Bridge Pattern
+### TUI Handle Pattern
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -25,7 +25,7 @@ The struct layer (`bun-ffi-structs`) is pure JavaScript — it computes offsets/
 │    ↓ chatOutput.write(text)                                  │
 │    ↓ selectModel(choices)                                    │
 ├──────────────────────────────────────────────────────────────┤
-│  OpenTuiChatBridge  (opentui-chat-bridge.tsx)                │
+│  Chat TUI handle + ChatStore  (create-chat-tui.tsx)          │
 │    ┌─ waitForEvent() → Promise<ChatInputEvent>              │
 │    ├─ emitOutput(text) → appends to outputText               │
 │    ├─ showModelPicker(choices) → Promise<selection>          │
@@ -35,34 +35,32 @@ The struct layer (`bun-ffi-structs`) is pure JavaScript — it computes offsets/
 │  OWNERSHIP SPLIT - editing vs non-editing state              │
 │    ┌─ <ChatInputTextarea> → native <textarea>                │
 │    │    TextareaRenderable owns text+cursor+selection+IME    │
-│    │    onKeyDown → bridgeTextareaKeyDown (raw KeyEvent,     │
+│    │    onKeyDown → textarea keydown handler (raw KeyEvent,  │
 │    │      preventDefault per handled chord)                  │
-│    │    onSubmit → bridgeSubmit / onContentChange → mirror   │
+│    │    onSubmit → submit handler / onContentChange → mirror │
 │    ├─ <ChatTranscript> → native <scrollbox>                  │
 │    │    ScrollBoxRenderable owns output scroll + windowing   │
 │    │    scrollboxRef → imperative Home/End/PgUp/PgDn         │
 │    └─ global useKeyboard → handleInput (OVERLAY SINK only;   │
 │         textarea focused ⇒ early-return except Ctrl+C)      │
-│    useSyncExternalStore ← bridge core snapshot               │
+│    useSyncExternalStore ← ChatStore snapshot                 │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Two native opentui renderables own what the old hand-rolled code used to. `<ChatInputTextarea>` wraps the native `<textarea>` (`TextareaRenderable`): it owns the editable text, the cursor, the selection, and IME composition. `<ChatTranscript>` wraps the native `<scrollbox>` (`ScrollBoxRenderable`): it owns output scrolling and windowing. The bridge core no longer tracks cursor, composition, or transcript scroll. It owns the non-editing state: overlay modes, menus, history, the `inputBuffer` mirror, and the event queue.
+Two native opentui renderables own what the old hand-rolled code used to. `<ChatInputTextarea>` wraps the native `<textarea>` (`TextareaRenderable`): it owns the editable text, the cursor, the selection, and IME composition. `<ChatTranscript>` wraps the native `<scrollbox>` (`ScrollBoxRenderable`): it owns output scrolling and windowing. `ChatStore` owns only non-editing state: overlay modes, menus, history, the `inputBuffer` mirror, and the event queue.
 
-Editing keys never reach the bridge. Printable input, backspace, arrow movement, word-move, the real cursor, and IME composition are all native `TextareaRenderable` behavior. The bridge intercepts only via the textarea's `onKeyDown` (`bridgeTextareaKeyDown`), where each handled chord calls `key.preventDefault()` first so the native binding is suppressed before the bridge logic runs.
+Editing keys stay with the textarea. Printable input, backspace, arrow movement, word-move, the real cursor, and IME composition are all native `TextareaRenderable` behavior. The TUI runtime intercepts only via the textarea's `onKeyDown`, where each handled chord calls `key.preventDefault()` first so the native binding is suppressed before app logic runs.
 
 `mountOpenTui` (in `src/platform/opentui-renderer.ts`) is the mount/unmount seam. It dynamic-imports `createCliRenderer` from `@opentui/core` and `createRoot` from `@opentui/react`, mounts the React tree, and returns `{ renderer, root, unmount }`. The dynamic imports keep both packages out of the eager module graph for non-TUI CLI runs (plain/JSON), so `mc --no-tui` never loads the native renderer. `unmount()` tears down both the React root and the renderer and is idempotent.
 
-### KeyEvent Adapter
+### Keyboard Routing
 
-opentui's `useKeyboard` delivers one `KeyEvent` per physical keypress. The adapter in `src/platform/key-event-adapter.ts` (`createKeyEventAdapter` / `adaptKeyEvent`) reproduces Ink's `{ input: string, key: Key }` assembly rules so the surviving `handleInput` overlay handlers (approval, question, model picker, level picker, rename, ABG overlay) keep their Ink-era keystroke checks:
+opentui's `useKeyboard` delivers one `KeyEvent` per physical keypress. Input handling is split between the native textarea, keymap layers, and overlay sinks:
 
-- `key.*` boolean flags derive from the key `name` (`up` → `upArrow`, etc.).
-- `input` for `ctrl+<letter>` is the letter (so `handleInput`'s `input === 'c'` Ctrl+C check still fires).
-- `input` is the `sequence` otherwise, forced to `''` for non-alphanumeric key names (arrows, tab, backspace, delete, pageup/down, home, end, f-keys).
-- A leading ESC (`\x1b`) is stripped (matters for the lone Escape key).
-
-The adapter is kept on purpose, but its scope shrank in the native-textarea port. Editing keys (printable, backspace, arrows, word-move, Enter-submit, IME) no longer flow through it; they are native `TextareaRenderable` behavior, and the chords, scroll, and history that the bridge still cares about ride the textarea's `onKeyDown` (`bridgeTextareaKeyDown`) as a raw `KeyEvent` with its own `preventDefault`. The adapter now feeds only the global `useKeyboard` overlay sink in `ChatRoot`, which runs when the textarea is blurred (an overlay is active) plus the always-routed Ctrl+C. `InkKeyShape` is the structural mirror of Ink's 20-field `Key` type, re-exported from the bridge so the bridge test suites import it from one module.
+- Editing keys (printable input, backspace, arrows, word-move, Enter-submit, IME) stay on `TextareaRenderable` and the managed textarea keymap layer.
+- App chords, transcript scroll, history recall, autocomplete completion, and submit run from the textarea `onKeyDown` handler with raw `KeyEvent.preventDefault()` when handled.
+- Overlays (approval, question, model picker, level picker, rename, ABG overlay, command palette, which-key, diff viewer) read keyboard input through their mounted React/keymap handlers while focus is redirected away from the textarea.
+- Ctrl+C is always routed through the global `useKeyboard` sink so interrupt/exit works during focus races.
 
 ### JSX: per-file `@jsxImportSource` pragma
 
@@ -72,44 +70,44 @@ opentui's lowercase intrinsics (`<text>`, `<box>`, `<span>`, ...) collide with R
 /** @jsxImportSource @opentui/react */
 ```
 
-opentui's `jsx-runtime.d.ts` re-exports `jsx`/`jsxs`/`Fragment` from `react/jsx-runtime` at runtime (zero behavior change) but loads opentui's own JSX namespace at type time, where intrinsics override the inherited DOM types cleanly. Under this pragma, `JSX.Element` is `React.ReactNode` (not `ReactElement`), so opentui-pragmatic component return types must be annotated `: React.ReactNode`. Ink color/attribute props (`color`, `backgroundColor`, `bold`, `dimColor`, `inverse`) do not exist on opentui intrinsics; components use native opentui props (`fg`/`bg`/`attributes`) directly. The legacy `toOpenTuiColor` / `toOpenTuiAttributes` shims (`src/platform/opentui-types.ts`) have been removed.
+opentui's `jsx-runtime.d.ts` re-exports `jsx`/`jsxs`/`Fragment` from `react/jsx-runtime` at runtime (zero behavior change) but loads opentui's own JSX namespace at type time, where intrinsics override the inherited DOM types cleanly. Under this pragma, `JSX.Element` is `React.ReactNode` (not `ReactElement`), so opentui-pragmatic component return types must be annotated `: React.ReactNode`. Components use native opentui props (`fg`/`bg`/`attributes`) directly.
 
-### Core State (OpenTuiChatBridgeCore)
+### Core State (ChatStore)
 
-All mutable state lives in the bridge core. React reads it via `useSyncExternalStore` and never directly mutates it. `publishSnapshot()` creates a new snapshot object and notifies all listeners.
+All mutable TUI state lives in `ChatStore`. React reads it via `useSyncExternalStore` and never directly mutates it. `publishSnapshot()` creates a new snapshot object and notifies all listeners.
 
-Editing state does NOT live here. The editable text, cursor, and selection live in the `TextareaRenderable`, reached via `textareaRef`. Output scroll lives in the `ScrollBoxRenderable`, reached via `scrollboxRef`. Clipboard access lives in a `clipboardService` built from the renderer. All three are created in `ChatRoot` and threaded into the bridge handlers, not stored on the core.
+Editing state does NOT live here. The editable text, cursor, and selection live in the `TextareaRenderable`, reached via `textareaRef`. Output scroll lives in the `ScrollBoxRenderable`, reached via `scrollboxRef`. Clipboard access lives in a `clipboardService` built from the renderer. All three are created in `ChatRoot` and threaded into the TUI handlers, not stored on the core.
 
 | Field | Purpose |
 |---|---|
-| `inputBuffer` | Mirror of the textarea's `plainText`, kept in sync by `bridgeContentChange`. The textarea is the source of truth; the bridge never appends to this directly. |
+| `inputBuffer` | Mirror of the textarea's `plainText`, kept in sync by the content-change handler. The textarea is the source of truth; store reducers never append to this directly. |
 | `outputText` | Accumulated chat output (system messages, user echoes, assistant responses, errors) |
 | `menuState` | Slash command autocomplete selection state |
 | `fileAutocomplete` | `@`-path autocomplete state |
 | `history` | Chat input history for Up/Down recall |
 | `eventQueue` | Pending ChatInputEvents when no waiter exists |
 | `eventWaiters` | Promise resolvers waiting for the next input event |
-| `submitting` | IME re-entrancy guard inside `bridgeSubmit` (blocks a fast double-Enter) |
+| `submitting` | IME re-entrancy guard inside the submit handler (blocks a fast double-Enter) |
 | `lastEscTimestamp` | Double-Escape window timing |
 | overlay flags (`modelPickerActive` / `levelPickerActive` / `approvalActive` / `questionActive` / `renameModeActive` / `abgOverlayActive`) | Any of these true blurs the textarea so its keys reach the global overlay sink. |
 
 ### Input Handling (handleInput)
 
-Input now splits across two sinks. Raw editing is native; the bridge intercepts only chords, scroll, history, and overlays.
+Input splits across native editing, app-chord handling, and overlays.
 
-**`bridgeTextareaKeyDown(core, key, textareaRef, scrollboxRef)`** is the textarea's `onKeyDown`. Every input-area key routes through it as a raw `KeyEvent` (which carries its own `preventDefault`). Each handled chord calls `key.preventDefault()` first so the native binding is suppressed before the logic runs. It owns: plain Enter to submit (a redundant safety net over the `return -> submit` keyBinding override), Tab to complete the active `@`-file selection, Escape (interrupt while generating, clear the buffer, close autocomplete, or open the double-Esc exit window), Ctrl+G (toggle ABG overlay), Ctrl+Z (suspend), Ctrl+D (delete char, or interrupt at an empty buffer), Ctrl+T (toggle thinking view), Ctrl+O (toggle tool expand), Ctrl+P (model cycle), Ctrl+E (external editor), Ctrl+R (rename entry), Ctrl+V (image paste, or cycle model variant when no image is in the clipboard), Home/End/PgUp/PgDn (imperative scrollbox scroll), and Up/Down (history recall at the buffer bounds, otherwise a native cursor move) plus slash/workflow menu navigation. Ctrl+C is deliberately NOT handled here; it routes through the global sink to avoid a double-enqueue race.
+**Textarea `onKeyDown`** receives every input-area key as a raw `KeyEvent` (which carries its own `preventDefault`). Each handled chord calls `key.preventDefault()` first so the native binding is suppressed before app logic runs. It owns: plain Enter to submit (a redundant safety net over the `return -> submit` keyBinding override), Tab to complete the active `@`-file selection, Escape (interrupt while generating, clear the buffer, close autocomplete, or open the double-Esc exit window), Ctrl+G (toggle ABG overlay), Ctrl+Z (suspend), Ctrl+D (delete char, or interrupt at an empty buffer), Ctrl+T (toggle thinking view), Ctrl+O (toggle tool expand), Ctrl+P (model cycle), Ctrl+E (external editor), Ctrl+R (rename entry), Ctrl+V (image paste, or cycle model variant when no image is in the clipboard), Home/End/PgUp/PgDn (imperative scrollbox scroll), and Up/Down (history recall at the buffer bounds, otherwise a native cursor move) plus slash/workflow menu navigation. Ctrl+C is deliberately not handled here; it routes through the global sink to avoid a double-enqueue race.
 
-**`bridgeSubmit(core, textareaRef)`** is the textarea's `onSubmit` (and the Enter branch above). It snapshots `textareaRef.current.plainText` synchronously, then defers the actual enqueue twice (`setTimeout` nested twice) so a Ctrl+C during the IME defer window cannot enqueue an empty line. A `submitting` guard blocks a fast double-Enter. The `#`-workflow and `/`-slash completion-into-buffer cases return without enqueuing a line.
+**Submit handling** runs from the textarea `onSubmit` and the Enter branch above. It snapshots `textareaRef.current.plainText` synchronously, then defers the actual enqueue twice (`setTimeout` nested twice) so a Ctrl+C during the IME defer window cannot enqueue an empty line. A `submitting` guard blocks a fast double-Enter. The `#`-workflow and `/`-slash completion-into-buffer cases return without enqueuing a line.
 
-**`bridgeContentChange(core, text)`** is the textarea's `onContentChange`. It mirrors the new text into `core.inputBuffer` and refreshes the slash/workflow/`@`-autocomplete menus. It only keeps the mirror in sync; the textarea remains the source of truth.
+**Content-change handling** mirrors the textarea's new text into `inputBuffer` and refreshes the slash/workflow/`@`-autocomplete menus. It only keeps the mirror in sync; the textarea remains the source of truth.
 
 **`handleInput(core, input, key)`** is now overlay-routing only. It is reached via the global `useKeyboard` sink when the textarea is blurred (an overlay is active), plus the always-routed Ctrl+C:
 
-1. **Overlays** - when `approvalActive` / `questionActive` / `modelPickerActive` / `levelPickerActive` / `renameModeActive` / `abgOverlayActive`, dispatch to the matching `handle*Input`. These still use the Ink-style `{ input, key }` pair assembled by the KeyEvent adapter.
+1. **Overlays** - when `approvalActive` / `questionActive` / `modelPickerActive` / `levelPickerActive` / `renameModeActive` / `abgOverlayActive`, dispatch to the matching `handle*Input` with the normalized input/key pair used by the overlay reducers.
 2. **Ctrl+C** - always enqueues `{ type: 'interrupt' }` so the "press twice to exit" contract holds even mid-focus-race.
-3. **Fallthrough** - editing/chord/scroll/history keys no longer arrive here; they route through `bridgeTextareaKeyDown` while the textarea is focused. This sink is a no-op for non-Ctrl+C keys when no overlay is open.
+3. **Fallthrough** - editing/chord/scroll/history keys no longer arrive here; they route through the textarea handler while the textarea is focused. This sink is a no-op for non-Ctrl+C keys when no overlay is open.
 
-Raw editing (printable input, backspace, arrow movement, word-move, the real cursor, Enter-submit, and IME composition) never reaches the bridge. It is native `TextareaRenderable` behavior.
+Raw editing (printable input, backspace, arrow movement, word-move, the real cursor, Enter-submit, and IME composition) never reaches the TUI handle seam. It is native `TextareaRenderable` behavior.
 
 ### Resolved Chord Conflicts
 
@@ -144,7 +142,7 @@ The markdown pipeline (`src/components/markdown/`) is opentui-native: `Markdown.
 
 `MessageBlock` routes each `ChatBlock`: assistant/thinking → `MarkdownPanel` (a colored bar whose row count matches the rendered markdown line count, plus the `<Markdown>` tree); tool → `<ToolCard>`; user/error/system → the legacy flat row. The `toolOutputExpanded` flag (Ctrl+O toggle) collapses `<ToolCard>` to a header-only `> title (N lines)` view.
 
-The transcript is a native opentui `<scrollbox>`. `MessageWindow` renders its blocks inside `<ChatTranscript>` (a `<scrollbox stickyScroll stickyStart="bottom" flexGrow={1}>` with a `MacOSScrollAccel`). There is no JS-side windowing budget: the `ScrollBoxRenderable` renders only the visible children and pins streaming output to the bottom via `stickyScroll`. Imperative scroll (Home/End/PgUp/PgDn from `bridgeTextareaKeyDown`) reaches the scrollbox through `scrollboxRef.current.scrollTo` / `scrollBy` / `scrollHeight`. The old `selectTrailingBlocks` / `getMessageWindowLineBudget` tail-slicing is gone.
+The transcript is a native opentui `<scrollbox>`. `MessageWindow` renders its blocks inside `<ChatTranscript>` (a `<scrollbox stickyScroll stickyStart="bottom" flexGrow={1}>` with a `MacOSScrollAccel`). There is no JS-side windowing budget: the `ScrollBoxRenderable` renders only the visible children and pins streaming output to the bottom via `stickyScroll`. Imperative scroll (Home/End/PgUp/PgDn from the textarea handler) reaches the scrollbox through `scrollboxRef.current.scrollTo` / `scrollBy` / `scrollHeight`. The old `selectTrailingBlocks` / `getMessageWindowLineBudget` tail-slicing is gone.
 
 Selectable text and copy-on-mouseup. Flat `<text>` blocks (system, user, error) are explicitly `selectable`; `Markdown` leaves default to selectable too, so assistant/thinking content is mouse-drag selectable. `ChatRoot`'s root `<box>` carries an `onMouseUp` handler: it checks `clipboardService.isOsc52Supported()`, and when supported calls `copy()` (selection-copy to `clipboardService.copyToClipboard`, which emits OSC52 from opentui's native Zig core). When OSC52 is unavailable and the user had a selection, it writes a stderr notice instead of silently no-op'ing. tmux needs `set -g set-allow-passthrough on`; iTerm2, Alacritty, Kitty, WezTerm, and Windows Terminal work directly.
 
@@ -193,9 +191,9 @@ When the input buffer starts with `/`, a filtered command menu renders between t
 
 ### Model Picker Overlay
 
-When `/model` is invoked, `showModelPicker(choices)` is called on the bridge. This switches `modelPickerActive` to true, causing ChatRoot to render a full-screen overlay replacing the normal output/menu/input/status layout.
+When `/model` is invoked, `showModelPicker(choices)` is called on the TUI handle. This switches `modelPickerActive` to true, causing ChatRoot to render a full-screen overlay replacing the normal output/menu/input/status layout.
 
-The model picker reuses `ProviderPromptKeypress` state machine (the same one used by the terminal model selector and auth provider prompts). Arrow keys are converted from the adapter's boolean flags (`key.upArrow`) to escape sequences (`\u001b[A`) for the reducer.
+The model picker reuses `ProviderPromptKeypress` state machine (the same one used by the terminal model selector and auth provider prompts). Arrow keys are converted from normalized key flags (`key.upArrow`) to escape sequences (`\u001b[A`) for the reducer.
 
 ### Error Handling
 
@@ -213,16 +211,16 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | --- | --- | --- |
 | Chat reactive store | `src/commands/chat-store.ts` | `ChatStore` owns all chat UI state (output, input mirror, overlays, menus, history, event queue) behind a `useSyncExternalStore` contract. `createChatStore` factory; 16ms-coalesced `emitOutput`; overlay-mode state machine; `waitForEvent`/`enqueueEvent` event queue. |
 | Background agent runner | `src/commands/chat-agent-runner.ts` | `startChatAgentRunner` replaces the imperative `for(;;)` loop with an async state machine over the store event queue; preserves the G1-G10 sequential guarantees. `createStoreChatOutput` adapts the store to the `ChatOutput` interface. |
-| TUI mount factory | `src/commands/create-chat-tui.tsx` | `createChatTui(options)` builds a `ChatStore`, dynamic-imports the renderer + keymap provider + `ChatApp`, mounts the tree, returns an `OpenTuiChatBridge` handle. `createChatTuiHandle(store, unmountFn)` is the testable seam that constructs the handle without the native renderer. |
+| TUI mount factory | `src/commands/create-chat-tui.tsx` | `createChatTui(options)` builds a `ChatStore`, dynamic-imports the renderer + keymap provider + `ChatApp`, mounts the tree, and returns the imperative TUI handle consumed by `interactive-chat.ts`. `createChatTuiHandle(store, unmountFn)` is the testable seam that constructs the handle without the native renderer. |
 | Chat block parsing | `src/commands/chat-blocks.ts` | `parseMessageBlocks` splits `outputText` into `ChatBlock` records (user/assistant/thinking/error/tool/system). |
-| opentui chat bridge (LEGACY, being phased out) | `src/commands/opentui-chat-bridge.tsx` | Heart of the legacy interactive chat. Still exported: the `OpenTuiChatBridge` / `OpenTuiChatBridgeOptions` type contracts (now satisfied by `createChatTuiHandle`), `parseMessageBlocks`/`ChatBlock` (also in `chat-blocks.ts`), `InkKeyShape` (also in `key-event-adapter.ts`), `bridgeTextareaKeyDown`/`bridgeSubmit`/`bridgeContentChange`, and the `AgentSpinner`/overlay handlers. Retained until `interactive-chat.ts`, `create-chat-tui.tsx`, `Banner.tsx`, and `diff-viewer.tsx` no longer import its types. |
 | Chat test support | `src/commands/chat-test-support.ts` | `TextareaLike`, `createRecordingTextarea`, `createRecordingScrollbox`, `makeKeyEvent`, `asTextareaRef` / `asScrollboxRef`. |
 | opentui components | `src/components/*.tsx` | `ChatApp` (root), `ChatInputArea`, `OverlayPanels` (approval/question/model/level/rename), `ChatInputTextarea` (native `<textarea>`), `ChatTranscript` (native `<scrollbox>`), `SlashMenuPanel`, `FileAutocompletePanel`, `Banner`, `StatusBar`, `Separator`, plus `markdown/` and `diff/`. Components consume the `ChatStore` snapshot and use native opentui props (`fg`/`bg`/`attributes`) directly. Each opentui-intrinsic file starts with the `@jsxImportSource @opentui/react` pragma. |
 | Clipboard copy | `src/platform/clipboard-service.ts`, `src/platform/selection-copy.ts` | OSC52 clipboard service plus mouseup selection-copy; `isOsc52Supported()` gates the stderr fallback. |
 | opentui renderer mount/unmount | `src/platform/opentui-renderer.ts` | `mountOpenTui(element)` dynamic-imports `createCliRenderer` + `createRoot`, returns `{ renderer, root, unmount }`. |
-| KeyEvent adapter | `src/platform/key-event-adapter.ts` | `createKeyEventAdapter` / `adaptKeyEvent`: opentui `KeyEvent` → Ink-compatible `{ input, key }`. Stateless, per-event. Also exports `InkKeyShape`. |
+| Terminal viewport source | `src/platform/terminal-viewport.ts`, `src/platform/terminal-viewport-react.ts` | Normalizes OpenTUI dimensions into `TerminalViewport { columns, rows }`; `useTerminalViewport()` is the interactive TUI layout source of truth. |
+| Keymap layers | `src/platform/keymap/` | OpenTUI keymap instance, managed textarea composition, command palette, which-key, diff viewer, message scrolling, selection copy, paste markers, and kill-ring layers. |
 | Markdown renderer | `src/components/markdown/Markdown.tsx` | opentui-native markdown: token walker → IR (`InlineRun`/`RenderLine`/`RenderBlock`) → `<box>`/`<text>`. Pure helpers (`getCachedBlocks`, `reflowRuns`, `renderInlineToRuns`, `computeTableColumnWidths`) are exported for unit tests. 64-entry LRU cache. |
-| Markdown theme | `src/components/markdown/theme.ts` | `darkTheme` (14 element styles + `highlightCode` slot), `noColorTheme`. `InkTextStyle` = subset of opentui `<text>` props. |
+| Markdown theme | `src/components/markdown/theme.ts` | `darkTheme` (14 element styles + `highlightCode` slot), `noColorTheme`. `TerminalTextStyle` = subset of opentui `<text>` props. |
 | Markdown streaming healer | `src/components/markdown/stream.ts` | `streamBlocks` heals incomplete markdown (open `**`, ```` ``` ```` fence) via `remend` and splits live input into renderable blocks. Never throws. |
 | Code highlighting | `src/components/markdown/highlight.ts` | `highlightCode` is a thin re-export over `tree-sitter-highlighter.ts` (opentui tree-sitter backend with async cache-fill); scope→style table in `syntax-rules.ts`; 34-language grammar config in `parsers-config.ts`; zero raw ANSI leakage. |
 | Diff renderer | `src/components/diff/` | `render-diff.ts` classifies mctrl no-line-number diffs; `DiffView.tsx` renders green/red/cyan with inverse intra-line spans. `kindStyle`/`splitLineSpans` exported for tests. |
@@ -233,7 +231,7 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | Auth args | `src/auth-args.ts` | Delegates into `src/commands/auth*.ts`. |
 | Session args | `src/session-args.ts` | Delegates into `src/commands/session.ts`. |
 | Runtime orchestration | `src/commands/run-agent.ts` | Chooses chat/non-interactive paths, provider setup, permissions, renderers, workspace root resolution (`--workspace` > `MCTRL_WORKSPACE` > `detectWorkspaceRoot()`). |
-| Interactive chat | `src/commands/interactive-chat*.ts` | Terminal input, slash commands, model picker, approval broker. Non-TTY fallback path. `useTui` gates the opentui bridge on `process.stdin.isTTY`. |
+| Interactive chat | `src/commands/interactive-chat*.ts` | Terminal input, slash commands, model picker, approval broker. Non-TTY fallback path. `useTui` gates the opentui TUI on `process.stdin.isTTY`. |
 | Command parsing | `src/commands/chat-commands.ts` | parseChatLine → ChatLineAction |
 | Slash command menu state | `src/commands/interactive-chat-command-menu.ts` | createSlashCommandMenuView, resolveSlashCommandMenuSubmission |
 | Model discovery | `src/commands/model-discovery.ts` | Per-provider API calls for live model lists |
@@ -242,8 +240,8 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | Runtime catalog | `packages/config/src/models-dev-runtime.ts` | Fetches models.dev with 5min disk cache |
 | Output modes | `src/ui/renderers.ts` | Plain, TUI (buffered summary), and JSON renderer contracts. |
 | CLI package targets | `package.json`, `project.json` | `tsc` build, verbose Vitest, Nx `cli:*` targets. |
-| Agent spinner | `src/components/ChatApp.tsx` (`AgentSpinner`) | Braille spinner (`⠋⠙⠹…`) at 80ms; shows "Thinking…" / "Running X…" via `store.setAgentStatus`. A legacy copy remains in `opentui-chat-bridge.tsx`. |
-| Approval overlay | `src/components/OverlayPanels.tsx` (`ApprovalOverlay`) | Arrow-key Up/Down/Enter/Ctrl+C navigation over the `ChatStore`; `store.showApproval`/`hideApproval`. Legacy `handleApprovalInput` retained in `opentui-chat-bridge.tsx`. |
+| Agent spinner | `src/components/ChatApp.tsx` (`AgentSpinner`) | Braille spinner (`⠋⠙⠹…`) at 80ms when animation is enabled; shows "Thinking…" / "Running X…" via `store.setAgentStatus`. |
+| Approval overlay | `src/components/OverlayPanels.tsx` (`ApprovalOverlay`) | Arrow-key Up/Down/Enter/Ctrl+C navigation over the `ChatStore`; `store.showApproval`/`hideApproval`. |
 | ChatOutput extensions | `src/commands/interactive-chat-io.ts` | Optional `setAgentStatus`/`clearAgentStatus`/`showApproval`/`hideApproval` methods. |
 | Workspace resolution | `src/commands/run-agent.ts` (`resolveWorkspaceRoot`, `detectWorkspaceRoot`) | `--workspace <path>` flag wins, then `MCTRL_WORKSPACE` env var, then `.git`/workspaces heuristic walking up from `process.cwd()`. |
 | StatusBar render surface | `src/components/StatusBar.tsx` | Renders provider/model/variant/project/branch/session; `formatStatus` is exported for unit tests. |
@@ -261,10 +259,11 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 - The markdown/diff/ToolCard renderers consume already-redacted `outputText` (provider/tool output is redacted upstream in `packages/core`). Never read raw provider or tool structured output in a renderer.
 - `react-test-renderer` is intentionally not a dependency. Test renderer logic via the pure exported helpers (`getCachedBlocks`/`reflowRuns`/`kindStyle`/`hasDiffContent`) or opentui's headless render path. Never mount a full React tree in a unit test.
 - Visible-width math (wrapping, table columns, bar row counts) counts East Asian Wide glyphs as 2 columns — `wrap-ansi` relies on `string-width`/`get-east-asian-width`, so CJK never overflows.
-- The textarea is the source of truth for editable text; `core.inputBuffer` is a mirror kept in sync by `bridgeContentChange`. The bridge core owns non-editing state (overlays, menus, history, event queue), and React components are read-only views of the snapshot.
+- Interactive TUI layout must derive from `TerminalViewport { columns, rows }` via `useTerminalViewport()`. Direct `process.stdout.columns/rows` reads are reserved for noninteractive stdout renderers and low-level terminal seams, not React components or keymaps.
+- The textarea is the source of truth for editable text; `core.inputBuffer` is a mirror kept in sync by the content-change handler. `ChatStore` owns non-editing state (overlays, menus, history, event queue), and React components are read-only views of the snapshot.
 - `useSyncExternalStore` requires `getSnapshot()` to return a referentially stable object — `publishSnapshot()` always creates a new object.
-- The KeyEvent adapter feeds the global `useKeyboard` overlay sink only. Editing keys are native `TextareaRenderable` behavior; chords, scroll, and history ride `bridgeTextareaKeyDown` (raw `KeyEvent` plus `preventDefault`).
-- `exactOptionalPropertyTypes` is active — use conditional spreads for optional props (`...(cond ? { prop: val } : {})`), and when sourcing opentui props from `| undefined` helpers (`toOpenTuiColor`), assign to a local first and narrow before spreading.
+- Editing keys are native `TextareaRenderable` behavior; app chords, scroll, and history ride the textarea `onKeyDown` handler (raw `KeyEvent` plus `preventDefault`).
+- `exactOptionalPropertyTypes` is active — use conditional spreads for optional props (`...(cond ? { prop: val } : {})`), and when sourcing opentui props from `| undefined` helpers, assign to a local first and narrow before spreading.
 - Every `.tsx` file using opentui lowercase intrinsics MUST start with `/** @jsxImportSource @opentui/react */`. Under that pragma, component return types are `React.ReactNode`, not `React.JSX.Element`.
 - User input echoed to outputText uses `You: ` prefix so `parseMessageBlocks` can classify it.
 - Error messages use `Error: ` prefix for the same reason.
@@ -276,18 +275,18 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 - Colocated `*.test.ts` files under `src` are the package test surface.
 - For argument changes, update `args.test.ts`, `run-agent-*`, `auth-*`, or `session.test.ts` as appropriate.
 - For renderer/output changes, update `src/ui/renderers.test.ts` and the affected command-mode tests.
-- Integration tests (`run-agent-chat.test.ts`) inject scripted `ChatInput`/`ChatOutput` via options, bypassing the opentui bridge entirely.
-- The bridge itself is tested via `interactive-chat-terminal-input.test.ts` (legacy terminal path), the `opentui-chat-bridge-*.test.ts` suites, and manual tmux QA.
+- Integration tests (`run-agent-chat.test.ts`) inject scripted `ChatInput`/`ChatOutput` via options, bypassing the opentui TUI entirely.
+- The interactive TUI is covered by `interactive-chat-terminal-input.test.ts` for the terminal fallback plus focused `create-chat-tui`, `ChatApp`, component, and keymap tests; use manual tmux QA for full runtime checks.
 - Model command tests (`run-agent-model-command.test.ts`) verify `/model` parsing and selection logic.
-- When modifying the bridge, always run tmux QA: start CLI, type a prompt, verify response, test `/exit` and Ctrl+C.
+- When modifying the interactive TUI runtime, always run tmux QA: start CLI, type a prompt, verify response, test `/exit` and Ctrl+C.
 - Run focused CLI tests with `NX_DAEMON=false NX_ISOLATE_PLUGINS=false pnpm exec nx run cli:test` or `pnpm exec vitest run apps/cli/src/<file>.test.ts`.
 
 ## Anti-Patterns
 
-- Do NOT mutate bridge core state directly from React components. Editing routes through the textarea (native) and `bridgeTextareaKeyDown`; overlays route through `handleInput`.
+- Do NOT mutate `ChatStore` state directly from React components. Editing routes through the textarea (native) and the textarea keydown handler; overlays route through their dedicated handlers.
 - Do NOT use `process.stdin.setRawMode()` directly — opentui's `createCliRenderer` manages raw mode.
-- Do NOT add companion packages (ink-text-input, ink-select-input) — the Ink dependency has been removed. All components are custom-built on opentui intrinsics.
-- Do NOT import from `'ink'` — the dependency is gone. The KeyEvent adapter reproduces Ink's input semantics; the `InkKeyShape` type is the structural mirror, imported from `opentui-chat-bridge.tsx` or `platform/key-event-adapter.ts`.
+- Do NOT add deprecated terminal UI companion packages or compatibility input/select layers. All components are custom-built on opentui intrinsics.
+- Do NOT import deprecated terminal UI frameworks. OpenTUI is the only React terminal renderer for TUI mode.
 - Do NOT call `console.log` in TUI mode — the renderer may patch the stream. Use `process.stderr.write()` for debugging.
 - Do NOT remove the non-TUI terminal fallback path — tests depend on it via scripted input injection.
 - Do NOT bypass `createAllowPermissionDecision` or approval plumbing for write-capable command paths.
@@ -295,6 +294,6 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 - Do NOT make demo-only provider/model metadata look like an implemented provider adapter.
 - Do NOT edit `dist`; it is generated by `tsc`.
 - Do NOT write opentui-intrinsic `.tsx` files without the `/** @jsxImportSource @opentui/react */` pragma — lowercase intrinsics will not resolve against React's DOM types.
-- Do NOT re-add a hand-rolled cursor or composition buffer. The `TextareaRenderable` owns the cursor, selection, and IME composition; the bridge only mirrors `plainText` into `inputBuffer`.
+- Do NOT re-add a hand-rolled cursor or composition buffer. The `TextareaRenderable` owns the cursor, selection, and IME composition; the chat store only mirrors `plainText` into `inputBuffer`.
 - Do NOT add a Ctrl+C copy regime. Copy is mouse-release only via OSC52 (`onMouseUp` on the root box). Ctrl+C is reserved for interrupt/exit and routes through the global sink, never the textarea.
 - Do NOT spawn clipboard binaries (`pbcopy` / `xclip` / `wl-copy`) for copy. OSC52 is emitted by opentui's native core; surface unsupported terminals via stderr instead.

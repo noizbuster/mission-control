@@ -288,11 +288,10 @@ no `foreground` (`idle`, `starting`) the low-color renderer already emits
 | Node count `> 16` | graph falls back to the adjacency-list renderer. | `[EXISTING]` `VISUAL_GRAPH_MAX_NODES`, `visual-graph.ts:78-79` |
 | Very large graph (canvas wider than bound) | dagre output is **clipped** to the canvas bound (section 2), never wrapped. Off-canvas nodes are summarized in the minimap as dim dots; the viewport rect shows the visible region. | `[NEW]` |
 
-`process.stdout.columns` is the source of truth for width
-(`AbgOverlay.tsx:197`); a resize re-runs the collapse decision and, when not
-collapsed, re-runs the dagre layout at the new bound. The minimap always
-renders the full graph regardless of canvas clipping so the operator can see
-what is off-screen.
+The normalized `TerminalViewport` is the source of truth for width. A resize
+re-runs the collapse decision from viewport columns and, when not collapsed,
+re-runs the dagre layout at the new bound. The minimap always renders the full
+graph regardless of canvas clipping so the operator can see what is off-screen.
 
 Vertical behavior mirrors horizontal: rows beyond the pane height scroll
 inside the existing native `<scrollbox>`; the minimap's viewport rect tracks
