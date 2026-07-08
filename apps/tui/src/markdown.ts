@@ -92,7 +92,7 @@ export function streamBlocks(text: string, live: boolean): Block[] {
     if (tail < 0) return [{ raw: text, src, mode: 'live' }];
 
     const last = tokens[tail];
-    if (!last || last.type !== 'code') return [{ raw: text, src, mode: 'live' }];
+    if (last?.type !== 'code') return [{ raw: text, src, mode: 'live' }];
 
     const code = last as Tokens.Code;
     if (!open(code.raw)) return [{ raw: text, src, mode: 'live' }];

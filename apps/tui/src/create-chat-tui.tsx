@@ -103,14 +103,8 @@ export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHan
     const { ChatApp } = await import('@mission-control/tui/chat-app');
     const { createComponent } = await import('solid-js/web');
 
-    let textareaRef: TextareaRenderable | undefined;
-    let scrollboxRef: ScrollBoxRenderable | undefined;
-    const setTextareaRef = (renderable: TextareaRenderable): void => {
-        textareaRef = renderable;
-    };
-    const setScrollboxRef = (renderable: ScrollBoxRenderable): void => {
-        scrollboxRef = renderable;
-    };
+    const setTextareaRef: (renderable: TextareaRenderable) => void = () => {};
+    const setScrollboxRef: (renderable: ScrollBoxRenderable) => void = () => {};
 
     const statusBarProps: StatusBarProps = {
         providerID: options.providerID,
@@ -144,8 +138,6 @@ export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHan
     );
 
     return createChatTuiHandle(store, () => {
-        textareaRef = undefined;
-        scrollboxRef = undefined;
         mountResult.unmount();
     });
 }

@@ -1,8 +1,36 @@
 import { defineConfig } from 'vitest/config';
+import solidPlugin from 'vite-plugin-solid';
 
 const tuiSrc = new URL('./apps/tui/src/', import.meta.url).pathname;
 
+function resolveSolidNodeRuntime(sourcePath: string): string {
+    if (sourcePath === 'solid-js') return 'solid-js/dist/solid.js';
+    if (sourcePath === 'solid-js/store') return 'solid-js/store/dist/store.js';
+    return sourcePath;
+}
+
 export default defineConfig({
+    plugins: [
+        solidPlugin({
+            // Scope Solid JSX to TUI only; desktop is React (JSX transform conflict).
+            include: [/apps[\\/]tui[\\/]/],
+            ssr: true,
+            solid: {
+                moduleName: '@opentui/solid',
+                generate: 'universal',
+            },
+            babel: {
+                plugins: [
+                    [
+                        'module-resolver',
+                        {
+                            resolvePath: resolveSolidNodeRuntime,
+                        },
+                    ],
+                ],
+            },
+        }),
+    ],
     resolve: {
         alias: [
             {
@@ -62,6 +90,7 @@ export default defineConfig({
             'apps/**/*.test.tsx',
             'scripts/**/*.test.ts',
         ],
+        environment: 'node',
         globals: false,
     },
 });

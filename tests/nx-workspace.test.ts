@@ -103,7 +103,9 @@ function isRootManifest(value: unknown): value is RootManifest {
     if (!isRecord(value)) {
         return false;
     }
+    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
     const scripts = value['scripts'];
+    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
     const devDependencies = value['devDependencies'];
     return (
         (scripts === undefined || isStringRecord(scripts)) &&
@@ -115,7 +117,9 @@ function isNxConfig(value: unknown): value is NxConfig {
     if (!isRecord(value)) {
         return false;
     }
+    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
     const namedInputs = value['namedInputs'];
+    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
     const targetDefaults = value['targetDefaults'];
     return (
         (namedInputs === undefined || isRecord(namedInputs)) &&
@@ -127,8 +131,11 @@ function isProjectConfig(value: unknown): value is ProjectConfig {
     if (!isRecord(value)) {
         return false;
     }
+    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
     const name = value['name'];
+    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
     const targets = value['targets'];
+    // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
     const implicitDependencies = value['implicitDependencies'];
     return (
         (name === undefined || typeof name === 'string') &&
@@ -156,10 +163,15 @@ describe('Nx workspace', () => {
     it('routes root scripts through Nx', () => {
         const manifest = readRootManifest();
 
+        // biome-ignore lint/complexity/useLiteralKeys: Record<string, string> requires bracket access per noPropertyAccessFromIndexSignature
         expect(manifest.devDependencies?.['nx']).toBeTruthy();
+        // biome-ignore lint/complexity/useLiteralKeys: Record<string, string> requires bracket access per noPropertyAccessFromIndexSignature
         expect(manifest.scripts?.['build']).toBe(`${nxRuntime} nx run-many -t build`);
+        // biome-ignore lint/complexity/useLiteralKeys: Record<string, string> requires bracket access per noPropertyAccessFromIndexSignature
         expect(manifest.scripts?.['typecheck']).toBe(`${nxRuntime} nx run-many -t typecheck`);
+        // biome-ignore lint/complexity/useLiteralKeys: Record<string, string> requires bracket access per noPropertyAccessFromIndexSignature
         expect(manifest.scripts?.['test']).toBe(`${nxRuntime} nx run-many -t test`);
+        // biome-ignore lint/complexity/useLiteralKeys: Record<string, string> requires bracket access per noPropertyAccessFromIndexSignature
         expect(manifest.scripts?.['lint']).toBe(`${nxRuntime} nx run workspace:lint`);
         expect(manifest.scripts?.['dev:cli']).toBe(`${nxRuntime} nx run cli:dev --`);
         expect(manifest.scripts?.['dev:desktop']).toBe(`${nxRuntime} nx run desktop:dev`);
@@ -170,11 +182,17 @@ describe('Nx workspace', () => {
     it('declares cacheable Nx target defaults', () => {
         const config = readNxConfig();
 
+        // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
         expect(config.namedInputs?.['default']).toBeTruthy();
+        // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
         expect(config.namedInputs?.['production']).toBeTruthy();
+        // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
         expect(config.targetDefaults?.['build']).toMatchObject({ cache: true });
+        // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
         expect(config.targetDefaults?.['test']).toMatchObject({ cache: true });
+        // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
         expect(config.targetDefaults?.['typecheck']).toMatchObject({ cache: true });
+        // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
         expect(config.targetDefaults?.['lint']).toMatchObject({ cache: true });
     });
 

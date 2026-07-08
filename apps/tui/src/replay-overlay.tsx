@@ -123,8 +123,8 @@ export async function runReplayOverlay(options: ReplayOverlayOptions): Promise<v
                     />
                     <box marginTop={1}>
                         <text {...dimAttrs}>
-                            ← → step | 0/$ jump | 1-8 tabs | ↑↓ scroll | t live {liveOutput() ? 'on' : 'off'} |
-                            q/Esc quit
+                            ← → step | 0/$ jump | 1-8 tabs | ↑↓ scroll | t live {liveOutput() ? 'on' : 'off'} | q/Esc
+                            quit
                         </text>
                     </box>
                 </box>

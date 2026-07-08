@@ -372,7 +372,7 @@ describe('renderCodeBlock token highlighting', () => {
         await flushPending();
         const block = renderCodeBlock('const x: number = 1;', 'ts', darkTheme, 40);
         const bodyRuns = block.lines.slice(1, -1).flat();
-        const coloredRuns = bodyRuns.filter((run) => run.style.fg !== undefined && run.style.fg.startsWith('#'));
+        const coloredRuns = bodyRuns.filter((run) => run.style.fg?.startsWith('#'));
         expect(coloredRuns.length).toBeGreaterThan(0);
     });
 });

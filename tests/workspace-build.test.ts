@@ -40,6 +40,7 @@ describe('workspace build integration', () => {
         const cliManifest = readManifest('apps/cli/package.json');
         const desktopManifest = readManifest('apps/desktop/package.json');
 
+        // biome-ignore lint/complexity/useLiteralKeys: Record<string, string> requires bracket access per noPropertyAccessFromIndexSignature
         expect(rootManifest.scripts?.['build']).toBe(`${nxRuntime} nx run-many -t build`);
 
         const buildablePackages: readonly PackageManifest[] = [
@@ -50,6 +51,7 @@ describe('workspace build integration', () => {
             desktopManifest,
         ];
         for (const manifest of buildablePackages) {
+            // biome-ignore lint/complexity/useLiteralKeys: Record<string, string> requires bracket access per noPropertyAccessFromIndexSignature
             expect(manifest.scripts?.['build']).toBeTruthy();
         }
 
@@ -64,16 +66,23 @@ describe('workspace build integration', () => {
         // Intentionally fails pre-split; passes once Todo 2 creates apps/tui.
         const tuiManifest = readManifest('apps/tui/package.json');
         for (const manifest of [...buildablePackages, tuiManifest]) {
+            // biome-ignore lint/complexity/useLiteralKeys: Record<string, string> requires bracket access per noPropertyAccessFromIndexSignature
             expect(manifest.scripts?.['build']).toBeTruthy();
         }
         expect(tuiManifest.private, 'tui must be private').toBe(true);
         expect(tuiManifest.dependencies?.['@opentui/solid'], 'tui must depend on OpenTUI Solid bindings').toBeTruthy();
         expect(tuiManifest.dependencies?.['solid-js'], 'tui must depend on Solid').toBeTruthy();
-        expect(tuiManifest.dependencies?.['@opentui/react'], 'tui must not depend on OpenTUI React bindings').toBeUndefined();
+        expect(
+            tuiManifest.dependencies?.['@opentui/react'],
+            'tui must not depend on OpenTUI React bindings',
+        ).toBeUndefined();
         expect(tuiManifest.exports?.['./terminal-viewport-solid'], 'tui must export the Solid viewport hook').toBe(
             './dist/platform/terminal-viewport-solid.js',
         );
-        expect(tuiManifest.exports?.['./terminal-viewport-react'], 'tui must not export the old viewport hook').toBeUndefined();
+        expect(
+            tuiManifest.exports?.['./terminal-viewport-react'],
+            'tui must not export the old viewport hook',
+        ).toBeUndefined();
         expectWorkspaceDependency(cliManifest, '@mission-control/tui');
     });
 });

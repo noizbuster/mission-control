@@ -136,6 +136,7 @@ function childrenArray(children: JSX.Element | undefined): readonly unknown[] {
 }
 
 function isTestElement(value: unknown): value is TestElement {
+    // biome-ignore lint/complexity/useLiteralKeys: Record<string, unknown> requires bracket access per noPropertyAccessFromIndexSignature
     return isRecord(value) && 'type' in value && isRecord(value['props']);
 }
 

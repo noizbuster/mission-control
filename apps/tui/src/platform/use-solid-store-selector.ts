@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, onMount, type Accessor } from 'solid-js';
+import { type Accessor, createSignal, onCleanup, onMount } from 'solid-js';
 
 export interface SolidSelectableStore<TSnapshot> {
     readonly subscribe: (onStoreChange: () => void) => () => void;

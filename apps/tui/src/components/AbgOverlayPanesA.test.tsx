@@ -1,6 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { AbgOverlayState } from '../state/abg-overlay-state';
-import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA';
 
 vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
 
@@ -116,7 +115,9 @@ describe('AbgOverlayPanesA', () => {
             const element = testElement({ state, modelLabel: 'openai/gpt-4' });
 
             expect(element).toBeDefined();
+            // biome-ignore lint/complexity/useLiteralKeys: Record<string, unknown> requires bracket access per noPropertyAccessFromIndexSignature
             expect(element.props['state']).toBe(state);
+            // biome-ignore lint/complexity/useLiteralKeys: Record<string, unknown> requires bracket access per noPropertyAccessFromIndexSignature
             expect(element.props['modelLabel']).toBe('openai/gpt-4');
 
             const stateWithCost = state;

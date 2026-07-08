@@ -12,10 +12,12 @@ async function resetTempDir(): Promise<void> {
 describe('abg-overlay-prefs-store', () => {
     beforeEach(async () => {
         await resetTempDir();
+        // biome-ignore lint/complexity/useLiteralKeys: process.env (NodeJS.ProcessEnv) requires bracket access per noPropertyAccessFromIndexSignature
         process.env['MCTRL_DATA_DIR'] = TEMP_DATA_DIR;
     });
 
     afterEach(async () => {
+        // biome-ignore lint/complexity/useLiteralKeys: process.env (NodeJS.ProcessEnv) requires bracket access per noPropertyAccessFromIndexSignature
         delete process.env['MCTRL_DATA_DIR'];
         await resetTempDir();
     });
