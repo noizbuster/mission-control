@@ -1,19 +1,47 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { relative } from 'node:path';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
 const root = process.cwd();
+const stateSourceRoot = 'apps/tui/src/state';
+const testFilePattern = /\.(test|spec)\.(ts|tsx)$/u;
+
+function collectSourceFiles(dir: string): string[] {
+    const absoluteDir = join(root, dir);
+    const files: string[] = [];
+    for (const entry of readdirSync(absoluteDir)) {
+        const relativePath = join(dir, entry);
+        const absolutePath = join(root, relativePath);
+        const stat = statSync(absolutePath);
+        if (stat.isDirectory()) {
+            files.push(...collectSourceFiles(relativePath));
+            continue;
+        }
+        if (testFilePattern.test(entry)) continue;
+        if (absolutePath.endsWith('.ts')) {
+            files.push(relativePath);
+        }
+    }
+    return files.sort();
+}
+
+const topLevelPureSourceFiles = [
+    'apps/tui/src/index.ts',
+    'apps/tui/src/terminal-text.ts',
+    'apps/tui/src/chat.ts',
+    'apps/tui/src/markdown.ts',
+] as const;
 
 /**
- * The PURE no-OpenTUI subpath source files. These must never import opentui,
- * react, ffi, or anything from the CLI package. The opentui components and
- * platform code that land in `apps/tui/src/{components,platform}` are exempt —
+ * The PURE no-framework eager source files. These must never import opentui,
+ * React, Solid, ffi, or anything from the CLI package. The opentui components
+ * and platform code that land in `apps/tui/src/{components,platform}` are exempt —
  * the recursive CLI-boundary scan is the job of `tests/tui-cli-boundary.test.ts`.
  *
- * When a new pure subpath is added, append its source path here so the guard
- * covers it.
+ * When a new pure subpath is added, append its top-level source path here or put
+ * it under `src/state/` so the recursive guard covers it.
  */
-const pureSourceFiles = ['apps/tui/src/terminal-text.ts', 'apps/tui/src/chat.ts', 'apps/tui/src/markdown.ts'];
+const pureSourceFiles = [...topLevelPureSourceFiles, ...collectSourceFiles(stateSourceRoot)].sort();
 
 /**
  * Forbidden import strings. `react` is matched via its import-statement forms
@@ -23,7 +51,11 @@ const pureSourceFiles = ['apps/tui/src/terminal-text.ts', 'apps/tui/src/chat.ts'
 const forbiddenImportStrings = [
     '@opentui/core',
     '@opentui/react',
+    '@opentui/solid',
     '@opentui/keymap',
+    '@opentui/keymap/react',
+    '@opentui/keymap/solid',
+    'solid-js',
     'opentui-renderer',
     'apps/cli',
     '../cli',
@@ -33,21 +65,30 @@ const forbiddenImportStrings = [
     'from "react"',
 ] as const;
 
+const blockCommentPattern = /\/\*[\s\S]*?\*\//gu;
+const lineCommentPattern = /\/\/.*$/gmu;
+
+function stripComments(source: string): string {
+    return source.replace(blockCommentPattern, '').replace(lineCommentPattern, '');
+}
+
 describe('apps/tui/src pure-subpath import-graph guard', () => {
-    it('no pure subpath source file imports opentui, react, ffi, or apps/cli', () => {
+    it('no pure/eager source file imports opentui, React, Solid, ffi, or apps/cli', () => {
         // Sanity: the guard must scan at least one real file; fail loudly if the
         // explicit list drifted to all-missing paths.
         expect(pureSourceFiles.length, 'pureSourceFiles must list at least one file').toBeGreaterThan(0);
         const failures: string[] = [];
         for (const relativePath of pureSourceFiles) {
-            const absolutePath = `${root}/${relativePath}`;
-            const source = readFileSync(absolutePath, 'utf8');
+            const absolutePath = join(root, relativePath);
+            const source = stripComments(readFileSync(absolutePath, 'utf8'));
             for (const term of forbiddenImportStrings) {
                 if (source.includes(term)) {
                     failures.push(`${relativePath}: forbidden import "${term}"`);
                 }
             }
         }
-        expect(failures, `pure subpaths must not import opentui/react/cli\n${failures.join('\n')}`).toEqual([]);
+        expect(failures, `pure/eager subpaths must not import opentui/react/solid/cli\n${failures.join('\n')}`).toEqual(
+            [],
+        );
     });
 });
