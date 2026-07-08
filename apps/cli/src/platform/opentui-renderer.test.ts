@@ -83,6 +83,13 @@ describe('opentui renderer resize sync', () => {
         expect(readTerminalSize(stream, () => ({ columns: 140, rows: 40 }))).toEqual({ columns: 140, rows: 40 });
     });
 
+    it('falls back to the stream size when a tmux probe is unavailable', () => {
+        const stream = new FakeTerminalStream(80, 24);
+        stream.setWindowSize(120, 30);
+
+        expect(readTerminalSize(stream, () => undefined)).toEqual({ columns: 120, rows: 30 });
+    });
+
     it('resizes the renderer when the terminal dimensions changed', () => {
         const stream = new FakeTerminalStream(80, 24);
         const renderer = new RecordingRenderer(80, 24);
@@ -96,18 +103,56 @@ describe('opentui renderer resize sync', () => {
         expect(Reflect.get(renderer, 'forceFullRepaintRequested')).toBe(true);
     });
 
+    it('dedupes duplicate resize events after the initial synchronization', () => {
+        const stream = new FakeTerminalStream(100, 28);
+        const renderer = new RecordingRenderer(80, 24);
+        const detach = attachRendererResizeSync(renderer, stream, { pollIntervalMs: 0 });
+
+        stream.emit('resize');
+        stream.emit('resize');
+        detach();
+
+        expect(renderer.calls).toEqual([[100, 28]]);
+        expect(renderer.renderRequests).toBe(1);
+        expect(Reflect.get(renderer, 'forceFullRepaintRequested')).toBe(true);
+    });
+
     it('subscribes to stream resize events and detaches cleanly', () => {
         const stream = new FakeTerminalStream(80, 24);
         const renderer = new RecordingRenderer(80, 24);
         const detach = attachRendererResizeSync(renderer, stream, { pollIntervalMs: 0 });
+        expect(stream.listenerCount('resize')).toBe(1);
 
         stream.setWindowSize(100, 28);
         stream.emit('resize');
         detach();
+        expect(stream.listenerCount('resize')).toBe(0);
         stream.setWindowSize(120, 32);
         stream.emit('resize');
 
         expect(renderer.calls).toEqual([[100, 28]]);
+    });
+
+    it('cleans up the resize listener and polling interval idempotently', () => {
+        vi.useFakeTimers();
+        try {
+            const stream = new FakeTerminalStream(80, 24);
+            const renderer = new RecordingRenderer(80, 24);
+            const offSpy = vi.spyOn(stream, 'off');
+            const detach = attachRendererResizeSync(renderer, stream, { pollIntervalMs: 10 });
+
+            expect(stream.listenerCount('resize')).toBe(1);
+            expect(vi.getTimerCount()).toBe(1);
+
+            detach();
+            detach();
+
+            expect(offSpy).toHaveBeenCalledTimes(1);
+            expect(stream.listenerCount('resize')).toBe(0);
+            expect(vi.getTimerCount()).toBe(0);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('polls terminal size when resize events are not emitted and stops polling after detach', () => {
@@ -140,6 +185,8 @@ describe('opentui renderer resize sync', () => {
                 sizeProbe: () => probedSize,
             });
 
+            probedSize = { columns: 140, rows: 40 };
+            vi.advanceTimersByTime(10);
             probedSize = { columns: 140, rows: 40 };
             vi.advanceTimersByTime(10);
             detach();

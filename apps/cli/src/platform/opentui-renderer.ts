@@ -1,8 +1,8 @@
 /**
  * opentui renderer mount/unmount wrapper.
  *
- * Replaces Ink's `render(<App />, { exitOnCtrlC: false })` with the opentui
- * equivalent: `createCliRenderer` + `createRoot(renderer).render(element)`.
+ * Mounts through the opentui runtime: `createCliRenderer` plus
+ * `createRoot(renderer).render(element)`.
  *
  * Dynamic imports keep `@opentui/core` and `@opentui/react` out of the eager
  * module graph when the CLI runs in non-TUI mode (plain / JSON output). The
@@ -132,7 +132,10 @@ export function attachRendererResizeSync(
     source.on?.('resize', sync);
     const intervalMs = options.pollIntervalMs ?? DEFAULT_RESIZE_POLL_INTERVAL_MS;
     const timer = intervalMs > 0 ? setInterval(sync, intervalMs) : undefined;
+    let attached = true;
     return (): void => {
+        if (!attached) return;
+        attached = false;
         source.off?.('resize', sync);
         if (timer !== undefined) clearInterval(timer);
     };
