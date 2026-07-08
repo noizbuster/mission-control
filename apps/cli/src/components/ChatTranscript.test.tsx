@@ -1,8 +1,25 @@
 import { MacOSScrollAccel, type ScrollBoxRenderable } from '@opentui/core';
-import type { RefObject } from 'react';
+import { isValidElement, type ReactNode, type RefObject } from 'react';
 import { describe, expect, it } from 'vitest';
-import { ChatTranscriptScrollbox, chatTranscriptScrollOptions, MarkdownPanel, MessageBlock } from './ChatTranscript.js';
+import {
+    ChatTranscriptScrollbox,
+    type ChatTranscriptScrollOptions,
+    chatTranscriptScrollOptions,
+    MarkdownPanel,
+    MessageBlock,
+} from './ChatTranscript.js';
 import { darkTheme } from './markdown/theme.js';
+
+type ScrollboxElementProps = ChatTranscriptScrollOptions & {
+    readonly children?: ReactNode;
+};
+
+function scrollboxProps(node: ReactNode): ScrollboxElementProps {
+    if (!isValidElement<ScrollboxElementProps>(node)) {
+        throw new Error('expected a scrollbox element');
+    }
+    return node.props;
+}
 
 describe('chatTranscriptScrollOptions', () => {
     it('builds the native scrollbox config with sticky-bottom macOS acceleration', () => {
@@ -27,6 +44,20 @@ describe('chatTranscriptScrollOptions', () => {
     it('keeps maxHeight when the value is 0 (does not treat 0 as absent)', () => {
         const opts = chatTranscriptScrollOptions(0);
         expect(opts.maxHeight).toBe(0);
+    });
+
+    it('preserves sticky-bottom behavior when resize changes the transcript height', () => {
+        const tall = chatTranscriptScrollOptions(24);
+        const short = chatTranscriptScrollOptions(10);
+
+        expect([tall.stickyScroll, tall.stickyStart, tall.width, tall.maxHeight]).toEqual([true, 'bottom', '100%', 24]);
+        expect([short.stickyScroll, short.stickyStart, short.width, short.maxHeight]).toEqual([
+            true,
+            'bottom',
+            '100%',
+            10,
+        ]);
+        expect(short.scrollAcceleration).toBeInstanceOf(MacOSScrollAccel);
     });
 });
 
@@ -55,6 +86,25 @@ describe('ChatTranscriptScrollbox component', () => {
                 </ChatTranscriptScrollbox>
             );
         }).not.toThrow();
+    });
+
+    it('threads resize height changes into the native scrollbox without dropping sticky-bottom props', () => {
+        const scrollboxRef: RefObject<ScrollBoxRenderable | null> = { current: null };
+
+        const tall = scrollboxProps(
+            ChatTranscriptScrollbox({ scrollboxRef, maxHeight: 24, children: 'transcript line' }),
+        );
+        const short = scrollboxProps(
+            ChatTranscriptScrollbox({ scrollboxRef, maxHeight: 10, children: 'transcript line' }),
+        );
+
+        expect([tall.stickyScroll, tall.stickyStart, tall.width, tall.maxHeight]).toEqual([true, 'bottom', '100%', 24]);
+        expect([short.stickyScroll, short.stickyStart, short.width, short.maxHeight]).toEqual([
+            true,
+            'bottom',
+            '100%',
+            10,
+        ]);
     });
 });
 
