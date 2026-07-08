@@ -42,7 +42,7 @@ export interface ScrollboxLike {
     readonly scrollHeight: number;
 }
 
-/** A ref-like handle to a nullable scrollbox (matches React.RefObject shape). */
+/** A ref-like handle to a nullable scrollbox (matches the object-ref shape). */
 export interface ScrollboxRef {
     readonly current: ScrollboxLike | null;
 }

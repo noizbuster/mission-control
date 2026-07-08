@@ -69,7 +69,7 @@ describe('apps/tui React dependency removal guard', () => {
         expect(findings).toEqual([{ file: 'synthetic-fixture.ts', term: 'useSyncExternalStore' }]);
     });
 
-    it.skip('no product file under apps/tui/src imports React (activate after Solid migration)', () => {
+    it('no product file under apps/tui/src contains React dependency terms', () => {
         const findings = scanFilesForReact(collectProductSourceFiles(tuiSourceRoot));
 
         expect(findings, `TUI product source must not contain React dependencies\n${formatFindings(findings)}`).toEqual(

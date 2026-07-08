@@ -1,5 +1,5 @@
 /**
- * Selector store wrapping `ChatStore` for fine-grained `useSyncExternalStore`
+ * Selector store wrapping `ChatStore` for fine-grained external-store
  * subscriptions. Mirrors `createKeymapSelectorStore`
  * (`platform/keymap/use-keymap-selector.ts:71-98`) with one enhancement: on
  * parent notify, the selector is re-derived and compared. Own listeners fire
@@ -9,7 +9,7 @@
  * Snapshot-stability strategy (CRITICAL):
  *   `ChatStore.getSnapshot()` returns a NEW object on every `publish()` (the
  *   `buildSnapshot()` spread at `chat-store.ts:1522-1528`). A pass-through
- *   `getSnapshot` would make `useSyncExternalStore` re-render on every token.
+ *   `getSnapshot` would make external-store subscribers re-render on every token.
  *   The selector store caches the derived value keyed on a monotonically
  *   increasing version that bumps only when the selected slice changed,
  *   guaranteeing referential stability between unrelated parent publishes.
@@ -26,7 +26,7 @@
 
 import type { ChatStore, ChatStoreState } from './chat-store.js';
 
-/** The `useSyncExternalStore` store contract. */
+/** The external-store subscription contract. */
 export interface ChatSelectorStore<T> {
     readonly subscribe: (onStoreChange: () => void) => () => void;
     readonly getSnapshot: () => T;
@@ -61,14 +61,14 @@ function selectionChanged(prev: unknown, next: unknown): boolean {
 }
 
 /**
- * Build a `useSyncExternalStore`-compatible store that derives `selector`
+ * Build an external-store-compatible selector that derives `selector`
  * from `store` and re-derives only when the parent store publishes. Own
  * listeners are notified only when the selected value changes (`Object.is` for
  * primitives, shallow for plain objects), guaranteeing that a component
  * selecting a narrow slice does not re-render on unrelated parent publishes.
  *
  * Callers MUST pass a referentially stable selector (module-level or wrapped
- * in `useCallback`); an inline arrow that changes identity every render would
+ * in a framework-level memo); an inline arrow that changes identity every render would
  * bust the single-entry cache on every derivation. The ChatInputArea selector
  * is module-level for this reason.
  */
@@ -84,7 +84,7 @@ export function createChatSelectorStore<T>(
             const next = selector(store.getSnapshot());
             if (cache !== null && !selectionChanged(cache.value, next)) {
                 // Selected slice unchanged — suppress the notification so
-                // React does not even schedule a re-render.
+                // subscribers do not even schedule a re-render.
                 return;
             }
             version += 1;
