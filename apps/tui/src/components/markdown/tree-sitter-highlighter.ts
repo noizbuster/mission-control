@@ -10,7 +10,7 @@
  *    async parse ({@link scheduleAsyncHighlight}).
  * 2. When the async parse resolves the colored result is cached, the markdown
  *    render LRU is invalidated ({@link clearRenderCache}), and the version
- *    emitter notifies React (via {@link subscribeHighlight} /
+ *    emitter notifies render subscribers (via {@link subscribeHighlight} /
  *    {@link getHighlightVersion}) so the block re-renders and hits the cache.
  *
  * The opentui worker is lazily initialized on the FIRST highlight call (never

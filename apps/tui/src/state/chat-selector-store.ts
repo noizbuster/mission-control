@@ -1,10 +1,10 @@
 /**
  * Selector store wrapping `ChatStore` for fine-grained external-store
- * subscriptions. Mirrors `createKeymapSelectorStore`
- * (`platform/keymap/use-keymap-selector.ts:71-98`) with one enhancement: on
- * parent notify, the selector is re-derived and compared. Own listeners fire
- * only when the selected value actually changed, so a component selecting
- * `generating` does NOT re-render when `outputText` gains a token.
+ * subscriptions. Mirrors the accessor-returning `useSolidStoreSelector`
+ * subscription pattern with one enhancement: on parent notify, the selector is
+ * re-derived and compared. Own listeners fire only when the selected value
+ * actually changed, so a component selecting `generating` does NOT re-render
+ * when `outputText` gains a token.
  *
  * Snapshot-stability strategy (CRITICAL):
  *   `ChatStore.getSnapshot()` returns a NEW object on every `publish()` (the

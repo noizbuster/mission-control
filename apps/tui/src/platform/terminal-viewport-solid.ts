@@ -1,12 +1,12 @@
 import { useRenderer } from '@opentui/solid';
-import { createSignal, onCleanup, onMount } from 'solid-js';
+import { type Accessor, createSignal, onCleanup, onMount } from 'solid-js';
 import {
     createTerminalViewportCache,
     type OpenTuiTerminalDimensions,
     type TerminalViewport,
 } from './terminal-viewport.js';
 
-export function useTerminalViewport(): TerminalViewport {
+export function useTerminalViewport(): Accessor<TerminalViewport> {
     const renderer = useRenderer();
     const cache = createTerminalViewportCache();
     const readViewport = (): TerminalViewport => {
@@ -26,5 +26,5 @@ export function useTerminalViewport(): TerminalViewport {
         });
     });
 
-    return viewport();
+    return viewport;
 }

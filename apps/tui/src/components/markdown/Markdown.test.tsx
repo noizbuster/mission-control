@@ -326,7 +326,7 @@ describe('getCachedBlocks LRU cache', () => {
 });
 
 describe('Markdown component', () => {
-    it('is a callable React component', () => {
+    it('is a callable component', () => {
         expect(typeof Markdown).toBe('function');
     });
 

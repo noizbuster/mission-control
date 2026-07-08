@@ -211,8 +211,7 @@ export function ChatApp({
     const keymap = useKeymap();
     const renderer = useRenderer();
     const viewport = useTerminalViewport();
-    let viewportRows = viewport.rows;
-    const viewportLayout = createMemo(() => chatAppViewportLayout(viewport));
+    const viewportLayout = createMemo(() => chatAppViewportLayout(viewport()));
     const shellWidth = createMemo(() => viewportLayout().width);
     const shellHeight = createMemo(() => viewportLayout().height);
     const dockPolicy = createMemo(() => viewportLayout().dockPolicy);
@@ -494,7 +493,7 @@ export function ChatApp({
                 {
                     scrollboxRef: keymapScrollboxRef,
                     clipboardService: createClipboardService(renderer),
-                    getViewportRows: () => viewportRows,
+                    getViewportRows: () => viewport().rows,
                     getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
                     getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
                     clearSelection: () => renderer.clearSelection(),
@@ -521,7 +520,7 @@ export function ChatApp({
                 {
                     scrollboxRef: keymapScrollboxRef,
                     clipboardService: createClipboardService(renderer),
-                    getViewportRows: () => viewportRows,
+                    getViewportRows: () => viewport().rows,
                     getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
                     getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
                     clearSelection: () => renderer.clearSelection(),
@@ -662,11 +661,11 @@ export function ChatApp({
     // full repaint (skip the diff, write every cell) when the view changes
     // dramatically: viewport resize, overlay open/close, and when a streaming
     // response finishes.
-    let prevViewport = viewport;
+    let prevViewport = viewport();
     createEffect(() => {
-        viewportRows = viewport.rows;
-        if (prevViewport.columns !== viewport.columns || prevViewport.rows !== viewport.rows) {
-            prevViewport = viewport;
+        const currentViewport = viewport();
+        if (prevViewport.columns !== currentViewport.columns || prevViewport.rows !== currentViewport.rows) {
+            prevViewport = currentViewport;
             hardResetRendererSurface(renderer);
         }
     });
@@ -716,7 +715,7 @@ export function ChatApp({
             scrollboxRef={scrollboxHandle}
             generating={snapshot().generating}
             toolOutputExpanded={snapshot().toolOutputExpanded}
-            viewportColumns={viewport.columns}
+            viewportColumns={viewport().columns}
         />
     ));
 
@@ -757,7 +756,7 @@ export function ChatApp({
                         activeTab={activeTab}
                         scrollOffset={abgScrollOffset()}
                         modelLabel={modelLabel}
-                        viewport={viewport}
+                        viewport={viewport()}
                     />
                 </box>
             );
@@ -793,7 +792,7 @@ export function ChatApp({
                         {showWelcome() && welcomeData !== undefined ? (
                             <WelcomeScreen
                                 data={welcomeData}
-                                viewportColumns={viewport.columns}
+                                viewportColumns={viewport().columns}
                                 availableRows={viewportLayout().welcomeAvailableRows}
                                 {...(statusBarProps?.workspaceRoot !== undefined
                                     ? { projectLabel: basename(statusBarProps.workspaceRoot) }
@@ -815,7 +814,7 @@ export function ChatApp({
                         ) : null}
                         {currentToast !== null ? <Toast message={currentToast} /> : null}
                         {showAbgMinimap() && abgOverlayController !== undefined ? (
-                            <AbgMinimap store={abgOverlayController.store} viewport={viewport} />
+                            <AbgMinimap store={abgOverlayController.store} viewport={viewport()} />
                         ) : null}
                     </>
                 }
@@ -825,8 +824,8 @@ export function ChatApp({
                         textareaRef={textareaHandle}
                         scrollboxRef={scrollboxHandle}
                         inputFocused={!overlayActive()}
-                        viewportColumns={viewport.columns}
-                        viewportRows={viewport.rows}
+                        viewportColumns={viewport().columns}
+                        viewportRows={viewport().rows}
                         statusLayout={dockStatusLayout()}
                         menuPolicy={dockPolicy().menu}
                         {...(statusBarProps !== undefined ? { statusBarProps } : {})}

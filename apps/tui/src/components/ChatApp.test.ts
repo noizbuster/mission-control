@@ -226,22 +226,22 @@ describe('ChatApp source topology', () => {
     it('uses the terminal viewport hook instead of renderer dimension polling', () => {
         const source = readChatAppSource();
 
-        expect(source).toContain('useTerminalViewport');
-        expect(source).toContain('chatAppViewportLayout(viewport)');
-        expect(source).not.toContain('useRendererDimensions');
-        expect(source).not.toContain('setInterval(sync, 250)');
-    });
+		expect(source).toContain('useTerminalViewport');
+		expect(source).toContain('chatAppViewportLayout(viewport())');
+		expect(source).not.toContain('useRendererDimensions');
+		expect(source).not.toContain('setInterval(sync, 250)');
+	});
 
-    it('requests a full OpenTUI repaint when terminal viewport columns or rows change', () => {
-        const source = readChatAppSource();
-        const viewportRepaintBlock = sliceBetween(source, 'let prevViewport = viewport;', 'let prevOverlayMode');
+	it('requests a full OpenTUI repaint when terminal viewport columns or rows change', () => {
+		const source = readChatAppSource();
+		const viewportRepaintBlock = sliceBetween(source, 'let prevViewport = viewport();', 'let prevOverlayMode');
 
-        expect(source).toContain("import { hardResetRendererSurface } from '../platform/opentui-renderer.js';");
-        expect(viewportRepaintBlock).toContain('prevViewport.columns !== viewport.columns');
-        expect(viewportRepaintBlock).toContain('prevViewport.rows !== viewport.rows');
-        expect(viewportRepaintBlock).toContain('viewportRows = viewport.rows');
-        expect(viewportRepaintBlock).toContain('hardResetRendererSurface(renderer)');
-    });
+		expect(source).toContain("import { hardResetRendererSurface } from '../platform/opentui-renderer.js';");
+		expect(viewportRepaintBlock).toContain('const currentViewport = viewport();');
+		expect(viewportRepaintBlock).toContain('prevViewport.columns !== currentViewport.columns');
+		expect(viewportRepaintBlock).toContain('prevViewport.rows !== currentViewport.rows');
+		expect(viewportRepaintBlock).toContain('hardResetRendererSurface(renderer)');
+	});
 
     it('wires ChatBottomDock exactly once with refs, focus, status layout, and menu policy', () => {
         const source = readChatAppSource();
@@ -252,8 +252,8 @@ describe('ChatApp source topology', () => {
         expect(dockBlock).toContain('textareaRef={textareaHandle}');
         expect(dockBlock).toContain('scrollboxRef={scrollboxHandle}');
         expect(dockBlock).toContain('inputFocused={!overlayActive()}');
-        expect(dockBlock).toContain('viewportColumns={viewport.columns}');
-        expect(dockBlock).toContain('viewportRows={viewport.rows}');
+		expect(dockBlock).toContain('viewportColumns={viewport().columns}');
+		expect(dockBlock).toContain('viewportRows={viewport().rows}');
         expect(dockBlock).toContain('statusLayout={dockStatusLayout()}');
         expect(dockBlock).toContain('menuPolicy={dockPolicy().menu}');
     });
@@ -262,8 +262,8 @@ describe('ChatApp source topology', () => {
         const source = readChatAppSource();
         const upperBlock = sliceBetween(source, 'upperOutputRegion={', 'bottomDock={');
 
-        expect(upperBlock).toContain('<WelcomeScreen');
-        expect(upperBlock).toContain('viewportColumns={viewport.columns}');
+		expect(upperBlock).toContain('<WelcomeScreen');
+		expect(upperBlock).toContain('viewportColumns={viewport().columns}');
         expect(upperBlock).toContain('availableRows={viewportLayout().welcomeAvailableRows}');
         expect(upperBlock).toContain('transcript');
         expect(upperBlock).toContain('<AgentSpinner');
@@ -291,9 +291,9 @@ describe('ChatApp source topology', () => {
         const abgOverlayBlock = sliceBetween(source, '<AbgOverlay', '/>');
         const upperBlock = sliceBetween(source, 'upperOutputRegion={', 'bottomDock={');
 
-        expect(abgOverlayBlock).toContain('viewport={viewport}');
-        expect(upperBlock).toContain('<AbgMinimap store={abgOverlayController.store} viewport={viewport} />');
-    });
+		expect(abgOverlayBlock).toContain('viewport={viewport()}');
+		expect(upperBlock).toContain('<AbgMinimap store={abgOverlayController.store} viewport={viewport()} />');
+	});
 
     it('does not import or directly render prompt-adjacent popover panels', () => {
         const source = readChatAppSource();
