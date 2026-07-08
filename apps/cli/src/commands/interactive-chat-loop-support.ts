@@ -1,5 +1,5 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { closeTreeSitterClient } from '../components/markdown/highlight.js';
+import { closeTreeSitterClient } from '@mission-control/tui/highlight';
 import type { ModelSelector } from './interactive-chat.js';
 import type { ChatInput, ChatInputEvent } from './interactive-chat-io.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';

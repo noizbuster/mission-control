@@ -15,26 +15,17 @@
     "access": "public"
   },
   "scripts": {
+    "prebuild": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run tui:build",
     "build": "tsc -p tsconfig.json",
     "dev": "sh -c 'while [ \"${1:-}\" = \"--\" ]; do shift; done; pnpm build >/dev/null && node --experimental-ffi dist/index.js \"$@\"' --",
     "test": "sh -c 'cd ../.. && while [ \"${1:-}\" = \"--\" ]; do shift; done; vitest run --reporter verbose \"$@\"' --",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@dagrejs/dagre": "^3.0.0",
     "@mission-control/config": "workspace:*",
     "@mission-control/core": "workspace:*",
     "@mission-control/protocol": "workspace:*",
-    "@opentui/core": "^0.4.3",
-    "@opentui/keymap": "^0.4.3",
-    "@opentui/react": "^0.4.3",
-    "@types/react": "^19.2.17",
-    "diff": "^9.0.0",
-    "marked": "^18.0.5",
-    "react": "^19.0.0",
-    "remend": "^1.3.0",
-    "web-tree-sitter": "^0.25.10",
-    "wrap-ansi": "^10.0.0"
+    "@mission-control/tui": "workspace:*"
   },
   "devDependencies": {
     "@ai-sdk/provider": "^3.0.10",

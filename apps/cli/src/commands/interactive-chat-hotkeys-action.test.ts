@@ -1,5 +1,5 @@
+import { Keybinds } from '@mission-control/tui/keybind';
 import { describe, expect, it } from 'vitest';
-import { Keybinds } from '../platform/keymap/keybind.js';
 import { parseChatLine } from './chat-commands.js';
 import { formatHotkeysText, runHotkeysAction } from './interactive-chat-hotkeys-action.js';
 

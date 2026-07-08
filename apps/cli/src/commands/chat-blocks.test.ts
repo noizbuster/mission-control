@@ -1,5 +1,5 @@
+import { classifyLine, parseMessageBlocks } from '@mission-control/tui/chat';
 import { describe, expect, it } from 'vitest';
-import { classifyLine, parseMessageBlocks } from './chat-blocks.js';
 
 describe('classifyLine', () => {
     it('classifies a You: prefix as user', () => {

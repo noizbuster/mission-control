@@ -16,6 +16,7 @@ const workspacePackages = [
     { name: '@mission-control/protocol', source: 'packages/protocol' },
     { name: '@mission-control/config', source: 'packages/config' },
     { name: '@mission-control/core', source: 'packages/core' },
+    { name: '@mission-control/tui', source: 'apps/tui' },
 ] as const;
 
 const workspacePackageNames = new Set<string>(workspacePackages.map((packageInfo) => packageInfo.name));

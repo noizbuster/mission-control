@@ -5,7 +5,7 @@ import type {
     ModelProviderSelection,
     RunCoordinatorState,
 } from '@mission-control/protocol';
-import { darkTheme, noColorTheme } from '../components/markdown/theme.js';
+import { darkTheme, noColorTheme } from '@mission-control/tui/markdown-theme';
 import { joinBlocks, renderBlock } from './block-renderer.js';
 import { createBlockAccumulator } from './output-blocks.js';
 import type { AgentUIRenderer } from './ui-adapter.js';

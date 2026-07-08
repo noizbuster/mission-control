@@ -16,21 +16,48 @@ import {
     WorkflowRegistry,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
+import type { QuestionBatchEntry, QuestionOption } from '@mission-control/tui/chat';
+import { closeTreeSitterClient } from '@mission-control/tui/highlight';
+import type {
+    ApprovalLevel,
+    ChatAppActions,
+    ChatTuiHandle,
+    ChatTuiRuntimeOptions,
+    DashboardAgentEntry,
+    MissionPanelRow,
+    ModelsOverlayRoleRow,
+    SessionPickerEntry,
+} from '@mission-control/tui/state';
+import {
+    approvalLevelRules,
+    createAbgOverlayController,
+    createAbgOverlayStore,
+    createModelChoices,
+    DEFAULT_ABG_OVERLAY_PREFS,
+    detectGitBranch,
+    detectGitWorktree,
+    formatAppTitle,
+    formatSessionTitle,
+    loadAbgOverlayPrefs,
+    type ModelChoice,
+    resetTerminalTitle,
+    setTerminalTitle,
+    suppressTitleManagement,
+} from '@mission-control/tui/state';
 import type { ProviderAuthStore } from '../auth-store.js';
-import { closeTreeSitterClient } from '../components/markdown/highlight.js';
 import { getVersion } from '../index.js';
-import { createAbgOverlayController } from './abg-overlay-controller.js';
-import { DEFAULT_ABG_OVERLAY_PREFS, loadAbgOverlayPrefs } from './abg-overlay-prefs-store.js';
-import { createAbgOverlayStore } from './abg-overlay-state.js';
-import type { ApprovalLevel } from './approval-level.js';
-import { approvalLevelRules } from './approval-level.js';
+import { toggleDisabled } from './agents-disabled-config.js';
+import { parseModelPatternString, setOverride } from './agents-model-overrides-config.js';
 import { parseChatLine } from './chat-commands.js';
-import type { DashboardAgentEntry, MissionPanelRow, SessionPickerEntry } from './chat-store.js';
-import type { ChatTuiHandle, ChatTuiRuntimeOptions } from './chat-tui-types.js';
-import { type ChatTuiOptions, createChatTui } from './create-chat-tui.js';
 import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
 import type { ChatActionResult } from './interactive-chat-action-result.js';
-import { type CodingActionContext, runChatAction, startWorkflowTurn } from './interactive-chat-actions.js';
+import {
+    type CodingActionContext,
+    loadDashboardAgentEntries,
+    loadMissionPanelRows,
+    runChatAction,
+    startWorkflowTurn,
+} from './interactive-chat-actions.js';
 import {
     type ChatInput,
     type ChatInputEvent,
@@ -47,7 +74,6 @@ import {
     stopActiveTurn,
     suspendChatInputWhileSelectingModel,
 } from './interactive-chat-loop-support.js';
-import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
 import { createTerminalModelSelector } from './interactive-chat-model-selector.js';
 import { createSessionNavigationController } from './interactive-chat-session-navigation.js';
 import { formatModelProviderStatus } from './interactive-chat-status.js';
@@ -58,21 +84,10 @@ import {
     isOmoRootNotFoundError,
     type MissionControlServices,
 } from './mission-control-services.js';
-import type { ModelsOverlayRoleRow } from './models-overlay-state.js';
 import { loadPricingTable } from './pricing-table-store.js';
-import type { QuestionBatchEntry, QuestionOption } from './question-types.js';
 import type { EnsuredSession } from './run-agent-session.js';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
 import { loadSessionTranscript } from './session-transcript-reconstruction.js';
-import {
-    detectGitBranch,
-    detectGitWorktree,
-    formatAppTitle,
-    formatSessionTitle,
-    resetTerminalTitle,
-    setTerminalTitle,
-    suppressTitleManagement,
-} from './terminal-controls.js';
 import { gatherWelcomeData } from './welcome-data.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
@@ -167,6 +182,21 @@ export async function runInteractiveChatSession(
                   ...(options.profileName !== undefined ? { profileName: options.profileName } : {}),
               })
             : undefined;
+    const chatAppActions: ChatAppActions = {
+        ...(options.workspaceRoot !== undefined
+            ? {
+                  loadDashboardAgentEntries,
+                  loadMissionPanelRows,
+                  toggleAgentDisabled: async (workspaceRoot, name, action) => {
+                      await toggleDisabled({ workspaceRoot }, name, action);
+                  },
+                  setAgentModelOverride: async (workspaceRoot, name, value) => {
+                      await setOverride({ workspaceRoot }, name, value);
+                  },
+                  isValidModelPattern: (raw) => parseModelPatternString(raw) !== undefined,
+              }
+            : {}),
+    };
     const tuiRuntimeOptions: SessionChatTuiRuntimeOptions | undefined = useTui
         ? {
               providerID: options.modelProviderSelection.providerID,
@@ -185,12 +215,15 @@ export async function runInteractiveChatSession(
               ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
               ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
               ...(welcomeData !== undefined ? { welcomeData } : {}),
+              ...(missionControlServices !== undefined ? { missionControlServices } : {}),
+              actions: chatAppActions,
           }
         : undefined;
-    const tuiHandle =
-        useTui && tuiRuntimeOptions !== undefined
-            ? await createChatTui(tuiRuntimeOptions as ChatTuiOptions)
-            : undefined;
+    let tuiHandle: ChatTuiHandle | undefined;
+    if (useTui && tuiRuntimeOptions !== undefined) {
+        const { createChatTui } = await import('@mission-control/tui/create-chat-tui');
+        tuiHandle = await createChatTui(tuiRuntimeOptions);
+    }
     const chatInput: ChatInput =
         options.input ??
         (tuiHandle !== undefined

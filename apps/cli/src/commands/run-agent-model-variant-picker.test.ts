@@ -1,8 +1,8 @@
 import type { ProviderAdapter, ProviderTurnRequest } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { ModelChoice } from '@mission-control/tui/state';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args.js';
-import type { ModelChoice } from './interactive-chat-model.js';
 import { runAgent } from './run-agent.js';
 import {
     createAuthStoreWithSummaries,

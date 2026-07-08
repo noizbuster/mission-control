@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import {
     clampTextOffset,
     nextGraphemeOffset,
@@ -8,7 +7,8 @@ import {
     terminalDisplayWidth,
     terminalOffsetForDisplayColumn,
     truncateTerminalText,
-} from './terminal-text.js';
+} from '@mission-control/tui';
+import { describe, expect, it } from 'vitest';
 
 describe('terminal text display offsets', () => {
     it('segments basic text into grapheme clusters', () => {

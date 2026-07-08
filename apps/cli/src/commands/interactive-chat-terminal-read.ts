@@ -1,10 +1,12 @@
 import {
     createSlashCommandMenuState,
     createSlashCommandMenuView,
+    isTerminalInterruptToken,
+    readTerminalCursorDirection,
     reduceSlashCommandMenuSelection,
     resolveSlashCommandMenuSubmission,
     type SlashCommandMenuState,
-} from './interactive-chat-command-menu.js';
+} from '@mission-control/tui/state';
 import {
     deleteTerminalChatInputCharacterBeforeCursor,
     insertTerminalChatInputText,
@@ -14,7 +16,6 @@ import {
 } from './interactive-chat-input-block.js';
 import type { ChatInputEvent } from './interactive-chat-io.js';
 import { isTerminalShiftEnterSequence, type TerminalKeyboardMode } from './interactive-chat-keyboard.js';
-import { isTerminalInterruptToken, readTerminalCursorDirection } from './interactive-chat-terminal-keys.js';
 import {
     type ChatInputRenderContext,
     commitTerminalInputBlock,

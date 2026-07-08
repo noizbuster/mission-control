@@ -1,11 +1,15 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { ApprovalLevel } from '@mission-control/tui/state';
+import {
+    formatModelSelection,
+    isApprovalLevel,
+    type ModelChoice,
+    resolveModelCommand,
+} from '@mission-control/tui/state';
 import { type AgentsCommand, parseAgentsCommand } from './agents-command.js';
-import type { ApprovalLevel } from './approval-level.js';
-import { isApprovalLevel } from './approval-level.js';
 import { splitCommandParts } from './chat-command-parts.js';
 import { parseSessionSlashCommand } from './chat-session-commands.js';
-import { formatModelSelection, type ModelChoice, resolveModelCommand } from './interactive-chat-model.js';
 
 export type SkillsCommand = { readonly kind: 'reload' } | { readonly kind: 'invalid'; readonly message: string };
 

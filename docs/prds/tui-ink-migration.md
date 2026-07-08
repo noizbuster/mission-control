@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | superseded by OpenTUI implementation |
-| Scope | Historical interactive CLI shell migration, current OpenTUI shell (`apps/cli/src/commands/create-chat-tui.tsx`), and the non-TTY terminal fallback path |
+| Scope | Historical interactive CLI shell migration, current OpenTUI shell (`apps/tui/src/create-chat-tui.tsx`), and the non-TTY terminal fallback path |
 | Related plans | `.omo/plans/ink-migration.md` |
 
 ## Background

@@ -3,10 +3,13 @@
 // T18 deliverable (d): non-TUI module-graph gate.
 //
 // Proves deterministically that the keymap module graph is NOT loaded on the
-// `--no-tui` path. The keymap provider (`apps/cli/src/platform/keymap/`) is
-// reached ONLY via the opentui bridge's dynamic `await import(...)` (the TUI
-// path). On `--no-tui` the bridge is never mounted, so the dynamic import
-// never fires and the keymap + native-FFI keymap modules stay out of the graph.
+// `--no-tui` path. The keymap provider (`apps/tui/src/platform/keymap/`) is
+// reached ONLY via the CLI's lazy `await import('@mission-control/tui/keymap-provider')`
+// inside the `if (useTui)` branch (the TUI path, apps/cli/src/commands/interactive-chat.ts).
+// On `--no-tui` that branch is never taken, so the dynamic import never fires and
+// the keymap + native-FFI keymap modules stay out of the graph. The keymap modules
+// moved from apps/cli to apps/tui in the tui-app-split; the forbidden substrings
+// below match the tui dist paths (node_modules/@mission-control/tui/dist/platform/keymap/*).
 //
 // Mechanism: an ESM resolve hook (`tui-keymap-trace-hooks.mjs`, registered by
 // `tui-keymap-trace-register.mjs`) tags every resolved module URL to stderr.
@@ -27,13 +30,14 @@ const CLI_DIST = resolve(REPO_ROOT, 'apps/cli/dist/index.js');
 const PRELOAD = resolve(REPO_ROOT, 'scripts/tui-keymap-trace-register.mjs');
 
 // Modules that MUST be absent from the --no-tui graph: every mctrl keymap
-// PROVIDER + LAYER module, plus the FFI-bearing keymap backend. These are what
-// "the keymap module graph is NOT loaded" means precisely — instantiating a
-// keymap requires keymap-provider/keymap-instance, which in turn pulls
+// PROVIDER + LAYER module (now in @mission-control/tui), plus the FFI-bearing keymap
+// backend. These are what "the keymap module graph is NOT loaded" means precisely —
+// instantiating a keymap requires keymap-provider/keymap-instance, which in turn pulls
 // `@opentui/keymap/opentui` (the native FFI backend). None of these load on
-// --no-tui. Matched as substrings of the resolved file URL.
+// --no-tui because the CLI lazy-imports @mission-control/tui/keymap-provider only
+// inside the useTui branch. Matched as substrings of the resolved file URL.
 const FORBIDDEN = [
-    // mctrl keymap provider + all registered layers (T3/T5/T7/T8/T9/T10/T11/T12/T13/T14/T15)
+    // @mission-control/tui keymap provider + all registered layers (T3/T5/T7/T8/T9/T10/T11/T12/T13/T14/T15)
     'platform/keymap/keymap-provider',
     'platform/keymap/keymap-instance',
     'platform/keymap/command-palette',
@@ -55,14 +59,15 @@ const FORBIDDEN = [
     '@opentui/keymap/testing',
 ];
 
-// FFI-free keymap adapter modules that MAY appear transitively on --no-tui.
-// `interactive-chat.ts` statically imports `createOpenTuiChatBridge` from the
-// opentui bridge; the bridge statically imports `useKeymap` from
-// `@opentui/keymap/react`. That adapter imports ONLY `react` + the
-// `@opentui/keymap` core chunk (ZERO native FFI — verified in T3 learnings),
-// so loading it does NOT instantiate a keymap and does NOT widen the FFI
-// boundary. We detect + report it as INFO (not a gate failure) and document the
-// root cause, rather than silently ignoring it.
+// FFI-free keymap adapter modules that MAY have appeared transitively on --no-tui in the past.
+// Before the tui-app-split (Todo 5), interactive-chat.ts statically imported createOpenTuiChatBridge,
+// which statically imported useKeymap from @opentui/keymap/react. That adapter imports ONLY react
+// + the @opentui/keymap core chunk (ZERO native FFI — verified in T3 learnings), so loading
+// it did NOT instantiate a keymap and did NOT widen the FFI boundary. After the split (Todo 5),
+// interactive-chat.ts removed all static opentui imports; createChatTui is lazy-loaded from
+// @mission-control/tui/create-chat-tui ONLY inside the useTui branch. So this transitive
+// load should no longer happen on --no-tui. We detect + report it as INFO (not a
+// gate failure) as a defensive check and document the root cause rather than silently ignoring it.
 const FFI_FREE_TRANSITIVE = ['@opentui/keymap/src/react', '@opentui/keymap/chunks'];
 
 // A module that MUST be present (sanity: the trace captured the non-TUI graph).
@@ -170,11 +175,11 @@ async function main() {
         console.log(
             `[gate][INFO] FFI-free keymap adapter loaded transitively on --no-tui: ${transitiveHits.join(', ')}`,
         );
-        console.log('[gate][INFO]   root cause: interactive-chat.ts statically imports createOpenTuiChatBridge;');
-        console.log('[gate][INFO]   the bridge statically imports useKeymap from @opentui/keymap/react.');
-        console.log('[gate][INFO]   This is FFI-free (react + @opentui/keymap core only) and does NOT');
-        console.log('[gate][INFO]   instantiate a keymap. Documented as a known minor finding (see');
-        console.log('[gate][INFO]   .omo/notepads/tui-keymap-port/issues.md T18).');
+        console.log('[gate][INFO]   root cause: a static opentui/keymap import leaked onto the --no-tui path.');
+        console.log('[gate][INFO]   After the tui-app-split (Todo 5), interactive-chat.ts should have NO static');
+        console.log('[gate][INFO]   @opentui import; createChatTui is lazy-loaded only inside the useTui branch.');
+        console.log('[gate][INFO]   This adapter is FFI-free (react + @opentui/keymap core only) and does NOT');
+        console.log('[gate][INFO]   instantiate a keymap, but its presence indicates a split regression.');
     } else {
         console.log('[gate][PASS] no FFI-free keymap adapter loaded transitively');
     }

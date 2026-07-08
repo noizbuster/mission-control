@@ -1,11 +1,10 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { Keybinds } from '../platform/keymap/keybind.js';
-import { resolveKeybindConfig } from '../platform/keymap/keybind-config-loader.js';
+import { padEndToDisplayWidth, terminalDisplayWidth } from '@mission-control/tui';
+import { Keybinds } from '@mission-control/tui/keybind';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import { formatKeyboardShortcutsSection } from './interactive-chat-hotkeys-action.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
-import { padEndToDisplayWidth, terminalDisplayWidth } from './terminal-text.js';
 
 export type HelpAction = { readonly kind: 'help' };
 
@@ -48,6 +47,8 @@ export async function runHelpAction(
     modelProviderSelection: ModelProviderSelection,
     activeTurn: ActiveCodingAgentTurn | undefined,
 ): Promise<ChatActionResult> {
+    // Lazy-load so the noninteractive `--no-tui` graph never transitively loads the keybind-config-loader module. `/help` is interactive-only.
+    const { resolveKeybindConfig } = await import('@mission-control/tui/keybind-config');
     const { keybinds } = resolveKeybindConfig();
     chatOutput.write(formatHelpText(commands, keybinds));
     return actionResult(modelProviderSelection, activeTurn);

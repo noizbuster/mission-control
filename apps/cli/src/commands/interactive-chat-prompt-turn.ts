@@ -15,8 +15,7 @@ import {
     type TaskToolRuntimeServices,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AgentEvent, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
-import type { AbgOverlayController } from './abg-overlay-controller.js';
-import type { ApprovalLevel } from './approval-level.js';
+import type { AbgOverlayController, ApprovalLevel } from '@mission-control/tui/state';
 import type { ChatOutput } from './interactive-chat-io.js';
 import { type ActiveCodingAgentTurn, startCodingAgentTurn } from './interactive-coding-agent.js';
 

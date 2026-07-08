@@ -9,6 +9,7 @@ type PackageManifest = {
     readonly scripts?: Record<string, string>;
     readonly dependencies?: Record<string, string>;
     readonly devDependencies?: Record<string, string>;
+    readonly private?: boolean;
 };
 
 function readManifest(path: string): PackageManifest {
@@ -40,7 +41,14 @@ describe('workspace build integration', () => {
 
         expect(rootManifest.scripts?.['build']).toBe(`${nxRuntime} nx run-many -t build`);
 
-        for (const manifest of [protocolManifest, coreManifest, configManifest, cliManifest, desktopManifest]) {
+        const buildablePackages: readonly PackageManifest[] = [
+            protocolManifest,
+            coreManifest,
+            configManifest,
+            cliManifest,
+            desktopManifest,
+        ];
+        for (const manifest of buildablePackages) {
             expect(manifest.scripts?.['build']).toBeTruthy();
         }
 
@@ -51,5 +59,13 @@ describe('workspace build integration', () => {
         expectWorkspaceDependency(desktopManifest, '@mission-control/config');
         expectWorkspaceDependency(desktopManifest, '@mission-control/core');
         expectWorkspaceDependency(desktopManifest, '@mission-control/protocol');
+
+        // Intentionally fails pre-split; passes once Todo 2 creates apps/tui.
+        const tuiManifest = readManifest('apps/tui/package.json');
+        for (const manifest of [...buildablePackages, tuiManifest]) {
+            expect(manifest.scripts?.['build']).toBeTruthy();
+        }
+        expect(tuiManifest.private, 'tui must be private').toBe(true);
+        expectWorkspaceDependency(cliManifest, '@mission-control/tui');
     });
 });

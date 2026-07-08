@@ -7,9 +7,9 @@ import type {
     SdkModelResolver,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import { closeTreeSitterClient } from '@mission-control/tui/highlight';
 import type { CliArgs } from '../args.js';
 import type { ProviderAuthStore } from '../auth-store.js';
-import { closeTreeSitterClient } from '../components/markdown/highlight.js';
 import { loadPersistedApprovalLevel, savePersistedApprovalLevel } from './approval-level-store.js';
 import type { ChatInput, ChatOutput, ModelSelector, PlainPromptGraph } from './interactive-chat.js';
 import { runInteractiveChatSession } from './interactive-chat.js';

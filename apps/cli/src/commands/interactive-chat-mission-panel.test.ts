@@ -9,8 +9,8 @@ import {
     startRun,
 } from '@mission-control/core';
 import { MissionSchema, type ModelProviderSelection, RunSchema, type WorkflowSpec } from '@mission-control/protocol';
+import { createChatStore, type MissionPanelRow } from '@mission-control/tui/state';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createChatStore, type MissionPanelRow } from './chat-store.js';
 import type { CodingActionContext } from './interactive-chat-actions.js';
 import { loadMissionPanelRows, runChatAction } from './interactive-chat-actions.js';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';

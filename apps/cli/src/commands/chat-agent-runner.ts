@@ -25,16 +25,14 @@
 
 import type { AgentRuntime, PermissionSession, ProviderAdapter } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { closeTreeSitterClient } from '../components/markdown/highlight.js';
-import type { ApprovalLevel } from './approval-level.js';
-import { approvalLevelRules } from './approval-level.js';
+import { closeTreeSitterClient } from '@mission-control/tui/highlight';
+import type { ApprovalLevel, ChatStore, ModelChoice } from '@mission-control/tui/state';
+import { approvalLevelRules } from '@mission-control/tui/state';
 import { type ChatLineAction, type ChatLineOptions, parseChatLine } from './chat-commands.js';
-import type { ChatStore } from './chat-store.js';
 import { appendInputHistoryEntry } from './input-history-store.js';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import type { ChatInputEvent, ChatOutput } from './interactive-chat-io.js';
 import { maxChatPromptLength } from './interactive-chat-io.js';
-import type { ModelChoice } from './interactive-chat-model.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 
 const YIELD_BEFORE_READ_MS = 25;

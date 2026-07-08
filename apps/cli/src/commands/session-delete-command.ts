@@ -4,9 +4,7 @@ import { CliSessionCommandError } from './session-command-error.js';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-export async function deleteSessionTree(input: {
-    readonly sessionId: string;
-}): Promise<string> {
+export async function deleteSessionTree(input: { readonly sessionId: string }): Promise<string> {
     const targetId = input.sessionId;
     const entries = await listSessionCatalogEntries();
     const target = entries.find((entry) => entry.sessionId === targetId);
@@ -22,9 +20,7 @@ export async function deleteSessionTree(input: {
     const ordered = collectDescendants(target, childrenByParent);
 
     await deleteLocalSessionRows({ sessionIds: ordered.map((entry) => entry.sessionId) });
-    await Promise.all(
-        ordered.map((entry) => rm(sessionLogPath(entry.sessionId), { force: true })),
-    );
+    await Promise.all(ordered.map((entry) => rm(sessionLogPath(entry.sessionId), { force: true })));
 
     const lines = ordered.map((entry) => `Deleted session ${entry.sessionId} (${entry.eventCount} events)`);
     return `${lines.join('\n')}\n`;

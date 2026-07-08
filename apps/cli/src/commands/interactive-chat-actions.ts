@@ -31,25 +31,34 @@ import type {
     Run,
     WorkflowSpec,
 } from '@mission-control/protocol';
+import type {
+    ApprovalLevel,
+    DashboardAgentEntry,
+    MissionPanelRow,
+    SessionPickerEntry,
+} from '@mission-control/tui/state';
+import {
+    APPROVAL_LEVEL_META,
+    createModelsOverlayRoleRows,
+    createVariantChoices,
+    type ModelChoice,
+    type ModelsOverlayRoleRow,
+    slashCommandChoices,
+} from '@mission-control/tui/state';
 import type { ProviderAuthStore } from '../auth-store.js';
 import { type AgentsCommand, formatAgentDetails, formatAgentsList } from './agents-command.js';
 import { readDisabledSet, toggleDisabled } from './agents-disabled-config.js';
 import { readOverridesMap } from './agents-model-overrides-config.js';
-import type { ApprovalLevel } from './approval-level.js';
-import { APPROVAL_LEVEL_META } from './approval-level.js';
 import type { ChatLineAction, SkillsCommand, WorkflowInvocationAction } from './chat-commands.js';
-import type { DashboardAgentEntry, MissionPanelRow, SessionPickerEntry } from './chat-store.js';
 import type { ModelSelector, PlainPromptGraph } from './interactive-chat.js';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import { runBashAction, runBashDisplayOnlyAction } from './interactive-chat-bash-action.js';
 import { runClearAction } from './interactive-chat-clear-action.js';
-import { slashCommandChoices } from './interactive-chat-command-menu.js';
 import { runCompactAction } from './interactive-chat-compaction-action.js';
 import { runExportAction } from './interactive-chat-export-action.js';
 import { runHelpAction } from './interactive-chat-help-action.js';
 import { runHotkeysAction } from './interactive-chat-hotkeys-action.js';
 import type { ChatOutput } from './interactive-chat-io.js';
-import { createVariantChoices, type ModelChoice } from './interactive-chat-model.js';
 import { runModelListAction, runModelPickAction } from './interactive-chat-model-actions.js';
 import {
     emitPromptAdmission,
@@ -67,7 +76,6 @@ import {
     type UndoRedoConversationController,
 } from './interactive-chat-undo-redo-action.js';
 import { type ActiveCodingAgentTurn, resumeCodingAgentTurn } from './interactive-coding-agent.js';
-import { createModelsOverlayRoleRows, type ModelsOverlayRoleRow } from './models-overlay-state.js';
 import { graphForDefaultFallback, graphForWorkflowSpec } from './workflow-materialization.js';
 
 export type CodingActionContext = PromptTurnContext & {

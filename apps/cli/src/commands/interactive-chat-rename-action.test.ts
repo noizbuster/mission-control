@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { parseChatLine } from './chat-commands.js';
 import {
     createSlashCommandMenuState,
     createSlashCommandMenuView,
     resolveSlashCommandMenuSubmission,
-} from './interactive-chat-command-menu.js';
+} from '@mission-control/tui/state';
+import { describe, expect, it } from 'vitest';
+import { parseChatLine } from './chat-commands.js';
 import { runRenameAction, type SessionDisplayNameController } from './interactive-chat-rename-action.js';
 
 type CapturingOutput = {

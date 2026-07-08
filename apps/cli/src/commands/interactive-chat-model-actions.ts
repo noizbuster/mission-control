@@ -1,11 +1,11 @@
 import type { AgentRuntime } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import { createVariantChoices, getModelChoiceUnavailableReason, type ModelChoice } from '@mission-control/tui/state';
 import type { ChatLineAction } from './chat-commands.js';
 import type { ModelSelector } from './interactive-chat.js';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import type { CodingActionContext } from './interactive-chat-actions.js';
 import type { ChatOutput } from './interactive-chat-io.js';
-import { createVariantChoices, getModelChoiceUnavailableReason, type ModelChoice } from './interactive-chat-model.js';
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 
 export async function runModelPickAction(

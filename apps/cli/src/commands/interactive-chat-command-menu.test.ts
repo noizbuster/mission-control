@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import {
     createSlashCommandMenuState,
     createSlashCommandMenuView,
@@ -12,7 +11,8 @@ import {
     resolveWorkflowCommandMenuInsertText,
     type SlashCommandMenuChoice,
     slashCommandChoices,
-} from './interactive-chat-command-menu.js';
+} from '@mission-control/tui/state';
+import { describe, expect, it } from 'vitest';
 import {
     deleteTerminalChatInputCharacterBeforeCursor,
     formatTerminalChatCommittedInputLine,

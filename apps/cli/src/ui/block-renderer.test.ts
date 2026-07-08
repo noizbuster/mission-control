@@ -1,6 +1,6 @@
+import { RESET, TEXT_DANGER_BOLD } from '@mission-control/tui/ansi-theme';
+import { darkTheme, noColorTheme } from '@mission-control/tui/markdown-theme';
 import { describe, expect, it } from 'vitest';
-import { darkTheme, noColorTheme } from '../components/markdown/theme.js';
-import { RESET, TEXT_DANGER_BOLD } from './ansi-theme.js';
 import { joinBlocks, renderBlock } from './block-renderer.js';
 import type { OutputBlock } from './output-blocks.js';
 

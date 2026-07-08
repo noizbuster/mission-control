@@ -1,5 +1,5 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import type { ApprovalLevel } from './approval-level.js';
+import type { ApprovalLevel } from '@mission-control/tui/state';
 import type { PromptTurnContext } from './interactive-chat-prompt-turn.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 

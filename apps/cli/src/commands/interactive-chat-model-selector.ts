@@ -1,14 +1,14 @@
 import { createStreamDecoder } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import { truncateTerminalText } from '@mission-control/tui';
+import type { ModelChoice } from '@mission-control/tui/state';
 import {
     createProviderPromptKeypressState,
     createProviderPromptView,
     reduceProviderPromptKeypress,
-} from './auth-provider-keypress.js';
+} from '@mission-control/tui/state';
 import type { ChatOutput, ModelSelector } from './interactive-chat.js';
-import type { ModelChoice } from './interactive-chat-model.js';
 import type { TerminalInputStream, TerminalOutputStream } from './interactive-chat-terminal-read.js';
-import { truncateTerminalText } from './terminal-text.js';
 import { stdin, stdout } from 'node:process';
 
 export type ModelSelectorRenderInput = {

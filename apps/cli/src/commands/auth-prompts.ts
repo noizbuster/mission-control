@@ -1,12 +1,12 @@
 import { createStreamDecoder } from '@mission-control/core';
+import { truncateTerminalText } from '@mission-control/tui';
 import {
     createProviderPromptKeypressState,
     createProviderPromptView,
     filterProviderPromptChoices,
     type ProviderPromptKeypressChoice,
     reduceProviderPromptKeypress,
-} from './auth-provider-keypress.js';
-import { truncateTerminalText } from './terminal-text.js';
+} from '@mission-control/tui/state';
 import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 

@@ -25,6 +25,10 @@ const requiredPackages = [
         manifest: 'packages/config/package.json',
         name: '@mission-control/config',
     },
+    {
+        manifest: 'apps/tui/package.json',
+        name: '@mission-control/tui',
+    },
 ] as const;
 
 const requiredRootScripts = ['test', 'typecheck', 'build', 'dev:cli', 'dev:sidecar', 'dev:desktop'] as const;

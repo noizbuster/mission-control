@@ -1,9 +1,9 @@
 import { getRuntimeModelProviderCatalog } from '@mission-control/config';
 import { type AgentModelLookup, discoverAgents, resolveUserConfigDir } from '@mission-control/core';
 import type { AbgNodeModelOptions, ModelProviderSelection } from '@mission-control/protocol';
+import { createModelChoices, type ModelChoice } from '@mission-control/tui/state';
 import type { CliArgs } from '../args.js';
 import type { ProviderAuthStore } from '../auth-store.js';
-import { createModelChoices, type ModelChoice } from './interactive-chat-model.js';
 import type { ModelDiscovery } from './model-discovery.js';
 
 export async function resolveModelProviderSelection(

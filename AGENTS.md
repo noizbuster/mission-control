@@ -25,7 +25,8 @@ Design references:
 
 ```text
 mission-control/
-|-- apps/cli/                 # mc CLI
+|-- apps/cli/                 # mc CLI (argument parsing, command orchestration, noninteractive renderers)
+|-- apps/tui/                  # private OpenTUI app: React components, keymap platform, TUI mount/store seam (consumed by apps/cli)
 |-- apps/desktop/             # React/Vite UI plus Tauri shell
 |-- packages/protocol/        # shared Zod schemas and exported protocol types
 |-- packages/core/            # runtime, sessions, providers, tools, sidecar fallback, ABG scaffolding, MCP clients, skills
@@ -40,6 +41,7 @@ mission-control/
 Scoped guidance:
 
 - `apps/cli/AGENTS.md`
+- `apps/tui/AGENTS.md`
 - `apps/desktop/AGENTS.md`
 - `packages/protocol/AGENTS.md`
 - `packages/core/AGENTS.md`
@@ -58,7 +60,7 @@ Scoped guidance:
 | CLI entry/help/version | `apps/cli/src/index.tsx` | `apps/cli/package.json` maps `mc` and `mctrl` to `./dist/index.js`. |
 | CLI command flow | `apps/cli/src/commands/run-agent.ts` | Chat, JSON/JSONL, graph, provider, sidecar selection. |
 | CLI output | `apps/cli/src/ui/renderers.ts` | Plain, TUI (buffered summary), and JSON renderer contracts. |
-| Interactive chat OpenTUI mount | `apps/cli/src/commands/create-chat-tui.tsx` | Builds the `ChatStore`, mounts the opentui React tree (`@opentui/react` over a node:ffi-loaded Zig core), and returns the `ChatTuiHandle` consumed by the imperative chat loop. |
+| Interactive chat OpenTUI mount | `apps/tui/src/create-chat-tui.tsx` | Builds the `ChatStore`, mounts the opentui React tree (`@opentui/react` over a node:ffi-loaded Zig core), and returns the `ChatTuiHandle` consumed by the imperative chat loop. |
 | Desktop entry/UI | `apps/desktop/src/main.tsx`, `apps/desktop/src/App.tsx` | Browser-facing shell. |
 | Desktop client boundary | `apps/desktop/src/lib/agent-client.ts` | Mock and Tauri clients, Zod response parsing. |
 | Tauri native shell | `apps/desktop/src-tauri` | Command bridge and Rust session-log parsing. |
@@ -78,7 +80,7 @@ Scoped guidance:
 | Workflow protocol schemas | `packages/protocol/src/{workflow,category,mode,permission-rule,delivery}.ts` | `WorkflowSpecSchema`, `CategorySchema`, `ModeSchema`, `PolicyEffectRuleSchema`, `DELIVERY_MODES`. Workflow policy-gate rules use action/resource/effect. |
 | Workflow runtime foundations | see **Workflow Foundations** below | Permission rule algebra, `.omo/` persistence, Mission/Run store, drain-lane coordinator v2, context-source registry, continuation runtime, full-parity `task()` tool. |
 | Workflow invocation | `apps/cli/src/commands/chat-commands.ts`, `apps/cli/src/commands/interactive-chat-actions.ts` | `#name {prompt}` parsing and dispatch. `--workflow` non-interactive flag lives in `run-agent.ts`. See **Workflow Invocation** below. |
-| Interactive TUI | `apps/cli/src/components/ChatApp.tsx`, `apps/cli/src/platform/terminal-viewport*.ts`, `apps/cli/src/commands/create-chat-tui.tsx` | Viewport-driven opentui shell, keymap routing, agent spinner, approval overlay, model picker, and imperative `ChatTuiHandle` seam. |
+| Interactive TUI | `apps/tui/src/components/ChatApp.tsx`, `apps/tui/src/platform/terminal-viewport*.ts`, `apps/tui/src/create-chat-tui.tsx` | Viewport-driven opentui shell, keymap routing, agent spinner, approval overlay, model picker, and imperative `ChatTuiHandle` seam. |
 | Workflow tool | `packages/core/src/tools/workflow-tool/workflow-tool.ts` | `workflow(name, prompt)` tool; resolves via `WorkflowRegistry`, returns `started`/`not_found`. |
 | Modes + mode overlay | `packages/core/src/behavior/modes/` | `autopilotMode` declaration, `applyMode` pure transform (overlay + policy conversion + tool filter). |
 | Built-in workflow graphs | `examples/abg/{default,planner,runner}.workflow.json` | Reference graph instances; autopilot is a mode overlay, not a graph file. Factory functions live in `packages/core/src/behavior/{default,planner,runner}-workflow-graph.ts`; byte-identity is locked by `toEqual` parity tests. |

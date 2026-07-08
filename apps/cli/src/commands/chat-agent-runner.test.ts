@@ -1,10 +1,10 @@
 import { AgentRuntime } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { ApprovalLevel } from '@mission-control/tui/state';
+import { ChatStore } from '@mission-control/tui/state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ApprovalLevel } from './approval-level.js';
 import { type AgentRunnerHandle, type DispatchActionContext, startChatAgentRunner } from './chat-agent-runner.js';
 import type { ChatLineAction } from './chat-commands.js';
-import { ChatStore } from './chat-store.js';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
 

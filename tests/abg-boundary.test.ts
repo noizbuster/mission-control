@@ -32,7 +32,15 @@ describe('ABG runtime boundaries', () => {
     });
 
     it('core runtime has no imports from CLI desktop or React UI', () => {
-        const forbidden = ['apps/cli', 'apps/desktop', '@mission-control/cli', '@mission-control/desktop', 'react'];
+        const forbidden = [
+            'apps/cli',
+            'apps/desktop',
+            'apps/tui',
+            '@mission-control/cli',
+            '@mission-control/desktop',
+            '@mission-control/tui',
+            'react',
+        ];
 
         for (const file of collectSourceFiles('packages/core/src')) {
             const source = readFileSync(file, 'utf8');

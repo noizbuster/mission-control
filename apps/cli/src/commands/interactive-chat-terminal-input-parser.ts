@@ -1,4 +1,4 @@
-import { segmentTerminalText } from './terminal-text.js';
+import { segmentTerminalText } from '@mission-control/tui';
 import { StringDecoder } from 'node:string_decoder';
 
 const escapeCharacter = '\u001b';

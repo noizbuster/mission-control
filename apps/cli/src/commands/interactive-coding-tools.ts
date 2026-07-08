@@ -46,8 +46,8 @@ import type {
     WorkflowSpec,
 } from '@mission-control/protocol';
 import { type AgentEvent, type ToolCall, ToolResultSchema } from '@mission-control/protocol';
+import type { ApprovalLevel } from '@mission-control/tui/state';
 import { readModelPatternOverrides } from './agents-model-overrides-config.js';
-import type { ApprovalLevel } from './approval-level.js';
 import { cliAllowsAction } from './cli-permission-policy.js';
 import type { InteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';
@@ -89,8 +89,8 @@ export type InteractiveToolOptions = {
     readonly lspServerManagerDeps?: LspServerManagerDeps;
     /**
      * `ask_user` tool callback: resolves with the user's answer to a model-posed question. When
-      * omitted, the `ask_user` tool is not registered (no host surface to ask the user). The
-      * interactive TUI wires this to the question overlay.
+     * omitted, the `ask_user` tool is not registered (no host surface to ask the user). The
+     * interactive TUI wires this to the question overlay.
      */
     readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
     /**

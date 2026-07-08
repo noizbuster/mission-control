@@ -1,0 +1,51 @@
+{
+  "name": "@mission-control/tui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./chat": "./dist/chat.js",
+    "./markdown": "./dist/markdown.js",
+    "./state": "./dist/state/index.js",
+    "./highlight": "./dist/components/markdown/highlight.js",
+    "./markdown-theme": "./dist/components/markdown/theme.js",
+    "./ansi-renderer": "./dist/components/markdown/ansi-renderer.js",
+    "./ansi-theme": "./dist/components/markdown/ansi-theme.js",
+    "./keybind": "./dist/platform/keymap/keybind.js",
+    "./keybind-config": "./dist/platform/keymap/keybind-config-loader.js",
+    "./slash-mapping": "./dist/platform/keymap/slash-mapping.js",
+    "./opentui-renderer": "./dist/platform/opentui-renderer.js",
+    "./keymap-provider": "./dist/platform/keymap/keymap-provider.js",
+    "./terminal-viewport-react": "./dist/platform/terminal-viewport-react.js",
+    "./status-bar": "./dist/components/StatusBar.js",
+    "./abg-overlay": "./dist/components/AbgOverlay.js",
+    "./chat-app": "./dist/components/ChatApp.js",
+    "./create-chat-tui": "./dist/create-chat-tui.js",
+    "./replay-overlay": "./dist/replay-overlay.js"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^3.0.0",
+    "@mission-control/config": "workspace:*",
+    "@mission-control/core": "workspace:*",
+    "@mission-control/protocol": "workspace:*",
+    "@opentui/core": "^0.4.3",
+    "@opentui/keymap": "^0.4.3",
+    "@opentui/react": "^0.4.3",
+    "@types/react": "^19.2.17",
+    "diff": "^9.0.0",
+    "marked": "^18.0.5",
+    "react": "^19.0.0",
+    "remend": "^1.3.0",
+    "web-tree-sitter": "^0.25.10",
+    "wrap-ansi": "^10.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "sh -c 'cd ../.. && while [ \"${1:-}\" = \"--\" ]; do shift; done; vitest run --reporter verbose \"$@\"' --",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

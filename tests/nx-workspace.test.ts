@@ -46,6 +46,11 @@ const requiredProjects = [
         path: 'native/natives/project.json',
         targets: ['build', 'test'],
     },
+    {
+        name: 'tui',
+        path: 'apps/tui/project.json',
+        targets: ['build', 'test', 'typecheck'],
+    },
 ] as const;
 
 type JsonObject = Record<string, unknown>;
@@ -186,7 +191,12 @@ describe('Nx workspace', () => {
         }
 
         expect(readProjectConfig('packages/core/project.json').implicitDependencies).toContain('protocol');
-        expect(readProjectConfig('apps/cli/project.json').implicitDependencies).toEqual(['config', 'core', 'protocol']);
+        expect(readProjectConfig('apps/cli/project.json').implicitDependencies).toEqual([
+            'config',
+            'core',
+            'protocol',
+            'tui',
+        ]);
         expect(readProjectConfig('apps/desktop/project.json').implicitDependencies).toEqual([
             'config',
             'core',

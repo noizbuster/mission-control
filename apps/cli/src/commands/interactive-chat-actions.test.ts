@@ -7,8 +7,8 @@ import {
     WorkflowRegistry,
 } from '@mission-control/core';
 import type { ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
+import type { SessionPickerEntry } from '@mission-control/tui/state';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { SessionPickerEntry } from './chat-store.js';
 import type { CodingActionContext } from './interactive-chat-actions.js';
 import { runChatAction } from './interactive-chat-actions.js';
 import type { SessionNavigationController } from './interactive-chat-session-navigation.js';

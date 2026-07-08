@@ -186,7 +186,7 @@ log "  - <leader>m / <leader>1..9            — two-key sequence needs pending-
 log "  - Ctrl+W/K/U + Ctrl+Y (kill-ring)     — Ctrl chords + ring state"
 log "  - Ctrl+G (abg overlay)                — Ctrl chord"
 log "These are covered by the unit-test seam (createRecordingTextarea +"
-log "createTestKeymap host.press) in apps/cli/src/platform/keymap/*.test.ts."
+log "createTestKeymap host.press) in apps/tui/src/platform/keymap/*.test.ts."
 log "Race/timing invariants (double-Esc, IME-defer, double-Enter, Ctrl+C"
 log "double-enqueue) are unit-only by nature — see the race-index in"
 log ".omo/evidence/tui-keymap-port-parity-matrix.md section 17."

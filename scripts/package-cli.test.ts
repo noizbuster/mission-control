@@ -66,6 +66,8 @@ describe('CLI package distribution contract', () => {
                     './node_modules/@mission-control/config/dist/provider-capabilities.js',
                     './node_modules/@mission-control/core/dist/providers/openai/openai-responses-provider.js',
                     './node_modules/@mission-control/protocol/dist/index.js',
+                    './node_modules/@mission-control/tui/dist/index.js',
+                    './node_modules/@mission-control/tui/package.json',
                     './node_modules/zod/package.json',
                     './mission-control-sidecar',
                 ]),
@@ -184,6 +186,11 @@ function writePackageFixture(fixtureRoot: string, options: PackageFixtureOptions
         packageJson('@mission-control/protocol', { '.': './dist/index.js' }),
     );
     writeFixtureFile(join(fixtureRoot, 'packages/protocol/dist/index.js'), 'export const protocol = true;\n');
+    writeFixtureFile(
+        join(fixtureRoot, 'apps/tui/package.json'),
+        packageJson('@mission-control/tui', { '.': './dist/index.js' }),
+    );
+    writeFixtureFile(join(fixtureRoot, 'apps/tui/dist/index.js'), 'export const tui = true;\n');
     writeFixtureFile(join(fixtureRoot, 'node_modules/zod/package.json'), packageJson('zod', { '.': './index.js' }));
     writeFixtureFile(join(fixtureRoot, 'node_modules/zod/index.js'), 'export const z = {};\n');
 

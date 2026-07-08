@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | draft |
-| Scope | Message block renderers (`apps/cli/src/components/*`) and the markdown pipeline (`apps/cli/src/components/markdown/`) |
+| Scope | Message block renderers (`apps/tui/src/components/*`) and the markdown pipeline (`apps/tui/src/components/markdown/`) |
 | Related plans | `.omo/plans/tui-rich-rendering.md` |
 
 ## Background

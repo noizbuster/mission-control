@@ -39,6 +39,7 @@ describe('README stage-01 contract', () => {
             '@mission-control/core',
             '@mission-control/config',
             '@mission-control/cli',
+            '@mission-control/tui',
             '@mission-control/desktop',
             'native/sidecar',
             'mc',
@@ -50,6 +51,18 @@ describe('README stage-01 contract', () => {
         for (const term of requiredTerms) {
             expect(content, `README missing ${term}`).toContain(term);
         }
+    });
+
+    it('documents @mission-control/tui as private internal', () => {
+        const content = readme();
+        expect(content, 'README must document @mission-control/tui').toContain('@mission-control/tui');
+        expect(content, 'README must state @mission-control/tui is private/not publishable').toContain(
+            'Not publishable',
+        );
+        expect(content, 'README must not claim a public TUI install command').not.toContain(
+            'npm install -g @mission-control/tui',
+        );
+        expect(content, 'README must not claim a dev:tui script').not.toContain('pnpm dev:tui');
     });
 
     it('documents native fallback, ABG reflection, and next-stage TODOs', () => {

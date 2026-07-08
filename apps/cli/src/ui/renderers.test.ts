@@ -1,7 +1,7 @@
 import { AgentRuntime } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
+import { darkTheme, noColorTheme } from '@mission-control/tui/markdown-theme';
 import { describe, expect, it, vi } from 'vitest';
-import { darkTheme, noColorTheme } from '../components/markdown/theme.js';
 import { joinBlocks, type RenderBlockOptions, renderBlock } from './block-renderer.js';
 import type { OutputBlock } from './output-blocks.js';
 import { type AgentUIRenderer, JsonRenderer, PlainRenderer, TuiRenderer } from './renderers.js';

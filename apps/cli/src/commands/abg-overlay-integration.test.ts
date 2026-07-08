@@ -1,8 +1,7 @@
 import { type AbgSignal, type AgentEvent } from '@mission-control/protocol';
+import { ABG_OVERLAY_TABS } from '@mission-control/tui/abg-overlay';
+import { createAbgOverlayController, createAbgOverlayStore } from '@mission-control/tui/state';
 import { describe, expect, it } from 'vitest';
-import { ABG_OVERLAY_TABS } from '../components/AbgOverlay.js';
-import { createAbgOverlayController } from './abg-overlay-controller.js';
-import { createAbgOverlayStore } from './abg-overlay-state.js';
 import { wireAbgOverlay } from './interactive-coding-agent.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -133,7 +132,7 @@ describe('overlay integration: controller → AbgOverlay contract (T5 wiring)', 
     });
 
     it('ChatApp live render path no longer contains the placeholder string', () => {
-        const source = readFileSync(resolve(process.cwd(), 'apps/cli/src/components/ChatApp.tsx'), 'utf8');
+        const source = readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatApp.tsx'), 'utf8');
         expect(source).not.toContain('The ABG monitoring overlay requires an active agent run');
     });
 });

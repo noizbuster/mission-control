@@ -1,5 +1,5 @@
 import { resolveMissionControlDataDir } from '@mission-control/core';
-import { type ApprovalLevel, isApprovalLevel } from './approval-level.js';
+import { type ApprovalLevel, isApprovalLevel } from '@mission-control/tui/state';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

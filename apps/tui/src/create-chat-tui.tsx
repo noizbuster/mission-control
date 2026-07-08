@@ -1,0 +1,135 @@
+/** @jsxImportSource @opentui/react */
+
+import { getModelContextLimit } from '@mission-control/config';
+import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
+import { createRef } from 'react';
+import { type StatusBarProps } from './components/StatusBar.js';
+import type { ChatTuiHandle, ChatTuiRuntimeOptions } from './state/chat-tui-types.js';
+import type { ModelsOverlayRoleRow } from './state/index.js';
+import { type ChatStore, createChatStore } from './state/index.js';
+
+export type ChatTuiOptions = ChatTuiRuntimeOptions;
+
+/**
+ * Internal factory that creates a {@link ChatTuiHandle} from an
+ * already-constructed {@link ChatStore} and an unmount function. Splitting this
+ * out from {@link createChatTui} makes the handle testable without mounting the
+ * opentui renderer (no native FFI, no real terminal).
+ */
+export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): ChatTuiHandle {
+    return {
+        waitForEvent: () => store.waitForEvent(),
+        emitOutput: (text) => store.emitOutput(text),
+        replaceOutputText: (text) => store.replaceOutputText(text),
+        getOutput: () => store.getOutput(),
+        showModelPicker: (choices) => store.showModelPicker(choices),
+        showSessionPicker: (entries) => store.showSessionPicker(entries),
+        showAgentsDashboard: (entries) => store.showAgentsDashboard(entries),
+        reloadAgentsDashboard: (entries) => store.reloadAgentsDashboard(entries),
+        hideAgentsDashboard: () => store.hideAgentsDashboard(),
+        showMissionPanel: (rows) => store.showMissionPanel(rows),
+        reloadMissions: (rows) => store.reloadMissions(rows),
+        hideMissionPanel: () => store.hideMissionPanel(),
+        showModelsOverlay: (entries: readonly ModelProviderSelection[], roleRows: readonly ModelsOverlayRoleRow[]) =>
+            store.showModelsOverlay(entries, roleRows),
+        showLevelPicker: (currentLevel?) => store.showLevelPicker(currentLevel),
+        showApproval: (toolName, action) => store.showApproval(toolName, action),
+        hideApproval: () => store.hideApproval(),
+        showQuestion: (question, options, metadata?) => store.showQuestion(question, options, metadata),
+        showQuestionBatch: (entries) => store.showQuestionBatch(entries),
+        setGenerating: (value) => store.setGenerating(value),
+        setAgentStatus: (text) => store.setAgentStatus(text),
+        clearAgentStatus: () => store.clearAgentStatus(),
+        showTransientNotice: (text) => store.showTransientNotice(text),
+        isShowThinking: () => store.getSnapshot().showThinking,
+        isToolOutputExpanded: () => store.getSnapshot().toolOutputExpanded,
+        setWorkflowNames: (names) => store.setWorkflowNames(names),
+        setModelCycleChoices: (choices) => store.setModelCycleChoices(choices),
+        setModelSelection: (selection) => store.setModelSelection(selection),
+        setApprovalLevel: (level) => store.setApprovalLevel(level),
+        setSessionId: (id) => store.setSessionId(id),
+        setSessionDisplayName: (name) => store.setSessionDisplayName(name),
+        setContextTokensUsed: (used) => store.setContextTokensUsed(used),
+        applyAbgOverlayPrefs: (prefs) => store.applyAbgOverlayPrefs(prefs),
+        getAbgOverlayPrefsSnapshot: () => store.getAbgOverlayPrefsSnapshot(),
+        get onModelCycleSelect(): ((selection: ModelProviderSelection) => void) | undefined {
+            return store.onModelCycleSelect;
+        },
+        set onModelCycleSelect(value: ((selection: ModelProviderSelection) => void) | undefined) {
+            store.onModelCycleSelect = value;
+        },
+        get onRenameSubmit(): ((name: string) => void) | undefined {
+            return store.onRenameSubmit;
+        },
+        set onRenameSubmit(value: ((name: string) => void) | undefined) {
+            store.onRenameSubmit = value;
+        },
+        unmount: unmountFn,
+    };
+}
+
+/**
+ * Full mount function: creates a {@link ChatStore}, dynamically imports the
+ * opentui renderer + keymap provider + {@link ChatApp}, mounts the React tree,
+ * and returns a {@link ChatTuiHandle}.
+ *
+ * Dynamic imports keep `@opentui/react`, the keymap provider, and `ChatApp` out
+ * of the eager module graph so non-TUI CLI runs (plain / JSON) never load the
+ * native renderer.
+ */
+export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHandle> {
+    const store = createChatStore({
+        ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
+        ...(options.initialHistoryEntries !== undefined
+            ? { initialHistoryEntries: options.initialHistoryEntries }
+            : {}),
+        ...(options.initialApprovalLevel !== undefined ? { initialApprovalLevel: options.initialApprovalLevel } : {}),
+        ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
+    });
+    store.setContextTokensMax(getModelContextLimit(options.providerID, options.modelID));
+    // Seed currentModelSelection so Ctrl+V variant cycling works pre-`/model`.
+    store.setModelSelection({
+        providerID: options.providerID,
+        modelID: options.modelID,
+        ...(options.variantID !== undefined ? { variantID: options.variantID } : {}),
+    });
+
+    const { useRenderer } = await import('@opentui/react');
+    const { ChatKeymapProvider } = await import('@mission-control/tui/keymap-provider');
+    const { mountOpenTui } = await import('@mission-control/tui/opentui-renderer');
+    const { ChatApp } = await import('@mission-control/tui/chat-app');
+
+    const textareaRef = createRef<TextareaRenderable | null>();
+    const scrollboxRef = createRef<ScrollBoxRenderable | null>();
+
+    const statusBarProps: StatusBarProps = {
+        providerID: options.providerID,
+        modelID: options.modelID,
+        ...(options.sessionID !== undefined ? { sessionID: options.sessionID } : {}),
+        ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
+        ...(options.gitBranch !== undefined ? { gitBranch: options.gitBranch } : {}),
+        ...(options.isWorktree ? { isWorktree: options.isWorktree } : {}),
+    };
+
+    const mountResult = await mountOpenTui(
+        <ChatKeymapProvider useRenderer={useRenderer}>
+            <ChatApp
+                store={store}
+                textareaRef={textareaRef}
+                scrollboxRef={scrollboxRef}
+                statusBarProps={statusBarProps}
+                {...(options.welcomeData !== undefined ? { welcomeData: options.welcomeData } : {})}
+                {...(options.abgOverlayController !== undefined
+                    ? { abgOverlayController: options.abgOverlayController }
+                    : {})}
+                {...(options.missionControlServices !== undefined
+                    ? { missionControlServices: options.missionControlServices }
+                    : {})}
+                {...(options.actions !== undefined ? { actions: options.actions } : {})}
+            />
+        </ChatKeymapProvider>,
+    );
+
+    return createChatTuiHandle(store, mountResult.unmount);
+}

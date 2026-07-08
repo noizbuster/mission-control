@@ -2,200 +2,21 @@
 
 ## Overview
 
-`apps/cli` owns the `mc` command-line application (`mctrl` alias retained): argument parsing, command orchestration, auth/model/session commands, terminal interaction, and interactive chat rendered via opentui (`@opentui/react` over a node:ffi-loaded native core on Node 26.3+).
+`apps/cli` owns the `mc` command-line application (`mctrl` alias retained): argument parsing, command orchestration, auth/model/session commands, terminal interaction, noninteractive renderers (plain/JSON/JSONL), and the interactive chat loop that drives the TUI surface.
 
-The interactive chat uses `@opentui/react` + React 19 for terminal rendering. A `ChatStore` plus TUI-handle seam adapts the imperative `runInteractiveChatSession` loop through `useSyncExternalStore`, so opentui owns keyboard input and screen output while the loop keeps its `ChatInput`/`ChatOutput` contracts.
+The interactive chat loop (`runInteractiveChatSession` in `interactive-chat.ts`) consumes a `ChatTuiHandle` produced by `@mission-control/tui/create-chat-tui`. The TUI mount, React/OpenTUI components, keymap platform, markdown/diff renderers, and the `ChatStore` reactive store all live in `apps/tui` now. `apps/cli` lazy-loads them only when the TUI is active (`useTui === true`); the noninteractive path (`--no-tui`, `--json`, `--jsonl`) never touches opentui or react.
 
-The current architecture is split across a `ChatStore` reactive store (`chat-store.ts`), a background agent-runner state machine (`chat-agent-runner.ts`), a testable mount factory (`create-chat-tui.tsx`), and React components (`ChatApp`, `ChatInputArea`, `OverlayPanels`) that read the store snapshot and use native opentui props (`fg`/`bg`/`attributes`) directly. Removed compatibility shims are not part of the live module graph.
+CLI-owned runtime pieces that still live here: the imperative chat loop, the background agent-runner state machine (`chat-agent-runner.ts`), command parsing (`chat-commands.ts`), interactive chat actions (`interactive-chat-actions.ts`), approval brokering (`interactive-approval-broker.ts`), provider/model selection, auth, sessions, models, and the noninteractive renderers (`renderers.ts`). See `apps/tui/AGENTS.md` for the TUI rendering, components, platform code, and store internals.
 
-## opentui Chat Architecture
+## opentui Integration
 
-### Native core via node:ffi (Node 26.3+)
+The CLI reaches the TUI exclusively through `@mission-control/tui` lazy imports. `interactive-chat.ts` has no static import of `create-chat-tui`, components, platform, or OpenTUI. It uses `import type { ... } from '@mission-control/tui/state'` for state types and loads the runtime mount via `await import('@mission-control/tui/create-chat-tui')` only inside the `if (useTui)` branch. The replay overlay is lazy-loaded the same way via `await import('@mission-control/tui/replay-overlay')`.
 
-opentui ships a Zig native core (`libopentui.so` / `.dylib` / `.dll`) accessed through an FFI backend. opentui's `loadBackend()` tries `bun:ffi` under Bun and `node:ffi` under Node, falling back to an unsupported backend on failure. With Node 26.3+, the `node:ffi` module is available and `createNodeBackend` handles dlopen, callbacks, and pointer arithmetic natively. No third-party FFI library or pnpm patch is required. Run the CLI with `--experimental-ffi` so `node:ffi` loads.
+The CLI provides `ChatAppActions` implementations (wrapping `interactive-chat-actions.ts`, `agents-disabled-config.ts`, `agents-model-overrides-config.ts`) and the `MissionControlServices` instance to `createChatTui` via `ChatTuiRuntimeOptions`. The TUI package receives them as injected callbacks and a structural interface, so it never imports CLI runtime code.
 
-The struct layer (`bun-ffi-structs`) is pure JavaScript — it computes offsets/sizes with arithmetic and packs into `ArrayBuffer` via `DataView`. Only its `ptr()` and `toArrayBuffer()` primitives touch native code, and both route through the same node:ffi backend. No per-struct rewrite is needed.
+For the TUI handle pattern, keyboard routing, JSX pragma, ChatStore internals, output rendering, screen layout, markdown pipeline, diff renderer, and all component/platform details, see `apps/tui/AGENTS.md`.
 
-### TUI Handle Pattern
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│  runInteractiveChatSession()  (imperative for(;;) loop)      │
-│    ↓ await chatInput.read()                                  │
-│    ↓ chatOutput.write(text)                                  │
-│    ↓ selectModel(choices)                                    │
-├──────────────────────────────────────────────────────────────┤
-│  Chat TUI handle + ChatStore  (create-chat-tui.tsx)          │
-│    ┌─ waitForEvent() → Promise<ChatInputEvent>              │
-│    ├─ emitOutput(text) → appends to outputText               │
-│    ├─ showModelPicker(choices) → Promise<selection>          │
-│    └─ unmount()                                              │
-├──────────────────────────────────────────────────────────────┤
-│  ChatRoot  (React tree over opentui intrinsics)              │
-│  OWNERSHIP SPLIT - editing vs non-editing state              │
-│    ┌─ <ChatInputTextarea> → native <textarea>                │
-│    │    TextareaRenderable owns text+cursor+selection+IME    │
-│    │    onKeyDown → textarea keydown handler (raw KeyEvent,  │
-│    │      preventDefault per handled chord)                  │
-│    │    onSubmit → submit handler / onContentChange → mirror │
-│    ├─ <ChatTranscript> → native <scrollbox>                  │
-│    │    ScrollBoxRenderable owns output scroll + windowing   │
-│    │    scrollboxRef → imperative Home/End/PgUp/PgDn         │
-│    └─ global useKeyboard → handleInput (OVERLAY SINK only;   │
-│         textarea focused ⇒ early-return except Ctrl+C)      │
-│    useSyncExternalStore ← ChatStore snapshot                 │
-└──────────────────────────────────────────────────────────────┘
-```
-
-Two native opentui renderables own what the old hand-rolled code used to. `<ChatInputTextarea>` wraps the native `<textarea>` (`TextareaRenderable`): it owns the editable text, the cursor, the selection, and IME composition. `<ChatTranscript>` wraps the native `<scrollbox>` (`ScrollBoxRenderable`): it owns output scrolling and windowing. `ChatStore` owns only non-editing state: overlay modes, menus, history, the `inputBuffer` mirror, and the event queue.
-
-Editing keys stay with the textarea. Printable input, backspace, arrow movement, word-move, the real cursor, and IME composition are all native `TextareaRenderable` behavior. The TUI runtime intercepts only via the textarea's `onKeyDown`, where each handled chord calls `key.preventDefault()` first so the native binding is suppressed before app logic runs.
-
-`mountOpenTui` (in `src/platform/opentui-renderer.ts`) is the mount/unmount seam. It dynamic-imports `createCliRenderer` from `@opentui/core` and `createRoot` from `@opentui/react`, mounts the React tree, and returns `{ renderer, root, unmount }`. The dynamic imports keep both packages out of the eager module graph for non-TUI CLI runs (plain/JSON), so `mc --no-tui` never loads the native renderer. `unmount()` tears down both the React root and the renderer and is idempotent.
-
-### Keyboard Routing
-
-opentui's `useKeyboard` delivers one `KeyEvent` per physical keypress. Input handling is split between the native textarea, keymap layers, and overlay sinks:
-
-- Editing keys (printable input, backspace, arrows, word-move, Enter-submit, IME) stay on `TextareaRenderable` and the managed textarea keymap layer.
-- App chords, transcript scroll, history recall, autocomplete completion, and submit run from the textarea `onKeyDown` handler with raw `KeyEvent.preventDefault()` when handled.
-- Overlays (approval, question, model picker, level picker, rename, ABG overlay, command palette, which-key, diff viewer) read keyboard input through their mounted React/keymap handlers while focus is redirected away from the textarea.
-- Ctrl+C is always routed through the global `useKeyboard` sink so interrupt/exit works during focus races.
-
-### JSX: per-file `@jsxImportSource` pragma
-
-opentui's lowercase intrinsics (`<text>`, `<box>`, `<span>`, ...) collide with React's inherited DOM/SVG intrinsics (`text` is SVG; `span`, `code`, `select` are HTML). A global `declare module 'react' { namespace JSX }` augmentation would cause "subsequent property declarations must have same type" errors on the overlapping names. Instead, every `.tsx` file that uses opentui intrinsics starts with a per-file pragma:
-
-```tsx
-/** @jsxImportSource @opentui/react */
-```
-
-opentui's `jsx-runtime.d.ts` re-exports `jsx`/`jsxs`/`Fragment` from `react/jsx-runtime` at runtime (zero behavior change) but loads opentui's own JSX namespace at type time, where intrinsics override the inherited DOM types cleanly. Under this pragma, `JSX.Element` is `React.ReactNode` (not `ReactElement`), so opentui-pragmatic component return types must be annotated `: React.ReactNode`. Components use native opentui props (`fg`/`bg`/`attributes`) directly.
-
-### Core State (ChatStore)
-
-All mutable TUI state lives in `ChatStore`. React reads it via `useSyncExternalStore` and never directly mutates it. `publishSnapshot()` creates a new snapshot object and notifies all listeners.
-
-Editing state does NOT live here. The editable text, cursor, and selection live in the `TextareaRenderable`, reached via `textareaRef`. Output scroll lives in the `ScrollBoxRenderable`, reached via `scrollboxRef`. Clipboard access lives in a `clipboardService` built from the renderer. All three are created in `ChatRoot` and threaded into the TUI handlers, not stored on the core.
-
-| Field | Purpose |
-|---|---|
-| `inputBuffer` | Mirror of the textarea's `plainText`, kept in sync by the content-change handler. The textarea is the source of truth; store reducers never append to this directly. |
-| `outputText` | Accumulated chat output (system messages, user echoes, assistant responses, errors) |
-| `menuState` | Slash command autocomplete selection state |
-| `fileAutocomplete` | `@`-path autocomplete state |
-| `history` | Chat input history for Up/Down recall |
-| `eventQueue` | Pending ChatInputEvents when no waiter exists |
-| `eventWaiters` | Promise resolvers waiting for the next input event |
-| `submitting` | IME re-entrancy guard inside the submit handler (blocks a fast double-Enter) |
-| `lastEscTimestamp` | Double-Escape window timing |
-| overlay flags (`modelPickerActive` / `levelPickerActive` / `approvalActive` / `questionActive` / `renameModeActive` / `abgOverlayActive`) | Any of these true blurs the textarea so its keys reach the global overlay sink. |
-
-### Input Handling (handleInput)
-
-Input splits across native editing, app-chord handling, and overlays.
-
-**Textarea `onKeyDown`** receives every input-area key as a raw `KeyEvent` (which carries its own `preventDefault`). Each handled chord calls `key.preventDefault()` first so the native binding is suppressed before app logic runs. It owns: plain Enter to submit (a redundant safety net over the `return -> submit` keyBinding override), Tab to complete the active `@`-file selection, Escape (interrupt while generating, clear the buffer, close autocomplete, or open the double-Esc exit window), Ctrl+G (toggle ABG overlay), Ctrl+Z (suspend), Ctrl+D (delete char, or interrupt at an empty buffer), Ctrl+T (toggle thinking view), Ctrl+O (toggle tool expand), Ctrl+P (model cycle), Ctrl+E (external editor), Ctrl+R (rename entry), Ctrl+V (image paste, or cycle model variant when no image is in the clipboard), Home/End/PgUp/PgDn (imperative scrollbox scroll), and Up/Down (history recall at the buffer bounds, otherwise a native cursor move) plus slash/workflow menu navigation. Ctrl+C is deliberately not handled here; it routes through the global sink to avoid a double-enqueue race.
-
-**Submit handling** runs from the textarea `onSubmit` and the Enter branch above. It snapshots `textareaRef.current.plainText` synchronously, then defers the actual enqueue twice (`setTimeout` nested twice) so a Ctrl+C during the IME defer window cannot enqueue an empty line. A `submitting` guard blocks a fast double-Enter. The `#`-workflow and `/`-slash completion-into-buffer cases return without enqueuing a line.
-
-**Content-change handling** mirrors the textarea's new text into `inputBuffer` and refreshes the slash/workflow/`@`-autocomplete menus. It only keeps the mirror in sync; the textarea remains the source of truth.
-
-**`handleInput(core, input, key)`** is now overlay-routing only. It is reached via the global `useKeyboard` sink when the textarea is blurred (an overlay is active), plus the always-routed Ctrl+C:
-
-1. **Overlays** - when `approvalActive` / `questionActive` / `modelPickerActive` / `levelPickerActive` / `renameModeActive` / `abgOverlayActive`, dispatch to the matching `handle*Input` with the normalized input/key pair used by the overlay reducers.
-2. **Ctrl+C** - always enqueues `{ type: 'interrupt' }` so the "press twice to exit" contract holds even mid-focus-race.
-3. **Fallthrough** - editing/chord/scroll/history keys no longer arrive here; they route through the textarea handler while the textarea is focused. This sink is a no-op for non-Ctrl+C keys when no overlay is open.
-
-Raw editing (printable input, backspace, arrow movement, word-move, the real cursor, Enter-submit, and IME composition) never reaches the TUI handle seam. It is native `TextareaRenderable` behavior.
-
-### Resolved Chord Conflicts
-
-Four chords have a documented app-action meaning that collides with the textarea's native editing defaults. The conflict is resolved by giving the app layer the bare chord and moving the input-layer equivalent onto a non-colliding chord, then excluding the bare chord from the managed textarea binding set (`EXCLUDED_TEXTAREA_CHORDS` in `keymap-managed-layer.ts`, applied via `filterTextareaBindings`). The `platform/keymap/chord-conflicts.test.ts` contract pins these exact values against future drift.
-
-| Bare chord (app layer owns it) | App action | Input-layer equivalent (restored) |
-|---|---|---|
-| `ctrl+e` | `editor_open` (external editor) | `input_line_end` = `ctrl+shift+e` |
-| `ctrl+z` | `terminal_suspend` (SIGTSTP) | `input_undo` = `ctrl+-`, `input_redo` = `ctrl+.` |
-| `home` / `end` | transcript scroll-to-top / -bottom | `input_buffer_home` = `ctrl+shift+home`, `input_buffer_end` = `ctrl+shift+end` |
-| `ctrl+p` | `model_cycle` (unchanged) | palette is `alt+x`, not `ctrl+p` |
-| `ctrl+g` | `abg_overlay_toggle` | `messages_first` is `ctrl+shift+home`, not `ctrl+g` — no collision |
-
-`messages_first` (`ctrl+shift+home`) and `input_buffer_home` (`ctrl+shift+home`) intentionally share a chord; layer priority resolves it (`input.*` at default priority wins while the textarea is focused; `messages.*` at priority `-100` wins while it is blurred). The default chords live in `keybind.ts` (`Definitions`) and are rebindable end-to-end via the T17 config loader (`keybinds.json`); `/hotkeys` is registry-driven (T17) and auto-reflects any rebind. `Ctrl+C` is the one exception: it is hardcoded, routes through the global `useKeyboard` sink, and is deliberately absent from the registry (see the Ctrl+C anti-pattern).
-
-### Output Rendering
-
-The output text is parsed into `ChatBlock` objects by `parseMessageBlocks()`. Each block has a `kind` that routes to a dedicated renderer:
-
-| Prefix in outputText | Block kind | Renderer |
-|---|---|---|
-| `You: ` | user | flat row, cyan left bar, raw text |
-| `Assistant: ` | assistant | `<Markdown>` via `MarkdownPanel` (green bar, width 1) |
-| `Thinking: ` | thinking | `<Markdown>` via `MarkdownPanel` (magenta bar, width 2, italic-dim theme) |
-| `Error: ` | error | flat row, red left bar, red text |
-| tool preview/output lines | tool | `<ToolCard>` (rounded border, diff-aware) |
-| (anything else) | system | flat dim text, no left bar |
-
-The markdown pipeline (`src/components/markdown/`) is opentui-native: `Markdown.tsx` walks `marked` tokens into a serializable IR (`InlineRun`/`RenderLine`/`RenderBlock`), styled by `theme.ts` (`darkTheme`), with code-block syntax highlighting from `highlight.ts` (T5) and streaming-unsafe markdown healing from `stream.ts` (T3). A 64-entry LRU cache (`getCachedBlocks`) keys on `(text, width, streaming, theme)`. Wrapping uses `wrap-ansi` with `trim:false` so every character survives; CJK double-width glyphs are counted as 2 columns by `string-width`/`get-east-asian-width`, so lines never overflow the target width.
-
-`parseMessageBlocks` splits `outputText` WITHOUT dropping blank lines: interior blanks survive as markdown paragraph separators (so `Assistant: para1\n\npara2` stays one block), and only leading/trailing empties are trimmed. Continuation absorption keeps multi-line assistant/thinking messages as a single markdown unit (absorbing only `system`-classified lines), while tool blocks keep the broader `!isStrongBoundary` absorption. Tool-preview lines (`Edit preview for`, `+++`, `---`, etc.) are strong-enough boundaries that they always start a new `tool` block.
-
-`MessageBlock` routes each `ChatBlock`: assistant/thinking → `MarkdownPanel` (a colored bar whose row count matches the rendered markdown line count, plus the `<Markdown>` tree); tool → `<ToolCard>`; user/error/system → the legacy flat row. The `toolOutputExpanded` flag (Ctrl+O toggle) collapses `<ToolCard>` to a header-only `> title (N lines)` view.
-
-The transcript is a native opentui `<scrollbox>`. `MessageWindow` renders its blocks inside `<ChatTranscript>` (a `<scrollbox stickyScroll stickyStart="bottom" flexGrow={1}>` with a `MacOSScrollAccel`). There is no JS-side windowing budget: the `ScrollBoxRenderable` renders only the visible children and pins streaming output to the bottom via `stickyScroll`. Imperative scroll (Home/End/PgUp/PgDn from the textarea handler) reaches the scrollbox through `scrollboxRef.current.scrollTo` / `scrollBy` / `scrollHeight`. The old `selectTrailingBlocks` / `getMessageWindowLineBudget` tail-slicing is gone.
-
-Selectable text and copy-on-mouseup. Flat `<text>` blocks (system, user, error) are explicitly `selectable`; `Markdown` leaves default to selectable too, so assistant/thinking content is mouse-drag selectable. `ChatRoot`'s root `<box>` carries an `onMouseUp` handler: it checks `clipboardService.isOsc52Supported()`, and when supported calls `copy()` (selection-copy to `clipboardService.copyToClipboard`, which emits OSC52 from opentui's native Zig core). When OSC52 is unavailable and the user had a selection, it writes a stderr notice instead of silently no-op'ing. tmux needs `set -g set-allow-passthrough on`; iTerm2, Alacritty, Kitty, WezTerm, and Windows Terminal work directly.
-
-The diff renderer (`src/components/diff/`) classifies mctrl's no-line-number format (`-old`/`+new`/`--- a/`/`+++ b/`/`@@`) via `render-diff.ts` and renders green/red/cyan rows with inverse intra-line highlighting through `DiffView.tsx`. `ToolCard` auto-detects diff content via `hasDiffContent` and routes accordingly; prose tool output falls back to plain yellow lines.
-
-### Screen Layout (top to bottom)
-
-```
-┌─ Banner (dim text, no left bar) ───────────────┐
-│  mission-control chat                            │
-│  provider: zai-coding-plan                       │
-│  Press Ctrl+C twice or /exit to exit             │
-└──────────────────────────────────────────────────┘
-┌─ <ChatTranscript> native <scrollbox> (stickyScroll, flexGrow) ┐
-│ ┌─ User (cyan left bar) ───────────────────────┐             │
-│ │  Hello, what is 2+2?                          │             │
-│ └───────────────────────────────────────────────┘             │
-│ ┌─ Assistant (green left bar) ─────────────────┐             │
-│ │  2 + 2 = 4                                    │  selectable │
-│ └───────────────────────────────────────────────┘  (mouse-up  │
-│ ┌─ Error (red left bar) ───────────────────────┐   = OSC52)  │
-│ │  Insufficient balance...                      │             │
-│ └───────────────────────────────────────────────┘             │
-│   ↑ Home/End/PgUp/PgDn scroll this box via scrollboxRef       │
-└───────────────────────────────────────────────────────────────┘
-  (slash / workflow / @-file menu - shown when input starts with /, #, @)
-
-────────────────────────────────────────── ← separator line (dim ─)
-┌─ <ChatInputTextarea> native <textarea> ─────────┐
-│ Type a message or / for commands█               │  ← real native cursor
-└──────────────────────────────────────────────────┘     (TextareaRenderable)
-
-provider: X | model: Y | session: Z      ← status bar (dim)
-```
-
-The cursor is the textarea's real native cursor (drawn by `TextareaRenderable`), not a synthesized glyph. The transcript scrolls inside its own `<scrollbox>`; there is no whole-screen PgUp/PgDn scroll offset and no JS-side windowing budget.
-
-### Slash Command Autocomplete
-
-When the input buffer starts with `/`, a filtered command menu renders between the message blocks and the separator line. The menu uses the existing `createSlashCommandMenuView` from `interactive-chat-command-menu.ts`.
-
-- Typing filters commands (e.g., `/ex` matches `/exit`)
-- Arrow Up/Down navigates the selection
-- Enter resolves the partial match via `resolveSlashCommandMenuSubmission()` before submitting
-- The selected command is highlighted with `>` marker and blue background
-
-### Model Picker Overlay
-
-When `/model` is invoked, `showModelPicker(choices)` is called on the TUI handle. This switches `modelPickerActive` to true, causing ChatRoot to render a full-screen overlay replacing the normal output/menu/input/status layout.
-
-The model picker reuses `ProviderPromptKeypress` state machine (the same one used by the terminal model selector and auth provider prompts). Arrow keys are converted from normalized key flags (`key.upArrow`) to escape sequences (`\u001b[A`) for the reducer.
-
-### Error Handling
+## Error Handling
 
 Provider errors (insufficient balance, rate limit, auth failure, network error) are caught at three layers:
 
@@ -209,62 +30,45 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 
 | Task | Location | Notes |
 | --- | --- | --- |
-| Chat reactive store | `src/commands/chat-store.ts` | `ChatStore` owns all chat UI state (output, input mirror, overlays, menus, history, event queue) behind a `useSyncExternalStore` contract. `createChatStore` factory; 16ms-coalesced `emitOutput`; overlay-mode state machine; `waitForEvent`/`enqueueEvent` event queue. |
-| Background agent runner | `src/commands/chat-agent-runner.ts` | `startChatAgentRunner` replaces the imperative `for(;;)` loop with an async state machine over the store event queue; preserves the G1-G10 sequential guarantees. `createStoreChatOutput` adapts the store to the `ChatOutput` interface. |
-| TUI mount factory | `src/commands/create-chat-tui.tsx` | `createChatTui(options)` builds a `ChatStore`, dynamic-imports the renderer + keymap provider + `ChatApp`, mounts the tree, and returns the imperative TUI handle consumed by `interactive-chat.ts`. `createChatTuiHandle(store, unmountFn)` is the testable seam that constructs the handle without the native renderer. |
-| Chat block parsing | `src/commands/chat-blocks.ts` | `parseMessageBlocks` splits `outputText` into `ChatBlock` records (user/assistant/thinking/error/tool/system). |
-| Chat test support | `src/commands/chat-test-support.ts` | `TextareaLike`, `createRecordingTextarea`, `createRecordingScrollbox`, `makeKeyEvent`, `asTextareaRef` / `asScrollboxRef`. |
-| opentui components | `src/components/*.tsx` | `ChatApp` (root), `ChatInputArea`, `OverlayPanels` (approval/question/model/level/rename), `ChatInputTextarea` (native `<textarea>`), `ChatTranscript` (native `<scrollbox>`), `SlashMenuPanel`, `FileAutocompletePanel`, `Banner`, `StatusBar`, `Separator`, plus `markdown/` and `diff/`. Components consume the `ChatStore` snapshot and use native opentui props (`fg`/`bg`/`attributes`) directly. Each opentui-intrinsic file starts with the `@jsxImportSource @opentui/react` pragma. |
-| Clipboard copy | `src/platform/clipboard-service.ts`, `src/platform/selection-copy.ts` | OSC52 clipboard service plus mouseup selection-copy; `isOsc52Supported()` gates the stderr fallback. |
-| opentui renderer mount/unmount | `src/platform/opentui-renderer.ts` | `mountOpenTui(element)` dynamic-imports `createCliRenderer` + `createRoot`, returns `{ renderer, root, unmount }`. |
-| Terminal viewport source | `src/platform/terminal-viewport.ts`, `src/platform/terminal-viewport-react.ts` | Normalizes OpenTUI dimensions into `TerminalViewport { columns, rows }`; `useTerminalViewport()` is the interactive TUI layout source of truth. |
-| Keymap layers | `src/platform/keymap/` | OpenTUI keymap instance, managed textarea composition, command palette, which-key, diff viewer, message scrolling, selection copy, paste markers, and kill-ring layers. |
-| Markdown renderer | `src/components/markdown/Markdown.tsx` | opentui-native markdown: token walker → IR (`InlineRun`/`RenderLine`/`RenderBlock`) → `<box>`/`<text>`. Pure helpers (`getCachedBlocks`, `reflowRuns`, `renderInlineToRuns`, `computeTableColumnWidths`) are exported for unit tests. 64-entry LRU cache. |
-| Markdown theme | `src/components/markdown/theme.ts` | `darkTheme` (14 element styles + `highlightCode` slot), `noColorTheme`. `TerminalTextStyle` = subset of opentui `<text>` props. |
-| Markdown streaming healer | `src/components/markdown/stream.ts` | `streamBlocks` heals incomplete markdown (open `**`, ```` ``` ```` fence) via `remend` and splits live input into renderable blocks. Never throws. |
-| Code highlighting | `src/components/markdown/highlight.ts` | `highlightCode` is a thin re-export over `tree-sitter-highlighter.ts` (opentui tree-sitter backend with async cache-fill); scope→style table in `syntax-rules.ts`; 34-language grammar config in `parsers-config.ts`; zero raw ANSI leakage. |
-| Diff renderer | `src/components/diff/` | `render-diff.ts` classifies mctrl no-line-number diffs; `DiffView.tsx` renders green/red/cyan with inverse intra-line spans. `kindStyle`/`splitLineSpans` exported for tests. |
-| Tool card | `src/components/ToolCard.tsx` | Bordered card; `hasDiffContent` auto-routes to `<DiffView>` or yellow prose lines; `expanded` prop collapses to header. |
 | Executable entry, help, version | `src/index.tsx` | Package `bin` maps `mc` and `mctrl` to `./dist/index.js`. |
+| Background agent runner | `src/commands/chat-agent-runner.ts` | `startChatAgentRunner` replaces the imperative `for(;;)` loop with an async state machine over the store event queue; preserves the G1-G10 sequential guarantees. `createStoreChatOutput` adapts the store to the `ChatOutput` interface. |
 | Top-level flags and modes | `src/args.ts` | Keep command/mode string unions explicit. Default mode is `'tui'` (opentui); `--no-tui`/`--json`/`--jsonl` select the non-interactive renderers. `--profile <name>` is long-only: it selects a user-scope config profile (`parseProfileName`, regex `^[a-z0-9][a-z0-9_-]{0,63}$`); auth's `-p` short flag is provider shorthand, not a profile alias. `--profile` threads through `run` and `mcp list/test/add/remove --scope user`; non-MCP commands (auth/session/models/agents) reject or ignore it safely. |
 | Run and graph args | `src/run-args.ts` | Owns `--json`, `--jsonl`, provider/model, native, graph, `--workspace`, `--session`, `--engine` flags. |
 | Auth args | `src/auth-args.ts` | Delegates into `src/commands/auth*.ts`. |
 | Session args | `src/session-args.ts` | Delegates into `src/commands/session.ts`. |
 | Runtime orchestration | `src/commands/run-agent.ts` | Chooses chat/non-interactive paths, provider setup, permissions, renderers, workspace root resolution (`--workspace` > `MCTRL_WORKSPACE` > `detectWorkspaceRoot()`). |
-| Interactive chat | `src/commands/interactive-chat*.ts` | Terminal input, slash commands, model picker, approval broker. Non-TTY fallback path. `useTui` gates the opentui TUI on `process.stdin.isTTY`. |
-| Command parsing | `src/commands/chat-commands.ts` | parseChatLine → ChatLineAction |
-| Slash command menu state | `src/commands/interactive-chat-command-menu.ts` | createSlashCommandMenuView, resolveSlashCommandMenuSubmission |
+| Interactive chat | `src/commands/interactive-chat*.ts` | Terminal input, slash commands, model picker, approval broker. Non-TTY fallback path. `useTui` gates the opentui TUI on `process.stdin.isTTY`. Lazy-loads `@mission-control/tui/create-chat-tui` only when TUI is active. |
+| Command parsing | `src/commands/chat-commands.ts` | parseChatLine -> ChatLineAction |
+| Interactive chat actions | `src/commands/interactive-chat-actions.ts` | CLI side-effect adapters (`loadDashboardAgentEntries`, `loadMissionPanelRows`, `toggleAgentDisabled`, `setAgentModelOverride`) injected as `ChatAppActions` into the TUI. Imports agents-command, chat-commands, interactive-coding-agent. |
 | Model discovery | `src/commands/model-discovery.ts` | Per-provider API calls for live model lists |
-| Models command | `src/commands/models.ts` | `mc models` — runtime catalog + discovery union |
-| Provider factory | `src/commands/provider-factory.ts` | Maps capability → adapter |
+| Models command | `src/commands/models.ts` | `mc models` - runtime catalog + discovery union |
+| Provider factory | `src/commands/provider-factory.ts` | Maps capability to adapter |
 | Runtime catalog | `packages/config/src/models-dev-runtime.ts` | Fetches models.dev with 5min disk cache |
-| Output modes | `src/ui/renderers.ts` | Plain, TUI (buffered summary), and JSON renderer contracts. |
+| Output modes | `src/ui/renderers.ts` | Plain, TUI (buffered summary), and JSON renderer contracts. `AgentUIRenderer` interface lives here. |
 | CLI package targets | `package.json`, `project.json` | `tsc` build, verbose Vitest, Nx `cli:*` targets. |
-| Agent spinner | `src/components/ChatApp.tsx` (`AgentSpinner`) | Braille spinner (`⠋⠙⠹…`) at 80ms when animation is enabled; shows "Thinking…" / "Running X…" via `store.setAgentStatus`. |
-| Approval overlay | `src/components/OverlayPanels.tsx` (`ApprovalOverlay`) | Arrow-key Up/Down/Enter/Ctrl+C navigation over the `ChatStore`; `store.showApproval`/`hideApproval`. |
-| ChatOutput extensions | `src/commands/interactive-chat-io.ts` | Optional `setAgentStatus`/`clearAgentStatus`/`showApproval`/`hideApproval` methods. |
+| ChatOutput extensions | `src/commands/interactive-chat-io.ts` | Optional `setAgentStatus`/`clearAgentStatus`/`showApproval`/`hideApproval` methods. Re-exports `ChatInputEvent` type from `@mission-control/tui/state`. |
 | Workspace resolution | `src/commands/run-agent.ts` (`resolveWorkspaceRoot`, `detectWorkspaceRoot`) | `--workspace <path>` flag wins, then `MCTRL_WORKSPACE` env var, then `.git`/workspaces heuristic walking up from `process.cwd()`. |
-| StatusBar render surface | `src/components/StatusBar.tsx` | Renders provider/model/variant/project/branch/session; `formatStatus` is exported for unit tests. |
 | Session store fix | `src/commands/run-agent-session.ts` | `createsTransientSessionStore` includes the `'tui'` mode so the graph path (with tools) is always used. |
-| Retryable tool errors | `packages/core/src/tools/read-tools-errors.ts` | Repo tool failures are `retryable: true` — the model can adjust and retry instead of the run dying. |
+| Mission control services | `src/commands/mission-control-services.ts` | CLI session-owned runtime manager (lifecycle, job manager, registry). Passed to TUI via `MissionControlServicesLike` structural interface. |
+| Welcome data factory | `src/commands/welcome-data.ts` | Imports `../index.js` (CLI entry) + session-catalog. Types moved to `@mission-control/tui/state`. |
+| Agents config (disabled) | `src/commands/agents-disabled-config.ts` | Writes agent config to disk; used by CLI runtime. Components call it via injected `ChatAppActions.toggleAgentDisabled`. |
+| Agents config (model overrides) | `src/commands/agents-model-overrides-config.ts` | Writes model override config; used by CLI runtime. Components call it via injected `ChatAppActions.setAgentModelOverride` + `isValidModelPattern`. |
+| Retryable tool errors | `packages/core/src/tools/read-tools-errors.ts` | Repo tool failures are `retryable: true` - the model can adjust and retry instead of the run dying. |
+| TUI components, platform, store, mount | see `apps/tui/AGENTS.md` | OpenTUI React components, keymap platform, `ChatStore`, `createChatTui`, markdown/diff renderers, clipboard, terminal viewport - all live in `apps/tui`. |
 
 ## Conventions
 
 - Keep CLI behavior behind `apps/cli`; do not move command-line parsing or terminal rendering into `packages/core`.
 - Treat help text, JSON, JSONL, and plain output as user-facing contracts. Update focused tests when strings, event ordering, or redaction changes.
-- Normal prompts can run through the deterministic local provider or the OpenAI-compatible adapter when configured. `$skill <name>` and `/<skill-name>` load a discovered skill's `SKILL.md` body as the next user prompt (real skill loading, replacing the old scaffold recorder); the loaded body is inert text and does not call Codex host skills or spawn agents on its own. A real tool-calling provider is required for loaded skills to drive agentic behavior — the default `local/local-echo` provider does not call tools.
+- Normal prompts can run through the deterministic local provider or the OpenAI-compatible adapter when configured. `$skill <name>` and `/<skill-name>` load a discovered skill's `SKILL.md` body as the next user prompt (real skill loading, replacing the old scaffold recorder); the loaded body is inert text and does not call Codex host skills or spawn agents on its own. A real tool-calling provider is required for loaded skills to drive agentic behavior - the default `local/local-echo` provider does not call tools.
 - Store auth through `auth-store.ts`; never print raw API keys, OAuth tokens, or multi-field credentials.
 - Argument parsing stays parse-only. Runtime effects belong in command modules.
 - Renderer code should consume protocol/core events, not private runtime fields.
-- The markdown/diff/ToolCard renderers consume already-redacted `outputText` (provider/tool output is redacted upstream in `packages/core`). Never read raw provider or tool structured output in a renderer.
-- `react-test-renderer` is intentionally not a dependency. Test renderer logic via the pure exported helpers (`getCachedBlocks`/`reflowRuns`/`kindStyle`/`hasDiffContent`) or opentui's headless render path. Never mount a full React tree in a unit test.
-- Visible-width math (wrapping, table columns, bar row counts) counts East Asian Wide glyphs as 2 columns — `wrap-ansi` relies on `string-width`/`get-east-asian-width`, so CJK never overflows.
-- Interactive TUI layout must derive from `TerminalViewport { columns, rows }` via `useTerminalViewport()`. Direct `process.stdout.columns/rows` reads are reserved for noninteractive stdout renderers and low-level terminal seams, not React components or keymaps.
-- The textarea is the source of truth for editable text; `core.inputBuffer` is a mirror kept in sync by the content-change handler. `ChatStore` owns non-editing state (overlays, menus, history, event queue), and React components are read-only views of the snapshot.
-- `useSyncExternalStore` requires `getSnapshot()` to return a referentially stable object — `publishSnapshot()` always creates a new object.
-- Editing keys are native `TextareaRenderable` behavior; app chords, scroll, and history ride the textarea `onKeyDown` handler (raw `KeyEvent` plus `preventDefault`).
-- `exactOptionalPropertyTypes` is active — use conditional spreads for optional props (`...(cond ? { prop: val } : {})`), and when sourcing opentui props from `| undefined` helpers, assign to a local first and narrow before spreading.
-- Every `.tsx` file using opentui lowercase intrinsics MUST start with `/** @jsxImportSource @opentui/react */`. Under that pragma, component return types are `React.ReactNode`, not `React.JSX.Element`.
+- The noninteractive renderers consume already-redacted output (provider/tool output is redacted upstream in `packages/core`). Never read raw provider or tool structured output in a renderer.
+- `react-test-renderer` is intentionally not a dependency. Test renderer logic via the pure exported helpers or opentui's headless render path (in `apps/tui`). Never mount a full React tree in a unit test.
+- Interactive TUI layout must derive from `TerminalViewport { columns, rows }` via `useTerminalViewport()` (now in `apps/tui/src/platform/`). Direct `process.stdout.columns/rows` reads are reserved for noninteractive stdout renderers (`src/ui/renderers.ts`) and low-level terminal seams, not interactive code.
+- The CLI must never statically import `@opentui/*` or `react`. All TUI access goes through `@mission-control/tui` lazy imports inside the `useTui` branch so `mc --no-tui` stays opentui-free.
+- `exactOptionalPropertyTypes` is active - use conditional spreads for optional props (`...(cond ? { prop: val } : {})`), and when sourcing opentui props from `| undefined` helpers, assign to a local first and narrow before spreading.
 - User input echoed to outputText uses `You: ` prefix so `parseMessageBlocks` can classify it.
 - Error messages use `Error: ` prefix for the same reason.
 - Slash commands that start with `/` are NOT echoed to outputText (they're system commands, not conversation).
@@ -276,24 +80,21 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 - For argument changes, update `args.test.ts`, `run-agent-*`, `auth-*`, or `session.test.ts` as appropriate.
 - For renderer/output changes, update `src/ui/renderers.test.ts` and the affected command-mode tests.
 - Integration tests (`run-agent-chat.test.ts`) inject scripted `ChatInput`/`ChatOutput` via options, bypassing the opentui TUI entirely.
-- The interactive TUI is covered by `interactive-chat-terminal-input.test.ts` for the terminal fallback plus focused `create-chat-tui`, `ChatApp`, component, and keymap tests; use manual tmux QA for full runtime checks.
+- The interactive TUI is covered by `interactive-chat-terminal-input.test.ts` for the terminal fallback plus focused tests in `apps/tui` (create-chat-tui, ChatApp, component, and keymap tests); use manual tmux QA for full runtime checks.
 - Model command tests (`run-agent-model-command.test.ts`) verify `/model` parsing and selection logic.
 - When modifying the interactive TUI runtime, always run tmux QA: start CLI, type a prompt, verify response, test `/exit` and Ctrl+C.
 - Run focused CLI tests with `NX_DAEMON=false NX_ISOLATE_PLUGINS=false pnpm exec nx run cli:test` or `pnpm exec vitest run apps/cli/src/<file>.test.ts`.
 
 ## Anti-Patterns
 
-- Do NOT mutate `ChatStore` state directly from React components. Editing routes through the textarea (native) and the textarea keydown handler; overlays route through their dedicated handlers.
-- Do NOT use `process.stdin.setRawMode()` directly — opentui's `createCliRenderer` manages raw mode.
-- Do NOT add deprecated terminal UI companion packages or compatibility input/select layers. All components are custom-built on opentui intrinsics.
+- Do NOT statically import `create-chat-tui`, TUI components, platform code, or `@opentui/*` in `apps/cli`. The CLI reaches the TUI through `@mission-control/tui` lazy imports only.
+- Do NOT use `process.stdin.setRawMode()` directly - opentui's `createCliRenderer` manages raw mode (in `apps/tui`).
+- Do NOT add deprecated terminal UI companion packages or compatibility input/select layers. All components are custom-built on opentui intrinsics (in `apps/tui`).
 - Do NOT import deprecated terminal UI frameworks. OpenTUI is the only React terminal renderer for TUI mode.
-- Do NOT call `console.log` in TUI mode — the renderer may patch the stream. Use `process.stderr.write()` for debugging.
-- Do NOT remove the non-TUI terminal fallback path — tests depend on it via scripted input injection.
+- Do NOT call `console.log` in TUI mode - the renderer may patch the stream. Use `process.stderr.write()` for debugging.
+- Do NOT remove the non-TUI terminal fallback path - tests depend on it via scripted input injection.
 - Do NOT bypass `createAllowPermissionDecision` or approval plumbing for write-capable command paths.
 - Do NOT add shell-string command execution in CLI code.
 - Do NOT make demo-only provider/model metadata look like an implemented provider adapter.
 - Do NOT edit `dist`; it is generated by `tsc`.
-- Do NOT write opentui-intrinsic `.tsx` files without the `/** @jsxImportSource @opentui/react */` pragma — lowercase intrinsics will not resolve against React's DOM types.
-- Do NOT re-add a hand-rolled cursor or composition buffer. The `TextareaRenderable` owns the cursor, selection, and IME composition; the chat store only mirrors `plainText` into `inputBuffer`.
-- Do NOT add a Ctrl+C copy regime. Copy is mouse-release only via OSC52 (`onMouseUp` on the root box). Ctrl+C is reserved for interrupt/exit and routes through the global sink, never the textarea.
-- Do NOT spawn clipboard binaries (`pbcopy` / `xclip` / `wl-copy`) for copy. OSC52 is emitted by opentui's native core; surface unsupported terminals via stderr instead.
+- Do NOT mutate `ChatStore` state directly from CLI code. The store is owned by `apps/tui`; CLI drives it through the `ChatTuiHandle` contract and injected callbacks.

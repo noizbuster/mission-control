@@ -1,9 +1,9 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import { terminalDisplayWidth } from '@mission-control/tui';
+import type { ModelChoice } from '@mission-control/tui/state';
+import { createProviderPromptKeypressState, createProviderPromptView } from '@mission-control/tui/state';
 import { describe, expect, it } from 'vitest';
-import { createProviderPromptKeypressState, createProviderPromptView } from './auth-provider-keypress.js';
-import type { ModelChoice } from './interactive-chat-model.js';
 import { createTerminalModelSelectorFromStreams, renderModelSelectorLines } from './interactive-chat-model-selector.js';
-import { terminalDisplayWidth } from './terminal-text.js';
 import { EventEmitter } from 'node:events';
 
 describe('terminal model selector renderer', () => {

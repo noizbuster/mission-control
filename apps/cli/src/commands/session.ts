@@ -2,7 +2,6 @@ import { type CodingReplayStep, type ReplayDiagnostic, readLocalSessionReplay } 
 import type { AgentEvent } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { formatSessionStatusWithSource } from '../ui/session-status-format.js';
-import { runReplayOverlay } from './replay-overlay.js';
 import { exportSessionArchiveFile, importSessionArchiveFile } from './session-archive.js';
 import { formatSessionCatalogEntry, listSessionCatalogEntries, readSessionCatalogEntry } from './session-catalog.js';
 import { CliSessionCommandError } from './session-command-error.js';
@@ -93,6 +92,7 @@ async function runReplayInteractiveSession(sessionId: string): Promise<void> {
         process.stderr.write(`No events found for session ${sessionId}\n`);
         return;
     }
+    const { runReplayOverlay } = await import('@mission-control/tui/replay-overlay');
     await runReplayOverlay({
         sessionId,
         envelopes: replay.projection.envelopes,

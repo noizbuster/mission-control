@@ -13,14 +13,14 @@
  * gear icons) is preserved for non-TTY consumers (piped output, logs).
  *
  * The theme type is the repo's existing `TerminalMarkdownTheme`
- * (`apps/cli/src/components/markdown/theme.ts`); no new theme type is
+ * (`apps/tui/src/components/markdown/theme.ts`); no new theme type is
  * introduced.
  */
 
-import { renderMarkdownAnsi } from '../components/markdown/ansi-renderer.js';
-import type { TerminalMarkdownTheme } from '../components/markdown/theme.js';
-import { mergeTextStyle, noColorTheme } from '../components/markdown/theme.js';
-import { TEXT_DANGER_BOLD, terminalTextStyleToAnsi, wrap } from './ansi-theme.js';
+import { renderMarkdownAnsi } from '@mission-control/tui/ansi-renderer';
+import { TEXT_DANGER_BOLD, terminalTextStyleToAnsi, wrap } from '@mission-control/tui/ansi-theme';
+import type { TerminalMarkdownTheme } from '@mission-control/tui/markdown-theme';
+import { mergeTextStyle, noColorTheme } from '@mission-control/tui/markdown-theme';
 import type { OutputBlock } from './output-blocks.js';
 
 export type RenderBlockOptions = {

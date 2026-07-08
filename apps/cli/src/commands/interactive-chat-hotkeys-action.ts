@@ -1,4 +1,5 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
+import { padEndToDisplayWidth, terminalDisplayWidth } from '@mission-control/tui';
 import {
     type BindingValue,
     Definitions,
@@ -7,12 +8,10 @@ import {
     type KeybindName,
     Keybinds,
     LeaderDefault,
-} from '../platform/keymap/keybind.js';
-import { resolveKeybindConfig } from '../platform/keymap/keybind-config-loader.js';
+} from '@mission-control/tui/keybind';
 import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
 import type { ChatOutput } from './interactive-chat-io.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
-import { padEndToDisplayWidth, terminalDisplayWidth } from './terminal-text.js';
 
 export type HotkeysAction = { readonly kind: 'hotkeys' };
 
@@ -197,6 +196,9 @@ export async function runHotkeysAction(
     modelProviderSelection: ModelProviderSelection,
     activeTurn: ActiveCodingAgentTurn | undefined,
 ): Promise<ChatActionResult> {
+    // Lazy-load the config loader so the noninteractive `--no-tui` module graph never transitively
+    // loads the keybind-config-loader module. `/hotkeys` is interactive-only.
+    const { resolveKeybindConfig } = await import('@mission-control/tui/keybind-config');
     const { keybinds } = resolveKeybindConfig();
     chatOutput.write(formatHotkeysText(keybinds));
     return actionResult(modelProviderSelection, activeTurn);

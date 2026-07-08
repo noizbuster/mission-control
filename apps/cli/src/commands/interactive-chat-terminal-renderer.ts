@@ -1,5 +1,5 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import type { SlashCommandMenuState } from './interactive-chat-command-menu.js';
+import type { SlashCommandMenuState } from '@mission-control/tui/state';
 import {
     formatTerminalChatCommittedInputLine,
     renderTerminalChatInputBlock,

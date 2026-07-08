@@ -31,7 +31,7 @@ import type {
     ToolCall,
     WorkflowSpec,
 } from '@mission-control/protocol';
-import type { AbgOverlayController } from './abg-overlay-controller.js';
+import type { AbgOverlayController, ApprovalLevel } from '@mission-control/tui/state';
 import {
     type AbgOverlayState,
     projectAbgSignal,
@@ -39,8 +39,7 @@ import {
     type RecentEvent,
     type RunState,
     readRefreshMsFromEnv,
-} from './abg-overlay-state.js';
-import type { ApprovalLevel } from './approval-level.js';
+} from '@mission-control/tui/state';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
 import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
 import type { ChatOutput } from './interactive-chat-io.js';

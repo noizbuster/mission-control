@@ -1,19 +1,17 @@
 import { modelProviderCatalog } from '@mission-control/config';
 import {
-    createSlashCommandMenuView,
-    formatSlashCommandMenuLines,
-    type SlashCommandMenuState,
-} from './interactive-chat-command-menu.js';
-import {
-    moveTerminalChatCursorOffset,
-    type TerminalChatCursorDirection,
-} from './interactive-chat-cursor-navigation.js';
-import {
     clampTextOffset,
     previousGraphemeOffset,
     terminalDisplayWidth,
     truncateTerminalText,
-} from './terminal-text.js';
+} from '@mission-control/tui';
+import {
+    createSlashCommandMenuView,
+    formatSlashCommandMenuLines,
+    moveTerminalChatCursorOffset,
+    type SlashCommandMenuState,
+    type TerminalChatCursorDirection,
+} from '@mission-control/tui/state';
 
 export type TerminalChatInputStatus = {
     readonly providerID: string;

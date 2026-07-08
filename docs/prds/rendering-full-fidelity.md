@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | draft |
-| Scope | Markdown renderer (`apps/cli/src/components/markdown/`), diff renderer (`apps/cli/src/components/diff/`), message block renderers (`apps/cli/src/components/*`) |
+| Scope | Markdown renderer (`apps/tui/src/components/markdown/`), diff renderer (`apps/tui/src/components/diff/`), message block renderers (`apps/tui/src/components/*`) |
 
 ## Background
 

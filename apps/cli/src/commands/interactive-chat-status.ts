@@ -1,5 +1,5 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { formatModelSelection } from './interactive-chat-model.js';
+import { formatModelSelection } from '@mission-control/tui/state';
 
 export function formatModelProviderStatus(
     selection: ModelProviderSelection,

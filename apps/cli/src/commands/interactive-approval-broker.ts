@@ -1,6 +1,6 @@
 import { PermissionRuleStore, PermissionSession } from '@mission-control/core';
 import type { ApprovalRecord, PermissionDecision, PermissionReply, PermissionRequest } from '@mission-control/protocol';
-import { type ApprovalLevel, approvalLevelRules } from './approval-level.js';
+import { type ApprovalLevel, approvalLevelRules } from '@mission-control/tui/state';
 import type { InteractiveToolOptions } from './interactive-coding-tools.js';
 
 export type InteractiveApprovalBroker = {

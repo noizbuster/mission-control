@@ -1,13 +1,13 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseChatLine } from './chat-commands.js';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import { runClearAction } from './interactive-chat-clear-action.js';
 import {
     createSlashCommandMenuState,
     createSlashCommandMenuView,
     resolveSlashCommandMenuSubmission,
-} from './interactive-chat-command-menu.js';
+} from '@mission-control/tui/state';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { parseChatLine } from './chat-commands.js';
+import type { CodingActionContext } from './interactive-chat-actions.js';
+import { runClearAction } from './interactive-chat-clear-action.js';
 import type { SessionNavigationController, SessionNavigationResult } from './interactive-chat-session-navigation.js';
 import type { UndoRedoConversationController } from './interactive-chat-undo-redo-action.js';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';

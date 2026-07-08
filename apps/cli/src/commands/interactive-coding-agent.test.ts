@@ -1,7 +1,11 @@
 import type { AbgSignal, AgentEvent } from '@mission-control/protocol';
+import {
+    type AbgOverlayStore,
+    createAbgOverlayController,
+    createAbgOverlayStore,
+    RECENT_EVENTS_CAP,
+} from '@mission-control/tui/state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAbgOverlayController } from './abg-overlay-controller.js';
-import { type AbgOverlayStore, createAbgOverlayStore, RECENT_EVENTS_CAP } from './abg-overlay-state.js';
 import { interactiveGraphStreamSignal, wireAbgOverlay } from './interactive-coding-agent.js';
 import { performance } from 'node:perf_hooks';
 

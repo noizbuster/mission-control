@@ -1,7 +1,7 @@
 import { getRuntimeModelProviderCatalog, type ModelProviderCatalogEntry } from '@mission-control/config';
+import { formatProviderCapabilityStatus } from '@mission-control/tui/state';
 import type { CliArgs } from '../args.js';
 import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
-import { formatProviderCapabilityStatus } from './model-capability.js';
 import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
 
 export type ModelsCommandOptions = {

@@ -8,7 +8,7 @@ Bring the ABG overlay (currently CLI OpenTUI-only) to the desktop app as a live 
 
 ## Current State (post-v2)
 
-The CLI OpenTUI overlay (`apps/cli/src/components/AbgOverlay.tsx`) consumes `AbgOverlayState` projected from `AbgSignal` + `AgentEvent` streams. The projector (`packages/core/src/abg-overlay/state.ts`) is pure: feed it signals/events, get a state shape back. This is reusable.
+The CLI OpenTUI overlay (`apps/tui/src/components/AbgOverlay.tsx`) consumes `AbgOverlayState` projected from `AbgSignal` + `AgentEvent` streams. The projector (`packages/core/src/abg-overlay/state.ts`) is pure: feed it signals/events, get a state shape back. This is reusable.
 
 The desktop (`apps/desktop/`) currently:
 - Reads durable local DB sessions through the desktop command bridge and replay projection helpers
@@ -19,7 +19,7 @@ The desktop (`apps/desktop/`) currently:
 
 ### Phase 1 — Projector reuse (low effort)
 
-Move `AbgOverlayState` and the pure projectors (`projectAbgSignal`, `projectAgentEvent`, `mergeGraphSnapshot`, `extractBudgetPayload`, `extractBlackboardMutation`) from `apps/cli/src/commands/abg-overlay-state.ts` to a new `packages/core/src/abg-overlay/` module. Re-export from `@mission-control/core`. CLI imports unchanged (just path). Desktop imports the same projectors.
+Move `AbgOverlayState` and the pure projectors (`projectAbgSignal`, `projectAgentEvent`, `mergeGraphSnapshot`, `extractBudgetPayload`, `extractBlackboardMutation`) from `apps/tui/src/state/abg-overlay-state.ts` to a new `packages/core/src/abg-overlay/` module. Re-export from `@mission-control/core`. CLI imports unchanged (just path). Desktop imports the same projectors.
 
 ### Phase 2 — Live event stream (medium effort)
 

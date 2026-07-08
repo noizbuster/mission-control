@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
-import { parseChatLine } from './chat-commands.js';
 import {
     createSlashCommandMenuState,
     createSlashCommandMenuView,
     resolveSlashCommandMenuSubmission,
-} from './interactive-chat-command-menu.js';
+} from '@mission-control/tui/state';
+import { describe, expect, it, vi } from 'vitest';
+import { parseChatLine } from './chat-commands.js';
 import { runExportAction } from './interactive-chat-export-action.js';
 import { exportSessionArchiveFile } from './session-archive.js';
 

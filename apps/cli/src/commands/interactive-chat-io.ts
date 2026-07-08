@@ -1,4 +1,4 @@
-import { createSlashCommandMenuState } from './interactive-chat-command-menu.js';
+import { createSlashCommandMenuState, interruptTokenEncodingFamily } from '@mission-control/tui/state';
 import { createTerminalChatInputBuffer } from './interactive-chat-input-block.js';
 import {
     type TerminalKeyboardMode,
@@ -6,7 +6,6 @@ import {
     terminalModifiedKeyEnableSequence,
 } from './interactive-chat-keyboard.js';
 import { createTerminalInputParser } from './interactive-chat-terminal-input-parser.js';
-import { interruptTokenEncodingFamily } from './interactive-chat-terminal-keys.js';
 import {
     readTerminalChatEvent,
     type TerminalInputStream,
@@ -19,25 +18,10 @@ import {
 } from './interactive-chat-terminal-renderer.js';
 import { stdin as processInput, stdout as processOutput } from 'node:process';
 
+export type { ChatInputEvent } from '@mission-control/tui/state';
 export type { ChatInputRenderContext } from './interactive-chat-terminal-renderer.js';
 
-export type ChatInputEvent =
-    | {
-          readonly type: 'line';
-          readonly value: string;
-      }
-    | {
-          readonly type: 'interrupt';
-          readonly interruptedPartialInput?: boolean;
-          /**
-           * Origin of the interrupt. Used by the main chat loop to decide
-           * whether the event may trigger an exit (second consecutive press
-           * while idle). ESC-sourced interrupts never exit; Ctrl+C-sourced
-           * (and legacy undefined-source) interrupts preserve the existing
-           * "press twice to exit" contract.
-           */
-          readonly source?: 'ctrl-c' | 'esc';
-      };
+import type { ChatInputEvent } from '@mission-control/tui/state';
 
 export type ChatInput = {
     readonly read: () => Promise<ChatInputEvent>;
