@@ -1,4 +1,4 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
 /**
  * Command palette overlay (T8).
  *
@@ -9,7 +9,7 @@
  * `LeaderPendingCue`) so it always has a keymap in context and never contends
  * with chat-store state.
  *
- * Self-contained via `useKeymap` + `registerLayer` (the task's suggested seam):
+ * Self-contained via `useKeymap` + Solid `useBindings`:
  *   - A toggle layer (always enabled) registers the `command.palette.show`
  *     command and binds Alt+X to it (the chord lives in keybind.ts as
  *     `command_list`; the id lives in `CommandMap.command_list`). The handler
@@ -26,28 +26,33 @@
  * `key.preventDefault()` on printable keys while the palette is open, keeping
  * filter keystrokes off the focused textarea.
  *
- * The reachable-command list is derived reactively through
- * `useKeymapSelectorReact` with a STABLE module-level selector (the T1 store
- * captures the first selector at mount, so an inline arrow would never
- * re-derive). `getCommandEntries` allocates a fresh array per call; the store
- * memoizes by version so the snapshot stays referentially stable between state
- * signals (no `useSyncExternalStore` infinite loop).
+ * The reachable-command list is derived reactively through Solid's native
+ * `useKeymapSelector` accessor with a stable module-level selector.
  *
  * Not unit-rendered: the TUI has no DOM test environment
- * and this module imports `@opentui/react` (native FFI). Correctness of the
- * slash set is pinned by slash-mapping.test coverage; the live overlay is
- * exercised by the T18 tmux harness.
+ * and this module renders OpenTUI intrinsics. Correctness of the slash set is
+ * pinned by slash-mapping.test coverage; the live overlay is exercised by the
+ * T18 tmux harness.
  */
 
-import { useKeymap } from '@opentui/keymap/react';
-import { useKeyboard } from '@opentui/react';
-import type { MutableRefObject, ReactNode } from 'react';
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { TextAttributes } from '@opentui/core';
+import { reactiveMatcherFromSignal, useBindings, useKeymap, useKeymapSelector } from '@opentui/keymap/solid';
+import { useKeyboard } from '@opentui/solid';
+import {
+    type Accessor,
+    createEffect,
+    createMemo,
+    createSignal,
+    For,
+    type JSX,
+    type Setter,
+    Show,
+    useContext,
+} from 'solid-js';
 import { CommandMap } from './keybind.js';
 import type { OpenTuiKeymap } from './keymap-instance.js';
 import { PaletteOpenContext } from './palette-open-context.js';
 import { getPaletteSlashCommands, type PaletteSlashEntry } from './slash-mapping.js';
-import { useKeymapSelectorReact } from './use-keymap-selector.js';
 
 /** The palette toggle command id (mirrors `CommandMap.command_list`). */
 const PALETTE_COMMAND_ID: string = CommandMap.command_list;
@@ -61,7 +66,7 @@ const PALETTE_VISIBLE_ROWS = 10;
 /** Single-char printable filter alphabet (letters + digits). */
 const PRINTABLE_FILTER = /^[a-z0-9]$/;
 
-const noopSetOpen = (): void => {};
+const noopSetOpen: Setter<boolean> = (value) => (typeof value === 'function' ? value(false) : value);
 
 /** A reachable keymap command projected to a palette row. */
 interface PaletteKeymapItem {
@@ -75,8 +80,6 @@ interface PaletteKeymapItem {
 export type PaletteListItem =
     | { readonly kind: 'keymap'; readonly name: string; readonly title: string; readonly description: string }
     | { readonly kind: 'slash'; readonly slashName: string; readonly display: string; readonly description: string };
-
-const EMPTY_LIST: readonly PaletteListItem[] = [];
 
 /**
  * Declared-property view over a keymap `Command`'s display metadata. `Command`
@@ -96,7 +99,7 @@ interface CommandDisplayMeta {
 
 /**
  * STABLE module-level selector for the reachable, non-hidden keymap commands.
- * Passed to `useKeymapSelectorReact` once at mount. Excludes the palette toggle
+ * Passed to `useKeymapSelector` once at mount. Excludes the palette toggle
  * command itself (no "open palette" row inside the palette) and any command
  * marked `hidden`.
  */
@@ -159,114 +162,90 @@ export interface CommandPaletteOverlayProps {
 }
 
 /**
- * The live controller state the once-registered keymap command handlers close
- * over: the keymap, the open/selection setters, and refs mirroring the current
- * filtered list / selection / slash callback. Bundling them keeps the handler
- * signatures small and centralizes what would otherwise be 4-5 loose params.
+ * The live controller state the registered keymap command handlers close over.
  */
 interface PaletteController {
     readonly keymap: OpenTuiKeymap;
-    readonly setOpen: (value: boolean | ((prev: boolean) => boolean)) => void;
-    readonly setSelected: (value: number | ((prev: number) => number)) => void;
-    readonly filteredRef: MutableRefObject<readonly PaletteListItem[]>;
-    readonly selectedRef: MutableRefObject<number>;
-    readonly onSelectSlashRef: MutableRefObject<((slashName: string) => void) | undefined>;
+    readonly setOpen: Setter<boolean>;
+    readonly setSelected: Setter<number>;
+    readonly filtered: Accessor<readonly PaletteListItem[]>;
+    readonly selected: Accessor<number>;
+    readonly onSelectSlash: () => ((slashName: string) => void) | undefined;
 }
 
-export function CommandPaletteOverlay({ onSelectSlash }: CommandPaletteOverlayProps): ReactNode {
+export function CommandPaletteOverlay(props: CommandPaletteOverlayProps): JSX.Element {
     const keymap = useKeymap();
-    const keymapCommands = useKeymapSelectorReact(selectReachablePaletteCommands);
+    const keymapCommands = useKeymapSelector(selectReachablePaletteCommands);
 
     const paletteState = useContext(PaletteOpenContext);
-    const open = paletteState !== null && paletteState.open;
+    const open = (): boolean => paletteState?.open() ?? false;
     const setOpen = paletteState?.setOpen ?? noopSetOpen;
 
-    const [query, setQuery] = useState('');
-    const [selected, setSelected] = useState(0);
+    const [query, setQuery] = createSignal('');
+    const [selected, setSelected] = createSignal(0);
 
-    const openRef = useRef(false);
-    const filteredRef = useRef<readonly PaletteListItem[]>(EMPTY_LIST);
-    const selectedRef = useRef(0);
-    const onSelectSlashRef = useRef<typeof onSelectSlash>(onSelectSlash);
-    useEffect(() => {
-        openRef.current = open;
-    }, [open]);
-    useEffect(() => {
-        onSelectSlashRef.current = onSelectSlash;
-    }, [onSelectSlash]);
+    const items = createMemo(() => buildPaletteItems(keymapCommands(), getPaletteSlashCommands()));
+    const filtered = createMemo(() => filterPaletteItems(items(), query()));
+    const clampedSelected = createMemo(() => {
+        const visible = filtered();
+        return visible.length === 0 ? 0 : Math.min(selected(), visible.length - 1);
+    });
 
-    const controller: PaletteController = useMemo(
-        () => ({ keymap, setOpen, setSelected, filteredRef, selectedRef, onSelectSlashRef }),
-        [keymap, setOpen],
-    );
+    const controller: PaletteController = {
+        keymap,
+        setOpen,
+        setSelected,
+        filtered,
+        selected: clampedSelected,
+        onSelectSlash: () => props.onSelectSlash,
+    };
 
-    // Register the toggle + navigation layers once per keymap. The nav layer's
-    // `enabled` reads `openRef.current` live, so it is only active while the
-    // palette is open (its bindings carry preventDefault by default, keeping
-    // Up/Down/Return/Escape off the focused textarea while open).
-    useEffect(() => {
-        const offToggle = keymap.registerLayer({
-            enabled: () => true,
-            commands: [{ name: PALETTE_COMMAND_ID, run: () => toggleOpen(controller) }],
-            bindings: [{ key: PALETTE_TOGGLE_KEY, cmd: PALETTE_COMMAND_ID }],
-        });
-        const offNav = keymap.registerLayer({
-            enabled: () => openRef.current,
-            commands: [
-                { name: 'palette.nav.up', run: () => moveSelection(controller, -1) },
-                { name: 'palette.nav.down', run: () => moveSelection(controller, 1) },
-                { name: 'palette.nav.submit', run: () => submitSelection(controller) },
-                { name: 'palette.nav.close', run: () => closePalette(controller) },
-            ],
-            bindings: [
-                { key: 'up', cmd: 'palette.nav.up' },
-                { key: 'down', cmd: 'palette.nav.down' },
-                { key: 'return', cmd: 'palette.nav.submit' },
-                { key: 'escape', cmd: 'palette.nav.close' },
-            ],
-        });
-        return () => {
-            offNav();
-            offToggle();
-        };
-    }, [keymap, controller]);
+    useBindings(() => ({
+        enabled: () => true,
+        commands: [{ name: PALETTE_COMMAND_ID, run: () => toggleOpen(controller) }],
+        bindings: [{ key: PALETTE_TOGGLE_KEY, cmd: PALETTE_COMMAND_ID }],
+    }));
 
-    // Reset the filter + selection each time the palette opens.
-    useEffect(() => {
-        if (open) {
+    useBindings(() => ({
+        enabled: reactiveMatcherFromSignal(open),
+        commands: [
+            { name: 'palette.nav.up', run: () => moveSelection(controller, -1) },
+            { name: 'palette.nav.down', run: () => moveSelection(controller, 1) },
+            { name: 'palette.nav.submit', run: () => submitSelection(controller) },
+            { name: 'palette.nav.close', run: () => closePalette(controller) },
+        ],
+        bindings: [
+            { key: 'up', cmd: 'palette.nav.up' },
+            { key: 'down', cmd: 'palette.nav.down' },
+            { key: 'return', cmd: 'palette.nav.submit' },
+            { key: 'escape', cmd: 'palette.nav.close' },
+        ],
+    }));
+
+    createEffect(() => {
+        if (open()) {
             setQuery('');
             setSelected(0);
         }
-    }, [open]);
+    });
 
-    const items = useMemo(() => buildPaletteItems(keymapCommands, getPaletteSlashCommands()), [keymapCommands]);
-    const filtered = useMemo(() => filterPaletteItems(items, query), [items, query]);
-    const clampedSelected = filtered.length === 0 ? 0 : Math.min(selected, filtered.length - 1);
-    useEffect(() => {
-        filteredRef.current = filtered;
-    }, [filtered]);
-    useEffect(() => {
-        selectedRef.current = clampedSelected;
-    }, [clampedSelected]);
+    useKeyboard((key: { readonly name: string }) => {
+        if (!open()) return;
+        const name = key.name;
+        if (name === 'backspace') {
+            setQuery((value) => value.slice(0, -1));
+            return;
+        }
+        if (name.length === 1 && PRINTABLE_FILTER.test(name)) {
+            setQuery((value) => value + name);
+        }
+    });
 
-    // Free-text filter via the global keyboard sink. Nav keys are ignored here
-    // (the nav layer owns them) to avoid double-handling.
-    useKeyboard(
-        useCallback((key: { readonly name: string }) => {
-            if (!openRef.current) return;
-            const name = key.name;
-            if (name === 'backspace') {
-                setQuery((value) => value.slice(0, -1));
-                return;
-            }
-            if (name.length === 1 && PRINTABLE_FILTER.test(name)) {
-                setQuery((value) => value + name);
-            }
-        }, []),
+    return (
+        <Show when={open()}>
+            <PaletteWindow items={filtered()} selected={clampedSelected()} query={query()} />
+        </Show>
     );
-
-    if (!open) return null;
-    return <PaletteWindow items={filtered} selected={clampedSelected} query={query} />;
 }
 
 function toggleOpen(controller: PaletteController): boolean {
@@ -275,7 +254,7 @@ function toggleOpen(controller: PaletteController): boolean {
 }
 
 function moveSelection(controller: PaletteController, delta: number): boolean {
-    const max = Math.max(0, controller.filteredRef.current.length - 1);
+    const max = Math.max(0, controller.filtered().length - 1);
     controller.setSelected((value) => Math.min(max, Math.max(0, value + delta)));
     return true;
 }
@@ -286,14 +265,14 @@ function closePalette(controller: PaletteController): boolean {
 }
 
 function submitSelection(controller: PaletteController): boolean {
-    const item = controller.filteredRef.current[controller.selectedRef.current];
+    const item = controller.filtered()[controller.selected()];
     if (item !== undefined) {
         switch (item.kind) {
             case 'keymap':
                 controller.keymap.dispatchCommand(item.name);
                 break;
             case 'slash':
-                controller.onSelectSlashRef.current?.(item.slashName);
+                controller.onSelectSlash()?.(item.slashName);
                 break;
         }
     }
@@ -305,36 +284,17 @@ function PaletteWindow(props: {
     readonly items: readonly PaletteListItem[];
     readonly selected: number;
     readonly query: string;
-}): ReactNode {
-    const { items, selected, query } = props;
-    const startIndex = Math.min(
-        Math.max(0, selected - Math.floor(PALETTE_VISIBLE_ROWS / 2)),
-        Math.max(0, items.length - PALETTE_VISIBLE_ROWS),
+}): JSX.Element {
+    const startIndex = createMemo(() =>
+        Math.min(
+            Math.max(0, props.selected - Math.floor(PALETTE_VISIBLE_ROWS / 2)),
+            Math.max(0, props.items.length - PALETTE_VISIBLE_ROWS),
+        ),
     );
-    const visible = items.slice(startIndex, startIndex + PALETTE_VISIBLE_ROWS);
+    const visible = createMemo(() => props.items.slice(startIndex(), startIndex() + PALETTE_VISIBLE_ROWS));
 
     const headerFg = '#00ffff';
-    const dimAttrs = { dim: true };
-    const selectedAttrs = { inverse: true };
     const borderColor = '#808080';
-
-    const rows: ReactNode[] = [];
-    if (items.length === 0) {
-        rows.push(<text key="empty" {...dimAttrs}>{`  no commands match "${query}"`}</text>);
-    }
-    for (let index = 0; index < visible.length; index += 1) {
-        const item = visible[index];
-        if (item === undefined) continue;
-        const isSelected = startIndex + index === selected;
-        const marker = isSelected ? '>' : ' ';
-        const label = item.kind === 'keymap' ? item.title : item.display;
-        const row = `${marker} ${label}`;
-        rows.push(
-            <text key={`${item.kind}:${startIndex + index}`} {...(isSelected ? selectedAttrs : dimAttrs)}>
-                {row}
-            </text>,
-        );
-    }
 
     return (
         <box
@@ -343,12 +303,27 @@ function PaletteWindow(props: {
             left={2}
             right={2}
             flexDirection="column"
-            {...(borderColor !== undefined ? { borderStyle: 'single', borderColor } : { borderStyle: 'single' })}
+            borderStyle="single"
+            borderColor={borderColor}
         >
-            <text {...(headerFg !== undefined ? { fg: headerFg } : {})} {...dimAttrs}>
-                {`Commands${query.length > 0 ? ` matching "${query}"` : ''}  (Alt+X/Esc to close)`}
+            <text fg={headerFg} attributes={TextAttributes.DIM}>
+                {`Commands${props.query.length > 0 ? ` matching "${props.query}"` : ''}  (Alt+X/Esc to close)`}
             </text>
-            {rows}
+            <Show when={props.items.length === 0}>
+                <text attributes={TextAttributes.DIM}>{`  no commands match "${props.query}"`}</text>
+            </Show>
+            <For each={visible()}>
+                {(item, index) => {
+                    const rowIndex = (): number => startIndex() + index();
+                    const isSelected = (): boolean => rowIndex() === props.selected;
+                    const label = item.kind === 'keymap' ? item.title : item.display;
+                    return (
+                        <text attributes={isSelected() ? TextAttributes.INVERSE : TextAttributes.DIM}>
+                            {`${isSelected() ? '>' : ' '} ${label}`}
+                        </text>
+                    );
+                }}
+            </For>
         </box>
     );
 }

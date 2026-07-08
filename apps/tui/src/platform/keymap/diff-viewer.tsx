@@ -1,4 +1,4 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
 // allow: SIZE_OK — task FILE LANE permits only diff-viewer.* (one source file);
 // the module owns one cohesive feature (collect + navigate + render session
 // diffs). Mirrors keybind.ts (363) / model-favorites.ts (305) single-file lanes.
@@ -30,7 +30,8 @@
  */
 
 import { type ChatBlock, parseMessageBlocks } from '@mission-control/tui/chat';
-import type React from 'react';
+import { TextAttributes } from '@opentui/core';
+import { createMemo, For, type JSX, Show } from 'solid-js';
 import { DiffView } from '../../components/diff/DiffView.js';
 import { type DiffLine, renderDiff } from '../../components/diff/render-diff.js';
 import { hasDiffContent } from '../../components/ToolCard.js';
@@ -262,43 +263,49 @@ export type DiffViewerOverlayProps = {
  * highlighted and a status line tracking the cursor position. Keyboard nav is
  * driven by the TUI diff input handler (`j`/`k`/`]`/`[`/`n`/`p`/`esc`/`q`).
  */
-export function DiffViewerOverlay({ entries, model, cursor }: DiffViewerOverlayProps): React.ReactNode {
-    const currentEntryIndex = entries.length === 0 ? -1 : entryIndexAt(model, cursor);
+export function DiffViewerOverlay(props: DiffViewerOverlayProps): JSX.Element {
+    const currentEntryIndex = createMemo(() =>
+        props.entries.length === 0 ? -1 : entryIndexAt(props.model, props.cursor),
+    );
     return (
         <box flexDirection="column" paddingTop={1} paddingX={1}>
-            <text fg="#00ffff" {...{ bold: true, inverse: true }}>
+            <text fg="#00ffff" attributes={TextAttributes.BOLD | TextAttributes.INVERSE}>
                 {' Diff Viewer '}
             </text>
-            {entries.length === 0 ? (
-                <>
-                    <text marginTop={1}>No file diffs in this session yet.</text>
-                    <text {...{ dim: true }}>Press Esc or q to close.</text>
-                </>
-            ) : (
-                <>
-                    <box flexDirection="column" marginTop={1}>
-                        {entries.map((entry, index) => {
-                            const isCurrent = index === currentEntryIndex;
+            <Show
+                when={props.entries.length > 0}
+                fallback={
+                    <>
+                        <text marginTop={1}>No file diffs in this session yet.</text>
+                        <text attributes={TextAttributes.DIM}>Press Esc or q to close.</text>
+                    </>
+                }
+            >
+                <box flexDirection="column" marginTop={1}>
+                    <For each={props.entries}>
+                        {(entry, index) => {
+                            const isCurrent = (): boolean => index() === currentEntryIndex();
                             return (
-                                // biome-ignore lint/suspicious/noArrayIndexKey: diff entries are positional within a single overlay render
-                                <box key={`dventry-${index}`} flexDirection="column">
-                                    <text {...(isCurrent ? { bg: '#0000ff' } : {})} {...{ bold: true }}>
-                                        {isCurrent ? '> ' : '  '}
+                                <box flexDirection="column">
+                                    <text {...(isCurrent() ? { bg: '#0000ff' } : {})} attributes={TextAttributes.BOLD}>
+                                        {isCurrent() ? '> ' : '  '}
                                         {entry.title}
                                     </text>
                                     <DiffView lines={entry.lines} />
                                 </box>
                             );
-                        })}
-                    </box>
+                        }}
+                    </For>
                     <box marginTop={1}>
-                        <text {...{ dim: true }}>
-                            {`File ${currentEntryIndex + 1}/${entries.length} \u00b7 Line ${cursor + 1}/${model.totalLines}`}
+                        <text attributes={TextAttributes.DIM}>
+                            {`File ${currentEntryIndex() + 1}/${props.entries.length} \u00b7 Line ${props.cursor + 1}/${props.model.totalLines}`}
                         </text>
                     </box>
-                    <text {...{ dim: true }}>{'j/k move \u00b7 ]/[ hunk \u00b7 n/p file \u00b7 Esc/q close'}</text>
-                </>
-            )}
+                    <text attributes={TextAttributes.DIM}>
+                        {'j/k move \u00b7 ]/[ hunk \u00b7 n/p file \u00b7 Esc/q close'}
+                    </text>
+                </box>
+            </Show>
         </box>
     );
 }

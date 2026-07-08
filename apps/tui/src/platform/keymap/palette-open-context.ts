@@ -1,6 +1,6 @@
 /**
  * Shared palette-open state between the command palette (keymap-provider lane)
- * and ChatRoot (bridge lane). FFI-free: imports only `react`'s `createContext`.
+ * and ChatRoot (bridge lane). FFI-free: imports only Solid context types.
  *
  * The palette is mounted inside `ChatKeymapProvider` (a sibling of ChatRoot).
  * When the palette opens, ChatRoot must prevent the focused textarea from
@@ -9,11 +9,11 @@
  * to the bridge core or the textarea ref.
  */
 
-import { createContext } from 'react';
+import { type Accessor, createContext, type Setter } from 'solid-js';
 
 export interface PaletteOpenState {
-    readonly open: boolean;
-    readonly setOpen: (value: boolean | ((prev: boolean) => boolean)) => void;
+    readonly open: Accessor<boolean>;
+    readonly setOpen: Setter<boolean>;
 }
 
-export const PaletteOpenContext = createContext<PaletteOpenState | null>(null);
+export const PaletteOpenContext = createContext<PaletteOpenState>();

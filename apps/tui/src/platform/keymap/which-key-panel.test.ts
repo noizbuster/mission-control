@@ -3,13 +3,9 @@
  * toggle/layout layer dispatch + mode-stack push/pop.
  *
  * The which-key panel component (which-key-panel.tsx) cannot be rendered in
- * unit tests (no react-dom / react-test-renderer / DOM env; the plan forbids
- * adding deps). Its module IS FFI-safe to import, though: it pulls only
- * `@opentui/keymap/react` (FFI-free, verified in T3 learnings) and the
- * jsx-runtime (a one-line re-export of react's jsx-runtime, verified), never
- * `@opentui/react` main. So this suite drives the PURE projection/grouping
- * helpers + the layer registration against a REAL `createTestKeymap` (pure JS,
- * no native FFI), mirroring the T8/T10 pattern.
+ * unit tests (no Solid renderer harness in this package). This suite drives the
+ * pure projection/grouping helpers + the layer registration against a real
+ * `createTestKeymap` (pure JS, no native FFI), mirroring the T8/T10 pattern.
  *
  * Adversarial coverage (per task spec):
  *  - misleading_success_output: assert the panel projects REAL reachable
@@ -33,7 +29,7 @@ import {
     registerWhichKeyLayer,
     WHICH_KEY_LAYOUT_COMMAND,
     WHICH_KEY_TOGGLE_COMMAND,
-} from './which-key-panel.js';
+} from './which-key-panel-core.js';
 
 /** Flatten grouped entries to "chord|label" strings for exact assertions. */
 function flatGroups(

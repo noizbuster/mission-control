@@ -105,13 +105,14 @@ describe('create-chat-tui', () => {
         expect(store.onRenameSubmit).toBe(callback);
     });
 
-    it('unmount calls the provided unmount function', () => {
-        let called = false;
+    it('unmount calls the provided unmount function once when invoked repeatedly', () => {
+        let calls = 0;
         const handle = createChatTuiHandle(createChatStore(), () => {
-            called = true;
+            calls += 1;
         });
         handle.unmount();
-        expect(called).toBe(true);
+        handle.unmount();
+        expect(calls).toBe(1);
     });
 
     it('ChatTuiOptions accepts abgOverlayController and the controller.store satisfies AbgOverlayStore', () => {

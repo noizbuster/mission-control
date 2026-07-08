@@ -2,9 +2,9 @@
  * opentui renderer mount/unmount wrapper.
  *
  * Mounts through the opentui runtime: `createCliRenderer` plus
- * `createRoot(renderer).render(element)`.
+ * Solid's `render(app, renderer)`.
  *
- * Dynamic imports keep `@opentui/core` and `@opentui/react` out of the eager
+ * Dynamic imports keep `@opentui/core` and `@opentui/solid` out of the eager
  * module graph when the CLI runs in non-TUI mode (plain / JSON output). The
  * native FFI backend is selected automatically by opentui: `bun:ffi` under Bun,
  * or `node:ffi` under Node 26.3+ (requires `--experimental-ffi`).
@@ -12,7 +12,7 @@
  * Resize handling: OpenTUI's CliRenderer auto-wires `process.on("SIGWINCH")`
  * when stdout === process.stdout. The handler reads stdout.columns/rows,
  * resizes native buffers, emits a "resize" event, and calls requestRender().
- * React's useTerminalDimensions() subscribes to that event and triggers
+ * Solid's useTerminalDimensions() subscribes to that event and triggers
  * re-renders.
  *
  * A polling fallback (`attachRendererResizeSync`) supplements SIGWINCH because
@@ -27,8 +27,7 @@
  */
 
 import type { CliRenderer } from '@opentui/core';
-import type { Root } from '@opentui/react';
-import type { ReactNode } from 'react';
+import type { JSX } from '@opentui/solid';
 import { execFileSync } from 'node:child_process';
 
 export type TerminalSize = {
@@ -229,16 +228,16 @@ export function hardResetRendererSurface(renderer: RendererSurfaceResetTarget): 
 /** Result of mounting an opentui renderer: the live handles plus an unmount function. */
 export interface OpenTuiMountResult {
     readonly renderer: CliRenderer;
-    readonly root: Root;
     unmount(): void;
 }
 
 /**
- * Mount a React element into an opentui renderer.
+ * Mount a Solid app into an opentui renderer.
  *
  * Creates the renderer via `createCliRenderer({ exitOnCtrlC: false })`, mounts
- * the React tree via `createRoot(renderer).render(element)`, and returns a
- * handle whose `unmount()` tears down both the React root and the renderer.
+ * the Solid tree via `render(app, renderer)`, and returns a handle whose
+ * `unmount()` tears down the renderer. The Solid binding disposes the tree from
+ * the renderer's destroy event.
  * `unmount()` is idempotent — calling it more than once is a no-op.
  *
  * Resize synchronization is attached via `attachRendererResizeSync`, which
@@ -247,25 +246,22 @@ export interface OpenTuiMountResult {
  * is unreliable because `stdout.columns`/`stdout.rows` may be stale when the
  * signal handler runs.
  */
-export async function mountOpenTui(element: ReactNode): Promise<OpenTuiMountResult> {
+export async function mountOpenTui(app: () => JSX.Element): Promise<OpenTuiMountResult> {
     const { createCliRenderer } = await import('@opentui/core');
-    const { createRoot } = await import('@opentui/react');
+    const { render } = await import('@opentui/solid');
 
     const renderer = await createCliRenderer({ exitOnCtrlC: false });
     const detachResizeSync = attachRendererResizeSync(renderer, process.stdout, { sizeProbe: readTmuxPaneSize });
 
-    const root = createRoot(renderer);
-    root.render(element);
+    await render(app, renderer);
 
     let unmounted = false;
     return {
         renderer,
-        root,
         unmount(): void {
             if (unmounted) return;
             unmounted = true;
             detachResizeSync();
-            root.unmount();
             renderer.destroy();
         },
     };

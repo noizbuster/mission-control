@@ -1,10 +1,7 @@
-/** @jsxImportSource @opentui/react */
-
 import { getModelContextLimit } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
-import { createRef } from 'react';
-import { type StatusBarProps } from './components/StatusBar.js';
+import type { StatusBarProps } from './components/StatusBar.js';
 import type { ChatTuiHandle, ChatTuiRuntimeOptions } from './state/chat-tui-types.js';
 import type { ModelsOverlayRoleRow } from './state/index.js';
 import { type ChatStore, createChatStore } from './state/index.js';
@@ -18,6 +15,7 @@ export type ChatTuiOptions = ChatTuiRuntimeOptions;
  * opentui renderer (no native FFI, no real terminal).
  */
 export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): ChatTuiHandle {
+    let unmounted = false;
     return {
         waitForEvent: () => store.waitForEvent(),
         emitOutput: (text) => store.emitOutput(text),
@@ -65,16 +63,20 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Ch
         set onRenameSubmit(value: ((name: string) => void) | undefined) {
             store.onRenameSubmit = value;
         },
-        unmount: unmountFn,
+        unmount: () => {
+            if (unmounted) return;
+            unmounted = true;
+            unmountFn();
+        },
     };
 }
 
 /**
  * Full mount function: creates a {@link ChatStore}, dynamically imports the
- * opentui renderer + keymap provider + {@link ChatApp}, mounts the React tree,
+ * opentui renderer + keymap provider + {@link ChatApp}, mounts the Solid tree,
  * and returns a {@link ChatTuiHandle}.
  *
- * Dynamic imports keep `@opentui/react`, the keymap provider, and `ChatApp` out
+ * Dynamic imports keep `@opentui/solid`, the keymap provider, and `ChatApp` out
  * of the eager module graph so non-TUI CLI runs (plain / JSON) never load the
  * native renderer.
  */
@@ -95,13 +97,20 @@ export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHan
         ...(options.variantID !== undefined ? { variantID: options.variantID } : {}),
     });
 
-    const { useRenderer } = await import('@opentui/react');
+    const { useRenderer } = await import('@opentui/solid');
     const { ChatKeymapProvider } = await import('@mission-control/tui/keymap-provider');
     const { mountOpenTui } = await import('@mission-control/tui/opentui-renderer');
     const { ChatApp } = await import('@mission-control/tui/chat-app');
+    const { createComponent } = await import('solid-js/web');
 
-    const textareaRef = createRef<TextareaRenderable | null>();
-    const scrollboxRef = createRef<ScrollBoxRenderable | null>();
+    let textareaRef: TextareaRenderable | undefined;
+    let scrollboxRef: ScrollBoxRenderable | undefined;
+    const setTextareaRef = (renderable: TextareaRenderable): void => {
+        textareaRef = renderable;
+    };
+    const setScrollboxRef = (renderable: ScrollBoxRenderable): void => {
+        scrollboxRef = renderable;
+    };
 
     const statusBarProps: StatusBarProps = {
         providerID: options.providerID,
@@ -112,24 +121,31 @@ export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHan
         ...(options.isWorktree ? { isWorktree: options.isWorktree } : {}),
     };
 
-    const mountResult = await mountOpenTui(
-        <ChatKeymapProvider useRenderer={useRenderer}>
-            <ChatApp
-                store={store}
-                textareaRef={textareaRef}
-                scrollboxRef={scrollboxRef}
-                statusBarProps={statusBarProps}
-                {...(options.welcomeData !== undefined ? { welcomeData: options.welcomeData } : {})}
-                {...(options.abgOverlayController !== undefined
-                    ? { abgOverlayController: options.abgOverlayController }
-                    : {})}
-                {...(options.missionControlServices !== undefined
-                    ? { missionControlServices: options.missionControlServices }
-                    : {})}
-                {...(options.actions !== undefined ? { actions: options.actions } : {})}
-            />
-        </ChatKeymapProvider>,
+    const mountResult = await mountOpenTui(() =>
+        createComponent(ChatKeymapProvider, {
+            useRenderer,
+            get children() {
+                return createComponent(ChatApp, {
+                    store,
+                    textareaRef: setTextareaRef,
+                    scrollboxRef: setScrollboxRef,
+                    statusBarProps,
+                    ...(options.welcomeData !== undefined ? { welcomeData: options.welcomeData } : {}),
+                    ...(options.abgOverlayController !== undefined
+                        ? { abgOverlayController: options.abgOverlayController }
+                        : {}),
+                    ...(options.missionControlServices !== undefined
+                        ? { missionControlServices: options.missionControlServices }
+                        : {}),
+                    ...(options.actions !== undefined ? { actions: options.actions } : {}),
+                });
+            },
+        }),
     );
 
-    return createChatTuiHandle(store, mountResult.unmount);
+    return createChatTuiHandle(store, () => {
+        textareaRef = undefined;
+        scrollboxRef = undefined;
+        mountResult.unmount();
+    });
 }

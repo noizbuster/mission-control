@@ -1,10 +1,10 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
 import { type AgentEvent, type AgentEventEnvelope } from '@mission-control/protocol';
-import { useKeyboard } from '@opentui/react';
-import { useState } from 'react';
+import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
+import { createMemo, createSignal } from 'solid-js';
 import { AbgOverlay } from './components/AbgOverlay.js';
 import { mountOpenTui, type OpenTuiMountResult } from './platform/opentui-renderer.js';
-import { useTerminalViewport } from './platform/terminal-viewport-solid.js';
+import { createTerminalViewportCache } from './platform/terminal-viewport.js';
 import { createAbgOverlayStore, projectAgentEvent } from './state/index.js';
 
 export type ReplayOverlayOptions = {
@@ -45,11 +45,19 @@ export async function runReplayOverlay(options: ReplayOverlayOptions): Promise<v
 
         stepTo(options.envelopes.length);
 
-        const ReplayRoot = (): React.ReactNode => {
-            const [activeTab, setActiveTab] = useState<0 | 1 | 2 | 3 | 4 | 5 | 6 | 7>(0);
-            const [scrollOffset, setScrollOffset] = useState(0);
-            const [, setLiveOutput] = useState(true);
-            const viewport = useTerminalViewport();
+        const ReplayRoot = () => {
+            const [activeTab, setActiveTab] = createSignal<0 | 1 | 2 | 3 | 4 | 5 | 6 | 7>(0);
+            const [scrollOffset, setScrollOffset] = createSignal(0);
+            const [liveOutput, setLiveOutput] = createSignal(true);
+            const [cursorValue, setCursorValue] = createSignal(cursor);
+            const terminalDimensions = useTerminalDimensions();
+            const viewportCache = createTerminalViewportCache();
+            const viewport = createMemo(() => viewportCache(terminalDimensions()));
+
+            const stepAndPublish = (target: number): void => {
+                stepTo(target);
+                setCursorValue(cursor);
+            };
 
             useKeyboard((key) => {
                 if (key.name === 'q' || key.name === 'escape') {
@@ -61,11 +69,11 @@ export async function runReplayOverlay(options: ReplayOverlayOptions): Promise<v
                     return;
                 }
                 if (key.name === 'left') {
-                    stepTo(cursor - 1);
+                    stepAndPublish(cursor - 1);
                     return;
                 }
                 if (key.name === 'right') {
-                    stepTo(cursor + 1);
+                    stepAndPublish(cursor + 1);
                     return;
                 }
                 if (key.name === 'up') {
@@ -86,11 +94,11 @@ export async function runReplayOverlay(options: ReplayOverlayOptions): Promise<v
                     return;
                 }
                 if (key.name === '0') {
-                    stepTo(0);
+                    stepAndPublish(0);
                     return;
                 }
                 if (key.name === '$') {
-                    stepTo(options.envelopes.length);
+                    stepAndPublish(options.envelopes.length);
                     return;
                 }
             });
@@ -103,24 +111,27 @@ export async function runReplayOverlay(options: ReplayOverlayOptions): Promise<v
                         </text>
                         <text {...dimAttrs}> session={options.sessionId} </text>
                         <text {...dimAttrs}>
-                            event {cursor}/{options.envelopes.length}
+                            event {cursorValue()}/{options.envelopes.length}
                         </text>
                     </box>
                     <AbgOverlay
                         store={store}
-                        activeTab={tabByIndex(activeTab)}
-                        scrollOffset={scrollOffset}
+                        activeTab={tabByIndex(activeTab())}
+                        scrollOffset={scrollOffset()}
                         modelLabel={options.modelLabel ?? 'replay'}
-                        viewport={viewport}
+                        viewport={viewport()}
                     />
                     <box marginTop={1}>
-                        <text {...dimAttrs}>← → step | 0/$ jump | 1-8 tabs | ↑↓ scroll | t live | q/Esc quit</text>
+                        <text {...dimAttrs}>
+                            ← → step | 0/$ jump | 1-8 tabs | ↑↓ scroll | t live {liveOutput() ? 'on' : 'off'} |
+                            q/Esc quit
+                        </text>
                     </box>
                 </box>
             );
         };
 
-        void mountOpenTui(<ReplayRoot />).then((handle) => {
+        void mountOpenTui(() => <ReplayRoot />).then((handle) => {
             mountHandle = handle;
         });
     });
