@@ -1,15 +1,15 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
 
-import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
-import type * as React from 'react';
-import { useRef, useSyncExternalStore } from 'react';
+import type { JSX } from 'solid-js';
 import { DEFAULT_TERMINAL_VIEWPORT } from '../platform/terminal-viewport.js';
-import { type ChatSelectorStore, createChatSelectorStore } from '../state/chat-selector-store.js';
+import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
 import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
 import type { SlashCommandMenuState } from '../state/interactive-chat-command-menu.js';
 import type { FileAutocompleteState } from '../state/interactive-chat-file-autocomplete.js';
 import { resolveSeparatorState } from '../state/separator-state.js';
 import { ChatInputArea } from './ChatInputArea.js';
+import type { ChatTextareaHandle } from './ChatInputTextarea.js';
+import type { ChatScrollboxHandle } from './ChatTranscript.js';
 import { type BottomDockMenuPolicy, bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { FileAutocompletePanel } from './FileAutocompletePanel.js';
 import { QuestionOverlay } from './OverlayPanels.js';
@@ -35,15 +35,15 @@ export type ChatBottomDockSlice = {
 
 export type ChatBottomDockProps = {
     readonly store: ChatStore;
-    readonly textareaRef: React.RefObject<TextareaRenderable | null>;
-    readonly scrollboxRef: React.RefObject<ScrollBoxRenderable | null>;
+    readonly textareaRef: ChatTextareaHandle;
+    readonly scrollboxRef: ChatScrollboxHandle;
     readonly inputFocused?: boolean;
     readonly viewportColumns?: number;
     readonly viewportRows?: number;
     readonly statusBarProps?: StatusBarProps;
     readonly statusLayout?: StatusBarLayout;
     readonly menuPolicy?: BottomDockMenuPolicy;
-    readonly promptAdjacentPanel?: React.ReactNode;
+    readonly promptAdjacentPanel?: JSX.Element;
 };
 
 export type ChatBottomDockBaseProps = ChatBottomDockProps & {
@@ -59,7 +59,7 @@ type StatusPropsInput = {
 type PromptAdjacentPanelsInput = {
     readonly dockSlice: ChatBottomDockSlice;
     readonly menuPolicy: BottomDockMenuPolicy;
-    readonly promptAdjacentPanel: React.ReactNode | undefined;
+    readonly promptAdjacentPanel: JSX.Element | undefined;
 };
 
 const DEFAULT_MENU_POLICY = bottomDockPolicy({ columns: 80, rows: 24 }).menu;
@@ -90,7 +90,7 @@ function renderPromptAdjacentPanels({
     dockSlice,
     menuPolicy,
     promptAdjacentPanel,
-}: PromptAdjacentPanelsInput): React.ReactNode {
+}: PromptAdjacentPanelsInput): JSX.Element | null {
     const showSlashOrWorkflow = dockSlice.inputMirror.startsWith('/') || dockSlice.inputMirror.startsWith('#');
     const showFileAutocomplete = !showSlashOrWorkflow && dockSlice.fileAutocomplete.open;
     const showPolicyMenu = menuPolicy.rows > 0 && (showSlashOrWorkflow || showFileAutocomplete);
@@ -164,7 +164,7 @@ export function ChatBottomDockBase({
     menuPolicy = DEFAULT_MENU_POLICY,
     promptAdjacentPanel,
     dockSlice,
-}: ChatBottomDockBaseProps): React.ReactNode {
+}: ChatBottomDockBaseProps): JSX.Element {
     const statusInput = { statusBarProps, statusLayout, dockSlice };
     const topStatusBarProps = buildTopStatusBarProps(statusInput);
     const bottomStatusBarProps = buildBottomStatusBarProps(statusInput);
@@ -192,11 +192,7 @@ export function ChatBottomDockBase({
     );
 }
 
-export function ChatBottomDock(props: ChatBottomDockProps): React.ReactNode {
-    const selectorStoreRef = useRef<ChatSelectorStore<ChatBottomDockSlice> | null>(null);
-    if (selectorStoreRef.current === null) {
-        selectorStoreRef.current = createChatSelectorStore(props.store, selectChatBottomDockSlice);
-    }
-    const dockSlice = useSyncExternalStore(selectorStoreRef.current.subscribe, selectorStoreRef.current.getSnapshot);
-    return <ChatBottomDockBase {...props} dockSlice={dockSlice} />;
+export function ChatBottomDock(props: ChatBottomDockProps): JSX.Element {
+    const dockSlice = useSolidStoreSelector(props.store, selectChatBottomDockSlice);
+    return <ChatBottomDockBase {...props} dockSlice={dockSlice()} />;
 }

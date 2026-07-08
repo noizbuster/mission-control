@@ -1,4 +1,4 @@
-import { Children, type ElementType, isValidElement, type ReactNode } from 'react';
+import type { JSX } from 'solid-js';
 import { expect } from 'vitest';
 import { createChatStore } from '../state/chat-store.js';
 import type { FileAutocompleteState } from '../state/interactive-chat-file-autocomplete.js';
@@ -17,14 +17,16 @@ export const statusLayout = statusBarLayoutFromPolicy(bottomDockPolicy({ columns
 export const slashFooter = 'Up/Down to navigate, Enter to select, Esc to close';
 export const fileFooter = 'Tab/Enter to complete, Up/Down to navigate, Esc to close';
 
-export function elementChildren(node: ReactNode): readonly ReactNode[] {
-    if (!isValidElement<{ readonly children?: ReactNode }>(node)) {
-        throw new Error('expected a React element with children');
-    }
-    return Children.toArray(node.props.children);
+type TestElement = {
+    readonly type: unknown;
+    readonly props: { readonly children?: JSX.Element } & Record<string, unknown>;
+};
+
+export function elementChildNodes(node: unknown): readonly unknown[] {
+    return childrenArray(testElement(node).props.children);
 }
 
-export function childAt(children: readonly ReactNode[], index: number): ReactNode {
+export function childAt(children: readonly unknown[], index: number): unknown {
     const child = children.at(index);
     if (child === undefined) {
         throw new Error(`missing child at index ${index}`);
@@ -32,12 +34,10 @@ export function childAt(children: readonly ReactNode[], index: number): ReactNod
     return child;
 }
 
-export function propsFor<TProps>(node: ReactNode, type: ElementType<TProps> | string): TProps {
-    if (!isValidElement<TProps>(node)) {
-        throw new Error('expected a React element');
-    }
-    expect(node.type).toBe(type);
-    return node.props;
+export function propsFor<TProps>(node: unknown, type: unknown): TProps {
+    const element = testElement(node);
+    expect(element.type).toBe(type);
+    return element.props as TProps;
 }
 
 export function baseStatusProps(onCopySessionID: () => void = (): void => {}): StatusBarProps {
@@ -75,9 +75,9 @@ export function dockSliceWith(overrides: Partial<ChatBottomDockSlice>): ChatBott
 export function dockNodeForSlice(
     dockSlice: ChatBottomDockSlice,
     menuPolicy: BottomDockMenuPolicy,
-    promptAdjacentPanel?: ReactNode,
+    promptAdjacentPanel?: JSX.Element,
     viewportColumns?: number,
-): ReactNode {
+): unknown {
     const store = createChatStore();
     return ChatBottomDockBase({
         store,
@@ -92,28 +92,28 @@ export function dockNodeForSlice(
     });
 }
 
-export function dockPromptPanelChildren(node: ReactNode): readonly ReactNode[] {
-    const children = elementChildren(node);
-    const panelProps = propsFor<{ readonly children?: ReactNode }>(childAt(children, 1), 'box');
-    return Children.toArray(panelProps.children);
+export function dockPromptPanelNodes(node: unknown): readonly unknown[] {
+    const children = elementChildNodes(node);
+    const panelProps = propsFor<{ readonly children?: JSX.Element }>(childAt(children, 1), 'box');
+    return childrenArray(panelProps.children);
 }
 
-export function firstDockPanelProps<TProps>(node: ReactNode, type: ElementType<TProps>): TProps {
-    const panelChildren = dockPromptPanelChildren(node);
-    expect(panelChildren.length).toBe(1);
-    return propsFor<TProps>(childAt(panelChildren, 0), type);
+export function firstDockPanelProps<TProps>(node: unknown, type: unknown): TProps {
+    const panelNodes = dockPromptPanelNodes(node);
+    expect(panelNodes.length).toBe(1);
+    return propsFor<TProps>(childAt(panelNodes, 0), type);
 }
 
-export function overlayFrameProps(node: ReactNode): OverlayFrameProps {
+export function overlayFrameProps(node: unknown): OverlayFrameProps {
     return propsFor<OverlayFrameProps>(node, OverlayFrame);
 }
 
-export function slashChoiceRowCount(node: ReactNode): number {
-    return Math.max(0, Children.toArray(overlayFrameProps(node).children).length - 1);
+export function slashChoiceRowCount(node: unknown): number {
+    return Math.max(0, childrenArray(overlayFrameProps(node).children).length - 1);
 }
 
-export function fileChoiceRowCount(node: ReactNode): number {
-    return Children.toArray(overlayFrameProps(node).children).length;
+export function fileChoiceRowCount(node: unknown): number {
+    return childrenArray(overlayFrameProps(node).children).length;
 }
 
 export function expectMenuPolicyProps(
@@ -121,4 +121,24 @@ export function expectMenuPolicyProps(
     policy: BottomDockMenuPolicy,
 ): void {
     expect([props.maxVisibleRows, props.showFooter]).toEqual([policy.rows, policy.showPanelFooter]);
+}
+
+function testElement(node: unknown): TestElement {
+    if (!isTestElement(node)) {
+        throw new Error('expected a Solid test element');
+    }
+    return node;
+}
+
+function childrenArray(children: JSX.Element | undefined): readonly unknown[] {
+    if (children === undefined || children === null || typeof children === 'boolean') return [];
+    return Array.isArray(children) ? children : [children];
+}
+
+function isTestElement(value: unknown): value is TestElement {
+    return isRecord(value) && 'type' in value && isRecord(value['props']);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
 }

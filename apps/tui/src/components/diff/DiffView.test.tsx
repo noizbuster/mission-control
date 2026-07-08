@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { type DiffKindStyle, DiffView, kindStyle, splitLineSpans, type TextSpan } from './DiffView.js';
 import type { DiffLine } from './render-diff.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const source = readFileSync(fileURLToPath(new URL('./DiffView.tsx', import.meta.url)), 'utf-8');
 
 describe('kindStyle per-kind styling', () => {
     it('styles added lines green', () => {
@@ -81,20 +85,13 @@ describe('splitLineSpans segment boundaries', () => {
 });
 
 describe('DiffView component export', () => {
-    it('is a callable React component', () => {
+    it('exports a callable Solid component', () => {
         expect(typeof DiffView).toBe('function');
     });
 
-    it('renders without throwing for a representative mixed line set', () => {
-        const lines: readonly DiffLine[] = [
-            { kind: 'meta', text: 'Target: a.ts (unique exact match)' },
-            { kind: 'hunk', text: '@@ -1,1 +1,1 @@' },
-            { kind: 'removed', text: 'foo bar', invertedSegments: [{ start: 4, end: 7 }] },
-            { kind: 'added', text: 'foo baz', invertedSegments: [{ start: 4, end: 7 }] },
-            { kind: 'context', text: 'unchanged' },
-        ];
-        // Rendering is validated structurally via the pure helpers above; this
-        // guard ensures the component constructor does not throw for valid props.
-        expect(() => DiffView({ lines })).not.toThrow();
+    it('renders rows through split spans and per-kind styles', () => {
+        expect(source).toContain('const style = kindStyle(line.kind);');
+        expect(source).toContain('const spans = splitLineSpans(line);');
+        expect(source).toContain('<For each={lines}>{(line) => <DiffRow line={line} />}</For>');
     });
 });

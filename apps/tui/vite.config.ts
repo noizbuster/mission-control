@@ -1,6 +1,8 @@
-import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
+import { fileURLToPath } from 'node:url';
+
+const coreTestShim = sourceEntry('./test-support/core-test-shim.ts');
 
 const entryPoints = {
     index: sourceEntry('./src/index.ts'),
@@ -56,7 +58,7 @@ function isExternalDependency(id: string): boolean {
     return externalPackages.some((packageName) => id === packageName || id.startsWith(`${packageName}/`));
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
     plugins: [
         solidPlugin({
             solid: {
@@ -75,6 +77,7 @@ export default defineConfig({
             },
         }),
     ],
+    resolve: mode === 'test' ? { alias: { '@mission-control/core': coreTestShim } } : undefined,
     build: {
         outDir: 'dist',
         emptyOutDir: true,
@@ -92,4 +95,4 @@ export default defineConfig({
             },
         },
     },
-});
+}));

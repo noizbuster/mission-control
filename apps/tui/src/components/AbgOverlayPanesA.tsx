@@ -1,7 +1,7 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
 
 import { truncateTerminalText } from '@mission-control/tui';
-import type React from 'react';
+import { For, type JSX } from 'solid-js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import type { AbgOverlayState } from '../state/abg-overlay-state.js';
 import { graphStatusTheme, nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
@@ -48,7 +48,7 @@ const yellowFg = '#ffff00';
 const redFg = '#ff0000';
 const focusedStyle = { fg: cyanFg, bold: true };
 
-export function OverviewPane({ state, modelLabel }: PaneProps): React.ReactNode {
+export function OverviewPane({ state, modelLabel }: PaneProps): JSX.Element {
     if (isEmptyState(state)) {
         return (
             <box flexDirection="column" marginTop={1}>
@@ -88,23 +88,27 @@ export function OverviewPane({ state, modelLabel }: PaneProps): React.ReactNode 
                         <text {...boldAttrs}>{`Graphs (${knownGraphs.length})  `}</text>
                         <text {...dimAttrs}>press 'g' to cycle focus</text>
                     </box>
-                    {knownGraphs.map((summary) => {
-                        const isFocused = summary.graphId === state.focusedGraphId;
-                        const themeFg = graphStatusTheme(summary.status).foreground;
-                        const graphFg = themeFg !== STATUS_FG_GRAY ? themeFg : undefined;
-                        return (
-                            <box key={summary.graphId} flexDirection="row">
-                                <text {...(isFocused ? focusedStyle : dimAttrs)}>{isFocused ? '▸ ' : '  '}</text>
-                                <text {...(graphFg !== undefined ? { fg: graphFg } : dimAttrs)}>{summary.status}</text>
-                                <text> </text>
-                                <text {...(isFocused ? boldAttrs : {})}>{truncate(summary.graphId, 30)}</text>
-                                <text {...dimAttrs}> events={summary.eventCount}</text>
-                                {summary.parentGraphId !== undefined ? (
-                                    <text {...dimAttrs}> ← {truncate(summary.parentGraphId, 20)}</text>
-                                ) : null}
-                            </box>
-                        );
-                    })}
+                    <For each={knownGraphs}>
+                        {(summary) => {
+                            const isFocused = summary.graphId === state.focusedGraphId;
+                            const themeFg = graphStatusTheme(summary.status).foreground;
+                            const graphFg = themeFg !== STATUS_FG_GRAY ? themeFg : undefined;
+                            return (
+                                <box flexDirection="row">
+                                    <text {...(isFocused ? focusedStyle : dimAttrs)}>{isFocused ? '▸ ' : '  '}</text>
+                                    <text {...(graphFg !== undefined ? { fg: graphFg } : dimAttrs)}>
+                                        {summary.status}
+                                    </text>
+                                    <text> </text>
+                                    <text {...(isFocused ? boldAttrs : {})}>{truncate(summary.graphId, 30)}</text>
+                                    <text {...dimAttrs}> events={summary.eventCount}</text>
+                                    {summary.parentGraphId !== undefined ? (
+                                        <text {...dimAttrs}> ← {truncate(summary.parentGraphId, 20)}</text>
+                                    ) : null}
+                                </box>
+                            );
+                        }}
+                    </For>
                 </box>
             ) : null}
             {state.lastError !== undefined ? (
@@ -114,46 +118,31 @@ export function OverviewPane({ state, modelLabel }: PaneProps): React.ReactNode 
             ) : null}
             <box flexDirection="column" marginTop={1}>
                 <text {...boldAttrs}>Live Output:</text>
-                {liveOutputLines.map((line: string, idx: number) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: live output lines are append-only
-                    <text key={idx} {...dimAttrs}>
-                        {line}
-                    </text>
-                ))}
+                <For each={liveOutputLines}>{(line) => <text {...dimAttrs}>{line}</text>}</For>
             </box>
         </box>
     );
 }
 
-function renderVisualRow(row: VisualGraphRow, idx: number, spinnerGlyph: string): React.ReactNode {
+function renderVisualRow(row: VisualGraphRow, spinnerGlyph: string): JSX.Element {
     if (row.kind === 'connector') {
         const text = row.segments.map((segment) => segment.text).join('');
-        return (
-            <text key={`vis-${idx}`} {...dimAttrs}>
-                {text}
-            </text>
-        );
+        return <text {...dimAttrs}>{text}</text>;
     }
     return (
-        <box key={`vis-${idx}`} flexDirection="row">
-            {row.segments.map((segment, segIdx) => {
-                const fg = segment.status !== undefined ? nodeStatusTheme(segment.status).foreground : undefined;
-                return (
-                    <text
-                        // biome-ignore lint/suspicious/noArrayIndexKey: segments are positional and stable per node row
-                        key={`seg-${segIdx}`}
-                        {...(fg !== undefined ? { fg } : dimAttrs)}
-                    >
-                        {segment.text}
-                    </text>
-                );
-            })}
+        <box flexDirection="row">
+            <For each={row.segments}>
+                {(segment) => {
+                    const fg = segment.status !== undefined ? nodeStatusTheme(segment.status).foreground : undefined;
+                    return <text {...(fg !== undefined ? { fg } : dimAttrs)}>{segment.text}</text>;
+                }}
+            </For>
             {row.isActive ? <text {...(yellowFg !== undefined ? { fg: yellowFg } : {})}> {spinnerGlyph}</text> : null}
         </box>
     );
 }
 
-export function GraphPane({ state, viewport }: GraphPaneProps): React.ReactNode {
+export function GraphPane({ state, viewport }: GraphPaneProps): JSX.Element {
     const { glyph: spinnerGlyph } = useSpinnerFrame();
     if (isEmptyState(state)) {
         return (
@@ -188,34 +177,38 @@ export function GraphPane({ state, viewport }: GraphPaneProps): React.ReactNode 
         <box flexDirection="column" marginTop={1}>
             <text {...boldAttrs}>{graphId}</text>
             <scrollbox marginLeft={2} maxHeight={graphMaxHeight} stickyScroll>
-                {visual.rows.map((row, idx) => renderVisualRow(row, idx, spinnerGlyph))}
+                <For each={visual.rows}>{(row) => renderVisualRow(row, spinnerGlyph)}</For>
             </scrollbox>
             {childGraphs.length > 0 ? (
                 <box marginTop={1} flexDirection="column">
                     <text {...boldAttrs} {...dimAttrs}>
                         Child Graphs ({childGraphs.length})
                     </text>
-                    {childGraphs.map((child) => {
-                        const themeFg = graphStatusTheme(child.status).foreground;
-                        const childFg = themeFg !== STATUS_FG_GRAY ? themeFg : undefined;
-                        return (
-                            <box key={child.graphId} flexDirection="row" marginLeft={2}>
-                                <text {...dimAttrs}>↳</text>
-                                <text> </text>
-                                <text {...(childFg !== undefined ? { fg: childFg } : dimAttrs)}>{child.status}</text>
-                                <text> </text>
-                                <text>{truncate(child.graphId, 30)}</text>
-                                <text {...dimAttrs}> events={child.eventCount}</text>
-                            </box>
-                        );
-                    })}
+                    <For each={childGraphs}>
+                        {(child) => {
+                            const themeFg = graphStatusTheme(child.status).foreground;
+                            const childFg = themeFg !== STATUS_FG_GRAY ? themeFg : undefined;
+                            return (
+                                <box flexDirection="row" marginLeft={2}>
+                                    <text {...dimAttrs}>↳</text>
+                                    <text> </text>
+                                    <text {...(childFg !== undefined ? { fg: childFg } : dimAttrs)}>
+                                        {child.status}
+                                    </text>
+                                    <text> </text>
+                                    <text>{truncate(child.graphId, 30)}</text>
+                                    <text {...dimAttrs}> events={child.eventCount}</text>
+                                </box>
+                            );
+                        }}
+                    </For>
                 </box>
             ) : null}
         </box>
     );
 }
 
-export function NodesPane({ state }: PaneProps): React.ReactNode {
+export function NodesPane({ state }: PaneProps): JSX.Element {
     if (isEmptyState(state)) {
         return (
             <box flexDirection="column" marginTop={1}>
@@ -238,20 +231,22 @@ export function NodesPane({ state }: PaneProps): React.ReactNode {
                     <text {...dimAttrs}>(no nodes)</text>
                 </box>
             ) : (
-                nodes.map(([nodeId, status]) => {
-                    const nodeTheme = nodeStatusTheme(status);
-                    const fg = nodeTheme.foreground;
-                    const glyph = nodeTheme.glyph;
-                    return (
-                        <box key={nodeId} flexDirection="row">
-                            <text {...(fg !== undefined ? { fg } : dimAttrs)}>{glyph}</text>
-                            <text> </text>
-                            <text>{truncate(nodeId, 10)}</text>
-                            <text> </text>
-                            <text {...(fg !== undefined ? { fg } : dimAttrs)}>[{status}]</text>
-                        </box>
-                    );
-                })
+                <For each={nodes}>
+                    {([nodeId, status]) => {
+                        const nodeTheme = nodeStatusTheme(status);
+                        const fg = nodeTheme.foreground;
+                        const glyph = nodeTheme.glyph;
+                        return (
+                            <box flexDirection="row">
+                                <text {...(fg !== undefined ? { fg } : dimAttrs)}>{glyph}</text>
+                                <text> </text>
+                                <text>{truncate(nodeId, 10)}</text>
+                                <text> </text>
+                                <text {...(fg !== undefined ? { fg } : dimAttrs)}>[{status}]</text>
+                            </box>
+                        );
+                    }}
+                </For>
             )}
         </box>
     );

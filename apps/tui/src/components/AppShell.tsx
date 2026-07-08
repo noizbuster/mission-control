@@ -1,45 +1,18 @@
-/** @jsxImportSource @opentui/react */
-import { Component, type ErrorInfo, type ReactNode } from 'react';
-
-/**
- * Error boundary + context wrapper for the opentui render path.
- *
- * Mirrors the terminal-renderer cleanup contract:
- * when a descendant throws, this boundary catches it, writes the stack to
- * stderr (opentui owns stdout), and renders a red fallback `<text>` so the
- * user sees the error before the process exits.
- *
- * The per-file `@jsxImportSource @opentui/react` pragma loads the opentui JSX
- * namespace so lowercase intrinsics (`<text>`) typecheck. At runtime the
- * opentui jsx-runtime re-exports React's `jsx`/`jsxs` unchanged, so the
- * compiled output is identical to React's automatic runtime.
- */
+/** @jsxImportSource @opentui/solid */
+import { ErrorBoundary, type JSX } from 'solid-js';
 
 interface AppShellProps {
-    readonly children: ReactNode;
+    readonly children: JSX.Element;
 }
 
-interface AppShellState {
-    readonly hasError: boolean;
-    readonly error?: Error;
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : 'unknown';
 }
 
-export class AppShell extends Component<AppShellProps, AppShellState> {
-    constructor(props: AppShellProps) {
-        super(props);
-        this.state = { hasError: false };
-    }
+function ErrorFallback(props: { readonly error: unknown }): JSX.Element {
+    return <text fg="#ff0000">{`Fatal error: ${errorMessage(props.error)}`}</text>;
+}
 
-    static getDerivedStateFromError(error: Error): AppShellState {
-        return { hasError: true, error };
-    }
-
-    override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {}
-
-    override render(): ReactNode {
-        if (this.state.hasError) {
-            return <text fg="#ff0000">{`Fatal error: ${this.state.error?.message ?? 'unknown'}`}</text>;
-        }
-        return this.props.children;
-    }
+export function AppShell(props: AppShellProps): JSX.Element {
+    return <ErrorBoundary fallback={(error) => <ErrorFallback error={error} />}>{props.children}</ErrorBoundary>;
 }

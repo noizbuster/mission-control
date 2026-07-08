@@ -1,11 +1,10 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
 
 import { type ChatBlock, extractLastAssistantText, parseMessageBlocks } from '@mission-control/tui/chat';
 import { type ScrollBoxRenderable, TextAttributes, type TextareaRenderable } from '@opentui/core';
-import { useKeymap } from '@opentui/keymap/react';
-import { useKeyboard, useRenderer } from '@opentui/react';
-import type * as React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useKeymap } from '@opentui/keymap/solid';
+import { useKeyboard, useRenderer } from '@opentui/solid';
+import { type Accessor, createEffect, createMemo, createSignal, type JSX, onCleanup, onMount } from 'solid-js';
 import { createClipboardService } from '../platform/clipboard-service.js';
 import {
     buildDiffViewerModel,
@@ -19,6 +18,7 @@ import {
 import { hardResetRendererSurface } from '../platform/opentui-renderer.js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import { useTerminalViewport } from '../platform/terminal-viewport-solid.js';
+import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
 import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
 import type { ChatAppActions } from '../state/chat-app-actions.js';
 import type { ChatStore } from '../state/chat-store.js';
@@ -31,7 +31,8 @@ import type { WelcomeData } from '../state/welcome-data-types.js';
 import { AbgMinimap } from './AbgMinimap.js';
 import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from './AbgOverlay.js';
 import { ChatBottomDock } from './ChatBottomDock.js';
-import { ChatTranscript } from './ChatTranscript.js';
+import { type ChatTextareaHandle } from './ChatInputTextarea.js';
+import { type ChatScrollboxHandle, ChatTranscript } from './ChatTranscript.js';
 import { type BottomDockPolicy, bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { MissionPanelOverlay } from './MissionPanelOverlay.js';
 import { ModelsOverlay } from './ModelsOverlay.js';
@@ -52,7 +53,7 @@ import { basename } from 'node:path';
 
 /**
  * Reuse previous block references when content (kind + element-wise lines) is unchanged.
- * Precondition for React.memo on MessageBlock: without reference stability, memo never skips.
+ * Precondition for memoized MessageBlock rendering: without reference stability, memo never skips.
  */
 export function preserveBlockReferences(fresh: readonly ChatBlock[], prev: readonly ChatBlock[]): readonly ChatBlock[] {
     return fresh.map((block, i) => {
@@ -72,15 +73,17 @@ export function preserveBlockReferences(fresh: readonly ChatBlock[], prev: reado
 // Two memos: outer avoids re-parsing when outputText is stable (overlay toggles);
 // inner avoids re-comparing when the parse result is stable. prevRef holds the last
 // stable result for the next comparison.
-function useStableMessageBlocks(outputText: string): readonly ChatBlock[] {
-    const prevRef = useRef<readonly ChatBlock[]>([]);
-    const fresh = useMemo(() => parseMessageBlocks(outputText), [outputText]);
-    const stable = useMemo(() => preserveBlockReferences(fresh, prevRef.current), [fresh]);
-    prevRef.current = stable;
-    return stable;
+function createStableMessageBlocks(outputText: Accessor<string>): Accessor<readonly ChatBlock[]> {
+    let previous: readonly ChatBlock[] = [];
+    return createMemo(() => {
+        const fresh = parseMessageBlocks(outputText());
+        const stable = preserveBlockReferences(fresh, previous);
+        previous = stable;
+        return stable;
+    });
 }
 
-function AgentSpinner({ text }: { readonly text: string }): React.ReactNode {
+function AgentSpinner({ text }: { readonly text: string }): JSX.Element {
     const { glyph } = useSpinnerFrame();
     return (
         <box marginTop={1} flexShrink={0}>
@@ -131,9 +134,9 @@ export type ChatAppSplitShellProps = {
     readonly width: number;
     readonly height: number;
     readonly onMouseUp: () => void;
-    readonly upperOutputRegion: React.ReactNode;
-    readonly bottomDock: React.ReactNode;
-    readonly modalOverlays: React.ReactNode;
+    readonly upperOutputRegion: JSX.Element;
+    readonly bottomDock: JSX.Element;
+    readonly modalOverlays: JSX.Element;
 };
 
 export function ChatAppSplitShell({
@@ -143,7 +146,7 @@ export function ChatAppSplitShell({
     upperOutputRegion,
     bottomDock,
     modalOverlays,
-}: ChatAppSplitShellProps): React.ReactNode {
+}: ChatAppSplitShellProps): JSX.Element {
     return (
         // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive, not a DOM element; mouse-up only surfaces the copy-hint toast.
         <box flexDirection="column" width={width} height={height} shouldFill={true} onMouseUp={onMouseUp}>
@@ -158,8 +161,8 @@ export function ChatAppSplitShell({
 
 export type ChatAppProps = {
     readonly store: ChatStore;
-    readonly textareaRef: React.RefObject<TextareaRenderable | null>;
-    readonly scrollboxRef: React.RefObject<ScrollBoxRenderable | null>;
+    readonly textareaRef: (renderable: TextareaRenderable) => void;
+    readonly scrollboxRef: (renderable: ScrollBoxRenderable) => void;
     readonly statusBarProps?: StatusBarProps;
     readonly welcomeData?: WelcomeData;
     readonly abgOverlayController?: AbgOverlayController;
@@ -176,113 +179,127 @@ export function ChatApp({
     abgOverlayController,
     missionControlServices,
     actions,
-}: ChatAppProps): React.ReactNode {
-    const subscribe = useCallback((cb: () => void) => store.subscribe(cb), [store]);
-    const getSnapshot = useCallback(() => store.getSnapshot(), [store]);
-    const snapshot = useSyncExternalStore(subscribe, getSnapshot);
+}: ChatAppProps): JSX.Element {
+    const snapshot = useSolidStoreSelector(store, (state) => state);
+    let textarea: TextareaRenderable | undefined;
+    let scrollbox: ScrollBoxRenderable | undefined;
+    const textareaHandle: ChatTextareaHandle = {
+        get: () => textarea,
+        set: (renderable) => {
+            textarea = renderable;
+            textareaRef(renderable);
+        },
+    };
+    const scrollboxHandle: ChatScrollboxHandle = {
+        get: () => scrollbox,
+        set: (renderable) => {
+            scrollbox = renderable;
+            scrollboxRef(renderable);
+        },
+    };
+    const keymapScrollboxRef = {
+        get current(): ScrollBoxRenderable | null {
+            return scrollbox ?? null;
+        },
+    };
 
     // Seeded from persisted prefs so a user's last tab/scroll survives an overlay reopen.
     const initialPrefs = store.getAbgOverlayPrefsSnapshot();
-    const [abgActiveTab, setAbgActiveTab] = useState<number>(initialPrefs.activeTabIndex);
-    const [abgScrollOffset, setAbgScrollOffset] = useState<number>(initialPrefs.scrollOffset);
+    const [abgActiveTab, setAbgActiveTab] = createSignal(initialPrefs.activeTabIndex);
+    const [abgScrollOffset, setAbgScrollOffset] = createSignal(initialPrefs.scrollOffset);
 
     const keymap = useKeymap();
     const renderer = useRenderer();
     const viewport = useTerminalViewport();
-    const viewportRowsRef = useRef(viewport.rows);
-    viewportRowsRef.current = viewport.rows;
-    const viewportLayout = useMemo(() => chatAppViewportLayout(viewport), [viewport]);
-    const shellWidth = viewportLayout.width;
-    const shellHeight = viewportLayout.height;
-    const dockPolicy = viewportLayout.dockPolicy;
-    const promptMenuInteractionsEnabled = viewportLayout.promptMenuInteractionsEnabled;
-    const dockStatusLayout = useMemo(() => statusBarLayoutFromPolicy(dockPolicy), [dockPolicy]);
+    let viewportRows = viewport.rows;
+    const viewportLayout = createMemo(() => chatAppViewportLayout(viewport));
+    const shellWidth = createMemo(() => viewportLayout().width);
+    const shellHeight = createMemo(() => viewportLayout().height);
+    const dockPolicy = createMemo(() => viewportLayout().dockPolicy);
+    const promptMenuInteractionsEnabled = createMemo(() => viewportLayout().promptMenuInteractionsEnabled);
+    const dockStatusLayout = createMemo(() => statusBarLayoutFromPolicy(dockPolicy()));
 
     // Transient toast (e.g. the selection-copy hint). Local state — presentational,
     // does not flow through ChatStore. Auto-dismisses; re-showing resets the timer.
-    const [toast, setToast] = useState<string | null>(null);
-    const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const showToast = useCallback((message: string): void => {
+    const [toast, setToast] = createSignal<string | null>(null);
+    let toastTimer: ReturnType<typeof setTimeout> | undefined;
+    const showToast = (message: string): void => {
         setToast(message);
-        if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = setTimeout(() => {
+        if (toastTimer !== undefined) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
             setToast(null);
-            toastTimerRef.current = null;
+            toastTimer = undefined;
         }, 3000);
-    }, []);
-    useEffect(() => {
-        return (): void => {
-            if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
-        };
-    }, []);
+    };
+    onCleanup(() => {
+        if (toastTimer !== undefined) clearTimeout(toastTimer);
+    });
 
-    const noticeId = snapshot.transientNotice?.id;
-    const noticeMessage = snapshot.transientNotice?.message;
-    useEffect(() => {
+    createEffect(() => {
+        const noticeId = snapshot().transientNotice?.id;
+        const noticeMessage = snapshot().transientNotice?.message;
         if (noticeId !== undefined && noticeMessage !== undefined) {
             showToast(noticeMessage);
         }
-    }, [noticeId, noticeMessage, showToast]);
+    });
 
     // Read-only mouse-up hook: when a drag-selection exists, surface the
     // keyboard-copy hint. The copy itself stays keyboard-only (Ctrl+D).
-    const handleSelectionMouseUp = useCallback((): void => {
+    const handleSelectionMouseUp = (): void => {
         const selection = renderer.getSelection();
         if (selection === null) return;
         if (selection.getSelectedText().length === 0) return;
         showToast('Copy selection: Ctrl+D');
-    }, [renderer, showToast]);
+    };
 
-    const handleSubmitRef = useRef<() => void>(() => {});
-    const submittingRef = useRef(false);
+    let handleSubmit = (): void => {};
+    let submitting = false;
 
     // Wire the submit handler the chat.submit keymap layer (T3) invokes. The
     // keymap owns the return/kpenter chord (native keyBindings are suspended),
     // so this is the sole Enter-submit path. Mirrors ChatInputArea.handleSubmit's
     // IME-safe double-defer + re-entrancy guard + empty check.
-    useEffect(() => {
-        handleSubmitRef.current = (): void => {
-            if (submittingRef.current) return;
-            submittingRef.current = true;
-            const captured = textareaRef.current?.plainText ?? '';
+    handleSubmit = (): void => {
+        if (submitting) return;
+        submitting = true;
+        const captured = textareaHandle.get()?.plainText ?? '';
+        setTimeout(() => {
             setTimeout(() => {
-                setTimeout(() => {
-                    try {
-                        if (captured.trim() === '') return;
-                        const snap = store.getSnapshot();
-                        if (promptMenuInteractionsEnabled && captured.startsWith('#')) {
-                            const insertText = resolveWorkflowCommandMenuInsertText(
-                                captured,
-                                snap.menuState,
-                                snap.workflowNames,
-                            );
-                            if (insertText !== undefined) {
-                                textareaRef.current?.setText(insertText);
-                                textareaRef.current?.gotoBufferEnd();
-                                store.setInputMirror(insertText);
-                                return;
-                            }
+                try {
+                    if (captured.trim() === '') return;
+                    const snap = store.getSnapshot();
+                    if (promptMenuInteractionsEnabled() && captured.startsWith('#')) {
+                        const insertText = resolveWorkflowCommandMenuInsertText(
+                            captured,
+                            snap.menuState,
+                            snap.workflowNames,
+                        );
+                        if (insertText !== undefined) {
+                            textareaHandle.get()?.setText(insertText);
+                            textareaHandle.get()?.gotoBufferEnd();
+                            store.setInputMirror(insertText);
+                            return;
                         }
-
-                        if (promptMenuInteractionsEnabled && captured.startsWith('/')) {
-                            const insertText = resolveSlashCommandMenuInsertText(captured, snap.menuState);
-                            if (insertText !== undefined && insertText.trimEnd() !== captured.trimEnd()) {
-                                textareaRef.current?.setText(insertText);
-                                textareaRef.current?.gotoBufferEnd();
-                                store.setInputMirror(insertText);
-                                return;
-                            }
-                        }
-
-                        store.submitLine(captured);
-                        textareaRef.current?.clear();
-                    } finally {
-                        submittingRef.current = false;
                     }
-                }, 0);
+
+                    if (promptMenuInteractionsEnabled() && captured.startsWith('/')) {
+                        const insertText = resolveSlashCommandMenuInsertText(captured, snap.menuState);
+                        if (insertText !== undefined && insertText.trimEnd() !== captured.trimEnd()) {
+                            textareaHandle.get()?.setText(insertText);
+                            textareaHandle.get()?.gotoBufferEnd();
+                            store.setInputMirror(insertText);
+                            return;
+                        }
+                    }
+
+                    store.submitLine(captured);
+                    textareaHandle.get()?.clear();
+                } finally {
+                    submitting = false;
+                }
             }, 0);
-        };
-    }, [promptMenuInteractionsEnabled, store, textareaRef]);
+        }, 0);
+    };
 
     useKeyboard((key) => {
         const isCtrlC = key.ctrl && key.name === 'c';
@@ -293,9 +310,9 @@ export function ChatApp({
                 store.sendInterrupt('ctrl-c');
                 return;
             }
-            const text = textareaRef.current?.plainText ?? snap.inputMirror;
+            const text = textareaHandle.get()?.plainText ?? snap.inputMirror;
             if (text.length > 0) {
-                textareaRef.current?.clear();
+                textareaHandle.get()?.clear();
                 store.setInputMirror('');
                 return;
             }
@@ -306,7 +323,7 @@ export function ChatApp({
         // (in ChatInputArea) owns chords like Ctrl+G. Without this guard, the opening
         // Ctrl+G would double-toggle: textarea opens the overlay, then this sink reads
         // the updated snapshot and immediately closes it.
-        if (textareaRef.current?.focused) {
+        if (textareaHandle.get()?.focused) {
             return;
         }
         const snap = store.getSnapshot();
@@ -386,14 +403,14 @@ export function ChatApp({
     });
 
     // Managed textarea + chat submit layer (T3): suspends native keyBindings so keys are not double-processed; dynamically imported to keep @opentui/keymap FFI out of --no-tui.
-    useEffect(() => {
+    onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
         void import('../platform/keymap/keymap-managed-layer.js').then(
             ({ registerChatSubmitLayer, registerManagedTextareaComposition }) => {
                 if (disposed) return;
                 const offComposition = registerManagedTextareaComposition(keymap, renderer);
-                const submitHandler = (): void => handleSubmitRef.current();
+                const submitHandler = (): void => handleSubmit();
                 const offSubmit = registerChatSubmitLayer(keymap, renderer, submitHandler);
                 cleanup = (): void => {
                     offSubmit();
@@ -401,24 +418,24 @@ export function ChatApp({
                 };
             },
         );
-        return (): void => {
+        onCleanup(() => {
             disposed = true;
             cleanup?.();
-        };
-    }, [keymap, renderer]);
+        });
+    });
 
     // menu-navigation layer: priority 200 shadows the managed textarea layer for
     // Up/Down while a `/`, `#`, or `@`-file autocomplete menu is open. Without it
     // the textarea layer binds arrows to cursor movement and returns handled,
     // stopping propagation before ChatInputArea.handleKeyDown can navigate menus.
-    useEffect(() => {
+    onMount(() => {
         const offLayer = keymap.registerLayer({
             priority: 200,
             enabled: (): boolean => {
-                if (!promptMenuInteractionsEnabled) {
+                if (!promptMenuInteractionsEnabled()) {
                     return false;
                 }
-                const text = textareaRef.current?.plainText ?? '';
+                const text = textareaHandle.get()?.plainText ?? '';
                 if (text.startsWith('/') || text.startsWith('#')) {
                     const token = text.slice(1);
                     return !token.includes(' ') && !token.includes('\n') && !token.includes('\t');
@@ -430,7 +447,7 @@ export function ChatApp({
                 {
                     name: 'menu.up',
                     run: () => {
-                        const text = textareaRef.current?.plainText ?? '';
+                        const text = textareaHandle.get()?.plainText ?? '';
                         const snap = store.getSnapshot();
                         if (text.startsWith('/')) {
                             store.navigateSlashMenu('up');
@@ -445,7 +462,7 @@ export function ChatApp({
                 {
                     name: 'menu.down',
                     run: () => {
-                        const text = textareaRef.current?.plainText ?? '';
+                        const text = textareaHandle.get()?.plainText ?? '';
                         const snap = store.getSnapshot();
                         if (text.startsWith('/')) {
                             store.navigateSlashMenu('down');
@@ -463,11 +480,11 @@ export function ChatApp({
                 { key: 'down', cmd: 'menu.down' },
             ],
         });
-        return offLayer;
-    }, [keymap, promptMenuInteractionsEnabled, store, textareaRef]);
+        onCleanup(offLayer);
+    });
 
     // messages.* scroll + copy layer (T10): SESSION-scoped (not textarea-gated); clipboard built from the renderer (OSC52 via opentui native core).
-    useEffect(() => {
+    onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
         void import('../platform/keymap/messages-scroll.js').then(({ registerMessagesScrollLayer }) => {
@@ -475,9 +492,9 @@ export function ChatApp({
             cleanup = registerMessagesScrollLayer(
                 keymap,
                 {
-                    scrollboxRef,
+                    scrollboxRef: keymapScrollboxRef,
                     clipboardService: createClipboardService(renderer),
-                    getViewportRows: () => viewportRowsRef.current,
+                    getViewportRows: () => viewportRows,
                     getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
                     getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
                     clearSelection: () => renderer.clearSelection(),
@@ -485,16 +502,16 @@ export function ChatApp({
                 { isEnabled: () => store.getSnapshot().overlayMode === 'none' },
             );
         });
-        return (): void => {
+        onCleanup(() => {
             disposed = true;
             cleanup?.();
-        };
-    }, [keymap, renderer, scrollboxRef, store]);
+        });
+    });
 
     // selection.copy layer: high-priority + selection-gated, so the default
     // ctrl+d copies a drag-selection but still deletes a char when nothing is
     // selected. Same OSC52 path + deps as the scroll layer above.
-    useEffect(() => {
+    onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
         void import('../platform/keymap/messages-scroll.js').then(({ registerSelectionCopyLayer }) => {
@@ -502,9 +519,9 @@ export function ChatApp({
             cleanup = registerSelectionCopyLayer(
                 keymap,
                 {
-                    scrollboxRef,
+                    scrollboxRef: keymapScrollboxRef,
                     clipboardService: createClipboardService(renderer),
-                    getViewportRows: () => viewportRowsRef.current,
+                    getViewportRows: () => viewportRows,
                     getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
                     getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
                     clearSelection: () => renderer.clearSelection(),
@@ -512,14 +529,14 @@ export function ChatApp({
                 { isEnabled: () => store.getSnapshot().overlayMode === 'none' },
             );
         });
-        return (): void => {
+        onCleanup(() => {
             disposed = true;
             cleanup?.();
-        };
-    }, [keymap, renderer, scrollboxRef, store]);
+        });
+    });
 
     // model-shortcuts layer (T11): F2/leader+N; selectModel routes through store.onModelCycleSelect (same path as Ctrl+P).
-    useEffect(() => {
+    onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
         void import('../platform/keymap/model-favorites.js').then(
@@ -542,14 +559,14 @@ export function ChatApp({
                 });
             },
         );
-        return (): void => {
+        onCleanup(() => {
             disposed = true;
             cleanup?.();
-        };
-    }, [keymap, store]);
+        });
+    });
 
     // session-shortcuts layer (T12): session-tree nav + prompt stash; priority -100 so bare arrows yield to editing while focused.
-    useEffect(() => {
+    onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
         void import('../platform/keymap/session-shortcuts.js').then(({ registerSessionShortcutsLayer }) => {
@@ -559,16 +576,16 @@ export function ChatApp({
                 {
                     navigateSessionTree: () => store.sendSlashCommand('/tree'),
                     captureInput: () => ({
-                        text: textareaRef.current?.plainText ?? '',
-                        cursor: textareaRef.current?.cursorOffset ?? 0,
+                        text: textareaHandle.get()?.plainText ?? '',
+                        cursor: textareaHandle.get()?.cursorOffset ?? 0,
                     }),
                     clearInput: () => {
-                        textareaRef.current?.clear();
+                        textareaHandle.get()?.clear();
                         store.setInputMirror('');
                     },
                     restoreInput: (entry) => {
-                        const textarea = textareaRef.current;
-                        if (textarea !== null) {
+                        const textarea = textareaHandle.get();
+                        if (textarea !== undefined) {
                             textarea.setText(entry.text);
                             textarea.cursorOffset = entry.cursor;
                         }
@@ -581,14 +598,14 @@ export function ChatApp({
                 { isEnabled: () => store.getSnapshot().overlayMode === 'none' },
             );
         });
-        return (): void => {
+        onCleanup(() => {
             disposed = true;
             cleanup?.();
-        };
-    }, [keymap, store, textareaRef]);
+        });
+    });
 
     // message undo/redo layer (T15): leader+u/r hides/restores the last exchange in the VIEW only (durable session store untouched); single-level.
-    useEffect(() => {
+    onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
         void import('../platform/keymap/message-undo-redo.js').then(({ registerMessageUndoRedoLayer }) => {
@@ -602,16 +619,16 @@ export function ChatApp({
                 },
             });
         });
-        return (): void => {
+        onCleanup(() => {
             disposed = true;
             cleanup?.();
-        };
-    }, [keymap, store]);
+        });
+    });
 
     // ABG minimap toggle layer: <leader>g (Ctrl+X then G) toggles the compact
     // upper-right minimap. Enabled only when no overlay is active so the chord
     // does not fire inside the full ABG overlay (which has its own Ctrl+G close).
-    useEffect(() => {
+    onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
         void import('../platform/keymap/leader-addons.js').then(({ registerAbgMinimapToggleLayer }) => {
@@ -621,21 +638,23 @@ export function ChatApp({
                 isEnabled: () => store.getSnapshot().overlayMode === 'none',
             });
         });
-        return (): void => {
+        onCleanup(() => {
             disposed = true;
             cleanup?.();
-        };
-    }, [keymap, store]);
-
-    const messageBlocks = useStableMessageBlocks(snapshot.outputText);
-    const overlayActive = snapshot.overlayMode !== 'none';
-    const showWelcome = welcomeData !== undefined && snapshot.outputText === '' && !overlayActive;
-    const promptRepaintKey = promptPanelRepaintKey({
-        inputMirror: snapshot.inputMirror,
-        fileAutocompleteOpen: snapshot.fileAutocomplete.open,
-        fileMatchCount: snapshot.fileAutocomplete.matches.length,
-        menuRows: dockPolicy.menu.rows,
+        });
     });
+
+    const messageBlocks = createStableMessageBlocks(() => snapshot().outputText);
+    const overlayActive = createMemo(() => snapshot().overlayMode !== 'none');
+    const showWelcome = createMemo(() => welcomeData !== undefined && snapshot().outputText === '' && !overlayActive());
+    const promptRepaintKey = createMemo(() =>
+        promptPanelRepaintKey({
+            inputMirror: snapshot().inputMirror,
+            fileAutocompleteOpen: snapshot().fileAutocomplete.open,
+            fileMatchCount: snapshot().fileAutocomplete.matches.length,
+            menuRows: dockPolicy().menu.rows,
+        }),
+    );
 
     // opentui's double-buffer diff can miss cells when a wide character (Korean
     // Hangul, emoji) is replaced by a narrow one — the continuation cell is not
@@ -643,218 +662,234 @@ export function ChatApp({
     // full repaint (skip the diff, write every cell) when the view changes
     // dramatically: viewport resize, overlay open/close, and when a streaming
     // response finishes.
-    const prevViewport = useRef(viewport);
-    useEffect(() => {
-        if (prevViewport.current.columns !== viewport.columns || prevViewport.current.rows !== viewport.rows) {
-            prevViewport.current = viewport;
+    let prevViewport = viewport;
+    createEffect(() => {
+        viewportRows = viewport.rows;
+        if (prevViewport.columns !== viewport.columns || prevViewport.rows !== viewport.rows) {
+            prevViewport = viewport;
             hardResetRendererSurface(renderer);
         }
-    }, [viewport, renderer]);
+    });
 
-    const prevOverlayMode = useRef(snapshot.overlayMode);
-    useEffect(() => {
-        if (prevOverlayMode.current !== snapshot.overlayMode) {
-            prevOverlayMode.current = snapshot.overlayMode;
+    let prevOverlayMode = snapshot().overlayMode;
+    createEffect(() => {
+        if (prevOverlayMode !== snapshot().overlayMode) {
+            prevOverlayMode = snapshot().overlayMode;
             Reflect.set(renderer, 'forceFullRepaintRequested', true);
             renderer.requestRender();
         }
-    }, [snapshot.overlayMode, renderer]);
+    });
 
-    const prevPromptRepaintKey = useRef(promptRepaintKey);
-    useEffect(() => {
-        if (prevPromptRepaintKey.current !== promptRepaintKey) {
-            prevPromptRepaintKey.current = promptRepaintKey;
+    let prevPromptRepaintKey = promptRepaintKey();
+    createEffect(() => {
+        if (prevPromptRepaintKey !== promptRepaintKey()) {
+            prevPromptRepaintKey = promptRepaintKey();
             Reflect.set(renderer, 'forceFullRepaintRequested', true);
             renderer.requestRender();
         }
-    }, [promptRepaintKey, renderer]);
+    });
 
-    const prevGenerating = useRef(snapshot.generating);
-    useEffect(() => {
-        if (prevGenerating.current && !snapshot.generating) {
+    let prevGenerating = snapshot().generating;
+    createEffect(() => {
+        if (prevGenerating && !snapshot().generating) {
             Reflect.set(renderer, 'forceFullRepaintRequested', true);
             renderer.requestRender();
         }
-        prevGenerating.current = snapshot.generating;
-    }, [snapshot.generating, renderer]);
+        prevGenerating = snapshot().generating;
+    });
 
     // During streaming, opentui's cell-diff can miss wide-character continuation
     // cells on every incremental text update. A periodic full repaint corrects
     // the accumulated errors without the per-frame cost of always skipping diff.
-    useEffect(() => {
-        if (!snapshot.generating) return;
+    createEffect(() => {
+        if (!snapshot().generating) return;
         const timer = setInterval(() => {
             Reflect.set(renderer, 'forceFullRepaintRequested', true);
             renderer.requestRender();
         }, 500);
-        return (): void => clearInterval(timer);
-    }, [snapshot.generating, renderer]);
+        onCleanup(() => clearInterval(timer));
+    });
 
-    const transcript = (
+    const transcript = createMemo(() => (
         <ChatTranscript
-            blocks={messageBlocks}
-            scrollboxRef={scrollboxRef}
-            generating={snapshot.generating}
-            toolOutputExpanded={snapshot.toolOutputExpanded}
+            blocks={messageBlocks()}
+            scrollboxRef={scrollboxHandle}
+            generating={snapshot().generating}
+            toolOutputExpanded={snapshot().toolOutputExpanded}
             viewportColumns={viewport.columns}
         />
-    );
+    ));
 
     // ModalPopup auto-sizes to content (no `bottom`), so the AgentSpinner's
     // 80ms Braille animation leaks under the popup edge and surfaces as mojibake.
     // Match the 'abg'/'diff-viewer' early-return replacement intent.
-    const showAgentIndicator = !overlayActive;
+    const showAgentIndicator = createMemo(() => !overlayActive());
+    const showAbgMinimap = createMemo(
+        () => snapshot().abgMinimapVisible && !overlayActive() && abgOverlayController !== undefined,
+    );
 
-    if (snapshot.overlayMode === 'abg') {
-        if (abgOverlayController === undefined) {
+    const rootContent = createMemo((): JSX.Element => {
+        const snap = snapshot();
+        const currentToast = toast();
+
+        if (snap.overlayMode === 'abg') {
+            if (abgOverlayController === undefined) {
+                return (
+                    <box flexDirection="column" width={shellWidth()} height={shellHeight()} shouldFill={true}>
+                        <OverlayFrame variant="view" title="ABG Overlay" hint="(Ctrl+G or Esc to close)">
+                            <text attributes={TextAttributes.DIM}>{'ABG overlay unavailable in this session.'}</text>
+                        </OverlayFrame>
+                    </box>
+                );
+            }
+
+            const selection = snap.currentModelSelection;
+            const providerID = selection?.providerID ?? statusBarProps?.providerID ?? '';
+            const modelID = selection?.modelID ?? statusBarProps?.modelID ?? '';
+            const variantID = snap.currentModelVariantID;
+            const modelLabel = `${providerID}/${modelID}${variantID !== undefined ? `#${variantID}` : ''}`;
+            const activeTab: AbgOverlayTab = ABG_OVERLAY_TABS[abgActiveTab()] ?? 'overview';
+
             return (
-                <box flexDirection="column" width={shellWidth} height={shellHeight} shouldFill={true}>
-                    <OverlayFrame variant="view" title="ABG Overlay" hint="(Ctrl+G or Esc to close)">
-                        <text attributes={TextAttributes.DIM}>{'ABG overlay unavailable in this session.'}</text>
-                    </OverlayFrame>
+                <box flexDirection="column" width={shellWidth()} height={shellHeight()} shouldFill={true}>
+                    <AbgOverlay
+                        store={abgOverlayController.store}
+                        activeTab={activeTab}
+                        scrollOffset={abgScrollOffset()}
+                        modelLabel={modelLabel}
+                        viewport={viewport}
+                    />
                 </box>
             );
         }
-        const selection = snapshot.currentModelSelection;
-        const providerID = selection?.providerID ?? statusBarProps?.providerID ?? '';
-        const modelID = selection?.modelID ?? statusBarProps?.modelID ?? '';
-        const variantID = snapshot.currentModelVariantID;
-        const modelLabel = `${providerID}/${modelID}${variantID !== undefined ? `#${variantID}` : ''}`;
-        const activeTab: AbgOverlayTab = ABG_OVERLAY_TABS[abgActiveTab] ?? 'overview';
+
+        if (snap.overlayMode === 'diff-viewer') {
+            const entries = snap.diffViewerEntries;
+            const cursor = snap.diffViewerCursor;
+            const model = buildDiffViewerModel(entries);
+
+            return (
+                <box flexDirection="column" width={shellWidth()} height={shellHeight()} shouldFill={true}>
+                    <DiffViewerOverlay entries={entries} model={model} cursor={cursor} />
+                </box>
+            );
+        }
+
+        if (snap.overlayMode === 'models-overlay') {
+            return (
+                <box flexDirection="column" width={shellWidth()} height={shellHeight()} shouldFill={true}>
+                    <ModelsOverlay store={store} />
+                </box>
+            );
+        }
+
         return (
-            <box flexDirection="column" width={shellWidth} height={shellHeight} shouldFill={true}>
-                <AbgOverlay
-                    store={abgOverlayController.store}
-                    activeTab={activeTab}
-                    scrollOffset={abgScrollOffset}
-                    modelLabel={modelLabel}
-                    viewport={viewport}
-                />
-            </box>
-        );
-    }
-
-    if (snapshot.overlayMode === 'diff-viewer') {
-        const entries = snapshot.diffViewerEntries;
-        const cursor = snapshot.diffViewerCursor;
-        const model = buildDiffViewerModel(entries);
-        return (
-            <box flexDirection="column" width={shellWidth} height={shellHeight} shouldFill={true}>
-                <DiffViewerOverlay entries={entries} model={model} cursor={cursor} />
-            </box>
-        );
-    }
-
-    if (snapshot.overlayMode === 'models-overlay') {
-        return (
-            <box flexDirection="column" width={shellWidth} height={shellHeight} shouldFill={true}>
-                <ModelsOverlay store={store} />
-            </box>
-        );
-    }
-
-    const showAbgMinimap = snapshot.abgMinimapVisible && !overlayActive && abgOverlayController !== undefined;
-
-    return (
-        <ChatAppSplitShell
-            width={shellWidth}
-            height={shellHeight}
-            onMouseUp={handleSelectionMouseUp}
-            upperOutputRegion={
-                <>
-                    {showWelcome ? (
-                        <WelcomeScreen
-                            data={welcomeData}
-                            viewportColumns={viewport.columns}
-                            availableRows={viewportLayout.welcomeAvailableRows}
-                            {...(statusBarProps?.workspaceRoot !== undefined
-                                ? { projectLabel: basename(statusBarProps.workspaceRoot) }
-                                : {})}
-                            {...(statusBarProps?.gitBranch !== undefined
-                                ? { gitBranch: statusBarProps.gitBranch }
-                                : {})}
-                            {...(statusBarProps?.isWorktree !== undefined
-                                ? { isWorktree: statusBarProps.isWorktree }
-                                : {})}
-                        />
-                    ) : (
-                        transcript
-                    )}
-                    {showAgentIndicator && snapshot.agentStatusText.length > 0 ? (
-                        <AgentSpinner text={snapshot.agentStatusText} />
-                    ) : showAgentIndicator && snapshot.generating ? (
-                        <AgentSpinner text="Working..." />
-                    ) : null}
-                    {toast !== null ? <Toast message={toast} /> : null}
-                    {showAbgMinimap ? <AbgMinimap store={abgOverlayController.store} viewport={viewport} /> : null}
-                </>
-            }
-            bottomDock={
-                <ChatBottomDock
-                    store={store}
-                    textareaRef={textareaRef}
-                    scrollboxRef={scrollboxRef}
-                    inputFocused={!overlayActive}
-                    viewportColumns={viewport.columns}
-                    viewportRows={viewport.rows}
-                    statusLayout={dockStatusLayout}
-                    menuPolicy={dockPolicy.menu}
-                    {...(statusBarProps !== undefined ? { statusBarProps } : {})}
-                />
-            }
-            modalOverlays={
-                <>
-                    {snapshot.overlayMode === 'approval' ? (
-                        <ModalPopup>
-                            <ApprovalOverlay store={store} />
-                        </ModalPopup>
-                    ) : null}
-                    {snapshot.overlayMode === 'model-picker' ? (
-                        <ModalPopup>
-                            <ModelPickerOverlay store={store} />
-                        </ModalPopup>
-                    ) : null}
-                    {snapshot.overlayMode === 'level-picker' ? (
-                        <ModalPopup>
-                            <LevelPickerOverlay store={store} />
-                        </ModalPopup>
-                    ) : null}
-                    {snapshot.overlayMode === 'rename' ? (
-                        <ModalPopup>
-                            <RenameOverlay store={store} />
-                        </ModalPopup>
-                    ) : null}
-                    {snapshot.overlayMode === 'session-picker' ? (
-                        <ModalPopup>
-                            <SessionPickerOverlay store={store} />
-                        </ModalPopup>
-                    ) : null}
-                    {snapshot.overlayMode === 'agents-dashboard' ? (
-                        <ModalPopup>
-                            <AgentsDashboardOverlay
-                                store={store}
-                                workspaceRoot={statusBarProps?.workspaceRoot}
-                                {...(actions !== undefined ? { actions } : {})}
+            <ChatAppSplitShell
+                width={shellWidth()}
+                height={shellHeight()}
+                onMouseUp={handleSelectionMouseUp}
+                upperOutputRegion={
+                    <>
+                        {showWelcome() && welcomeData !== undefined ? (
+                            <WelcomeScreen
+                                data={welcomeData}
+                                viewportColumns={viewport.columns}
+                                availableRows={viewportLayout().welcomeAvailableRows}
+                                {...(statusBarProps?.workspaceRoot !== undefined
+                                    ? { projectLabel: basename(statusBarProps.workspaceRoot) }
+                                    : {})}
+                                {...(statusBarProps?.gitBranch !== undefined
+                                    ? { gitBranch: statusBarProps.gitBranch }
+                                    : {})}
+                                {...(statusBarProps?.isWorktree !== undefined
+                                    ? { isWorktree: statusBarProps.isWorktree }
+                                    : {})}
                             />
-                        </ModalPopup>
-                    ) : null}
-                    {snapshot.overlayMode === 'mission-panel' ? (
-                        <ModalPopup>
-                            <MissionPanelOverlay
-                                store={store}
-                                workspaceRoot={statusBarProps?.workspaceRoot}
-                                {...(actions !== undefined ? { actions } : {})}
-                                {...(missionControlServices !== undefined ? { services: missionControlServices } : {})}
-                            />
-                        </ModalPopup>
-                    ) : null}
-                </>
-            }
-        />
-    );
+                        ) : (
+                            transcript()
+                        )}
+                        {showAgentIndicator() && snap.agentStatusText.length > 0 ? (
+                            <AgentSpinner text={snap.agentStatusText} />
+                        ) : showAgentIndicator() && snap.generating ? (
+                            <AgentSpinner text="Working..." />
+                        ) : null}
+                        {currentToast !== null ? <Toast message={currentToast} /> : null}
+                        {showAbgMinimap() && abgOverlayController !== undefined ? (
+                            <AbgMinimap store={abgOverlayController.store} viewport={viewport} />
+                        ) : null}
+                    </>
+                }
+                bottomDock={
+                    <ChatBottomDock
+                        store={store}
+                        textareaRef={textareaHandle}
+                        scrollboxRef={scrollboxHandle}
+                        inputFocused={!overlayActive()}
+                        viewportColumns={viewport.columns}
+                        viewportRows={viewport.rows}
+                        statusLayout={dockStatusLayout()}
+                        menuPolicy={dockPolicy().menu}
+                        {...(statusBarProps !== undefined ? { statusBarProps } : {})}
+                    />
+                }
+                modalOverlays={
+                    <>
+                        {snap.overlayMode === 'approval' ? (
+                            <ModalPopup>
+                                <ApprovalOverlay store={store} />
+                            </ModalPopup>
+                        ) : null}
+                        {snap.overlayMode === 'model-picker' ? (
+                            <ModalPopup>
+                                <ModelPickerOverlay store={store} />
+                            </ModalPopup>
+                        ) : null}
+                        {snap.overlayMode === 'level-picker' ? (
+                            <ModalPopup>
+                                <LevelPickerOverlay store={store} />
+                            </ModalPopup>
+                        ) : null}
+                        {snap.overlayMode === 'rename' ? (
+                            <ModalPopup>
+                                <RenameOverlay store={store} />
+                            </ModalPopup>
+                        ) : null}
+                        {snap.overlayMode === 'session-picker' ? (
+                            <ModalPopup>
+                                <SessionPickerOverlay store={store} />
+                            </ModalPopup>
+                        ) : null}
+                        {snap.overlayMode === 'agents-dashboard' ? (
+                            <ModalPopup>
+                                <AgentsDashboardOverlay
+                                    store={store}
+                                    workspaceRoot={statusBarProps?.workspaceRoot}
+                                    {...(actions !== undefined ? { actions } : {})}
+                                />
+                            </ModalPopup>
+                        ) : null}
+                        {snap.overlayMode === 'mission-panel' ? (
+                            <ModalPopup>
+                                <MissionPanelOverlay
+                                    store={store}
+                                    workspaceRoot={statusBarProps?.workspaceRoot}
+                                    {...(actions !== undefined ? { actions } : {})}
+                                    {...(missionControlServices !== undefined
+                                        ? { services: missionControlServices }
+                                        : {})}
+                                />
+                            </ModalPopup>
+                        ) : null}
+                    </>
+                }
+            />
+        );
+    });
+
+    return <>{rootContent()}</>;
 }
 
-function ModalPopup({ children }: { readonly children: React.ReactNode }): React.ReactNode {
+function ModalPopup({ children }: { readonly children: JSX.Element }): JSX.Element {
     return (
         <box
             position="absolute"

@@ -1,8 +1,6 @@
-/** @jsxImportSource @opentui/react */
-
 import { padEndToDisplayWidth, terminalDisplayWidth, truncateTerminalText } from '@mission-control/tui';
 import { TextAttributes } from '@opentui/core';
-import type * as React from 'react';
+import { For, type JSX } from 'solid-js';
 import type {
     WelcomeData,
     WelcomeLspServer,
@@ -265,7 +263,7 @@ export function formatSkillRow(
  * Collapse every LSP server onto a single row with availability glyphs.
  * Available servers render as `✓ lang`; missing ones as `✗ lang`. The two
  * are space-separated. Returns the rendered string plus the per-glyph colors
- * so the React layer can color each glyph independently.
+ * so the render layer can color each glyph independently.
  */
 export type LspGlyph = { readonly text: string; readonly available: boolean };
 
@@ -322,7 +320,7 @@ export function WelcomeScreen({
     projectLabel,
     gitBranch,
     isWorktree,
-}: WelcomeScreenProps): React.ReactNode {
+}: WelcomeScreenProps): JSX.Element {
     const widthBudget = welcomeWidthBudget(viewportColumns);
     const { label: modelLabel, value: modelValue } = formatModelLine(data);
     const projectDescriptor = buildProjectDescriptor(projectLabel, gitBranch, isWorktree);
@@ -342,7 +340,7 @@ export function WelcomeScreen({
         };
         return (
             <box flexDirection="column" flexGrow={1} paddingLeft={2} paddingRight={2}>
-                {rowPlan.compactRowKeys.map((rowKey) => renderCompactWelcomeRow(rowKey, compactContext))}
+                <For each={rowPlan.compactRowKeys}>{(rowKey) => renderCompactWelcomeRow(rowKey, compactContext)}</For>
             </box>
         );
     }
@@ -360,34 +358,24 @@ export function WelcomeScreen({
             {data.mcpServers.length === 0 ? (
                 <EmptyHint text="no servers configured" widthBudget={widthBudget} />
             ) : (
-                data.mcpServers.map((server) => {
-                    const row = formatMcpServerRow(server);
-                    return (
-                        <TwoColumnRow
-                            key={`mcp-${server.name}`}
-                            label={row.label}
-                            value={row.value}
-                            widthBudget={widthBudget}
-                        />
-                    );
-                })
+                <For each={data.mcpServers}>
+                    {(server) => {
+                        const row = formatMcpServerRow(server);
+                        return <TwoColumnRow label={row.label} value={row.value} widthBudget={widthBudget} />;
+                    }}
+                </For>
             )}
 
             <SectionHeader title="PROJECT SKILLS" contentWidth={widthBudget.contentWidth} />
             {data.projectSkills.length === 0 ? (
                 <EmptyHint text="no project-scoped skills (.mctrl/skills, .agents/skills)" widthBudget={widthBudget} />
             ) : (
-                data.projectSkills.map((skill) => {
-                    const row = formatSkillRow(skill, widthBudget.skillValueWidth);
-                    return (
-                        <TwoColumnRow
-                            key={`skill-${skill.name}`}
-                            label={row.label}
-                            value={row.value}
-                            widthBudget={widthBudget}
-                        />
-                    );
-                })
+                <For each={data.projectSkills}>
+                    {(skill) => {
+                        const row = formatSkillRow(skill, widthBudget.skillValueWidth);
+                        return <TwoColumnRow label={row.label} value={row.value} widthBudget={widthBudget} />;
+                    }}
+                </For>
             )}
 
             <SectionHeader title="LSP SERVERS" contentWidth={widthBudget.contentWidth} />
@@ -401,9 +389,9 @@ export function WelcomeScreen({
             {data.recentSessions.length === 0 ? (
                 <EmptyHint text="no sessions yet for this project" widthBudget={widthBudget} />
             ) : (
-                data.recentSessions.map((session) => (
-                    <SessionRow key={`session-${session.sessionId}`} session={session} widthBudget={widthBudget} />
-                ))
+                <For each={data.recentSessions}>
+                    {(session) => <SessionRow session={session} widthBudget={widthBudget} />}
+                </For>
             )}
 
             <box marginTop={1}>
@@ -413,26 +401,25 @@ export function WelcomeScreen({
     );
 }
 
-function renderCompactWelcomeRow(rowKey: WelcomeCompactRowKey, context: CompactWelcomeRowContext): React.ReactNode {
+function renderCompactWelcomeRow(rowKey: WelcomeCompactRowKey, context: CompactWelcomeRowContext): JSX.Element | null {
     switch (rowKey) {
         case 'title':
             return (
-                <text key={rowKey} fg={HEADER_FG} attributes={TextAttributes.BOLD}>
+                <text fg={HEADER_FG} attributes={TextAttributes.BOLD}>
                     {'mission-control'}
                 </text>
             );
         case 'version':
-            return <text key={rowKey} attributes={TextAttributes.DIM}>{`v${context.data.version}`}</text>;
+            return <text attributes={TextAttributes.DIM}>{`v${context.data.version}`}</text>;
         case 'environmentHeader':
             return (
-                <text key={rowKey} fg={HEADER_FG} attributes={TextAttributes.BOLD}>
+                <text fg={HEADER_FG} attributes={TextAttributes.BOLD}>
                     {'ENVIRONMENT'}
                 </text>
             );
         case 'defaultModel':
             return (
                 <TwoColumnRow
-                    key={rowKey}
                     label={context.modelLine.label}
                     value={context.modelLine.value}
                     widthBudget={context.widthBudget}
@@ -440,17 +427,11 @@ function renderCompactWelcomeRow(rowKey: WelcomeCompactRowKey, context: CompactW
             );
         case 'project':
             return context.projectDescriptor !== undefined ? (
-                <TwoColumnRow
-                    key={rowKey}
-                    label="project"
-                    value={context.projectDescriptor}
-                    widthBudget={context.widthBudget}
-                />
+                <TwoColumnRow label="project" value={context.projectDescriptor} widthBudget={context.widthBudget} />
             ) : null;
         case 'mcpSummary':
             return (
                 <TwoColumnRow
-                    key={rowKey}
                     label="mcp servers"
                     value={formatConfiguredSummary(context.data.mcpServers.length)}
                     widthBudget={context.widthBudget}
@@ -459,7 +440,6 @@ function renderCompactWelcomeRow(rowKey: WelcomeCompactRowKey, context: CompactW
         case 'skillsSummary':
             return (
                 <TwoColumnRow
-                    key={rowKey}
                     label="project skills"
                     value={formatAvailableSummary(context.data.projectSkills.length)}
                     widthBudget={context.widthBudget}
@@ -468,7 +448,6 @@ function renderCompactWelcomeRow(rowKey: WelcomeCompactRowKey, context: CompactW
         case 'lspSummary':
             return (
                 <TwoColumnRow
-                    key={rowKey}
                     label="lsp servers"
                     value={formatLspSummary(context.data.lspServers)}
                     widthBudget={context.widthBudget}
@@ -477,18 +456,13 @@ function renderCompactWelcomeRow(rowKey: WelcomeCompactRowKey, context: CompactW
         case 'recentSummary':
             return (
                 <TwoColumnRow
-                    key={rowKey}
                     label="recent sessions"
                     value={formatRecentSummary(context.data.recentSessions.length)}
                     widthBudget={context.widthBudget}
                 />
             );
         case 'hint':
-            return (
-                <text key={rowKey} attributes={TextAttributes.DIM}>
-                    {formatWelcomeHint(context.widthBudget.contentWidth)}
-                </text>
-            );
+            return <text attributes={TextAttributes.DIM}>{formatWelcomeHint(context.widthBudget.contentWidth)}</text>;
     }
 }
 
@@ -510,7 +484,7 @@ function formatRecentSummary(count: number): string {
     return count === 0 ? 'none yet' : `${count} recent`;
 }
 
-function WelcomeHeader({ version }: { readonly version: string }): React.ReactNode {
+function WelcomeHeader({ version }: { readonly version: string }): JSX.Element {
     return (
         <box flexDirection="column" marginTop={1} marginBottom={1}>
             <text fg={HEADER_FG} attributes={TextAttributes.BOLD}>
@@ -527,7 +501,7 @@ function SectionHeader({
 }: {
     readonly title: string;
     readonly contentWidth: number;
-}): React.ReactNode {
+}): JSX.Element {
     return (
         <box flexDirection="row" marginTop={1} marginBottom={0}>
             <text fg={HEADER_FG} attributes={TextAttributes.BOLD}>
@@ -546,7 +520,7 @@ function TwoColumnRow({
     readonly label: string;
     readonly value: string;
     readonly widthBudget: WelcomeWidthBudget;
-}): React.ReactNode {
+}): JSX.Element {
     return (
         <box flexDirection="row">
             <text attributes={TextAttributes.DIM}>{padToWidth(label, widthBudget.labelWidth)}</text>
@@ -561,7 +535,7 @@ function EmptyHint({
 }: {
     readonly text: string;
     readonly widthBudget: WelcomeWidthBudget;
-}): React.ReactNode {
+}): JSX.Element {
     return (
         <box flexDirection="row">
             <text attributes={TextAttributes.DIM}>{padToWidth('(none)', widthBudget.labelWidth)}</text>
@@ -572,20 +546,22 @@ function EmptyHint({
     );
 }
 
-function LspGlyphRow({ glyphs }: { readonly glyphs: readonly LspGlyph[] }): React.ReactNode {
+function LspGlyphRow({ glyphs }: { readonly glyphs: readonly LspGlyph[] }): JSX.Element {
     return (
         <box flexDirection="row">
-            {glyphs.map((glyph, idx) => (
-                <box key={`lsp-${glyph.text}`} flexDirection="row">
-                    {idx > 0 ? <text>{'   '}</text> : null}
-                    <text
-                        fg={glyph.available ? '#26d926' : DIM_FG}
-                        attributes={glyph.available ? TextAttributes.BOLD : TextAttributes.DIM}
-                    >
-                        {glyph.text}
-                    </text>
-                </box>
-            ))}
+            <For each={glyphs}>
+                {(glyph, index) => (
+                    <box flexDirection="row">
+                        {index() > 0 ? <text>{'   '}</text> : null}
+                        <text
+                            fg={glyph.available ? '#26d926' : DIM_FG}
+                            attributes={glyph.available ? TextAttributes.BOLD : TextAttributes.DIM}
+                        >
+                            {glyph.text}
+                        </text>
+                    </box>
+                )}
+            </For>
         </box>
     );
 }
@@ -596,7 +572,7 @@ function SessionRow({
 }: {
     readonly session: WelcomeSession;
     readonly widthBudget: WelcomeWidthBudget;
-}): React.ReactNode {
+}): JSX.Element {
     const row = formatSessionRow(session);
     const timePrefix = row.time !== undefined ? `${row.time}   ` : undefined;
     const timePrefixWidth = timePrefix === undefined ? 0 : terminalDisplayWidth(timePrefix);

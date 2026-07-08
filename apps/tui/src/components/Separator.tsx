@@ -1,5 +1,4 @@
-/** @jsxImportSource @opentui/react */
-import { useEffect, useState } from 'react';
+import { createEffect, createSignal, type JSX, onCleanup } from 'solid-js';
 import { resolveSpinnerMode } from './spinner.js';
 
 export type SeparatorProps = {
@@ -66,21 +65,21 @@ export function buildSeparatorLine(
  * opentui-native separator. Owns its own frame timer (`SEPARATOR_INTERVAL_MS`);
  * `width` is supplied by a viewport-aware caller.
  */
-export function Separator({ state, width }: SeparatorProps): React.ReactNode {
+export function Separator(props: SeparatorProps): JSX.Element {
     const animated = resolveSpinnerMode() === 'animate';
-    const [frame, setFrame] = useState(0);
-    useEffect(() => {
-        if (!animated || state === 'idle') {
+    const [frame, setFrame] = createSignal(0);
+    createEffect(() => {
+        if (!animated || props.state === 'idle') {
             return;
         }
         const timer = setInterval(() => {
             setFrame((current) => current + 1);
         }, SEPARATOR_INTERVAL_MS);
-        return () => {
+        onCleanup(() => {
             clearInterval(timer);
-        };
-    }, [animated, state]);
-    const { text, color, dimColor } = buildSeparatorLine(state, animated, frame, width);
+        });
+    });
+    const { text, color, dimColor } = buildSeparatorLine(props.state, animated, frame(), props.width);
     const resolvedFg = color === 'yellow' ? '#ffff00' : color === 'magenta' ? '#ff00ff' : undefined;
     return (
         <text {...(resolvedFg !== undefined ? { fg: resolvedFg } : {})} {...(dimColor ? { dim: true } : {})}>

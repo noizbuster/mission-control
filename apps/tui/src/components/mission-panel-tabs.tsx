@@ -1,7 +1,6 @@
-/** @jsxImportSource @opentui/react */
 import type { ContinuationState } from '@mission-control/core';
 import { TextAttributes } from '@opentui/core';
-import type * as React from 'react';
+import { For, type JSX } from 'solid-js';
 import {
     type AgentPanelRow,
     agentStatusColor,
@@ -38,7 +37,7 @@ export type MissionRunRow = {
     readonly detail?: string;
 };
 
-export function renderRunsTab(selectedIndex: number, rows: readonly MissionRunRow[]): React.ReactNode {
+export function renderRunsTab(selectedIndex: number, rows: readonly MissionRunRow[]): JSX.Element {
     if (rows.length === 0) {
         return (
             <box marginTop={1}>
@@ -53,27 +52,29 @@ export function renderRunsTab(selectedIndex: number, rows: readonly MissionRunRo
             <text attributes={TextAttributes.DIM}>
                 {`${startIndex + 1}-${startIndex + visibleRows.length} of ${rows.length}`}
             </text>
-            {visibleRows.map((row, index) => {
-                const isSelected = startIndex + index === clampedSelected;
-                const status = row.status ?? '';
-                return (
-                    <box key={row.id} flexDirection="row" {...(isSelected ? { bg: SELECTED_BG } : {})}>
-                        <text>
-                            {isSelected ? '> ' : '  '}
-                            {row.label}
-                        </text>
-                        {status.length > 0 ? <text fg={statusColor(status)}>{` [${status}]`}</text> : null}
-                        {row.detail !== undefined ? (
-                            <text attributes={TextAttributes.DIM}>{` ${row.detail}`}</text>
-                        ) : null}
-                    </box>
-                );
-            })}
+            <For each={visibleRows}>
+                {(row, index) => {
+                    const isSelected = startIndex + index() === clampedSelected;
+                    const status = row.status ?? '';
+                    return (
+                        <box flexDirection="row" {...(isSelected ? { bg: SELECTED_BG } : {})}>
+                            <text>
+                                {isSelected ? '> ' : '  '}
+                                {row.label}
+                            </text>
+                            {status.length > 0 ? <text fg={statusColor(status)}>{` [${status}]`}</text> : null}
+                            {row.detail !== undefined ? (
+                                <text attributes={TextAttributes.DIM}>{` ${row.detail}`}</text>
+                            ) : null}
+                        </box>
+                    );
+                }}
+            </For>
         </box>
     );
 }
 
-export function renderJobsTab(selectedIndex: number, rows: readonly JobPanelRow[]): React.ReactNode {
+export function renderJobsTab(selectedIndex: number, rows: readonly JobPanelRow[]): JSX.Element {
     if (rows.length === 0) {
         return (
             <box marginTop={1}>
@@ -88,26 +89,28 @@ export function renderJobsTab(selectedIndex: number, rows: readonly JobPanelRow[
             <text attributes={TextAttributes.DIM}>
                 {`${startIndex + 1}-${startIndex + visibleRows.length} of ${rows.length}`}
             </text>
-            {visibleRows.map((row, index) => {
-                const isSelected = startIndex + index === clampedSelected;
-                return (
-                    <box key={row.id} flexDirection="column" {...(isSelected ? { bg: SELECTED_BG } : {})}>
-                        <box flexDirection="row">
-                            <text>{`${isSelected ? '> ' : '  '}${row.label}`}</text>
-                            <text fg={jobStatusColor(row.status)}>{` [${row.status}]`}</text>
-                            {row.detail !== undefined ? (
-                                <text attributes={TextAttributes.DIM}>{` ${row.detail}`}</text>
-                            ) : null}
+            <For each={visibleRows}>
+                {(row, index) => {
+                    const isSelected = startIndex + index() === clampedSelected;
+                    return (
+                        <box flexDirection="column" {...(isSelected ? { bg: SELECTED_BG } : {})}>
+                            <box flexDirection="row">
+                                <text>{`${isSelected ? '> ' : '  '}${row.label}`}</text>
+                                <text fg={jobStatusColor(row.status)}>{` [${row.status}]`}</text>
+                                {row.detail !== undefined ? (
+                                    <text attributes={TextAttributes.DIM}>{` ${row.detail}`}</text>
+                                ) : null}
+                            </box>
+                            {row.error !== undefined ? <text fg="#ff6b6b">{`    ${row.error}`}</text> : null}
                         </box>
-                        {row.error !== undefined ? <text fg="#ff6b6b">{`    ${row.error}`}</text> : null}
-                    </box>
-                );
-            })}
+                    );
+                }}
+            </For>
         </box>
     );
 }
 
-export function renderAgentsTab(selectedIndex: number, rows: readonly AgentPanelRow[]): React.ReactNode {
+export function renderAgentsTab(selectedIndex: number, rows: readonly AgentPanelRow[]): JSX.Element {
     if (rows.length === 0) {
         return (
             <box marginTop={1}>
@@ -122,23 +125,25 @@ export function renderAgentsTab(selectedIndex: number, rows: readonly AgentPanel
             <text attributes={TextAttributes.DIM}>
                 {`${startIndex + 1}-${startIndex + visibleRows.length} of ${rows.length}`}
             </text>
-            {visibleRows.map((row, index) => {
-                const isSelected = startIndex + index === clampedSelected;
-                return (
-                    <box key={row.id} flexDirection="row" {...(isSelected ? { bg: SELECTED_BG } : {})}>
-                        <text>{`${isSelected ? '> ' : '  '}${row.label}`}</text>
-                        <text fg={agentStatusColor(row.status)}>{` [${row.status}]`}</text>
-                        {row.detail !== undefined ? (
-                            <text attributes={TextAttributes.DIM}>{` ${row.detail}`}</text>
-                        ) : null}
-                    </box>
-                );
-            })}
+            <For each={visibleRows}>
+                {(row, index) => {
+                    const isSelected = startIndex + index() === clampedSelected;
+                    return (
+                        <box flexDirection="row" {...(isSelected ? { bg: SELECTED_BG } : {})}>
+                            <text>{`${isSelected ? '> ' : '  '}${row.label}`}</text>
+                            <text fg={agentStatusColor(row.status)}>{` [${row.status}]`}</text>
+                            {row.detail !== undefined ? (
+                                <text attributes={TextAttributes.DIM}>{` ${row.detail}`}</text>
+                            ) : null}
+                        </box>
+                    );
+                }}
+            </For>
         </box>
     );
 }
 
-export function renderDrainTab(): React.ReactNode {
+export function renderDrainTab(): JSX.Element {
     const lines = DRAIN_TAB_MESSAGE.split('\n');
     const header = lines[0] ?? '';
     const body = lines.slice(1).join('\n');
@@ -150,7 +155,7 @@ export function renderDrainTab(): React.ReactNode {
     );
 }
 
-export function renderContinueTab(state: ContinuationState | null): React.ReactNode {
+export function renderContinueTab(state: ContinuationState | null): JSX.Element {
     if (state === null) {
         return (
             <box marginTop={1}>

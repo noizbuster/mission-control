@@ -1,8 +1,9 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
 
 import { truncateTerminalText } from '@mission-control/tui';
-import { useSyncExternalStore } from 'react';
+import { For, type JSX } from 'solid-js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
+import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
 import type { AbgOverlayState, AbgOverlayStore } from '../state/abg-overlay-state.js';
 import { DEFAULT_REFRESH_MS } from '../state/abg-overlay-state.js';
 import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA.js';
@@ -98,7 +99,7 @@ function Header({
     state: AbgOverlayState;
     modelLabel: string;
     refreshMs: number;
-}): React.ReactNode {
+}): JSX.Element {
     const fps = Math.round(1000 / refreshMs);
     // Preserve the pre-refactor default: an undefined graph status renders gray, not terminal-default.
     const statusFg = state.graphStatus !== undefined ? graphStatusTheme(state.graphStatus).foreground : STATUS_FG_GRAY;
@@ -126,25 +127,27 @@ function Header({
     );
 }
 
-function TabStrip({ activeTab }: { activeTab: AbgOverlayTab }): React.ReactNode {
+function TabStrip({ activeTab }: { activeTab: AbgOverlayTab }): JSX.Element {
     return (
         <box flexDirection="row">
-            {TABS.map((tab, index) => {
-                const isActive = tab === activeTab;
-                const label = TAB_LABELS[tab];
-                return (
-                    <box key={tab} flexDirection="row">
-                        {index > 0 ? <text {...dimAttrs}> | </text> : null}
-                        {isActive ? (
-                            <text {...(cyanFg !== undefined ? { fg: cyanFg } : {})} {...boldAttrs}>
-                                {label}
-                            </text>
-                        ) : (
-                            <text {...dimAttrs}>{label}</text>
-                        )}
-                    </box>
-                );
-            })}
+            <For each={TABS}>
+                {(tab, index) => {
+                    const isActive = tab === activeTab;
+                    const label = TAB_LABELS[tab];
+                    return (
+                        <box flexDirection="row">
+                            {index() > 0 ? <text {...dimAttrs}> | </text> : null}
+                            {isActive ? (
+                                <text {...(cyanFg !== undefined ? { fg: cyanFg } : {})} {...boldAttrs}>
+                                    {label}
+                                </text>
+                            ) : (
+                                <text {...dimAttrs}>{label}</text>
+                            )}
+                        </box>
+                    );
+                }}
+            </For>
         </box>
     );
 }
@@ -159,7 +162,7 @@ function PaneBody({
     state: AbgOverlayState;
     modelLabel: string;
     viewport: TerminalViewport;
-}): React.ReactNode {
+}): JSX.Element {
     switch (activeTab) {
         case 'overview':
             return <OverviewPane state={state} modelLabel={modelLabel} />;
@@ -186,7 +189,7 @@ function PaneBody({
     }
 }
 
-function FooterHint({ narrow }: { narrow: boolean }): React.ReactNode {
+function FooterHint({ narrow }: { narrow: boolean }): JSX.Element {
     if (narrow) {
         return (
             <box marginTop={1}>
@@ -210,17 +213,17 @@ export function AbgOverlay({
     modelLabel,
     viewport,
     refreshMs = DEFAULT_REFRESH_MS,
-}: AbgOverlayProps): React.ReactNode {
-    const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
+}: AbgOverlayProps): JSX.Element {
+    const state = useSolidStoreSelector(store, (snapshot) => snapshot);
     const narrow = shouldCollapseViewportToOverview(viewport);
     const visibleTab = visibleAbgOverlayTab(activeTab, viewport);
 
     return (
         <box flexDirection="column" height="100%" shouldFill={true}>
-            <Header state={state} modelLabel={modelLabel} refreshMs={refreshMs} />
+            <Header state={state()} modelLabel={modelLabel} refreshMs={refreshMs} />
             <TabStrip activeTab={visibleTab} />
             <box flexGrow={1} shouldFill={true}>
-                <PaneBody activeTab={visibleTab} state={state} modelLabel={modelLabel} viewport={viewport} />
+                <PaneBody activeTab={visibleTab} state={state()} modelLabel={modelLabel} viewport={viewport} />
             </box>
             <FooterHint narrow={narrow} />
         </box>

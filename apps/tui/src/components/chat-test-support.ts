@@ -11,8 +11,8 @@
  *
  * Test seam:
  *   - `TextareaLike` is the structural port the runtime reads off the textarea
- *     ref (`plainText`, `cursorOffset`, `insertText`, `setText`, `clear`,
- *     `gotoBufferEnd`, `submit`). The recording fake also implements
+ *     ref (`plainText`, `cursorOffset`, `focused`, `insertText`, `setText`,
+ *     `clear`, `gotoBufferEnd`, `submit`). The recording fake also implements
  *     `deleteChar` (used by the Ctrl+D branch) and mirrors state so successive
  *     reads stay consistent.
  *   - `makeKeyEvent` returns a REAL `KeyEvent` instance (no casts) so
@@ -20,30 +20,22 @@
  *     runtime. The TUI handlers only read `name`/`ctrl`/`meta`/`shift`/`preventDefault`.
  *   - `createRecordingScrollbox` records `scrollTo`/`scrollBy`/`scrollHeight`.
  *
- * Ref wiring uses the sanctioned null-first concrete-target cast pattern
- * (`as RefObject<T|null>` then `(ref as {current: ...|null}).current = fake`);
- * the fake is cast `as TextareaRenderable`/`as ScrollBoxRenderable` (concrete
- * targets with substantial structural overlap, never untyped assertion escapes).
+ * Handle wiring returns the same get/set shape production components use; the
+ * fakes are concrete-target casts with substantial structural overlap, never
+ * untyped assertion escapes.
  */
 
-import type { KeyEvent, ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
+import type { KeyEvent } from '@opentui/core';
 import { KeyEvent as KeyEventClass } from '@opentui/core';
-import type * as React from 'react';
+import type { ChatTextareaHandle, ChatTextareaSurface } from './ChatInputTextarea.js';
+import type { ChatScrollboxHandle, ChatScrollboxSurface } from './ChatTranscript.js';
 
 /**
  * The textarea port the runtime depends on. Mirrors the opentui
  * `EditBufferRenderable` surface actually read by textarea keydown, submit,
  * and file-autocomplete completion handlers.
  */
-export interface TextareaLike {
-    plainText: string;
-    cursorOffset: number;
-    insertText(text: string): void;
-    setText(text: string): void;
-    clear(): void;
-    gotoBufferEnd(): void;
-    submit(): void;
-}
+export type TextareaLike = ChatTextareaSurface & { submit(): void };
 
 export type TextareaCall = { readonly method: string; readonly args: readonly unknown[] };
 
@@ -82,6 +74,12 @@ export function createRecordingTextarea(initial = '', cursorOffset?: number): Re
         },
         get cursorOffset(): number {
             return cursor;
+        },
+        set cursorOffset(value: number) {
+            cursor = Math.min(Math.max(0, value), text.length);
+        },
+        get focused(): boolean {
+            return true;
         },
         insertText(t: string): void {
             calls.push({ method: 'insertText', args: [t] });
@@ -200,22 +198,27 @@ export function makeKeyEvent(
 }
 
 /**
- * Wrap a recording textarea fake in a `RefObject<TextareaRenderable | null>`.
- * Casts the ref to a minimal structural shape and assigns the fake directly
- * (the sanctioned ChatInputTextarea.test.tsx idiom) — the fake is never cast to
- * `TextareaRenderable` (insufficient overlap) nor through `unknown`.
+ * Wrap a recording textarea fake in the production handle shape.
  */
-export function asTextareaRef(fake: RecordingTextarea): React.RefObject<TextareaRenderable | null> {
-    const ref = { current: null } as React.RefObject<TextareaRenderable | null>;
-    (ref as { current: RecordingTextarea | null }).current = fake;
-    return ref;
+export function asTextareaRef(fake: RecordingTextarea): ChatTextareaHandle {
+    let current: ChatTextareaSurface | undefined = fake;
+    return {
+        get: () => current,
+        set: (renderable) => {
+            current = renderable;
+        },
+    };
 }
 
 /**
- * Wrap a recording scrollbox fake in a `RefObject<ScrollBoxRenderable | null>`.
+ * Wrap a recording scrollbox fake in the production handle shape.
  */
-export function asScrollboxRef(fake: RecordingScrollbox): React.RefObject<ScrollBoxRenderable | null> {
-    const ref = { current: null } as React.RefObject<ScrollBoxRenderable | null>;
-    (ref as { current: RecordingScrollbox | null }).current = fake;
-    return ref;
+export function asScrollboxRef(fake: RecordingScrollbox): ChatScrollboxHandle {
+    let current: ChatScrollboxSurface | undefined = fake;
+    return {
+        get: () => current,
+        set: (renderable) => {
+            current = renderable;
+        },
+    };
 }

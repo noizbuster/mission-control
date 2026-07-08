@@ -1,5 +1,5 @@
-/** @jsxImportSource @opentui/react */
-import type * as React from 'react';
+/** @jsxImportSource @opentui/solid */
+import type { JSX } from 'solid-js';
 
 export type ToastProps = {
     readonly message: string;
@@ -12,7 +12,7 @@ export type ToastProps = {
  * through ChatStore). Rendered as the last child of the transcript container so
  * it lands on top.
  */
-export function Toast({ message }: ToastProps): React.ReactNode {
+export function Toast({ message }: ToastProps): JSX.Element {
     return (
         <box position="absolute" bottom={0} right={0} paddingLeft={1} paddingRight={1} backgroundColor="#1a1a2e">
             <text fg="#e4e4ef">{message}</text>

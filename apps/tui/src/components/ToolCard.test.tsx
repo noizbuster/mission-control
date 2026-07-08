@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildHeaderLabel, hasDiffContent, ToolCard } from './ToolCard.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const source = readFileSync(fileURLToPath(new URL('./ToolCard.tsx', import.meta.url)), 'utf-8');
 
 describe('hasDiffContent', () => {
     it('returns true when a block contains added/removed diff lines', () => {
@@ -75,21 +79,17 @@ describe('buildHeaderLabel', () => {
 });
 
 describe('ToolCard component', () => {
-    it('is a callable React component', () => {
+    it('exports a callable Solid component', () => {
         expect(typeof ToolCard).toBe('function');
     });
 
-    it('does not throw when constructed with a diff block', () => {
-        expect(() => {
-            void (<ToolCard lines={['+added', '-removed']} expanded={true} />);
-        }).not.toThrow();
+    it('routes expanded diff content through DiffView', () => {
+        expect(source).toContain('hasDiffContent(lines) ? (');
+        expect(source).toContain('<DiffView lines={renderDiff(lines.join');
     });
 
-    it('does not throw when constructed with a prose block collapsed', () => {
-        expect(() => {
-            void (
-                <ToolCard lines={['Command preview for command.run', '$ ls']} title="command.run" expanded={false} />
-            );
-        }).not.toThrow();
+    it('keeps collapsed cards to the header only', () => {
+        expect(source).toContain('{expanded ? (');
+        expect(source).toContain(') : null}');
     });
 });

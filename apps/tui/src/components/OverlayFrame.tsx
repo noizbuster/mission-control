@@ -1,6 +1,6 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
 import { TextAttributes } from '@opentui/core';
-import type * as React from 'react';
+import type { JSX } from 'solid-js';
 import type { OverlayVariant } from './overlay-theme.js';
 import { resolveOverlayChrome } from './overlay-theme.js';
 
@@ -10,7 +10,7 @@ export type OverlayFrameProps = {
     readonly accent?: string;
     readonly hint?: string;
     readonly footer?: string;
-    readonly children: React.ReactNode;
+    readonly children: JSX.Element;
 };
 
 /**
@@ -24,7 +24,7 @@ export type OverlayFrameProps = {
  * overlay-mode switch and the per-overlay panels) own those concerns; this
  * frame only renders the chrome and the children they hand it.
  */
-export function OverlayFrame({ variant, title, accent, hint, footer, children }: OverlayFrameProps): React.ReactNode {
+export function OverlayFrame({ variant, title, accent, hint, footer, children }: OverlayFrameProps): JSX.Element {
     const chrome = resolveOverlayChrome(variant, accent);
 
     // Modal renders inside a bordered popup (see ModalPopup in ChatApp), so it

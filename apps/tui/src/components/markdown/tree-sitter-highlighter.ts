@@ -90,7 +90,7 @@ const inFlight = new Map<string, Promise<void>>();
 let highlightVersion = 0;
 const highlightListeners = new Set<() => void>();
 
-/** Snapshot version for `useSyncExternalStore`; bumps after every async fill. */
+/** Snapshot version for highlight subscriptions; bumps after every async fill. */
 export function getHighlightVersion(): number {
     return highlightVersion;
 }

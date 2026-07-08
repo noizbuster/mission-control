@@ -1,9 +1,9 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
 
 import type { AbgNodeStatus } from '@mission-control/protocol';
-import type * as React from 'react';
-import { useSyncExternalStore } from 'react';
+import { For, type JSX } from 'solid-js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
+import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
 import type { AbgOverlayStore } from '../state/abg-overlay-state.js';
 import { nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
 import {
@@ -67,42 +67,42 @@ function computeRecentStatuses(
     return result;
 }
 
-function renderRow(row: VisualGraphRow, recentStatuses: Set<AbgNodeStatus>): React.ReactNode {
-    const firstText = row.segments[0]?.text ?? '';
+function renderRow(row: VisualGraphRow, recentStatuses: Set<AbgNodeStatus>): JSX.Element {
     return (
-        <box key={firstText} flexDirection="row" flexShrink={0}>
-            {row.segments.map((segment) => {
-                const theme = segment.status !== undefined ? nodeStatusTheme(segment.status) : undefined;
-                const fg = theme?.foreground;
-                const isRecent = segment.status !== undefined && recentStatuses.has(segment.status);
-                return (
-                    <text
-                        key={segment.text}
-                        {...(fg !== undefined ? { fg } : { fg: STATUS_FG_GRAY })}
-                        {...(isRecent ? { bold: true } : {})}
-                    >
-                        {segment.text}
-                    </text>
-                );
-            })}
+        <box flexDirection="row" flexShrink={0}>
+            <For each={row.segments}>
+                {(segment) => {
+                    const theme = segment.status !== undefined ? nodeStatusTheme(segment.status) : undefined;
+                    const fg = theme?.foreground;
+                    const isRecent = segment.status !== undefined && recentStatuses.has(segment.status);
+                    return (
+                        <text
+                            {...(fg !== undefined ? { fg } : { fg: STATUS_FG_GRAY })}
+                            {...(isRecent ? { bold: true } : {})}
+                        >
+                            {segment.text}
+                        </text>
+                    );
+                }}
+            </For>
         </box>
     );
 }
 
-export function AbgMinimap({ store, viewport }: AbgMinimapProps): React.ReactNode {
-    const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
+export function AbgMinimap({ store, viewport }: AbgMinimapProps): JSX.Element {
+    const state = useSolidStoreSelector(store, (snapshot) => snapshot);
 
-    if (state.nodes.size === 0) return null;
+    if (state().nodes.size === 0) return null;
 
     const input = buildInput(
-        state.nodes,
-        state.graphEdges,
-        state.activeNodeIds,
-        state.activeGraphId,
+        state().nodes,
+        state().graphEdges,
+        state().activeNodeIds,
+        state().activeGraphId,
         minimapMaxWidthForViewport(viewport),
     );
     const rendered = renderVisualGraph(input);
-    const recentStatuses = computeRecentStatuses(state.nodeChangedAtMs, state.nodes, Date.now());
+    const recentStatuses = computeRecentStatuses(state().nodeChangedAtMs, state().nodes, Date.now());
 
     return (
         <box
@@ -114,7 +114,7 @@ export function AbgMinimap({ store, viewport }: AbgMinimapProps): React.ReactNod
             borderStyle="single"
             borderColor="#404040"
         >
-            {rendered.rows.map((row) => renderRow(row, recentStatuses))}
+            <For each={rendered.rows}>{(row) => renderRow(row, recentStatuses)}</For>
         </box>
     );
 }

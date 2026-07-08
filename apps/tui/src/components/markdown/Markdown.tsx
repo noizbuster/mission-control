@@ -1,4 +1,3 @@
-/** @jsxImportSource @opentui/react */
 // allow: SIZE_OK — full markdown token coverage (19 block+inline variants, table
 // width math, LRU cache, wrapping) is mandated by T4 and the file boundary is
 // mandated by the task MUST NOT ("only edit Markdown.tsx and Markdown.test.tsx").
@@ -16,7 +15,7 @@
  *
  * Architecture: a serializable intermediate representation (`InlineRun` /
  * `RenderLine` / `RenderBlock`) is produced by pure, individually testable
- * helpers, then a thin React component maps it to opentui elements. A module-level
+ * helpers, then a thin component maps it to opentui elements. A module-level
  * LRU cache stores the IR keyed on `(text, width, streaming, theme)` so a
  * re-render of unchanged input returns the same instance.
  */
@@ -26,18 +25,10 @@ import { streamBlocks } from '@mission-control/tui/markdown';
 import { SyntaxStyle } from '@opentui/core';
 import type { Token, Tokens } from 'marked';
 import { marked } from 'marked';
-import type React from 'react';
-import { useMemo, useSyncExternalStore } from 'react';
+import { type Accessor, createMemo, createSignal, type JSX, onCleanup, onMount } from 'solid-js';
 import wrapAnsi from 'wrap-ansi';
-// MUST come after ./theme.js: the module graph highlight -> tree-sitter-highlighter
-// -> render-cache -> theme -> highlight is circular. Loading render-cache first
-// (via the import above) ensures theme.ts body runs AFTER highlight.ts finishes,
-// so darkTheme.highlightCode resolves to the real function instead of undefined.
 import { getHighlightVersion, subscribeHighlight } from './highlight.js';
-import { getCachedBlocks } from './render-cache.js';
-import { terminalStyleToTextProps } from './text-attributes.js';
 import type { TerminalMarkdownTheme, TerminalTextStyle } from './theme.js';
-import { darkTheme } from './theme.js';
 
 /**
  * A styled, width-measurable text run. `text` is the VISIBLE content only (no
@@ -404,7 +395,7 @@ export function renderCodeBlock(
     const codeLines = code.split('\n');
     const highlighted = theme.highlightCode ? theme.highlightCode(code, lang) : undefined;
     const lines: RenderLine[] = [];
-    lines.push([{ text: '```' + (lang ?? ''), style: theme.codeBlockBorder }]);
+    lines.push([{ text: `\`\`\`${lang ?? ''}`, style: theme.codeBlockBorder }]);
     for (let i = 0; i < codeLines.length; i++) {
         const rawLine = codeLines[i] ?? '';
         if (highlighted) {
@@ -649,47 +640,31 @@ export function buildBlocks(
     return tokenToBlocks(tokens, theme, width);
 }
 
-// ---------------------------------------------------------------------------
-// React component.
-// ---------------------------------------------------------------------------
-
 export type MarkdownProps = {
     readonly text: string;
     readonly width?: number;
     readonly streaming?: boolean;
     readonly theme?: TerminalMarkdownTheme;
-    readonly selectable?: boolean;
 };
-
-function LineView({ line }: { readonly line: RenderLine }): React.ReactNode {
-    if (line.length === 0) {
-        return <text> </text>;
-    }
-    return (
-        <box flexDirection="row">
-            {line.map((run, index) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: run order is stable for a given line
-                <text key={index} {...terminalStyleToTextProps(run.style)}>
-                    {run.href ? buildOsc8Hyperlink(run.href, run.text) : run.text}
-                </text>
-            ))}
-        </box>
-    );
-}
 
 /**
  * Subscribe the calling component to tree-sitter async-fill notifications.
  * Returns the current highlight version; the component re-renders whenever the
  * version bumps (i.e. when an async highlight fill lands and the render LRU is
- * invalidated via `clearRenderCache`). The third `getServerSnapshot` arg keeps
- * React 19 SSR/noop renders happy.
+ * invalidated via `clearRenderCache`).
  */
-export function useHighlightVersion(): number {
-    return useSyncExternalStore(subscribeHighlight, getHighlightVersion, getHighlightVersion);
+export function useHighlightVersion(): Accessor<number> {
+    const [version, setVersion] = createSignal(getHighlightVersion());
+    onMount(() => {
+        const unsubscribe = subscribeHighlight(() => setVersion(getHighlightVersion()));
+        onCleanup(unsubscribe);
+    });
+    return version;
 }
 
-export function Markdown({ text, streaming, theme }: MarkdownProps): React.ReactNode {
-    const syntaxStyle = useMemo(() => {
+export function Markdown(props: MarkdownProps): JSX.Element {
+    const syntaxStyle = createMemo(() => {
+        const theme = props.theme;
         try {
             return SyntaxStyle.fromStyles({
                 default: { fg: theme?.heading?.fg ?? '#e0e0e0' },
@@ -705,6 +680,14 @@ export function Markdown({ text, streaming, theme }: MarkdownProps): React.React
         } catch {
             return SyntaxStyle.create();
         }
-    }, [theme]);
-    return <markdown content={text} streaming={streaming ?? false} syntaxStyle={syntaxStyle} conceal={true} />;
+    });
+    return (
+        <markdown
+            content={props.text}
+            streaming={props.streaming ?? false}
+            syntaxStyle={syntaxStyle()}
+            conceal={true}
+            width={props.width ?? '100%'}
+        />
+    );
 }

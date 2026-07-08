@@ -1,7 +1,7 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
 import type { AbgToolOutcomeSnapshot, ApprovalRecord } from '@mission-control/protocol';
 import { truncateTerminalText } from '@mission-control/tui';
-import type React from 'react';
+import { For, type JSX } from 'solid-js';
 import type { AbgOverlayState, RecentEvent } from '../state/abg-overlay-state.js';
 
 export interface AbgOverlayPaneProps {
@@ -76,44 +76,45 @@ function approvalStateFg(state: ApprovalRecord['state']): string | undefined {
     }
 }
 
-export function ToolsPane({ state }: AbgOverlayPaneProps): React.ReactNode {
+export function ToolsPane({ state }: AbgOverlayPaneProps): JSX.Element {
     const outcomes = state.toolOutcomes;
     return (
         <box flexDirection="column" marginTop={1}>
             {outcomes.length === 0 ? (
                 <text {...dimAttrs}>No tool calls yet</text>
             ) : (
-                outcomes.map((outcome: AbgToolOutcomeSnapshot, index: number) => {
-                    const { glyph, fg } = statusGlyph(outcome.status);
-                    const toolId = truncate(outcome.toolId, 20);
-                    const started = shortTime(outcome.startedAt);
-                    const completed = shortTime(outcome.completedAt ?? outcome.failedAt);
-                    const message = truncate(outcome.lastMessage, 60);
-                    return (
-                        // biome-ignore lint/suspicious/noArrayIndexKey: tool outcomes are append-only within a single overlay render
-                        <box key={`${outcome.toolId}-${index}`} flexDirection="row">
-                            <text {...dimAttrs}>{toolId}</text>
-                            <text> </text>
-                            <text {...(fg !== undefined ? { fg } : {})} {...boldAttrs}>
-                                {glyph}
-                            </text>
-                            <text> </text>
-                            <text {...dimAttrs}>{started}</text>
-                            {completed !== '' ? (
-                                <>
-                                    <text {...dimAttrs}> → </text>
-                                    <text {...dimAttrs}>{completed}</text>
-                                </>
-                            ) : null}
-                            {message !== '' ? (
-                                <>
-                                    <text> </text>
-                                    <text {...dimAttrs}>{message}</text>
-                                </>
-                            ) : null}
-                        </box>
-                    );
-                })
+                <For each={outcomes}>
+                    {(outcome: AbgToolOutcomeSnapshot) => {
+                        const { glyph, fg } = statusGlyph(outcome.status);
+                        const toolId = truncate(outcome.toolId, 20);
+                        const started = shortTime(outcome.startedAt);
+                        const completed = shortTime(outcome.completedAt ?? outcome.failedAt);
+                        const message = truncate(outcome.lastMessage, 60);
+                        return (
+                            <box flexDirection="row">
+                                <text {...dimAttrs}>{toolId}</text>
+                                <text> </text>
+                                <text {...(fg !== undefined ? { fg } : {})} {...boldAttrs}>
+                                    {glyph}
+                                </text>
+                                <text> </text>
+                                <text {...dimAttrs}>{started}</text>
+                                {completed !== '' ? (
+                                    <>
+                                        <text {...dimAttrs}> → </text>
+                                        <text {...dimAttrs}>{completed}</text>
+                                    </>
+                                ) : null}
+                                {message !== '' ? (
+                                    <>
+                                        <text> </text>
+                                        <text {...dimAttrs}>{message}</text>
+                                    </>
+                                ) : null}
+                            </box>
+                        );
+                    }}
+                </For>
             )}
             <box marginTop={1}>
                 <text {...dimAttrs}>
@@ -136,76 +137,78 @@ function timelineModelMessage(event: RecentEvent): string {
     return truncate(event.emitPayloadText ?? event.message, 60);
 }
 
-export function TimelinePane({ state }: AbgOverlayPaneProps): React.ReactNode {
+export function TimelinePane({ state }: AbgOverlayPaneProps): JSX.Element {
     const events = state.recentEvents;
     return (
         <box flexDirection="column" marginTop={1}>
             {events.length === 0 ? (
                 <text {...dimAttrs}>No timeline events</text>
             ) : (
-                events.map((event: RecentEvent, index: number) => {
-                    const type = truncate(event.type, 24);
-                    const timestamp = event.timestamp !== '' ? shortTime(event.timestamp) : '';
-                    const taskGraph = truncate(timelineTaskGraph(event), 16);
-                    const nodeSignal = truncate(timelineNodeSignal(event), 16);
-                    const modelMessage = timelineModelMessage(event);
-                    return (
-                        // biome-ignore lint/suspicious/noArrayIndexKey: timeline events are append-only and capped at 200
-                        <box key={`${event.timestamp}-${event.type}-${index}`} flexDirection="row">
-                            <text>{type}</text>
-                            <text {...dimAttrs}> | </text>
-                            <text {...dimAttrs}>{timestamp}</text>
-                            <text {...dimAttrs}> | </text>
-                            <text>{taskGraph}</text>
-                            <text {...dimAttrs}> | </text>
-                            <text>{nodeSignal}</text>
-                            <text {...dimAttrs}> | </text>
-                            <text {...dimAttrs}>{modelMessage}</text>
-                        </box>
-                    );
-                })
+                <For each={events}>
+                    {(event: RecentEvent) => {
+                        const type = truncate(event.type, 24);
+                        const timestamp = event.timestamp !== '' ? shortTime(event.timestamp) : '';
+                        const taskGraph = truncate(timelineTaskGraph(event), 16);
+                        const nodeSignal = truncate(timelineNodeSignal(event), 16);
+                        const modelMessage = timelineModelMessage(event);
+                        return (
+                            <box flexDirection="row">
+                                <text>{type}</text>
+                                <text {...dimAttrs}> | </text>
+                                <text {...dimAttrs}>{timestamp}</text>
+                                <text {...dimAttrs}> | </text>
+                                <text>{taskGraph}</text>
+                                <text {...dimAttrs}> | </text>
+                                <text>{nodeSignal}</text>
+                                <text {...dimAttrs}> | </text>
+                                <text {...dimAttrs}>{modelMessage}</text>
+                            </box>
+                        );
+                    }}
+                </For>
             )}
         </box>
     );
 }
 
-export function ApprovalsPane({ state }: AbgOverlayPaneProps): React.ReactNode {
+export function ApprovalsPane({ state }: AbgOverlayPaneProps): JSX.Element {
     const approvals = state.pendingApprovals;
     return (
         <box flexDirection="column" marginTop={1}>
             {approvals.length === 0 ? (
                 <text {...dimAttrs}>No pending approvals</text>
             ) : (
-                approvals.map((approval: ApprovalRecord, index: number) => {
-                    const approvalId = truncate(approval.approvalId, 16);
-                    const stateFg = approvalStateFg(approval.state);
-                    const subject = `${approval.subject.kind}:${approval.subject.id}`;
-                    const reason = approval.reason !== undefined ? truncate(approval.reason, 60) : '';
-                    const requested = relativeTime(approval.requestedAt);
-                    return (
-                        // biome-ignore lint/suspicious/noArrayIndexKey: pending approvals are append-only within a single overlay render
-                        <box key={`${approval.approvalId}-${index}`} flexDirection="column">
-                            <box flexDirection="row">
-                                <text {...dimAttrs}>{approvalId}</text>
-                                <text> </text>
-                                <text {...(stateFg !== undefined ? { fg: stateFg } : {})} {...boldAttrs}>
-                                    [{approval.state}]
-                                </text>
-                                <text> </text>
-                                <text>{subject}</text>
-                            </box>
-                            {reason !== '' ? (
+                <For each={approvals}>
+                    {(approval: ApprovalRecord) => {
+                        const approvalId = truncate(approval.approvalId, 16);
+                        const stateFg = approvalStateFg(approval.state);
+                        const subject = `${approval.subject.kind}:${approval.subject.id}`;
+                        const reason = approval.reason !== undefined ? truncate(approval.reason, 60) : '';
+                        const requested = relativeTime(approval.requestedAt);
+                        return (
+                            <box flexDirection="column">
                                 <box flexDirection="row">
-                                    <text {...dimAttrs}>reason: </text>
-                                    <text {...dimAttrs}>{reason}</text>
+                                    <text {...dimAttrs}>{approvalId}</text>
+                                    <text> </text>
+                                    <text {...(stateFg !== undefined ? { fg: stateFg } : {})} {...boldAttrs}>
+                                        [{approval.state}]
+                                    </text>
+                                    <text> </text>
+                                    <text>{subject}</text>
                                 </box>
-                            ) : null}
-                            <box flexDirection="row">
-                                <text {...dimAttrs}>requested: {requested}</text>
+                                {reason !== '' ? (
+                                    <box flexDirection="row">
+                                        <text {...dimAttrs}>reason: </text>
+                                        <text {...dimAttrs}>{reason}</text>
+                                    </box>
+                                ) : null}
+                                <box flexDirection="row">
+                                    <text {...dimAttrs}>requested: {requested}</text>
+                                </box>
                             </box>
-                        </box>
-                    );
-                })
+                        );
+                    }}
+                </For>
             )}
         </box>
     );
@@ -235,7 +238,7 @@ function policyEventFg(eventType: string): string | undefined {
     return undefined;
 }
 
-export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): React.ReactNode {
+export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): JSX.Element {
     const cost = state.costCents !== undefined ? `$${(state.costCents / 100).toFixed(2)}` : '$0.00';
     const inputTokens = state.inputTokens;
     const outputTokens = state.outputTokens;
@@ -275,26 +278,27 @@ export function CostPolicyPane({ state, modelLabel }: CostPolicyPaneProps): Reac
                 {policyEvents.length === 0 ? (
                     <text {...dimAttrs}>No policy events</text>
                 ) : (
-                    policyEvents.map((event: RecentEvent, index: number) => {
-                        const type = truncate(event.type, 24);
-                        const timestamp = event.timestamp !== '' ? shortTime(event.timestamp) : '';
-                        const message = truncate(event.emitPayloadText ?? event.message, 60);
-                        const eventFg = policyEventFg(event.type);
-                        return (
-                            // biome-ignore lint/suspicious/noArrayIndexKey: policy events are append-only within a single overlay render
-                            <box key={`policy-${event.timestamp}-${event.type}-${index}`} flexDirection="row">
-                                <text {...(eventFg !== undefined ? { fg: eventFg } : {})}>{type}</text>
-                                <text {...dimAttrs}> </text>
-                                <text {...dimAttrs}>{timestamp}</text>
-                                {message !== '' ? (
-                                    <>
-                                        <text {...dimAttrs}> </text>
-                                        <text {...dimAttrs}>{message}</text>
-                                    </>
-                                ) : null}
-                            </box>
-                        );
-                    })
+                    <For each={policyEvents}>
+                        {(event: RecentEvent) => {
+                            const type = truncate(event.type, 24);
+                            const timestamp = event.timestamp !== '' ? shortTime(event.timestamp) : '';
+                            const message = truncate(event.emitPayloadText ?? event.message, 60);
+                            const eventFg = policyEventFg(event.type);
+                            return (
+                                <box flexDirection="row">
+                                    <text {...(eventFg !== undefined ? { fg: eventFg } : {})}>{type}</text>
+                                    <text {...dimAttrs}> </text>
+                                    <text {...dimAttrs}>{timestamp}</text>
+                                    {message !== '' ? (
+                                        <>
+                                            <text {...dimAttrs}> </text>
+                                            <text {...dimAttrs}>{message}</text>
+                                        </>
+                                    ) : null}
+                                </box>
+                            );
+                        }}
+                    </For>
                 )}
             </box>
         </box>
@@ -322,11 +326,12 @@ function blackboardKeyFg(key: string): string | undefined {
     return undefined;
 }
 
-export function BlackboardPane({ state }: AbgOverlayPaneProps): React.ReactNode {
+export function BlackboardPane({ state }: AbgOverlayPaneProps): JSX.Element {
     const entries = [...state.blackboardEntries.entries()].sort(([left], [right]) => left.localeCompare(right));
     const recentMutations = state.recentEvents.filter(
         (event) => event.type === 'blackboard.set' || event.type === 'blackboard.delete',
     );
+    const recentMutationRows = recentMutations.slice(-10).reverse();
     const greenFg = '#00ff00';
     const redFg = '#ff0000';
 
@@ -341,41 +346,41 @@ export function BlackboardPane({ state }: AbgOverlayPaneProps): React.ReactNode 
                         hypotheses, and observations here.
                     </text>
                 ) : (
-                    entries.map(([key, value]) => {
-                        const valueText = truncate(formatBlackboardValue(value), 80);
-                        const keyFg = blackboardKeyFg(key);
-                        return (
-                            <box key={`bb-${key}`} flexDirection="row">
-                                <text {...(keyFg !== undefined ? { fg: keyFg } : {})} {...boldAttrs}>
-                                    {key}
-                                </text>
-                                <text {...dimAttrs}> = </text>
-                                <text {...dimAttrs}>{valueText}</text>
-                            </box>
-                        );
-                    })
+                    <For each={entries}>
+                        {([key, value]) => {
+                            const valueText = truncate(formatBlackboardValue(value), 80);
+                            const keyFg = blackboardKeyFg(key);
+                            return (
+                                <box flexDirection="row">
+                                    <text {...(keyFg !== undefined ? { fg: keyFg } : {})} {...boldAttrs}>
+                                        {key}
+                                    </text>
+                                    <text {...dimAttrs}> = </text>
+                                    <text {...dimAttrs}>{valueText}</text>
+                                </box>
+                            );
+                        }}
+                    </For>
                 )}
             </box>
             {recentMutations.length > 0 ? (
                 <box marginTop={1} flexDirection="column">
                     <text {...boldAttrs}>Recent Mutations</text>
-                    {recentMutations
-                        .slice(-10)
-                        .reverse()
-                        .map((event, index) => {
+                    <For each={recentMutationRows}>
+                        {(event) => {
                             const type = event.type === 'blackboard.set' ? 'set' : 'del';
                             const timestamp = event.timestamp !== '' ? shortTime(event.timestamp) : '';
                             const message = truncate(event.emitPayloadText ?? event.message, 60);
                             const mutFg = event.type === 'blackboard.set' ? greenFg : redFg;
                             return (
-                                // biome-ignore lint/suspicious/noArrayIndexKey: blackboard mutations are append-only within a render
-                                <box key={`bb-mut-${event.timestamp}-${index}`} flexDirection="row">
+                                <box flexDirection="row">
                                     <text {...(mutFg !== undefined ? { fg: mutFg } : {})}>{type}</text>
                                     <text {...dimAttrs}> {timestamp}</text>
                                     {message !== '' ? <text {...dimAttrs}> {message}</text> : null}
                                 </box>
                             );
-                        })}
+                        }}
+                    </For>
                 </box>
             ) : null}
         </box>

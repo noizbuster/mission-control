@@ -1,8 +1,8 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
 
 import { terminalDisplayWidth } from '@mission-control/tui';
 import { TextAttributes } from '@opentui/core';
-import type * as React from 'react';
+import type { JSX } from 'solid-js';
 import type { ApprovalLevel } from '../state/approval-level.js';
 import { type BottomDockPolicy, type BottomDockStatusPolicy, bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { APPROVAL_LEVEL_COLORS, STATUS_LINE_BG } from './overlay-theme.js';
@@ -219,13 +219,12 @@ export function formatBottomStatusRow(props: StatusBarProps): BottomStatusRowSha
  * between the segments is filled with a dim divider so the line
  * reads as a continuous divider. Full-width dark-navy bg.
  */
-export function TopStatusBar(props: StatusBarProps): React.ReactNode {
+export function TopStatusBar(props: StatusBarProps): JSX.Element {
     const { provider, model, variantLabel, contextLabel, fillCount } = formatTopStatusRow(props);
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
             <text selectable>
-                <span attributes={TextAttributes.DIM}>{provider}</span>{' '}
-                <span attributes={TextAttributes.BOLD}>{model}</span>
+                <span style={{ dim: true }}>{provider}</span> <span style={{ bold: true }}>{model}</span>
                 {variantLabel !== undefined ? ` - ${variantLabel}` : null}
             </text>
             <text selectable> </text>
@@ -245,7 +244,7 @@ export function TopStatusBar(props: StatusBarProps): React.ReactNode {
  * (Ctrl+R / `/rename`) does not appear here. The gap between the segments is
  * filled with a dim divider. Full-width dark-navy bg.
  */
-export function BottomStatusBar(props: StatusBarProps): React.ReactNode {
+export function BottomStatusBar(props: StatusBarProps): JSX.Element {
     const { approvalLabel, approvalColor, projectLabel, sessionLabel, dimApproval, fillCount } =
         formatBottomStatusRow(props);
     return (

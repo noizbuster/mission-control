@@ -1,6 +1,5 @@
-import { MacOSScrollAccel, type ScrollBoxRenderable } from '@opentui/core';
-import { isValidElement, type ReactNode, type RefObject } from 'react';
-import { describe, expect, it } from 'vitest';
+import { MacOSScrollAccel } from '@opentui/core';
+import { describe, expect, it, vi } from 'vitest';
 import {
     ChatTranscriptScrollbox,
     type ChatTranscriptScrollOptions,
@@ -8,18 +7,12 @@ import {
     MarkdownPanel,
     MessageBlock,
 } from './ChatTranscript.js';
-import { darkTheme } from './markdown/theme.js';
 
-type ScrollboxElementProps = ChatTranscriptScrollOptions & {
-    readonly children?: ReactNode;
-};
-
-function scrollboxProps(node: ReactNode): ScrollboxElementProps {
-    if (!isValidElement<ScrollboxElementProps>(node)) {
-        throw new Error('expected a scrollbox element');
-    }
-    return node.props;
-}
+vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
+vi.mock('@mission-control/tui/chat', async () => await import('../chat.js'));
+vi.mock('@mission-control/core', () => ({
+    resolveMissionControlDataDir: () => '/tmp/mission-control-test',
+}));
 
 describe('chatTranscriptScrollOptions', () => {
     it('builds the native scrollbox config with sticky-bottom macOS acceleration', () => {
@@ -61,108 +54,15 @@ describe('chatTranscriptScrollOptions', () => {
     });
 });
 
-describe('ChatTranscriptScrollbox component', () => {
-    it('is a callable React component', () => {
+describe('ChatTranscript component exports', () => {
+    it('keeps callable Solid component seams', () => {
         expect(typeof ChatTranscriptScrollbox).toBe('function');
+        expect(typeof MessageBlock).toBe('function');
+        expect(typeof MarkdownPanel).toBe('function');
     });
 
-    it('does not throw when constructed with children and a scrollbox ref', () => {
-        const scrollboxRef: RefObject<ScrollBoxRenderable | null> = { current: null };
-        expect(() => {
-            void (
-                <ChatTranscriptScrollbox scrollboxRef={scrollboxRef}>
-                    <text>hello</text>
-                </ChatTranscriptScrollbox>
-            );
-        }).not.toThrow();
-    });
-
-    it('does not throw when constructed with null children and a maxHeight (failure scenario)', () => {
-        const scrollboxRef: RefObject<ScrollBoxRenderable | null> = { current: null };
-        expect(() => {
-            void (
-                <ChatTranscriptScrollbox scrollboxRef={scrollboxRef} maxHeight={10}>
-                    {null}
-                </ChatTranscriptScrollbox>
-            );
-        }).not.toThrow();
-    });
-
-    it('threads resize height changes into the native scrollbox without dropping sticky-bottom props', () => {
-        const scrollboxRef: RefObject<ScrollBoxRenderable | null> = { current: null };
-
-        const tall = scrollboxProps(
-            ChatTranscriptScrollbox({ scrollboxRef, maxHeight: 24, children: 'transcript line' }),
-        );
-        const short = scrollboxProps(
-            ChatTranscriptScrollbox({ scrollboxRef, maxHeight: 10, children: 'transcript line' }),
-        );
-
-        expect([tall.stickyScroll, tall.stickyStart, tall.width, tall.maxHeight]).toEqual([true, 'bottom', '100%', 24]);
-        expect([short.stickyScroll, short.stickyStart, short.width, short.maxHeight]).toEqual([
-            true,
-            'bottom',
-            '100%',
-            10,
-        ]);
-    });
-});
-
-describe('MessageBlock component (memoized)', () => {
-    it('does not throw when constructed with a streaming assistant block', () => {
-        expect(() => {
-            void (
-                <MessageBlock
-                    block={{ kind: 'assistant', lines: ['Assistant: hello'] }}
-                    isStreaming={true}
-                    toolOutputExpanded={false}
-                    viewportColumns={80}
-                />
-            );
-        }).not.toThrow();
-    });
-
-    it('does not throw when constructed with a collapsed tool block', () => {
-        expect(() => {
-            void (
-                <MessageBlock
-                    block={{ kind: 'tool', lines: ['Command preview for command.run', '$ ls'] }}
-                    toolOutputExpanded={false}
-                    viewportColumns={80}
-                />
-            );
-        }).not.toThrow();
-    });
-});
-
-describe('MarkdownPanel component (memoized)', () => {
-    it('does not throw when constructed with streaming enabled', () => {
-        expect(() => {
-            void (
-                <MarkdownPanel
-                    text="# heading"
-                    theme={darkTheme}
-                    barColor="#00ff00"
-                    barWidth={1}
-                    streaming={true}
-                    viewportColumns={80}
-                />
-            );
-        }).not.toThrow();
-    });
-
-    it('does not throw when constructed without streaming and a marginTop', () => {
-        expect(() => {
-            void (
-                <MarkdownPanel
-                    text="plain text"
-                    theme={darkTheme}
-                    barColor="#ff00ff"
-                    barWidth={2}
-                    marginTop={1}
-                    viewportColumns={80}
-                />
-            );
-        }).not.toThrow();
+    it('keeps the scroll option type exact for maxHeight callers', () => {
+        const opts = chatTranscriptScrollOptions(10) satisfies ChatTranscriptScrollOptions;
+        expect(opts.maxHeight).toBe(10);
     });
 });

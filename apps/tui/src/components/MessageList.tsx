@@ -1,4 +1,6 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
+
+import { For, type JSX } from 'solid-js';
 
 export type ChatMessage = {
     readonly text: string;
@@ -14,15 +16,17 @@ function messagePrefix(role: ChatMessage['role']): string {
     return '';
 }
 
-export function MessageList({ messages }: MessageListProps): React.ReactNode {
+export function MessageList({ messages }: MessageListProps): JSX.Element {
     return (
         <box flexDirection="column">
-            {messages.map((message) => (
-                <text key={`${message.role}-${message.text.slice(0, 16)}`}>
-                    {messagePrefix(message.role)}
-                    {message.text}
-                </text>
-            ))}
+            <For each={messages}>
+                {(message) => (
+                    <text>
+                        {messagePrefix(message.role)}
+                        {message.text}
+                    </text>
+                )}
+            </For>
         </box>
     );
 }

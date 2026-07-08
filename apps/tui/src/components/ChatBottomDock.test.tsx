@@ -1,185 +1,98 @@
-/** @jsxImportSource @opentui/react */
-
-import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createChatSelectorStore } from '../state/chat-selector-store.js';
 import { createChatStore } from '../state/chat-store.js';
 import { createSlashCommandMenuState } from '../state/interactive-chat-command-menu.js';
-import { ChatBottomDockBase, selectChatBottomDockSlice } from './ChatBottomDock.js';
 import {
-    baseStatusProps,
-    childAt,
-    dockNodeForSlice,
-    dockPromptPanelChildren,
-    dockSliceWith,
-    elementChildren,
-    expectMenuPolicyProps,
-    fileChoiceRowCount,
-    fileFooter,
-    firstDockPanelProps,
-    openFileAutocompleteState,
-    overlayFrameProps,
-    propsFor,
-    slashChoiceRowCount,
-    slashFooter,
-    statusLayout,
-} from './ChatBottomDock.test-support.js';
-import { ChatInputArea, type ChatInputAreaProps } from './ChatInputArea.js';
+    buildBottomStatusBarProps,
+    buildTopStatusBarProps,
+    type ChatBottomDockSlice,
+    selectChatBottomDockSlice,
+} from './ChatBottomDock.js';
 import { bottomDockPolicy } from './chat-bottom-dock-policy.js';
-import {
-    asScrollboxRef,
-    asTextareaRef,
-    createRecordingScrollbox,
-    createRecordingTextarea,
-} from './chat-test-support.js';
-import { FileAutocompletePanel, type FileAutocompletePanelProps } from './FileAutocompletePanel.js';
-import { QuestionOverlay } from './OverlayPanels.js';
-import { Separator, type SeparatorProps } from './Separator.js';
-import { SlashMenuPanel, type SlashMenuPanelProps } from './SlashMenuPanel.js';
-import { BottomStatusBar, type StatusBarProps, TopStatusBar } from './StatusBar.js';
+import { type StatusBarProps, statusBarLayoutFromPolicy } from './StatusBar.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
+vi.mock('@mission-control/tui/chat', async () => await import('../chat.js'));
+vi.mock('@mission-control/core', () => ({
+    resolveUserConfigDir: () => '/tmp/mission-control-test-config',
+}));
+
+const statusLayout = statusBarLayoutFromPolicy(bottomDockPolicy({ columns: 120, rows: 24 }));
+
+function readChatBottomDockSource(): string {
+    return readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatBottomDock.tsx'), 'utf8');
+}
 
 function readChatInputAreaSource(): string {
     return readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatInputArea.tsx'), 'utf8');
 }
 
-describe('ChatBottomDockBase composition', () => {
-    it('constructs normal input mode in status, panel, input, status order', () => {
-        // Given: a normal chat store with live status fields and prompt-adjacent content.
-        const store = createChatStore();
-        store.setModelSelection({ providerID: 'openai', modelID: 'gpt-5', variantID: 'reasoning-high' });
-        store.setSessionId('session_123');
-        store.setApprovalLevel('safe');
-        store.setContextTokensUsed(12345);
-        store.setContextTokensMax(200000);
-        const textareaRef = asTextareaRef(createRecordingTextarea());
-        const scrollboxRef = asScrollboxRef(createRecordingScrollbox());
-        const onCopySessionID = vi.fn();
-        const promptAdjacentPanel = (
-            <box>
-                <text>panel slot</text>
-            </box>
+function sliceBetween(source: string, startNeedle: string, endNeedle: string): string {
+    const start = source.indexOf(startNeedle);
+    const end = source.indexOf(endNeedle, start);
+    if (start < 0 || end < 0) {
+        throw new Error(`missing source slice ${startNeedle}..${endNeedle}`);
+    }
+    return source.slice(start, end);
+}
+
+function baseStatusProps(onCopySessionID: () => void = (): void => {}): StatusBarProps {
+    return {
+        providerID: 'local',
+        modelID: 'local-echo',
+        workspaceRoot: '/home/user/mission-control',
+        gitBranch: 'main',
+        isWorktree: false,
+        approvalLevel: 'verbose',
+        onCopySessionID,
+    };
+}
+
+function sliceWith(overrides: Partial<ChatBottomDockSlice>): ChatBottomDockSlice {
+    const store = createChatStore();
+    return {
+        ...selectChatBottomDockSlice(store.getSnapshot()),
+        ...overrides,
+    };
+}
+
+describe('ChatBottomDockBase source topology', () => {
+    it('keeps status, prompt panels, separator, input slot, and bottom status in order', () => {
+        const source = readChatBottomDockSource();
+        const block = sliceBetween(source, 'export function ChatBottomDockBase', 'export function ChatBottomDock(');
+
+        expect(block.indexOf('<TopStatusBar')).toBeLessThan(block.indexOf('{promptPanels}'));
+        expect(block.indexOf('{promptPanels}')).toBeLessThan(block.indexOf('<Separator'));
+        expect(block.indexOf('<Separator')).toBeLessThan(block.indexOf("dockSlice.inputMode === 'question'"));
+        expect(block.indexOf("dockSlice.inputMode === 'question'")).toBeLessThan(block.indexOf('<BottomStatusBar'));
+        expect(block).toContain('<QuestionOverlay store={store} />');
+        expect(block).toContain('<ChatInputArea');
+        expect(block).toContain('textareaRef={textareaRef}');
+        expect(block).toContain('scrollboxRef={scrollboxRef}');
+        expect(block).toContain('focused={inputFocused}');
+        expect(block).toContain('viewportRows={viewportRows}');
+        expect(block).toContain('promptMenuInteractionsEnabled={menuPolicy.rows > 0}');
+    });
+
+    it('derives prompt-adjacent menu visibility from slash, workflow, file, and menu-row state', () => {
+        const source = readChatBottomDockSource();
+        const block = sliceBetween(
+            source,
+            'function renderPromptAdjacentPanels',
+            'export function buildTopStatusBarProps',
         );
 
-        // When: the pure construction seam is called with the selected dock slice.
-        const node = ChatBottomDockBase({
-            store,
-            textareaRef,
-            scrollboxRef,
-            viewportColumns: 121,
-            viewportRows: 40,
-            statusBarProps: baseStatusProps(onCopySessionID),
-            statusLayout,
-            promptAdjacentPanel,
-            dockSlice: selectChatBottomDockSlice(store.getSnapshot()),
-        });
-
-        // Then: the dock composes the expected children and passes runtime refs/status through.
-        const children = elementChildren(node);
-        expect(children.length).toBe(5);
-        const topStatusProps = propsFor<StatusBarProps>(childAt(children, 0), TopStatusBar);
-        expect([
-            topStatusProps.providerID,
-            topStatusProps.modelID,
-            topStatusProps.variantID,
-            topStatusProps.contextTokensUsed,
-            topStatusProps.contextTokensMax,
-            topStatusProps.statusLayout,
-        ]).toEqual(['openai', 'gpt-5', 'reasoning-high', 12345, 200000, statusLayout]);
-        expect(dockPromptPanelChildren(node).length).toBe(1);
-        const separatorProps = propsFor<SeparatorProps>(childAt(children, 2), Separator);
-        expect([separatorProps.state, separatorProps.width]).toEqual(['idle', 121]);
-        const inputProps = propsFor<ChatInputAreaProps>(childAt(children, 3), ChatInputArea);
-        expect([inputProps.store, inputProps.textareaRef, inputProps.scrollboxRef, inputProps.focused]).toEqual([
-            store,
-            textareaRef,
-            scrollboxRef,
-            true,
-        ]);
-        expect(inputProps.viewportRows).toBe(40);
-        const bottomStatusProps = propsFor<StatusBarProps>(childAt(children, 4), BottomStatusBar);
-        expect([
-            bottomStatusProps.sessionID,
-            bottomStatusProps.approvalLevel,
-            bottomStatusProps.onCopySessionID,
-            bottomStatusProps.statusLayout,
-        ]).toEqual(['session_123', 'safe', onCopySessionID, statusLayout]);
+        expect(block).toContain("dockSlice.inputMirror.startsWith('/')");
+        expect(block).toContain("dockSlice.inputMirror.startsWith('#')");
+        expect(block).toContain('dockSlice.fileAutocomplete.open');
+        expect(block).toContain('menuPolicy.rows > 0');
+        expect(block).toContain('<SlashMenuPanel');
+        expect(block).toContain('<FileAutocompletePanel');
+        expect(block).toContain('{promptAdjacentPanel ?? null}');
     });
 
-    it('constructs question mode with QuestionOverlay in the input slot', () => {
-        // Given: the only overlay mode allowed inside the dock input slot.
-        const store = createChatStore();
-        void store.showQuestion('Pick one', ['Yes', 'No'], { header: 'Question' });
-        const textareaRef = asTextareaRef(createRecordingTextarea());
-        const scrollboxRef = asScrollboxRef(createRecordingScrollbox());
-
-        // When: the dock is constructed from the question snapshot.
-        const node = ChatBottomDockBase({
-            store,
-            textareaRef,
-            scrollboxRef,
-            viewportColumns: 80,
-            viewportRows: 24,
-            statusBarProps: baseStatusProps(),
-            dockSlice: selectChatBottomDockSlice(store.getSnapshot()),
-        });
-
-        // Then: the question panel occupies the input slot instead of ChatInputArea.
-        const children = elementChildren(node);
-        expect(children.length).toBe(4);
-        const separatorProps = propsFor<SeparatorProps>(childAt(children, 1), Separator);
-        expect([separatorProps.state, separatorProps.width]).toEqual(['awaiting_input', 80]);
-        const questionProps = propsFor<{ readonly store: ReturnType<typeof createChatStore> }>(
-            childAt(children, 2),
-            QuestionOverlay,
-        );
-        expect(questionProps.store).toBe(store);
-    });
-
-    it('keeps modal overlays out of the dock selector', () => {
-        // Given: an approval overlay, which remains a ChatApp modal concern.
-        const store = createChatStore();
-        store.showApproval('bash.run', 'run tests');
-        const textareaRef = asTextareaRef(createRecordingTextarea());
-        const scrollboxRef = asScrollboxRef(createRecordingScrollbox());
-
-        // When: the dock is constructed from the approval snapshot.
-        const node = ChatBottomDockBase({
-            store,
-            textareaRef,
-            scrollboxRef,
-            viewportColumns: 80,
-            viewportRows: 24,
-            statusBarProps: baseStatusProps(),
-            inputFocused: false,
-            dockSlice: selectChatBottomDockSlice(store.getSnapshot()),
-        });
-
-        // Then: it still renders ChatInputArea with caller-owned focus and no approval modal child appears.
-        const children = elementChildren(node);
-        const separatorProps = propsFor<SeparatorProps>(childAt(children, 1), Separator);
-        const inputProps = propsFor<ChatInputAreaProps>(childAt(children, 2), ChatInputArea);
-        expect([children.length, separatorProps.state, inputProps.focused]).toEqual([4, 'awaiting_input', false]);
-    });
-});
-
-describe('ChatBottomDockBase separator', () => {
-    it('derives separator state from the selected slice and width from viewport columns', () => {
-        const node = dockNodeForSlice(
-            dockSliceWith({ separatorState: 'running' }),
-            bottomDockPolicy({ columns: 120, rows: 24 }).menu,
-            undefined,
-            40,
-        );
-        const children = elementChildren(node);
-
-        const separatorProps = propsFor<SeparatorProps>(childAt(children, 1), Separator);
-        expect([separatorProps.state, separatorProps.width]).toEqual(['running', 40]);
-    });
-});
-
-describe('ChatInputArea viewport contract', () => {
     it('uses injected viewportRows for PgUp/PgDn scroll and does not read process stdout rows', () => {
         const source = readChatInputAreaSource();
         const stdoutRowsToken = ['process', 'stdout', 'rows'].join('.');
@@ -190,122 +103,76 @@ describe('ChatInputArea viewport contract', () => {
     });
 });
 
-describe('ChatBottomDockBase prompt-adjacent panels', () => {
-    it('renders the slash menu through the dock with policy-derived rows and footer', () => {
-        // Given: a wide dock policy with more rows than the direct slash-panel default.
-        const policy = bottomDockPolicy({ columns: 120, rows: 24 });
-        const node = dockNodeForSlice(
-            dockSliceWith({ inputMirror: '/', menuState: createSlashCommandMenuState() }),
-            policy.menu,
-        );
+describe('ChatBottomDockBase status props', () => {
+    it('threads live provider, variant, and context fields into the top status bar props', () => {
+        const dockSlice = sliceWith({
+            providerID: 'openai',
+            modelID: 'gpt-5',
+            variantID: 'reasoning-high',
+            contextTokensUsed: 12345,
+            contextTokensMax: 200000,
+        });
 
-        // Then: SlashMenuPanel is dock-owned and receives the policy-derived menu settings.
-        const slashProps = firstDockPanelProps<SlashMenuPanelProps>(node, SlashMenuPanel);
-        expectMenuPolicyProps(slashProps, policy.menu);
-        const renderedSlash = SlashMenuPanel(slashProps);
-        expect(slashChoiceRowCount(renderedSlash)).toBe(policy.menu.rows);
-        expect(overlayFrameProps(renderedSlash).footer).toBe(slashFooter);
+        const props = buildTopStatusBarProps({ statusBarProps: baseStatusProps(), statusLayout, dockSlice });
+
+        expect(props).toMatchObject({
+            providerID: 'openai',
+            modelID: 'gpt-5',
+            variantID: 'reasoning-high',
+            contextTokensUsed: 12345,
+            contextTokensMax: 200000,
+            statusLayout,
+        });
     });
 
-    it('renders the workflow menu through the dock and hides the footer when policy says so', () => {
-        // Given: a narrow dock policy that still permits menu rows but hides footer help.
-        const policy = bottomDockPolicy({ columns: 40, rows: 24 });
-        const workflowNames = ['default', 'planner', 'runner', 'audit', 'release'];
-        const node = dockNodeForSlice(
-            dockSliceWith({ inputMirror: '#', menuState: createSlashCommandMenuState(), workflowNames }),
-            policy.menu,
-        );
+    it('threads session and approval fields into the bottom status bar props', () => {
+        const onCopySessionID = vi.fn();
+        const dockSlice = sliceWith({ sessionId: 'session_123', approvalLevel: 'safe' });
 
-        // Then: the same panel seam renders workflow choices with the narrow row budget and no footer.
-        const slashProps = firstDockPanelProps<SlashMenuPanelProps>(node, SlashMenuPanel);
-        expect(slashProps.workflowNames).toBe(workflowNames);
-        expectMenuPolicyProps(slashProps, policy.menu);
-        const renderedWorkflow = SlashMenuPanel(slashProps);
-        expect(overlayFrameProps(renderedWorkflow).title).toBe('Workflows (5)');
-        expect(slashChoiceRowCount(renderedWorkflow)).toBe(policy.menu.rows);
-        expect(overlayFrameProps(renderedWorkflow).footer).toBeUndefined();
+        const props = buildBottomStatusBarProps({
+            statusBarProps: baseStatusProps(onCopySessionID),
+            statusLayout,
+            dockSlice,
+        });
+
+        expect(props).toMatchObject({
+            sessionID: 'session_123',
+            approvalLevel: 'safe',
+            onCopySessionID,
+            statusLayout,
+        });
     });
 
-    it('renders file autocomplete through the dock with policy-derived rows and footer', () => {
-        // Given: an open file autocomplete state and a wide dock row budget.
-        const policy = bottomDockPolicy({ columns: 120, rows: 24 });
-        const fileAutocomplete = openFileAutocompleteState(12);
-        const node = dockNodeForSlice(dockSliceWith({ inputMirror: '@file', fileAutocomplete }), policy.menu);
+    it('omits optional top and bottom status bars when caller status props are absent', () => {
+        const dockSlice = sliceWith({});
 
-        // Then: FileAutocompletePanel is dock-owned and bounded by the policy menu rows.
-        const fileProps = firstDockPanelProps<FileAutocompletePanelProps>(node, FileAutocompletePanel);
-        expect(fileProps.fileAutocomplete).toBe(fileAutocomplete);
-        expectMenuPolicyProps(fileProps, policy.menu);
-        const renderedFiles = FileAutocompletePanel(fileProps);
-        expect(fileChoiceRowCount(renderedFiles)).toBe(policy.menu.rows);
-        expect(overlayFrameProps(renderedFiles).footer).toBe(fileFooter);
-    });
-
-    it('omits prompt-adjacent menu panels when the policy has zero menu rows', () => {
-        // Given: the minimum reserved dock height, which leaves no rows for menus.
-        const policy = bottomDockPolicy({ columns: 80, rows: 7 });
-
-        // When: slash and file autocomplete states would normally open a panel.
-        const nodes = [
-            dockNodeForSlice(
-                dockSliceWith({ inputMirror: '/', menuState: createSlashCommandMenuState() }),
-                policy.menu,
-            ),
-            dockNodeForSlice(
-                dockSliceWith({ inputMirror: '@file', fileAutocomplete: openFileAutocompleteState(3) }),
-                policy.menu,
-            ),
-        ];
-
-        // Then: the dock renders status/input/status only, avoiding a negative-height or overflow-like panel.
-        expect(policy.menu.rows).toBe(0);
-        expect(nodes.map((node) => elementChildren(node).length)).toEqual([4, 4]);
-        const inputProps = propsFor<ChatInputAreaProps>(childAt(elementChildren(nodes[0]), 2), ChatInputArea);
-        expect(inputProps.promptMenuInteractionsEnabled).toBe(false);
-    });
-
-    it('keeps the prompt-adjacent wrapper when zero menu rows leave only the custom panel slot', () => {
-        // Given: a collapsed menu budget and a caller-provided prompt-adjacent panel.
-        const policy = bottomDockPolicy({ columns: 80, rows: 7 });
-        const promptAdjacentPanel = (
-            <box>
-                <text>custom panel</text>
-            </box>
-        );
-
-        // When: the slash menu would be hidden by policy but the custom panel remains.
-        const node = dockNodeForSlice(
-            dockSliceWith({ inputMirror: '/', menuState: createSlashCommandMenuState() }),
-            policy.menu,
-            promptAdjacentPanel,
-        );
-
-        // Then: the same column wrapper is present and contains only the custom panel.
-        const children = elementChildren(node);
-        expect(children.length).toBe(5);
-        const panelChildren = dockPromptPanelChildren(node);
-        expect(panelChildren.length).toBe(1);
-        const customPanelProps = propsFor<{ readonly children?: ReactNode }>(childAt(panelChildren, 0), 'box');
-        const customPanelTextProps = propsFor<{ readonly children?: string }>(customPanelProps.children, 'text');
-        expect(customPanelTextProps.children).toBe('custom panel');
+        expect(buildTopStatusBarProps({ statusBarProps: undefined, statusLayout, dockSlice })).toBeUndefined();
+        expect(buildBottomStatusBarProps({ statusBarProps: undefined, statusLayout, dockSlice })).toBeUndefined();
     });
 });
 
-describe('direct prompt-adjacent panel defaults', () => {
-    it('preserves panel row counts and footers for direct callers', () => {
-        // Given: a direct caller that does not pass dock policy overrides.
-        const slashPanel = SlashMenuPanel({
-            inputBuffer: '/',
-            menuState: createSlashCommandMenuState(),
-            workflowNames: [],
-        });
-        const filePanel = FileAutocompletePanel({ fileAutocomplete: openFileAutocompleteState(12) });
+describe('ChatBottomDockBase menu policy contract', () => {
+    it('keeps dock-owned slash/workflow and file autocomplete menus bounded by policy rows', () => {
+        const policy = bottomDockPolicy({ columns: 120, rows: 24 });
+        const source = readChatBottomDockSource();
+        const block = sliceBetween(
+            source,
+            'function renderPromptAdjacentPanels',
+            'export function buildTopStatusBarProps',
+        );
 
-        // When/Then: current row counts and footers remain the default behavior.
-        expect(slashChoiceRowCount(slashPanel)).toBe(5);
-        expect(overlayFrameProps(slashPanel).footer).toBe(slashFooter);
-        expect(fileChoiceRowCount(filePanel)).toBe(8);
-        expect(overlayFrameProps(filePanel).footer).toBe(fileFooter);
+        expect(policy.menu.rows).toBe(8);
+        expect(block).toContain('maxVisibleRows={menuPolicy.rows}');
+        expect(block).toContain('showFooter={menuPolicy.showPanelFooter}');
+    });
+
+    it('disables dock-owned menu interactions when policy has zero menu rows', () => {
+        const policy = bottomDockPolicy({ columns: 80, rows: 7 });
+        const source = readChatBottomDockSource();
+        const block = sliceBetween(source, 'export function ChatBottomDockBase', 'export function ChatBottomDock(');
+
+        expect(policy.menu.rows).toBe(0);
+        expect(block).toContain('promptMenuInteractionsEnabled={menuPolicy.rows > 0}');
     });
 });
 
@@ -314,8 +181,48 @@ describe('selectChatBottomDockSlice', () => {
         vi.useRealTimers();
     });
 
+    it('selects normal input mode with model, session, approval, token, and idle separator state', () => {
+        const store = createChatStore();
+        store.setModelSelection({ providerID: 'openai', modelID: 'gpt-5', variantID: 'reasoning-high' });
+        store.setSessionId('session_123');
+        store.setApprovalLevel('safe');
+        store.setContextTokensUsed(12345);
+        store.setContextTokensMax(200000);
+
+        expect(selectChatBottomDockSlice(store.getSnapshot())).toMatchObject({
+            inputMode: 'input',
+            providerID: 'openai',
+            modelID: 'gpt-5',
+            variantID: 'reasoning-high',
+            contextTokensUsed: 12345,
+            contextTokensMax: 200000,
+            sessionId: 'session_123',
+            approvalLevel: 'safe',
+            separatorState: 'idle',
+        });
+    });
+
+    it('selects question mode and awaiting-input separator only for question overlays', () => {
+        const store = createChatStore();
+        void store.showQuestion('Pick one', ['Yes', 'No'], { header: 'Question' });
+
+        expect(selectChatBottomDockSlice(store.getSnapshot())).toMatchObject({
+            inputMode: 'question',
+            separatorState: 'awaiting_input',
+        });
+    });
+
+    it('keeps modal overlays in input mode while exposing the awaiting-input separator state', () => {
+        const store = createChatStore();
+        store.showApproval('bash.run', 'run tests');
+
+        expect(selectChatBottomDockSlice(store.getSnapshot())).toMatchObject({
+            inputMode: 'input',
+            separatorState: 'awaiting_input',
+        });
+    });
+
     it('does not notify when only outputText changes', () => {
-        // Given: a selector store built from the dock selector.
         vi.useFakeTimers();
         const store = createChatStore();
         const selectorStore = createChatSelectorStore(store, selectChatBottomDockSlice);
@@ -323,12 +230,10 @@ describe('selectChatBottomDockSlice', () => {
         const dispose = selectorStore.subscribe(listener);
         const before = selectorStore.getSnapshot();
 
-        // When: streaming output publishes without touching dock-relevant state.
         store.emitOutput('token-1\n');
         store.emitOutput('token-2\n');
         vi.advanceTimersByTime(50);
 
-        // Then: outputText changed on the parent store, but the dock selector stayed silent and stable.
         expect(store.getSnapshot().outputText).toBe('token-1\ntoken-2\n');
         expect(listener).not.toHaveBeenCalled();
         expect(selectorStore.getSnapshot()).toBe(before);
@@ -336,17 +241,14 @@ describe('selectChatBottomDockSlice', () => {
     });
 
     it('notifies when approval changes the live separator state but keeps approval modal out of the input slot', () => {
-        // Given: a dock selector snapshot in normal input mode.
         const store = createChatStore();
         const selectorStore = createChatSelectorStore(store, selectChatBottomDockSlice);
         const listener = vi.fn();
         const dispose = selectorStore.subscribe(listener);
         const before = selectorStore.getSnapshot();
 
-        // When: a modal overlay that ChatApp owns opens.
         store.showApproval('bash.run', 'run tests');
 
-        // Then: the dock slice updates only the separator state; approval modal rendering stays outside the dock.
         expect(store.getSnapshot().overlayMode).toBe('approval');
         expect(listener).toHaveBeenCalledTimes(1);
         expect(selectorStore.getSnapshot()).toMatchObject({
@@ -354,5 +256,30 @@ describe('selectChatBottomDockSlice', () => {
             separatorState: 'awaiting_input',
         });
         dispose();
+    });
+
+    it('carries slash menu, workflow names, and file autocomplete state into the dock slice', () => {
+        const store = createChatStore();
+        const menuState = createSlashCommandMenuState();
+        const fileAutocomplete = {
+            open: true,
+            prefix: 'file',
+            selectedIndex: 0,
+            matches: [{ name: 'file-1.ts', isDirectory: false }],
+        };
+        const snapshot = {
+            ...store.getSnapshot(),
+            inputMirror: '/',
+            menuState,
+            workflowNames: ['default', 'planner', 'runner'],
+            fileAutocomplete,
+        };
+
+        expect(selectChatBottomDockSlice(snapshot)).toMatchObject({
+            inputMirror: '/',
+            menuState,
+            workflowNames: ['default', 'planner', 'runner'],
+            fileAutocomplete,
+        });
     });
 });

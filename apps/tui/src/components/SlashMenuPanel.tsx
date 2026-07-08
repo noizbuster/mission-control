@@ -1,8 +1,6 @@
-/** @jsxImportSource @opentui/react */
-
 import { terminalDisplayWidth } from '@mission-control/tui';
 import { TextAttributes } from '@opentui/core';
-import type * as React from 'react';
+import { For, type JSX } from 'solid-js';
 import {
     createSlashCommandMenuView,
     createWorkflowCommandMenuView,
@@ -28,7 +26,7 @@ export function SlashMenuPanel({
     workflowNames,
     maxVisibleRows = MAX_VISIBLE,
     showFooter = true,
-}: SlashMenuPanelProps): React.ReactNode {
+}: SlashMenuPanelProps): JSX.Element | null {
     const isSlash = inputBuffer.startsWith('/');
     const isWorkflow = inputBuffer.startsWith('#');
     if (!isSlash && !isWorkflow) return null;
@@ -51,31 +49,28 @@ export function SlashMenuPanel({
     const idWidth =
         view.visibleChoices.length > 0 ? Math.max(8, ...view.visibleChoices.map((c) => terminalDisplayWidth(c.id))) : 8;
 
-    const items: readonly React.ReactNode[] = view.empty
-        ? [
-              <text key="empty" attributes={TextAttributes.DIM}>
-                  {' '}
-                  no matches
-              </text>,
-          ]
-        : view.visibleChoices.map((choice, index) => {
-              const globalIndex = view.startIndex + index;
-              const isSelected = globalIndex === view.selectedIndex;
-              const padding = ' '.repeat(Math.max(0, idWidth - terminalDisplayWidth(choice.id)));
-              const pickerMarker = choice.opensPicker === true ? ' \u2026' : '';
-              const selectedBg = isSelected ? { bg: SELECTED_BG } : {};
-              const line = `${isSelected ? '> ' : '  '}${choice.id}${padding}${pickerMarker}  ${choice.description}`;
-              return (
-                  <box key={choice.id} height={1}>
-                      <text {...selectedBg}>{line}</text>
-                  </box>
-              );
-          });
-
     return (
         <OverlayFrame variant="panel" title={header.trim()} {...(showFooter ? { footer: FOOTER } : {})}>
             <box height={1} />
-            {items}
+            {view.empty ? (
+                <text attributes={TextAttributes.DIM}> no matches</text>
+            ) : (
+                <For each={view.visibleChoices}>
+                    {(choice, index) => {
+                        const globalIndex = view.startIndex + index();
+                        const isSelected = globalIndex === view.selectedIndex;
+                        const padding = ' '.repeat(Math.max(0, idWidth - terminalDisplayWidth(choice.id)));
+                        const pickerMarker = choice.opensPicker === true ? ' \u2026' : '';
+                        const selectedBg = isSelected ? { bg: SELECTED_BG } : {};
+                        const line = `${isSelected ? '> ' : '  '}${choice.id}${padding}${pickerMarker}  ${choice.description}`;
+                        return (
+                            <box height={1}>
+                                <text {...selectedBg}>{line}</text>
+                            </box>
+                        );
+                    }}
+                </For>
+            )}
         </OverlayFrame>
     );
 }

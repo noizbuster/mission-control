@@ -1,12 +1,24 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
 
 import { blockPrefix, type ChatBlock, joinBlockText, readToolBlockTitle } from '@mission-control/tui/chat';
 import { MacOSScrollAccel, type ScrollAcceleration, type ScrollBoxRenderable, TextAttributes } from '@opentui/core';
-import type * as React from 'react';
-import { memo } from 'react';
+import { For, type JSX } from 'solid-js';
 import { Markdown } from './markdown/Markdown.js';
 import { darkTheme, type TerminalMarkdownTheme } from './markdown/theme.js';
 import { ToolCard } from './ToolCard.js';
+
+export interface ChatScrollboxHandle {
+    readonly get: () => ChatScrollboxSurface | undefined;
+    readonly set: (renderable: ScrollBoxRenderable) => void;
+}
+
+type ChatScrollTarget = number | { readonly x?: number; readonly y?: number };
+
+export interface ChatScrollboxSurface {
+    readonly scrollHeight: number;
+    scrollTo(target: ChatScrollTarget): void;
+    scrollBy(delta: ChatScrollTarget): void;
+}
 
 export type ChatTranscriptScrollOptions = {
     readonly stickyScroll: true;
@@ -30,15 +42,15 @@ export function chatTranscriptScrollOptions(maxHeight?: number): ChatTranscriptS
 
 export type ChatTranscriptProps = {
     readonly blocks: readonly ChatBlock[];
-    readonly scrollboxRef: React.RefObject<ScrollBoxRenderable | null>;
+    readonly scrollboxRef: ChatScrollboxHandle;
     readonly generating: boolean;
     readonly toolOutputExpanded: boolean;
     readonly viewportColumns: number;
 };
 
 export type ChatTranscriptScrollboxProps = {
-    readonly children?: React.ReactNode;
-    readonly scrollboxRef: React.RefObject<ScrollBoxRenderable | null>;
+    readonly children?: JSX.Element;
+    readonly scrollboxRef: ChatScrollboxHandle;
     readonly maxHeight?: number;
 };
 
@@ -46,9 +58,12 @@ export function ChatTranscriptScrollbox({
     children,
     scrollboxRef,
     maxHeight,
-}: ChatTranscriptScrollboxProps): React.ReactNode {
+}: ChatTranscriptScrollboxProps): JSX.Element {
     return (
-        <scrollbox ref={scrollboxRef} {...chatTranscriptScrollOptions(maxHeight)}>
+        <scrollbox
+            ref={(renderable: ScrollBoxRenderable) => scrollboxRef.set(renderable)}
+            {...chatTranscriptScrollOptions(maxHeight)}
+        >
             {children}
         </scrollbox>
     );
@@ -84,24 +99,23 @@ export function MarkdownPanelBase({
     readonly streaming?: boolean;
     readonly marginTop?: number;
     readonly viewportColumns: number;
-}): React.ReactNode {
+}): JSX.Element {
     return (
         <box flexDirection="row" {...(marginTop !== undefined ? { marginTop } : {})}>
             <box width={barWidth} backgroundColor={barColor} shouldFill={true} />
             <box flexDirection="column" flexGrow={1}>
-                <Markdown key={viewportColumns} text={text} theme={theme} {...(streaming ? { streaming: true } : {})} />
+                <Markdown
+                    text={text}
+                    theme={theme}
+                    width={viewportColumns}
+                    {...(streaming ? { streaming: true } : {})}
+                />
             </box>
         </box>
     );
 }
 
-/**
- * Memoized wrapper: skips re-render when all props are unchanged (shallow
- * compare). Effective because MessageBlock passes a value-stable `text`
- * (pure joinBlockText of a referentially-stable block.lines, per todo 2's
- * preserveBlockReferences) plus module-constant theme/barColor/barWidth.
- */
-export const MarkdownPanel = memo(MarkdownPanelBase);
+export const MarkdownPanel = MarkdownPanelBase;
 
 export function MessageBlockBase({
     block,
@@ -113,18 +127,19 @@ export function MessageBlockBase({
     readonly isStreaming?: boolean;
     readonly toolOutputExpanded: boolean;
     readonly viewportColumns: number;
-}): React.ReactNode {
+}): JSX.Element {
     const prefix = blockPrefix[block.kind];
 
     if (block.kind === 'system') {
         return (
             <box flexDirection="column">
-                {block.lines.map((line, index) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
-                    <text key={`sys-${index}`} selectable attributes={TextAttributes.DIM}>
-                        {line}
-                    </text>
-                ))}
+                <For each={block.lines}>
+                    {(line) => (
+                        <text selectable attributes={TextAttributes.DIM}>
+                            {line}
+                        </text>
+                    )}
+                </For>
             </box>
         );
     }
@@ -177,32 +192,22 @@ export function MessageBlockBase({
         <box flexDirection="row">
             {leftHex !== undefined ? <box width={1} backgroundColor={leftHex} shouldFill={true} /> : null}
             <box flexDirection="column" flexGrow={1}>
-                {block.lines.map((line, index) => {
-                    const content = prefix.length > 0 && line.startsWith(prefix) ? line.slice(prefix.length) : line;
-                    return (
-                        <text
-                            selectable
-                            // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
-                            key={`line-${index}`}
-                            {...(isError ? { fg: '#ff0000' } : {})}
-                        >
-                            {content}
-                        </text>
-                    );
-                })}
+                <For each={block.lines}>
+                    {(line) => {
+                        const content = prefix.length > 0 && line.startsWith(prefix) ? line.slice(prefix.length) : line;
+                        return (
+                            <text selectable {...(isError ? { fg: '#ff0000' } : {})}>
+                                {content}
+                            </text>
+                        );
+                    }}
+                </For>
             </box>
         </box>
     );
 }
 
-/**
- * Memoized wrapper: skips re-render when all props are unchanged (shallow
- * compare). Effective because ChatTranscript passes a referentially-stable
- * `block` (preserveBlockReferences in ChatApp reuses refs for unchanged
- * segments), so completed blocks skip re-render while the streaming tail
- * (whose block ref changes per token) re-renders normally.
- */
-export const MessageBlock = memo(MessageBlockBase);
+export const MessageBlock = MessageBlockBase;
 
 export function ChatTranscript({
     blocks,
@@ -210,30 +215,38 @@ export function ChatTranscript({
     generating,
     toolOutputExpanded,
     viewportColumns,
-}: ChatTranscriptProps): React.ReactNode {
+}: ChatTranscriptProps): JSX.Element {
     if (blocks.length === 0) {
         return (
-            <scrollbox ref={scrollboxRef} focusable={false} {...chatTranscriptScrollOptions()}>
+            <scrollbox
+                ref={(renderable: ScrollBoxRenderable) => scrollboxRef.set(renderable)}
+                focusable={false}
+                {...chatTranscriptScrollOptions()}
+            >
                 <text attributes={TextAttributes.DIM}>{''}</text>
             </scrollbox>
         );
     }
     const lastIndex = blocks.length - 1;
     return (
-        <scrollbox ref={scrollboxRef} focusable={false} {...chatTranscriptScrollOptions()}>
-            {blocks.map((block, index) => {
-                const streaming = generating && index === lastIndex;
-                return (
-                    <MessageBlock
-                        // biome-ignore lint/suspicious/noArrayIndexKey: chat blocks are append-only
-                        key={`msg-${block.kind}-${index}`}
-                        block={block}
-                        toolOutputExpanded={toolOutputExpanded}
-                        viewportColumns={viewportColumns}
-                        {...(streaming ? { isStreaming: true } : {})}
-                    />
-                );
-            })}
+        <scrollbox
+            ref={(renderable: ScrollBoxRenderable) => scrollboxRef.set(renderable)}
+            focusable={false}
+            {...chatTranscriptScrollOptions()}
+        >
+            <For each={blocks}>
+                {(block, index) => {
+                    const streaming = generating && index() === lastIndex;
+                    return (
+                        <MessageBlock
+                            block={block}
+                            toolOutputExpanded={toolOutputExpanded}
+                            viewportColumns={viewportColumns}
+                            {...(streaming ? { isStreaming: true } : {})}
+                        />
+                    );
+                }}
+            </For>
         </scrollbox>
     );
 }

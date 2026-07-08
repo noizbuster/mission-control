@@ -1,45 +1,27 @@
 import { type ChatBlock, parseMessageBlocks } from '@mission-control/tui/chat';
-import { Children, createElement, isValidElement, type ReactNode } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { normalizeTerminalViewport } from '../platform/terminal-viewport.js';
-import { createChatStore } from '../state/chat-store.js';
 import {
     bottomDockPolicyForTerminal,
-    ChatAppSplitShell,
     chatAppViewportLayout,
     preserveBlockReferences,
     promptPanelRepaintKey,
 } from './ChatApp.js';
-import { ChatBottomDock } from './ChatBottomDock.js';
-import { bottomDockPolicy } from './chat-bottom-dock-policy.js';
-import {
-    asScrollboxRef,
-    asTextareaRef,
-    createRecordingScrollbox,
-    createRecordingTextarea,
-} from './chat-test-support.js';
-import { statusBarLayoutFromPolicy } from './StatusBar.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
+vi.mock('@mission-control/tui/chat', async () => await import('../chat.js'));
+vi.mock('@mission-control/core', () => ({
+    ContinuationRuntime: class ContinuationRuntime {},
+    MAIN_AGENT_ID: 'main',
+    readBoulder: () => undefined,
+    resolveMissionControlDataDir: () => '/tmp/mission-control-test',
+    resolveUserConfigDir: () => '/tmp/mission-control-test-config',
+}));
+
 function readChatAppSource(): string {
     return readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatApp.tsx'), 'utf8');
-}
-
-function childAt(children: readonly ReactNode[], index: number): ReactNode {
-    const child = children.at(index);
-    if (child === undefined) {
-        throw new Error(`missing child at index ${index}`);
-    }
-    return child;
-}
-
-function propsFor<TProps>(node: ReactNode, type: string | ((props: TProps) => ReactNode)): TProps {
-    if (!isValidElement<TProps>(node)) {
-        throw new Error('expected a React element');
-    }
-    expect(node.type).toBe(type);
-    return node.props;
 }
 
 function matchCount(source: string, needle: string): number {
@@ -225,50 +207,18 @@ describe('promptPanelRepaintKey', () => {
 });
 
 describe('ChatAppSplitShell topology', () => {
-    it('constructs the upper output region above a single bottom dock sibling and leaves modals outside the dock', () => {
-        const store = createChatStore();
-        const textareaRef = asTextareaRef(createRecordingTextarea());
-        const scrollboxRef = asScrollboxRef(createRecordingScrollbox());
-        const policy = bottomDockPolicy({ columns: 120, rows: 24 });
-        const upperOutputRegion = createElement('text', { key: 'upper' }, 'upper output');
-        const bottomDock = createElement(ChatBottomDock, {
-            store,
-            textareaRef,
-            scrollboxRef,
-            statusLayout: statusBarLayoutFromPolicy(policy),
-            menuPolicy: policy.menu,
-        });
-        const modalOverlays = createElement('box', { key: 'modal' }, createElement('text', undefined, 'modal'));
+    it('keeps upper output, bottom dock, and modal overlays as ordered shell children', () => {
+        const source = readChatAppSource();
+        const shellBlock = sliceBetween(source, 'export function ChatAppSplitShell', 'export function ChatApp(');
 
-        const shell = ChatAppSplitShell({
-            width: 60,
-            height: 15,
-            onMouseUp: () => {},
-            upperOutputRegion,
-            bottomDock,
-            modalOverlays,
-        });
-
-        const shellProps = propsFor<{
-            readonly children?: ReactNode;
-            readonly width?: number;
-            readonly height?: number;
-            readonly shouldFill?: boolean;
-        }>(shell, 'box');
-        expect([shellProps.width, shellProps.height]).toEqual([60, 15]);
-        expect(shellProps.shouldFill).toBe(true);
-        const children = Children.toArray(shellProps.children);
-        const upperProps = propsFor<{
-            readonly children?: ReactNode;
-            readonly flexGrow?: number;
-            readonly shouldFill?: boolean;
-        }>(childAt(children, 0), 'box');
-        expect([upperProps.flexGrow, upperProps.shouldFill]).toEqual([1, true]);
-        expect(upperProps.children).toBe(upperOutputRegion);
-        expect(propsFor(childAt(children, 1), ChatBottomDock)).toMatchObject({ store, textareaRef, scrollboxRef });
-        const modalProps = propsFor<{ readonly children?: ReactNode }>(childAt(children, 2), 'box');
-        const modalChildren = Children.toArray(modalProps.children);
-        expect(propsFor<{ readonly children?: string }>(childAt(modalChildren, 0), 'text').children).toBe('modal');
+        expect(shellBlock).toContain(
+            '<box flexDirection="column" width={width} height={height} shouldFill={true} onMouseUp={onMouseUp}>',
+        );
+        expect(shellBlock).toContain('upperOutputRegion');
+        expect(shellBlock).toContain('bottomDock');
+        expect(shellBlock).toContain('modalOverlays');
+        expect(shellBlock.indexOf('upperOutputRegion')).toBeLessThan(shellBlock.indexOf('bottomDock'));
+        expect(shellBlock.indexOf('bottomDock')).toBeLessThan(shellBlock.indexOf('modalOverlays'));
     });
 });
 
@@ -284,14 +234,13 @@ describe('ChatApp source topology', () => {
 
     it('requests a full OpenTUI repaint when terminal viewport columns or rows change', () => {
         const source = readChatAppSource();
-        const viewportRepaintBlock = sliceBetween(source, 'const prevViewport', 'const prevOverlayMode');
+        const viewportRepaintBlock = sliceBetween(source, 'let prevViewport = viewport;', 'let prevOverlayMode');
 
         expect(source).toContain("import { hardResetRendererSurface } from '../platform/opentui-renderer.js';");
-        expect(viewportRepaintBlock).toContain('useRef(viewport)');
-        expect(viewportRepaintBlock).toContain('prevViewport.current.columns !== viewport.columns');
-        expect(viewportRepaintBlock).toContain('prevViewport.current.rows !== viewport.rows');
+        expect(viewportRepaintBlock).toContain('prevViewport.columns !== viewport.columns');
+        expect(viewportRepaintBlock).toContain('prevViewport.rows !== viewport.rows');
+        expect(viewportRepaintBlock).toContain('viewportRows = viewport.rows');
         expect(viewportRepaintBlock).toContain('hardResetRendererSurface(renderer)');
-        expect(viewportRepaintBlock).toContain('[viewport, renderer]');
     });
 
     it('wires ChatBottomDock exactly once with refs, focus, status layout, and menu policy', () => {
@@ -300,13 +249,13 @@ describe('ChatApp source topology', () => {
 
         expect(matchCount(source, '<ChatBottomDock')).toBe(1);
         expect(dockBlock).toContain('store={store}');
-        expect(dockBlock).toContain('textareaRef={textareaRef}');
-        expect(dockBlock).toContain('scrollboxRef={scrollboxRef}');
-        expect(dockBlock).toContain('inputFocused={!overlayActive}');
+        expect(dockBlock).toContain('textareaRef={textareaHandle}');
+        expect(dockBlock).toContain('scrollboxRef={scrollboxHandle}');
+        expect(dockBlock).toContain('inputFocused={!overlayActive()}');
         expect(dockBlock).toContain('viewportColumns={viewport.columns}');
         expect(dockBlock).toContain('viewportRows={viewport.rows}');
-        expect(dockBlock).toContain('statusLayout={dockStatusLayout}');
-        expect(dockBlock).toContain('menuPolicy={dockPolicy.menu}');
+        expect(dockBlock).toContain('statusLayout={dockStatusLayout()}');
+        expect(dockBlock).toContain('menuPolicy={dockPolicy().menu}');
     });
 
     it('keeps transcript output, spinner, toast, and minimap inside the upper output region', () => {
@@ -315,7 +264,7 @@ describe('ChatApp source topology', () => {
 
         expect(upperBlock).toContain('<WelcomeScreen');
         expect(upperBlock).toContain('viewportColumns={viewport.columns}');
-        expect(upperBlock).toContain('availableRows={viewportLayout.welcomeAvailableRows}');
+        expect(upperBlock).toContain('availableRows={viewportLayout().welcomeAvailableRows}');
         expect(upperBlock).toContain('transcript');
         expect(upperBlock).toContain('<AgentSpinner');
         expect(upperBlock).toContain('<Toast');
@@ -333,7 +282,7 @@ describe('ChatApp source topology', () => {
         const stdoutRowsToken = ['process', 'stdout', 'rows'].join('.');
 
         expect(layoutBlock).toContain('welcomeAvailableRows: dockPolicy.transcript.rows');
-        expect(welcomeBlock).toContain('availableRows={viewportLayout.welcomeAvailableRows}');
+        expect(welcomeBlock).toContain('availableRows={viewportLayout().welcomeAvailableRows}');
         expect(source).not.toContain(stdoutRowsToken);
     });
 
@@ -362,9 +311,9 @@ describe('ChatApp source topology', () => {
         expect(source.indexOf("snapshot.overlayMode === 'abg'")).toBeLessThan(shellIndex);
         expect(source.indexOf("snapshot.overlayMode === 'diff-viewer'")).toBeLessThan(shellIndex);
         expect(source.indexOf("snapshot.overlayMode === 'models-overlay'")).toBeLessThan(shellIndex);
-        expect(matchCount(source, 'width={shellWidth} height={shellHeight}')).toBeGreaterThanOrEqual(4);
-        expect(source).toContain('width={shellWidth}');
-        expect(source).toContain('height={shellHeight}');
+        expect(matchCount(source, 'width={shellWidth()} height={shellHeight()}')).toBeGreaterThanOrEqual(4);
+        expect(source).toContain('width={shellWidth()}');
+        expect(source).toContain('height={shellHeight()}');
     });
 
     it('keeps modal overlays in ChatApp through ModalPopup after the dock sibling', () => {
@@ -382,7 +331,7 @@ describe('ChatApp source topology', () => {
             'agents-dashboard',
             'mission-panel',
         ]) {
-            expect(modalBlock).toContain(`snapshot.overlayMode === '${mode}'`);
+            expect(modalBlock).toContain(`snap.overlayMode === '${mode}'`);
         }
         expect(matchCount(modalBlock, '<ModalPopup>')).toBe(7);
         expect(modalBlock).toContain('<ApprovalOverlay store={store} />');

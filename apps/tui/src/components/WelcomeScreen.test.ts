@@ -1,6 +1,5 @@
 import { terminalDisplayWidth } from '@mission-control/tui';
-import { Children, isValidElement, type ReactNode } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type {
     WelcomeData,
     WelcomeLspServer,
@@ -20,10 +19,11 @@ import {
     padToWidth,
     sectionDividerRule,
     truncateSessionId,
-    WelcomeScreen,
     welcomeRowBudgetPlan,
     welcomeWidthBudget,
 } from './WelcomeScreen.js';
+
+vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
 
 const NOW = new Date('2026-07-01T12:00:00Z');
 const isoMinutesAgo = (mins: number): string => new Date(NOW.getTime() - mins * 60_000).toISOString();
@@ -38,13 +38,6 @@ function makeData(overrides: Partial<WelcomeData> = {}): WelcomeData {
         recentSessions: [],
         ...overrides,
     };
-}
-
-function elementChildren(node: ReactNode): readonly ReactNode[] {
-    if (!isValidElement<{ readonly children?: ReactNode }>(node)) {
-        throw new Error('expected a React element');
-    }
-    return Children.toArray(node.props.children);
 }
 
 describe('padToWidth', () => {
@@ -255,7 +248,7 @@ describe('welcomeRowBudgetPlan', () => {
 });
 
 describe('WelcomeScreen row budget', () => {
-    it('constructs no more compact child rows than the 60x15 upper region allows', () => {
+    it('plans no more compact child rows than the 60x15 upper region allows', () => {
         const data = makeData({
             recentSessions: [
                 { sessionId: 'ses_one', messageCount: 4 },
@@ -263,15 +256,14 @@ describe('WelcomeScreen row budget', () => {
             ],
         });
 
-        const screen = WelcomeScreen({
+        const projectDescriptor = buildProjectDescriptor('mission-control', 'main', undefined);
+        const plan = welcomeRowBudgetPlan({
             data,
-            viewportColumns: 60,
             availableRows: 9,
-            projectLabel: 'mission-control',
-            gitBranch: 'main',
+            ...(projectDescriptor !== undefined ? { projectDescriptor } : {}),
         });
 
-        expect(elementChildren(screen).length).toBeLessThanOrEqual(9);
+        expect(plan.visibleRows).toBeLessThanOrEqual(9);
     });
 });
 

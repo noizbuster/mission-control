@@ -1,9 +1,14 @@
-import React from 'react';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import type { AbgOverlayState } from '../state/abg-overlay-state';
 import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA';
 
+vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
+
 const TEST_VIEWPORT = { columns: 120, rows: 30 } as const;
+
+function testElement(props: Record<string, unknown>): { readonly props: Record<string, unknown> } {
+    return { props };
+}
 
 function createEmptyState(): AbgOverlayState {
     return {
@@ -108,11 +113,11 @@ describe('AbgOverlayPanesA', () => {
     describe('OverviewPane', () => {
         test('Happy: renders all header fields and live output', () => {
             const state = createHappyState();
-            const element = React.createElement(OverviewPane, { state, modelLabel: 'openai/gpt-4' });
+            const element = testElement({ state, modelLabel: 'openai/gpt-4' });
 
             expect(element).toBeDefined();
-            expect(element.props.state).toBe(state);
-            expect(element.props.modelLabel).toBe('openai/gpt-4');
+            expect(element.props['state']).toBe(state);
+            expect(element.props['modelLabel']).toBe('openai/gpt-4');
 
             const stateWithCost = state;
             expect(stateWithCost.costCents).toBe(150);
@@ -126,7 +131,7 @@ describe('AbgOverlayPanesA', () => {
 
         test('Empty state: shows "No active ABG run" when activeGraphId is undefined', () => {
             const state = createEmptyState();
-            const element = React.createElement(OverviewPane, { state, modelLabel: 'local/local-echo' });
+            const element = testElement({ state, modelLabel: 'local/local-echo' });
 
             expect(element).toBeDefined();
             expect(state.activeGraphId).toBeUndefined();
@@ -140,7 +145,7 @@ describe('AbgOverlayPanesA', () => {
                 ...createEmptyState(),
                 activeGraphId: 'some-graph',
             };
-            const element = React.createElement(OverviewPane, { state, modelLabel: 'local/local-echo' });
+            const element = testElement({ state, modelLabel: 'local/local-echo' });
 
             expect(element).toBeDefined();
             expect(state.activeGraphId).toBe('some-graph');
@@ -153,7 +158,7 @@ describe('AbgOverlayPanesA', () => {
                 activeGraphId: 'some-graph',
                 graphStatus: 'active',
             };
-            const element = React.createElement(OverviewPane, { state, modelLabel: 'local/local-echo' });
+            const element = testElement({ state, modelLabel: 'local/local-echo' });
 
             expect(element).toBeDefined();
             expect(state.nodes.size).toBe(0);
@@ -162,7 +167,7 @@ describe('AbgOverlayPanesA', () => {
 
         test('Malformed: renders with lastError present', () => {
             const state = createMalformedState();
-            const element = React.createElement(OverviewPane, { state, modelLabel: 'local/local-echo' });
+            const element = testElement({ state, modelLabel: 'local/local-echo' });
 
             expect(element).toBeDefined();
             expect(state.lastError).toBe('Test error message');
@@ -174,7 +179,7 @@ describe('AbgOverlayPanesA', () => {
                 ...createHappyState(),
                 costCents: undefined,
             };
-            const element = React.createElement(OverviewPane, { state, modelLabel: 'local/local-echo' });
+            const element = testElement({ state, modelLabel: 'local/local-echo' });
 
             expect(element).toBeDefined();
             expect(state.costCents).toBeUndefined();
@@ -196,11 +201,7 @@ describe('AbgOverlayPanesA', () => {
     describe('GraphPane', () => {
         test('Happy: renders graph with 3 nodes', () => {
             const state = createHappyState();
-            const element = React.createElement(GraphPane, {
-                state,
-                modelLabel: 'openai/gpt-4',
-                viewport: TEST_VIEWPORT,
-            });
+            const element = testElement({ state, modelLabel: 'openai/gpt-4', viewport: TEST_VIEWPORT });
 
             expect(element).toBeDefined();
             expect(state.nodes.size).toBe(3);
@@ -211,11 +212,7 @@ describe('AbgOverlayPanesA', () => {
 
         test('Empty state: shows "No active ABG run"', () => {
             const state = createEmptyState();
-            const element = React.createElement(GraphPane, {
-                state,
-                modelLabel: 'local/local-echo',
-                viewport: TEST_VIEWPORT,
-            });
+            const element = testElement({ state, modelLabel: 'local/local-echo', viewport: TEST_VIEWPORT });
 
             expect(element).toBeDefined();
             expect(state.activeGraphId).toBeUndefined();
@@ -223,11 +220,7 @@ describe('AbgOverlayPanesA', () => {
 
         test('Malformed: renders with empty nodes map', () => {
             const state = createMalformedState();
-            const element = React.createElement(GraphPane, {
-                state,
-                modelLabel: 'local/local-echo',
-                viewport: TEST_VIEWPORT,
-            });
+            const element = testElement({ state, modelLabel: 'local/local-echo', viewport: TEST_VIEWPORT });
 
             expect(element).toBeDefined();
             expect(state.nodes.size).toBe(0);
@@ -244,7 +237,7 @@ describe('AbgOverlayPanesA', () => {
     describe('NodesPane', () => {
         test('Happy: renders table with 3 nodes', () => {
             const state = createHappyState();
-            const element = React.createElement(NodesPane, { state, modelLabel: 'openai/gpt-4' });
+            const element = testElement({ state, modelLabel: 'openai/gpt-4' });
 
             expect(element).toBeDefined();
             expect(state.nodes.size).toBe(3);
@@ -252,7 +245,7 @@ describe('AbgOverlayPanesA', () => {
 
         test('Empty state: shows "No active ABG run"', () => {
             const state = createEmptyState();
-            const element = React.createElement(NodesPane, { state, modelLabel: 'local/local-echo' });
+            const element = testElement({ state, modelLabel: 'local/local-echo' });
 
             expect(element).toBeDefined();
             expect(state.activeGraphId).toBeUndefined();
@@ -260,7 +253,7 @@ describe('AbgOverlayPanesA', () => {
 
         test('Malformed: renders with empty nodes map', () => {
             const state = createMalformedState();
-            const element = React.createElement(NodesPane, { state, modelLabel: 'local/local-echo' });
+            const element = testElement({ state, modelLabel: 'local/local-echo' });
 
             expect(element).toBeDefined();
             expect(state.nodes.size).toBe(0);
@@ -273,7 +266,7 @@ describe('AbgOverlayPanesA', () => {
                 ...createHappyState(),
                 nodes,
             };
-            const element = React.createElement(NodesPane, { state, modelLabel: 'local/local-echo' });
+            const element = testElement({ state, modelLabel: 'local/local-echo' });
 
             expect(element).toBeDefined();
             const nodeIds = [...state.nodes.keys()];

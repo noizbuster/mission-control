@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { createSignal, onCleanup, onMount } from 'solid-js';
 
 /**
  * Shared braille spinner primitives. Default mode is `'static'` (no interval, no re-renders)
@@ -35,18 +35,18 @@ export function resolveSpinnerMode(env: NodeJS.ProcessEnv = process.env): 'stati
  */
 export function useSpinnerFrame(): { readonly glyph: string; readonly animated: boolean } {
     const mode = resolveSpinnerMode();
-    const [frame, setFrame] = useState(0);
-    useEffect(() => {
+    const [frame, setFrame] = createSignal(0);
+    onMount(() => {
         if (mode === 'static') {
             return;
         }
         const timer = setInterval(() => {
             setFrame((current) => (current + 1) % SPINNER_FRAMES.length);
         }, SPINNER_INTERVAL_MS);
-        return () => {
+        onCleanup(() => {
             clearInterval(timer);
-        };
-    }, [mode]);
-    const glyph = mode === 'static' ? SPINNER_STATIC_GLYPH : (SPINNER_FRAMES[frame] ?? SPINNER_STATIC_GLYPH);
+        });
+    });
+    const glyph = mode === 'static' ? SPINNER_STATIC_GLYPH : (SPINNER_FRAMES[frame()] ?? SPINNER_STATIC_GLYPH);
     return { glyph, animated: mode === 'animate' };
 }

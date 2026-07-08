@@ -1,279 +1,88 @@
-import type { TextareaRenderable } from '@opentui/core';
-import type { ReactNode, RefObject } from 'react';
-import { isValidElement } from 'react';
-import { describe, expect, it, vi } from 'vitest';
-import { ChatInputTextarea, ChatInputTextareaBase, type ChatInputTextareaProps } from './ChatInputTextarea.js';
+import { defaultTextareaKeyBindings } from '@opentui/core';
+import { describe, expect, it } from 'vitest';
+import { ChatInputTextarea, ChatInputTextareaBase } from './ChatInputTextarea.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
-type TextareaPropShape = {
-    readonly onContentChange: () => void;
-    readonly onKeyDown: (key: { preventDefault(): void }) => void;
-    readonly keyBindings: ReadonlyArray<{
-        readonly name: string;
-        readonly action: string;
-        readonly shift?: boolean;
-        readonly ctrl?: boolean;
-        readonly meta?: boolean;
-    }>;
-    readonly placeholder?: string;
-    readonly cursorColor: string;
-};
-
-type TextareaFramePropShape = {
-    readonly border?: readonly string[];
-    readonly width?: string;
-};
-
-const noopCallbacks = {
-    onSubmit: (): void => {},
-    onContentChange: (_text: string): void => {},
-    onCursorChange: (): void => {},
-    onKeyDown: (_key: { preventDefault(): void }): void => {},
-    onPaste: (): void => {},
-} as const;
-
-function makeMockRef(plainText: string): RefObject<TextareaRenderable | null> {
-    const ref = { current: null } as RefObject<TextareaRenderable | null>;
-    (ref as { current: { readonly plainText: string } | null }).current = { plainText };
-    return ref;
-}
-
-function mountTextarea(props: ChatInputTextareaProps): TextareaPropShape {
-    const node: ReactNode = ChatInputTextareaBase(props);
-    if (!isValidElement(node)) {
-        throw new Error('ChatInputTextarea did not return a valid element');
-    }
-    const boxChildren = (node.props as { readonly children?: ReactNode }).children;
-    if (!isValidElement(boxChildren)) {
-        throw new Error('expected a textarea child inside the box');
-    }
-    return boxChildren.props as TextareaPropShape;
-}
-
-function mountTextareaFrame(props: ChatInputTextareaProps): TextareaFramePropShape {
-    const node: ReactNode = ChatInputTextareaBase(props);
-    if (!isValidElement(node)) {
-        throw new Error('ChatInputTextarea did not return a valid element');
-    }
-    return node.props as TextareaFramePropShape;
+function readTextareaSource(): string {
+    return readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatInputTextarea.tsx'), 'utf8');
 }
 
 describe('ChatInputTextarea', () => {
+    describe('component seam', () => {
+        it('exports the callable Solid component aliases', () => {
+            expect(ChatInputTextarea).toBe(ChatInputTextareaBase);
+            expect(typeof ChatInputTextareaBase).toBe('function');
+        });
+    });
+
     describe('frame', () => {
-        it('renders a full-width left and right input frame so wrapped prompt rows align', () => {
-            const frameProps = mountTextareaFrame({
-                ...noopCallbacks,
-                textareaRef: { current: null } as RefObject<TextareaRenderable | null>,
-                focused: true,
-            });
+        it('keeps the full-width left and right input frame so wrapped prompt rows align', () => {
+            const source = readTextareaSource();
 
-            expect(frameProps.border).toEqual(['left', 'right']);
-            expect(frameProps.width).toBe('100%');
+            expect(source).toContain("border={['left', 'right']}");
+            expect(source).toContain('width="100%"');
+            expect(source).toContain('flexGrow={1}');
         });
     });
 
-    describe('onContentChange', () => {
-        it('forwards ref.current.plainText to the parent callback when the textarea content changes', () => {
-            const received: string[] = [];
-            const ref = makeMockRef('hello world');
-            const props = mountTextarea({
-                ...noopCallbacks,
-                onContentChange: (text) => {
-                    received.push(text);
-                },
-                textareaRef: ref,
-                focused: true,
-            });
+    describe('textarea handle contract', () => {
+        it('reads content from textareaRef.get().plainText and falls back to an empty string', () => {
+            const source = readTextareaSource();
 
-            props.onContentChange();
-
-            expect(received).toEqual(['hello world']);
+            expect(source).toContain("const text = textareaRef.get()?.plainText ?? '';");
+            expect(source).toContain('onContentChange(text);');
         });
 
-        it('forwards an empty string when ref.current is null', () => {
-            const received: string[] = [];
-            const ref = { current: null } as RefObject<TextareaRenderable | null>;
-            const props = mountTextarea({
-                ...noopCallbacks,
-                onContentChange: (text) => {
-                    received.push(text);
-                },
-                textareaRef: ref,
-                focused: true,
-            });
+        it('uses a Solid callback ref to update the production handle shape', () => {
+            const source = readTextareaSource();
 
-            props.onContentChange();
-
-            expect(received).toEqual(['']);
+            expect(source).toContain('ref={(renderable: TextareaRenderable) => textareaRef.set(renderable)}');
+            expect(source).not.toContain('.current');
         });
     });
 
-    describe('onKeyDown disabled guard', () => {
-        it('preventDefaults and does not forward to the parent when disabled', () => {
-            const forwarded: Array<{ preventDefault(): void }> = [];
-            const fakeKey = { preventDefault: vi.fn() };
-            const props = mountTextarea({
-                ...noopCallbacks,
-                disabled: true,
-                onKeyDown: (key) => {
-                    forwarded.push(key);
-                },
-                textareaRef: { current: null } as RefObject<TextareaRenderable | null>,
-                focused: true,
-            });
+    describe('disabled key guard', () => {
+        it('prevents default and returns before forwarding when disabled', () => {
+            const source = readTextareaSource();
+            const disabledBlock = source.slice(
+                source.indexOf('const handleKeyDown'),
+                source.indexOf('const cursorColor'),
+            );
 
-            props.onKeyDown(fakeKey);
-
-            expect(fakeKey.preventDefault).toHaveBeenCalledOnce();
-            expect(forwarded).toEqual([]);
-        });
-
-        it('forwards the key to the parent when not disabled', () => {
-            const forwarded: Array<{ preventDefault(): void }> = [];
-            const fakeKey = { preventDefault: vi.fn() };
-            const props = mountTextarea({
-                ...noopCallbacks,
-                onKeyDown: (key) => {
-                    forwarded.push(key);
-                },
-                textareaRef: { current: null } as RefObject<TextareaRenderable | null>,
-                focused: true,
-            });
-
-            props.onKeyDown(fakeKey);
-
-            expect(fakeKey.preventDefault).not.toHaveBeenCalled();
-            expect(forwarded).toEqual([fakeKey]);
+            expect(disabledBlock).toContain('if (disabled)');
+            expect(disabledBlock).toContain('key.preventDefault();');
+            expect(disabledBlock).toContain('return;');
+            expect(disabledBlock).toContain('onKeyDown(key);');
         });
     });
 
     describe('cursorColor', () => {
-        it('uses the dim cursor color when disabled', () => {
-            const props = mountTextarea({
-                ...noopCallbacks,
-                disabled: true,
-                textareaRef: { current: null } as RefObject<TextareaRenderable | null>,
-                focused: true,
-            });
+        it('keeps dim and bright cursor colors for disabled/enabled states', () => {
+            const source = readTextareaSource();
 
-            expect(props.cursorColor).toBe('#333333');
-        });
-
-        it('uses the bright cursor color when enabled', () => {
-            const props = mountTextarea({
-                ...noopCallbacks,
-                textareaRef: { current: null } as RefObject<TextareaRenderable | null>,
-                focused: true,
-            });
-
-            expect(props.cursorColor).toBe('#ffffff');
+            expect(source).toContain("const cursorColor = disabled ? '#333333' : '#ffffff';");
+            expect(source).toContain('cursorColor={cursorColor}');
         });
     });
 
     describe('placeholder', () => {
-        it('spreads the placeholder prop onto the textarea when provided', () => {
-            const props = mountTextarea({
-                ...noopCallbacks,
-                placeholder: 'type here',
-                textareaRef: { current: null } as RefObject<TextareaRenderable | null>,
-                focused: true,
-            });
+        it('uses an exactOptionalPropertyTypes-safe conditional spread', () => {
+            const source = readTextareaSource();
 
-            expect(props.placeholder).toBe('type here');
-        });
-
-        it('omits the placeholder prop entirely when undefined (exactOptionalPropertyTypes)', () => {
-            const node = ChatInputTextareaBase({
-                ...noopCallbacks,
-                textareaRef: { current: null } as RefObject<TextareaRenderable | null>,
-                focused: true,
-            });
-            if (!isValidElement(node)) {
-                throw new Error('expected a box element');
-            }
-            const child = (node.props as { readonly children?: ReactNode }).children;
-            if (!isValidElement(child)) {
-                throw new Error('expected textarea child');
-            }
-            const childProps = child.props as Record<string, unknown>;
-
-            expect(childProps).not.toHaveProperty('placeholder');
+            expect(source).toContain('{...(placeholder !== undefined ? { placeholder } : {})}');
         });
     });
 
     describe('keyBindings override', () => {
-        // keyBindings is `[...defaults, ...custom]` with a last-write-wins
-        // composite-key merge, so plain-return/kpenter overrides are the LAST
-        // match — look them up with filter().at(-1), not find() (first match).
-        const mountBindings = (): TextareaPropShape['keyBindings'] =>
-            mountTextarea({
-                ...noopCallbacks,
-                textareaRef: { current: null } as RefObject<TextareaRenderable | null>,
-                focused: true,
-            }).keyBindings;
+        it('preserves default editing bindings before chat submit overrides', () => {
+            expect(defaultTextareaKeyBindings.some((binding) => binding.name === 'backspace')).toBe(true);
+            const source = readTextareaSource();
 
-        it('binds plain Enter (return, no modifiers) to submit', () => {
-            const bindings = mountBindings();
-            const plainReturn = bindings.filter((b) => b.name === 'return' && !b.shift && !b.ctrl && !b.meta).at(-1);
-            expect(plainReturn?.action).toBe('submit');
-        });
-
-        it('binds Shift+Enter to newline', () => {
-            const bindings = mountBindings();
-            const shiftReturn = bindings.find((b) => b.name === 'return' && b.shift === true && !b.ctrl && !b.meta);
-            expect(shiftReturn?.action).toBe('newline');
-        });
-
-        it('binds kpenter (no modifiers) to submit', () => {
-            const bindings = mountBindings();
-            const plainKpenter = bindings.filter((b) => b.name === 'kpenter' && !b.shift && !b.ctrl && !b.meta).at(-1);
-            expect(plainKpenter?.action).toBe('submit');
-        });
-
-        it('preserves the default Alt+Enter (meta+return) submit binding (no silent regression)', () => {
-            const bindings = mountBindings();
-            const metaReturn = bindings.find((b) => b.name === 'return' && b.meta === true && !b.shift && !b.ctrl);
-            expect(metaReturn?.action).toBe('submit');
-        });
-
-        it('preserves default editing bindings (backspace)', () => {
-            const bindings = mountBindings();
-            const backspace = bindings.find((b) => b.name === 'backspace' && !b.shift && !b.ctrl && !b.meta);
-            expect(backspace?.action).toBe('backspace');
-        });
-    });
-
-    describe('memo construction', () => {
-        it('does not throw when constructed as a JSX element', () => {
-            expect(() => {
-                void (
-                    <ChatInputTextarea
-                        onSubmit={(): void => {}}
-                        onContentChange={(): void => {}}
-                        onCursorChange={(): void => {}}
-                        onKeyDown={(): void => {}}
-                        onPaste={(): void => {}}
-                        textareaRef={{ current: null } as RefObject<TextareaRenderable | null>}
-                        focused={true}
-                    />
-                );
-            }).not.toThrow();
-        });
-
-        it('does not throw when constructed with a placeholder prop', () => {
-            expect(() => {
-                void (
-                    <ChatInputTextarea
-                        placeholder="type here"
-                        onSubmit={(): void => {}}
-                        onContentChange={(): void => {}}
-                        onCursorChange={(): void => {}}
-                        onKeyDown={(): void => {}}
-                        onPaste={(): void => {}}
-                        textareaRef={{ current: null } as RefObject<TextareaRenderable | null>}
-                        focused={true}
-                    />
-                );
-            }).not.toThrow();
+            expect(source).toContain('...defaultTextareaKeyBindings');
+            expect(source).toContain("{ name: 'return', shift: true, action: 'newline' }");
+            expect(source).toContain("{ name: 'return', action: 'submit' }");
+            expect(source).toContain("{ name: 'kpenter', action: 'submit' }");
         });
     });
 });

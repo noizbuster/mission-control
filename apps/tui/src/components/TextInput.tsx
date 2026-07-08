@@ -1,4 +1,6 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
+
+import type { JSX } from 'solid-js';
 
 export type TextInputProps = {
     readonly value: string;
@@ -10,7 +12,7 @@ export type TextInputProps = {
 
 const defaultPrefix = '> ';
 
-export function TextInput({ value, placeholder, prefix = defaultPrefix }: TextInputProps): React.ReactNode {
+export function TextInput({ value, placeholder, prefix = defaultPrefix }: TextInputProps): JSX.Element {
     const showPlaceholder = value.length === 0 && placeholder !== undefined;
     return (
         <box flexDirection="row">

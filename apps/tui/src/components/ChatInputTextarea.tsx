@@ -1,9 +1,24 @@
-/** @jsxImportSource @opentui/react */
+/** @jsxImportSource @opentui/solid */
 
 import type { KeyEvent, PasteEvent, TextareaRenderable } from '@opentui/core';
 import { defaultTextareaKeyBindings } from '@opentui/core';
-import type * as React from 'react';
-import { memo } from 'react';
+import type { JSX } from 'solid-js';
+
+export interface ChatTextareaHandle {
+    readonly get: () => ChatTextareaSurface | undefined;
+    readonly set: (renderable: TextareaRenderable) => void;
+}
+
+export interface ChatTextareaSurface {
+    readonly plainText: string;
+    cursorOffset: number;
+    readonly focused: boolean;
+    insertText(text: string): void;
+    setText(text: string): void;
+    clear(): void;
+    gotoBufferEnd(): void;
+    deleteChar(): void;
+}
 
 export type ChatInputTextareaProps = {
     readonly placeholder?: string;
@@ -13,7 +28,7 @@ export type ChatInputTextareaProps = {
     readonly onCursorChange: () => void;
     readonly onKeyDown: (key: KeyEvent) => void;
     readonly onPaste: (event: PasteEvent) => void;
-    readonly textareaRef: React.RefObject<TextareaRenderable | null>;
+    readonly textareaRef: ChatTextareaHandle;
     readonly focused: boolean;
 };
 
@@ -27,9 +42,9 @@ export function ChatInputTextareaBase({
     onPaste,
     textareaRef,
     focused,
-}: ChatInputTextareaProps): React.ReactNode {
+}: ChatInputTextareaProps): JSX.Element {
     const handleContentChange = (): void => {
-        const text = textareaRef.current?.plainText ?? '';
+        const text = textareaRef.get()?.plainText ?? '';
         onContentChange(text);
     };
 
@@ -46,7 +61,7 @@ export function ChatInputTextareaBase({
     return (
         <box backgroundColor="#0a0a0a" border={['left', 'right']} borderColor="#00ffff" flexGrow={1} width="100%">
             <textarea
-                ref={textareaRef}
+                ref={(renderable: TextareaRenderable) => textareaRef.set(renderable)}
                 width="100%"
                 focused={focused}
                 placeholderColor="#666666"
@@ -70,10 +85,4 @@ export function ChatInputTextareaBase({
     );
 }
 
-/**
- * Memoized wrapper: skips re-render when all props are unchanged (shallow
- * compare). Effective because ChatInputArea passes stable handler refs
- * (`useCallback`) and a stable selector slice, so streaming tokens no longer
- * re-render the input textarea.
- */
-export const ChatInputTextarea = memo(ChatInputTextareaBase);
+export const ChatInputTextarea = ChatInputTextareaBase;

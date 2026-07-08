@@ -1,6 +1,5 @@
-/** @jsxImportSource @opentui/react */
 import { TextAttributes } from '@opentui/core';
-import type * as React from 'react';
+import { For, type JSX } from 'solid-js';
 import { createFileAutocompleteView, type FileAutocompleteState } from '../state/interactive-chat-file-autocomplete.js';
 import { OverlayFrame } from './OverlayFrame.js';
 import { SELECTED_BG } from './overlay-theme.js';
@@ -18,7 +17,7 @@ export function FileAutocompletePanel({
     fileAutocomplete,
     maxVisibleRows = MAX_VISIBLE,
     showFooter = true,
-}: FileAutocompletePanelProps): React.ReactNode {
+}: FileAutocompletePanelProps): JSX.Element | null {
     if (maxVisibleRows <= 0) return null;
 
     const view = createFileAutocompleteView(fileAutocomplete, maxVisibleRows);
@@ -34,21 +33,23 @@ export function FileAutocompletePanel({
             {view.empty ? (
                 <text attributes={TextAttributes.DIM}> no files match</text>
             ) : (
-                view.visibleMatches.map((match, index) => {
-                    const globalIndex = view.startIndex + index;
-                    const isSelected = globalIndex === view.selectedIndex;
-                    const marker = match.isDirectory ? '/' : ' ';
-                    const selectedBg = isSelected ? { bg: SELECTED_BG } : {};
-                    return (
-                        <box key={match.name} flexDirection="row">
-                            <text {...selectedBg}>
-                                {isSelected ? '> ' : '  '}
-                                {marker}
-                                {match.name}
-                            </text>
-                        </box>
-                    );
-                })
+                <For each={view.visibleMatches}>
+                    {(match, index) => {
+                        const globalIndex = view.startIndex + index();
+                        const isSelected = globalIndex === view.selectedIndex;
+                        const marker = match.isDirectory ? '/' : ' ';
+                        const selectedBg = isSelected ? { bg: SELECTED_BG } : {};
+                        return (
+                            <box flexDirection="row">
+                                <text {...selectedBg}>
+                                    {isSelected ? '> ' : '  '}
+                                    {marker}
+                                    {match.name}
+                                </text>
+                            </box>
+                        );
+                    }}
+                </For>
             )}
         </OverlayFrame>
     );

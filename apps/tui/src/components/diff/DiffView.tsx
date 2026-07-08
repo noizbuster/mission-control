@@ -1,5 +1,4 @@
-/** @jsxImportSource @opentui/react */
-import type React from 'react';
+import { For, type JSX } from 'solid-js';
 import type { DiffLine, DiffLineKind } from './render-diff.js';
 
 export type DiffViewProps = {
@@ -64,7 +63,7 @@ export function splitLineSpans(line: DiffLine): readonly TextSpan[] {
     return spans;
 }
 
-function DiffRow({ line, index }: { readonly line: DiffLine; readonly index: number }): React.ReactNode {
+function DiffRow({ line }: { readonly line: DiffLine }): JSX.Element {
     const style = kindStyle(line.kind);
     const spans = splitLineSpans(line);
     const fg = style.fg;
@@ -74,23 +73,21 @@ function DiffRow({ line, index }: { readonly line: DiffLine; readonly index: num
     };
     return (
         <box flexDirection="row">
-            {spans.map((span, segIndex) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: index is stable per (line, segment)
-                <text key={`seg-${index}-${segIndex}`} {...rowStyle} {...(span.inverse ? { inverse: true } : {})}>
-                    {span.text}
-                </text>
-            ))}
+            <For each={spans}>
+                {(span) => (
+                    <text {...rowStyle} {...(span.inverse ? { inverse: true } : {})}>
+                        {span.text}
+                    </text>
+                )}
+            </For>
         </box>
     );
 }
 
-export function DiffView({ lines }: DiffViewProps): React.ReactNode {
+export function DiffView({ lines }: DiffViewProps): JSX.Element {
     return (
         <box flexDirection="column">
-            {lines.map((line, index) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: line order is stable for a given input
-                <DiffRow key={`diff-${index}`} line={line} index={index} />
-            ))}
+            <For each={lines}>{(line) => <DiffRow line={line} />}</For>
         </box>
     );
 }
