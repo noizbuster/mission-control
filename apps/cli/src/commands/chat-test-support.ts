@@ -1,9 +1,8 @@
 /**
- * Test-only seam for driving the opentui chat bridge headlessly.
+ * Test-only seam for driving the opentui chat runtime headlessly.
  *
  * After todos 4-7, the textarea (opentui `EditBuffer`) owns all text/cursor
- * editing and the bridge's `bridgeTextareaKeyDown`/`bridgeSubmit`/
- * `bridgeContentChange` own the NON-editing surface (scroll, history recall,
+ * editing and the chat runtime handlers own the NON-editing surface (scroll, history recall,
  * overlay toggles, autocomplete completion, submit). `handleInput` is now
  * overlay-only (+ Ctrl+C). These helpers let unit tests drive that surviving
  * surface WITHOUT mounting a real opentui tree and WITHOUT touching
@@ -11,20 +10,20 @@
  * (the textarea owns those).
  *
  * Test seam:
- *   - `TextareaLike` is the structural port the bridge reads off the textarea
+ *   - `TextareaLike` is the structural port the runtime reads off the textarea
  *     ref (`plainText`, `cursorOffset`, `insertText`, `setText`, `clear`,
  *     `gotoBufferEnd`, `submit`). The recording fake also implements
  *     `deleteChar` (used by the Ctrl+D branch) and mirrors state so successive
  *     reads stay consistent.
  *   - `makeKeyEvent` returns a REAL `KeyEvent` instance (no casts) so
  *     `key.preventDefault()` / `key.defaultPrevented` behave exactly as in the
- *     runtime. The bridge only reads `name`/`ctrl`/`meta`/`shift`/`preventDefault`.
+ *     runtime. The TUI handlers only read `name`/`ctrl`/`meta`/`shift`/`preventDefault`.
  *   - `createRecordingScrollbox` records `scrollTo`/`scrollBy`/`scrollHeight`.
  *
  * Ref wiring uses the sanctioned null-first concrete-target cast pattern
  * (`as RefObject<T|null>` then `(ref as {current: ...|null}).current = fake`);
  * the fake is cast `as TextareaRenderable`/`as ScrollBoxRenderable` (concrete
- * targets with substantial structural overlap — NOT `as any`/`as unknown`).
+ * targets with substantial structural overlap, never untyped assertion escapes).
  */
 
 import type { KeyEvent, ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
@@ -32,9 +31,9 @@ import { KeyEvent as KeyEventClass } from '@opentui/core';
 import type * as React from 'react';
 
 /**
- * The textarea port the bridge depends on. Mirrors the opentui
- * `EditBufferRenderable` surface actually read by `bridgeTextareaKeyDown` /
- * `bridgeSubmit` / `applyFileAutocompleteCompletion`.
+ * The textarea port the runtime depends on. Mirrors the opentui
+ * `EditBufferRenderable` surface actually read by textarea keydown, submit,
+ * and file-autocomplete completion handlers.
  */
 export interface TextareaLike {
     plainText: string;
@@ -50,9 +49,9 @@ export type TextareaCall = { readonly method: string; readonly args: readonly un
 
 /**
  * Recording fake satisfying `TextareaLike`. `plainText`/`cursorOffset` are
- * mirrored so the bridge's optional-chained reads stay consistent across a
+ * mirrored so the runtime's optional-chained reads stay consistent across a
  * sequence of calls. All mutations are also logged to `calls` (plus shaped
- * convenience arrays) so tests assert on what the bridge asked the textarea to
+ * convenience arrays) so tests assert on what the runtime asked the textarea to
  * do, not on `core.inputBuffer`.
  */
 export type RecordingTextarea = TextareaLike & {

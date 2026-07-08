@@ -10,7 +10,7 @@
  *  3. `registerModelShortcutsLayer` — a SESSION-scoped keymap layer wiring
  *     F2 / Shift+F2 (recent cycle) and `<leader>1..9` (quick switch) to the
  *     same model-selection mechanism `handleModelCycle` uses
- *     (`OpenTuiChatBridge.onModelCycleSelect`).
+ *     (`ChatTuiHandle.onModelCycleSelect`).
  *
  * Design decisions (see also learnings.md):
  *
@@ -34,8 +34,8 @@
  *
  * Module-graph safety: imports only `@opentui/keymap` types (erased at compile
  * time), the `ModelProviderSelection` protocol type, and the pure-data
- * `keybind.ts` registry. NO `@opentui/core`. Dynamically imported by the opentui
- * bridge (TUI path only) so `--no-tui` stays clean.
+ * `keybind.ts` registry. NO `@opentui/core`. Dynamically imported by the TUI
+ * mount path only so `--no-tui` stays clean.
  *
  * allow: SIZE_OK — T11's deliverable mandates a single `model-favorites.ts`
  * holding the frecency store + favorites store + their keymap layer. The two
@@ -220,15 +220,15 @@ export class ModelFavorites {
 }
 
 // ---------------------------------------------------------------------------
-// Layer dependencies (injected by the bridge)
+// Layer dependencies (injected by the TUI runtime)
 // ---------------------------------------------------------------------------
 
 /**
- * Dependencies the model-shortcuts layer needs from the bridge. Kept decoupled
- * from bridge internals (same pattern as T10 `MessagesScrollDeps`) so the module
+ * Dependencies the model-shortcuts layer needs from the TUI runtime. Kept decoupled
+ * from TUI internals (same pattern as T10 `MessagesScrollDeps`) so the module
  * stays FFI-free and unit-testable against `createTestKeymap`.
  *
- * `selectModel` is a PURE selection (it calls the bridge's
+ * `selectModel` is a PURE selection (it calls the TUI handle's
  * `onModelCycleSelect`); it does NOT touch the frecency. The layer records into
  * the frecency explicitly where a commit is intended (favorites jump).
  */
@@ -321,7 +321,7 @@ export function registerModelShortcutsLayer<TTarget extends object, TEvent exten
             return false;
         }
         // Walk only — do NOT record (see module header). The selection flows
-        // through the same mechanism as Ctrl+P (bridge.onModelCycleSelect).
+        // through the same mechanism as Ctrl+P (ChatTuiHandle.onModelCycleSelect).
         deps.selectModel(target);
         return true;
     };

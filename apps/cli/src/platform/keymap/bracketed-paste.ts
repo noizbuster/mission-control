@@ -1,8 +1,8 @@
 /**
  * Bracketed-paste markers + multiline robustness (T13).
  *
- * Ports oh-my-pi's paste-marker logic to the native-textarea bridge. When a
- * paste is "marker-sized" (> 10 lines OR > 1000 chars), the bridge collapses it
+ * Ports oh-my-pi's paste-marker logic to the native-textarea TUI path. When a
+ * paste is "marker-sized" (> 10 lines OR > 1000 chars), the TUI runtime collapses it
  * to a `[Paste #N, +M lines]` (or `[Paste #N, K chars]`) token in the textarea
  * via `insertText`, and stores the full content keyed by id in a
  * `PasteMarkerStore`. On submit, `expand` replaces every marker token with its
@@ -10,14 +10,14 @@
  * back to the literal token text.
  *
  * The textarea is the source of truth for visible text; `core.inputBuffer` is
- * the mirror, kept in sync by `bridgeContentChange` after the native
+ * the mirror, kept in sync by the content-change handler after the native
  * `onContentChange` fires from `insertText`. The `PasteMarkerStore` is a
  * SEPARATE keyed content store — NOT a parallel text buffer — so this respects
  * the AGENTS.md "no shadow text buffer" anti-pattern.
  *
  * Pure module: no @opentui/core, no React, FFI-free, fully unit-testable.
- * Dynamically imported by the opentui bridge (TUI path) via a static import
- * inside the bridge module that is already behind the dynamic-renderer graph.
+ * Imported only from the opentui TUI path that is already behind the
+ * dynamic-renderer graph.
  */
 
 // Module-private; a single shared UTF-8 decoder is fine (TextDecoder is stateless
@@ -55,14 +55,14 @@ export function makeMarker(id: number, lineCount: number, charCount: number): st
         : `[Paste #${id}, ${charCount} chars]`;
 }
 
-/** Pure decision for a paste so the bridge knows whether to collapse it. */
+/** Pure decision for a paste so the TUI runtime knows whether to collapse it. */
 export type PasteDecision =
     | { readonly kind: 'literal' }
     | { readonly kind: 'marker'; readonly lineCount: number; readonly charCount: number };
 
 /**
  * Decide whether a paste should collapse to a marker. Pure (no id/store). The
- * bridge allocates the id, calls `makeMarker`, and stores the content via
+ * caller allocates the id, calls `makeMarker`, and stores the content via
  * `PasteMarkerStore.store`. Empty pastes are literal no-ops.
  */
 export function evaluatePaste(text: string): PasteDecision {

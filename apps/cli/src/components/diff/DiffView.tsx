@@ -7,7 +7,7 @@ export type DiffViewProps = {
 };
 
 /**
- * Per-kind Ink `<Text>` style. `added` -> green, `removed` -> red,
+ * Per-kind opentui `<text>` style. `added` -> green, `removed` -> red,
  * `context` -> dim, `hunk`/`meta` -> cyan. Exposed for unit testing.
  */
 export type DiffKindStyle = {
@@ -40,8 +40,8 @@ export type TextSpan = {
 /**
  * Split a `DiffLine.text` into ordered spans at every `invertedSegment`
  * boundary. Spans covering an inverted range carry `inverse: true`; the gaps
- * between/around them carry `inverse: false`. Ink has no mid-string styling, so
- * the `DiffView` renders each span as its own `<Text>` element.
+ * between/around them carry `inverse: false`. opentui styling is per element, so
+ * the `DiffView` renders each span as its own `<text>` element.
  */
 export function splitLineSpans(line: DiffLine): readonly TextSpan[] {
     const segments = line.invertedSegments;

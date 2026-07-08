@@ -89,7 +89,7 @@ export type CodingAgentTurnOptions = {
     readonly lspClient?: LspClient;
     /**
      * `ask_user` tool callback. When omitted, the `ask_user` tool is not registered for the turn
-     * (no host surface to ask the user). The interactive TUI supplies the Ink question overlay.
+     * (no host surface to ask the user). The interactive TUI supplies the question overlay.
      */
     readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
     readonly requestUserQuestions?: (requests: readonly AskUserQuestionRequest[]) => Promise<string[]>;
@@ -97,8 +97,8 @@ export type CodingAgentTurnOptions = {
      * Optional ABG overlay controller (Wave 2). When present, its plane-A `observer` is composed
      * into the interactive graph signal tap (single-slot `onSignal`, Metis 1.1), its
      * `onDurableEvent` settles `runState` on run-terminal events, and `dispose()` is invoked when the
-     * turn settles so the coalescing flush timer is cleared. Injected by the host (todo 3 bridge)
-     * — NOT threaded through the OpenTuiChatBridge public surface (Metis 3.1).
+     * turn settles so the coalescing flush timer is cleared. Injected by the host TUI runtime
+     * rather than being threaded through the ChatTuiHandle surface (Metis 3.1).
      */
     readonly abgOverlayController?: AbgOverlayController;
     /** Operator-supplied pricing table; threaded to the graph so `CostLedger` emits `policy.budget.*`. */

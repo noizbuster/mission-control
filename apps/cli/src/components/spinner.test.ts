@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { resolveSpinnerMode } from '../components/spinner.js';
+import { resolveSpinnerMode } from './spinner.js';
 
 const ENV_KEY = 'MCTRL_SPINNER';
 

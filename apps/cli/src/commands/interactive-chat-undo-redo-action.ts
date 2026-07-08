@@ -20,8 +20,8 @@ export type RedoAction = { readonly kind: 'redo' };
  * - {@link readOutputText}: a snapshot of the conversation display text
  *   (kept in sync by the chat loop wrapping `chatOutput.write`).
  * - {@link replaceOutputText}: replaces that snapshot (used by `/undo`
- *   to remove the last pair). The underlying Ink bridge only supports
- *   append, so the production controller updates its local mirror; the
+ *   to remove the last pair). The production TUI handle supports replacing
+ *   display text, while non-TUI output uses this local mirror; the
  *   display divergence is documented and the logical undo state stays
  *   correct.
  * - {@link getStack}/{@link setStack}: the LIFO undo/redo stack.

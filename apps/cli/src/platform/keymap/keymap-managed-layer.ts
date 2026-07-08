@@ -21,7 +21,7 @@
  *      app actions (ctrl+e, ctrl+z, bare home/end). T17's config loader can
  *      rebind any input.* command by passing an overridden `Keybinds` object.
  *   4. A higher-priority layer with a CUSTOM submit command (`chat.submit`)
- *      that wraps `bridgeSubmit` (IME-safe double-setTimeout defer +
+ *      that wraps the chat submit callback (IME-safe double-setTimeout defer +
  *      submitting re-entrancy guard). Bind `return`/`kpenter` to this command
  *      instead of the addon default (`editor.submit()`).
  *
@@ -134,15 +134,15 @@ export function createFilteredTextareaBindings(): readonly InputBinding[] {
 
 /**
  * The custom submit command name. Shadows `input.submit` at a higher layer
- * priority so `return`/`kpenter` dispatch to `bridgeSubmit` (IME-safe) instead
+ * priority so `return`/`kpenter` dispatch to the chat submit callback (IME-safe) instead
  * of the addon default `editor.submit()`.
  */
 export const CHAT_SUBMIT_COMMAND = 'chat.submit';
 
 /**
  * Build the custom submit command. The `submitHandler` callback wraps
- * `bridgeSubmit(core, textareaRef)` — the caller provides it so this module
- * has no dependency on the bridge module (avoids a circular import).
+ * the caller provides the callback so this module stays decoupled from chat
+ * store internals (avoids a circular import).
  */
 export function createChatSubmitCommand(submitHandler: () => void): Command<Renderable, KeyEvent> {
     return {
@@ -196,10 +196,10 @@ export function registerManagedTextareaComposition(
 /**
  * Register the custom chat submit command + bindings (return/kpenter) at a
  * higher priority than the filtered bindings layer so Enter submits via
- * `bridgeSubmit` (IME-safe) instead of the addon default `editor.submit()`.
+ * the chat submit callback (IME-safe) instead of the addon default `editor.submit()`.
  *
- * The `submitHandler` is `() => bridgeSubmit(core, textareaRef)`, provided by
- * the caller (ChatRoot) so this module stays decoupled from the bridge core.
+ * The `submitHandler` is provided by the caller (ChatRoot) so this module stays
+ * decoupled from the chat store.
  *
  * Returns a cleanup function.
  */

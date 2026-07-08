@@ -6,17 +6,17 @@
 // small and individually testable.
 
 /**
- * Ink-native markdown renderer.
+ * opentui-native markdown renderer.
  *
- * Walks `marked` tokens and emits Ink `<Box>`/`<Text>` trees styled by the T1
+ * Walks `marked` tokens and emits opentui `<box>`/`<text>` trees styled by the T1
  * theme. Re-expresses pi's token-walking algorithm (temp/ref-repos/pi/.../
- * markdown.ts) as Ink elements instead of ANSI strings: styles live on `<Text>`
+ * markdown.ts) as opentui elements instead of ANSI strings: styles live on `<text>`
  * props, never as embedded `\x1b[` color codes (the OSC 8 hyperlink escape is
  * the one sanctioned exception).
  *
  * Architecture: a serializable intermediate representation (`InlineRun` /
  * `RenderLine` / `RenderBlock`) is produced by pure, individually testable
- * helpers, then a thin React component maps it to Ink elements. A module-level
+ * helpers, then a thin React component maps it to opentui elements. A module-level
  * LRU cache stores the IR keyed on `(text, width, streaming, theme)` so a
  * re-render of unchanged input returns the same instance.
  */

@@ -2,8 +2,8 @@
  * `@path` file-attachment autocomplete state machine for the interactive TUI.
  *
  * Mirrors the slash-command menu (`interactive-chat-command-menu.ts`): a pure
- * state value plus helpers that the Ink bridge calls from `handleInput`. The
- * bridge detects an active `@<prefix>` at the end of the input buffer, calls
+ * state value plus helpers that the TUI input handlers call. The runtime
+ * detects an active `@<prefix>` at the end of the input buffer, calls
  * `updateFileAutocomplete` to list matching entries from the workspace root,
  * renders the popup via `createFileAutocompleteView`, and resolves Tab/Enter
  * completion through `buildFileAutocompleteCompletion`.
@@ -105,7 +105,7 @@ export function resolveFileAutocomplete(state: FileAutocompleteState): string | 
 
 /**
  * Build the full replacement path (`<dirPart><entryName>`, plus a trailing `/`
- * for directories) so the bridge can splice `@prefix` -> `@path` in one step.
+ * for directories) so the caller can splice `@prefix` -> `@path` in one step.
  * Returns undefined when no match is selectable.
  */
 export function buildFileAutocompleteCompletion(state: FileAutocompleteState): string | undefined {

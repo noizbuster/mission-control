@@ -13,11 +13,11 @@
  *     `parseMessageBlocks` + `hasDiffContent`, then splitting merged tool
  *     blocks at file-title boundaries);
  *   - a flat navigation model (entry starts + hunk positions) and the
- *     `j/k`/`][`/`n/p` reducers that the bridge's `handleDiffViewerInput`
+ *     `j/k`/`][`/`n/p` reducers that the TUI diff input handler
  *     drives;
  *   - the overlay component itself.
  *
- * The overlay mirrors the model-picker/approval overlay pattern: the bridge
+ * The overlay mirrors the model-picker/approval overlay pattern: the chat store
  * owns `diffViewerActive` (+ entries + cursor) on its core; when active the
  * textarea blurs so keystrokes route to `handleDiffViewerInput` via the global
  * `useKeyboard` sink, and `ChatRoot` renders `<DiffViewerOverlay>`.
@@ -25,8 +25,7 @@
  * Module-graph safety: imports `render-diff` (the `diff` lib, FFI-free),
  * `DiffView` + `ToolCard` (opentui-pragmatic `.tsx` whose jsx-runtime is a
  * one-line re-export of react's jsx-runtime — FFI-free), opentui type helpers
- * (FFI-free), and `parseMessageBlocks` from the bridge (whose FFI imports are
- * dynamic, inside `createOpenTuiChatBridge`). So importing this module never
+ * (FFI-free), and `parseMessageBlocks` from the shared chat-block parser. So importing this module never
  * loads the native backend; it is unit-testable headlessly.
  */
 
@@ -261,7 +260,7 @@ export type DiffViewerOverlayProps = {
  * Full-screen diff viewer. Renders one `<DiffView>` per file entry (reusing the
  * existing renderer — no duplicated diff logic) with the current file's title
  * highlighted and a status line tracking the cursor position. Keyboard nav is
- * driven by the bridge's `handleDiffViewerInput` (`j`/`k`/`]`/`[`/`n`/`p`/`esc`/`q`).
+ * driven by the TUI diff input handler (`j`/`k`/`]`/`[`/`n`/`p`/`esc`/`q`).
  */
 export function DiffViewerOverlay({ entries, model, cursor }: DiffViewerOverlayProps): React.ReactNode {
     const currentEntryIndex = entries.length === 0 ? -1 : entryIndexAt(model, cursor);

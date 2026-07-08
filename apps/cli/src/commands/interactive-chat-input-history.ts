@@ -1,7 +1,7 @@
 /**
  * Pure input-history reducer for the interactive chat input box.
  *
- * The Ink chat bridge keeps a {@link ChatInputHistory} value in its core state.
+ * The chat store keeps a {@link ChatInputHistory} value in its core state.
  * Every non-empty submitted line (prompts and slash commands alike) is recorded
  * so the user can recall anything they previously typed.
  *
@@ -12,9 +12,9 @@
  * they navigate back down past the newest entry — matching familiar shell
  * (readline) semantics.
  *
- * The module is intentionally pure: the bridge threads the value through its
- * `handleInput` reducer and applies the returned `input` to `inputBuffer`. This
- * keeps the state machine unit-testable without mounting Ink.
+ * The module is intentionally pure: the TUI runtime threads the value through its
+ * input reducer and applies the returned `input` to `inputBuffer`. This keeps
+ * the state machine unit-testable without mounting OpenTUI.
  */
 
 export type ChatInputHistory = {

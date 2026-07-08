@@ -7,8 +7,7 @@
  * lets the user filter and navigate, and dispatches the selected entry. It is
  * mounted inside `ChatKeymapProvider` (a sibling of ChatRoot, like T7's
  * `LeaderPendingCue`) so it always has a keymap in context and never contends
- * with the chat bridge — the plan forbids wiring this into
- * `opentui-chat-bridge.tsx` (T5/T6/T10-T15/T16 own the bridge).
+ * with chat-store state.
  *
  * Self-contained via `useKeymap` + `registerLayer` (the task's suggested seam):
  *   - A toggle layer (always enabled) registers the `command.palette.show`
@@ -152,7 +151,7 @@ function searchableText(item: PaletteListItem): string {
 
 export interface CommandPaletteOverlayProps {
     /**
-     * Invoked when the user selects a registry-slash entry. The bridge (T10)
+     * Invoked when the user selects a registry-slash entry. The chat runtime (T10)
      * wires this to the chat input / parseChatLine path; until then it is
      * optional and the palette simply closes on slash selection.
      */

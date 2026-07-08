@@ -89,8 +89,8 @@ export type InteractiveToolOptions = {
     readonly lspServerManagerDeps?: LspServerManagerDeps;
     /**
      * `ask_user` tool callback: resolves with the user's answer to a model-posed question. When
-     * omitted, the `ask_user` tool is not registered (no host surface to ask the user). The
-     * interactive TUI wires this to the Ink question overlay.
+      * omitted, the `ask_user` tool is not registered (no host surface to ask the user). The
+      * interactive TUI wires this to the question overlay.
      */
     readonly requestUserQuestion?: (request: AskUserQuestionRequest) => Promise<string>;
     /**

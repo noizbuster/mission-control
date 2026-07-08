@@ -4,7 +4,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 /**
  * Error boundary + context wrapper for the opentui render path.
  *
- * Mirrors Ink's behavior where an unmounting renderer cleans up the terminal:
+ * Mirrors the terminal-renderer cleanup contract:
  * when a descendant throws, this boundary catches it, writes the stack to
  * stderr (opentui owns stdout), and renders a red fallback `<text>` so the
  * user sees the error before the process exits.

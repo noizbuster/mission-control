@@ -10,9 +10,9 @@
  * Editor access goes through `renderer.currentFocusedEditor` (the focused
  * TextareaRenderable) — the SAME surface the addon's edit-buffer commands use.
  * insertText (yank) and setSelection/deleteSelection (yank-pop) are METHOD
- * calls: they fire the editor's `content-changed` event, so the bridge's
+ * calls: they fire the editor's `content-changed` event, so the chat store's
  * `inputBuffer` mirror stays in sync (no shadow text buffer — see T3/T13
- * learnings). This module NEVER touches the opentui-chat-bridge textareaRef.
+ * learnings). This module NEVER touches the ChatInputTextarea ref directly.
  *
  * Capture strategy: the addon's delete methods (`deleteWordBackward` /
  * `deleteToLineEnd` / `deleteToLineStart`) do not return the deleted text, so
@@ -28,14 +28,14 @@
  * yank (the one observable non-kill action) and accumulates otherwise. Typing
  * or arrow-key navigation between two rapid kills would therefore accumulate
  * in T5 where oh-my-pi would not — a documented, accepted divergence (the
- * keymap layer cannot observe textarea typing/navigation without bridge
- * access, which is T12/T16's lane). Acceptance criterion (c) — three
+ * keymap layer cannot observe textarea typing/navigation without direct chat
+ * runtime access, which is T12/T16's lane). Acceptance criterion (c) — three
  * consecutive ctrl+w into one entry — holds.
  *
  * Module-graph safety: imports ONLY `@opentui/keymap` types (erased) and the
  * pure-data `keybind.ts` registry. NO `@opentui/core` value import, so the
  * unit test runs headlessly without native FFI (mirrors T10/T13). Dynamically
- * pulled in via `keymap-managed-layer.ts`, itself lazy-imported by the bridge.
+ * pulled in via `keymap-managed-layer.ts`, itself loaded only on the TUI path.
  */
 
 import type { Command, Keymap, KeymapEvent } from '@opentui/keymap';

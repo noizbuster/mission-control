@@ -9,9 +9,7 @@
  * layout outside of an active chord.
  *
  * Mounted inside `ChatKeymapProvider` (above ChatRoot) so it always has a
- * keymap in context and never contends with the bridge's own state — the plan
- * explicitly forbids wiring this into `opentui-chat-bridge.tsx` (bridge
- * contention; T5/T6/T10-T15/T16 own the bridge).
+ * keymap in context and never contends with the chat store's own state.
  *
  * It reads the pending sequence reactively via `usePendingSequence`
  * (`@opentui/keymap/react`), which re-derives `keymap.getPendingSequence()`
