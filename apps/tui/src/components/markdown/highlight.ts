@@ -12,7 +12,7 @@
  * cache-miss-then-async-fill pattern: the first call for a (code, lang) pair
  * returns monochrome immediately and fires an async parse; once it resolves the
  * colored lines are cached, the markdown render LRU is invalidated, and the
- * version emitter notifies React (via `subscribeHighlight` /
+ * version emitter notifies subscribers (via `subscribeHighlight` /
  * `getHighlightVersion`) so the block re-renders and hits the cache.
  * Unsupported or unknown languages return monochrome with no schedule.
  * Highlighting never throws into the renderer: every failure path degrades to

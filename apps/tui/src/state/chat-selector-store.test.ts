@@ -1,16 +1,17 @@
 /**
- * Store-contract tests for `createChatSelectorStore` — the pure, React-free
+ * Store-contract tests for `createChatSelectorStore` — the pure, framework-free
  * core that backs ChatInputArea's selector subscription.
  *
- * These tests exercise the `useSyncExternalStore` contract directly: React
- * re-renders iff (a) `onStoreChange` is called AND (b) the next
+ * These tests exercise the external-store contract directly (the
+ * `subscribe`/`getSnapshot` surface that `useSolidStoreSelector` consumes): a
+ * subscriber re-renders iff (a) `onStoreChange` is called AND (b) the next
  * `getSnapshot()` is not equal to the previous. We assert both halves against
- * a real `ChatStore`, plus the referential-stability invariant that prevents
- * the `useSyncExternalStore` infinite-loop ("snapshot changed during render").
+ * a real `ChatStore`, plus the referential-stability invariant that keeps
+ * `getSnapshot()` returning the same reference between publishes.
  *
- * Three assertions mirror `use-keymap-selector.test.ts:33-93`:
- *   1. re-render-on-change — mutate a selected slice -> listener fires + value differs.
- *   2. no-re-render-on-unrelated — mutate outputText via emitOutput -> listener silent.
+ * Three assertions cover the store contract:
+ *   1. notify-on-change — mutate a selected slice -> listener fires + value differs.
+ *   2. no-notify-on-unrelated — mutate outputText via emitOutput -> listener silent.
  *   3. referential-stability — repeated getSnapshot with no mutation -> same reference.
  */
 
