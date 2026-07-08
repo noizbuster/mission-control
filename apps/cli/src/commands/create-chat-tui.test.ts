@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { createAbgOverlayController } from './abg-overlay-controller.js';
 import { createAbgOverlayStore } from './abg-overlay-state.js';
 import { createChatStore } from './chat-store.js';
+import type { ChatTuiHandle } from './chat-tui-types.js';
 import { type ChatTuiOptions, createChatTuiHandle } from './create-chat-tui.js';
 
 describe('create-chat-tui', () => {
-    it('returns a handle structurally assignable to OpenTuiChatBridge', () => {
+    it('returns a handle structurally assignable to ChatTuiHandle', () => {
         const store = createChatStore();
-        const handle = createChatTuiHandle(store, () => {});
+        const handle: ChatTuiHandle = createChatTuiHandle(store, () => {});
 
         expect(typeof handle.waitForEvent).toBe('function');
         expect(typeof handle.emitOutput).toBe('function');

@@ -4,38 +4,21 @@ import { getModelContextLimit } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
 import { createRef } from 'react';
-import type { ProviderAuthStore } from '../auth-store.js';
 import type { StatusBarProps } from '../components/StatusBar.js';
-import type { AbgOverlayController } from './abg-overlay-controller.js';
-import type { ApprovalLevel } from './approval-level.js';
 import { type ChatStore, createChatStore } from './chat-store.js';
-import type { OpenTuiChatBridge } from './chat-tui-types.js';
+import type { ChatTuiHandle, ChatTuiRuntimeOptions } from './chat-tui-types.js';
 import { getOrCreateMissionControlServices, type MissionControlServices } from './mission-control-services.js';
 import type { ModelsOverlayRoleRow } from './models-overlay-state.js';
-import type { WelcomeData } from './welcome-data.js';
 
-export type ChatTuiOptions = {
-    readonly providerID: string;
-    readonly modelID: string;
-    readonly variantID?: string;
-    readonly sessionID?: string;
-    readonly workspaceRoot?: string;
-    readonly gitBranch?: string;
-    readonly isWorktree?: boolean;
-    readonly initialHistoryEntries?: readonly string[];
-    readonly initialApprovalLevel?: ApprovalLevel;
-    readonly authStore?: ProviderAuthStore;
-    readonly abgOverlayController?: AbgOverlayController;
-    readonly welcomeData?: WelcomeData;
-};
+export type ChatTuiOptions = ChatTuiRuntimeOptions;
 
 /**
- * Internal factory that creates an {@link OpenTuiChatBridge} handle from an
+ * Internal factory that creates a {@link ChatTuiHandle} from an
  * already-constructed {@link ChatStore} and an unmount function. Splitting this
  * out from {@link createChatTui} makes the handle testable without mounting the
  * opentui renderer (no native FFI, no real terminal).
  */
-export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): OpenTuiChatBridge {
+export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): ChatTuiHandle {
     return {
         waitForEvent: () => store.waitForEvent(),
         emitOutput: (text) => store.emitOutput(text),
@@ -90,13 +73,13 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Op
 /**
  * Full mount function: creates a {@link ChatStore}, dynamically imports the
  * opentui renderer + keymap provider + {@link ChatApp}, mounts the React tree,
- * and returns an {@link OpenTuiChatBridge} handle.
+ * and returns a {@link ChatTuiHandle}.
  *
  * Dynamic imports keep `@opentui/react`, the keymap provider, and `ChatApp` out
  * of the eager module graph so non-TUI CLI runs (plain / JSON) never load the
  * native renderer.
  */
-export async function createChatTui(options: ChatTuiOptions): Promise<OpenTuiChatBridge> {
+export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHandle> {
     const store = createChatStore({
         ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
         ...(options.initialHistoryEntries !== undefined

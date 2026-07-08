@@ -10,7 +10,7 @@ import type { QuestionBatchEntry, QuestionOption } from './question-types.js';
 import type { WelcomeData } from './welcome-data.js';
 
 /** Public surface consumed by the imperative chat loop. */
-export type OpenTuiChatBridge = {
+export type ChatTuiHandle = {
     readonly waitForEvent: () => Promise<ChatInputEvent>;
     readonly emitOutput: (text: string) => void;
     readonly replaceOutputText: (text: string) => void;
@@ -72,7 +72,7 @@ export type OpenTuiChatBridge = {
 };
 
 /** Provider/model/session info passed through to the StatusBar render surface. */
-export type OpenTuiChatBridgeOptions = {
+export type ChatTuiRuntimeOptions = {
     readonly providerID: string;
     readonly modelID: string;
     readonly variantID?: string;

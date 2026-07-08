@@ -1,7 +1,7 @@
 import { AgentRuntime, createDeterministicProvider } from '@mission-control/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createChatStore } from './chat-store.js';
-import type { OpenTuiChatBridge } from './chat-tui-types.js';
+import type { ChatTuiHandle } from './chat-tui-types.js';
 import { createChatTuiHandle } from './create-chat-tui.js';
 import { runInteractiveChatSession } from './interactive-chat.js';
 import { setTtyState } from './run-agent-chat-test-support.js';
@@ -36,7 +36,7 @@ afterEach(async () => {
 describe('runInteractiveChatSession terminal title management', () => {
     it('writes OSC title escapes for TUI-capable TTY sessions without mounting OpenTUI', async () => {
         const restoreTtyState = setTtyState({ input: true, output: true });
-        createChatTuiMock.mockImplementation(async () => createExitOnlyTuiBridge());
+        createChatTuiMock.mockImplementation(async () => createExitOnlyTuiHandle());
         try {
             const { result, stderr } = await captureStderr(async () =>
                 runInteractiveChatSession(new AgentRuntime(), {
@@ -55,7 +55,7 @@ describe('runInteractiveChatSession terminal title management', () => {
     });
 });
 
-function createExitOnlyTuiBridge(): OpenTuiChatBridge {
+function createExitOnlyTuiHandle(): ChatTuiHandle {
     const store = createChatStore();
     store.enqueueEvent({ type: 'line', value: '/exit' });
     return createChatTuiHandle(store, () => {});

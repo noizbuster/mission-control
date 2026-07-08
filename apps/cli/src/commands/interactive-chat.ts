@@ -26,7 +26,7 @@ import type { ApprovalLevel } from './approval-level.js';
 import { approvalLevelRules } from './approval-level.js';
 import { parseChatLine } from './chat-commands.js';
 import type { DashboardAgentEntry, MissionPanelRow, SessionPickerEntry } from './chat-store.js';
-import type { OpenTuiChatBridge, OpenTuiChatBridgeOptions } from './chat-tui-types.js';
+import type { ChatTuiHandle, ChatTuiRuntimeOptions } from './chat-tui-types.js';
 import { type ChatTuiOptions, createChatTui } from './create-chat-tui.js';
 import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
 import type { ChatActionResult } from './interactive-chat-action-result.js';
@@ -139,7 +139,7 @@ export async function runInteractiveChatSession(
 ): Promise<string> {
     const useTui = options.input === undefined && process.stdin.isTTY === true;
     suppressTitleManagement(false);
-    type SessionBridgeOptions = Omit<OpenTuiChatBridgeOptions, 'providerID' | 'modelID' | 'variantID'> & {
+    type SessionChatTuiRuntimeOptions = Omit<ChatTuiRuntimeOptions, 'providerID' | 'modelID' | 'variantID'> & {
         providerID: string;
         modelID: string;
         variantID?: string;
@@ -149,7 +149,7 @@ export async function runInteractiveChatSession(
     const initialAbgOverlayPrefs = useTui ? await loadAbgOverlayPrefs() : undefined;
     const pricingTableForSession = await loadPricingTable();
     const missionControlServices = await resolveMissionControlServices(options.workspaceRoot);
-    let tuiBridgeRef: OpenTuiChatBridge | undefined;
+    let tuiBridgeRef: ChatTuiHandle | undefined;
     const abgOverlayController = useTui
         ? createAbgOverlayController(createAbgOverlayStore(), {
               readPrefsSnapshot: () => tuiBridgeRef?.getAbgOverlayPrefsSnapshot() ?? DEFAULT_ABG_OVERLAY_PREFS,
@@ -167,7 +167,7 @@ export async function runInteractiveChatSession(
                   ...(options.profileName !== undefined ? { profileName: options.profileName } : {}),
               })
             : undefined;
-    const bridgeOptions: SessionBridgeOptions | undefined = useTui
+    const bridgeOptions: SessionChatTuiRuntimeOptions | undefined = useTui
         ? {
               providerID: options.modelProviderSelection.providerID,
               modelID: options.modelProviderSelection.modelID,
@@ -235,8 +235,8 @@ export async function runInteractiveChatSession(
         }
     };
     const undoRedoController = {
-        // The Ink bridge echoes "You: ..." directly to core.outputText, bypassing
-        // the conversationText mirror; prefer the bridge's full text when present.
+        // The TUI handle echoes "You: ..." directly to its store, bypassing the
+        // conversationText mirror; prefer the TUI's full text when present.
         readOutputText: () => tuiBridge?.getOutput() ?? conversationText,
         replaceOutputText: (next: string) => {
             conversationText = next;
