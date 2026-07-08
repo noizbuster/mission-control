@@ -4,7 +4,7 @@ import { resolveSpinnerMode } from './spinner.js';
 
 export type SeparatorProps = {
     readonly state: SeparatorState;
-    readonly width?: number;
+    readonly width: number;
 };
 
 export type SeparatorState = 'running' | 'awaiting_input' | 'idle';
@@ -64,8 +64,7 @@ export function buildSeparatorLine(
 
 /**
  * opentui-native separator. Owns its own frame timer (`SEPARATOR_INTERVAL_MS`);
- * `width` is optional for testability (defaults to terminal width minus one to
- * avoid autowrap phantom lines).
+ * `width` is supplied by a viewport-aware caller.
  */
 export function Separator({ state, width }: SeparatorProps): React.ReactNode {
     const animated = resolveSpinnerMode() === 'animate';
@@ -81,8 +80,7 @@ export function Separator({ state, width }: SeparatorProps): React.ReactNode {
             clearInterval(timer);
         };
     }, [animated, state]);
-    const columns = width ?? Math.max(1, (process.stdout.columns ?? 80) - 1);
-    const { text, color, dimColor } = buildSeparatorLine(state, animated, frame, columns);
+    const { text, color, dimColor } = buildSeparatorLine(state, animated, frame, width);
     const resolvedFg = color === 'yellow' ? '#ffff00' : color === 'magenta' ? '#ff00ff' : undefined;
     return (
         <text {...(resolvedFg !== undefined ? { fg: resolvedFg } : {})} {...(dimColor ? { dim: true } : {})}>

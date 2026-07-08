@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react';
 import type { AbgOverlayState, AbgOverlayStore } from '../commands/abg-overlay-state.js';
 import { DEFAULT_REFRESH_MS } from '../commands/abg-overlay-state.js';
 import { truncateTerminalText } from '../commands/terminal-text.js';
+import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA.js';
 import { ApprovalsPane, BlackboardPane, CostPolicyPane, TimelinePane, ToolsPane } from './AbgOverlayPanesB.js';
 import { graphStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
@@ -36,10 +37,21 @@ export const NARROW_THRESHOLD = 100;
 
 /**
  * Pure collapse-decision. Extracted from the render path so resize behavior is testable without
- * `ink-testing-library` — do NOT inline back into the component.
+ * mounting the terminal renderer — do NOT inline back into the component.
  */
 export function shouldCollapseToOverview(cols: number): boolean {
     return cols < NARROW_THRESHOLD;
+}
+
+export function shouldCollapseViewportToOverview(viewport: Pick<TerminalViewport, 'columns'>): boolean {
+    return shouldCollapseToOverview(viewport.columns);
+}
+
+export function visibleAbgOverlayTab(
+    activeTab: AbgOverlayTab,
+    viewport: Pick<TerminalViewport, 'columns'>,
+): AbgOverlayTab {
+    return shouldCollapseViewportToOverview(viewport) ? 'overview' : activeTab;
 }
 
 const TAB_LABELS: Record<AbgOverlayTab, string> = {
@@ -58,6 +70,7 @@ export interface AbgOverlayProps {
     readonly activeTab: AbgOverlayTab;
     readonly scrollOffset: number;
     readonly modelLabel: string;
+    readonly viewport: TerminalViewport;
     readonly refreshMs?: number;
 }
 
@@ -139,16 +152,18 @@ function PaneBody({
     activeTab,
     state,
     modelLabel,
+    viewport,
 }: {
     activeTab: AbgOverlayTab;
     state: AbgOverlayState;
     modelLabel: string;
+    viewport: TerminalViewport;
 }): React.ReactNode {
     switch (activeTab) {
         case 'overview':
             return <OverviewPane state={state} modelLabel={modelLabel} />;
         case 'graph':
-            return <GraphPane state={state} modelLabel={modelLabel} />;
+            return <GraphPane state={state} modelLabel={modelLabel} viewport={viewport} />;
         case 'nodes':
             return <NodesPane state={state} modelLabel={modelLabel} />;
         case 'tools':
@@ -192,33 +207,21 @@ export function AbgOverlay({
     activeTab,
     scrollOffset: _scrollOffset,
     modelLabel,
+    viewport,
     refreshMs = DEFAULT_REFRESH_MS,
 }: AbgOverlayProps): React.ReactNode {
     const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
-    const cols = process.stdout.columns ?? 80;
-    const narrow = shouldCollapseToOverview(cols);
-
-    if (narrow) {
-        return (
-            <box flexDirection="column" height="100%" shouldFill={true}>
-                <Header state={state} modelLabel={modelLabel} refreshMs={refreshMs} />
-                <TabStrip activeTab="overview" />
-                <box flexGrow={1} shouldFill={true}>
-                    <PaneBody activeTab="overview" state={state} modelLabel={modelLabel} />
-                </box>
-                <FooterHint narrow={true} />
-            </box>
-        );
-    }
+    const narrow = shouldCollapseViewportToOverview(viewport);
+    const visibleTab = visibleAbgOverlayTab(activeTab, viewport);
 
     return (
         <box flexDirection="column" height="100%" shouldFill={true}>
             <Header state={state} modelLabel={modelLabel} refreshMs={refreshMs} />
-            <TabStrip activeTab={activeTab} />
+            <TabStrip activeTab={visibleTab} />
             <box flexGrow={1} shouldFill={true}>
-                <PaneBody activeTab={activeTab} state={state} modelLabel={modelLabel} />
+                <PaneBody activeTab={visibleTab} state={state} modelLabel={modelLabel} viewport={viewport} />
             </box>
-            <FooterHint narrow={false} />
+            <FooterHint narrow={narrow} />
         </box>
     );
 }

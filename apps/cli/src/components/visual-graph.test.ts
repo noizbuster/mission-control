@@ -5,6 +5,7 @@ import {
     VISUAL_GRAPH_MAX_NODES,
     type VisualGraphEdge,
     type VisualGraphNode,
+    visualGraphBoundsForViewport,
 } from './visual-graph.js';
 
 const AbgNodeStatusValues = ['idle', 'starting', 'running', 'succeeded', 'failed', 'blocked', 'cancelled'] as const;
@@ -258,6 +259,25 @@ describe('visual-graph renderVisualGraph', () => {
                 maxWidth: 8,
             });
             expect(joinedLines(result)).toContain('\u2713');
+        });
+    });
+
+    describe('viewport-derived graph pane bounds', () => {
+        it('keeps a 40x10 viewport finite, positive, and non-negative', () => {
+            const bounds = visualGraphBoundsForViewport({ columns: 40, rows: 10 });
+
+            expect(bounds).toEqual({ maxWidth: 34, maxHeight: 8 });
+            expect(Number.isFinite(bounds.maxWidth)).toBe(true);
+            expect(Number.isFinite(bounds.maxHeight)).toBe(true);
+            expect(bounds.maxWidth).toBeGreaterThan(0);
+            expect(bounds.maxHeight).toBeGreaterThan(0);
+        });
+
+        it('preserves the existing graph pane chrome subtraction for wide viewports', () => {
+            expect(visualGraphBoundsForViewport({ columns: 200, rows: 40 })).toEqual({
+                maxWidth: 194,
+                maxHeight: 32,
+            });
         });
     });
 

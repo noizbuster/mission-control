@@ -3,6 +3,8 @@ import { describe, expect, test } from 'vitest';
 import type { AbgOverlayState } from '../commands/abg-overlay-state';
 import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA';
 
+const TEST_VIEWPORT = { columns: 120, rows: 30 } as const;
+
 function createEmptyState(): AbgOverlayState {
     return {
         activeGraphId: undefined,
@@ -194,7 +196,11 @@ describe('AbgOverlayPanesA', () => {
     describe('GraphPane', () => {
         test('Happy: renders graph with 3 nodes', () => {
             const state = createHappyState();
-            const element = React.createElement(GraphPane, { state, modelLabel: 'openai/gpt-4' });
+            const element = React.createElement(GraphPane, {
+                state,
+                modelLabel: 'openai/gpt-4',
+                viewport: TEST_VIEWPORT,
+            });
 
             expect(element).toBeDefined();
             expect(state.nodes.size).toBe(3);
@@ -205,7 +211,11 @@ describe('AbgOverlayPanesA', () => {
 
         test('Empty state: shows "No active ABG run"', () => {
             const state = createEmptyState();
-            const element = React.createElement(GraphPane, { state, modelLabel: 'local/local-echo' });
+            const element = React.createElement(GraphPane, {
+                state,
+                modelLabel: 'local/local-echo',
+                viewport: TEST_VIEWPORT,
+            });
 
             expect(element).toBeDefined();
             expect(state.activeGraphId).toBeUndefined();
@@ -213,7 +223,11 @@ describe('AbgOverlayPanesA', () => {
 
         test('Malformed: renders with empty nodes map', () => {
             const state = createMalformedState();
-            const element = React.createElement(GraphPane, { state, modelLabel: 'local/local-echo' });
+            const element = React.createElement(GraphPane, {
+                state,
+                modelLabel: 'local/local-echo',
+                viewport: TEST_VIEWPORT,
+            });
 
             expect(element).toBeDefined();
             expect(state.nodes.size).toBe(0);

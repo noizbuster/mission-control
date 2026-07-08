@@ -5,7 +5,15 @@ import {
     DEFAULT_REFRESH_MS,
     readRefreshMsFromEnv,
 } from '../commands/abg-overlay-state';
-import { NARROW_THRESHOLD, shouldCollapseToOverview } from './AbgOverlay';
+import { normalizeTerminalViewport } from '../platform/terminal-viewport';
+import {
+    NARROW_THRESHOLD,
+    shouldCollapseToOverview,
+    shouldCollapseViewportToOverview,
+    visibleAbgOverlayTab,
+} from './AbgOverlay';
+
+const REFRESH_ENV_KEY = 'MCTRL_ABG_OVERLAY_REFRESH_MS';
 
 function createMockStore(): AbgOverlayStore {
     return createAbgOverlayStore();
@@ -237,16 +245,6 @@ describe('AbgOverlay Store Integration', () => {
 });
 
 describe('AbgOverlay resize collapse behavior', () => {
-    const originalColumns = process.stdout.columns;
-
-    afterEach(() => {
-        Object.defineProperty(process.stdout, 'columns', {
-            value: originalColumns,
-            configurable: true,
-            writable: true,
-        });
-    });
-
     test('NARROW_THRESHOLD is 100 cols (Metis 2.8 contract)', () => {
         expect(NARROW_THRESHOLD).toBe(100);
     });
@@ -264,50 +262,44 @@ describe('AbgOverlay resize collapse behavior', () => {
         expect(shouldCollapseToOverview(99)).toBe(true);
     });
 
-    test('resize cycle 200 → 80 → 200 collapses then restores via process.stdout.columns', () => {
-        // Given: 200 cols — full overlay
-        Object.defineProperty(process.stdout, 'columns', { value: 200, configurable: true, writable: true });
-        const colsWide = process.stdout.columns ?? 80;
-        expect(shouldCollapseToOverview(colsWide)).toBe(false);
+    test('resize cycle 200 → 80 → 200 collapses then restores via normalized viewport props', () => {
+        // Given: 200 cols, full overlay.
+        const wide = normalizeTerminalViewport({ width: 200, height: 40 });
+        expect(shouldCollapseViewportToOverview(wide)).toBe(false);
+        expect(visibleAbgOverlayTab('graph', wide)).toBe('graph');
 
-        // When: resize to 80 cols — collapse to Overview-only
-        Object.defineProperty(process.stdout, 'columns', { value: 80, configurable: true, writable: true });
-        const colsNarrow = process.stdout.columns ?? 80;
-        expect(shouldCollapseToOverview(colsNarrow)).toBe(true);
+        // When: resize to 80 cols, collapse to Overview-only.
+        const narrow = normalizeTerminalViewport({ width: 80, height: 24 });
+        expect(shouldCollapseViewportToOverview(narrow)).toBe(true);
+        expect(visibleAbgOverlayTab('graph', narrow)).toBe('overview');
 
-        // Then: resize back to 200 — restored (decision is pure per-render, no sticky state)
-        Object.defineProperty(process.stdout, 'columns', { value: 200, configurable: true, writable: true });
-        const colsRestored = process.stdout.columns ?? 80;
-        expect(shouldCollapseToOverview(colsRestored)).toBe(false);
+        // Then: resize back to 200, restored by pure per-render state.
+        const restored = normalizeTerminalViewport({ width: 200, height: 40 });
+        expect(shouldCollapseViewportToOverview(restored)).toBe(false);
+        expect(visibleAbgOverlayTab('graph', restored)).toBe('graph');
     });
 
-    test('collapse decision uses the same expression the component reads (process.stdout.columns ?? 80)', () => {
-        Object.defineProperty(process.stdout, 'columns', { value: 80, configurable: true, writable: true });
-        const colsAsReadByComponent = process.stdout.columns ?? 80;
-        expect(shouldCollapseToOverview(colsAsReadByComponent)).toBe(true);
-        expect(colsAsReadByComponent).toBe(80);
+    test('collapse decision reads the viewport columns used by the component', () => {
+        const viewport = normalizeTerminalViewport({ width: 80, height: 24 });
+        expect(shouldCollapseViewportToOverview(viewport)).toBe(true);
+        expect(viewport.columns).toBe(80);
     });
 
-    test('undefined columns (non-TTY) falls back to 80 via component default → collapses', () => {
-        Object.defineProperty(process.stdout, 'columns', {
-            value: undefined,
-            configurable: true,
-            writable: true,
-        });
-        const colsAsReadByComponent = process.stdout.columns ?? 80;
-        expect(colsAsReadByComponent).toBe(80);
-        expect(shouldCollapseToOverview(colsAsReadByComponent)).toBe(true);
+    test('missing viewport dimensions normalize to 80x24 and collapse', () => {
+        const viewport = normalizeTerminalViewport({});
+        expect(viewport).toEqual({ columns: 80, rows: 24 });
+        expect(shouldCollapseViewportToOverview(viewport)).toBe(true);
     });
 });
 
 describe('readRefreshMsFromEnv tuning (MCTRL_ABG_OVERLAY_REFRESH_MS)', () => {
-    const original = process.env['MCTRL_ABG_OVERLAY_REFRESH_MS'];
+    const original = process.env[REFRESH_ENV_KEY];
 
     afterEach(() => {
         if (original === undefined) {
-            delete process.env['MCTRL_ABG_OVERLAY_REFRESH_MS'];
+            delete process.env[REFRESH_ENV_KEY];
         } else {
-            process.env['MCTRL_ABG_OVERLAY_REFRESH_MS'] = original;
+            process.env[REFRESH_ENV_KEY] = original;
         }
     });
 
@@ -316,27 +308,27 @@ describe('readRefreshMsFromEnv tuning (MCTRL_ABG_OVERLAY_REFRESH_MS)', () => {
     });
 
     test('MCTRL_ABG_OVERLAY_REFRESH_MS=20 → returns 20 (pass-through, faster than default 33ms)', () => {
-        process.env['MCTRL_ABG_OVERLAY_REFRESH_MS'] = '20';
+        process.env[REFRESH_ENV_KEY] = '20';
         expect(readRefreshMsFromEnv()).toBe(20);
     });
 
     test('16ms floor clamp: MCTRL_ABG_OVERLAY_REFRESH_MS=10 → returns 16 (10 is below floor)', () => {
-        process.env['MCTRL_ABG_OVERLAY_REFRESH_MS'] = '10';
+        process.env[REFRESH_ENV_KEY] = '10';
         expect(readRefreshMsFromEnv()).toBe(16);
     });
 
-    test('16ms floor clamp: MCTRL_ABG_OVERLAY_REFRESH_MS=1 → returns 16 (never thrash Ink)', () => {
-        process.env['MCTRL_ABG_OVERLAY_REFRESH_MS'] = '1';
+    test('16ms floor clamp: MCTRL_ABG_OVERLAY_REFRESH_MS=1 → returns 16 (never thrash the terminal renderer)', () => {
+        process.env[REFRESH_ENV_KEY] = '1';
         expect(readRefreshMsFromEnv()).toBe(16);
     });
 
     test('exactly 16 is the floor boundary (not clamped, passes through)', () => {
-        process.env['MCTRL_ABG_OVERLAY_REFRESH_MS'] = '16';
+        process.env[REFRESH_ENV_KEY] = '16';
         expect(readRefreshMsFromEnv()).toBe(16);
     });
 
     test('unset env → returns DEFAULT_REFRESH_MS (33)', () => {
-        delete process.env['MCTRL_ABG_OVERLAY_REFRESH_MS'];
+        delete process.env[REFRESH_ENV_KEY];
         expect(readRefreshMsFromEnv()).toBe(DEFAULT_REFRESH_MS);
         expect(readRefreshMsFromEnv()).toBe(33);
     });

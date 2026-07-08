@@ -2,14 +2,25 @@
 import type React from 'react';
 import type { AbgOverlayState } from '../commands/abg-overlay-state.js';
 import { truncateTerminalText } from '../commands/terminal-text.js';
+import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import { graphStatusTheme, nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
 import { useSpinnerFrame } from './spinner.js';
-import { renderVisualGraph, type VisualGraphEdge, type VisualGraphNode, type VisualGraphRow } from './visual-graph.js';
+import {
+    renderVisualGraph,
+    type VisualGraphEdge,
+    type VisualGraphNode,
+    type VisualGraphRow,
+    visualGraphBoundsForViewport,
+} from './visual-graph.js';
 
 export interface PaneProps {
     readonly state: AbgOverlayState;
     readonly modelLabel: string;
 }
+
+export type GraphPaneProps = PaneProps & {
+    readonly viewport: TerminalViewport;
+};
 
 const dimAttrs = { dim: true };
 const boldAttrs = { bold: true };
@@ -141,7 +152,7 @@ function renderVisualRow(row: VisualGraphRow, idx: number, spinnerGlyph: string)
     );
 }
 
-export function GraphPane({ state }: PaneProps): React.ReactNode {
+export function GraphPane({ state, viewport }: GraphPaneProps): React.ReactNode {
     const { glyph: spinnerGlyph } = useSpinnerFrame();
     if (isEmptyState(state)) {
         return (
@@ -167,12 +178,10 @@ export function GraphPane({ state }: PaneProps): React.ReactNode {
         to: edge.target,
         ...(edge.condition !== undefined ? { label: edge.condition } : {}),
     }));
-    const terminalWidth = process.stdout.columns ?? 80;
-    const graphMaxWidth = Math.max(20, terminalWidth - 6);
+    const graphBounds = visualGraphBoundsForViewport(viewport);
+    const graphMaxWidth = graphBounds.maxWidth;
     const visual = renderVisualGraph({ nodes: visualNodes, edges: visualEdges, maxWidth: graphMaxWidth });
-
-    const terminalHeight = process.stdout.rows ?? 24;
-    const graphMaxHeight = Math.max(8, terminalHeight - 8);
+    const graphMaxHeight = graphBounds.maxHeight;
 
     return (
         <box flexDirection="column" marginTop={1}>

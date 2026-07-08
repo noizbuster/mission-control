@@ -4,6 +4,7 @@ import type { AbgNodeStatus } from '@mission-control/protocol';
 import type * as React from 'react';
 import { useSyncExternalStore } from 'react';
 import type { AbgOverlayStore } from '../commands/abg-overlay-state.js';
+import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import { nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
 import {
     renderVisualGraph,
@@ -19,6 +20,11 @@ const PULSE_WINDOW_MS = 3000;
 
 export interface AbgMinimapProps {
     readonly store: AbgOverlayStore;
+    readonly viewport: TerminalViewport;
+}
+
+export function minimapMaxWidthForViewport(viewport: TerminalViewport): number {
+    return Math.min(MINIMAP_MAX_WIDTH, Math.max(1, viewport.columns - 2));
 }
 
 function buildInput(
@@ -26,6 +32,7 @@ function buildInput(
     edges: readonly { readonly source: string; readonly target: string; readonly condition?: string }[],
     activeNodeIds: readonly string[],
     activeGraphId: string | undefined,
+    maxWidth: number,
 ): VisualGraphInput {
     const visualNodes: VisualGraphNode[] = [];
     for (const [nodeId, status] of nodes) {
@@ -41,7 +48,7 @@ function buildInput(
         edges: visualEdges,
         ...(activeGraphId !== undefined ? { entryNodeId: activeGraphId } : {}),
         maxNodes: MINIMAP_MAX_NODES,
-        maxWidth: MINIMAP_MAX_WIDTH,
+        maxWidth,
     };
 }
 
@@ -82,12 +89,18 @@ function renderRow(row: VisualGraphRow, recentStatuses: Set<AbgNodeStatus>): Rea
     );
 }
 
-export function AbgMinimap({ store }: AbgMinimapProps): React.ReactNode {
+export function AbgMinimap({ store, viewport }: AbgMinimapProps): React.ReactNode {
     const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
 
     if (state.nodes.size === 0) return null;
 
-    const input = buildInput(state.nodes, state.graphEdges, state.activeNodeIds, state.activeGraphId);
+    const input = buildInput(
+        state.nodes,
+        state.graphEdges,
+        state.activeNodeIds,
+        state.activeGraphId,
+        minimapMaxWidthForViewport(viewport),
+    );
     const rendered = renderVisualGraph(input);
     const recentStatuses = computeRecentStatuses(state.nodeChangedAtMs, state.nodes, Date.now());
 
