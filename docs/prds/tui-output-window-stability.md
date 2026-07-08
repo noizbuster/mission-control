@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | draft |
-| Scope | Output text accumulation, `selectTrailingBlocks` window budget, Ink re-render loop |
+| Scope | Output text accumulation, historical `selectTrailingBlocks` window budget, OpenTUI redraw loop |
 
 ## Background
 

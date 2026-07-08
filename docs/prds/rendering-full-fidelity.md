@@ -25,7 +25,7 @@ mctrl's output rendering lagged the reference renderers across markdown, diff, a
 ### Markdown rendering
 
 1. Walk markdown tokens into a serializable IR (`InlineRun` / `RenderLine` / `RenderBlock`) before rendering, so rendering is a pure function of the IR + theme + width.
-2. Apply a per-element theme with at least: heading (per-level), paragraph, bold, italic, strikethrough, inline code, code block, blockquote, ordered/unordered list, link, image alt, hr, table. Themes map to a subset of Ink `<Text>` style props.
+2. Apply a per-element theme with at least: heading (per-level), paragraph, bold, italic, strikethrough, inline code, code block, blockquote, ordered/unordered list, link, image alt, hr, table. Themes map to the terminal text style props consumed by OpenTUI `<text>` nodes.
 3. Code blocks are syntax-highlighted: tokenize via a highlighting backend, map scopes to a fixed color table, and never leak raw ANSI escape codes into the output.
 4. Streaming-safe healing: while a block is still streaming, heal incomplete markdown (open `**`, open ```` ``` ```` fence, unclosed inline code) via a markdown-fixer so partial output never breaks the layout. Healed state is discarded once the block completes.
 5. Wrap rendered text with `trim: false` so no character is dropped; CJK / East Asian Wide glyphs are counted as 2 columns by the width function so lines never overflow the target column budget.

@@ -19,7 +19,7 @@ const SEPARATOR_PULSE_HALF = 2;
 
 /**
  * Build the separator line for a given chat state. Moved here (canonical home)
- * from the chat bridge so the bridge imports it rather than owning a duplicate.
+ * so the TUI tree imports it rather than owning a duplicate.
  *
  *   running         — yellow; a bright "comet" sweeps left→right while the agent works
  *   awaiting_input  — magenta; a slow pulse while an approval/question decision is pending

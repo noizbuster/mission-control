@@ -14,7 +14,7 @@ Product requirements distilled from the user's request history on this project. 
 | [`bug-react-key-collision-model-picker.md`](bug-react-key-collision-model-picker.md) | Bug: React key collision in model picker (`provider: zai-co`) | 3 |
 | [`build-core-failure-and-dev-cli-prebuild.md`](build-core-failure-and-dev-cli-prebuild.md) | Build pipeline: fix core build failures and add dev:cli pre-build hook | 2 |
 | [`build-nx-tui-blocking-interactive.md`](build-nx-tui-blocking-interactive.md) | Build pipeline: stop nx TUI from blocking interactive `pnpm dev:cli` | 2 |
-| [`tui-ink-migration.md`](tui-ink-migration.md) | Ink TUI library: full adoption and migration of legacy terminal code | 5 |
+| [`tui-ink-migration.md`](tui-ink-migration.md) | Historical TUI library migration and drift audit | 5 |
 | [`models-api-driven-list-when-logged-in.md`](models-api-driven-list-when-logged-in.md) | Models command: prefer live API list, expose comparison, hide verbose markers by default | 4 |
 | [`models-discovery-consistency.md`](models-discovery-consistency.md) | Models command: unify lists, treat provider list as superset, render picker as popup | 3 |
 | [`provider-errors-non-fatal.md`](provider-errors-non-fatal.md) | Provider errors: visible, non-fatal, with parsed human-readable messages | 3 |

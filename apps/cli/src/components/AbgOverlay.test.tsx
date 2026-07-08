@@ -58,17 +58,17 @@ describe('AbgOverlay Store Integration', () => {
         unsubscribe();
     });
 
-    test('re-render isolation: overlay store is separate from chat bridge', () => {
+    test('re-render isolation: overlay store is separate from chat state', () => {
         const overlayStore = createMockStore();
         populateStore(overlayStore);
 
-        const chatBridgeStore = createMockStore();
+        const chatStateStore = createMockStore();
 
         const overlayListener = vi.fn();
-        const chatBridgeListener = vi.fn();
+        const chatStateListener = vi.fn();
 
         const overlayUnsubscribe = overlayStore.subscribe(overlayListener);
-        const chatBridgeUnsubscribe = chatBridgeStore.subscribe(chatBridgeListener);
+        const chatStateUnsubscribe = chatStateStore.subscribe(chatStateListener);
 
         for (let i = 0; i < 30; i++) {
             overlayStore.update((draft) => {
@@ -77,10 +77,10 @@ describe('AbgOverlay Store Integration', () => {
         }
 
         expect(overlayListener).toHaveBeenCalledTimes(30);
-        expect(chatBridgeListener).not.toHaveBeenCalled();
+        expect(chatStateListener).not.toHaveBeenCalled();
 
         overlayUnsubscribe();
-        chatBridgeUnsubscribe();
+        chatStateUnsubscribe();
     });
 
     test('graphId can be set and retrieved', () => {

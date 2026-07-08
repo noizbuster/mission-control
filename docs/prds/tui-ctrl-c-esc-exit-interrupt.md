@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | active |
-| Scope | Keyboard router (`handleInput`, `handleEscKey` in `ink-chat-bridge.tsx`), the interrupt event flow into the main chat loop (`interactive-chat.ts`), and multi-line input triggers |
+| Scope | Keyboard router (`handleInput` and textarea handlers in the OpenTUI chat tree), the interrupt event flow into the main chat loop (`interactive-chat.ts`), and multi-line input triggers |
 | Related plans | `.omo/plans/ulw-input-korean-ctrlc.md` |
 
 ## Background
@@ -12,7 +12,7 @@ Ctrl+C was not terminating the session reliably, ESC was exiting the CLI instead
 
 A regression at commits `950227d` (single-Esc interrupts while generating) and `507809a` (default double-Esc action changed from `'interrupt'` to `'none'`) removed the user's ability to force-stop stuck runs via double-Esc. The default-`'none'` choice was motivated by the main loop treating every `interrupt` event as an exit candidate on second consecutive press when idle, which meant mashing Esc on an empty prompt would exit. The correct fix is not to neuter ESC, but to differentiate ESC-sourced interrupts from Ctrl+C-sourced at the event level so ESC can stop without ever exiting.
 
-Multi-line input (Shift+Enter) also regressed because Ink v7's `key.shift` flag is only set when the terminal sends kitty keyboard protocol or modifier-encoded ANSI sequences for Enter. Most common terminals (xterm, gnome-terminal, Terminal.app without modifyOtherKeys) send a plain `\r` for Shift+Enter, making it indistinguishable from plain Enter. A reliable cross-terminal multi-line trigger is needed.
+Multi-line input (Shift+Enter) also depends on whether the terminal sends kitty keyboard protocol or modifier-encoded ANSI sequences for Enter. Most common terminals (xterm, gnome-terminal, Terminal.app without modifyOtherKeys) send a plain `\r` for Shift+Enter, making it indistinguishable from plain Enter. A reliable cross-terminal multi-line trigger is needed.
 
 ## Goals
 

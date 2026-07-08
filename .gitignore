@@ -65,3 +65,4 @@ Thumbs.db
 !.vscode/tasks.json
 !.vscode/launch.json
 .playwright-mcp
+ref

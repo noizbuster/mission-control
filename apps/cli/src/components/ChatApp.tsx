@@ -24,6 +24,7 @@ import {
     prevFile,
     prevHunk,
 } from '../platform/keymap/diff-viewer.js';
+import { hardResetRendererSurface } from '../platform/opentui-renderer.js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import { useTerminalViewport } from '../platform/terminal-viewport-react.js';
 import { AbgMinimap } from './AbgMinimap.js';
@@ -98,6 +99,7 @@ export type ChatAppViewportLayout = {
     readonly width: number;
     readonly height: number;
     readonly dockPolicy: BottomDockPolicy;
+    readonly welcomeAvailableRows: number;
     readonly promptMenuInteractionsEnabled: boolean;
 };
 
@@ -111,6 +113,7 @@ export function chatAppViewportLayout(viewport: TerminalViewport): ChatAppViewpo
         width: viewport.columns,
         height: viewport.rows,
         dockPolicy,
+        welcomeAvailableRows: dockPolicy.transcript.rows,
         promptMenuInteractionsEnabled: dockPolicy.menu.rows > 0,
     };
 }
@@ -635,7 +638,16 @@ export function ChatApp({
     // Hangul, emoji) is replaced by a narrow one — the continuation cell is not
     // marked dirty, leaving stale pixels that look like garbled text. Force a
     // full repaint (skip the diff, write every cell) when the view changes
-    // dramatically: overlay open/close, and when a streaming response finishes.
+    // dramatically: viewport resize, overlay open/close, and when a streaming
+    // response finishes.
+    const prevViewport = useRef(viewport);
+    useEffect(() => {
+        if (prevViewport.current.columns !== viewport.columns || prevViewport.current.rows !== viewport.rows) {
+            prevViewport.current = viewport;
+            hardResetRendererSurface(renderer);
+        }
+    }, [viewport, renderer]);
+
     const prevOverlayMode = useRef(snapshot.overlayMode);
     useEffect(() => {
         if (prevOverlayMode.current !== snapshot.overlayMode) {
@@ -749,6 +761,8 @@ export function ChatApp({
                     {showWelcome ? (
                         <WelcomeScreen
                             data={welcomeData}
+                            viewportColumns={viewport.columns}
+                            availableRows={viewportLayout.welcomeAvailableRows}
                             {...(statusBarProps?.workspaceRoot !== undefined
                                 ? { projectLabel: basename(statusBarProps.workspaceRoot) }
                                 : {})}

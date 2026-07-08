@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
     attachRendererResizeSync,
+    hardResetRendererSurface,
     parseTmuxPaneSize,
     type RendererResizeTarget,
     readTerminalSize,
@@ -53,6 +54,82 @@ class RecordingRenderer implements RendererResizeTarget {
     }
 }
 
+class ResizeRenderProbeRenderer extends RecordingRenderer {
+    readonly repaintStateDuringRender: boolean[] = [];
+
+    override resize(width: number, height: number): void {
+        super.resize(width, height);
+        this.requestRender();
+    }
+
+    override requestRender(): void {
+        this.repaintStateDuringRender.push(Reflect.get(this, 'forceFullRepaintRequested') === true);
+        super.requestRender();
+    }
+}
+
+class TerminalClearProbeRenderer extends RecordingRenderer {
+    readonly events: string[] = [];
+    readonly output: string[] = [];
+
+    writeOut(chunk: string): boolean {
+        this.events.push('clear');
+        this.output.push(chunk);
+        return true;
+    }
+
+    override resize(width: number, height: number): void {
+        this.events.push('resize');
+        super.resize(width, height);
+    }
+}
+
+class RecordingBuffer {
+    constructor(
+        private readonly events: string[],
+        private readonly name: string,
+    ) {}
+
+    clear(backgroundColor: unknown): void {
+        this.events.push(`${this.name}:${String(backgroundColor)}`);
+    }
+}
+
+class ResizeEventBufferProbeRenderer extends TerminalClearProbeRenderer {
+    backgroundColor = 'default-bg';
+    currentRenderBuffer: RecordingBuffer;
+    nextRenderBuffer: RecordingBuffer;
+    private readonly resizeListeners: Array<(width: number, height: number) => void> = [];
+
+    constructor(width: number, height: number) {
+        super(width, height);
+        this.currentRenderBuffer = new RecordingBuffer(this.events, 'old-current');
+        this.nextRenderBuffer = new RecordingBuffer(this.events, 'old-next');
+    }
+
+    override resize(width: number, height: number): void {
+        super.resize(width, height);
+        this.currentRenderBuffer = new RecordingBuffer(this.events, 'new-current');
+        this.nextRenderBuffer = new RecordingBuffer(this.events, 'new-next');
+        for (const listener of [...this.resizeListeners]) listener(this.width, this.height);
+        this.requestRender();
+    }
+
+    override requestRender(): void {
+        this.events.push('render');
+        super.requestRender();
+    }
+
+    on(_event: 'resize', listener: (width: number, height: number) => void): void {
+        this.resizeListeners.push(listener);
+    }
+
+    off(_event: 'resize', listener: (width: number, height: number) => void): void {
+        const index = this.resizeListeners.indexOf(listener);
+        if (index >= 0) this.resizeListeners.splice(index, 1);
+    }
+}
+
 describe('opentui renderer resize sync', () => {
     it('parses tmux pane size output defensively', () => {
         expect(parseTmuxPaneSize('140 40\n')).toEqual({ columns: 140, rows: 40 });
@@ -100,6 +177,58 @@ describe('opentui renderer resize sync', () => {
 
         expect(renderer.calls).toEqual([[140, 40]]);
         expect(renderer.renderRequests).toBe(1);
+        expect(Reflect.get(renderer, 'forceFullRepaintRequested')).toBe(true);
+    });
+
+    it('requests a full repaint before a resize-triggered render can run when the terminal shrinks', () => {
+        const stream = new FakeTerminalStream(100, 30);
+        const renderer = new ResizeRenderProbeRenderer(100, 30);
+        stream.setWindowSize(60, 15);
+
+        expect(syncRendererToTerminalSize(renderer, stream)).toBe(true);
+
+        expect(renderer.calls).toEqual([[60, 15]]);
+        expect(renderer.repaintStateDuringRender[0]).toBe(true);
+    });
+
+    it('clears the visible terminal surface before resizing to a smaller frame', () => {
+        const stream = new FakeTerminalStream(100, 30);
+        const renderer = new TerminalClearProbeRenderer(100, 30);
+        stream.setWindowSize(60, 15);
+
+        expect(syncRendererToTerminalSize(renderer, stream)).toBe(true);
+
+        expect(renderer.events).toEqual(['clear', 'resize']);
+        expect(renderer.output).toContain('\x1B[r\x1B[0m\x1B[H\x1B[2J\x1B[3J\x1B[H');
+    });
+
+    it('hard resets the visible terminal surface and retained renderer buffers', () => {
+        const renderer = new ResizeEventBufferProbeRenderer(60, 15);
+
+        hardResetRendererSurface(renderer);
+
+        expect(renderer.events).toEqual(['clear', 'old-current:default-bg', 'old-next:default-bg', 'render']);
+        expect(renderer.output).toContain('\x1B[r\x1B[0m\x1B[H\x1B[2J\x1B[3J\x1B[H');
+        expect(Reflect.get(renderer, 'forceFullRepaintRequested')).toBe(true);
+    });
+
+    it('clears swapped opentui render buffers when opentui emits its own shrink resize', () => {
+        const stream = new FakeTerminalStream(100, 30);
+        const renderer = new ResizeEventBufferProbeRenderer(100, 30);
+        const detach = attachRendererResizeSync(renderer, stream, { pollIntervalMs: 0 });
+        renderer.events.length = 0;
+
+        renderer.resize(60, 15);
+        detach();
+
+        expect(renderer.events).toEqual([
+            'resize',
+            'clear',
+            'new-current:default-bg',
+            'new-next:default-bg',
+            'render',
+            'render',
+        ]);
         expect(Reflect.get(renderer, 'forceFullRepaintRequested')).toBe(true);
     });
 

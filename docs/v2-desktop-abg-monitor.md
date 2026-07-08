@@ -4,11 +4,11 @@
 
 ## Goal
 
-Bring the ABG overlay (currently CLI Ink-only) to the desktop app as a live observation surface, alongside the existing Timeline/Graph/Session views.
+Bring the ABG overlay (currently CLI OpenTUI-only) to the desktop app as a live observation surface, alongside the existing Timeline/Graph/Session views.
 
 ## Current State (post-v2)
 
-The CLI Ink overlay (`apps/cli/src/components/AbgOverlay.tsx`) consumes `AbgOverlayState` projected from `AbgSignal` + `AgentEvent` streams. The projector (`apps/cli/src/commands/abg-overlay-state.ts`) is pure: feed it signals/events, get a state shape back. This is reusable.
+The CLI OpenTUI overlay (`apps/cli/src/components/AbgOverlay.tsx`) consumes `AbgOverlayState` projected from `AbgSignal` + `AgentEvent` streams. The projector (`packages/core/src/abg-overlay/state.ts`) is pure: feed it signals/events, get a state shape back. This is reusable.
 
 The desktop (`apps/desktop/`) currently:
 - Reads durable local DB sessions through the desktop command bridge and replay projection helpers
@@ -33,9 +33,9 @@ Option 1 is the cleanest (no file watcher, no port management) and matches Tauri
 
 ### Phase 3 — React components (low-medium effort)
 
-The Ink components (`AbgOverlay.tsx`, `AbgOverlayPanesA.tsx`, `AbgOverlayPanesB.tsx`) use `<Box>`/`<Text>` from `ink`. The desktop uses `<div>`/`<span>` with CSS. Two paths:
+The OpenTUI components (`AbgOverlay.tsx`, `AbgOverlayPanesA.tsx`, `AbgOverlayPanesB.tsx`) use terminal intrinsics such as `<box>`/`<text>`. The desktop uses `<div>`/`<span>` with CSS. Two paths:
 
-1. **Adapter layer** — Wrap Ink primitives in a `ink-to-dom` adapter so the same JSX renders to web. Heavy work; only worth it if many Ink components are shared.
+1. **Adapter layer** — Wrap terminal primitives in an OpenTUI-to-DOM adapter so the same JSX renders to web. Heavy work; only worth it if many terminal components are shared.
 2. **Parallel component tree** — Re-implement the panes as React DOM components (matching the existing `SessionInspectorDetailPanels.tsx` pattern). Simpler; no shared render layer.
 
 Option 2 fits the existing desktop architecture. The projectors are shared (Phase 1), but the components are parallel.
@@ -76,9 +76,9 @@ This is illustrative — production needs bounded retries, error recovery, curso
 
 ## Scope Boundary
 
-- **Not in v2:** full live event stream implementation (Phase 2), shared Ink/DOM component adapter (Phase 1 adapter layer), multi-graph desktop views (depends on Phase 1 graph-switcher).
+- **Not in v2:** full live event stream implementation (Phase 2), shared OpenTUI/DOM component adapter (Phase 1 adapter layer), multi-graph desktop views (depends on Phase 1 graph-switcher).
 - **In v2 (this document):** design path, projector-extraction plan, Tauri command shape, scope boundary.
 
 ## Next Action
 
-When v3 starts: extract projectors to `packages/core/src/abg-overlay/` first (Phase 1), then prototype the Tauri command bridge against a single test session. Do NOT attempt to share Ink components with the desktop — parallel panes are cheaper and clearer.
+When v3 starts: keep the projectors in `packages/core/src/abg-overlay/`, then prototype the Tauri command bridge against a single test session. Do NOT attempt to share OpenTUI components with the desktop — parallel panes are cheaper and clearer.

@@ -149,10 +149,10 @@ export async function runInteractiveChatSession(
     const initialAbgOverlayPrefs = useTui ? await loadAbgOverlayPrefs() : undefined;
     const pricingTableForSession = await loadPricingTable();
     const missionControlServices = await resolveMissionControlServices(options.workspaceRoot);
-    let tuiBridgeRef: ChatTuiHandle | undefined;
+    let tuiHandleRef: ChatTuiHandle | undefined;
     const abgOverlayController = useTui
         ? createAbgOverlayController(createAbgOverlayStore(), {
-              readPrefsSnapshot: () => tuiBridgeRef?.getAbgOverlayPrefsSnapshot() ?? DEFAULT_ABG_OVERLAY_PREFS,
+              readPrefsSnapshot: () => tuiHandleRef?.getAbgOverlayPrefsSnapshot() ?? DEFAULT_ABG_OVERLAY_PREFS,
           })
         : undefined;
     // Resolve git branch + linked-worktree status once at TUI mount for the
@@ -167,7 +167,7 @@ export async function runInteractiveChatSession(
                   ...(options.profileName !== undefined ? { profileName: options.profileName } : {}),
               })
             : undefined;
-    const bridgeOptions: SessionChatTuiRuntimeOptions | undefined = useTui
+    const tuiRuntimeOptions: SessionChatTuiRuntimeOptions | undefined = useTui
         ? {
               providerID: options.modelProviderSelection.providerID,
               modelID: options.modelProviderSelection.modelID,
@@ -187,14 +187,16 @@ export async function runInteractiveChatSession(
               ...(welcomeData !== undefined ? { welcomeData } : {}),
           }
         : undefined;
-    const tuiBridge =
-        useTui && bridgeOptions !== undefined ? await createChatTui(bridgeOptions as ChatTuiOptions) : undefined;
+    const tuiHandle =
+        useTui && tuiRuntimeOptions !== undefined
+            ? await createChatTui(tuiRuntimeOptions as ChatTuiOptions)
+            : undefined;
     const chatInput: ChatInput =
         options.input ??
-        (tuiBridge !== undefined
+        (tuiHandle !== undefined
             ? {
-                  read: () => tuiBridge.waitForEvent(),
-                  close: () => tuiBridge.unmount(),
+                  read: () => tuiHandle.waitForEvent(),
+                  close: () => tuiHandle.unmount(),
                   suspend: () => {},
                   resume: () => {},
                   controlsPrompt: true,
@@ -203,17 +205,17 @@ export async function runInteractiveChatSession(
             : createTerminalChatInput());
     const baseChatOutput: ChatOutput =
         options.output ??
-        (tuiBridge !== undefined
+        (tuiHandle !== undefined
             ? {
-                  write: (text) => tuiBridge.emitOutput(text),
-                  getOutput: () => tuiBridge.getOutput(),
-                  setAgentStatus: (text) => tuiBridge.setAgentStatus(text),
-                  clearAgentStatus: () => tuiBridge.clearAgentStatus(),
-                  showNotice: (text) => tuiBridge.showTransientNotice(text),
-                  isShowThinking: () => tuiBridge.isShowThinking(),
-                  isToolOutputExpanded: () => tuiBridge.isToolOutputExpanded(),
-                  showApproval: (toolName, action) => tuiBridge.showApproval(toolName, action),
-                  hideApproval: () => tuiBridge.hideApproval(),
+                  write: (text) => tuiHandle.emitOutput(text),
+                  getOutput: () => tuiHandle.getOutput(),
+                  setAgentStatus: (text) => tuiHandle.setAgentStatus(text),
+                  clearAgentStatus: () => tuiHandle.clearAgentStatus(),
+                  showNotice: (text) => tuiHandle.showTransientNotice(text),
+                  isShowThinking: () => tuiHandle.isShowThinking(),
+                  isToolOutputExpanded: () => tuiHandle.isToolOutputExpanded(),
+                  showApproval: (toolName, action) => tuiHandle.showApproval(toolName, action),
+                  hideApproval: () => tuiHandle.hideApproval(),
               }
             : createTerminalChatOutput());
     // Mirror of the conversation text for /undo and /redo. This is display-only;
@@ -237,10 +239,10 @@ export async function runInteractiveChatSession(
     const undoRedoController = {
         // The TUI handle echoes "You: ..." directly to its store, bypassing the
         // conversationText mirror; prefer the TUI's full text when present.
-        readOutputText: () => tuiBridge?.getOutput() ?? conversationText,
+        readOutputText: () => tuiHandle?.getOutput() ?? conversationText,
         replaceOutputText: (next: string) => {
             conversationText = next;
-            tuiBridge?.replaceOutputText(next);
+            tuiHandle?.replaceOutputText(next);
         },
         getStack: () => undoRedoStack,
         setStack: (next: UndoRedoStack) => {
@@ -248,8 +250,8 @@ export async function runInteractiveChatSession(
         },
     };
     const selectModel: ModelSelector =
-        tuiBridge !== undefined
-            ? (choices) => tuiBridge.showModelPicker(choices)
+        tuiHandle !== undefined
+            ? (choices) => tuiHandle.showModelPicker(choices)
             : suspendChatInputWhileSelectingModel(
                   options.selectModel ?? createTerminalModelSelector(chatOutput),
                   chatInput,
@@ -266,7 +268,7 @@ export async function runInteractiveChatSession(
     let turnCounter = 0;
     const inputPump = new ChatInputPump(chatInput);
     let currentSessionId = options.sessionId;
-    tuiBridge?.setSessionId(currentSessionId ?? '');
+    tuiHandle?.setSessionId(currentSessionId ?? '');
     let currentProvider = options.resolveProviderForSelection?.(currentModelProviderSelection) ?? options.provider;
     let currentSessionStore = options.sessionStore;
     let currentApprovalLevel: ApprovalLevel | undefined = options.initialApprovalLevel;
@@ -306,8 +308,8 @@ export async function runInteractiveChatSession(
         current: () => sessionDisplayName,
         update: (name: string) => {
             sessionDisplayName = name;
-            if (bridgeOptions !== undefined) {
-                bridgeOptions.sessionDisplayName = name;
+            if (tuiRuntimeOptions !== undefined) {
+                tuiRuntimeOptions.sessionDisplayName = name;
             }
         },
     };
@@ -329,13 +331,13 @@ export async function runInteractiveChatSession(
                       ? { observeStoredEvent: options.observeStoredEvent }
                       : {}),
               });
-    const unregisterProcessCleanup = tuiBridge === undefined ? registerProcessTerminalCleanup(chatInput) : undefined;
+    const unregisterProcessCleanup = tuiHandle === undefined ? registerProcessTerminalCleanup(chatInput) : undefined;
 
     const syncSessionDisplayName = async (sessionId: string | undefined): Promise<void> => {
         const sid = sessionId ?? '';
         if (sid.length === 0) {
             sessionDisplayNameController.update('');
-            tuiBridge?.setSessionDisplayName(undefined);
+            tuiHandle?.setSessionDisplayName(undefined);
             setTerminalTitle(formatAppTitle(getVersion()));
             return;
         }
@@ -350,12 +352,12 @@ export async function runInteractiveChatSession(
             // best-effort: leave name undefined on catalog read failure
         }
         sessionDisplayNameController.update(name ?? '');
-        tuiBridge?.setSessionDisplayName(name);
+        tuiHandle?.setSessionDisplayName(name);
         setTerminalTitle(formatSessionTitle(sid, name));
     };
 
     const applySessionRenameEffects = async (name: string): Promise<void> => {
-        tuiBridge?.setSessionDisplayName(name);
+        tuiHandle?.setSessionDisplayName(name);
         setTerminalTitle(formatSessionTitle(currentSessionId, name));
         if (sessionNavigation !== undefined && currentSessionId !== undefined) {
             try {
@@ -373,26 +375,26 @@ export async function runInteractiveChatSession(
     setTerminalTitle(formatAppTitle(getVersion()));
     void syncSessionDisplayName(currentSessionId);
 
-    if (tuiBridge !== undefined) {
-        tuiBridgeRef = tuiBridge;
+    if (tuiHandle !== undefined) {
+        tuiHandleRef = tuiHandle;
         if (initialAbgOverlayPrefs !== undefined) {
-            tuiBridge.applyAbgOverlayPrefs(initialAbgOverlayPrefs);
+            tuiHandle.applyAbgOverlayPrefs(initialAbgOverlayPrefs);
         }
-        tuiBridge.setModelCycleChoices(modelChoices);
-        tuiBridge.onModelCycleSelect = (selection) => {
+        tuiHandle.setModelCycleChoices(modelChoices);
+        tuiHandle.onModelCycleSelect = (selection) => {
             currentModelProviderSelection = selection;
             currentProvider = options.resolveProviderForSelection?.(selection) ?? currentProvider;
-            if (bridgeOptions !== undefined) {
-                bridgeOptions.providerID = selection.providerID;
-                bridgeOptions.modelID = selection.modelID;
+            if (tuiRuntimeOptions !== undefined) {
+                tuiRuntimeOptions.providerID = selection.providerID;
+                tuiRuntimeOptions.modelID = selection.modelID;
                 if (selection.variantID !== undefined) {
-                    bridgeOptions.variantID = selection.variantID;
+                    tuiRuntimeOptions.variantID = selection.variantID;
                 } else {
-                    delete bridgeOptions.variantID;
+                    delete tuiRuntimeOptions.variantID;
                 }
             }
         };
-        tuiBridge.onRenameSubmit = (name: string) => {
+        tuiHandle.onRenameSubmit = (name: string) => {
             sessionDisplayNameController.update(name);
             void applySessionRenameEffects(name);
         };
@@ -443,7 +445,7 @@ export async function runInteractiveChatSession(
     registerBuiltinWorkflows(sessionWorkflowRegistry);
     await pluginManager.registerInto(sessionWorkflowRegistry);
     const knownWorkflowNames = new Set<string>(sessionWorkflowRegistry.names());
-    tuiBridge?.setWorkflowNames(sessionWorkflowRegistry.names());
+    tuiHandle?.setWorkflowNames(sessionWorkflowRegistry.names());
     const pendingWorkflowTurns: Array<{ readonly spec: WorkflowSpec; readonly prompt: string }> = [];
     let workflowChainDepth = 0;
     const MAX_CHAINED_WORKFLOW_TURNS = 4;
@@ -473,8 +475,8 @@ export async function runInteractiveChatSession(
         if (currentSessionId !== undefined) {
             const resumedTranscript = await loadSessionTranscript(currentSessionId);
             if (resumedTranscript.length > 0) {
-                if (tuiBridge !== undefined) {
-                    tuiBridge.replaceOutputText(resumedTranscript);
+                if (tuiHandle !== undefined) {
+                    tuiHandle.replaceOutputText(resumedTranscript);
                 } else {
                     chatOutput.write(resumedTranscript);
                 }
@@ -579,15 +581,15 @@ export async function runInteractiveChatSession(
             ) {
                 const ensured = await options.ensureSession();
                 currentSessionId = ensured.sessionId;
-                tuiBridge?.setSessionId(currentSessionId);
+                tuiHandle?.setSessionId(currentSessionId);
                 void syncSessionDisplayName(currentSessionId);
                 currentSessionStore = ensured.store;
             }
             let result: ChatActionResult;
             const isPickerAction =
                 action.kind === 'sessions' || action.kind === 'session-picker' || action.kind === 'agents';
-            if (tuiBridge !== undefined && !isPickerAction) {
-                tuiBridge.setGenerating(true);
+            if (tuiHandle !== undefined && !isPickerAction) {
+                tuiHandle.setGenerating(true);
             }
             try {
                 const codingContext: CodingActionContext = {
@@ -622,9 +624,9 @@ export async function runInteractiveChatSession(
                     ...(missionControlServices !== undefined
                         ? { taskRuntimeServices: missionControlServices.getTaskRuntimeServices() }
                         : {}),
-                    ...(tuiBridge !== undefined
+                    ...(tuiHandle !== undefined
                         ? {
-                              onUsage: (inputTokens: number | undefined) => tuiBridge.setContextTokensUsed(inputTokens),
+                              onUsage: (inputTokens: number | undefined) => tuiHandle.setContextTokensUsed(inputTokens),
                           }
                         : {}),
                     listWorkspaceSessions: async () => {
@@ -638,57 +640,57 @@ export async function runInteractiveChatSession(
                             status: entry.status,
                         }));
                     },
-                    ...(tuiBridge !== undefined
+                    ...(tuiHandle !== undefined
                         ? {
                               selectSessionForAttach: (entries: readonly SessionPickerEntry[]) =>
-                                  tuiBridge.showSessionPicker(entries),
+                                  tuiHandle.showSessionPicker(entries),
                           }
                         : {}),
-                    ...(tuiBridge !== undefined
+                    ...(tuiHandle !== undefined
                         ? {
                               openAgentsDashboard: (entries: readonly DashboardAgentEntry[]) =>
-                                  tuiBridge.showAgentsDashboard(entries),
+                                  tuiHandle.showAgentsDashboard(entries),
                           }
                         : {}),
-                    ...(tuiBridge !== undefined
+                    ...(tuiHandle !== undefined
                         ? {
                               reloadAgentsDashboard: (entries: readonly DashboardAgentEntry[]) =>
-                                  tuiBridge.reloadAgentsDashboard(entries),
+                                  tuiHandle.reloadAgentsDashboard(entries),
                           }
                         : {}),
-                    ...(tuiBridge !== undefined
+                    ...(tuiHandle !== undefined
                         ? {
-                              openMissionPanel: (rows: readonly MissionPanelRow[]) => tuiBridge.showMissionPanel(rows),
+                              openMissionPanel: (rows: readonly MissionPanelRow[]) => tuiHandle.showMissionPanel(rows),
                           }
                         : {}),
-                    ...(tuiBridge !== undefined
+                    ...(tuiHandle !== undefined
                         ? {
-                              reloadMissionPanel: (rows: readonly MissionPanelRow[]) => tuiBridge.reloadMissions(rows),
+                              reloadMissionPanel: (rows: readonly MissionPanelRow[]) => tuiHandle.reloadMissions(rows),
                           }
                         : {}),
-                    ...(tuiBridge !== undefined
+                    ...(tuiHandle !== undefined
                         ? {
                               openModelsOverlay: (
                                   entries: readonly ModelProviderSelection[],
                                   roleRows: readonly ModelsOverlayRoleRow[],
-                              ) => tuiBridge.showModelsOverlay(entries, roleRows),
+                              ) => tuiHandle.showModelsOverlay(entries, roleRows),
                           }
                         : {}),
                     ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
-                    ...(tuiBridge !== undefined
+                    ...(tuiHandle !== undefined
                         ? {
                               selectApprovalLevel: (currentLevel?: ApprovalLevel) =>
-                                  tuiBridge
+                                  tuiHandle
                                       .showLevelPicker(currentLevel)
                                       .then((level): ApprovalLevel | undefined =>
                                           level !== undefined ? (level as ApprovalLevel) : undefined,
                                       ),
                           }
                         : {}),
-                    ...(tuiBridge !== undefined
+                    ...(tuiHandle !== undefined
                         ? {
                               requestUserQuestion: async (request: AskUserQuestionRequest) => {
-                                  const answer = await tuiBridge.showQuestion(
+                                  const answer = await tuiHandle.showQuestion(
                                       request.question,
                                       toQuestionOptions(request.options),
                                       {
@@ -706,7 +708,7 @@ export async function runInteractiveChatSession(
                                       options: toQuestionOptions(request.options),
                                       multiple: request.multiple ?? false,
                                   }));
-                                  const answers = await tuiBridge.showQuestionBatch(entries);
+                                  const answers = await tuiHandle.showQuestionBatch(entries);
                                   const lines = requests.map(
                                       (request, i) => `  ${request.header ?? request.question}: ${answers[i] ?? ''}`,
                                   );
@@ -732,13 +734,13 @@ export async function runInteractiveChatSession(
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 chatOutput.write(`Error: ${message}\n`);
-                if (tuiBridge !== undefined) {
-                    tuiBridge.setGenerating(false);
+                if (tuiHandle !== undefined) {
+                    tuiHandle.setGenerating(false);
                 }
                 continue;
             }
-            if (tuiBridge !== undefined) {
-                tuiBridge.setGenerating(false);
+            if (tuiHandle !== undefined) {
+                tuiHandle.setGenerating(false);
             }
             if (!areModelProviderSelectionsEqual(currentModelProviderSelection, result.modelProviderSelection)) {
                 currentProvider =
@@ -747,12 +749,12 @@ export async function runInteractiveChatSession(
                     await options.persistModelProviderSelection?.(result.modelProviderSelection);
                 }
                 // Sync store so Ctrl+V variant cycling targets the new base.
-                tuiBridge?.setModelSelection(result.modelProviderSelection);
+                tuiHandle?.setModelSelection(result.modelProviderSelection);
             }
             currentModelProviderSelection = result.modelProviderSelection;
             activeTurn = result.activeTurn;
             currentSessionId = result.sessionId ?? currentSessionId;
-            tuiBridge?.setSessionId(currentSessionId ?? '');
+            tuiHandle?.setSessionId(currentSessionId ?? '');
             if (result.sessionId !== undefined) {
                 void syncSessionDisplayName(result.sessionId);
             }
@@ -763,7 +765,7 @@ export async function runInteractiveChatSession(
             if (result.approvalLevel !== undefined) {
                 currentApprovalLevel = result.approvalLevel;
                 sharedPermissionSession.replaceBuiltInRules(approvalLevelRules(currentApprovalLevel));
-                tuiBridge?.setApprovalLevel(currentApprovalLevel);
+                tuiHandle?.setApprovalLevel(currentApprovalLevel);
                 await options.persistApprovalLevel?.(currentApprovalLevel);
             }
         }

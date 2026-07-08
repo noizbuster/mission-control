@@ -2,14 +2,14 @@
  * Single keymap instance for the mctrl opentui TUI (T1 foundation + T7 leader).
  *
  * This module is the ONE place a `Keymap<Renderable, KeyEvent>` is built for the
- * chat bridge. Later todos (T2/T3/T7/...) register app-specific addons and
+ * chat TUI path. Later todos (T2/T3/T7/...) register app-specific addons and
  * bindings against the instance returned here; T1 stands up a working base
  * keymap plus the framework-agnostic, bootstrap-safe addon set, and T7 layers
  * the leader / comma / escape-clears / backspace-pops universal addons on top.
  *
  * Lazy-loading: `@opentui/keymap/opentui` transitively imports `@opentui/core`
  * (the native FFI backend) as a runtime value, so this module is imported
- * lazily — only the opentui bridge (TUI path) ever loads it. The `--no-tui`
+ * lazily — only the opentui TUI path ever loads it. The `--no-tui`
  * path never touches this module, keeping the native renderer out of its
  * module graph (see apps/cli/AGENTS.md "opentui renderer mount/unmount"). The
  * `import type` lines below are erased at compile time and do not load core.

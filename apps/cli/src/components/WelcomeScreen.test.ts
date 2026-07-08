@@ -1,4 +1,6 @@
+import { Children, isValidElement, type ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
+import { terminalDisplayWidth } from '../commands/terminal-text.js';
 import type {
     WelcomeData,
     WelcomeLspServer,
@@ -14,8 +16,13 @@ import {
     formatRelativeTime,
     formatSessionRow,
     formatSkillRow,
+    formatWelcomeHint,
     padToWidth,
+    sectionDividerRule,
     truncateSessionId,
+    WelcomeScreen,
+    welcomeRowBudgetPlan,
+    welcomeWidthBudget,
 } from './WelcomeScreen.js';
 
 const NOW = new Date('2026-07-01T12:00:00Z');
@@ -31,6 +38,13 @@ function makeData(overrides: Partial<WelcomeData> = {}): WelcomeData {
         recentSessions: [],
         ...overrides,
     };
+}
+
+function elementChildren(node: ReactNode): readonly ReactNode[] {
+    if (!isValidElement<{ readonly children?: ReactNode }>(node)) {
+        throw new Error('expected a React element');
+    }
+    return Children.toArray(node.props.children);
 }
 
 describe('padToWidth', () => {
@@ -135,10 +149,129 @@ describe('formatSkillRow', () => {
         expect(result.value.endsWith('\u2026')).toBe(true);
     });
 
+    it('clamps long descriptions to an explicit narrow value budget', () => {
+        const skill: WelcomeSkill = {
+            name: 'impeccable',
+            description: 'A'.repeat(200),
+            scopeId: 'project-mctrl',
+        };
+        const result = formatSkillRow(skill, 36);
+
+        expect(terminalDisplayWidth(result.value)).toBe(36);
+        expect(result.value.endsWith('\u2026')).toBe(true);
+    });
+
     it('handles missing description', () => {
         const skill: WelcomeSkill = { name: 'nope', scopeId: 'project-agents' };
         const result = formatSkillRow(skill);
         expect(result.value).toBe('');
+    });
+});
+
+describe('welcomeWidthBudget', () => {
+    it('keeps 60-column welcome rows within the content width after horizontal padding', () => {
+        const budget = welcomeWidthBudget(60);
+        const skill: WelcomeSkill = {
+            name: 'impeccable',
+            description: 'A'.repeat(200),
+            scopeId: 'project-mctrl',
+        };
+        const row = formatSkillRow(skill, budget.skillValueWidth);
+        const rowWidth =
+            terminalDisplayWidth(padToWidth(row.label, budget.labelWidth)) + terminalDisplayWidth(row.value);
+        const headerWidth =
+            terminalDisplayWidth('PROJECT SKILLS') +
+            terminalDisplayWidth(sectionDividerRule('PROJECT SKILLS', budget.contentWidth));
+        const hintWidth = terminalDisplayWidth(formatWelcomeHint(budget.contentWidth));
+
+        expect(budget).toEqual({ contentWidth: 56, labelWidth: 20, valueWidth: 36, skillValueWidth: 36 });
+        expect(rowWidth).toBeLessThanOrEqual(budget.contentWidth);
+        expect(headerWidth).toBeLessThanOrEqual(budget.contentWidth);
+        expect(hintWidth).toBeLessThanOrEqual(budget.contentWidth);
+    });
+
+    it('preserves the original section divider width when the terminal is wide enough', () => {
+        const headerWidth =
+            terminalDisplayWidth('PROJECT SKILLS') + terminalDisplayWidth(sectionDividerRule('PROJECT SKILLS', 76));
+
+        expect(headerWidth).toBe(61);
+    });
+});
+
+describe('welcomeRowBudgetPlan', () => {
+    it('bounds the 60x15 welcome screen to the dock-derived upper row budget', () => {
+        // Given: a short terminal whose bottom dock policy leaves nine rows for the upper region.
+        const data = makeData({
+            mcpServers: [
+                { name: 'context7', type: 'remote', scope: 'user' },
+                { name: 'filesystem', type: 'stdio', scope: 'project' },
+            ],
+            projectSkills: [
+                { name: 'frontend', description: 'UI work', scopeId: 'project-mctrl' },
+                { name: 'debugging', description: 'Runtime bug work', scopeId: 'project-agents' },
+            ],
+            lspServers: [
+                { languageId: 'typescript', command: 'typescript-language-server', available: true },
+                { languageId: 'rust', command: 'rust-analyzer', available: false },
+                { languageId: 'go', command: 'gopls', available: true },
+            ],
+            recentSessions: [
+                { sessionId: 'ses_one', messageCount: 4 },
+                { sessionId: 'ses_two', messageCount: 8 },
+            ],
+        });
+
+        // When: the welcome layout is planned for the 60x15 upper row budget.
+        const plan = welcomeRowBudgetPlan({
+            data,
+            availableRows: 9,
+            projectDescriptor: 'mission-control:main',
+        });
+
+        // Then: the compact plan fits, preserves header/environment/status context, and omits lower optional rows.
+        expect(plan.mode).toBe('compact');
+        expect(plan.visibleRows).toBeLessThanOrEqual(9);
+        expect(plan.compactRowKeys).toEqual([
+            'title',
+            'version',
+            'environmentHeader',
+            'defaultModel',
+            'project',
+            'mcpSummary',
+            'skillsSummary',
+            'lspSummary',
+            'hint',
+        ]);
+        expect(plan.omittedSections).toEqual(['recentSessions']);
+    });
+
+    it('keeps the full welcome layout when no row budget is supplied', () => {
+        const plan = welcomeRowBudgetPlan({ data: makeData() });
+
+        expect(plan.mode).toBe('full');
+        expect(plan.compactRowKeys).toEqual([]);
+        expect(plan.omittedSections).toEqual([]);
+    });
+});
+
+describe('WelcomeScreen row budget', () => {
+    it('constructs no more compact child rows than the 60x15 upper region allows', () => {
+        const data = makeData({
+            recentSessions: [
+                { sessionId: 'ses_one', messageCount: 4 },
+                { sessionId: 'ses_two', messageCount: 8 },
+            ],
+        });
+
+        const screen = WelcomeScreen({
+            data,
+            viewportColumns: 60,
+            availableRows: 9,
+            projectLabel: 'mission-control',
+            gitBranch: 'main',
+        });
+
+        expect(elementChildren(screen).length).toBeLessThanOrEqual(9);
     });
 });
 

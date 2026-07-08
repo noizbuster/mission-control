@@ -182,7 +182,9 @@ describe('chatAppViewportLayout', () => {
             resized.dockPolicy.widthClass,
             resized.dockPolicy.menu.rows,
             resized.dockPolicy.status.showSession,
-        ]).toEqual([60, 15, 60, 15, 'narrow', 3, false]);
+            resized.welcomeAvailableRows,
+        ]).toEqual([60, 15, 60, 15, 'narrow', 3, false, 9]);
+        expect(resized.welcomeAvailableRows).toBe(resized.dockPolicy.transcript.rows);
     });
 
     it('keeps short-terminal rows non-negative and shell dimensions non-zero at 40x10', () => {
@@ -280,6 +282,18 @@ describe('ChatApp source topology', () => {
         expect(source).not.toContain('setInterval(sync, 250)');
     });
 
+    it('requests a full OpenTUI repaint when terminal viewport columns or rows change', () => {
+        const source = readChatAppSource();
+        const viewportRepaintBlock = sliceBetween(source, 'const prevViewport', 'const prevOverlayMode');
+
+        expect(source).toContain("import { hardResetRendererSurface } from '../platform/opentui-renderer.js';");
+        expect(viewportRepaintBlock).toContain('useRef(viewport)');
+        expect(viewportRepaintBlock).toContain('prevViewport.current.columns !== viewport.columns');
+        expect(viewportRepaintBlock).toContain('prevViewport.current.rows !== viewport.rows');
+        expect(viewportRepaintBlock).toContain('hardResetRendererSurface(renderer)');
+        expect(viewportRepaintBlock).toContain('[viewport, renderer]');
+    });
+
     it('wires ChatBottomDock exactly once with refs, focus, status layout, and menu policy', () => {
         const source = readChatAppSource();
         const dockBlock = sliceBetween(source, '<ChatBottomDock', '/>');
@@ -300,10 +314,27 @@ describe('ChatApp source topology', () => {
         const upperBlock = sliceBetween(source, 'upperOutputRegion={', 'bottomDock={');
 
         expect(upperBlock).toContain('<WelcomeScreen');
+        expect(upperBlock).toContain('viewportColumns={viewport.columns}');
+        expect(upperBlock).toContain('availableRows={viewportLayout.welcomeAvailableRows}');
         expect(upperBlock).toContain('transcript');
         expect(upperBlock).toContain('<AgentSpinner');
         expect(upperBlock).toContain('<Toast');
         expect(upperBlock).toContain('<AbgMinimap');
+    });
+
+    it('derives the welcome row budget from the live viewport dock policy without stdout row reads', () => {
+        const source = readChatAppSource();
+        const layoutBlock = sliceBetween(
+            source,
+            'export function chatAppViewportLayout',
+            'export function promptPanelRepaintKey',
+        );
+        const welcomeBlock = sliceBetween(source, '<WelcomeScreen', '/>');
+        const stdoutRowsToken = ['process', 'stdout', 'rows'].join('.');
+
+        expect(layoutBlock).toContain('welcomeAvailableRows: dockPolicy.transcript.rows');
+        expect(welcomeBlock).toContain('availableRows={viewportLayout.welcomeAvailableRows}');
+        expect(source).not.toContain(stdoutRowsToken);
     });
 
     it('threads the terminal viewport into ABG overlay and minimap renderers', () => {

@@ -797,7 +797,7 @@ export function createAbgOverlayStore(): AbgOverlayStore {
 /**
  * Reads `MCTRL_ABG_OVERLAY_REFRESH_MS`. Absent or non-numeric falls back to
  * {@link DEFAULT_REFRESH_MS} (33ms). Finite values below {@link MIN_REFRESH_MS} (16ms) are clamped
- * up to avoid thrashing Ink's render loop.
+ * up to avoid thrashing the TUI redraw loop.
  */
 export function readRefreshMsFromEnv(): number {
     // biome-ignore lint/complexity/useLiteralKeys: process.env (NodeJS.ProcessEnv) requires bracket access per noPropertyAccessFromIndexSignature

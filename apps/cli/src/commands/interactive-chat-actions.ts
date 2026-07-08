@@ -111,7 +111,7 @@ export type CodingActionContext = PromptTurnContext & {
     readonly listWorkspaceSessions?: () => Promise<readonly SessionPickerEntry[]>;
     /**
      * Opens the session-picker modal and resolves to the selected sessionId, or undefined
-     * when cancelled. Only available in TUI mode (wired to `tuiBridge.showSessionPicker`).
+     * when cancelled. Only available in TUI mode through the active TUI handle.
      */
     readonly selectSessionForAttach?: (entries: readonly SessionPickerEntry[]) => Promise<string | undefined>;
     readonly openAgentsDashboard?: (entries: readonly DashboardAgentEntry[]) => void;

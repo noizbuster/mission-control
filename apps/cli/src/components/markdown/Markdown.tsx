@@ -41,7 +41,7 @@ import { darkTheme } from './theme.js';
 
 /**
  * A styled, width-measurable text run. `text` is the VISIBLE content only (no
- * ANSI escapes); `style` is spread onto the `<Text>` that renders it. When
+ * ANSI escapes); `style` is spread onto the opentui `<text>` node that renders it. When
  * `href` is set the renderer wraps `text` in an OSC 8 hyperlink escape at draw
  * time, so `text` carries no embedded control bytes — pass it through
  * `terminalDisplayWidth` to get the true visible column count (CJK glyphs count
