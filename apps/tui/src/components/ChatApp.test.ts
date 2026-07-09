@@ -35,6 +35,8 @@ function readChatAppTopologyUnion(): string {
         readChatAppModuleSource('chat-app/use-chat-selection-mouseup.ts'),
         readChatAppModuleSource('chat-app/use-chat-submit.ts'),
         readChatAppModuleSource('chat-app/use-chat-renderable-handles.ts'),
+        readChatAppModuleSource('chat-app/use-chat-global-keyboard.ts'),
+        readChatAppModuleSource('chat-app/use-chat-keymap-layers.ts'),
     ].join('\n');
 }
 
@@ -219,5 +221,43 @@ describe('ChatApp source topology', () => {
         expect(matchCount(modalBlock, '<ModalPopup>')).toBe(7);
         expect(modalBlock).toContain('<ApprovalOverlay store={store} />');
         expect(modalBlock).toContain('<MissionPanelOverlay');
+    });
+
+    it('routes global keyboard sink and keymap layers through single chat-app hooks', () => {
+        const chatAppSource = readChatAppSource();
+        const keyboardSource = readChatAppModuleSource('chat-app/use-chat-global-keyboard.ts');
+        const keymapSource = readChatAppModuleSource('chat-app/use-chat-keymap-layers.ts');
+
+        expect(chatAppSource).toContain('useChatGlobalKeyboard');
+        expect(chatAppSource).toContain('useChatKeymapLayers');
+        expect(matchCount(chatAppSource, 'useChatKeymapLayers')).toBe(2);
+        expect(chatAppSource).not.toContain('useKeyboard');
+        expect(chatAppSource).not.toContain('onMount(');
+        expect(chatAppSource).not.toContain("import('../platform/keymap/");
+
+        expect(keyboardSource).toContain('useKeyboard');
+        expect(keyboardSource).toContain("key.ctrl && key.name === 'c'");
+        expect(keyboardSource).toContain("key.name === 'escape' || (key.ctrl && key.name === 'g')");
+        expect(keyboardSource).toContain('textareaHandle.get()?.focused');
+
+        for (const name of [
+            'registerManagedTextareaComposition',
+            'registerChatSubmitLayer',
+            'registerMessagesScrollLayer',
+            'registerSelectionCopyLayer',
+            'registerModelShortcutsLayer',
+            'registerSessionShortcutsLayer',
+            'registerMessageUndoRedoLayer',
+            'registerAbgMinimapToggleLayer',
+            "name: 'menu.up'",
+            "name: 'menu.down'",
+            'priority: 200',
+        ]) {
+            expect(keymapSource).toContain(name);
+        }
+        expect(matchCount(keymapSource, 'registerMessagesScrollLayer')).toBe(2);
+        expect(matchCount(keymapSource, 'registerSelectionCopyLayer')).toBe(2);
+        expect(keymapSource).toContain("import('../../platform/keymap/");
+        expect(keymapSource).not.toContain('KeymapProvider');
     });
 });
