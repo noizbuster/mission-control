@@ -1,53 +1,36 @@
-import { type Accessor, createEffect, onCleanup } from 'solid-js';
-import {
-    hardResetRendererSurface,
-    type RendererSurfaceResetTarget,
-} from '../platform/opentui-renderer.js';
-import type { TerminalViewport } from '../platform/terminal-viewport.js';
+import { type Accessor, createEffect } from 'solid-js';
 import type { ChatStoreOverlayMode } from '../state/chat-store.js';
 
-export type ChatRepaintRenderer = RendererSurfaceResetTarget & {
+export type ChatRepaintRenderer = {
     requestRender(): void;
 };
 
 export type UseRepaintEffectsDeps = {
     readonly renderer: ChatRepaintRenderer;
-    readonly viewport: Accessor<TerminalViewport>;
     readonly overlayMode: Accessor<ChatStoreOverlayMode>;
     readonly generating: Accessor<boolean>;
     readonly promptRepaintKey: Accessor<string>;
 };
 
+function requestFullRepaint(renderer: ChatRepaintRenderer): void {
+    Reflect.set(renderer, 'forceFullRepaintRequested', true);
+    renderer.requestRender();
+}
+
 /**
- * Full-repaint / hard-reset effects for OpenTUI double-buffer drift.
- *
- * opentui's double-buffer diff can miss cells when a wide character (Korean
- * Hangul, emoji) is replaced by a narrow one — the continuation cell is not
- * marked dirty, leaving stale pixels that look like garbled text. Force a
- * full repaint (skip the diff, write every cell) when the view changes
- * dramatically: viewport resize, overlay open/close, prompt panel changes,
- * and when a streaming response finishes. During streaming, a 500ms interval
- * corrects accumulated errors without the per-frame cost of always skipping
- * diff.
+ * Occasional full-repaint for CJK/emoji double-buffer drift.
+ * OpenCode has no periodic force-repaint; a 500ms interval while generating
+ * races OpenTUI processResize and blanks expanded cells after shrink-then-grow.
+ * Only fire on discrete UI transitions (overlay / prompt / stream end).
  */
 export function useRepaintEffects(deps: UseRepaintEffectsDeps): void {
-    const { renderer, viewport, overlayMode, generating, promptRepaintKey } = deps;
-
-    let prevViewport = viewport();
-    createEffect(() => {
-        const currentViewport = viewport();
-        if (prevViewport.columns !== currentViewport.columns || prevViewport.rows !== currentViewport.rows) {
-            prevViewport = currentViewport;
-            hardResetRendererSurface(renderer);
-        }
-    });
+    const { renderer, overlayMode, generating, promptRepaintKey } = deps;
 
     let prevOverlayMode = overlayMode();
     createEffect(() => {
         if (prevOverlayMode !== overlayMode()) {
             prevOverlayMode = overlayMode();
-            Reflect.set(renderer, 'forceFullRepaintRequested', true);
-            renderer.requestRender();
+            requestFullRepaint(renderer);
         }
     });
 
@@ -55,29 +38,15 @@ export function useRepaintEffects(deps: UseRepaintEffectsDeps): void {
     createEffect(() => {
         if (prevPromptRepaintKey !== promptRepaintKey()) {
             prevPromptRepaintKey = promptRepaintKey();
-            Reflect.set(renderer, 'forceFullRepaintRequested', true);
-            renderer.requestRender();
+            requestFullRepaint(renderer);
         }
     });
 
     let prevGenerating = generating();
     createEffect(() => {
         if (prevGenerating && !generating()) {
-            Reflect.set(renderer, 'forceFullRepaintRequested', true);
-            renderer.requestRender();
+            requestFullRepaint(renderer);
         }
         prevGenerating = generating();
-    });
-
-    // During streaming, opentui's cell-diff can miss wide-character continuation
-    // cells on every incremental text update. A periodic full repaint corrects
-    // the accumulated errors without the per-frame cost of always skipping diff.
-    createEffect(() => {
-        if (!generating()) return;
-        const timer = setInterval(() => {
-            Reflect.set(renderer, 'forceFullRepaintRequested', true);
-            renderer.requestRender();
-        }, 500);
-        onCleanup(() => clearInterval(timer));
     });
 }

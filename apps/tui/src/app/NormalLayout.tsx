@@ -40,52 +40,49 @@ export type NormalLayoutProps = {
  * Full-screen overlays are handled by {@link FullscreenOverlays} before this mounts.
  */
 export function NormalLayout(props: NormalLayoutProps): JSX.Element {
-    const bar = props.statusBarProps;
-    const upperOutputRegion = (
-        <UpperRegion
-            showWelcome={props.showWelcome}
-            welcomeData={props.welcomeData}
-            viewport={props.viewport}
-            availableRows={props.dockPolicy.transcript.rows}
-            statusBarProps={bar}
-            transcript={props.transcript}
-            showAgentIndicator={props.showAgentIndicator}
-            agentStatusText={props.snap.agentStatusText}
-            generating={props.snap.generating}
-            showAbgMinimap={props.showAbgMinimap}
-            abgOverlayController={props.abgOverlayController}
-        />
-    );
-    const bottomDock = (
-        <ChatBottomDock
-            store={props.store}
-            textareaRef={props.textareaHandle}
-            scrollboxRef={props.scrollboxHandle}
-            inputFocused={!props.overlayActive}
-            viewportColumns={props.viewport.columns}
-            viewportRows={props.viewport.rows}
-            statusBarProps={bar}
-            {...(props.actions !== undefined ? { actions: props.actions } : {})}
-        />
-    );
-    const modalOverlays = (
-        <ModalOverlays
-            store={props.store}
-            overlayMode={props.snap.overlayMode}
-            workspaceRoot={bar.workspaceRoot}
-            actions={props.actions}
-            missionControlServices={props.missionControlServices}
-        />
-    );
-
     return (
         // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive, not a DOM element; mouse-up only surfaces the copy-hint toast.
-        <box flexDirection="column" width={props.viewport.columns} height={props.viewport.rows} shouldFill={true} onMouseUp={props.onMouseUp}>
-            <box flexDirection="column" flexGrow={1} shouldFill={true}>
-                {upperOutputRegion}
+        <box
+            flexDirection="column"
+            width={props.viewport.columns}
+            height={props.viewport.rows}
+            backgroundColor="#000000"
+            onMouseUp={props.onMouseUp}
+        >
+            <box flexDirection="column" flexGrow={1} minHeight={0}>
+                <UpperRegion
+                    showWelcome={props.showWelcome}
+                    welcomeData={props.welcomeData}
+                    viewport={props.viewport}
+                    availableRows={props.dockPolicy.transcript.rows}
+                    statusBarProps={props.statusBarProps}
+                    transcript={props.transcript}
+                    showAgentIndicator={props.showAgentIndicator}
+                    agentStatusText={props.snap.agentStatusText}
+                    generating={props.snap.generating}
+                    showAbgMinimap={props.showAbgMinimap}
+                    abgOverlayController={props.abgOverlayController}
+                />
             </box>
-            {bottomDock}
-            {modalOverlays}
+            <box flexShrink={0}>
+                <ChatBottomDock
+                    store={props.store}
+                    textareaRef={props.textareaHandle}
+                    scrollboxRef={props.scrollboxHandle}
+                    inputFocused={!props.overlayActive}
+                    viewportColumns={props.viewport.columns}
+                    viewportRows={props.viewport.rows}
+                    statusBarProps={props.statusBarProps}
+                    {...(props.actions !== undefined ? { actions: props.actions } : {})}
+                />
+            </box>
+            <ModalOverlays
+                store={props.store}
+                overlayMode={props.snap.overlayMode}
+                workspaceRoot={props.statusBarProps.workspaceRoot}
+                actions={props.actions}
+                missionControlServices={props.missionControlServices}
+            />
         </box>
     );
 }

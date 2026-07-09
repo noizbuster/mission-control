@@ -24,15 +24,13 @@ export type FullscreenOverlaysProps = {
 /**
  * Full-screen overlay modes that replace the normal chat root layout.
  * Returns null when the active overlay is not a full-screen mode.
+ * Shell uses 100% size so it tracks OpenTUI root after processResize.
  */
 export function FullscreenOverlays(props: FullscreenOverlaysProps): JSX.Element | null {
-    const { store, snap, viewport, statusBarProps, abgOverlayController, abgActiveTabIndex, abgScrollOffset } =
-        props;
-
-    if (snap.overlayMode === 'abg') {
-        if (abgOverlayController === undefined) {
+    if (props.snap.overlayMode === 'abg') {
+        if (props.abgOverlayController === undefined) {
             return (
-                <box flexDirection="column" width={viewport.columns} height={viewport.rows} shouldFill={true}>
+                <box flexDirection="column" width={props.viewport.columns} height={props.viewport.rows} backgroundColor="#000000">
                     <OverlayFrame variant="view" title="ABG Overlay" hint="(Ctrl+G or Esc to close)">
                         <text attributes={TextAttributes.DIM}>{'ABG overlay unavailable in this session.'}</text>
                     </OverlayFrame>
@@ -40,42 +38,42 @@ export function FullscreenOverlays(props: FullscreenOverlaysProps): JSX.Element 
             );
         }
 
-        const selection = snap.currentModelSelection;
-        const providerID = selection?.providerID ?? statusBarProps.providerID;
-        const modelID = selection?.modelID ?? statusBarProps.modelID;
-        const variantID = snap.currentModelVariantID;
+        const selection = props.snap.currentModelSelection;
+        const providerID = selection?.providerID ?? props.statusBarProps.providerID;
+        const modelID = selection?.modelID ?? props.statusBarProps.modelID;
+        const variantID = props.snap.currentModelVariantID;
         const modelLabel = `${providerID}/${modelID}${variantID !== undefined ? `#${variantID}` : ''}`;
-        const activeTab: AbgOverlayTab = ABG_OVERLAY_TABS[abgActiveTabIndex] ?? 'overview';
+        const activeTab: AbgOverlayTab = ABG_OVERLAY_TABS[props.abgActiveTabIndex] ?? 'overview';
 
         return (
-            <box flexDirection="column" width={viewport.columns} height={viewport.rows} shouldFill={true}>
+            <box flexDirection="column" width={props.viewport.columns} height={props.viewport.rows} backgroundColor="#000000">
                 <AbgOverlay
-                    store={abgOverlayController.store}
+                    store={props.abgOverlayController.store}
                     activeTab={activeTab}
-                    scrollOffset={abgScrollOffset}
+                    scrollOffset={props.abgScrollOffset}
                     modelLabel={modelLabel}
-                    viewport={viewport}
+                    viewport={props.viewport}
                 />
             </box>
         );
     }
 
-    if (snap.overlayMode === 'diff-viewer') {
-        const entries = snap.diffViewerEntries;
-        const cursor = snap.diffViewerCursor;
+    if (props.snap.overlayMode === 'diff-viewer') {
+        const entries = props.snap.diffViewerEntries;
+        const cursor = props.snap.diffViewerCursor;
         const model = buildDiffViewerModel(entries);
 
         return (
-            <box flexDirection="column" width={viewport.columns} height={viewport.rows} shouldFill={true}>
+            <box flexDirection="column" width={props.viewport.columns} height={props.viewport.rows} backgroundColor="#000000">
                 <DiffViewerOverlay entries={entries} model={model} cursor={cursor} />
             </box>
         );
     }
 
-    if (snap.overlayMode === 'models-overlay') {
+    if (props.snap.overlayMode === 'models-overlay') {
         return (
-            <box flexDirection="column" width={viewport.columns} height={viewport.rows} shouldFill={true}>
-                <ModelsOverlay store={store} />
+            <box flexDirection="column" width={props.viewport.columns} height={props.viewport.rows} backgroundColor="#000000">
+                <ModelsOverlay store={props.store} />
             </box>
         );
     }

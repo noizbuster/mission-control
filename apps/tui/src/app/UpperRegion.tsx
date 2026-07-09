@@ -25,26 +25,30 @@ export type UpperRegionProps = {
     readonly abgOverlayController: AbgOverlayController | undefined;
 };
 
-/**
- * Upper output region: welcome or transcript, agent spinner, toast, ABG minimap.
- */
+/** Upper output region: welcome or transcript, agent spinner, toast, ABG minimap. */
 export function UpperRegion(props: UpperRegionProps): JSX.Element {
-    const bar = props.statusBarProps;
-
     return (
-        <>
-            {props.showWelcome && props.welcomeData !== undefined ? (
-                <WelcomeScreen
-                    data={props.welcomeData}
-                    viewportColumns={props.viewport.columns}
-                    availableRows={props.availableRows}
-                    {...(bar.workspaceRoot !== undefined ? { projectLabel: basename(bar.workspaceRoot) } : {})}
-                    {...(bar.gitBranch !== undefined ? { gitBranch: bar.gitBranch } : {})}
-                    {...(bar.isWorktree !== undefined ? { isWorktree: bar.isWorktree } : {})}
-                />
-            ) : (
-                props.transcript
-            )}
+        <box flexDirection="column" flexGrow={1} minHeight={0} width="100%">
+            <box flexDirection="column" flexGrow={1} minHeight={0}>
+                {props.showWelcome && props.welcomeData !== undefined ? (
+                    <WelcomeScreen
+                        data={props.welcomeData}
+                        viewportColumns={props.viewport.columns}
+                        availableRows={props.availableRows}
+                        {...(props.statusBarProps.workspaceRoot !== undefined
+                            ? { projectLabel: basename(props.statusBarProps.workspaceRoot) }
+                            : {})}
+                        {...(props.statusBarProps.gitBranch !== undefined
+                            ? { gitBranch: props.statusBarProps.gitBranch }
+                            : {})}
+                        {...(props.statusBarProps.isWorktree !== undefined
+                            ? { isWorktree: props.statusBarProps.isWorktree }
+                            : {})}
+                    />
+                ) : (
+                    props.transcript
+                )}
+            </box>
             {props.showAgentIndicator && props.agentStatusText.length > 0 ? (
                 <AgentSpinner text={props.agentStatusText} />
             ) : props.showAgentIndicator && props.generating ? (
@@ -54,6 +58,6 @@ export function UpperRegion(props: UpperRegionProps): JSX.Element {
             {props.showAbgMinimap && props.abgOverlayController !== undefined ? (
                 <AbgMinimap store={props.abgOverlayController.store} viewport={props.viewport} />
             ) : null}
-        </>
+        </box>
     );
 }

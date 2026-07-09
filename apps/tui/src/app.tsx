@@ -2,8 +2,8 @@
 
 import { type ChatBlock, parseMessageBlocks } from '@mission-control/tui/chat';
 import { useKeymap } from '@opentui/keymap/solid';
-import { useRenderer } from '@opentui/solid';
-import { type Accessor, createMemo, createSignal, type JSX } from 'solid-js';
+import { useRenderer, useTerminalDimensions } from '@opentui/solid';
+import { type Accessor, createMemo, createSignal, type JSX, Show } from 'solid-js';
 import {
     useChatSession,
     useTuiClipboard,
@@ -11,7 +11,6 @@ import {
     useTuiPromptStash,
     useTuiRuntime,
 } from './platform/providers/index.js';
-import { useTerminalViewport } from './platform/terminal-viewport-solid.js';
 import { useSolidStoreSelector } from './platform/use-solid-store-selector.js';
 import type { ChatStore } from './state/chat-store.js';
 import { ChatTranscript } from './components/ChatTranscript.js';
@@ -40,9 +39,6 @@ export {
     recentModelPreferenceSelections,
 } from './app/app-helpers.js';
 
-// Two memos: outer avoids re-parsing when outputText is stable (overlay toggles);
-// inner avoids re-comparing when the parse result is stable. prevRef holds the last
-// stable result for the next comparison.
 function createStableMessageBlocks(outputText: Accessor<string>): Accessor<readonly ChatBlock[]> {
     let previous: readonly ChatBlock[] = [];
     return createMemo(() => {
@@ -57,8 +53,14 @@ export type AppProps = {
     readonly store: ChatStore;
 };
 
-export function App({ store }: AppProps): JSX.Element {
-    const snapshot = useSolidStoreSelector(store, (state) => state);
+/**
+ * Solid components run once: never freeze dimensions with
+ * `const w = viewport().columns`. Always read accessors inside JSX
+ * (`viewport().columns`) so resize reflows — same as OpenCode's
+ * `dimensions().width`.
+ */
+export function App(props: AppProps): JSX.Element {
+    const snapshot = useSolidStoreSelector(props.store, (state) => state);
     const runtime = useTuiRuntime();
     const session = useChatSession();
     const welcomeData = session.welcomeData;
@@ -68,8 +70,7 @@ export function App({ store }: AppProps): JSX.Element {
     const statusBarProps = createMemo(() => deriveStatusBarProps(runtime, snapshot()));
     const { textareaHandle, scrollboxHandle, keymapScrollboxRef } = useRenderableHandles();
 
-    // Seeded from persisted prefs so a user's last tab/scroll survives an overlay reopen.
-    const initialPrefs = store.getAbgOverlayPrefsSnapshot();
+    const initialPrefs = props.store.getAbgOverlayPrefsSnapshot();
     const [abgActiveTab, setAbgActiveTab] = createSignal(initialPrefs.activeTabIndex);
     const [abgScrollOffset, setAbgScrollOffset] = createSignal(initialPrefs.scrollOffset);
 
@@ -78,23 +79,25 @@ export function App({ store }: AppProps): JSX.Element {
     const clipboard = useTuiClipboard();
     const promptStash = useTuiPromptStash();
     const localPreferences = useTuiLocalPreferences();
-    const viewport = useTerminalViewport();
+    // OpenCode: useTerminalDimensions() + read .width/.height inside JSX/memos only.
+    const dimensions = useTerminalDimensions();
+    const viewport = createMemo(() => ({
+        columns: dimensions().width,
+        rows: dimensions().height,
+    }));
     const dockPolicy = createMemo(() => bottomDockPolicy(viewport()));
     const promptMenuInteractionsEnabled = createMemo(() => dockPolicy().menu.rows > 0);
 
-    useTransientToast(store);
+    useTransientToast(props.store);
     const handleSelectionMouseUp = useSelectionMouseUp();
-    // Wire the submit handler the chat.submit keymap layer (T3) invokes. The
-    // keymap owns the return/kpenter chord (native keyBindings are suspended),
-    // so this is the sole Enter-submit path.
     const handleSubmit = useSubmit({
-        store,
+        store: props.store,
         textareaHandle,
         promptMenuInteractionsEnabled,
     });
 
     useGlobalKeyboard({
-        store,
+        store: props.store,
         textareaHandle,
         setAbgActiveTab,
         setAbgScrollOffset,
@@ -102,7 +105,7 @@ export function App({ store }: AppProps): JSX.Element {
     });
 
     useKeymapLayers({
-        store,
+        store: props.store,
         keymap,
         renderer,
         clipboard,
@@ -117,7 +120,9 @@ export function App({ store }: AppProps): JSX.Element {
 
     const messageBlocks = createStableMessageBlocks(() => snapshot().outputText);
     const overlayActive = createMemo(() => snapshot().overlayMode !== 'none');
-    const showWelcome = createMemo(() => welcomeData !== undefined && snapshot().outputText === '' && !overlayActive());
+    const showWelcome = createMemo(
+        () => welcomeData !== undefined && snapshot().outputText === '' && !overlayActive(),
+    );
     const promptRepaintKey = createMemo(() =>
         promptPanelRepaintKey({
             inputMirror: snapshot().inputMirror,
@@ -129,73 +134,62 @@ export function App({ store }: AppProps): JSX.Element {
 
     useRepaintEffects({
         renderer,
-        viewport,
         overlayMode: () => snapshot().overlayMode,
         generating: () => snapshot().generating,
         promptRepaintKey,
     });
 
-    const transcript = createMemo(() => (
-        <ChatTranscript
-            blocks={messageBlocks()}
-            scrollboxRef={scrollboxHandle}
-            generating={snapshot().generating}
-            toolOutputExpanded={snapshot().toolOutputExpanded}
-            viewportColumns={viewport().columns}
-        />
-    ));
-
-    // ModalPopup auto-sizes to content (no `bottom`), so the AgentSpinner's
-    // 80ms Braille animation leaks under the popup edge and surfaces as mojibake.
-    // Match the 'abg'/'diff-viewer' early-return replacement intent.
     const showAgentIndicator = createMemo(() => !overlayActive());
     const showAbgMinimap = createMemo(
         () => snapshot().abgMinimapVisible && !overlayActive() && abgOverlayController !== undefined,
     );
-
-    const rootContent = createMemo((): JSX.Element => {
-        const snap = snapshot();
-
-        if (
-            snap.overlayMode === 'abg' ||
-            snap.overlayMode === 'diff-viewer' ||
-            snap.overlayMode === 'models-overlay'
-        ) {
-            return (
-                <FullscreenOverlays
-                    store={store}
-                    snap={snap}
-                    viewport={viewport()}
-                    statusBarProps={statusBarProps()}
-                    abgOverlayController={abgOverlayController}
-                    abgActiveTabIndex={abgActiveTab()}
-                    abgScrollOffset={abgScrollOffset()}
-                />
-            );
-        }
-
-        return (
-            <NormalLayout
-                store={store}
-                snap={snap}
-                viewport={viewport()}
-                statusBarProps={statusBarProps()}
-                onMouseUp={handleSelectionMouseUp}
-                textareaHandle={textareaHandle}
-                scrollboxHandle={scrollboxHandle}
-                overlayActive={overlayActive()}
-                actions={actions}
-                missionControlServices={missionControlServices}
-                showWelcome={showWelcome()}
-                welcomeData={welcomeData}
-                dockPolicy={dockPolicy()}
-                transcript={transcript()}
-                showAgentIndicator={showAgentIndicator()}
-                showAbgMinimap={showAbgMinimap()}
-                abgOverlayController={abgOverlayController}
-            />
-        );
+    const isFullscreenOverlay = createMemo(() => {
+        const mode = snapshot().overlayMode;
+        return mode === 'abg' || mode === 'diff-viewer' || mode === 'models-overlay';
     });
 
-    return <>{rootContent()}</>;
+    return (
+        <Show
+            when={isFullscreenOverlay()}
+            fallback={
+                <NormalLayout
+                    store={props.store}
+                    snap={snapshot()}
+                    viewport={viewport()}
+                    statusBarProps={statusBarProps()}
+                    onMouseUp={handleSelectionMouseUp}
+                    textareaHandle={textareaHandle}
+                    scrollboxHandle={scrollboxHandle}
+                    overlayActive={overlayActive()}
+                    actions={actions}
+                    missionControlServices={missionControlServices}
+                    showWelcome={showWelcome()}
+                    welcomeData={welcomeData}
+                    dockPolicy={dockPolicy()}
+                    transcript={
+                        <ChatTranscript
+                            blocks={messageBlocks()}
+                            scrollboxRef={scrollboxHandle}
+                            generating={snapshot().generating}
+                            toolOutputExpanded={snapshot().toolOutputExpanded}
+                            viewportColumns={viewport().columns}
+                        />
+                    }
+                    showAgentIndicator={showAgentIndicator()}
+                    showAbgMinimap={showAbgMinimap()}
+                    abgOverlayController={abgOverlayController}
+                />
+            }
+        >
+            <FullscreenOverlays
+                store={props.store}
+                snap={snapshot()}
+                viewport={viewport()}
+                statusBarProps={statusBarProps()}
+                abgOverlayController={abgOverlayController}
+                abgActiveTabIndex={abgActiveTab()}
+                abgScrollOffset={abgScrollOffset()}
+            />
+        </Show>
+    );
 }
