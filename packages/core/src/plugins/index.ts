@@ -13,3 +13,12 @@ export {
 } from './plugin-loader.js';
 export { PluginManager, type PluginManagerOptions } from './plugin-manager.js';
 export { ensurePluginDirs, pluginHomeEnvKey, resolvePluginDir, resolvePluginHome } from './plugin-paths.js';
+export {
+    type TuiPluginHostApi,
+    TuiPluginHostRegistry,
+    type TuiPluginHostRegistryOptions,
+    type TuiPluginLoadInput,
+    type TuiPluginLoadResult,
+    type TuiPluginRegistrationHandle,
+    type TuiPluginSource,
+} from './tui-plugin-host.js';
