@@ -19,7 +19,15 @@ src/
 |-- create-chat-tui.tsx       # TUI mount function: builds ChatStore, mounts ChatApp, returns ChatTuiHandle
 |-- replay-overlay.tsx        # replay overlay mount (ABG overlay over a replay session)
 |-- components/               # OpenTUI Solid JSX components (all .tsx through @opentui/solid)
-|   |-- ChatApp.tsx           # root component
+|   |-- ChatApp.tsx           # thin root composer: hooks + fullscreen vs normal branch
+|   |-- chat-app/             # ChatApp layout modules + extracted hooks/helpers
+|   |   |-- AgentSpinner.tsx, ModalPopup.tsx
+|   |   |-- ChatFullscreenOverlays.tsx  # abg / diff-viewer / models-overlay
+|   |   |-- ChatUpperRegion.tsx         # welcome | transcript + spinner + Toast + AbgMinimap
+|   |   |-- ChatModalOverlays.tsx       # 7 ModalPopup modes
+|   |   |-- ChatNormalLayout.tsx        # root box + onMouseUp + upper → dock → modals
+|   |   |-- chat-app-helpers.ts         # pure helpers re-exported by ChatApp
+|   |   `-- use-chat-*.ts               # keyboard, keymap, submit, repaint, toast, handles
 |   |-- ChatInputArea.tsx     # input wrapper
 |   |-- ChatInputTextarea.tsx # native <textarea> wrapper (owns cursor/selection/IME)
 |   |-- ChatTranscript.tsx    # native <scrollbox> wrapper (owns output scroll)
@@ -61,7 +69,7 @@ src/
 | CLI side-effect interface | `src/state/chat-app-actions.ts` | `ChatAppActions` callback interface (`loadDashboardAgentEntries`, `loadMissionPanelRows`, `toggleAgentDisabled`, `setAgentModelOverride`, `isValidModelPattern`). CLI provides implementations; components call them. |
 | Chat block parsing | `src/chat.ts` (via `@mission-control/tui/chat`) | `parseMessageBlocks` splits `outputText` into `ChatBlock` records (user/assistant/thinking/error/tool/system). Pure, zero imports. |
 | Chat test support | `src/components/chat-test-support.ts` | `TextareaLike`, `createRecordingTextarea`, `createRecordingScrollbox`, `makeKeyEvent`, and framework-free test helpers for native renderable seams. |
-| Root component | `src/components/ChatApp.tsx` | `ChatApp` renders the full tree: banner, transcript, input area, overlays. Owns `AgentSpinner` (braille spinner at 80ms). Reads `ChatStore` snapshots through Solid signals/accessors. |
+| Root component | `src/components/ChatApp.tsx` | Thin composer: wires hooks, then branches fullscreen (`ChatFullscreenOverlays`) vs normal (`ChatNormalLayout`). Layout modules live under `src/components/chat-app/` (`AgentSpinner`, `ModalPopup`, upper region, modal overlays). Reads `ChatStore` snapshots through Solid signals/accessors. |
 | Input textarea | `src/components/ChatInputTextarea.tsx` | Wraps native `<textarea>` (`TextareaRenderable`): owns editable text, cursor, selection, IME composition. |
 | Output transcript | `src/components/ChatTranscript.tsx` | Wraps native `<scrollbox>` (`ScrollBoxRenderable`): owns output scroll and windowing via `stickyScroll`. |
 | Overlay panels | `src/components/OverlayPanels.tsx` | Approval, question, model picker, level picker, rename overlays. Arrow-key navigation over `ChatStore`. |

@@ -27,7 +27,7 @@ export type OverlayFrameProps = {
 export function OverlayFrame({ variant, title, accent, hint, footer, children }: OverlayFrameProps): JSX.Element {
     const chrome = resolveOverlayChrome(variant, accent);
 
-    // Modal renders inside a bordered popup (see ModalPopup in ChatApp), so it
+    // Modal renders inside a bordered popup (see ModalPopup in chat-app/), so it
     // has no Separator of its own — the popup border is the delineator. The
     // title and footer each sit in their own <box> row because opentui merges
     // adjacent <text> siblings onto one row: without the wrappers a body that

@@ -1,6 +1,9 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ChatBlock } from '@mission-control/tui/chat';
+import type { TuiRuntimeProviderValue } from '../../platform/providers/runtime-context.js';
 import { parseModelSelection } from '../../state/interactive-chat-model.js';
+import type { ChatStoreState } from '../../state/chat-store.js';
+import type { StatusBarProps } from '../StatusBar.js';
 
 /**
  * Reuse previous block references when content (kind + element-wise lines) is unchanged.
@@ -45,4 +48,21 @@ export function parseModelPreferenceKeys(keys: readonly string[]): readonly Mode
 
 export function recentModelPreferenceSelections(keys: readonly string[]): readonly ModelProviderSelection[] {
     return [...parseModelPreferenceKeys(keys)].reverse();
+}
+
+export function deriveStatusBarProps(runtime: TuiRuntimeProviderValue, snap: ChatStoreState): StatusBarProps {
+    const selection = snap.currentModelSelection;
+    const providerID = selection?.providerID ?? runtime.providerID;
+    const modelID = selection?.modelID ?? runtime.modelID;
+    const variantID = selection?.variantID ?? snap.currentModelVariantID ?? runtime.variantID;
+    const sessionID = snap.sessionId.length > 0 ? snap.sessionId : runtime.sessionID;
+    return {
+        providerID,
+        modelID,
+        ...(variantID !== undefined ? { variantID } : {}),
+        ...(sessionID !== undefined && sessionID.length > 0 ? { sessionID } : {}),
+        ...(runtime.workspaceRoot !== undefined ? { workspaceRoot: runtime.workspaceRoot } : {}),
+        ...(runtime.gitBranch !== undefined ? { gitBranch: runtime.gitBranch } : {}),
+        ...(runtime.isWorktree ? { isWorktree: true } : {}),
+    };
 }

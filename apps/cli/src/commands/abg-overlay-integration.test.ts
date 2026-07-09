@@ -132,7 +132,14 @@ describe('overlay integration: controller → AbgOverlay contract (T5 wiring)', 
     });
 
     it('ChatApp live render path no longer contains the placeholder string', () => {
-        const source = readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatApp.tsx'), 'utf8');
-        expect(source).not.toContain('The ABG monitoring overlay requires an active agent run');
+        const chatAppSource = readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatApp.tsx'), 'utf8');
+        const fullscreenSource = readFileSync(
+            resolve(process.cwd(), 'apps/tui/src/components/chat-app/ChatFullscreenOverlays.tsx'),
+            'utf8',
+        );
+        const union = `${chatAppSource}\n${fullscreenSource}`;
+        expect(union).not.toContain('The ABG monitoring overlay requires an active agent run');
+        expect(fullscreenSource).toContain('<AbgOverlay');
+        expect(fullscreenSource).toContain('ABG overlay unavailable in this session.');
     });
 });
