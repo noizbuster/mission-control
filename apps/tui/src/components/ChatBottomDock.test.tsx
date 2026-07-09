@@ -59,13 +59,12 @@ function sliceWith(overrides: Partial<ChatBottomDockSlice>): ChatBottomDockSlice
 }
 
 describe('ChatBottomDockBase source topology', () => {
-    it('keeps status, prompt panels, separator, input slot, and bottom status in order', () => {
+    it('keeps status, prompt panels, input slot, and bottom status in order', () => {
         const source = readChatBottomDockSource();
         const block = sliceBetween(source, 'export function ChatBottomDockBase', 'export function ChatBottomDock(');
 
         expect(block.indexOf('<TopStatusBar')).toBeLessThan(block.indexOf('{promptPanels}'));
-        expect(block.indexOf('{promptPanels}')).toBeLessThan(block.indexOf('<Separator'));
-        expect(block.indexOf('<Separator')).toBeLessThan(block.indexOf("dockSlice.inputMode === 'question'"));
+        expect(block.indexOf('{promptPanels}')).toBeLessThan(block.indexOf("dockSlice.inputMode === 'question'"));
         expect(block.indexOf("dockSlice.inputMode === 'question'")).toBeLessThan(block.indexOf('<BottomStatusBar'));
         expect(block).toContain('<QuestionOverlay store={store} />');
         expect(block).toContain('<ChatInputArea');

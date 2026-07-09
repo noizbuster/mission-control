@@ -184,6 +184,7 @@ Flat `<text>` blocks are explicitly `selectable`; `Markdown` leaves default sele
 ## Tests
 
 - Colocated `*.test.ts`/`*.test.tsx` files under `src` are the package test surface.
+- `src/components/chat-app/chat-app-topology.test.ts` is the multi-file ChatApp topology suite: source-union + import-graph pins for mount shape (`createComponent(ChatApp, { store })`), store-only `ChatAppProps`, no `ChatAppSplitShell`, no SlashMenu/FileAutocomplete in chat-app modules, 7 ModalPopup modes, fullscreen abg/diff/models, normal layout order upper→dock→modals + `onMouseUp`, keymap layers, Ctrl+C global sink, hardReset/forceFullRepaint/500ms, and provider hooks. `ChatApp.test.ts` keeps only the public re-export smoke.
 - `src/import-graph.test.ts` scans the 3 pure source files and asserts no `@opentui/*`, framework-runtime, `apps/cli`, or `@mission-control/cli` imports. Keep it green when adding pure modules.
 - `tests/tui-cli-boundary.test.ts` (root) scans all non-test source under `src/` and asserts no `apps/cli`/`../cli`/`@mission-control/cli` references.
 - `platform/terminal-global-policy.test.ts` scans `src/` for direct `process.stdout.columns/rows` reads. No allowed files.
