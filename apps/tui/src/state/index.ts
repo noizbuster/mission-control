@@ -29,5 +29,4 @@ export * from './mission-services-types.js';
 export * from './model-capability.js';
 export * from './models-overlay-state.js';
 export * from './separator-state.js';
-export * from './terminal-controls.js';
 export * from './welcome-data-types.js';

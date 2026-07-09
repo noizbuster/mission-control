@@ -34,15 +34,8 @@ import {
     createAbgOverlayStore,
     createModelChoices,
     DEFAULT_ABG_OVERLAY_PREFS,
-    detectGitBranch,
-    detectGitWorktree,
-    formatAppTitle,
-    formatSessionTitle,
     loadAbgOverlayPrefs,
     type ModelChoice,
-    resetTerminalTitle,
-    setTerminalTitle,
-    suppressTitleManagement,
 } from '@mission-control/tui/state';
 import type { ProviderAuthStore } from '../auth-store.js';
 import { getVersion } from '../index.js';
@@ -88,6 +81,17 @@ import { loadPricingTable } from './pricing-table-store.js';
 import type { EnsuredSession } from './run-agent-session.js';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
 import { loadSessionTranscript } from './session-transcript-reconstruction.js';
+import {
+    detectGitBranch,
+    detectGitWorktree,
+    formatAppTitle,
+    formatSessionTitle,
+    openExternalEditor,
+    resetTerminalTitle,
+    setTerminalTitle,
+    suppressTitleManagement,
+    suspendTerminal,
+} from './terminal-controls.js';
 import { gatherWelcomeData } from './welcome-data.js';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
@@ -185,6 +189,8 @@ export async function runInteractiveChatSession(
               })
             : undefined;
     const chatAppActions: ChatAppActions = {
+        openExternalEditor,
+        suspendTerminal,
         ...(options.workspaceRoot !== undefined
             ? {
                   loadDashboardAgentEntries,

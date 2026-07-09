@@ -860,6 +860,7 @@ export function ChatApp({
                         statusLayout={dockStatusLayout()}
                         menuPolicy={dockPolicy().menu}
                         {...(statusBarProps !== undefined ? { statusBarProps } : {})}
+                        {...(actions !== undefined ? { actions } : {})}
                     />
                 }
                 modalOverlays={

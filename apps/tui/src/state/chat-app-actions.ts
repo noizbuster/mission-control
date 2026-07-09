@@ -11,6 +11,15 @@
  */
 import type { DashboardAgentEntry, MissionPanelRow } from './chat-store.js';
 
+export type ExternalEditorActionResult =
+    | { readonly kind: 'updated'; readonly text: string }
+    | { readonly kind: 'unavailable'; readonly message: string }
+    | { readonly kind: 'failed'; readonly message: string };
+
+export type TerminalSuspendActionResult =
+    | { readonly kind: 'suspended' }
+    | { readonly kind: 'unsupported'; readonly message: string };
+
 export type ChatAppActions = {
     readonly loadDashboardAgentEntries?: (
         workspaceRoot: string,
@@ -21,4 +30,6 @@ export type ChatAppActions = {
     readonly setAgentModelOverride?: (workspaceRoot: string, name: string, value: string | undefined) => Promise<void>;
     /** Returns true when `raw` is a valid `provider/model[#variant]` pattern. */
     readonly isValidModelPattern?: (raw: string) => boolean;
+    readonly openExternalEditor?: (initialText: string) => Promise<ExternalEditorActionResult>;
+    readonly suspendTerminal?: () => TerminalSuspendActionResult;
 };

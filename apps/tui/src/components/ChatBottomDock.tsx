@@ -3,6 +3,7 @@
 import type { JSX } from 'solid-js';
 import { DEFAULT_TERMINAL_VIEWPORT } from '../platform/terminal-viewport.js';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
+import type { ChatAppActions } from '../state/chat-app-actions.js';
 import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
 import type { SlashCommandMenuState } from '../state/interactive-chat-command-menu.js';
 import type { FileAutocompleteState } from '../state/interactive-chat-file-autocomplete.js';
@@ -44,6 +45,7 @@ export type ChatBottomDockProps = {
     readonly statusLayout?: StatusBarLayout;
     readonly menuPolicy?: BottomDockMenuPolicy;
     readonly promptAdjacentPanel?: JSX.Element;
+    readonly actions?: ChatAppActions;
 };
 
 export type ChatBottomDockBaseProps = ChatBottomDockProps & {
@@ -163,6 +165,7 @@ export function ChatBottomDockBase({
     statusLayout,
     menuPolicy = DEFAULT_MENU_POLICY,
     promptAdjacentPanel,
+    actions,
     dockSlice,
 }: ChatBottomDockBaseProps): JSX.Element {
     const statusInput = { statusBarProps, statusLayout, dockSlice };
@@ -185,6 +188,7 @@ export function ChatBottomDockBase({
                     focused={inputFocused}
                     viewportRows={viewportRows}
                     promptMenuInteractionsEnabled={menuPolicy.rows > 0}
+                    {...(actions !== undefined ? { actions } : {})}
                 />
             )}
             {bottomStatusBarProps !== undefined ? <BottomStatusBar {...bottomStatusBarProps} /> : null}

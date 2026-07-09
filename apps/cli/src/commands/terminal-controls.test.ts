@@ -1,19 +1,25 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { setTtyState } from './run-agent-chat-test-support.js';
 import {
     detectGitBranch,
     detectGitWorktree,
+    editorControls,
     formatAppTitle,
     formatSessionTitle,
+    NO_EDITOR_MESSAGE,
+    openExternalEditor,
     resetTerminalTitle,
+    SUSPEND_UNSUPPORTED_MESSAGE,
     setTerminalTitle,
     shouldManageTerminalTitle,
     suppressTitleManagement,
+    suspendControls,
+    suspendTerminal,
     TERMINAL_TITLE_DISABLE_ENV,
     TERMINAL_TITLE_RESET,
     TERMINAL_TITLE_SET_PREFIX,
     TERMINAL_TITLE_SET_SUFFIX,
-} from '@mission-control/tui/state';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { setTtyState } from './run-agent-chat-test-support.js';
+} from './terminal-controls.js';
 import { execSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -255,6 +261,41 @@ describe('terminal-controls — title management gates', () => {
         } finally {
             restoreTtyState();
         }
+    });
+});
+
+describe('terminal-controls — suspend action', () => {
+    it('returns unsupported on Windows without sending SIGTSTP', () => {
+        vi.spyOn(suspendControls, 'isWindowsPlatform').mockReturnValue(true);
+        const sendSuspendSignal = vi.spyOn(suspendControls, 'sendSuspendSignal').mockImplementation(() => {});
+
+        expect(suspendTerminal()).toEqual({ kind: 'unsupported', message: SUSPEND_UNSUPPORTED_MESSAGE });
+        expect(sendSuspendSignal).not.toHaveBeenCalled();
+    });
+
+    it('sends SIGTSTP on POSIX platforms', () => {
+        vi.spyOn(suspendControls, 'isWindowsPlatform').mockReturnValue(false);
+        const sendSuspendSignal = vi.spyOn(suspendControls, 'sendSuspendSignal').mockImplementation(() => {});
+
+        expect(suspendTerminal()).toEqual({ kind: 'suspended' });
+        expect(sendSuspendSignal).toHaveBeenCalledOnce();
+    });
+});
+
+describe('terminal-controls — external editor action', () => {
+    it('returns unavailable when neither VISUAL nor EDITOR resolves', async () => {
+        vi.spyOn(editorControls, 'resolveEditor').mockReturnValue(undefined);
+
+        await expect(openExternalEditor('draft')).resolves.toEqual({ kind: 'unavailable', message: NO_EDITOR_MESSAGE });
+    });
+
+    it('returns the edited prompt text from the temporary file', async () => {
+        vi.spyOn(editorControls, 'resolveEditor').mockReturnValue('fake-editor');
+        vi.spyOn(editorControls, 'runEditor').mockImplementation((_editor, filePath) => {
+            writeFileSync(filePath, 'edited draft');
+        });
+
+        await expect(openExternalEditor('draft')).resolves.toEqual({ kind: 'updated', text: 'edited draft' });
     });
 });
 

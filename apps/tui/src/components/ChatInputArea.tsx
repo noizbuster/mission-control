@@ -8,6 +8,7 @@ import { collectDiffEntries } from '../platform/keymap/diff-viewer.js';
 import { halfPageScrollDelta } from '../platform/keymap/messages-scroll.js';
 import { useTuiPromptRef } from '../platform/providers/index.js';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
+import type { ChatAppActions } from '../state/chat-app-actions.js';
 import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
 import {
     isSlashCommandMenuOpen,
@@ -18,21 +19,13 @@ import {
     resolveWorkflowCommandMenuSubmission,
 } from '../state/interactive-chat-command-menu.js';
 import { buildFileAutocompleteCompletion } from '../state/interactive-chat-file-autocomplete.js';
-import {
-    clipboardImageControls,
-    editorControls,
-    NO_EDITOR_MESSAGE,
-    SUSPEND_UNSUPPORTED_MESSAGE,
-    suspendControls,
-} from '../state/terminal-controls.js';
 import { ChatInputTextarea, type ChatTextareaHandle } from './ChatInputTextarea.js';
 import type { ChatScrollboxHandle } from './ChatTranscript.js';
-import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 
 const DOUBLE_ESC_WINDOW_MS = 500;
 const DOUBLE_ESC_ACTION_ENV = 'MCTRL_DOUBLE_ESC_ACTION';
+const NO_EDITOR_ACTION_MESSAGE = 'No editor set. Set $VISUAL or $EDITOR.\n';
+const SUSPEND_ACTION_UNAVAILABLE_MESSAGE = 'Suspend not available in this environment.\n';
 const noopCursorChange = (): void => {};
 
 export function fileCompletionFrecencyKey(completed: string): string {
@@ -64,6 +57,7 @@ export type ChatInputAreaProps = {
     readonly focused: boolean;
     readonly viewportRows: number;
     readonly promptMenuInteractionsEnabled?: boolean;
+    readonly actions?: ChatAppActions;
 };
 
 export function ChatInputArea({
@@ -73,6 +67,7 @@ export function ChatInputArea({
     focused,
     viewportRows,
     promptMenuInteractionsEnabled = true,
+    actions,
 }: ChatInputAreaProps): JSX.Element {
     const snapshot = useSolidStoreSelector(store, selectInputAreaSlice);
     const promptRef = useTuiPromptRef();
@@ -228,12 +223,22 @@ export function ChatInputArea({
             }
             if (key.name === 'z') {
                 key.preventDefault();
-                if (suspendControls.isWindowsPlatform()) {
-                    store.emitOutput(SUSPEND_UNSUPPORTED_MESSAGE);
-                } else {
-                    suspendControls.sendSuspendSignal();
+                const result = actions?.suspendTerminal?.();
+                if (result === undefined) {
+                    store.emitOutput(SUSPEND_ACTION_UNAVAILABLE_MESSAGE);
+                    return;
                 }
-                return;
+                switch (result.kind) {
+                    case 'suspended':
+                        return;
+                    case 'unsupported':
+                        store.emitOutput(result.message);
+                        return;
+                    default: {
+                        const exhaustive: never = result;
+                        throw new Error(`Unhandled terminal suspend result: ${String(exhaustive)}`);
+                    }
+                }
             }
             if (key.name === 'd') {
                 key.preventDefault();
@@ -261,22 +266,27 @@ export function ChatInputArea({
             }
             if (key.name === 'e') {
                 key.preventDefault();
-                const editor = editorControls.resolveEditor();
-                if (editor === undefined) {
-                    store.emitOutput(NO_EDITOR_MESSAGE);
+                if (actions?.openExternalEditor === undefined) {
+                    store.emitOutput(NO_EDITOR_ACTION_MESSAGE);
                     return;
                 }
-                const tempPath = join(tmpdir(), `mctrl-edit-${Date.now()}.md`);
-                writeFileSync(tempPath, plainText(), 'utf-8');
-                try {
-                    editorControls.runEditor(editor, tempPath);
-                    const edited = readFileSync(tempPath, 'utf-8');
-                    textareaRef.get()?.setText(edited);
-                    textareaRef.get()?.gotoBufferEnd();
-                    store.setInputMirror(edited);
-                } finally {
-                    unlinkSync(tempPath);
-                }
+                void actions.openExternalEditor(plainText()).then((result) => {
+                    switch (result.kind) {
+                        case 'updated':
+                            textareaRef.get()?.setText(result.text);
+                            textareaRef.get()?.gotoBufferEnd();
+                            store.setInputMirror(result.text);
+                            return;
+                        case 'unavailable':
+                        case 'failed':
+                            store.emitOutput(result.message);
+                            return;
+                        default: {
+                            const exhaustive: never = result;
+                            return exhaustive;
+                        }
+                    }
+                });
                 return;
             }
             if (key.name === 'r') {
@@ -285,12 +295,6 @@ export function ChatInputArea({
                 return;
             }
             if (key.name === 'v') {
-                const image = clipboardImageControls.readClipboardImage();
-                if (image !== undefined) {
-                    key.preventDefault();
-                    textareaRef.get()?.insertText(`${image.path} `);
-                    return;
-                }
                 key.preventDefault();
                 store.cycleModelVariant(key.shift ? -1 : 1);
                 return;

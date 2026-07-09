@@ -1,12 +1,9 @@
-import { execSync, spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import type { ExternalEditorActionResult, TerminalSuspendActionResult } from '@mission-control/tui/state';
+import { spawnSync } from 'node:child_process';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 
-/**
- * Terminal title via OSC 2 (`\x1b]2;<title>\x07`, BEL terminator).
- * Gated on `isTTY` (no escapes to pipes) and `MCTRL_DISABLE_TERMINAL_TITLE !== '1'`.
- */
 export const TERMINAL_TITLE_DISABLE_ENV = 'MCTRL_DISABLE_TERMINAL_TITLE';
 export const TERMINAL_TITLE_SET_PREFIX = '\x1b]2;';
 export const TERMINAL_TITLE_SET_SUFFIX = '\x07';
@@ -51,12 +48,6 @@ export function formatSessionTitle(sessionId: string | undefined, sessionDisplay
 
 export const SUSPEND_UNSUPPORTED_MESSAGE = 'Suspend not supported on Windows.\n';
 
-/**
- * Suspend signal controls. Exported as an object so unit tests can spy on
- * `isWindowsPlatform` (simulate Windows on a POSIX CI runner) and intercept
- * the real SIGTSTP via `vi.spyOn(process, 'kill')` without actually
- * suspending the test runner.
- */
 export const suspendControls = {
     isWindowsPlatform(): boolean {
         return process.platform === 'win32';
@@ -66,15 +57,18 @@ export const suspendControls = {
     },
 };
 
+export function suspendTerminal(): TerminalSuspendActionResult {
+    if (suspendControls.isWindowsPlatform()) {
+        return { kind: 'unsupported', message: SUSPEND_UNSUPPORTED_MESSAGE };
+    }
+    suspendControls.sendSuspendSignal();
+    return { kind: 'suspended' };
+}
+
 export const NO_EDITOR_MESSAGE = 'No editor set. Set $VISUAL or $EDITOR.\n';
 export const VISUAL_ENV = 'VISUAL';
 export const EDITOR_ENV = 'EDITOR';
 
-/**
- * External editor controls. Exported as an object so unit tests can mock
- * `resolveEditor` (simulate $VISUAL/$EDITOR presence/absence and priority)
- * and `runEditor` (intercept the real `spawnSync` so no editor is launched).
- */
 export const editorControls = {
     resolveEditor(): string | undefined {
         return process.env[VISUAL_ENV] ?? process.env[EDITOR_ENV];
@@ -84,64 +78,29 @@ export const editorControls = {
     },
 };
 
-export const LINUX_CLIPBOARD_IMAGE_COMMANDS = [
-    'xclip -selection clipboard -t image/png -o',
-    'wl-paste -t image/png',
-] as const;
-
-/**
- * Clipboard image paste controls. Exported so unit tests can spy on
- * `readClipboardImage` (simulate clipboard with image, without image, or
- * tool absence) without launching real platform clipboard binaries.
- *
- * Platform coverage: Linux X11 (xclip), Linux Wayland (wl-paste), macOS
- * (pngpaste). Windows and unknown platforms return undefined. On failure
- * (tool absent, clipboard has no image), returns undefined silently.
- */
-export const clipboardImageControls = {
-    readClipboardImage(): { readonly path: string } | undefined {
-        const tempPath = join(tmpdir(), `mctrl-paste-${Date.now()}.png`);
-        if (process.platform === 'linux') {
-            return readLinuxClipboardImage(tempPath);
-        }
-        if (process.platform === 'darwin') {
-            return readMacOSClipboardImage(tempPath);
-        }
-        return undefined;
-    },
-};
-
-export function readLinuxClipboardImage(tempPath: string): { readonly path: string } | undefined {
-    for (const command of LINUX_CLIPBOARD_IMAGE_COMMANDS) {
-        try {
-            const buffer = execSync(command, { stdio: ['ignore', 'pipe', 'ignore'] });
-            if (buffer.length === 0) {
-                return undefined;
-            }
-            writeFileSync(tempPath, buffer);
-            return { path: tempPath };
-        } catch {
-            // Command not installed or clipboard has no image — try next tool.
-        }
-    }
-    return undefined;
+function formatExternalEditorFailure(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+    return `Editor failed: ${message}\n`;
 }
 
-export function readMacOSClipboardImage(tempPath: string): { readonly path: string } | undefined {
+export function openExternalEditor(initialText: string): Promise<ExternalEditorActionResult> {
+    const editor = editorControls.resolveEditor();
+    if (editor === undefined || editor.length === 0) {
+        return Promise.resolve({ kind: 'unavailable', message: NO_EDITOR_MESSAGE });
+    }
+
+    const tempPath = join(tmpdir(), `mctrl-edit-${Date.now()}.md`);
     try {
-        execSync(`pngpaste ${tempPath}`, { stdio: 'ignore' });
-        return { path: tempPath };
-    } catch {
-        return undefined;
+        writeFileSync(tempPath, initialText, 'utf-8');
+        editorControls.runEditor(editor, tempPath);
+        return Promise.resolve({ kind: 'updated', text: readFileSync(tempPath, 'utf-8') });
+    } catch (error: unknown) {
+        return Promise.resolve({ kind: 'failed', message: formatExternalEditorFailure(error) });
+    } finally {
+        rmSync(tempPath, { force: true });
     }
 }
 
-/**
- * Detect the current git branch of `workspaceRoot` synchronously via `git rev-parse`.
- * Returns undefined when git is unavailable, the workspace is not a git repo,
- * or `HEAD` is detached (the rev-parse returns `HEAD` literally in that case).
- * Exported for unit tests; never throws.
- */
 export function detectGitBranch(workspaceRoot: string | undefined): string | undefined {
     if (workspaceRoot === undefined) {
         return undefined;
@@ -166,13 +125,6 @@ export function detectGitBranch(workspaceRoot: string | undefined): string | und
     }
 }
 
-/**
- * Module-private: run `git rev-parse <args>` synchronously in `workspaceRoot`
- * with the same spawn options, 1s timeout, and never-throws contract as
- * {@link detectGitBranch}. Returns the trimmed stdout, or `undefined` when git
- * is unavailable, the workspace is not a git repo, the rev-parse exits non-zero,
- * or the timeout trips.
- */
 function runGitRevParse(workspaceRoot: string, args: readonly string[]): string | undefined {
     try {
         const result = spawnSync('git', ['rev-parse', ...args], {
@@ -191,24 +143,6 @@ function runGitRevParse(workspaceRoot: string, args: readonly string[]): string 
     }
 }
 
-/**
- * Detect whether `workspaceRoot` is a linked git worktree (created via
- * `git worktree add`) rather than the main checkout, and return the worktree's
- * directory name.
- *
- * Detection compares `git rev-parse --git-dir` against `--git-common-dir`,
- * both resolved to absolute paths. In a linked worktree `--git-dir` resolves to
- * `<common>/.git/worktrees/<name>` while `--git-common-dir` resolves to the
- * shared `<common>/.git`; in the main checkout (and in a submodule, whose own
- * git dir IS its common dir) the two are identical. This avoids the `.git`
- * file-versus-dir heuristic, which false-positives on git submodules: a
- * submodule's `.git` is a file, but a submodule is NOT a linked worktree.
- *
- * `name` is the `basename` of `git rev-parse --show-toplevel` and is only
- * populated when `isWorktree` is true. Returns
- * `{ isWorktree: false, name: undefined }` on any error, non-git dir,
- * undefined input, or timeout. Exported for unit tests; never throws.
- */
 export function detectGitWorktree(workspaceRoot: string | undefined): {
     readonly isWorktree: boolean;
     readonly name: string | undefined;

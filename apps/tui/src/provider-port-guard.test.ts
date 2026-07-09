@@ -1,17 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
 const root = process.cwd();
 const productSourceRoots = ['apps', 'packages'] as const;
 const tuiSourceRoot = 'apps/tui/src';
 const stateSourceRoot = 'apps/tui/src/state';
 const indexSourcePath = 'apps/tui/src/index.ts';
-const platformProvidersRoot = 'apps/tui/src/platform/providers';
-const clipboardSourceFiles = [
-    'apps/tui/src/platform/clipboard-service.ts',
-    'apps/tui/src/platform/selection-copy.ts',
-] as const;
 const testFilePattern = /\.(test|spec)\.(ts|tsx|mts|cts)$/u;
 
 const skippedDirectoryNames: ReadonlySet<string> = new Set([
@@ -43,7 +38,7 @@ const stateProviderImportTerms = [
     'from "../providers/',
 ] as const;
 const runtimeBridgeForbiddenTerms = ['AgentRuntime', 'AgentRuntimeOptions', 'ProviderAdapter', 'ToolRegistry'] as const;
-const clipboardFallbackTerms = ['child_process', 'execSync', 'spawnSync', 'pbcopy', 'xclip', 'wl-copy'] as const;
+const clipboardFallbackTerms = ['child_process', 'execSync', 'execFileSync', 'spawnSync', 'pbcopy', 'xclip', 'wl-copy'] as const;
 
 const blockCommentPattern = /\/\*[\s\S]*?\*\//gu;
 const lineCommentPattern = /\/\/.*$/gmu;
@@ -87,20 +82,12 @@ function collectSourceFiles(directory: string): readonly string[] {
     return files.sort();
 }
 
-function collectExistingSourceFiles(directory: string): readonly string[] {
-    if (!existsSync(join(root, directory))) return [];
-    return collectSourceFiles(directory);
-}
-
 function productSourceFiles(): readonly string[] {
     return productSourceRoots.flatMap((sourceRoot) => collectSourceFiles(sourceRoot));
 }
 
 function clipboardGuardFiles(): readonly string[] {
-    const providerClipboardFiles = collectExistingSourceFiles(platformProvidersRoot).filter((file) =>
-        basename(file).startsWith('clipboard'),
-    );
-    return [...clipboardSourceFiles, ...providerClipboardFiles].sort();
+    return collectSourceFiles(tuiSourceRoot);
 }
 
 function scanSourceForTerms(file: string, source: string, terms: readonly string[]): readonly GuardFinding[] {
@@ -222,9 +209,11 @@ describe('TUI provider-port guardrails', () => {
         ).toEqual([]);
     });
 
-    it('no clipboard source imports child-process clipboard fallbacks', () => {
+    it('no TUI product source imports child-process clipboard fallbacks', () => {
         const findings = scanFilesForTerms(clipboardGuardFiles(), clipboardFallbackTerms);
 
-        expect(findings, `clipboard source must remain OSC52-only\n${formatFindings(findings)}`).toEqual([]);
+        expect(findings, `TUI source must remain free of native clipboard/shell fallbacks\n${formatFindings(findings)}`).toEqual(
+            [],
+        );
     });
 });
