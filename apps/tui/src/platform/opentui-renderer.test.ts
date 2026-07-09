@@ -2,9 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
     attachRendererResizeSync,
     hardResetRendererSurface,
-    parseTmuxPaneSize,
     readTerminalSize,
-    readTmuxPaneSize,
     syncRendererToTerminalSize,
     type TerminalResizeSource,
 } from './opentui-renderer.js';
@@ -110,22 +108,6 @@ class ResizeProbeRenderer {
 }
 
 describe('opentui renderer resize sync', () => {
-    it('parses tmux pane size output defensively', () => {
-        expect(parseTmuxPaneSize('140 40\n')).toEqual({ columns: 140, rows: 40 });
-        expect(parseTmuxPaneSize('140')).toBeUndefined();
-        expect(parseTmuxPaneSize('0 40')).toBeUndefined();
-        expect(parseTmuxPaneSize('wide tall')).toBeUndefined();
-    });
-
-    it('reads tmux pane size when TMUX_PANE is available', () => {
-        expect(readTmuxPaneSize({ TMUX_PANE: '%7' }, (paneId) => `${paneId === '%7' ? 140 : 80} 40`)).toEqual({
-            columns: 140,
-            rows: 40,
-        });
-        expect(readTmuxPaneSize({}, () => '140 40')).toBeUndefined();
-        expect(readTmuxPaneSize({ TMUX_PANE: '%7' }, () => 'bad')).toBeUndefined();
-    });
-
     it('prefers live TTY window size over stale columns and rows', () => {
         const stream = new FakeTerminalStream(80, 24);
         stream.setWindowSize(100, 28);

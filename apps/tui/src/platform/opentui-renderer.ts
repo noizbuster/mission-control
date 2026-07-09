@@ -28,7 +28,6 @@
 
 import type { CliRenderer } from '@opentui/core';
 import type { JSX } from '@opentui/solid';
-import { execFileSync } from 'node:child_process';
 
 export type TerminalSize = {
     readonly columns: number;
@@ -59,47 +58,10 @@ const DEFAULT_RESIZE_POLL_INTERVAL_MS = 250;
 
 export type TerminalSizeProbe = () => TerminalSize | undefined;
 
-export type TmuxPaneSizeCommand = (paneId: string) => string;
-
-export type TmuxPaneEnvironment = {
-    readonly TMUX_PANE?: string;
-};
-
 function positiveInteger(value: number | undefined): number | undefined {
     if (value === undefined) return undefined;
     if (!Number.isInteger(value) || value <= 0) return undefined;
     return value;
-}
-
-export function parseTmuxPaneSize(output: string): TerminalSize | undefined {
-    const parts = output.trim().split(/\s+/);
-    if (parts.length !== 2) return undefined;
-    const columns = positiveInteger(Number.parseInt(parts[0] ?? '', 10));
-    const rows = positiveInteger(Number.parseInt(parts[1] ?? '', 10));
-    if (columns === undefined || rows === undefined) return undefined;
-    return { columns, rows };
-}
-
-function defaultTmuxPaneSizeCommand(paneId: string): string {
-    return execFileSync('tmux', ['display-message', '-p', '-t', paneId, '#{pane_width} #{pane_height}'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        timeout: 100,
-    });
-}
-
-export function readTmuxPaneSize(
-    environment: TmuxPaneEnvironment = process.env,
-    runTmux: TmuxPaneSizeCommand = defaultTmuxPaneSizeCommand,
-): TerminalSize | undefined {
-    const paneId = environment.TMUX_PANE;
-    if (paneId === undefined || paneId.length === 0) return undefined;
-    try {
-        return parseTmuxPaneSize(runTmux(paneId));
-    } catch (error) {
-        if (error instanceof Error) return undefined;
-        throw error;
-    }
 }
 
 export function readTerminalSize(
@@ -251,7 +213,7 @@ export async function mountOpenTui(app: () => JSX.Element): Promise<OpenTuiMount
     const { render } = await import('@opentui/solid');
 
     const renderer = await createCliRenderer({ exitOnCtrlC: false });
-    const detachResizeSync = attachRendererResizeSync(renderer, process.stdout, { sizeProbe: readTmuxPaneSize });
+    const detachResizeSync = attachRendererResizeSync(renderer, process.stdout);
 
     await render(app, renderer);
 
