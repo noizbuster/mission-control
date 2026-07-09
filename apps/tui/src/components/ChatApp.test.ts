@@ -1,12 +1,6 @@
 import { type ChatBlock, parseMessageBlocks } from '@mission-control/tui/chat';
 import { describe, expect, it, vi } from 'vitest';
-import { normalizeTerminalViewport } from '../platform/terminal-viewport.js';
-import {
-    bottomDockPolicyForTerminal,
-    chatAppViewportLayout,
-    preserveBlockReferences,
-    promptPanelRepaintKey,
-} from './ChatApp.js';
+import { preserveBlockReferences, promptPanelRepaintKey } from './ChatApp.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -123,69 +117,6 @@ describe('preserveBlockReferences', () => {
     });
 });
 
-describe('bottomDockPolicyForTerminal', () => {
-    it('builds policy from normalized terminal dimensions with deterministic fallbacks', () => {
-        const fallback = bottomDockPolicyForTerminal(normalizeTerminalViewport({}));
-        const wide = bottomDockPolicyForTerminal({ columns: 120, rows: 24 });
-
-        expect([fallback.columns, fallback.rows, fallback.menu.rows]).toEqual([80, 24, 5]);
-        expect([wide.columns, wide.rows, wide.menu.rows, wide.status.showSession]).toEqual([120, 24, 8, true]);
-    });
-
-    it('uses live viewport dimensions instead of stale process stdout dimensions', () => {
-        const viewport = normalizeTerminalViewport({ width: 140, height: 40 });
-        const policy = bottomDockPolicyForTerminal(viewport);
-
-        expect([policy.columns, policy.rows, policy.menu.rows, policy.status.showSession]).toEqual([140, 40, 8, true]);
-    });
-});
-
-describe('chatAppViewportLayout', () => {
-    it('recomputes dock policy and root dimensions when the viewport shrinks from 100x30 to 60x15', () => {
-        // Given: two consecutive normalized viewport readings from the terminal hook.
-        const initial = chatAppViewportLayout(normalizeTerminalViewport({ width: 100, height: 30 }));
-        const resized = chatAppViewportLayout(normalizeTerminalViewport({ width: 60, height: 15 }));
-
-        // Then: both the numeric shell props and the dock policy follow the latest viewport.
-        expect([
-            initial.width,
-            initial.height,
-            initial.dockPolicy.columns,
-            initial.dockPolicy.rows,
-            initial.dockPolicy.widthClass,
-            initial.dockPolicy.menu.rows,
-            initial.dockPolicy.status.showSession,
-        ]).toEqual([100, 30, 100, 30, 'normal', 5, true]);
-        expect([
-            resized.width,
-            resized.height,
-            resized.dockPolicy.columns,
-            resized.dockPolicy.rows,
-            resized.dockPolicy.widthClass,
-            resized.dockPolicy.menu.rows,
-            resized.dockPolicy.status.showSession,
-            resized.welcomeAvailableRows,
-        ]).toEqual([60, 15, 60, 15, 'narrow', 3, false, 9]);
-        expect(resized.welcomeAvailableRows).toBe(resized.dockPolicy.transcript.rows);
-    });
-
-    it('keeps short-terminal rows non-negative and shell dimensions non-zero at 40x10', () => {
-        // Given: a short but valid terminal viewport.
-        const layout = chatAppViewportLayout(normalizeTerminalViewport({ width: 40, height: 10 }));
-        const policy = layout.dockPolicy;
-
-        // Then: the shell remains visible and every dock region has a valid row budget.
-        expect([layout.width, layout.height]).toEqual([40, 10]);
-        expect(layout.width).toBeGreaterThan(0);
-        expect(layout.height).toBeGreaterThan(0);
-        expect(policy.menu.rows).toBeGreaterThanOrEqual(0);
-        expect(policy.status.rows).toBeGreaterThanOrEqual(0);
-        expect(policy.input.rows).toBeGreaterThanOrEqual(0);
-        expect(policy.transcript.rows).toBeGreaterThanOrEqual(0);
-        expect(policy.transcript.rows + policy.menu.rows + policy.status.rows + policy.input.rows).toBe(policy.rows);
-    });
-});
-
 describe('promptPanelRepaintKey', () => {
     it('changes when prompt-adjacent panel rows can shift around the native textarea', () => {
         expect(
@@ -227,7 +158,6 @@ describe('ChatApp source topology', () => {
         const source = readChatAppSource();
 
         expect(source).toContain('useTerminalViewport');
-        expect(source).toContain('chatAppViewportLayout(viewport())');
         expect(source).not.toContain('useRendererDimensions');
         expect(source).not.toContain('setInterval(sync, 250)');
     });
@@ -243,7 +173,7 @@ describe('ChatApp source topology', () => {
         expect(viewportRepaintBlock).toContain('hardResetRendererSurface(renderer)');
     });
 
-    it('wires ChatBottomDock exactly once with refs, focus, status layout, and menu policy', () => {
+    it('wires ChatBottomDock exactly once with refs, focus, and raw viewport dimensions', () => {
         const source = readChatAppSource();
         const dockBlock = sliceBetween(source, '<ChatBottomDock', '/>');
 
@@ -254,8 +184,8 @@ describe('ChatApp source topology', () => {
         expect(dockBlock).toContain('inputFocused={!overlayActive()}');
         expect(dockBlock).toContain('viewportColumns={viewport().columns}');
         expect(dockBlock).toContain('viewportRows={viewport().rows}');
-        expect(dockBlock).toContain('statusLayout={dockStatusLayout()}');
-        expect(dockBlock).toContain('menuPolicy={dockPolicy().menu}');
+        expect(dockBlock).not.toContain('statusLayout=');
+        expect(dockBlock).not.toContain('menuPolicy=');
     });
 
     it('keeps transcript output, spinner, toast, and minimap inside the upper output region', () => {
@@ -264,7 +194,7 @@ describe('ChatApp source topology', () => {
 
         expect(upperBlock).toContain('<WelcomeScreen');
         expect(upperBlock).toContain('viewportColumns={viewport().columns}');
-        expect(upperBlock).toContain('availableRows={viewportLayout().welcomeAvailableRows}');
+        expect(upperBlock).toContain('availableRows={dockPolicy().transcript.rows}');
         expect(upperBlock).toContain('transcript');
         expect(upperBlock).toContain('<AgentSpinner');
         expect(upperBlock).toContain('<Toast');
@@ -285,16 +215,10 @@ describe('ChatApp source topology', () => {
 
     it('derives the welcome row budget from the live viewport dock policy without stdout row reads', () => {
         const source = readChatAppSource();
-        const layoutBlock = sliceBetween(
-            source,
-            'export function chatAppViewportLayout',
-            'export function promptPanelRepaintKey',
-        );
         const welcomeBlock = sliceBetween(source, '<WelcomeScreen', '/>');
         const stdoutRowsToken = ['process', 'stdout', 'rows'].join('.');
 
-        expect(layoutBlock).toContain('welcomeAvailableRows: dockPolicy.transcript.rows');
-        expect(welcomeBlock).toContain('availableRows={viewportLayout().welcomeAvailableRows}');
+        expect(welcomeBlock).toContain('availableRows={dockPolicy().transcript.rows}');
         expect(source).not.toContain(stdoutRowsToken);
     });
 
@@ -323,9 +247,9 @@ describe('ChatApp source topology', () => {
         expect(source.indexOf("snapshot.overlayMode === 'abg'")).toBeLessThan(shellIndex);
         expect(source.indexOf("snapshot.overlayMode === 'diff-viewer'")).toBeLessThan(shellIndex);
         expect(source.indexOf("snapshot.overlayMode === 'models-overlay'")).toBeLessThan(shellIndex);
-        expect(matchCount(source, 'width={shellWidth()} height={shellHeight()}')).toBeGreaterThanOrEqual(4);
-        expect(source).toContain('width={shellWidth()}');
-        expect(source).toContain('height={shellHeight()}');
+        expect(matchCount(source, 'width={viewport().columns} height={viewport().rows}')).toBeGreaterThanOrEqual(4);
+        expect(source).toContain('width={viewport().columns}');
+        expect(source).toContain('height={viewport().rows}');
     });
 
     it('keeps modal overlays in ChatApp through ModalPopup after the dock sibling', () => {

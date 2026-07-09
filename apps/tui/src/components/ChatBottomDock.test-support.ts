@@ -74,7 +74,7 @@ export function dockSliceWith(overrides: Partial<ChatBottomDockSlice>): ChatBott
 
 export function dockNodeForSlice(
     dockSlice: ChatBottomDockSlice,
-    menuPolicy: BottomDockMenuPolicy,
+    _menuPolicy: BottomDockMenuPolicy,
     promptAdjacentPanel?: JSX.Element,
     viewportColumns?: number,
 ): unknown {
@@ -84,8 +84,6 @@ export function dockNodeForSlice(
         textareaRef: asTextareaRef(createRecordingTextarea()),
         scrollboxRef: asScrollboxRef(createRecordingScrollbox()),
         statusBarProps: baseStatusProps(),
-        statusLayout,
-        menuPolicy,
         ...(viewportColumns !== undefined ? { viewportColumns } : {}),
         ...(promptAdjacentPanel !== undefined ? { promptAdjacentPanel } : {}),
         dockSlice,

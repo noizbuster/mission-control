@@ -22,7 +22,6 @@ import {
     useTuiPromptStash,
     useTuiToast,
 } from '../platform/providers/index.js';
-import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import { useTerminalViewport } from '../platform/terminal-viewport-solid.js';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
 import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
@@ -40,7 +39,7 @@ import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from './AbgOverlay.j
 import { ChatBottomDock } from './ChatBottomDock.js';
 import { type ChatTextareaHandle } from './ChatInputTextarea.js';
 import { type ChatScrollboxHandle, ChatTranscript } from './ChatTranscript.js';
-import { type BottomDockPolicy, bottomDockPolicy } from './chat-bottom-dock-policy.js';
+import { bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { MissionPanelOverlay } from './MissionPanelOverlay.js';
 import { ModelsOverlay } from './ModelsOverlay.js';
 import { OverlayFrame } from './OverlayFrame.js';
@@ -52,7 +51,7 @@ import {
     RenameOverlay,
     SessionPickerOverlay,
 } from './OverlayPanels.js';
-import { type StatusBarProps, statusBarLayoutFromPolicy } from './StatusBar.js';
+import { type StatusBarProps } from './StatusBar.js';
 import { useSpinnerFrame } from './spinner.js';
 import { Toast } from './Toast.js';
 import { WelcomeScreen } from './WelcomeScreen.js';
@@ -105,29 +104,6 @@ export type PromptPanelRepaintKeyInput = {
     readonly fileMatchCount: number;
     readonly menuRows: number;
 };
-
-export type ChatAppViewportLayout = {
-    readonly width: number;
-    readonly height: number;
-    readonly dockPolicy: BottomDockPolicy;
-    readonly welcomeAvailableRows: number;
-    readonly promptMenuInteractionsEnabled: boolean;
-};
-
-export function bottomDockPolicyForTerminal(viewport: TerminalViewport): BottomDockPolicy {
-    return bottomDockPolicy(viewport);
-}
-
-export function chatAppViewportLayout(viewport: TerminalViewport): ChatAppViewportLayout {
-    const dockPolicy = bottomDockPolicyForTerminal(viewport);
-    return {
-        width: viewport.columns,
-        height: viewport.rows,
-        dockPolicy,
-        welcomeAvailableRows: dockPolicy.transcript.rows,
-        promptMenuInteractionsEnabled: dockPolicy.menu.rows > 0,
-    };
-}
 
 export function promptPanelRepaintKey(input: PromptPanelRepaintKeyInput): string {
     if (input.menuRows <= 0) return 'none';
@@ -233,12 +209,8 @@ export function ChatApp({
     const promptStash = useTuiPromptStash();
     const localPreferences = useTuiLocalPreferences();
     const viewport = useTerminalViewport();
-    const viewportLayout = createMemo(() => chatAppViewportLayout(viewport()));
-    const shellWidth = createMemo(() => viewportLayout().width);
-    const shellHeight = createMemo(() => viewportLayout().height);
-    const dockPolicy = createMemo(() => viewportLayout().dockPolicy);
-    const promptMenuInteractionsEnabled = createMemo(() => viewportLayout().promptMenuInteractionsEnabled);
-    const dockStatusLayout = createMemo(() => statusBarLayoutFromPolicy(dockPolicy()));
+    const dockPolicy = createMemo(() => bottomDockPolicy(viewport()));
+    const promptMenuInteractionsEnabled = createMemo(() => dockPolicy().menu.rows > 0);
 
     createEffect(() => {
         const noticeId = snapshot().transientNotice?.id;
@@ -765,7 +737,7 @@ export function ChatApp({
         if (snap.overlayMode === 'abg') {
             if (abgOverlayController === undefined) {
                 return (
-                    <box flexDirection="column" width={shellWidth()} height={shellHeight()} shouldFill={true}>
+                    <box flexDirection="column" width={viewport().columns} height={viewport().rows} shouldFill={true}>
                         <OverlayFrame variant="view" title="ABG Overlay" hint="(Ctrl+G or Esc to close)">
                             <text attributes={TextAttributes.DIM}>{'ABG overlay unavailable in this session.'}</text>
                         </OverlayFrame>
@@ -781,7 +753,7 @@ export function ChatApp({
             const activeTab: AbgOverlayTab = ABG_OVERLAY_TABS[abgActiveTab()] ?? 'overview';
 
             return (
-                <box flexDirection="column" width={shellWidth()} height={shellHeight()} shouldFill={true}>
+                <box flexDirection="column" width={viewport().columns} height={viewport().rows} shouldFill={true}>
                     <AbgOverlay
                         store={abgOverlayController.store}
                         activeTab={activeTab}
@@ -799,7 +771,7 @@ export function ChatApp({
             const model = buildDiffViewerModel(entries);
 
             return (
-                <box flexDirection="column" width={shellWidth()} height={shellHeight()} shouldFill={true}>
+                <box flexDirection="column" width={viewport().columns} height={viewport().rows} shouldFill={true}>
                     <DiffViewerOverlay entries={entries} model={model} cursor={cursor} />
                 </box>
             );
@@ -807,7 +779,7 @@ export function ChatApp({
 
         if (snap.overlayMode === 'models-overlay') {
             return (
-                <box flexDirection="column" width={shellWidth()} height={shellHeight()} shouldFill={true}>
+                <box flexDirection="column" width={viewport().columns} height={viewport().rows} shouldFill={true}>
                     <ModelsOverlay store={store} />
                 </box>
             );
@@ -815,8 +787,8 @@ export function ChatApp({
 
         return (
             <ChatAppSplitShell
-                width={shellWidth()}
-                height={shellHeight()}
+                width={viewport().columns}
+                height={viewport().rows}
                 onMouseUp={handleSelectionMouseUp}
                 upperOutputRegion={
                     <>
@@ -824,7 +796,7 @@ export function ChatApp({
                             <WelcomeScreen
                                 data={welcomeData}
                                 viewportColumns={viewport().columns}
-                                availableRows={viewportLayout().welcomeAvailableRows}
+                                availableRows={dockPolicy().transcript.rows}
                                 {...(statusBarProps?.workspaceRoot !== undefined
                                     ? { projectLabel: basename(statusBarProps.workspaceRoot) }
                                     : {})}
@@ -857,8 +829,6 @@ export function ChatApp({
                         inputFocused={!overlayActive()}
                         viewportColumns={viewport().columns}
                         viewportRows={viewport().rows}
-                        statusLayout={dockStatusLayout()}
-                        menuPolicy={dockPolicy().menu}
                         {...(statusBarProps !== undefined ? { statusBarProps } : {})}
                         {...(actions !== undefined ? { actions } : {})}
                     />

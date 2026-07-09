@@ -16,7 +16,13 @@ import { FileAutocompletePanel } from './FileAutocompletePanel.js';
 import { QuestionOverlay } from './OverlayPanels.js';
 import { Separator, type SeparatorState } from './Separator.js';
 import { SlashMenuPanel } from './SlashMenuPanel.js';
-import { BottomStatusBar, type StatusBarLayout, type StatusBarProps, TopStatusBar } from './StatusBar.js';
+import {
+    BottomStatusBar,
+    type StatusBarLayout,
+    type StatusBarProps,
+    statusBarLayoutFromPolicy,
+    TopStatusBar,
+} from './StatusBar.js';
 
 export type ChatBottomDockSlice = {
     readonly inputMode: 'input' | 'question';
@@ -42,8 +48,6 @@ export type ChatBottomDockProps = {
     readonly viewportColumns?: number;
     readonly viewportRows?: number;
     readonly statusBarProps?: StatusBarProps;
-    readonly statusLayout?: StatusBarLayout;
-    readonly menuPolicy?: BottomDockMenuPolicy;
     readonly promptAdjacentPanel?: JSX.Element;
     readonly actions?: ChatAppActions;
 };
@@ -63,8 +67,6 @@ type PromptAdjacentPanelsInput = {
     readonly menuPolicy: BottomDockMenuPolicy;
     readonly promptAdjacentPanel: JSX.Element | undefined;
 };
-
-const DEFAULT_MENU_POLICY = bottomDockPolicy({ columns: 80, rows: 24 }).menu;
 
 export function selectChatBottomDockSlice(snapshot: ChatStoreState): ChatBottomDockSlice {
     return {
@@ -162,12 +164,13 @@ export function ChatBottomDockBase({
     viewportColumns = DEFAULT_TERMINAL_VIEWPORT.columns,
     viewportRows = DEFAULT_TERMINAL_VIEWPORT.rows,
     statusBarProps,
-    statusLayout,
-    menuPolicy = DEFAULT_MENU_POLICY,
     promptAdjacentPanel,
     actions,
     dockSlice,
 }: ChatBottomDockBaseProps): JSX.Element {
+    const dockPolicyValue = bottomDockPolicy({ columns: viewportColumns, rows: viewportRows });
+    const statusLayout = statusBarLayoutFromPolicy(dockPolicyValue);
+    const menuPolicy: BottomDockMenuPolicy = dockPolicyValue.menu;
     const statusInput = { statusBarProps, statusLayout, dockSlice };
     const topStatusBarProps = buildTopStatusBarProps(statusInput);
     const bottomStatusBarProps = buildBottomStatusBarProps(statusInput);
