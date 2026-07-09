@@ -20,6 +20,7 @@
     "./slash-mapping": "./dist/platform/keymap/slash-mapping.js",
     "./opentui-renderer": "./dist/platform/opentui-renderer.js",
     "./keymap-provider": "./dist/platform/keymap/keymap-provider.js",
+    "./providers": "./dist/platform/providers/index.js",
     "./terminal-viewport-solid": "./dist/platform/terminal-viewport-solid.js",
     "./status-bar": "./dist/components/StatusBar.js",
     "./abg-overlay": "./dist/components/AbgOverlay.js",

@@ -18,6 +18,7 @@ const entryPoints = {
     'platform/keymap/slash-mapping': sourceEntry('./src/platform/keymap/slash-mapping.ts'),
     'platform/opentui-renderer': sourceEntry('./src/platform/opentui-renderer.ts'),
     'platform/keymap/keymap-provider': sourceEntry('./src/platform/keymap/keymap-provider.tsx'),
+    'platform/providers/index': sourceEntry('./src/platform/providers/index.tsx'),
     'platform/terminal-viewport-solid': sourceEntry('./src/platform/terminal-viewport-solid.ts'),
     'components/StatusBar': sourceEntry('./src/components/StatusBar.tsx'),
     'components/AbgOverlay': sourceEntry('./src/components/AbgOverlay.tsx'),

@@ -14,7 +14,14 @@ const clipboardSourceFiles = [
 ] as const;
 const testFilePattern = /\.(test|spec)\.(ts|tsx|mts|cts)$/u;
 
-const skippedDirectoryNames = ['.nx', 'build', 'coverage', 'dist', 'node_modules', 'target'] as const;
+const skippedDirectoryNames: ReadonlySet<string> = new Set([
+    '.nx',
+    'build',
+    'coverage',
+    'dist',
+    'node_modules',
+    'target',
+]);
 const productSourceExtensions = ['.ts', '.tsx', '.mts', '.cts'] as const;
 
 const opencodeImportTerms = ['@opencode-ai/'] as const;
@@ -35,7 +42,7 @@ const stateProviderImportTerms = [
     "from '../providers/",
     'from "../providers/',
 ] as const;
-const agentRuntimeTerms = ['AgentRuntime'] as const;
+const runtimeBridgeForbiddenTerms = ['AgentRuntime', 'AgentRuntimeOptions', 'ProviderAdapter', 'ToolRegistry'] as const;
 const clipboardFallbackTerms = ['child_process', 'execSync', 'spawnSync', 'pbcopy', 'xclip', 'wl-copy'] as const;
 
 const blockCommentPattern = /\/\*[\s\S]*?\*\//gu;
@@ -68,7 +75,7 @@ function collectSourceFiles(directory: string): readonly string[] {
         const absolutePath = join(root, relativePath);
         const entryStat = statSync(absolutePath);
         if (entryStat.isDirectory()) {
-            if (!skippedDirectoryNames.includes(entry)) {
+            if (!skippedDirectoryNames.has(entry)) {
                 files.push(...collectSourceFiles(relativePath));
             }
             continue;
@@ -147,14 +154,19 @@ describe('TUI provider-port guardrails', () => {
         expect(findings).toEqual([{ file: indexSourcePath, term: 'provider' }]);
     });
 
-    it('scanner flags AgentRuntime references in a synthetic TUI source fixture', () => {
+    it('scanner flags full runtime references in a synthetic TUI source fixture', () => {
         const findings = scanSourceForTerms(
             'apps/tui/src/synthetic-runtime-fixture.ts',
-            "import type { AgentRuntime } from '@mission-control/core';",
-            agentRuntimeTerms,
+            "import type { AgentRuntime, AgentRuntimeOptions, ProviderAdapter, ToolRegistry } from '@mission-control/core';",
+            runtimeBridgeForbiddenTerms,
         );
 
-        expect(findings).toEqual([{ file: 'apps/tui/src/synthetic-runtime-fixture.ts', term: 'AgentRuntime' }]);
+        expect(findings).toEqual([
+            { file: 'apps/tui/src/synthetic-runtime-fixture.ts', term: 'AgentRuntime' },
+            { file: 'apps/tui/src/synthetic-runtime-fixture.ts', term: 'AgentRuntimeOptions' },
+            { file: 'apps/tui/src/synthetic-runtime-fixture.ts', term: 'ProviderAdapter' },
+            { file: 'apps/tui/src/synthetic-runtime-fixture.ts', term: 'ToolRegistry' },
+        ]);
     });
 
     it('scanner flags clipboard child-process fallbacks in a synthetic source fixture', () => {
@@ -201,12 +213,12 @@ describe('TUI provider-port guardrails', () => {
         ).toEqual([]);
     });
 
-    it('no TUI source refers to AgentRuntime', () => {
-        const findings = scanFilesForTerms(collectSourceFiles(tuiSourceRoot), agentRuntimeTerms);
+    it('no TUI source refers to full runtime objects', () => {
+        const findings = scanFilesForTerms(collectSourceFiles(tuiSourceRoot), runtimeBridgeForbiddenTerms);
 
         expect(
             findings,
-            `TUI source must use structural callbacks instead of AgentRuntime\n${formatFindings(findings)}`,
+            `TUI source must use structural callbacks instead of full runtime objects\n${formatFindings(findings)}`,
         ).toEqual([]);
     });
 

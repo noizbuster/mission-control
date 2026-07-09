@@ -1,5 +1,5 @@
-import { defineConfig } from 'vitest/config';
 import solidPlugin from 'vite-plugin-solid';
+import { defineConfig } from 'vitest/config';
 
 const tuiSrc = new URL('./apps/tui/src/', import.meta.url).pathname;
 
@@ -56,7 +56,10 @@ export default defineConfig({
             { find: '@mission-control/tui/state', replacement: `${tuiSrc}state/index.ts` },
             { find: '@mission-control/tui/highlight', replacement: `${tuiSrc}components/markdown/highlight.ts` },
             { find: '@mission-control/tui/markdown-theme', replacement: `${tuiSrc}components/markdown/theme.ts` },
-            { find: '@mission-control/tui/ansi-renderer', replacement: `${tuiSrc}components/markdown/ansi-renderer.ts` },
+            {
+                find: '@mission-control/tui/ansi-renderer',
+                replacement: `${tuiSrc}components/markdown/ansi-renderer.ts`,
+            },
             { find: '@mission-control/tui/ansi-theme', replacement: `${tuiSrc}components/markdown/ansi-theme.ts` },
             { find: '@mission-control/tui/keybind', replacement: `${tuiSrc}platform/keymap/keybind.ts` },
             {
@@ -65,7 +68,11 @@ export default defineConfig({
             },
             { find: '@mission-control/tui/slash-mapping', replacement: `${tuiSrc}platform/keymap/slash-mapping.ts` },
             { find: '@mission-control/tui/opentui-renderer', replacement: `${tuiSrc}platform/opentui-renderer.ts` },
-            { find: '@mission-control/tui/keymap-provider', replacement: `${tuiSrc}platform/keymap/keymap-provider.tsx` },
+            {
+                find: '@mission-control/tui/keymap-provider',
+                replacement: `${tuiSrc}platform/keymap/keymap-provider.tsx`,
+            },
+            { find: '@mission-control/tui/providers', replacement: `${tuiSrc}platform/providers/index.tsx` },
             {
                 find: '@mission-control/tui/terminal-viewport-solid',
                 replacement: `${tuiSrc}platform/terminal-viewport-solid.ts`,
