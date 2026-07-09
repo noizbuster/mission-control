@@ -14,8 +14,9 @@ import {
     type AgentSnapshot,
     type SessionAwaitingDetails,
 } from '@mission-control/protocol';
-import { type Accessor, createMemo, createSignal, type JSX, onCleanup } from 'solid-js';
+import { type Accessor, createMemo, type JSX } from 'solid-js';
 import type { ChatStore } from '../../state/chat-store.js';
+import { useSolidStoreSelector } from '../use-solid-store-selector.js';
 import { createRequiredContext } from './context-base.js';
 import { useTuiPaths, useTuiRuntime } from './runtime-context.js';
 import { useTuiRuntimeEvents } from './runtime-events-context.js';
@@ -113,13 +114,7 @@ function createProjectSyncServices(chatStore: ChatStore | undefined): {
     const runtime = useTuiRuntime();
     const paths = useTuiPaths();
     const runtimeEvents = useTuiRuntimeEvents();
-    const [chatSessionId, setChatSessionId] = createSignal(chatStore?.getSnapshot().sessionId ?? '');
-    const unsubscribe = chatStore?.subscribe(() => {
-        setChatSessionId(chatStore.getSnapshot().sessionId);
-    });
-    onCleanup(() => {
-        unsubscribe?.();
-    });
+    const chatSessionId = chatStore ? useSolidStoreSelector(chatStore, (s) => s.sessionId) : () => '';
 
     const sessionID = (): string | undefined => {
         const snapshotSessionId = runtimeEvents.snapshot()?.sessionId;

@@ -25,8 +25,9 @@ import { streamBlocks } from '@mission-control/tui/markdown';
 import { SyntaxStyle } from '@opentui/core';
 import type { Token, Tokens } from 'marked';
 import { marked } from 'marked';
-import { type Accessor, createMemo, createSignal, type JSX, onCleanup, onMount } from 'solid-js';
+import { type Accessor, createMemo, type JSX } from 'solid-js';
 import wrapAnsi from 'wrap-ansi';
+import { useSolidStoreSelector } from '../../platform/use-solid-store-selector.js';
 import { getHighlightVersion, subscribeHighlight } from './highlight.js';
 import type { TerminalMarkdownTheme, TerminalTextStyle } from './theme.js';
 
@@ -654,12 +655,10 @@ export type MarkdownProps = {
  * invalidated via `clearRenderCache`).
  */
 export function useHighlightVersion(): Accessor<number> {
-    const [version, setVersion] = createSignal(getHighlightVersion());
-    onMount(() => {
-        const unsubscribe = subscribeHighlight(() => setVersion(getHighlightVersion()));
-        onCleanup(unsubscribe);
-    });
-    return version;
+    return useSolidStoreSelector(
+        { subscribe: subscribeHighlight, getSnapshot: getHighlightVersion },
+        (version) => version,
+    );
 }
 
 export function Markdown(props: MarkdownProps): JSX.Element {

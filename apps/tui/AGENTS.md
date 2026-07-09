@@ -56,7 +56,7 @@ src/
 | --- | --- | --- |
 | TUI mount factory | `src/create-chat-tui.tsx` | `createChatTui(options)` builds a `ChatStore`, dynamic-imports the renderer + keymap provider + `ChatApp`, mounts the Solid tree, and returns the imperative `ChatTuiHandle` consumed by `interactive-chat.ts`. `createChatTuiHandle(store, unmountFn)` is the testable seam that constructs the handle without the native renderer. |
 | Chat state store | `src/state/chat-store.ts` | `ChatStore` owns all chat UI state (output, input mirror, overlays, menus, history, event queue) behind `subscribe()` + `getSnapshot()`. `createChatStore` factory; 16ms-coalesced `emitOutput`; overlay-mode state machine; `waitForEvent`/`enqueueEvent` event queue. |
-| Store selector hook | component-local `useStoreSelector` pattern | Use Solid `createSignal` with `onMount`/`onCleanup` and `store.subscribe()` to project snapshots into accessors. Do not add a custom external-store bridge. |
+| Store selector hook | shared `useSolidStoreSelector` | Use `useSolidStoreSelector(store, selector)` from `platform/use-solid-store-selector.ts` to project a `subscribe`/`getSnapshot` store into a Solid accessor. Do not hand-roll `createSignal` + `onMount` + `subscribe` + `onCleanup` external-store bridges per component; use the shared helper. |
 | TUI handle types | `src/state/chat-tui-types.ts` | `ChatTuiHandle`, `ChatTuiRuntimeOptions` (carries optional `missionControlServices` and `actions` injected by the CLI). |
 | CLI side-effect interface | `src/state/chat-app-actions.ts` | `ChatAppActions` callback interface (`loadDashboardAgentEntries`, `loadMissionPanelRows`, `toggleAgentDisabled`, `setAgentModelOverride`, `isValidModelPattern`). CLI provides implementations; components call them. |
 | Chat block parsing | `src/chat.ts` (via `@mission-control/tui/chat`) | `parseMessageBlocks` splits `outputText` into `ChatBlock` records (user/assistant/thinking/error/tool/system). Pure, zero imports. |
@@ -136,7 +136,7 @@ Component return types are `JSX.Element`. Type-only imports should use `import t
 
 ### Signals, Effects, And Refs
 
-Use Solid primitives for component state and lifecycle: `createSignal`, `createMemo`, `onMount`, `onCleanup`, and accessors. Store selector helpers should subscribe on mount, clean up on unmount, and expose a signal accessor to callers.
+Use Solid primitives for component state and lifecycle: `createSignal`, `createMemo`, `onMount`, `onCleanup`, and accessors. Store selectors should use the shared `useSolidStoreSelector(store, selector)` from `platform/use-solid-store-selector.ts` rather than hand-rolling `createSignal` + `onMount` + `subscribe` + `onCleanup` per component.
 
 Use Solid callback refs, local variables, or signals for native renderable handles. Do not introduce object ref wrappers for components; narrow locals before use and keep renderable ownership at the component seam.
 
