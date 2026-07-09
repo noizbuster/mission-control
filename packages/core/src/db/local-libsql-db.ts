@@ -93,7 +93,9 @@ export async function openLocalLibsqlDb(options: OpenLocalLibsqlDbOptions): Prom
     const client = createClient({ url: options.url });
     try {
         await runWithLocalLibsqlWriteLock(options.url, () =>
-            options.migrations === undefined ? ensureLocalDbSchema(client) : runLocalDbMigrations(client, options.migrations),
+            options.migrations === undefined
+                ? ensureLocalDbSchema(client)
+                : runLocalDbMigrations(client, options.migrations),
         );
     } catch (error: unknown) {
         client.close();
@@ -135,10 +137,7 @@ export async function runLocalLibsqlWrite<T>(
     return runWithLocalLibsqlWriteLock(target.url, () => write(target.client));
 }
 
-export async function runLocalDbMigrations(
-    client: Client,
-    migrations: readonly LocalDbMigration[],
-): Promise<void> {
+export async function runLocalDbMigrations(client: Client, migrations: readonly LocalDbMigration[]): Promise<void> {
     const planned = normalizeMigrations(migrations);
     await client.execute(createSchemaMigrationsSql);
 
