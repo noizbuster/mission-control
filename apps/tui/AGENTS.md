@@ -36,6 +36,7 @@ src/
 |   |-- opentui-renderer.ts   # mountOpenTui/unmount (dynamic-imports createCliRenderer + Solid render/root)
 |   |-- terminal-viewport.ts, terminal-viewport-solid.ts  # TerminalViewport normalization, useTerminalViewport()
 |   |-- clipboard-service.ts, selection-copy.ts  # OSC52 clipboard, mouseup selection copy
+|   |-- providers/            # Solid provider root + provider hook services
 |   `-- keymap/               # keybind, keymap-instance, keymap-provider, managed-layer, command-palette, which-key, diff-viewer, messages-scroll, etc.
 `-- state/                    # pure TUI state cluster (NO framework or OpenTUI runtime imports)
     |-- index.ts              # barrel re-exported via @mission-control/tui/state
@@ -74,6 +75,7 @@ src/
 | ANSI renderer | `src/components/markdown/ansi-renderer.ts` | `renderMarkdownAnsi` for plain-TTY rendering. Depends on IR helpers in `Markdown.tsx` (split deferred). |
 | Diff renderer | `src/components/diff/` | `render-diff.ts` classifies mctrl no-line-number diffs; `DiffView.tsx` renders green/red/cyan with inverse intra-line spans. `kindStyle`/`splitLineSpans` exported for tests. |
 | opentui renderer mount | `src/platform/opentui-renderer.ts` | `mountOpenTui(element)` dynamic-imports the OpenTUI renderer and Solid root/render entrypoints, returns `{ renderer, root, unmount }`. Dynamic imports keep both packages out of the eager module graph for non-TUI CLI runs. `unmount()` is idempotent. |
+| Provider root | `src/platform/providers/index.tsx` | `MissionControlTuiProviders` composes runtime, paths/config, runtime events, project/session replay, route/dialog/theme, local preferences, prompt history, prompt services, clipboard/toast, keymap, and plugin runtime providers. Exported only through `@mission-control/tui/providers`; the main barrel stays provider-free. |
 | Terminal viewport | `src/platform/terminal-viewport.ts`, `src/platform/terminal-viewport-solid.ts` | Normalizes OpenTUI dimensions into `TerminalViewport { columns, rows }`; `useTerminalViewport()` is the interactive TUI layout source of truth. |
 | Keymap provider | `src/platform/keymap/keymap-provider.tsx` | Solid provider around `@opentui/keymap/solid`: `KeymapProvider`, `useBindings`, and `useKeymapSelector` return accessors. Layer predicates should read signals directly through the existing signal-matcher helper. |
 | Clipboard copy | `src/platform/clipboard-service.ts`, `src/platform/selection-copy.ts` | OSC52 clipboard service plus mouseup selection-copy; `isOsc52Supported()` gates the stderr fallback. |
@@ -109,6 +111,18 @@ The TUI package builds with Vite in library mode. `apps/tui/vite.config.ts` decl
 The CLI's `runInteractiveChatSession()` loop drives an imperative `ChatInput`/`ChatOutput` contract. `createChatTui` bridges that contract to the Solid tree: `waitForEvent()` returns a `Promise<ChatInputEvent>`, `emitOutput(text)` appends to the store, `showModelPicker(choices)` returns a selection, and `unmount()` tears down. Components read `ChatStore` snapshots through Solid accessors created from `store.subscribe()`.
 
 Two native OpenTUI renderables own what the old hand-rolled code used to. `<ChatInputTextarea>` wraps the native `<textarea>` (`TextareaRenderable`): it owns the editable text, the cursor, the selection, and IME composition. `<ChatTranscript>` wraps the native `<scrollbox>` (`ScrollBoxRenderable`): it owns output scrolling and windowing. `ChatStore` owns only non-editing state: overlay modes, menus, history, the `inputBuffer` mirror, and the event queue.
+
+### Provider architecture
+
+The interactive mount dynamically imports `@mission-control/tui/providers`, then wraps `ChatApp` in `MissionControlTuiProviders`. The package exposes that provider composition root through the dedicated `./providers` package subpath and Vite library entry. Do not add provider exports to `src/index.ts`; the main barrel stays provider-free so pure utilities and the state cluster remain safe for eager CLI imports.
+
+Provider-owned persistence lives in the TUI store classes from `packages/core/src/tui-stores/`, selected by `TuiPathsProviderValue` (`dataDir`, `configDir`, and workspace root). Components consume provider hooks and injected structural services; they do not instantiate `AgentRuntime`, provider adapters, tool registries, CLI action classes, or raw OpenCode SDK objects.
+
+The plugin runtime provider is descriptor-first. Trusted manifests can register allowed slots, routes, commands, KV, dialog, and theme capabilities through `TuiPluginHostRegistry`; denied capabilities emit redacted diagnostics, project-local descriptors stay inert until workspace trust is granted, and provider cleanup disposes registrations. This is the plugin trust contract.
+
+OpenCode references are reference material only. Mission Control ports selected patterns into strict protocol/core/TUI seams: OSC52 selection copy instead of shell clipboard binaries, prompt stash/frecency stores instead of ad-hoc component state, structural focused-editor access for kill-ring behavior, and descriptor-gated plugins instead of arbitrary project plugin execution.
+
+Epilogue-style context surfaces are deferred; current context display remains the ABG/session replay projection providers. Editor parity is intentionally minimal: `Ctrl+E` launches `$VISUAL`/`$EDITOR`, and keymap layers operate on the focused OpenTUI textarea surface. There is no full embedded OpenCode editor subsystem.
 
 ### Solid JSX And Return Types
 
@@ -150,6 +164,7 @@ Flat `<text>` blocks are explicitly `selectable`; `Markdown` leaves default sele
 - The pure subpath layer (`src/terminal-text.ts`, `src/chat.ts`, `src/markdown.ts`) MUST NOT import `@opentui/*`, `solid-js`, framework runtimes, or any CLI/core runtime module. Verified by `src/import-graph.test.ts` for the current pure surface.
 - The state cluster (`src/state/`) is framework-free (no `@opentui/*` or `solid-js` runtime imports). It is exported via `@mission-control/tui/state` and eagerly imported by the CLI so OpenTUI stays out of the noninteractive module graph.
 - The main barrel (`src/index.ts`) re-exports pure primitives + the state cluster. It does NOT re-export OpenTUI components. Component/platform modules are accessed via dedicated subpath exports in `package.json` (e.g. `./chat-app`, `./opentui-renderer`, `./keybind`, `./markdown-theme`). This prevents circular dependencies between the barrel and the state modules.
+- Provider modules are accessed via `@mission-control/tui/providers`. Keep provider hook modules under `src/platform/providers/`; do not move provider runtime imports into `src/state/` or `src/index.ts`.
 - Impure mount-surface modules (`create-chat-tui.tsx`, `replay-overlay.tsx`, `keymap-provider`) MUST be behind dedicated subpath exports, not the main barrel. Adding them to the barrel triggers circular init races where state modules import pure primitives from the barrel.
 - Visible-width math (wrapping, table columns, bar row counts) counts East Asian Wide glyphs as 2 columns. `wrap-ansi` relies on `string-width`/`get-east-asian-width`, so CJK never overflows.
 - Interactive TUI layout must derive from `TerminalViewport { columns, rows }` via `useTerminalViewport()` from `platform/terminal-viewport-solid.ts`. Direct `process.stdout.columns/rows` reads are forbidden in components and keymaps. Enforced by `platform/terminal-global-policy.test.ts`.
