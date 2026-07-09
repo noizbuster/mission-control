@@ -6,7 +6,7 @@ import type {
     ProviderAdapter,
     SdkModelResolver,
 } from '@mission-control/core';
-import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
+import type { AgentEvent, AgentSnapshot, ModelProviderSelection } from '@mission-control/protocol';
 import { closeTreeSitterClient } from '@mission-control/tui/highlight';
 import type { CliArgs } from '../args.js';
 import type { ProviderAuthStore } from '../auth-store.js';
@@ -44,12 +44,28 @@ type RunInteractiveAgentInput = {
 
 export async function runInteractiveAgent(input: RunInteractiveAgentInput): Promise<string> {
     const recorder = await createRunEventRecorder(input.args, { workspaceRoot: input.workspaceRoot });
+    const tuiEventListeners = new Set<(event: AgentEvent) => void>();
     const emitRuntimeEvent = (event: AgentEvent) => {
         const recorded = recorder.record(event);
         input.options.onRuntimeEvent?.(recorded);
+        for (const listener of tuiEventListeners) {
+            listener(recorded);
+        }
     };
     const observeStoredEvent = (event: AgentEvent) => {
         input.options.onRuntimeEvent?.(event);
+        for (const listener of tuiEventListeners) {
+            listener(event);
+        }
+    };
+    const subscribeEvents = (listener: (event: AgentEvent) => void): (() => void) => {
+        tuiEventListeners.add(listener);
+        return () => {
+            tuiEventListeners.delete(listener);
+        };
+    };
+    const loadSessionSnapshot = (): AgentSnapshot => {
+        return input.runtime.getSnapshot();
     };
     const unsubscribeRuntimeEvents = input.runtime.onEvent(emitRuntimeEvent);
     let didStart = false;
@@ -71,6 +87,8 @@ export async function runInteractiveAgent(input: RunInteractiveAgentInput): Prom
             ),
             emitEvent: emitRuntimeEvent,
             observeStoredEvent,
+            subscribeEvents,
+            loadSessionSnapshot,
             switchSessionStore: recorder.switchSession,
             ensureSession: recorder.ensureSession,
             ...(sessionStore !== undefined ? { sessionStore } : {}),

@@ -1,5 +1,5 @@
 import type { ProviderAuthStore } from '@mission-control/core';
-import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { AgentEvent, AgentSnapshot, ModelProviderSelection } from '@mission-control/protocol';
 import type { QuestionBatchEntry, QuestionOption } from '../chat.js';
 import type { AbgOverlayController } from './abg-overlay-controller.js';
 import type { ApprovalLevel } from './approval-level.js';
@@ -73,6 +73,9 @@ export type ChatTuiHandle = {
     readonly unmount: () => void;
 };
 
+export type ChatTuiRuntimeEventSubscriber = (listener: (event: AgentEvent) => void) => () => void;
+export type ChatTuiSessionSnapshotLoader = () => AgentSnapshot | Promise<AgentSnapshot | undefined> | undefined;
+
 /** Provider/model/session info passed through to the StatusBar render surface. */
 export type ChatTuiRuntimeOptions = {
     readonly providerID: string;
@@ -88,5 +91,7 @@ export type ChatTuiRuntimeOptions = {
     readonly abgOverlayController?: AbgOverlayController;
     readonly welcomeData?: WelcomeData;
     readonly missionControlServices?: MissionControlServicesLike;
+    readonly subscribeEvents?: ChatTuiRuntimeEventSubscriber;
+    readonly loadSessionSnapshot?: ChatTuiSessionSnapshotLoader;
     readonly actions?: ChatAppActions;
 };

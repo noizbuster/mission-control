@@ -26,9 +26,22 @@ export {
 } from '../../../packages/core/src/agents/runtime-registry.js';
 export { resolveMissionControlDataDir } from '../../../packages/core/src/memory/data-dir.js';
 export { readBoulder } from '../../../packages/core/src/persistence/boulder-store.js';
+export {
+    type TuiPluginHostApi,
+    TuiPluginHostRegistry,
+    type TuiPluginSource,
+} from '../../../packages/core/src/plugins/tui-plugin-host.js';
 export type { ProviderAuthStore } from '../../../packages/core/src/providers/provider-auth-store.js';
 export {
     ContinuationRuntime,
     type ContinuationState,
 } from '../../../packages/core/src/runtime/continuation/continuation-runtime.js';
+export {
+    type ApprovalProjection,
+    projectSessionReplay,
+    type SessionReplayProjection,
+    type ToolOutcomeProjection,
+} from '../../../packages/core/src/session-replay.js';
 export { resolveUserConfigDir } from '../../../packages/core/src/skills/skill-loader.js';
+export { type ProjectTrustLookup, ProjectTrustStore } from '../../../packages/core/src/trust/project-trust-store.js';
+export * as TuiStores from '../../../packages/core/src/tui-stores/index.js';

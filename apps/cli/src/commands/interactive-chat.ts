@@ -15,7 +15,7 @@ import {
     type Skill,
     WorkflowRegistry,
 } from '@mission-control/core';
-import type { AgentEvent, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
+import type { AgentEvent, AgentSnapshot, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import type { QuestionBatchEntry, QuestionOption } from '@mission-control/tui/chat';
 import { closeTreeSitterClient } from '@mission-control/tui/highlight';
 import type {
@@ -129,6 +129,8 @@ export type InteractiveChatOptions = {
     readonly workspaceRoot?: string;
     readonly emitEvent?: (event: AgentEvent) => void;
     readonly observeStoredEvent?: (event: AgentEvent) => void;
+    readonly subscribeEvents?: (listener: (event: AgentEvent) => void) => () => void;
+    readonly loadSessionSnapshot?: () => AgentSnapshot | Promise<AgentSnapshot | undefined> | undefined;
     readonly sessionStore?: LocalSessionEventStore;
     readonly switchSessionStore?: (sessionId: string) => Promise<LocalSessionEventStore>;
     readonly ensureSession?: () => Promise<EnsuredSession>;
@@ -216,6 +218,10 @@ export async function runInteractiveChatSession(
               ...(abgOverlayController !== undefined ? { abgOverlayController } : {}),
               ...(welcomeData !== undefined ? { welcomeData } : {}),
               ...(missionControlServices !== undefined ? { missionControlServices } : {}),
+              ...(options.subscribeEvents !== undefined ? { subscribeEvents: options.subscribeEvents } : {}),
+              ...(options.loadSessionSnapshot !== undefined
+                  ? { loadSessionSnapshot: options.loadSessionSnapshot }
+                  : {}),
               actions: chatAppActions,
           }
         : undefined;
