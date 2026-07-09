@@ -1,20 +1,19 @@
 import { useTerminalDimensions } from '@opentui/solid';
 import { type Accessor, createMemo } from 'solid-js';
-import {
-    createTerminalViewportCache,
-    type OpenTuiTerminalDimensions,
-    type TerminalViewport,
-} from './terminal-viewport.js';
+import type { TerminalViewport } from './terminal-viewport.js';
 
+/**
+ * Thin OpenCode-compatible adapter: useTerminalDimensions() → { columns, rows }.
+ *
+ * No cache and no extra signals. OpenCode reads dimensions().width in JSX;
+ * we only rename width/height → columns/rows for existing MC call sites.
+ * The previous createTerminalViewportCache was redundant with createMemo and
+ * added an extra object layer that is not part of the OpenTUI model.
+ */
 export function useTerminalViewport(): Accessor<TerminalViewport> {
-    // Delegate reactive terminal sizing to the official OpenTUI Solid hook. It
-    // owns the renderer subscription (seed + resize) and returns a Solid signal
-    // of `{ width, height }`. We compose it with the pure normalization cache so
-    // callers keep receiving the `TerminalViewport { columns, rows }` shape with
-    // referentially stable updates and safe fallbacks.
     const dimensions = useTerminalDimensions();
-    const cache = createTerminalViewportCache();
-    return createMemo<TerminalViewport>(() =>
-        cache({ width: dimensions().width, height: dimensions().height } satisfies OpenTuiTerminalDimensions),
-    );
+    return createMemo(() => ({
+        columns: dimensions().width,
+        rows: dimensions().height,
+    }));
 }
