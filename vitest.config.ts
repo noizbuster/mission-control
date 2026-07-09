@@ -73,10 +73,6 @@ export default defineConfig({
                 replacement: `${tuiSrc}platform/keymap/keymap-provider.tsx`,
             },
             { find: '@mission-control/tui/providers', replacement: `${tuiSrc}platform/providers/index.tsx` },
-            {
-                find: '@mission-control/tui/terminal-viewport-solid',
-                replacement: `${tuiSrc}platform/terminal-viewport-solid.ts`,
-            },
             { find: '@mission-control/tui/status-bar', replacement: `${tuiSrc}components/StatusBar.tsx` },
             { find: '@mission-control/tui/abg-overlay', replacement: `${tuiSrc}components/AbgOverlay.tsx` },
             { find: '@mission-control/tui/app', replacement: `${tuiSrc}app.tsx` },

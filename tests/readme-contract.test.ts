@@ -59,7 +59,7 @@ describe('README stage-01 contract', () => {
         expect(content, 'README must document the TUI as Solid/OpenTUI').toContain('Solid/OpenTUI TUI app');
         expect(content, 'README must document @opentui/solid').toContain('@opentui/solid');
         expect(content, 'README must document solid-js').toContain('solid-js');
-        expect(content, 'README must document the Solid viewport module').toContain('terminal-viewport-solid.ts');
+
         expect(content, 'README must state @mission-control/tui is private/not publishable').toContain(
             'Not publishable',
         );

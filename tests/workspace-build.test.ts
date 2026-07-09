@@ -76,9 +76,7 @@ describe('workspace build integration', () => {
             tuiManifest.dependencies?.['@opentui/react'],
             'tui must not depend on OpenTUI React bindings',
         ).toBeUndefined();
-        expect(tuiManifest.exports?.['./terminal-viewport-solid'], 'tui must export the Solid viewport hook').toBe(
-            './dist/platform/terminal-viewport-solid.js',
-        );
+
         expect(
             tuiManifest.exports?.['./terminal-viewport-react'],
             'tui must not export the old viewport hook',
