@@ -6,15 +6,24 @@ import { createRequiredContext } from './context-base.js';
 
 export type TuiToastVariant = 'info' | 'success' | 'warning' | 'error';
 
+export type TuiToastInput = {
+    readonly message: string;
+    readonly variant: TuiToastVariant;
+    readonly title?: string;
+    readonly duration?: number;
+};
+
 export type TuiToastMessage = {
     readonly id: number;
     readonly message: string;
     readonly variant: TuiToastVariant;
+    readonly title?: string;
+    readonly duration: number;
 };
 
 export type TuiToastService = {
     readonly current: Accessor<TuiToastMessage | null>;
-    readonly show: (message: string, variant: TuiToastVariant) => void;
+    readonly show: (input: TuiToastInput) => void;
     readonly clear: () => void;
     readonly error: (error: unknown) => void;
 };
@@ -28,7 +37,7 @@ export type MissionControlClipboardToastProvidersProps = {
     readonly children: JSX.Element;
 };
 
-const toastDismissMs = 3000;
+const defaultToastDurationMs = 5000;
 const clipboardUnavailableMessage = 'Clipboard unavailable in this terminal';
 const clipboardCopiedMessage = 'Copied to clipboard';
 const unknownToastErrorMessage = 'Unknown clipboard error';
@@ -72,16 +81,17 @@ function createTuiToastService(): TuiToastService {
         setCurrent(null);
     }
 
-    function show(message: string, variant: TuiToastVariant): void {
+    function show(input: TuiToastInput): void {
+        const duration = input.duration ?? defaultToastDurationMs;
         nextToastId += 1;
-        setCurrent(Object.freeze({ id: nextToastId, message, variant }));
+        setCurrent(Object.freeze({ id: nextToastId, message: input.message, variant: input.variant, duration, ...input.title !== undefined ? { title: input.title } : {} }));
         clearTimer();
-        dismissTimer = setTimeout(clear, toastDismissMs);
+        dismissTimer = setTimeout(clear, duration);
     }
 
     function error(errorValue: unknown): void {
         const message = errorValue instanceof Error ? errorValue.message : unknownToastErrorMessage;
-        show(message, 'error');
+        show({ message, variant: 'error' });
     }
 
     onCleanup(clearTimer);
@@ -94,7 +104,10 @@ function createTuiClipboardService(renderer: ClipboardServiceRenderer, toast: Tu
 
     async function copyWithNotice(text: string): Promise<boolean> {
         const ok = await clipboard.copyToClipboard(text);
-        toast.show(ok ? clipboardCopiedMessage : clipboardUnavailableMessage, ok ? 'info' : 'warning');
+        toast.show({
+            message: ok ? clipboardCopiedMessage : clipboardUnavailableMessage,
+            variant: ok ? 'info' : 'warning',
+        });
         return ok;
     }
 

@@ -34,7 +34,7 @@ export interface SelectionCopyRenderer {
 
 /** Minimal toast surface the copy helper notifies. */
 export interface Toast {
-    show(message: string, variant: 'info' | 'success' | 'warning' | 'error'): void;
+    show(input: { readonly message: string; readonly variant: 'info' | 'success' | 'warning' | 'error' }): void;
     error(err: unknown): void;
 }
 
@@ -65,7 +65,7 @@ export function copy(renderer: SelectionCopyRenderer, toast: Toast, clipboardSer
 
     clipboardService
         .copyToClipboard(clipboardText)
-        .then(() => toast.show('Copied to clipboard', 'info'))
+        .then(() => toast.show({ message: 'Copied to clipboard', variant: 'info' }))
         .catch(toast.error);
 
     renderer.clearSelection();

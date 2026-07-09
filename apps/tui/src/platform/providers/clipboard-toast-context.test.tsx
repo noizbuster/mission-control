@@ -138,9 +138,9 @@ describe('TUI clipboard and toast providers', () => {
         const renderer = makeRenderer(true);
         const services = renderServices(renderer);
 
-        services.toast.show('first', 'info');
-        services.toast.show('second', 'success');
-        vi.advanceTimersByTime(2999);
+        services.toast.show({ message: 'first', variant: 'info' });
+        services.toast.show({ message: 'second', variant: 'success' });
+        vi.advanceTimersByTime(4999);
 
         expect(services.toast.current()).toMatchObject({ message: 'second', variant: 'success' });
 

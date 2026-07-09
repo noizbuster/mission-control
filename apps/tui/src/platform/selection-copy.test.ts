@@ -4,16 +4,16 @@ import type { FocusableSelectionTarget, SelectionCopyRenderer, Toast } from './s
 import { copy } from './selection-copy.js';
 
 function makeToast(): Toast & {
-    messages: Array<[string, 'info' | 'success' | 'warning' | 'error']>;
+    messages: Array<{ readonly message: string; readonly variant: 'info' | 'success' | 'warning' | 'error' }>;
     errors: unknown[];
 } {
-    const messages: Array<[string, 'info' | 'success' | 'warning' | 'error']> = [];
+    const messages: Array<{ readonly message: string; readonly variant: 'info' | 'success' | 'warning' | 'error' }> = [];
     const errors: unknown[] = [];
     return {
         messages,
         errors,
-        show(message: string, variant: 'info' | 'success' | 'warning' | 'error'): void {
-            messages.push([message, variant]);
+        show(input: { readonly message: string; readonly variant: 'info' | 'success' | 'warning' | 'error' }): void {
+            messages.push(input);
         },
         error(err: unknown): void {
             errors.push(err);
@@ -58,7 +58,7 @@ describe('selection-copy copy()', () => {
         expect(clearSelection).toHaveBeenCalledTimes(1);
         // toast.show fires in the async continuation; flush it.
         await Promise.resolve();
-        expect(toast.messages).toEqual([['Copied to clipboard', 'info']]);
+        expect(toast.messages).toEqual([{ message: 'Copied to clipboard', variant: 'info' }]);
     });
 
     it('applies the focused renderable getClipboardText transform when focus is in selectedRenderables', async () => {

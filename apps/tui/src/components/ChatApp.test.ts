@@ -137,19 +137,36 @@ describe('promptPanelRepaintKey', () => {
     });
 });
 
-describe('ChatAppSplitShell topology', () => {
-    it('keeps upper output, bottom dock, and modal overlays as ordered shell children', () => {
+describe('ChatApp normal root layout topology', () => {
+    it('does not define or render ChatAppSplitShell', () => {
         const source = readChatAppSource();
-        const shellBlock = sliceBetween(source, 'export function ChatAppSplitShell', 'export function ChatApp(');
 
-        expect(shellBlock).toContain(
-            '<box flexDirection="column" width={width} height={height} shouldFill={true} onMouseUp={onMouseUp}>',
+        expect(source).not.toContain('ChatAppSplitShell');
+    });
+
+    it('inlines the root box with viewport dimensions and the selection mouse-up handler', () => {
+        const source = readChatAppSource();
+
+        expect(source).toContain(
+            '<box flexDirection="column" width={viewport().columns} height={viewport().rows} shouldFill={true} onMouseUp={handleSelectionMouseUp}>',
         );
-        expect(shellBlock).toContain('upperOutputRegion');
-        expect(shellBlock).toContain('bottomDock');
-        expect(shellBlock).toContain('modalOverlays');
-        expect(shellBlock.indexOf('upperOutputRegion')).toBeLessThan(shellBlock.indexOf('bottomDock'));
-        expect(shellBlock.indexOf('bottomDock')).toBeLessThan(shellBlock.indexOf('modalOverlays'));
+    });
+
+    it('keeps upper output region, bottom dock, and modal overlays as ordered root children', () => {
+        const source = readChatAppSource();
+        const rootBoxIndex = source.indexOf(
+            '<box flexDirection="column" width={viewport().columns} height={viewport().rows} shouldFill={true} onMouseUp={handleSelectionMouseUp}>',
+        );
+        expect(rootBoxIndex).toBeGreaterThanOrEqual(0);
+
+        const rootBlock = source.slice(rootBoxIndex);
+        const upperIndex = rootBlock.indexOf('upperOutputRegion');
+        const dockIndex = rootBlock.indexOf('bottomDock');
+        const modalIndex = rootBlock.indexOf('modalOverlays');
+
+        expect(upperIndex).toBeGreaterThanOrEqual(0);
+        expect(dockIndex).toBeGreaterThan(upperIndex);
+        expect(modalIndex).toBeGreaterThan(dockIndex);
     });
 });
 
@@ -190,7 +207,7 @@ describe('ChatApp source topology', () => {
 
     it('keeps transcript output, spinner, toast, and minimap inside the upper output region', () => {
         const source = readChatAppSource();
-        const upperBlock = sliceBetween(source, 'upperOutputRegion={', 'bottomDock={');
+        const upperBlock = sliceBetween(source, 'const upperOutputRegion', 'const bottomDock');
 
         expect(upperBlock).toContain('<WelcomeScreen');
         expect(upperBlock).toContain('viewportColumns={viewport().columns}');
@@ -225,7 +242,7 @@ describe('ChatApp source topology', () => {
     it('threads the terminal viewport into ABG overlay and minimap renderers', () => {
         const source = readChatAppSource();
         const abgOverlayBlock = sliceBetween(source, '<AbgOverlay', '/>');
-        const upperBlock = sliceBetween(source, 'upperOutputRegion={', 'bottomDock={');
+        const upperBlock = sliceBetween(source, 'const upperOutputRegion', 'const bottomDock');
 
         expect(abgOverlayBlock).toContain('viewport={viewport()}');
         expect(upperBlock).toContain('<AbgMinimap store={abgOverlayController.store} viewport={viewport()} />');
@@ -240,13 +257,16 @@ describe('ChatApp source topology', () => {
         expect(source).not.toContain('<FileAutocompletePanel');
     });
 
-    it('keeps full-screen overlays as early returns before the dock shell', () => {
+    it('keeps full-screen overlays as early returns before the normal root layout', () => {
         const source = readChatAppSource();
-        const shellIndex = source.indexOf('<ChatAppSplitShell');
+        const rootBoxIndex = source.indexOf(
+            '<box flexDirection="column" width={viewport().columns} height={viewport().rows} shouldFill={true} onMouseUp={handleSelectionMouseUp}>',
+        );
+        expect(rootBoxIndex).toBeGreaterThanOrEqual(0);
 
-        expect(source.indexOf("snapshot.overlayMode === 'abg'")).toBeLessThan(shellIndex);
-        expect(source.indexOf("snapshot.overlayMode === 'diff-viewer'")).toBeLessThan(shellIndex);
-        expect(source.indexOf("snapshot.overlayMode === 'models-overlay'")).toBeLessThan(shellIndex);
+        expect(source.indexOf("snap.overlayMode === 'abg'")).toBeLessThan(rootBoxIndex);
+        expect(source.indexOf("snap.overlayMode === 'diff-viewer'")).toBeLessThan(rootBoxIndex);
+        expect(source.indexOf("snap.overlayMode === 'models-overlay'")).toBeLessThan(rootBoxIndex);
         expect(matchCount(source, 'width={viewport().columns} height={viewport().rows}')).toBeGreaterThanOrEqual(4);
         expect(source).toContain('width={viewport().columns}');
         expect(source).toContain('height={viewport().rows}');
@@ -254,7 +274,7 @@ describe('ChatApp source topology', () => {
 
     it('keeps modal overlays in ChatApp through ModalPopup after the dock sibling', () => {
         const source = readChatAppSource();
-        const modalStart = source.indexOf('modalOverlays={');
+        const modalStart = source.indexOf('const modalOverlays');
         expect(modalStart).toBeGreaterThanOrEqual(0);
         const modalBlock = source.slice(modalStart);
 

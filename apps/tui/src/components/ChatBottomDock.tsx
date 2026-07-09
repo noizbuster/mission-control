@@ -180,7 +180,6 @@ export function ChatBottomDockBase({
         <box flexDirection="column" flexShrink={0}>
             {topStatusBarProps !== undefined ? <TopStatusBar {...topStatusBarProps} /> : null}
             {promptPanels}
-            <Separator state={dockSlice.separatorState} width={Math.max(1, viewportColumns)} />
             {dockSlice.inputMode === 'question' ? (
                 <QuestionOverlay store={store} />
             ) : (

@@ -202,7 +202,7 @@ export function createTuiPluginRuntimeService(input: CreateTuiPluginRuntimeServi
 
     async function reportFailure(pluginName: string, code: string, message: string): Promise<void> {
         await recordDiagnostics([diagnostic(pluginName, 'error', code, message)]);
-        input.toast.show(`Plugin ${pluginName} failed`, 'error');
+        input.toast.show({ message: `Plugin ${pluginName} failed`, variant: 'error' });
     }
 
     function diagnostic(

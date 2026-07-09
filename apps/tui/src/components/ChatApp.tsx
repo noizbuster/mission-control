@@ -124,35 +124,6 @@ function recentModelPreferenceSelections(keys: readonly string[]): readonly Mode
     return [...parseModelPreferenceKeys(keys)].reverse();
 }
 
-export type ChatAppSplitShellProps = {
-    readonly width: number;
-    readonly height: number;
-    readonly onMouseUp: () => void;
-    readonly upperOutputRegion: JSX.Element;
-    readonly bottomDock: JSX.Element;
-    readonly modalOverlays: JSX.Element;
-};
-
-export function ChatAppSplitShell({
-    width,
-    height,
-    onMouseUp,
-    upperOutputRegion,
-    bottomDock,
-    modalOverlays,
-}: ChatAppSplitShellProps): JSX.Element {
-    return (
-        // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive, not a DOM element; mouse-up only surfaces the copy-hint toast.
-        <box flexDirection="column" width={width} height={height} shouldFill={true} onMouseUp={onMouseUp}>
-            <box flexDirection="column" flexGrow={1} shouldFill={true}>
-                {upperOutputRegion}
-            </box>
-            {bottomDock}
-            {modalOverlays}
-        </box>
-    );
-}
-
 export type ChatAppProps = {
     readonly store: ChatStore;
     readonly textareaRef: (renderable: TextareaRenderable) => void;
@@ -216,7 +187,7 @@ export function ChatApp({
         const noticeId = snapshot().transientNotice?.id;
         const noticeMessage = snapshot().transientNotice?.message;
         if (noticeId !== undefined && noticeMessage !== undefined) {
-            toast.show(noticeMessage, 'info');
+            toast.show({ message: noticeMessage, variant: 'info' });
         }
     });
 
@@ -226,7 +197,7 @@ export function ChatApp({
         const selection = renderer.getSelection();
         if (selection === null) return;
         if (selection.getSelectedText().length === 0) return;
-        toast.show('Copy selection: Ctrl+D', 'info');
+        toast.show({ message: 'Copy selection: Ctrl+D', variant: 'info' });
     };
 
     let handleSubmit = (): void => {};
@@ -732,7 +703,6 @@ export function ChatApp({
 
     const rootContent = createMemo((): JSX.Element => {
         const snap = snapshot();
-        const currentToast = toast.current();
 
         if (snap.overlayMode === 'abg') {
             if (abgOverlayController === undefined) {
@@ -785,105 +755,108 @@ export function ChatApp({
             );
         }
 
-        return (
-            <ChatAppSplitShell
-                width={viewport().columns}
-                height={viewport().rows}
-                onMouseUp={handleSelectionMouseUp}
-                upperOutputRegion={
-                    <>
-                        {showWelcome() && welcomeData !== undefined ? (
-                            <WelcomeScreen
-                                data={welcomeData}
-                                viewportColumns={viewport().columns}
-                                availableRows={dockPolicy().transcript.rows}
-                                {...(statusBarProps?.workspaceRoot !== undefined
-                                    ? { projectLabel: basename(statusBarProps.workspaceRoot) }
-                                    : {})}
-                                {...(statusBarProps?.gitBranch !== undefined
-                                    ? { gitBranch: statusBarProps.gitBranch }
-                                    : {})}
-                                {...(statusBarProps?.isWorktree !== undefined
-                                    ? { isWorktree: statusBarProps.isWorktree }
-                                    : {})}
-                            />
-                        ) : (
-                            transcript()
-                        )}
-                        {showAgentIndicator() && snap.agentStatusText.length > 0 ? (
-                            <AgentSpinner text={snap.agentStatusText} />
-                        ) : showAgentIndicator() && snap.generating ? (
-                            <AgentSpinner text="Working..." />
-                        ) : null}
-                        {currentToast !== null ? <Toast message={currentToast.message} /> : null}
-                        {showAbgMinimap() && abgOverlayController !== undefined ? (
-                            <AbgMinimap store={abgOverlayController.store} viewport={viewport()} />
-                        ) : null}
-                    </>
-                }
-                bottomDock={
-                    <ChatBottomDock
-                        store={store}
-                        textareaRef={textareaHandle}
-                        scrollboxRef={scrollboxHandle}
-                        inputFocused={!overlayActive()}
+        const upperOutputRegion = (
+            <>
+                {showWelcome() && welcomeData !== undefined ? (
+                    <WelcomeScreen
+                        data={welcomeData}
                         viewportColumns={viewport().columns}
-                        viewportRows={viewport().rows}
-                        {...(statusBarProps !== undefined ? { statusBarProps } : {})}
-                        {...(actions !== undefined ? { actions } : {})}
+                        availableRows={dockPolicy().transcript.rows}
+                        {...(statusBarProps?.workspaceRoot !== undefined
+                            ? { projectLabel: basename(statusBarProps.workspaceRoot) }
+                            : {})}
+                        {...(statusBarProps?.gitBranch !== undefined
+                            ? { gitBranch: statusBarProps.gitBranch }
+                            : {})}
+                        {...(statusBarProps?.isWorktree !== undefined
+                            ? { isWorktree: statusBarProps.isWorktree }
+                            : {})}
                     />
-                }
-                modalOverlays={
-                    <>
-                        {snap.overlayMode === 'approval' ? (
-                            <ModalPopup>
-                                <ApprovalOverlay store={store} />
-                            </ModalPopup>
-                        ) : null}
-                        {snap.overlayMode === 'model-picker' ? (
-                            <ModalPopup>
-                                <ModelPickerOverlay store={store} />
-                            </ModalPopup>
-                        ) : null}
-                        {snap.overlayMode === 'level-picker' ? (
-                            <ModalPopup>
-                                <LevelPickerOverlay store={store} />
-                            </ModalPopup>
-                        ) : null}
-                        {snap.overlayMode === 'rename' ? (
-                            <ModalPopup>
-                                <RenameOverlay store={store} />
-                            </ModalPopup>
-                        ) : null}
-                        {snap.overlayMode === 'session-picker' ? (
-                            <ModalPopup>
-                                <SessionPickerOverlay store={store} />
-                            </ModalPopup>
-                        ) : null}
-                        {snap.overlayMode === 'agents-dashboard' ? (
-                            <ModalPopup>
-                                <AgentsDashboardOverlay
-                                    store={store}
-                                    workspaceRoot={statusBarProps?.workspaceRoot}
-                                    {...(actions !== undefined ? { actions } : {})}
-                                />
-                            </ModalPopup>
-                        ) : null}
-                        {snap.overlayMode === 'mission-panel' ? (
-                            <ModalPopup>
-                                <MissionPanelOverlay
-                                    store={store}
-                                    workspaceRoot={statusBarProps?.workspaceRoot}
-                                    {...(actions !== undefined ? { actions } : {})}
-                                    {...(missionControlServices !== undefined
-                                        ? { services: missionControlServices }
-                                        : {})}
-                                />
-                            </ModalPopup>
-                        ) : null}
-                    </>
-                }
+                ) : (
+                    transcript()
+                )}
+                {showAgentIndicator() && snap.agentStatusText.length > 0 ? (
+                    <AgentSpinner text={snap.agentStatusText} />
+                ) : showAgentIndicator() && snap.generating ? (
+                    <AgentSpinner text="Working..." />
+                ) : null}
+                <Toast />
+                {showAbgMinimap() && abgOverlayController !== undefined ? (
+                    <AbgMinimap store={abgOverlayController.store} viewport={viewport()} />
+                ) : null}
+            </>
+        );
+        const bottomDock = (
+            <ChatBottomDock
+                store={store}
+                textareaRef={textareaHandle}
+                scrollboxRef={scrollboxHandle}
+                inputFocused={!overlayActive()}
+                viewportColumns={viewport().columns}
+                viewportRows={viewport().rows}
+                {...(statusBarProps !== undefined ? { statusBarProps } : {})}
+                {...(actions !== undefined ? { actions } : {})}
             />
+        );
+        const modalOverlays = (
+            <>
+                {snap.overlayMode === 'approval' ? (
+                    <ModalPopup>
+                        <ApprovalOverlay store={store} />
+                    </ModalPopup>
+                ) : null}
+                {snap.overlayMode === 'model-picker' ? (
+                    <ModalPopup>
+                        <ModelPickerOverlay store={store} />
+                    </ModalPopup>
+                ) : null}
+                {snap.overlayMode === 'level-picker' ? (
+                    <ModalPopup>
+                        <LevelPickerOverlay store={store} />
+                    </ModalPopup>
+                ) : null}
+                {snap.overlayMode === 'rename' ? (
+                    <ModalPopup>
+                        <RenameOverlay store={store} />
+                    </ModalPopup>
+                ) : null}
+                {snap.overlayMode === 'session-picker' ? (
+                    <ModalPopup>
+                        <SessionPickerOverlay store={store} />
+                    </ModalPopup>
+                ) : null}
+                {snap.overlayMode === 'agents-dashboard' ? (
+                    <ModalPopup>
+                        <AgentsDashboardOverlay
+                            store={store}
+                            workspaceRoot={statusBarProps?.workspaceRoot}
+                            {...(actions !== undefined ? { actions } : {})}
+                        />
+                    </ModalPopup>
+                ) : null}
+                {snap.overlayMode === 'mission-panel' ? (
+                    <ModalPopup>
+                        <MissionPanelOverlay
+                            store={store}
+                            workspaceRoot={statusBarProps?.workspaceRoot}
+                            {...(actions !== undefined ? { actions } : {})}
+                            {...(missionControlServices !== undefined
+                                ? { services: missionControlServices }
+                                : {})}
+                        />
+                    </ModalPopup>
+                ) : null}
+            </>
+        );
+        return (
+            // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive, not a DOM element; mouse-up only surfaces the copy-hint toast.
+            <box flexDirection="column" width={viewport().columns} height={viewport().rows} shouldFill={true} onMouseUp={handleSelectionMouseUp}>
+                <box flexDirection="column" flexGrow={1} shouldFill={true}>
+                    {upperOutputRegion}
+                </box>
+                {bottomDock}
+                {modalOverlays}
+            </box>
         );
     });
 
