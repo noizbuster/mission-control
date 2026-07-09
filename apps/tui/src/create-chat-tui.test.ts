@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { type ChatTuiOptions, createChatTuiHandle } from './create-chat-tui.js';
 import type { ChatTuiHandle } from './state/chat-tui-types.js';
 import { createAbgOverlayController, createAbgOverlayStore, createChatStore } from './state/index.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+function readCreateChatTuiSource(): string {
+    return readFileSync(resolve(process.cwd(), 'apps/tui/src/create-chat-tui.tsx'), 'utf8');
+}
 
 describe('create-chat-tui', () => {
     it('returns a handle structurally assignable to ChatTuiHandle', () => {
@@ -127,5 +133,13 @@ describe('create-chat-tui', () => {
         expect(typeof store?.subscribe).toBe('function');
         expect(typeof store?.getSnapshot).toBe('function');
         expect(typeof store?.update).toBe('function');
+    });
+
+    it('mount path dynamically imports the provider composition root instead of the keymap provider directly', () => {
+        const source = readCreateChatTuiSource();
+
+        expect(source).toContain("await import('@mission-control/tui/providers')");
+        expect(source).toContain('createComponent(MissionControlTuiProviders');
+        expect(source).not.toContain("await import('@mission-control/tui/keymap-provider')");
     });
 });

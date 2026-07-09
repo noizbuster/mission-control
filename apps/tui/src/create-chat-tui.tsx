@@ -73,10 +73,10 @@ export function createChatTuiHandle(store: ChatStore, unmountFn: () => void): Ch
 
 /**
  * Full mount function: creates a {@link ChatStore}, dynamically imports the
- * opentui renderer + keymap provider + {@link ChatApp}, mounts the Solid tree,
+ * opentui renderer + provider root + {@link ChatApp}, mounts the Solid tree,
  * and returns a {@link ChatTuiHandle}.
  *
- * Dynamic imports keep `@opentui/solid`, the keymap provider, and `ChatApp` out
+ * Dynamic imports keep `@opentui/solid`, the provider root, and `ChatApp` out
  * of the eager module graph so non-TUI CLI runs (plain / JSON) never load the
  * native renderer.
  */
@@ -98,7 +98,7 @@ export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHan
     });
 
     const { useRenderer } = await import('@opentui/solid');
-    const { ChatKeymapProvider } = await import('@mission-control/tui/keymap-provider');
+    const { MissionControlTuiProviders } = await import('@mission-control/tui/providers');
     const { mountOpenTui } = await import('@mission-control/tui/opentui-renderer');
     const { ChatApp } = await import('@mission-control/tui/chat-app');
     const { createComponent } = await import('solid-js/web');
@@ -116,8 +116,10 @@ export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHan
     };
 
     const mountResult = await mountOpenTui(() =>
-        createComponent(ChatKeymapProvider, {
+        createComponent(MissionControlTuiProviders, {
             useRenderer,
+            runtimeOptions: options,
+            chatStore: store,
             get children() {
                 return createComponent(ChatApp, {
                     store,
