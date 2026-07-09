@@ -34,6 +34,14 @@
         "command": "{ nx run core:build --outputStyle=stream >/dev/null 2>&1 || nx run core:build --outputStyle=stream; } && pnpm dev --",
         "forwardAllArgs": true
       }
+    },
+    "dev-bun": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/cli",
+        "command": "{ nx run core:build --outputStyle=stream >/dev/null 2>&1 || nx run core:build --outputStyle=stream; } && pnpm dev:bun --",
+        "forwardAllArgs": true
+      }
     }
   }
 }
