@@ -42,6 +42,10 @@ export type FileAutocompleteView = {
     readonly empty: boolean;
 };
 
+export type FileAutocompleteOptions = {
+    readonly frecencyKeys?: readonly string[];
+};
+
 const deniedPathEntries = [
     'node_modules',
     '.git',
@@ -65,11 +69,16 @@ export function updateFileAutocomplete(
     state: FileAutocompleteState,
     prefix: string,
     workspaceRoot: string,
+    options: FileAutocompleteOptions = {},
 ): FileAutocompleteState {
     if (whitespacePattern.test(prefix)) {
         return createFileAutocompleteState();
     }
-    const matches = listMatchingEntries(prefix, workspaceRoot);
+    const matches = orderMatchesByFrecency(
+        listMatchingEntries(prefix, workspaceRoot),
+        prefix,
+        options.frecencyKeys ?? [],
+    );
     const selectedIndex = state.selectedIndex >= matches.length ? 0 : state.selectedIndex;
     return {
         open: true,
@@ -77,6 +86,32 @@ export function updateFileAutocomplete(
         matches,
         selectedIndex,
     };
+}
+
+function orderMatchesByFrecency(
+    matches: readonly FileMatch[],
+    prefix: string,
+    frecencyKeys: readonly string[],
+): readonly FileMatch[] {
+    if (frecencyKeys.length === 0 || matches.length === 0) {
+        return matches;
+    }
+    const frecencyRank = new Map(frecencyKeys.map((key, index) => [canonicalPolicyPath(key), index]));
+    return [...matches].sort((left, right) => {
+        const leftRank = frecencyRank.get(canonicalPolicyPath(completionKey(prefix, left))) ?? Number.POSITIVE_INFINITY;
+        const rightRank =
+            frecencyRank.get(canonicalPolicyPath(completionKey(prefix, right))) ?? Number.POSITIVE_INFINITY;
+        if (leftRank !== rightRank) {
+            return leftRank - rightRank;
+        }
+        return compareFileMatches(left, right);
+    });
+}
+
+function completionKey(prefix: string, match: FileMatch): string {
+    const slashIndex = prefix.lastIndexOf('/');
+    const dirPart = slashIndex === -1 ? '' : prefix.slice(0, slashIndex + 1);
+    return `${dirPart}${match.name}`;
 }
 
 export function navigateFileAutocompleteUp(state: FileAutocompleteState): FileAutocompleteState {

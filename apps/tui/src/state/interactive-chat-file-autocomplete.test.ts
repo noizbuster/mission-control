@@ -240,6 +240,19 @@ describe('interactive chat file autocomplete — empty prefix shows top-level mi
         const first = state.matches[0];
         expect(first?.isDirectory).toBe(true);
     });
+
+    it('keeps default ordering until frecency keys rank matching entries', () => {
+        writeFileSync(join(tempRoot, 'alpha.ts'), 'x', 'utf-8');
+        writeFileSync(join(tempRoot, 'zeta.ts'), 'x', 'utf-8');
+
+        const defaultState = updateFileAutocomplete(createFileAutocompleteState(), '', tempRoot);
+        const rankedState = updateFileAutocomplete(createFileAutocompleteState(), '', tempRoot, {
+            frecencyKeys: ['zeta.ts'],
+        });
+
+        expect(defaultState.matches.map((match) => match.name).slice(0, 2)).toEqual(['apps', 'packages']);
+        expect(rankedState.matches.map((match) => match.name).slice(0, 2)).toEqual(['zeta.ts', 'apps']);
+    });
 });
 
 describe('interactive chat file autocomplete — view', () => {

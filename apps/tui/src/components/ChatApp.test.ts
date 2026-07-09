@@ -271,6 +271,18 @@ describe('ChatApp source topology', () => {
         expect(upperBlock).toContain('<AbgMinimap');
     });
 
+    it('uses provider-backed clipboard and toast services instead of local ad-hoc services', () => {
+        const source = readChatAppSource();
+
+        expect(source).toContain('useTuiClipboard');
+        expect(source).toContain('useTuiToast');
+        expect(source).toContain('useTuiLocalPreferences');
+        expect(source).not.toContain('createClipboardService(renderer)');
+        expect(source).not.toContain('const [toast, setToast]');
+        expect(source).not.toContain('new ModelFrecency()');
+        expect(source).not.toContain('new ModelFavorites()');
+    });
+
     it('derives the welcome row budget from the live viewport dock policy without stdout row reads', () => {
         const source = readChatAppSource();
         const layoutBlock = sliceBetween(

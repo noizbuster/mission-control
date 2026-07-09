@@ -35,6 +35,7 @@
  * T18 tmux harness.
  */
 
+import type { TuiPluginCommandDescriptor } from '@mission-control/protocol';
 import { TextAttributes } from '@opentui/core';
 import { reactiveMatcherFromSignal, useBindings, useKeymap, useKeymapSelector } from '@opentui/keymap/solid';
 import { useKeyboard } from '@opentui/solid';
@@ -49,6 +50,7 @@ import {
     Show,
     useContext,
 } from 'solid-js';
+import { useTuiPluginRuntime } from '../providers/plugin-runtime-context.js';
 import { CommandMap } from './keybind.js';
 import type { OpenTuiKeymap } from './keymap-instance.js';
 import { PaletteOpenContext } from './palette-open-context.js';
@@ -79,7 +81,13 @@ interface PaletteKeymapItem {
 /** One row in the palette list: either a keymap command or a slash command. */
 export type PaletteListItem =
     | { readonly kind: 'keymap'; readonly name: string; readonly title: string; readonly description: string }
-    | { readonly kind: 'slash'; readonly slashName: string; readonly display: string; readonly description: string };
+    | { readonly kind: 'slash'; readonly slashName: string; readonly display: string; readonly description: string }
+    | {
+          readonly kind: 'plugin';
+          readonly commandId: string;
+          readonly title: string;
+          readonly description: string;
+      };
 
 /**
  * Declared-property view over a keymap `Command`'s display metadata. `Command`
@@ -126,6 +134,7 @@ function selectReachablePaletteCommands(km: OpenTuiKeymap): readonly PaletteKeym
 export function buildPaletteItems(
     keymapItems: readonly PaletteKeymapItem[],
     slashEntries: readonly PaletteSlashEntry[],
+    pluginCommands: readonly TuiPluginCommandDescriptor[] = [],
 ): readonly PaletteListItem[] {
     const slashItems: PaletteListItem[] = slashEntries.map((entry) => ({
         kind: 'slash',
@@ -133,7 +142,13 @@ export function buildPaletteItems(
         display: entry.display,
         description: entry.description,
     }));
-    return [...keymapItems, ...slashItems];
+    const pluginItems: PaletteListItem[] = pluginCommands.map((command) => ({
+        kind: 'plugin',
+        commandId: command.id,
+        title: command.title,
+        description: command.paletteSection ?? 'Plugin command',
+    }));
+    return [...keymapItems, ...slashItems, ...pluginItems];
 }
 
 /** Case-insensitive substring filter over a palette item's searchable text. */
@@ -149,6 +164,8 @@ function searchableText(item: PaletteListItem): string {
             return `${item.title} ${item.description} ${item.name}`.toLowerCase();
         case 'slash':
             return `${item.display} ${item.description}`.toLowerCase();
+        case 'plugin':
+            return `${item.title} ${item.description} ${item.commandId}`.toLowerCase();
     }
 }
 
@@ -171,11 +188,13 @@ interface PaletteController {
     readonly filtered: Accessor<readonly PaletteListItem[]>;
     readonly selected: Accessor<number>;
     readonly onSelectSlash: () => ((slashName: string) => void) | undefined;
+    readonly dispatchPluginCommand: (commandId: string) => void;
 }
 
 export function CommandPaletteOverlay(props: CommandPaletteOverlayProps): JSX.Element {
     const keymap = useKeymap();
     const keymapCommands = useKeymapSelector(selectReachablePaletteCommands);
+    const pluginRuntime = useTuiPluginRuntime();
 
     const paletteState = useContext(PaletteOpenContext);
     const open = (): boolean => paletteState?.open() ?? false;
@@ -184,7 +203,9 @@ export function CommandPaletteOverlay(props: CommandPaletteOverlayProps): JSX.El
     const [query, setQuery] = createSignal('');
     const [selected, setSelected] = createSignal(0);
 
-    const items = createMemo(() => buildPaletteItems(keymapCommands(), getPaletteSlashCommands()));
+    const items = createMemo(() =>
+        buildPaletteItems(keymapCommands(), getPaletteSlashCommands(), pluginRuntime.commands()),
+    );
     const filtered = createMemo(() => filterPaletteItems(items(), query()));
     const clampedSelected = createMemo(() => {
         const visible = filtered();
@@ -198,6 +219,9 @@ export function CommandPaletteOverlay(props: CommandPaletteOverlayProps): JSX.El
         filtered,
         selected: clampedSelected,
         onSelectSlash: () => props.onSelectSlash,
+        dispatchPluginCommand: (commandId) => {
+            void pluginRuntime.dispatchCommand(commandId);
+        },
     };
 
     useBindings(() => ({
@@ -274,6 +298,9 @@ function submitSelection(controller: PaletteController): boolean {
             case 'slash':
                 controller.onSelectSlash()?.(item.slashName);
                 break;
+            case 'plugin':
+                controller.dispatchPluginCommand(item.commandId);
+                break;
         }
     }
     controller.setOpen(false);
@@ -316,7 +343,7 @@ function PaletteWindow(props: {
                 {(item, index) => {
                     const rowIndex = (): number => startIndex() + index();
                     const isSelected = (): boolean => rowIndex() === props.selected;
-                    const label = item.kind === 'keymap' ? item.title : item.display;
+                    const label = paletteItemLabel(item);
                     return (
                         <text attributes={isSelected() ? TextAttributes.INVERSE : TextAttributes.DIM}>
                             {`${isSelected() ? '>' : ' '} ${label}`}
@@ -326,4 +353,15 @@ function PaletteWindow(props: {
             </For>
         </box>
     );
+}
+
+function paletteItemLabel(item: PaletteListItem): string {
+    switch (item.kind) {
+        case 'keymap':
+            return item.title;
+        case 'slash':
+            return item.display;
+        case 'plugin':
+            return item.title;
+    }
 }

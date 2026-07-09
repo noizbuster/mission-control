@@ -105,6 +105,12 @@ export interface QueuedPromptsSnapshot {
     readonly observable: boolean;
 }
 
+export type PromptStashServiceLike = {
+    readonly count: () => number;
+    readonly pushDraft: (entry: PromptStashEntry) => Promise<void>;
+    readonly popDraft: () => Promise<PromptStashEntry | undefined>;
+};
+
 /**
  * Format the queued-prompts view notice. When `observable === false` (the
  * current interactive-mode reality), names the limitation honestly instead of
@@ -151,6 +157,7 @@ export interface SessionShortcutsLayerOptions {
      * per-session instance owned by the layer.
      */
     readonly stash?: PromptStash;
+    readonly promptStashService?: PromptStashServiceLike;
     /**
      * Extra enabled gate (AND-ed with the default always-on). When false the
      * layer's bindings (e.g. bare `up` -> session.tree.parent) stay dormant so
@@ -221,7 +228,11 @@ export function registerSessionShortcutsLayer<TTarget extends object, TEvent ext
 ): () => void {
     const stash = options.stash ?? new PromptStash();
 
-    const stashCountNotice = (): string => `Prompt stash: ${stash.size} stashed draft(s)\n`;
+    const stashCount = (): number => options.promptStashService?.count() ?? stash.size;
+    const stashCountNotice = (): string => `Prompt stash: ${stashCount()} stashed draft(s)\n`;
+    const emitPromptStashError = (error: unknown): void => {
+        deps.emitNotice(`Prompt stash: ${error instanceof Error ? error.message : 'operation failed'}\n`);
+    };
 
     const commands: readonly Command<TTarget, TEvent>[] = [
         {
@@ -273,9 +284,21 @@ export function registerSessionShortcutsLayer<TTarget extends object, TEvent ext
             name: 'prompt.stash',
             desc: 'Stash the current prompt draft',
             run: () => {
-                stash.push(deps.captureInput());
-                deps.clearInput();
-                deps.emitNotice(stashCountNotice());
+                const entry = deps.captureInput();
+                const service = options.promptStashService;
+                if (service === undefined) {
+                    stash.push(entry);
+                    deps.clearInput();
+                    deps.emitNotice(stashCountNotice());
+                    return true;
+                }
+                void service
+                    .pushDraft(entry)
+                    .then(() => {
+                        deps.clearInput();
+                        deps.emitNotice(stashCountNotice());
+                    })
+                    .catch(emitPromptStashError);
                 return true;
             },
         },
@@ -283,6 +306,20 @@ export function registerSessionShortcutsLayer<TTarget extends object, TEvent ext
             name: 'prompt.stash.pop',
             desc: 'Restore the most-recent stashed prompt draft',
             run: () => {
+                const service = options.promptStashService;
+                if (service !== undefined) {
+                    void service
+                        .popDraft()
+                        .then((entry) => {
+                            if (entry === undefined) {
+                                deps.emitNotice('Prompt stash: empty\n');
+                                return;
+                            }
+                            deps.restoreInput(entry);
+                        })
+                        .catch(emitPromptStashError);
+                    return true;
+                }
                 const entry = stash.pop();
                 // Empty-pop is a documented no-op: no restore, no buffer clear.
                 if (entry === undefined) {

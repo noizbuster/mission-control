@@ -74,6 +74,7 @@ describe('ChatBottomDockBase source topology', () => {
         expect(block).toContain('focused={inputFocused}');
         expect(block).toContain('viewportRows={viewportRows}');
         expect(block).toContain('promptMenuInteractionsEnabled={menuPolicy.rows > 0}');
+        expect(readChatInputAreaSource()).toContain('useTuiPromptRef');
     });
 
     it('derives prompt-adjacent menu visibility from slash, workflow, file, and menu-row state', () => {

@@ -6,6 +6,7 @@ import type { JSX } from 'solid-js';
 import { evaluatePaste, makeMarker } from '../platform/keymap/bracketed-paste.js';
 import { collectDiffEntries } from '../platform/keymap/diff-viewer.js';
 import { halfPageScrollDelta } from '../platform/keymap/messages-scroll.js';
+import { useTuiPromptRef } from '../platform/providers/index.js';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
 import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
 import {
@@ -33,6 +34,10 @@ import { join } from 'node:path';
 const DOUBLE_ESC_WINDOW_MS = 500;
 const DOUBLE_ESC_ACTION_ENV = 'MCTRL_DOUBLE_ESC_ACTION';
 const noopCursorChange = (): void => {};
+
+export function fileCompletionFrecencyKey(completed: string): string {
+    return completed.endsWith('/') ? completed.slice(0, -1) : completed;
+}
 
 function resolveDoubleEscAction(): 'tree' | 'fork' | 'interrupt' | 'none' {
     const action = process.env[DOUBLE_ESC_ACTION_ENV];
@@ -70,6 +75,7 @@ export function ChatInputArea({
     promptMenuInteractionsEnabled = true,
 }: ChatInputAreaProps): JSX.Element {
     const snapshot = useSolidStoreSelector(store, selectInputAreaSlice);
+    const promptRef = useTuiPromptRef();
     let submitting = false;
     let lastEsc: number | undefined;
 
@@ -88,6 +94,7 @@ export function ChatInputArea({
         textarea.setText(next);
         textarea.gotoBufferEnd();
         store.setInputMirror(next);
+        void promptRef.recordFileReference(fileCompletionFrecencyKey(completed));
         return true;
     };
 

@@ -1,11 +1,11 @@
 /** @jsxImportSource @opentui/solid */
 
+import type { ModelProviderSelection } from '@mission-control/protocol';
 import { type ChatBlock, extractLastAssistantText, parseMessageBlocks } from '@mission-control/tui/chat';
 import { type ScrollBoxRenderable, TextAttributes, type TextareaRenderable } from '@opentui/core';
 import { useKeymap } from '@opentui/keymap/solid';
 import { useKeyboard, useRenderer } from '@opentui/solid';
 import { type Accessor, createEffect, createMemo, createSignal, type JSX, onCleanup, onMount } from 'solid-js';
-import { createClipboardService } from '../platform/clipboard-service.js';
 import {
     buildDiffViewerModel,
     DiffViewerOverlay,
@@ -16,6 +16,12 @@ import {
     prevHunk,
 } from '../platform/keymap/diff-viewer.js';
 import { hardResetRendererSurface } from '../platform/opentui-renderer.js';
+import {
+    useTuiClipboard,
+    useTuiLocalPreferences,
+    useTuiPromptStash,
+    useTuiToast,
+} from '../platform/providers/index.js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import { useTerminalViewport } from '../platform/terminal-viewport-solid.js';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
@@ -26,6 +32,7 @@ import {
     resolveSlashCommandMenuInsertText,
     resolveWorkflowCommandMenuInsertText,
 } from '../state/interactive-chat-command-menu.js';
+import { parseModelSelection } from '../state/interactive-chat-model.js';
 import type { MissionControlServicesLike } from '../state/mission-services-types.js';
 import type { WelcomeData } from '../state/welcome-data-types.js';
 import { AbgMinimap } from './AbgMinimap.js';
@@ -130,6 +137,17 @@ export function promptPanelRepaintKey(input: PromptPanelRepaintKeyInput): string
     return 'none';
 }
 
+function parseModelPreferenceKeys(keys: readonly string[]): readonly ModelProviderSelection[] {
+    return keys.flatMap((key) => {
+        const selection = parseModelSelection(key);
+        return selection === undefined ? [] : [selection];
+    });
+}
+
+function recentModelPreferenceSelections(keys: readonly string[]): readonly ModelProviderSelection[] {
+    return [...parseModelPreferenceKeys(keys)].reverse();
+}
+
 export type ChatAppSplitShellProps = {
     readonly width: number;
     readonly height: number;
@@ -210,6 +228,10 @@ export function ChatApp({
 
     const keymap = useKeymap();
     const renderer = useRenderer();
+    const clipboard = useTuiClipboard();
+    const toast = useTuiToast();
+    const promptStash = useTuiPromptStash();
+    const localPreferences = useTuiLocalPreferences();
     const viewport = useTerminalViewport();
     const viewportLayout = createMemo(() => chatAppViewportLayout(viewport()));
     const shellWidth = createMemo(() => viewportLayout().width);
@@ -218,27 +240,11 @@ export function ChatApp({
     const promptMenuInteractionsEnabled = createMemo(() => viewportLayout().promptMenuInteractionsEnabled);
     const dockStatusLayout = createMemo(() => statusBarLayoutFromPolicy(dockPolicy()));
 
-    // Transient toast (e.g. the selection-copy hint). Local state — presentational,
-    // does not flow through ChatStore. Auto-dismisses; re-showing resets the timer.
-    const [toast, setToast] = createSignal<string | null>(null);
-    let toastTimer: ReturnType<typeof setTimeout> | undefined;
-    const showToast = (message: string): void => {
-        setToast(message);
-        if (toastTimer !== undefined) clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => {
-            setToast(null);
-            toastTimer = undefined;
-        }, 3000);
-    };
-    onCleanup(() => {
-        if (toastTimer !== undefined) clearTimeout(toastTimer);
-    });
-
     createEffect(() => {
         const noticeId = snapshot().transientNotice?.id;
         const noticeMessage = snapshot().transientNotice?.message;
         if (noticeId !== undefined && noticeMessage !== undefined) {
-            showToast(noticeMessage);
+            toast.show(noticeMessage, 'info');
         }
     });
 
@@ -248,7 +254,7 @@ export function ChatApp({
         const selection = renderer.getSelection();
         if (selection === null) return;
         if (selection.getSelectedText().length === 0) return;
-        showToast('Copy selection: Ctrl+D');
+        toast.show('Copy selection: Ctrl+D', 'info');
     };
 
     let handleSubmit = (): void => {};
@@ -492,7 +498,7 @@ export function ChatApp({
                 keymap,
                 {
                     scrollboxRef: keymapScrollboxRef,
-                    clipboardService: createClipboardService(renderer),
+                    clipboardService: clipboard,
                     getViewportRows: () => viewport().rows,
                     getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
                     getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
@@ -519,7 +525,7 @@ export function ChatApp({
                 keymap,
                 {
                     scrollboxRef: keymapScrollboxRef,
-                    clipboardService: createClipboardService(renderer),
+                    clipboardService: clipboard,
                     getViewportRows: () => viewport().rows,
                     getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
                     getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
@@ -539,11 +545,24 @@ export function ChatApp({
         let disposed = false;
         let cleanup: (() => void) | undefined;
         void import('../platform/keymap/model-favorites.js').then(
-            ({ ModelFrecency, ModelFavorites, registerModelShortcutsLayer }) => {
+            ({
+                createPreferenceBackedModelFavorites,
+                createPreferenceBackedModelFrecency,
+                registerModelShortcutsLayer,
+            }) => {
                 if (disposed) return;
                 cleanup = registerModelShortcutsLayer(keymap, {
-                    frecency: new ModelFrecency(),
-                    favorites: new ModelFavorites(),
+                    frecency: createPreferenceBackedModelFrecency({
+                        getRecentModels: () =>
+                            recentModelPreferenceSelections(localPreferences.preferences().recentModels),
+                        recordRecentModel: (selection) => {
+                            void localPreferences.addRecentModel(selection);
+                        },
+                    }),
+                    favorites: createPreferenceBackedModelFavorites({
+                        getFavoriteModels: () =>
+                            parseModelPreferenceKeys(localPreferences.preferences().favoriteModels),
+                    }),
                     getModelSelections: () => store.getSnapshot().modelCycleChoices.map((choice) => choice.selection),
                     getCurrentSelection: () => {
                         const snap = store.getSnapshot();
@@ -594,7 +613,19 @@ export function ChatApp({
                         store.emitOutput(text);
                     },
                 },
-                { isEnabled: () => store.getSnapshot().overlayMode === 'none' },
+                {
+                    isEnabled: () => store.getSnapshot().overlayMode === 'none',
+                    promptStashService: {
+                        count: () => promptStash.entries().length,
+                        pushDraft: async (entry) => {
+                            await promptStash.pushDraft({ text: entry.text, cursorOffset: entry.cursor });
+                        },
+                        popDraft: async () => {
+                            const entry = await promptStash.popDraft();
+                            return entry === undefined ? undefined : { text: entry.text, cursor: entry.cursorOffset };
+                        },
+                    },
+                },
             );
         });
         onCleanup(() => {
@@ -729,7 +760,7 @@ export function ChatApp({
 
     const rootContent = createMemo((): JSX.Element => {
         const snap = snapshot();
-        const currentToast = toast();
+        const currentToast = toast.current();
 
         if (snap.overlayMode === 'abg') {
             if (abgOverlayController === undefined) {
@@ -812,7 +843,7 @@ export function ChatApp({
                         ) : showAgentIndicator() && snap.generating ? (
                             <AgentSpinner text="Working..." />
                         ) : null}
-                        {currentToast !== null ? <Toast message={currentToast} /> : null}
+                        {currentToast !== null ? <Toast message={currentToast.message} /> : null}
                         {showAbgMinimap() && abgOverlayController !== undefined ? (
                             <AbgMinimap store={abgOverlayController.store} viewport={viewport()} />
                         ) : null}

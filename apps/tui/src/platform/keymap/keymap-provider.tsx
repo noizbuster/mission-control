@@ -8,10 +8,7 @@
  * `useKeymap` and derive reactive views via `useKeymapSelector`. T1
  * stands up the keymap + bootstrap addons; T7 layers the leader-family addons
  * (inside `createKeymapInstance`) and mounts the pending-sequence cue HERE so
- * it is always available above ChatRoot without touching chat-store state. T8 mounts the
- * Alt+X command palette the same way: it self-registers its toggle + nav
- * keymap layers via `useKeymap` and reads the slash-command mapping table, so
- * it needs no bridge wiring from this lane. T9 mounts the which-key panel the
+ * it is always available above ChatRoot without touching chat-store state. T9 mounts the which-key panel the
  * same way (self-registers its `Ctrl+Alt+K` toggle + `Ctrl+Alt+Shift+K` layout
  * layer via `registerWhichKeyLayer`) inside a `ModeStackProvider` so the panel
  * (and future overlays under `{children}`) can read/push the active mode.
@@ -24,7 +21,6 @@
 import type { CliRenderer } from '@opentui/core';
 import { KeymapProvider } from '@opentui/keymap/solid';
 import { createMemo, createSignal, type JSX } from 'solid-js';
-import { CommandPaletteOverlay } from './command-palette.js';
 import { createKeymapInstance, type OpenTuiKeymap } from './keymap-instance.js';
 import { LeaderPendingCue } from './leader-pending-cue.js';
 import { ModeStackProvider } from './mode-stack.js';
@@ -46,7 +42,6 @@ export function ChatKeymapProvider(props: ChatKeymapProviderProps): JSX.Element 
             <PaletteOpenContext.Provider value={{ open: paletteOpen, setOpen: setPaletteOpen }}>
                 <ModeStackProvider>
                     <LeaderPendingCue />
-                    <CommandPaletteOverlay />
                     <WhichKeyPanel />
                     {props.children}
                 </ModeStackProvider>

@@ -35,6 +35,7 @@ import {
     MAX_STASH_ENTRIES,
     PromptStash,
     type PromptStashEntry,
+    type PromptStashServiceLike,
     registerSessionShortcutsLayer,
     type SessionShortcutsDeps,
 } from './session-shortcuts.js';
@@ -266,6 +267,40 @@ describe('T12 session-shortcuts layer — dispatch', () => {
         // The entry landed on the shared stash (LIFO top).
         expect(stash.size).toBe(1);
         expect(stash.pop()).toEqual({ text: 'stash me', cursor: 4 });
+        off();
+        offLeader();
+        harness.cleanup();
+    });
+
+    it('prompt.stash uses the injected persistent service when provided', async () => {
+        const harness = createTestKeymap({ defaultKeys: true });
+        harness.host.focus(harness.root);
+        const offLeader = registerLeaderAddons(harness.keymap, {
+            trigger: 'ctrl+x',
+            timeoutMs: LEADER_TIMEOUT_MS,
+        });
+        const entries: PromptStashEntry[] = [];
+        const service: PromptStashServiceLike = {
+            count: () => entries.length,
+            pushDraft: async (entry) => {
+                entries.push(entry);
+            },
+            popDraft: async () => entries.pop(),
+        };
+        const deps = createRecordingDeps('persist me', 8);
+        const off = registerSessionShortcutsLayer(harness.keymap, deps, { promptStashService: service });
+
+        pressLeader(harness, 's');
+        await Promise.resolve();
+        await Promise.resolve();
+        pressLeader(harness, 'p');
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(deps.captured).toEqual([{ text: 'persist me', cursor: 8 }]);
+        expect(deps.clearInputCount).toBe(1);
+        expect(deps.restored).toEqual([{ text: 'persist me', cursor: 8 }]);
+        expect(entries).toEqual([]);
         off();
         offLeader();
         harness.cleanup();

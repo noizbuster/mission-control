@@ -296,6 +296,7 @@ export class ChatStore {
     private readonly eventWaiters: Array<(event: ChatInputEvent) => void> = [];
     private readonly state: ChatStoreMutableState;
     private snapshot: ChatStoreState;
+    private fileFrecencyKeys: readonly string[] = [];
     private modelPickerResolve: ((selection: ModelProviderSelection | undefined) => void) | undefined;
     private levelPickerResolve: ((level: string | undefined) => void) | undefined;
     private questionResolve: ((answer: string) => void) | undefined;
@@ -922,6 +923,17 @@ export class ChatStore {
         return result.input;
     }
 
+    setHistoryEntries(entries: readonly string[]): void {
+        this.state.history = createChatInputHistoryFromEntries(entries);
+        this.publish();
+    }
+
+    setFileFrecencyKeys(keys: readonly string[]): void {
+        this.fileFrecencyKeys = keys;
+        this.refreshFileAutocomplete();
+        this.publish();
+    }
+
     navigateApproval(direction: 1 | -1): void {
         const count = APPROVAL_OPTIONS.length;
         this.state.approvalSelectedIndex = (this.state.approvalSelectedIndex + direction + count) % count;
@@ -1539,7 +1551,9 @@ export class ChatStore {
             this.state.fileAutocomplete = createFileAutocompleteState();
             return;
         }
-        this.state.fileAutocomplete = updateFileAutocomplete(this.state.fileAutocomplete, prefix, this.workspaceRoot);
+        this.state.fileAutocomplete = updateFileAutocomplete(this.state.fileAutocomplete, prefix, this.workspaceRoot, {
+            frecencyKeys: this.fileFrecencyKeys,
+        });
     }
 }
 
