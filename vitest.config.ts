@@ -79,7 +79,7 @@ export default defineConfig({
             },
             { find: '@mission-control/tui/status-bar', replacement: `${tuiSrc}components/StatusBar.tsx` },
             { find: '@mission-control/tui/abg-overlay', replacement: `${tuiSrc}components/AbgOverlay.tsx` },
-            { find: '@mission-control/tui/chat-app', replacement: `${tuiSrc}components/ChatApp.tsx` },
+            { find: '@mission-control/tui/app', replacement: `${tuiSrc}app.tsx` },
             { find: '@mission-control/tui/create-chat-tui', replacement: `${tuiSrc}create-chat-tui.tsx` },
             { find: '@mission-control/tui/replay-overlay', replacement: `${tuiSrc}replay-overlay.tsx` },
             { find: '@mission-control/tui', replacement: `${tuiSrc}index.ts` },

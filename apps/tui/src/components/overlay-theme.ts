@@ -10,7 +10,7 @@ export const SELECTED_BG = '#0000ff';
 
 /**
  * Panel background for the inline (in-place) overlays that replace the input
- * area, e.g. the ask-user QuestionOverlay. Matches chat-app ModalPopup's popup
+ * area, e.g. the ask-user QuestionOverlay. Matches app ModalPopup's popup
  * fill so the inline panel and the floating modals share one dark base.
  */
 export const OVERLAY_PANEL_BG = '#0a0a0a';

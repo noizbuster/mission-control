@@ -20,14 +20,14 @@ export type OverlayFrameProps = {
  * caller-supplied children inside.
  *
  * PURELY PRESENTATIONAL: this component owns no keyboard input, no
- * overlay-mode/transcript placement, and no store reads. Callers (ChatApp's
+ * overlay-mode/transcript placement, and no store reads. Callers (App's
  * overlay-mode switch and the per-overlay panels) own those concerns; this
  * frame only renders the chrome and the children they hand it.
  */
 export function OverlayFrame({ variant, title, accent, hint, footer, children }: OverlayFrameProps): JSX.Element {
     const chrome = resolveOverlayChrome(variant, accent);
 
-    // Modal renders inside a bordered popup (see ModalPopup in chat-app/), so it
+    // Modal renders inside a bordered popup (see ModalPopup in app/), so it
     // has no Separator of its own — the popup border is the delineator. The
     // title and footer each sit in their own <box> row because opentui merges
     // adjacent <text> siblings onto one row: without the wrappers a body that

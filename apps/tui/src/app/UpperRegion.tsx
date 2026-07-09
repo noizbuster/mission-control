@@ -2,16 +2,16 @@
 
 import { basename } from 'node:path';
 import type { JSX } from 'solid-js';
-import type { TerminalViewport } from '../../platform/terminal-viewport.js';
-import type { AbgOverlayController } from '../../state/abg-overlay-controller.js';
-import type { WelcomeData } from '../../state/welcome-data-types.js';
-import { AbgMinimap } from '../AbgMinimap.js';
-import type { StatusBarProps } from '../StatusBar.js';
-import { Toast } from '../Toast.js';
-import { WelcomeScreen } from '../WelcomeScreen.js';
+import type { TerminalViewport } from '../platform/terminal-viewport.js';
+import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
+import type { WelcomeData } from '../state/welcome-data-types.js';
+import { AbgMinimap } from '../components/AbgMinimap.js';
+import type { StatusBarProps } from '../components/StatusBar.js';
+import { Toast } from '../components/Toast.js';
+import { WelcomeScreen } from '../components/WelcomeScreen.js';
 import { AgentSpinner } from './AgentSpinner.js';
 
-export type ChatUpperRegionProps = {
+export type UpperRegionProps = {
     readonly showWelcome: boolean;
     readonly welcomeData: WelcomeData | undefined;
     readonly viewport: TerminalViewport;
@@ -28,7 +28,7 @@ export type ChatUpperRegionProps = {
 /**
  * Upper output region: welcome or transcript, agent spinner, toast, ABG minimap.
  */
-export function ChatUpperRegion(props: ChatUpperRegionProps): JSX.Element {
+export function UpperRegion(props: UpperRegionProps): JSX.Element {
     const bar = props.statusBarProps;
 
     return (

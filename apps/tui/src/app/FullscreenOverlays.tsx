@@ -2,16 +2,16 @@
 
 import { TextAttributes } from '@opentui/core';
 import type { JSX } from 'solid-js';
-import { buildDiffViewerModel, DiffViewerOverlay } from '../../platform/keymap/diff-viewer.js';
-import type { TerminalViewport } from '../../platform/terminal-viewport.js';
-import type { AbgOverlayController } from '../../state/abg-overlay-controller.js';
-import type { ChatStore, ChatStoreState } from '../../state/chat-store.js';
-import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from '../AbgOverlay.js';
-import { ModelsOverlay } from '../ModelsOverlay.js';
-import { OverlayFrame } from '../OverlayFrame.js';
-import type { StatusBarProps } from '../StatusBar.js';
+import { buildDiffViewerModel, DiffViewerOverlay } from '../platform/keymap/diff-viewer.js';
+import type { TerminalViewport } from '../platform/terminal-viewport.js';
+import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
+import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
+import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from '../components/AbgOverlay.js';
+import { ModelsOverlay } from '../components/ModelsOverlay.js';
+import { OverlayFrame } from '../components/OverlayFrame.js';
+import type { StatusBarProps } from '../components/StatusBar.js';
 
-export type ChatFullscreenOverlaysProps = {
+export type FullscreenOverlaysProps = {
     readonly store: ChatStore;
     readonly snap: ChatStoreState;
     readonly viewport: TerminalViewport;
@@ -25,7 +25,7 @@ export type ChatFullscreenOverlaysProps = {
  * Full-screen overlay modes that replace the normal chat root layout.
  * Returns null when the active overlay is not a full-screen mode.
  */
-export function ChatFullscreenOverlays(props: ChatFullscreenOverlaysProps): JSX.Element | null {
+export function FullscreenOverlays(props: FullscreenOverlaysProps): JSX.Element | null {
     const { store, snap, viewport, statusBarProps, abgOverlayController, abgActiveTabIndex, abgScrollOffset } =
         props;
 

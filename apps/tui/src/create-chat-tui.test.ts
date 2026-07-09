@@ -163,10 +163,10 @@ describe('create-chat-tui', () => {
         expect(source).not.toContain("await import('@mission-control/tui/keymap-provider')");
     });
 
-    it('mounts ChatApp with store-only props and no external ref or chrome fan-out', () => {
+    it('mounts App with store-only props and no external ref or chrome fan-out', () => {
         const source = readCreateChatTuiSource();
 
-        expect(source).toContain('createComponent(ChatApp, { store })');
+        expect(source).toContain('createComponent(App, { store })');
         expect(source).not.toContain('textareaRef:');
         expect(source).not.toContain('scrollboxRef:');
         expect(source).not.toContain('statusBarProps');

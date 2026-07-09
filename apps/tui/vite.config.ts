@@ -22,7 +22,7 @@ const entryPoints = {
     'platform/terminal-viewport-solid': sourceEntry('./src/platform/terminal-viewport-solid.ts'),
     'components/StatusBar': sourceEntry('./src/components/StatusBar.tsx'),
     'components/AbgOverlay': sourceEntry('./src/components/AbgOverlay.tsx'),
-    'components/ChatApp': sourceEntry('./src/components/ChatApp.tsx'),
+    'app': sourceEntry('./src/app.tsx'),
     'create-chat-tui': sourceEntry('./src/create-chat-tui.tsx'),
     'replay-overlay': sourceEntry('./src/replay-overlay.tsx'),
 } satisfies Record<string, string>;

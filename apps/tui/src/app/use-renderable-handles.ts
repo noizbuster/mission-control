@@ -1,23 +1,23 @@
 import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
-import type { ChatTextareaHandle } from '../ChatInputTextarea.js';
-import type { ChatScrollboxHandle } from '../ChatTranscript.js';
+import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
+import type { ChatScrollboxHandle } from '../components/ChatTranscript.js';
 
 export type ChatKeymapScrollboxRef = {
     readonly current: ScrollBoxRenderable | null;
 };
 
-export type ChatRenderableHandles = {
+export type RenderableHandles = {
     readonly textareaHandle: ChatTextareaHandle;
     readonly scrollboxHandle: ChatScrollboxHandle;
     readonly keymapScrollboxRef: ChatKeymapScrollboxRef;
 };
 
 /**
- * Owns the ChatApp-local textarea and scrollbox renderable handles used by the
+ * Owns the App-local textarea and scrollbox renderable handles used by the
  * bottom dock, transcript, and keymap layers. Mount no longer injects external
  * ref callbacks; these stay internal to the chat root.
  */
-export function useChatRenderableHandles(): ChatRenderableHandles {
+export function useRenderableHandles(): RenderableHandles {
     let textarea: TextareaRenderable | undefined;
     let scrollbox: ScrollBoxRenderable | undefined;
 

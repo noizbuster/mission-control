@@ -1,24 +1,24 @@
 import type { Accessor } from 'solid-js';
-import type { ChatStore } from '../../state/chat-store.js';
+import type { ChatStore } from '../state/chat-store.js';
 import {
     resolveSlashCommandMenuInsertText,
     resolveWorkflowCommandMenuInsertText,
-} from '../../state/interactive-chat-command-menu.js';
-import type { ChatTextareaHandle } from '../ChatInputTextarea.js';
+} from '../state/interactive-chat-command-menu.js';
+import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
 
-export type UseChatSubmitOptions = {
+export type UseSubmitOptions = {
     readonly store: ChatStore;
     readonly textareaHandle: ChatTextareaHandle;
     readonly promptMenuInteractionsEnabled: Accessor<boolean>;
 };
 
 /**
- * ChatApp Enter-submit path (keymap chat.submit layer). Preserves IME-safe
+ * App Enter-submit path (keymap chat.submit layer). Preserves IME-safe
  * double setTimeout(0), re-entrancy guard, empty reject, and slash/workflow
  * menu insert-before-submit behavior. Does not expand paste markers or handle
  * file-autocomplete completion (those stay on ChatInputArea).
  */
-export function useChatSubmit(options: UseChatSubmitOptions): () => void {
+export function useSubmit(options: UseSubmitOptions): () => void {
     const { store, textareaHandle, promptMenuInteractionsEnabled } = options;
     let submitting = false;
 

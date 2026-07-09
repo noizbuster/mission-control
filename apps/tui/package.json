@@ -24,7 +24,7 @@
     "./terminal-viewport-solid": "./dist/platform/terminal-viewport-solid.js",
     "./status-bar": "./dist/components/StatusBar.js",
     "./abg-overlay": "./dist/components/AbgOverlay.js",
-    "./chat-app": "./dist/components/ChatApp.js",
+    "./app": "./dist/app.js",
     "./create-chat-tui": "./dist/create-chat-tui.js",
     "./replay-overlay": "./dist/replay-overlay.js"
   },

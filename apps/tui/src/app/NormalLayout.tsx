@@ -1,21 +1,21 @@
 /** @jsxImportSource @opentui/solid */
 
 import type { JSX } from 'solid-js';
-import type { TerminalViewport } from '../../platform/terminal-viewport.js';
-import type { AbgOverlayController } from '../../state/abg-overlay-controller.js';
-import type { ChatAppActions } from '../../state/chat-app-actions.js';
-import type { ChatStore, ChatStoreState } from '../../state/chat-store.js';
-import type { MissionControlServicesLike } from '../../state/mission-services-types.js';
-import type { WelcomeData } from '../../state/welcome-data-types.js';
-import { ChatBottomDock } from '../ChatBottomDock.js';
-import type { ChatTextareaHandle } from '../ChatInputTextarea.js';
-import type { ChatScrollboxHandle } from '../ChatTranscript.js';
-import type { BottomDockPolicy } from '../chat-bottom-dock-policy.js';
-import type { StatusBarProps } from '../StatusBar.js';
-import { ChatModalOverlays } from './ChatModalOverlays.js';
-import { ChatUpperRegion } from './ChatUpperRegion.js';
+import type { TerminalViewport } from '../platform/terminal-viewport.js';
+import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
+import type { ChatAppActions } from '../state/chat-app-actions.js';
+import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
+import type { MissionControlServicesLike } from '../state/mission-services-types.js';
+import type { WelcomeData } from '../state/welcome-data-types.js';
+import { ChatBottomDock } from '../components/ChatBottomDock.js';
+import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
+import type { ChatScrollboxHandle } from '../components/ChatTranscript.js';
+import type { BottomDockPolicy } from '../components/chat-bottom-dock-policy.js';
+import type { StatusBarProps } from '../components/StatusBar.js';
+import { ModalOverlays } from './ModalOverlays.js';
+import { UpperRegion } from './UpperRegion.js';
 
-export type ChatNormalLayoutProps = {
+export type NormalLayoutProps = {
     readonly store: ChatStore;
     readonly snap: ChatStoreState;
     readonly viewport: TerminalViewport;
@@ -37,12 +37,12 @@ export type ChatNormalLayoutProps = {
 
 /**
  * Normal chat root: upper output region, bottom dock, and modal overlays.
- * Full-screen overlays are handled by {@link ChatFullscreenOverlays} before this mounts.
+ * Full-screen overlays are handled by {@link FullscreenOverlays} before this mounts.
  */
-export function ChatNormalLayout(props: ChatNormalLayoutProps): JSX.Element {
+export function NormalLayout(props: NormalLayoutProps): JSX.Element {
     const bar = props.statusBarProps;
     const upperOutputRegion = (
-        <ChatUpperRegion
+        <UpperRegion
             showWelcome={props.showWelcome}
             welcomeData={props.welcomeData}
             viewport={props.viewport}
@@ -69,7 +69,7 @@ export function ChatNormalLayout(props: ChatNormalLayoutProps): JSX.Element {
         />
     );
     const modalOverlays = (
-        <ChatModalOverlays
+        <ModalOverlays
             store={props.store}
             overlayMode={props.snap.overlayMode}
             workspaceRoot={bar.workspaceRoot}

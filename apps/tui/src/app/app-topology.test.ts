@@ -3,9 +3,9 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const root = process.cwd();
-const componentsDir = 'apps/tui/src/components';
-const chatAppDir = join(componentsDir, 'chat-app');
-const chatAppRootFile = join(componentsDir, 'ChatApp.tsx');
+const appDir = 'apps/tui/src/app';
+const chatAppDir = appDir;
+const chatAppRootFile = 'apps/tui/src/app.tsx';
 const createChatTuiFile = 'apps/tui/src/create-chat-tui.tsx';
 const testFilePattern = /\.(test|spec)\.(ts|tsx)$/u;
 
@@ -51,7 +51,7 @@ function readSource(relativePath: string): string {
     return readFileSync(resolve(root, relativePath), 'utf8');
 }
 
-function collectChatAppModuleFiles(): readonly string[] {
+function collectAppModuleFiles(): readonly string[] {
     const absoluteDir = resolve(root, chatAppDir);
     const files: string[] = [];
     for (const entry of readdirSync(absoluteDir)) {
@@ -66,8 +66,8 @@ function collectChatAppModuleFiles(): readonly string[] {
     return files.sort();
 }
 
-function readChatAppTopologyUnion(): string {
-    const moduleSources = collectChatAppModuleFiles().map((path) => readSource(path));
+function readAppTopologyUnion(): string {
+    const moduleSources = collectAppModuleFiles().map((path) => readSource(path));
     return [readSource(chatAppRootFile), ...moduleSources].join('\n');
 }
 
@@ -84,27 +84,27 @@ function sliceBetween(source: string, startNeedle: string, endNeedle: string): s
     return source.slice(start, end);
 }
 
-describe('ChatApp multi-file topology union', () => {
-    it('scans ChatApp.tsx plus every non-test chat-app module', () => {
-        const modules = collectChatAppModuleFiles();
+describe('App multi-file topology union', () => {
+    it('scans app.tsx plus every non-test app module', () => {
+        const modules = collectAppModuleFiles();
         expect(modules.length).toBeGreaterThanOrEqual(12);
-        expect(modules).toContain(join(chatAppDir, 'ChatNormalLayout.tsx'));
-        expect(modules).toContain(join(chatAppDir, 'ChatModalOverlays.tsx'));
-        expect(modules).toContain(join(chatAppDir, 'ChatFullscreenOverlays.tsx'));
-        expect(modules).toContain(join(chatAppDir, 'use-chat-keymap-layers.ts'));
-        expect(modules).toContain(join(chatAppDir, 'use-chat-global-keyboard.ts'));
-        expect(modules).toContain(join(chatAppDir, 'use-chat-repaint-effects.ts'));
+        expect(modules).toContain(join(chatAppDir, 'NormalLayout.tsx'));
+        expect(modules).toContain(join(chatAppDir, 'ModalOverlays.tsx'));
+        expect(modules).toContain(join(chatAppDir, 'FullscreenOverlays.tsx'));
+        expect(modules).toContain(join(chatAppDir, 'use-keymap-layers.ts'));
+        expect(modules).toContain(join(chatAppDir, 'use-global-keyboard.ts'));
+        expect(modules).toContain(join(chatAppDir, 'use-repaint-effects.ts'));
         expect(modules.every((path) => !testFilePattern.test(path))).toBe(true);
     });
 
-    it('does not define or render ChatAppSplitShell anywhere in the chat-app surface', () => {
-        const union = readChatAppTopologyUnion();
+    it('does not define or render ChatAppSplitShell anywhere in the app surface', () => {
+        const union = readAppTopologyUnion();
         expect(union).not.toContain('ChatAppSplitShell');
         expect(union).not.toContain('AppShell');
     });
 
-    it('does not import or render SlashMenu/FileAutocomplete in chat-app modules', () => {
-        const union = readChatAppTopologyUnion();
+    it('does not import or render SlashMenu/FileAutocomplete in app modules', () => {
+        const union = readAppTopologyUnion();
         expect(union).not.toContain('./SlashMenuPanel.js');
         expect(union).not.toContain('./FileAutocompletePanel.js');
         expect(union).not.toContain('../SlashMenuPanel.js');
@@ -115,7 +115,7 @@ describe('ChatApp multi-file topology union', () => {
 
     it('uses provider hooks instead of ad-hoc clipboard/toast/frecency construction', () => {
         const chatAppSource = readSource(chatAppRootFile);
-        const union = readChatAppTopologyUnion();
+        const union = readAppTopologyUnion();
 
         for (const hook of PROVIDER_HOOK_NEEDLES) {
             expect(union).toContain(hook);
@@ -130,8 +130,8 @@ describe('ChatApp multi-file topology union', () => {
         expect(union).not.toContain('new ModelFavorites()');
     });
 
-    it('never reads process.stdout rows/columns from the chat-app surface', () => {
-        const union = readChatAppTopologyUnion();
+    it('never reads process.stdout rows/columns from the app surface', () => {
+        const union = readAppTopologyUnion();
         const stdoutRowsToken = ['process', 'stdout', 'rows'].join('.');
         const stdoutColumnsToken = ['process', 'stdout', 'columns'].join('.');
         expect(union).not.toContain(stdoutRowsToken);
@@ -139,10 +139,10 @@ describe('ChatApp multi-file topology union', () => {
     });
 });
 
-describe('ChatAppProps and mount shape', () => {
-    it('declares ChatAppProps with only store', () => {
+describe('AppProps and mount shape', () => {
+    it('declares AppProps with only store', () => {
         const source = readSource(chatAppRootFile);
-        const propsBlock = sliceBetween(source, 'export type ChatAppProps = {', '};');
+        const propsBlock = sliceBetween(source, 'export type AppProps = {', '};');
 
         expect(propsBlock).toContain('readonly store: ChatStore');
         expect(propsBlock).not.toContain('textareaRef');
@@ -155,11 +155,11 @@ describe('ChatAppProps and mount shape', () => {
         expect(matchCount(propsBlock, 'readonly ')).toBe(1);
     });
 
-    it('mounts via createComponent(ChatApp, { store }) only under MissionControlTuiProviders', () => {
+    it('mounts via createComponent(App, { store }) only under MissionControlTuiProviders', () => {
         const source = readSource(createChatTuiFile);
 
         expect(source).toContain('createComponent(MissionControlTuiProviders');
-        expect(source).toContain('createComponent(ChatApp, { store })');
+        expect(source).toContain('createComponent(App, { store })');
         expect(source).toContain("await import('@mission-control/tui/providers')");
         expect(source).not.toContain('textareaRef:');
         expect(source).not.toContain('scrollboxRef:');
@@ -173,22 +173,22 @@ describe('ChatAppProps and mount shape', () => {
     });
 });
 
-describe('ChatApp thin composer topology', () => {
-    it('thins ChatApp to hooks plus fullscreen vs normal branch', () => {
+describe('App thin composer topology', () => {
+    it('thins App to hooks plus fullscreen vs normal branch', () => {
         const source = readSource(chatAppRootFile);
 
         expect(source).toContain('useTerminalViewport');
         expect(source).not.toContain('useRendererDimensions');
         expect(source).not.toContain('setInterval(sync, 250)');
-        expect(source).toContain('ChatFullscreenOverlays');
-        expect(source).toContain('ChatNormalLayout');
-        expect(source).toContain('useChatGlobalKeyboard');
-        expect(source).toContain('useChatKeymapLayers');
-        expect(source).toContain('useChatRepaintEffects');
-        expect(source).toContain('useChatSubmit');
-        expect(source).toContain('useChatTransientToast');
-        expect(source).toContain('useChatSelectionMouseUp');
-        expect(source).toContain('useChatRenderableHandles');
+        expect(source).toContain('FullscreenOverlays');
+        expect(source).toContain('NormalLayout');
+        expect(source).toContain('useGlobalKeyboard');
+        expect(source).toContain('useKeymapLayers');
+        expect(source).toContain('useRepaintEffects');
+        expect(source).toContain('useSubmit');
+        expect(source).toContain('useTransientToast');
+        expect(source).toContain('useSelectionMouseUp');
+        expect(source).toContain('useRenderableHandles');
         expect(source).not.toContain('function AgentSpinner');
         expect(source).not.toContain('function ModalPopup');
         expect(source).not.toContain('<ChatBottomDock');
@@ -198,13 +198,13 @@ describe('ChatApp thin composer topology', () => {
         expect(source).not.toContain("import('../platform/keymap/");
         expect(source).not.toContain('hardResetRendererSurface(renderer)');
         expect(source).not.toContain("Reflect.set(renderer, 'forceFullRepaintRequested'");
-        expect(matchCount(source, 'useChatKeymapLayers')).toBe(2);
+        expect(matchCount(source, 'useKeymapLayers')).toBe(2);
     });
 
     it('keeps full-screen overlays as early returns before the normal root layout', () => {
         const chatAppSource = readSource(chatAppRootFile);
-        const fullscreenSource = readSource(join(chatAppDir, 'ChatFullscreenOverlays.tsx'));
-        const normalLayoutIndex = chatAppSource.indexOf('<ChatNormalLayout');
+        const fullscreenSource = readSource(join(chatAppDir, 'FullscreenOverlays.tsx'));
+        const normalLayoutIndex = chatAppSource.indexOf('<NormalLayout');
         expect(normalLayoutIndex).toBeGreaterThanOrEqual(0);
 
         for (const mode of FULLSCREEN_MODES) {
@@ -218,14 +218,14 @@ describe('ChatApp thin composer topology', () => {
     });
 });
 
-describe('ChatNormalLayout order and dock wiring', () => {
+describe('NormalLayout order and dock wiring', () => {
     it('pins the root box with viewport dimensions and selection mouse-up handler', () => {
-        const layoutSource = readSource(join(chatAppDir, 'ChatNormalLayout.tsx'));
+        const layoutSource = readSource(join(chatAppDir, 'NormalLayout.tsx'));
         expect(layoutSource).toContain(ROOT_BOX_NEEDLE);
     });
 
     it('keeps upper output region, bottom dock, and modal overlays as ordered root children', () => {
-        const layoutSource = readSource(join(chatAppDir, 'ChatNormalLayout.tsx'));
+        const layoutSource = readSource(join(chatAppDir, 'NormalLayout.tsx'));
         const rootBoxIndex = layoutSource.indexOf(ROOT_BOX_NEEDLE);
         expect(rootBoxIndex).toBeGreaterThanOrEqual(0);
 
@@ -240,7 +240,7 @@ describe('ChatNormalLayout order and dock wiring', () => {
     });
 
     it('wires ChatBottomDock exactly once with refs, focus, and raw viewport dimensions', () => {
-        const layoutSource = readSource(join(chatAppDir, 'ChatNormalLayout.tsx'));
+        const layoutSource = readSource(join(chatAppDir, 'NormalLayout.tsx'));
         const dockBlock = sliceBetween(layoutSource, '<ChatBottomDock', '/>');
 
         expect(matchCount(layoutSource, '<ChatBottomDock')).toBe(1);
@@ -255,17 +255,17 @@ describe('ChatNormalLayout order and dock wiring', () => {
     });
 
     it('derives welcome row budget from dock policy without stdout row reads', () => {
-        const layoutSource = readSource(join(chatAppDir, 'ChatNormalLayout.tsx'));
-        const upperSource = readSource(join(chatAppDir, 'ChatUpperRegion.tsx'));
+        const layoutSource = readSource(join(chatAppDir, 'NormalLayout.tsx'));
+        const upperSource = readSource(join(chatAppDir, 'UpperRegion.tsx'));
 
         expect(layoutSource).toContain('availableRows={props.dockPolicy.transcript.rows}');
         expect(upperSource).toContain('availableRows={props.availableRows}');
     });
 });
 
-describe('ChatUpperRegion and fullscreen feature inventory', () => {
+describe('UpperRegion and fullscreen feature inventory', () => {
     it('keeps transcript output, spinner, toast, and minimap inside the upper output region', () => {
-        const upperSource = readSource(join(chatAppDir, 'ChatUpperRegion.tsx'));
+        const upperSource = readSource(join(chatAppDir, 'UpperRegion.tsx'));
 
         expect(upperSource).toContain('<WelcomeScreen');
         expect(upperSource).toContain('viewportColumns={props.viewport.columns}');
@@ -277,8 +277,8 @@ describe('ChatUpperRegion and fullscreen feature inventory', () => {
     });
 
     it('threads the terminal viewport into ABG overlay and minimap renderers', () => {
-        const fullscreenSource = readSource(join(chatAppDir, 'ChatFullscreenOverlays.tsx'));
-        const upperSource = readSource(join(chatAppDir, 'ChatUpperRegion.tsx'));
+        const fullscreenSource = readSource(join(chatAppDir, 'FullscreenOverlays.tsx'));
+        const upperSource = readSource(join(chatAppDir, 'UpperRegion.tsx'));
         const abgOverlayBlock = sliceBetween(fullscreenSource, '<AbgOverlay', '/>');
 
         expect(abgOverlayBlock).toContain('viewport={viewport}');
@@ -291,10 +291,10 @@ describe('ChatUpperRegion and fullscreen feature inventory', () => {
     });
 });
 
-describe('ChatModalOverlays seven ModalPopup modes', () => {
+describe('ModalOverlays seven ModalPopup modes', () => {
     it('keeps all seven modal modes through ModalPopup after the dock sibling', () => {
-        const modalSource = readSource(join(chatAppDir, 'ChatModalOverlays.tsx'));
-        const layoutSource = readSource(join(chatAppDir, 'ChatNormalLayout.tsx'));
+        const modalSource = readSource(join(chatAppDir, 'ModalOverlays.tsx'));
+        const layoutSource = readSource(join(chatAppDir, 'NormalLayout.tsx'));
 
         for (const mode of MODAL_MODES) {
             expect(modalSource).toContain(`overlayMode === '${mode}'`);
@@ -307,22 +307,22 @@ describe('ChatModalOverlays seven ModalPopup modes', () => {
 });
 
 describe('keyboard and keymap layer topology', () => {
-    it('routes global keyboard sink Ctrl+C through use-chat-global-keyboard', () => {
+    it('routes global keyboard sink Ctrl+C through use-global-keyboard', () => {
         const chatAppSource = readSource(chatAppRootFile);
-        const keyboardSource = readSource(join(chatAppDir, 'use-chat-global-keyboard.ts'));
+        const keyboardSource = readSource(join(chatAppDir, 'use-global-keyboard.ts'));
 
-        expect(chatAppSource).toContain('useChatGlobalKeyboard');
+        expect(chatAppSource).toContain('useGlobalKeyboard');
         expect(keyboardSource).toContain('useKeyboard');
         expect(keyboardSource).toContain("key.ctrl && key.name === 'c'");
         expect(keyboardSource).toContain("key.name === 'escape' || (key.ctrl && key.name === 'g')");
         expect(keyboardSource).toContain('textareaHandle.get()?.focused');
     });
 
-    it('registers keymap layers only in use-chat-keymap-layers', () => {
+    it('registers keymap layers only in use-keymap-layers', () => {
         const chatAppSource = readSource(chatAppRootFile);
-        const keymapSource = readSource(join(chatAppDir, 'use-chat-keymap-layers.ts'));
+        const keymapSource = readSource(join(chatAppDir, 'use-keymap-layers.ts'));
 
-        expect(chatAppSource).toContain('useChatKeymapLayers');
+        expect(chatAppSource).toContain('useKeymapLayers');
         expect(chatAppSource).not.toContain('registerManagedTextareaComposition');
         expect(chatAppSource).not.toContain('registerChatSubmitLayer');
 
@@ -331,23 +331,23 @@ describe('keyboard and keymap layer topology', () => {
         }
         expect(matchCount(keymapSource, 'registerMessagesScrollLayer')).toBe(2);
         expect(matchCount(keymapSource, 'registerSelectionCopyLayer')).toBe(2);
-        expect(keymapSource).toContain("import('../../platform/keymap/");
+        expect(keymapSource).toContain("import('../platform/keymap/");
         expect(keymapSource).not.toContain('KeymapProvider');
     });
 });
 
 describe('repaint effects topology', () => {
-    it('pins hardReset + forceFullRepaint + 500ms in use-chat-repaint-effects', () => {
+    it('pins hardReset + forceFullRepaint + 500ms in use-repaint-effects', () => {
         const chatAppSource = readSource(chatAppRootFile);
-        const repaintSource = readSource(join(chatAppDir, 'use-chat-repaint-effects.ts'));
-        const union = readChatAppTopologyUnion();
+        const repaintSource = readSource(join(chatAppDir, 'use-repaint-effects.ts'));
+        const union = readAppTopologyUnion();
         const viewportRepaintBlock = sliceBetween(
             repaintSource,
             'let prevViewport = viewport();',
             'let prevOverlayMode',
         );
 
-        expect(chatAppSource).toContain('useChatRepaintEffects');
+        expect(chatAppSource).toContain('useRepaintEffects');
         expect(repaintSource).toContain('hardResetRendererSurface');
         expect(repaintSource).toContain("Reflect.set(renderer, 'forceFullRepaintRequested', true)");
         expect(repaintSource).toContain('}, 500)');
@@ -359,18 +359,18 @@ describe('repaint effects topology', () => {
     });
 });
 
-describe('chat-app import-graph invariants', () => {
-    it('ChatApp imports layout and hooks only from ./chat-app/', () => {
+describe('app import-graph invariants', () => {
+    it('App imports layout and hooks only from ./app/', () => {
         const source = readSource(chatAppRootFile);
         const importLines = source
             .split('\n')
-            .filter((line) => line.includes("from './chat-app/") || line.includes('from "./chat-app/'));
+            .filter((line) => line.includes("from './app/") || line.includes('from "./app/'));
 
-        expect(importLines.some((line) => line.includes('ChatFullscreenOverlays'))).toBe(true);
-        expect(importLines.some((line) => line.includes('ChatNormalLayout'))).toBe(true);
-        expect(importLines.some((line) => line.includes('use-chat-global-keyboard'))).toBe(true);
-        expect(importLines.some((line) => line.includes('use-chat-keymap-layers'))).toBe(true);
-        expect(importLines.some((line) => line.includes('use-chat-repaint-effects'))).toBe(true);
+        expect(importLines.some((line) => line.includes('FullscreenOverlays'))).toBe(true);
+        expect(importLines.some((line) => line.includes('NormalLayout'))).toBe(true);
+        expect(importLines.some((line) => line.includes('use-global-keyboard'))).toBe(true);
+        expect(importLines.some((line) => line.includes('use-keymap-layers'))).toBe(true);
+        expect(importLines.some((line) => line.includes('use-repaint-effects'))).toBe(true);
         expect(source).not.toContain("from './AgentSpinner");
         expect(source).not.toContain("from './ModalPopup");
         expect(source).not.toContain("from './ChatBottomDock");
@@ -380,8 +380,8 @@ describe('chat-app import-graph invariants', () => {
         const createSource = readSource(createChatTuiFile);
         const chatAppSource = readSource(chatAppRootFile);
 
-        expect(createSource).toContain('createComponent(ChatApp, { store })');
-        expect(chatAppSource).toMatch(/export function ChatApp\(\{\s*store\s*\}:\s*ChatAppProps\)/);
+        expect(createSource).toContain('createComponent(App, { store })');
+        expect(chatAppSource).toMatch(/export function App\(\{\s*store\s*\}:\s*AppProps\)/);
         expect(chatAppSource).toContain('useChatSession()');
     });
 });

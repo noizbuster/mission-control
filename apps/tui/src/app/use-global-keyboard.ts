@@ -7,17 +7,17 @@ import {
     nextHunk,
     prevFile,
     prevHunk,
-} from '../../platform/keymap/diff-viewer.js';
-import type { AbgOverlayController } from '../../state/abg-overlay-controller.js';
-import type { ChatStore } from '../../state/chat-store.js';
-import { ABG_OVERLAY_TABS } from '../AbgOverlay.js';
-import type { ChatTextareaHandle } from '../ChatInputTextarea.js';
+} from '../platform/keymap/diff-viewer.js';
+import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
+import type { ChatStore } from '../state/chat-store.js';
+import { ABG_OVERLAY_TABS } from '../components/AbgOverlay.js';
+import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
 
 /**
- * Shared deps for the ChatApp global keyboard sink (Ctrl+C + overlay-only keys).
+ * Shared deps for the App global keyboard sink (Ctrl+C + overlay-only keys).
  * Frozen for the simplify-tui-mount extract; do not expand casually.
  */
-export type ChatGlobalKeyboardDeps = {
+export type GlobalKeyboardDeps = {
     readonly store: ChatStore;
     readonly textareaHandle: ChatTextareaHandle;
     readonly setAbgActiveTab: Setter<number>;
@@ -30,7 +30,7 @@ export type ChatGlobalKeyboardDeps = {
  * the textarea is not focused. Overlay-only guard prevents double-toggle with
  * ChatInputArea onKeyDown (e.g. Ctrl+G).
  */
-export function useChatGlobalKeyboard(deps: ChatGlobalKeyboardDeps): void {
+export function useGlobalKeyboard(deps: GlobalKeyboardDeps): void {
     const { store, textareaHandle, setAbgActiveTab, setAbgScrollOffset, abgOverlayController } = deps;
 
     useKeyboard((key) => {

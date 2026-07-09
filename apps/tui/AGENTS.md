@@ -16,18 +16,18 @@ src/
 |-- terminal-text.ts          # pure: terminalDisplayWidth, segmentTerminalText, truncate, padEnd
 |-- chat.ts                   # pure: ChatBlock, parseMessageBlocks, classifyLine, QuestionOption
 |-- markdown.ts               # pure: streamBlocks (streaming markdown healer, imports marked + remend)
-|-- create-chat-tui.tsx       # TUI mount function: builds ChatStore, mounts ChatApp, returns ChatTuiHandle
+|-- create-chat-tui.tsx       # TUI mount function: builds ChatStore, mounts App, returns ChatTuiHandle
 |-- replay-overlay.tsx        # replay overlay mount (ABG overlay over a replay session)
+|-- app.tsx                   # thin root composer: hooks + fullscreen vs normal branch
+|-- app/                      # App layout modules + extracted hooks/helpers
+|   |-- AgentSpinner.tsx, ModalPopup.tsx
+|   |-- FullscreenOverlays.tsx  # abg / diff-viewer / models-overlay
+|   |-- UpperRegion.tsx         # welcome | transcript + spinner + Toast + AbgMinimap
+|   |-- ModalOverlays.tsx       # 7 ModalPopup modes
+|   |-- NormalLayout.tsx        # root box + onMouseUp + upper → dock → modals
+|   |-- app-helpers.ts          # pure helpers re-exported by App
+|   `-- use-*.ts                # keyboard, keymap, submit, repaint, toast, handles
 |-- components/               # OpenTUI Solid JSX components (all .tsx through @opentui/solid)
-|   |-- ChatApp.tsx           # thin root composer: hooks + fullscreen vs normal branch
-|   |-- chat-app/             # ChatApp layout modules + extracted hooks/helpers
-|   |   |-- AgentSpinner.tsx, ModalPopup.tsx
-|   |   |-- ChatFullscreenOverlays.tsx  # abg / diff-viewer / models-overlay
-|   |   |-- ChatUpperRegion.tsx         # welcome | transcript + spinner + Toast + AbgMinimap
-|   |   |-- ChatModalOverlays.tsx       # 7 ModalPopup modes
-|   |   |-- ChatNormalLayout.tsx        # root box + onMouseUp + upper → dock → modals
-|   |   |-- chat-app-helpers.ts         # pure helpers re-exported by ChatApp
-|   |   `-- use-chat-*.ts               # keyboard, keymap, submit, repaint, toast, handles
 |   |-- ChatInputArea.tsx     # input wrapper
 |   |-- ChatInputTextarea.tsx # native <textarea> wrapper (owns cursor/selection/IME)
 |   |-- ChatTranscript.tsx    # native <scrollbox> wrapper (owns output scroll)
@@ -62,14 +62,14 @@ src/
 
 | Task | Location | Notes |
 | --- | --- | --- |
-| TUI mount factory | `src/create-chat-tui.tsx` | `createChatTui(options)` builds a `ChatStore`, dynamic-imports the renderer + keymap provider + `ChatApp`, mounts the Solid tree, and returns the imperative `ChatTuiHandle` consumed by `interactive-chat.ts`. `createChatTuiHandle(store, unmountFn)` is the testable seam that constructs the handle without the native renderer. |
+| TUI mount factory | `src/create-chat-tui.tsx` | `createChatTui(options)` builds a `ChatStore`, dynamic-imports the renderer + keymap provider + `App`, mounts the Solid tree, and returns the imperative `ChatTuiHandle` consumed by `interactive-chat.ts`. `createChatTuiHandle(store, unmountFn)` is the testable seam that constructs the handle without the native renderer. |
 | Chat state store | `src/state/chat-store.ts` | `ChatStore` owns all chat UI state (output, input mirror, overlays, menus, history, event queue) behind `subscribe()` + `getSnapshot()`. `createChatStore` factory; 16ms-coalesced `emitOutput`; overlay-mode state machine; `waitForEvent`/`enqueueEvent` event queue. |
 | Store selector hook | shared `useSolidStoreSelector` | Use `useSolidStoreSelector(store, selector)` from `platform/use-solid-store-selector.ts` to project a `subscribe`/`getSnapshot` store into a Solid accessor. Do not hand-roll `createSignal` + `onMount` + `subscribe` + `onCleanup` external-store bridges per component; use the shared helper. |
 | TUI handle types | `src/state/chat-tui-types.ts` | `ChatTuiHandle`, `ChatTuiRuntimeOptions` (carries optional `missionControlServices` and `actions` injected by the CLI). |
 | CLI side-effect interface | `src/state/chat-app-actions.ts` | `ChatAppActions` callback interface (`loadDashboardAgentEntries`, `loadMissionPanelRows`, `toggleAgentDisabled`, `setAgentModelOverride`, `isValidModelPattern`). CLI provides implementations; components call them. |
 | Chat block parsing | `src/chat.ts` (via `@mission-control/tui/chat`) | `parseMessageBlocks` splits `outputText` into `ChatBlock` records (user/assistant/thinking/error/tool/system). Pure, zero imports. |
 | Chat test support | `src/components/chat-test-support.ts` | `TextareaLike`, `createRecordingTextarea`, `createRecordingScrollbox`, `makeKeyEvent`, and framework-free test helpers for native renderable seams. |
-| Root component | `src/components/ChatApp.tsx` | Thin composer: wires hooks, then branches fullscreen (`ChatFullscreenOverlays`) vs normal (`ChatNormalLayout`). Layout modules live under `src/components/chat-app/` (`AgentSpinner`, `ModalPopup`, upper region, modal overlays). Reads `ChatStore` snapshots through Solid signals/accessors. |
+| Root component | `src/app.tsx` | Thin composer: wires hooks, then branches fullscreen (`FullscreenOverlays`) vs normal (`NormalLayout`). Layout modules live under `src/app/` (`AgentSpinner`, `ModalPopup`, upper region, modal overlays). Reads `ChatStore` snapshots through Solid signals/accessors. |
 | Input textarea | `src/components/ChatInputTextarea.tsx` | Wraps native `<textarea>` (`TextareaRenderable`): owns editable text, cursor, selection, IME composition. |
 | Output transcript | `src/components/ChatTranscript.tsx` | Wraps native `<scrollbox>` (`ScrollBoxRenderable`): owns output scroll and windowing via `stickyScroll`. |
 | Overlay panels | `src/components/OverlayPanels.tsx` | Approval, question, model picker, level picker, rename overlays. Arrow-key navigation over `ChatStore`. |
@@ -122,7 +122,7 @@ Two native OpenTUI renderables own what the old hand-rolled code used to. `<Chat
 
 ### Provider architecture
 
-The interactive mount dynamically imports `@mission-control/tui/providers`, then wraps `ChatApp` in `MissionControlTuiProviders`. The package exposes that provider composition root through the dedicated `./providers` package subpath and Vite library entry. Do not add provider exports to `src/index.ts`; the main barrel stays provider-free so pure utilities and the state cluster remain safe for eager CLI imports.
+The interactive mount dynamically imports `@mission-control/tui/providers`, then wraps `App` in `MissionControlTuiProviders`. The package exposes that provider composition root through the dedicated `./providers` package subpath and Vite library entry. Do not add provider exports to `src/index.ts`; the main barrel stays provider-free so pure utilities and the state cluster remain safe for eager CLI imports.
 
 Provider-owned persistence lives in the TUI store classes from `packages/core/src/tui-stores/`, selected by `TuiPathsProviderValue` (`dataDir`, `configDir`, and workspace root). Components consume provider hooks and injected structural services; they do not instantiate `AgentRuntime`, provider adapters, tool registries, CLI action classes, or raw OpenCode SDK objects.
 
@@ -162,7 +162,7 @@ Output text is parsed into `ChatBlock` objects by `parseMessageBlocks()` (in `sr
 
 ### Clipboard
 
-Flat `<text>` blocks are explicitly `selectable`; `Markdown` leaves default selectable too. `ChatApp`'s root `<box>` carries an `onMouseUp` handler: when OSC52 is supported it calls `copy()` (selection-copy via OpenTUI's native Zig core). tmux needs `set -g set-allow-passthrough on`; iTerm2, Alacritty, Kitty, WezTerm, and Windows Terminal work directly.
+Flat `<text>` blocks are explicitly `selectable`; `Markdown` leaves default selectable too. `App`'s root `<box>` carries an `onMouseUp` handler: when OSC52 is supported it calls `copy()` (selection-copy via OpenTUI's native Zig core). tmux needs `set -g set-allow-passthrough on`; iTerm2, Alacritty, Kitty, WezTerm, and Windows Terminal work directly.
 
 ## Conventions
 
@@ -171,7 +171,7 @@ Flat `<text>` blocks are explicitly `selectable`; `Markdown` leaves default sele
 - OpenTUI `.tsx` files use Solid JSX through `@opentui/solid`; component return types are `JSX.Element`.
 - The pure subpath layer (`src/terminal-text.ts`, `src/chat.ts`, `src/markdown.ts`) MUST NOT import `@opentui/*`, `solid-js`, framework runtimes, or any CLI/core runtime module. Verified by `src/import-graph.test.ts` for the current pure surface.
 - The state cluster (`src/state/`) is framework-free (no `@opentui/*` or `solid-js` runtime imports). It is exported via `@mission-control/tui/state` and eagerly imported by the CLI so OpenTUI stays out of the noninteractive module graph.
-- The main barrel (`src/index.ts`) re-exports pure primitives + the state cluster. It does NOT re-export OpenTUI components. Component/platform modules are accessed via dedicated subpath exports in `package.json` (e.g. `./chat-app`, `./opentui-renderer`, `./keybind`, `./markdown-theme`). This prevents circular dependencies between the barrel and the state modules.
+- The main barrel (`src/index.ts`) re-exports pure primitives + the state cluster. It does NOT re-export OpenTUI components. Component/platform modules are accessed via dedicated subpath exports in `package.json` (e.g. `./app`, `./opentui-renderer`, `./keybind`, `./markdown-theme`). This prevents circular dependencies between the barrel and the state modules.
 - Provider modules are accessed via `@mission-control/tui/providers`. Keep provider hook modules under `src/platform/providers/`; do not move provider runtime imports into `src/state/` or `src/index.ts`.
 - Impure mount-surface modules (`create-chat-tui.tsx`, `replay-overlay.tsx`, `keymap-provider`) MUST be behind dedicated subpath exports, not the main barrel. Adding them to the barrel triggers circular init races where state modules import pure primitives from the barrel.
 - Visible-width math (wrapping, table columns, bar row counts) counts East Asian Wide glyphs as 2 columns. `wrap-ansi` relies on `string-width`/`get-east-asian-width`, so CJK never overflows.
@@ -184,7 +184,7 @@ Flat `<text>` blocks are explicitly `selectable`; `Markdown` leaves default sele
 ## Tests
 
 - Colocated `*.test.ts`/`*.test.tsx` files under `src` are the package test surface.
-- `src/components/chat-app/chat-app-topology.test.ts` is the multi-file ChatApp topology suite: source-union + import-graph pins for mount shape (`createComponent(ChatApp, { store })`), store-only `ChatAppProps`, no `ChatAppSplitShell`, no SlashMenu/FileAutocomplete in chat-app modules, 7 ModalPopup modes, fullscreen abg/diff/models, normal layout order upper→dock→modals + `onMouseUp`, keymap layers, Ctrl+C global sink, hardReset/forceFullRepaint/500ms, and provider hooks. `ChatApp.test.ts` keeps only the public re-export smoke.
+- `src/app/app-topology.test.ts` is the multi-file App topology suite: source-union + import-graph pins for mount shape (`createComponent(App, { store })`), store-only `AppProps`, no `ChatAppSplitShell`, no SlashMenu/FileAutocomplete in app modules, 7 ModalPopup modes, fullscreen abg/diff/models, normal layout order upper→dock→modals + `onMouseUp`, keymap layers, Ctrl+C global sink, hardReset/forceFullRepaint/500ms, and provider hooks. `app.test.ts` keeps only the public re-export smoke.
 - `src/import-graph.test.ts` scans the 3 pure source files and asserts no `@opentui/*`, framework-runtime, `apps/cli`, or `@mission-control/cli` imports. Keep it green when adding pure modules.
 - `tests/tui-cli-boundary.test.ts` (root) scans all non-test source under `src/` and asserts no `apps/cli`/`../cli`/`@mission-control/cli` references.
 - `platform/terminal-global-policy.test.ts` scans `src/` for direct `process.stdout.columns/rows` reads. No allowed files.

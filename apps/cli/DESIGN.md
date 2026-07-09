@@ -299,7 +299,7 @@ the vertical scroll position.
 
 ## 10. Chat Bottom-Dock Primitive
 
-`ChatApp` owns the full chat screen topology: one flex-growing upper output
+`App` owns the full chat screen topology: one flex-growing upper output
 region, one `ChatBottomDock` sibling, and any global/modal overlays outside the
 dock. The split is a responsibility contract, not a new visual language.
 
@@ -315,9 +315,9 @@ interactions; the dock composes it and forwards refs rather than replacing input
 semantics.
 
 Full-screen overlays (`abg`, `diff-viewer`, `models-overlay`) remain early
-returns in `ChatApp`. Modal overlays (`approval`, `model-picker`,
+returns in `App`. Modal overlays (`approval`, `model-picker`,
 `level-picker`, `rename`, `session-picker`, `agents-dashboard`,
-`mission-panel`) remain outside `ChatBottomDock` and are routed by `ChatApp`.
+`mission-panel`) remain outside `ChatBottomDock` and are routed by `App`.
 Do not move global/modal overlay responsibility into the dock.
 
 Bottom-dock layout policy is deterministic by terminal size:

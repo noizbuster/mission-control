@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createChatStore } from '../../state/chat-store.js';
-import { asTextareaRef, createRecordingTextarea } from '../chat-test-support.js';
-import { useChatSubmit } from './use-chat-submit.js';
+import { createChatStore } from '../state/chat-store.js';
+import { asTextareaRef, createRecordingTextarea } from '../components/chat-test-support.js';
+import { useSubmit } from './use-submit.js';
 
-vi.mock('@mission-control/tui', async () => await import('../../terminal-text.js'));
-vi.mock('@mission-control/tui/chat', async () => await import('../../chat.js'));
+vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
+vi.mock('@mission-control/tui/chat', async () => await import('../chat.js'));
 vi.mock('@mission-control/core', () => ({
     ContinuationRuntime: class ContinuationRuntime {},
     MAIN_AGENT_ID: 'main',
@@ -18,7 +18,7 @@ function flushSubmitTimers(): void {
     vi.runAllTimers();
 }
 
-describe('useChatSubmit', () => {
+describe('useSubmit', () => {
     beforeEach(() => {
         vi.useFakeTimers();
     });
@@ -32,7 +32,7 @@ describe('useChatSubmit', () => {
         const textarea = createRecordingTextarea('hello world');
         const textareaHandle = asTextareaRef(textarea);
         const submitLine = vi.spyOn(store, 'submitLine');
-        const handleSubmit = useChatSubmit({
+        const handleSubmit = useSubmit({
             store,
             textareaHandle,
             promptMenuInteractionsEnabled: () => true,
@@ -52,7 +52,7 @@ describe('useChatSubmit', () => {
         const textarea = createRecordingTextarea('   ');
         const textareaHandle = asTextareaRef(textarea);
         const submitLine = vi.spyOn(store, 'submitLine');
-        const handleSubmit = useChatSubmit({
+        const handleSubmit = useSubmit({
             store,
             textareaHandle,
             promptMenuInteractionsEnabled: () => true,
@@ -70,7 +70,7 @@ describe('useChatSubmit', () => {
         const textarea = createRecordingTextarea('once');
         const textareaHandle = asTextareaRef(textarea);
         const submitLine = vi.spyOn(store, 'submitLine');
-        const handleSubmit = useChatSubmit({
+        const handleSubmit = useSubmit({
             store,
             textareaHandle,
             promptMenuInteractionsEnabled: () => true,
@@ -92,7 +92,7 @@ describe('useChatSubmit', () => {
         const textareaHandle = asTextareaRef(textarea);
         const submitLine = vi.spyOn(store, 'submitLine');
         const setInputMirror = vi.spyOn(store, 'setInputMirror');
-        const handleSubmit = useChatSubmit({
+        const handleSubmit = useSubmit({
             store,
             textareaHandle,
             promptMenuInteractionsEnabled: () => true,
@@ -116,7 +116,7 @@ describe('useChatSubmit', () => {
         const textarea = createRecordingTextarea('/help');
         const textareaHandle = asTextareaRef(textarea);
         const submitLine = vi.spyOn(store, 'submitLine');
-        const handleSubmit = useChatSubmit({
+        const handleSubmit = useSubmit({
             store,
             textareaHandle,
             promptMenuInteractionsEnabled: () => false,

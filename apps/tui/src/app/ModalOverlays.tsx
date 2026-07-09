@@ -1,10 +1,10 @@
 /** @jsxImportSource @opentui/solid */
 
 import type { JSX } from 'solid-js';
-import type { ChatAppActions } from '../../state/chat-app-actions.js';
-import type { ChatStore, ChatStoreOverlayMode } from '../../state/chat-store.js';
-import type { MissionControlServicesLike } from '../../state/mission-services-types.js';
-import { MissionPanelOverlay } from '../MissionPanelOverlay.js';
+import type { ChatAppActions } from '../state/chat-app-actions.js';
+import type { ChatStore, ChatStoreOverlayMode } from '../state/chat-store.js';
+import type { MissionControlServicesLike } from '../state/mission-services-types.js';
+import { MissionPanelOverlay } from '../components/MissionPanelOverlay.js';
 import {
     AgentsDashboardOverlay,
     ApprovalOverlay,
@@ -12,10 +12,10 @@ import {
     ModelPickerOverlay,
     RenameOverlay,
     SessionPickerOverlay,
-} from '../OverlayPanels.js';
+} from '../components/OverlayPanels.js';
 import { ModalPopup } from './ModalPopup.js';
 
-export type ChatModalOverlaysProps = {
+export type ModalOverlaysProps = {
     readonly store: ChatStore;
     readonly overlayMode: ChatStoreOverlayMode;
     readonly workspaceRoot: string | undefined;
@@ -26,7 +26,7 @@ export type ChatModalOverlaysProps = {
 /**
  * Seven modal popup modes rendered as absolute siblings over the normal layout.
  */
-export function ChatModalOverlays(props: ChatModalOverlaysProps): JSX.Element {
+export function ModalOverlays(props: ModalOverlaysProps): JSX.Element {
     const { store, overlayMode, workspaceRoot, actions, missionControlServices } = props;
 
     return (

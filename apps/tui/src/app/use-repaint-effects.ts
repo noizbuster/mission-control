@@ -2,15 +2,15 @@ import { type Accessor, createEffect, onCleanup } from 'solid-js';
 import {
     hardResetRendererSurface,
     type RendererSurfaceResetTarget,
-} from '../../platform/opentui-renderer.js';
-import type { TerminalViewport } from '../../platform/terminal-viewport.js';
-import type { ChatStoreOverlayMode } from '../../state/chat-store.js';
+} from '../platform/opentui-renderer.js';
+import type { TerminalViewport } from '../platform/terminal-viewport.js';
+import type { ChatStoreOverlayMode } from '../state/chat-store.js';
 
 export type ChatRepaintRenderer = RendererSurfaceResetTarget & {
     requestRender(): void;
 };
 
-export type UseChatRepaintEffectsDeps = {
+export type UseRepaintEffectsDeps = {
     readonly renderer: ChatRepaintRenderer;
     readonly viewport: Accessor<TerminalViewport>;
     readonly overlayMode: Accessor<ChatStoreOverlayMode>;
@@ -30,7 +30,7 @@ export type UseChatRepaintEffectsDeps = {
  * corrects accumulated errors without the per-frame cost of always skipping
  * diff.
  */
-export function useChatRepaintEffects(deps: UseChatRepaintEffectsDeps): void {
+export function useRepaintEffects(deps: UseRepaintEffectsDeps): void {
     const { renderer, viewport, overlayMode, generating, promptRepaintKey } = deps;
 
     let prevViewport = viewport();

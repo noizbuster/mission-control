@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 
 import type { JSX } from 'solid-js';
-import { useSpinnerFrame } from '../spinner.js';
+import { useSpinnerFrame } from '../components/spinner.js';
 
 export function AgentSpinner({ text }: { readonly text: string }): JSX.Element {
     const { glyph } = useSpinnerFrame();

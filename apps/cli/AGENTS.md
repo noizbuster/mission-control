@@ -72,7 +72,7 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 - User input echoed to outputText uses `You: ` prefix so `parseMessageBlocks` can classify it.
 - Error messages use `Error: ` prefix for the same reason.
 - Slash commands that start with `/` are NOT echoed to outputText (they're system commands, not conversation).
-- The `controlsPrompt` flag is set to `true` on the opentui `ChatOutput` (see `interactive-chat-io.ts`) so the imperative loop calls `renderPrompt()` (no-op) instead of writing `> ` to outputText. The prompt is rendered by `ChatApp`'s input area.
+- The `controlsPrompt` flag is set to `true` on the opentui `ChatOutput` (see `interactive-chat-io.ts`) so the imperative loop calls `renderPrompt()` (no-op) instead of writing `> ` to outputText. The prompt is rendered by `App`'s input area.
 
 ## Tests
 
@@ -80,7 +80,7 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 - For argument changes, update `args.test.ts`, `run-agent-*`, `auth-*`, or `session.test.ts` as appropriate.
 - For renderer/output changes, update `src/ui/renderers.test.ts` and the affected command-mode tests.
 - Integration tests (`run-agent-chat.test.ts`) inject scripted `ChatInput`/`ChatOutput` via options, bypassing the opentui TUI entirely.
-- The interactive TUI is covered by `interactive-chat-terminal-input.test.ts` for the terminal fallback plus focused tests in `apps/tui` (create-chat-tui, ChatApp, component, and keymap tests); use manual tmux QA for full runtime checks.
+- The interactive TUI is covered by `interactive-chat-terminal-input.test.ts` for the terminal fallback plus focused tests in `apps/tui` (create-chat-tui, App, component, and keymap tests); use manual tmux QA for full runtime checks.
 - Model command tests (`run-agent-model-command.test.ts`) verify `/model` parsing and selection logic.
 - When modifying the interactive TUI runtime, always run tmux QA: start CLI, type a prompt, verify response, test `/exit` and Ctrl+C.
 - Run focused CLI tests with `NX_DAEMON=false NX_ISOLATE_PLUGINS=false pnpm exec nx run cli:test` or `pnpm exec vitest run apps/cli/src/<file>.test.ts`.

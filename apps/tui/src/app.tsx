@@ -10,26 +10,26 @@ import {
     useTuiLocalPreferences,
     useTuiPromptStash,
     useTuiRuntime,
-} from '../platform/providers/index.js';
-import { useTerminalViewport } from '../platform/terminal-viewport-solid.js';
-import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
-import type { ChatStore } from '../state/chat-store.js';
-import { ChatTranscript } from './ChatTranscript.js';
+} from './platform/providers/index.js';
+import { useTerminalViewport } from './platform/terminal-viewport-solid.js';
+import { useSolidStoreSelector } from './platform/use-solid-store-selector.js';
+import type { ChatStore } from './state/chat-store.js';
+import { ChatTranscript } from './components/ChatTranscript.js';
 import {
     deriveStatusBarProps,
     preserveBlockReferences,
     promptPanelRepaintKey,
-} from './chat-app/chat-app-helpers.js';
-import { ChatFullscreenOverlays } from './chat-app/ChatFullscreenOverlays.js';
-import { ChatNormalLayout } from './chat-app/ChatNormalLayout.js';
-import { useChatGlobalKeyboard } from './chat-app/use-chat-global-keyboard.js';
-import { useChatKeymapLayers } from './chat-app/use-chat-keymap-layers.js';
-import { useChatRenderableHandles } from './chat-app/use-chat-renderable-handles.js';
-import { useChatRepaintEffects } from './chat-app/use-chat-repaint-effects.js';
-import { useChatSelectionMouseUp } from './chat-app/use-chat-selection-mouseup.js';
-import { useChatSubmit } from './chat-app/use-chat-submit.js';
-import { useChatTransientToast } from './chat-app/use-chat-transient-toast.js';
-import { bottomDockPolicy } from './chat-bottom-dock-policy.js';
+} from './app/app-helpers.js';
+import { FullscreenOverlays } from './app/FullscreenOverlays.js';
+import { NormalLayout } from './app/NormalLayout.js';
+import { useGlobalKeyboard } from './app/use-global-keyboard.js';
+import { useKeymapLayers } from './app/use-keymap-layers.js';
+import { useRenderableHandles } from './app/use-renderable-handles.js';
+import { useRepaintEffects } from './app/use-repaint-effects.js';
+import { useSelectionMouseUp } from './app/use-selection-mouseup.js';
+import { useSubmit } from './app/use-submit.js';
+import { useTransientToast } from './app/use-transient-toast.js';
+import { bottomDockPolicy } from './components/chat-bottom-dock-policy.js';
 
 export {
     type PromptPanelRepaintKeyInput,
@@ -38,7 +38,7 @@ export {
     preserveBlockReferences,
     promptPanelRepaintKey,
     recentModelPreferenceSelections,
-} from './chat-app/chat-app-helpers.js';
+} from './app/app-helpers.js';
 
 // Two memos: outer avoids re-parsing when outputText is stable (overlay toggles);
 // inner avoids re-comparing when the parse result is stable. prevRef holds the last
@@ -53,11 +53,11 @@ function createStableMessageBlocks(outputText: Accessor<string>): Accessor<reado
     });
 }
 
-export type ChatAppProps = {
+export type AppProps = {
     readonly store: ChatStore;
 };
 
-export function ChatApp({ store }: ChatAppProps): JSX.Element {
+export function App({ store }: AppProps): JSX.Element {
     const snapshot = useSolidStoreSelector(store, (state) => state);
     const runtime = useTuiRuntime();
     const session = useChatSession();
@@ -66,7 +66,7 @@ export function ChatApp({ store }: ChatAppProps): JSX.Element {
     const missionControlServices = session.missionControlServices;
     const actions = session.actions;
     const statusBarProps = createMemo(() => deriveStatusBarProps(runtime, snapshot()));
-    const { textareaHandle, scrollboxHandle, keymapScrollboxRef } = useChatRenderableHandles();
+    const { textareaHandle, scrollboxHandle, keymapScrollboxRef } = useRenderableHandles();
 
     // Seeded from persisted prefs so a user's last tab/scroll survives an overlay reopen.
     const initialPrefs = store.getAbgOverlayPrefsSnapshot();
@@ -82,18 +82,18 @@ export function ChatApp({ store }: ChatAppProps): JSX.Element {
     const dockPolicy = createMemo(() => bottomDockPolicy(viewport()));
     const promptMenuInteractionsEnabled = createMemo(() => dockPolicy().menu.rows > 0);
 
-    useChatTransientToast(store);
-    const handleSelectionMouseUp = useChatSelectionMouseUp();
+    useTransientToast(store);
+    const handleSelectionMouseUp = useSelectionMouseUp();
     // Wire the submit handler the chat.submit keymap layer (T3) invokes. The
     // keymap owns the return/kpenter chord (native keyBindings are suspended),
     // so this is the sole Enter-submit path.
-    const handleSubmit = useChatSubmit({
+    const handleSubmit = useSubmit({
         store,
         textareaHandle,
         promptMenuInteractionsEnabled,
     });
 
-    useChatGlobalKeyboard({
+    useGlobalKeyboard({
         store,
         textareaHandle,
         setAbgActiveTab,
@@ -101,7 +101,7 @@ export function ChatApp({ store }: ChatAppProps): JSX.Element {
         abgOverlayController,
     });
 
-    useChatKeymapLayers({
+    useKeymapLayers({
         store,
         keymap,
         renderer,
@@ -127,7 +127,7 @@ export function ChatApp({ store }: ChatAppProps): JSX.Element {
         }),
     );
 
-    useChatRepaintEffects({
+    useRepaintEffects({
         renderer,
         viewport,
         overlayMode: () => snapshot().overlayMode,
@@ -162,7 +162,7 @@ export function ChatApp({ store }: ChatAppProps): JSX.Element {
             snap.overlayMode === 'models-overlay'
         ) {
             return (
-                <ChatFullscreenOverlays
+                <FullscreenOverlays
                     store={store}
                     snap={snap}
                     viewport={viewport()}
@@ -175,7 +175,7 @@ export function ChatApp({ store }: ChatAppProps): JSX.Element {
         }
 
         return (
-            <ChatNormalLayout
+            <NormalLayout
                 store={store}
                 snap={snap}
                 viewport={viewport()}

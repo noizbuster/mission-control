@@ -4,7 +4,7 @@
  * The concrete implementations (agent config persistence, dashboard/mission
  * data loading) live in the CLI because they bridge to CLI runtime concerns
  * (agent discovery, mission stores). The TUI overlays receive these callbacks
- * via ChatApp props, preserving the CLI → TUI dependency direction.
+ * via App props, preserving the CLI → TUI dependency direction.
  *
  * `DashboardAgentEntry` and `MissionPanelRow` come from the chat store state
  * (same package). All callbacks are optional; overlays no-op when undefined.

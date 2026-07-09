@@ -103,13 +103,13 @@ describe('overlay integration: controller → AbgOverlay contract (T5 wiring)', 
         expect(typeof store.update).toBe('function');
     });
 
-    it('controller exposes flushNow and clearTimeline (the ChatApp overlay keymap actions)', () => {
+    it('controller exposes flushNow and clearTimeline (the App overlay keymap actions)', () => {
         const controller = createAbgOverlayController(createAbgOverlayStore());
         expect(typeof controller.flushNow).toBe('function');
         expect(typeof controller.clearTimeline).toBe('function');
     });
 
-    it('clearTimeline empties recentEvents (ChatApp "c" keymap action)', () => {
+    it('clearTimeline empties recentEvents (App "c" keymap action)', () => {
         const store = createAbgOverlayStore();
         const controller = createAbgOverlayController(store);
         store.update((draft) => {
@@ -131,10 +131,10 @@ describe('overlay integration: controller → AbgOverlay contract (T5 wiring)', 
         expect(ABG_OVERLAY_TABS[7]).toBe('blackboard');
     });
 
-    it('ChatApp live render path no longer contains the placeholder string', () => {
-        const chatAppSource = readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatApp.tsx'), 'utf8');
+    it('App live render path no longer contains the placeholder string', () => {
+        const chatAppSource = readFileSync(resolve(process.cwd(), 'apps/tui/src/app.tsx'), 'utf8');
         const fullscreenSource = readFileSync(
-            resolve(process.cwd(), 'apps/tui/src/components/chat-app/ChatFullscreenOverlays.tsx'),
+            resolve(process.cwd(), 'apps/tui/src/app/FullscreenOverlays.tsx'),
             'utf8',
         );
         const union = `${chatAppSource}\n${fullscreenSource}`;

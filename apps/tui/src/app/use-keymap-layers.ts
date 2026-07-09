@@ -2,20 +2,20 @@ import { extractLastAssistantText } from '@mission-control/tui/chat';
 import type { CliRenderer, ScrollBoxRenderable } from '@opentui/core';
 import type { Accessor } from 'solid-js';
 import { onCleanup, onMount } from 'solid-js';
-import type { OpenTuiKeymap } from '../../platform/keymap/keymap-instance.js';
-import type { TuiClipboardService } from '../../platform/providers/clipboard-toast-context.js';
-import type { TuiLocalPreferencesService } from '../../platform/providers/local-preferences-context.js';
-import type { TuiPromptStashService } from '../../platform/providers/prompt-services-context.js';
-import type { TerminalViewport } from '../../platform/terminal-viewport.js';
-import type { ChatStore } from '../../state/chat-store.js';
-import type { ChatTextareaHandle } from '../ChatInputTextarea.js';
-import { parseModelPreferenceKeys, recentModelPreferenceSelections } from './chat-app-helpers.js';
+import type { OpenTuiKeymap } from '../platform/keymap/keymap-instance.js';
+import type { TuiClipboardService } from '../platform/providers/clipboard-toast-context.js';
+import type { TuiLocalPreferencesService } from '../platform/providers/local-preferences-context.js';
+import type { TuiPromptStashService } from '../platform/providers/prompt-services-context.js';
+import type { TerminalViewport } from '../platform/terminal-viewport.js';
+import type { ChatStore } from '../state/chat-store.js';
+import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
+import { parseModelPreferenceKeys, recentModelPreferenceSelections } from './app-helpers.js';
 
 /**
- * Shared deps for all ChatApp keymap layer registrations.
+ * Shared deps for all App keymap layer registrations.
  * Frozen for the simplify-tui-mount extract; single registration site per layer.
  */
-export type ChatKeymapLayersDeps = {
+export type KeymapLayersDeps = {
     readonly store: ChatStore;
     readonly keymap: OpenTuiKeymap;
     readonly renderer: CliRenderer;
@@ -31,7 +31,7 @@ export type ChatKeymapLayersDeps = {
     readonly handleSubmit: () => void;
 };
 
-function createMessagesScrollDeps(deps: ChatKeymapLayersDeps) {
+function createMessagesScrollDeps(deps: KeymapLayersDeps) {
     const { store, renderer, clipboard, viewport, scrollboxRef } = deps;
     return {
         scrollboxRef,
@@ -56,8 +56,8 @@ function navigateOpenMenu(store: ChatStore, textareaHandle: ChatTextareaHandle, 
     return true;
 }
 
-/** Registers every ChatApp keymap layer once; dynamic imports keep keymap FFI out of --no-tui. */
-export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
+/** Registers every App keymap layer once; dynamic imports keep keymap FFI out of --no-tui. */
+export function useKeymapLayers(deps: KeymapLayersDeps): void {
     const {
         store,
         keymap,
@@ -73,7 +73,7 @@ export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
     onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
-        void import('../../platform/keymap/keymap-managed-layer.js').then(
+        void import('../platform/keymap/keymap-managed-layer.js').then(
             ({ registerChatSubmitLayer, registerManagedTextareaComposition }) => {
                 if (disposed) return;
                 const offComposition = registerManagedTextareaComposition(keymap, renderer);
@@ -127,7 +127,7 @@ export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
     onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
-        void import('../../platform/keymap/messages-scroll.js').then(({ registerMessagesScrollLayer }) => {
+        void import('../platform/keymap/messages-scroll.js').then(({ registerMessagesScrollLayer }) => {
             if (disposed) return;
             cleanup = registerMessagesScrollLayer(keymap, createMessagesScrollDeps(deps), {
                 isEnabled: () => store.getSnapshot().overlayMode === 'none',
@@ -143,7 +143,7 @@ export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
     onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
-        void import('../../platform/keymap/messages-scroll.js').then(({ registerSelectionCopyLayer }) => {
+        void import('../platform/keymap/messages-scroll.js').then(({ registerSelectionCopyLayer }) => {
             if (disposed) return;
             cleanup = registerSelectionCopyLayer(keymap, createMessagesScrollDeps(deps), {
                 isEnabled: () => store.getSnapshot().overlayMode === 'none',
@@ -159,7 +159,7 @@ export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
     onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
-        void import('../../platform/keymap/model-favorites.js').then(
+        void import('../platform/keymap/model-favorites.js').then(
             ({
                 createPreferenceBackedModelFavorites,
                 createPreferenceBackedModelFrecency,
@@ -202,7 +202,7 @@ export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
     onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
-        void import('../../platform/keymap/session-shortcuts.js').then(({ registerSessionShortcutsLayer }) => {
+        void import('../platform/keymap/session-shortcuts.js').then(({ registerSessionShortcutsLayer }) => {
             if (disposed) return;
             cleanup = registerSessionShortcutsLayer(
                 keymap,
@@ -253,7 +253,7 @@ export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
     onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
-        void import('../../platform/keymap/message-undo-redo.js').then(({ registerMessageUndoRedoLayer }) => {
+        void import('../platform/keymap/message-undo-redo.js').then(({ registerMessageUndoRedoLayer }) => {
             if (disposed) return;
             cleanup = registerMessageUndoRedoLayer(keymap, {
                 getOutputText: () => store.getSnapshot().outputText,
@@ -276,7 +276,7 @@ export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
     onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
-        void import('../../platform/keymap/leader-addons.js').then(({ registerAbgMinimapToggleLayer }) => {
+        void import('../platform/keymap/leader-addons.js').then(({ registerAbgMinimapToggleLayer }) => {
             if (disposed) return;
             cleanup = registerAbgMinimapToggleLayer(keymap, {
                 toggleMinimap: () => store.toggleAbgMinimap(),
