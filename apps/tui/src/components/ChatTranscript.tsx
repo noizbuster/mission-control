@@ -3,6 +3,7 @@
 import { blockPrefix, type ChatBlock, joinBlockText, readToolBlockTitle } from '@mission-control/tui/chat';
 import { MacOSScrollAccel, type ScrollAcceleration, type ScrollBoxRenderable, TextAttributes } from '@opentui/core';
 import { For, type JSX } from 'solid-js';
+import { useTerminalViewport } from '../platform/terminal-viewport-solid.js';
 import { Markdown } from './markdown/Markdown.js';
 import { darkTheme, type TerminalMarkdownTheme } from './markdown/theme.js';
 import { ToolCard } from './ToolCard.js';
@@ -25,7 +26,7 @@ export type ChatTranscriptScrollOptions = {
     readonly stickyStart: 'bottom';
     readonly scrollAcceleration: ScrollAcceleration;
     readonly flexGrow: 1;
-    readonly width: '100%';
+    readonly minHeight: 0;
     readonly maxHeight?: number;
 };
 
@@ -35,7 +36,7 @@ export function chatTranscriptScrollOptions(maxHeight?: number): ChatTranscriptS
         stickyStart: 'bottom',
         scrollAcceleration: new MacOSScrollAccel(),
         flexGrow: 1,
-        width: '100%',
+        minHeight: 0,
         ...(maxHeight !== undefined ? { maxHeight } : {}),
     };
 }
@@ -45,7 +46,7 @@ export type ChatTranscriptProps = {
     readonly scrollboxRef: ChatScrollboxHandle;
     readonly generating: boolean;
     readonly toolOutputExpanded: boolean;
-    readonly viewportColumns: number;
+    readonly viewportColumns?: number;
 };
 
 export type ChatTranscriptScrollboxProps = {
@@ -54,17 +55,13 @@ export type ChatTranscriptScrollboxProps = {
     readonly maxHeight?: number;
 };
 
-export function ChatTranscriptScrollbox({
-    children,
-    scrollboxRef,
-    maxHeight,
-}: ChatTranscriptScrollboxProps): JSX.Element {
+export function ChatTranscriptScrollbox(props: ChatTranscriptScrollboxProps): JSX.Element {
     return (
         <scrollbox
-            ref={(renderable: ScrollBoxRenderable) => scrollboxRef.set(renderable)}
-            {...chatTranscriptScrollOptions(maxHeight)}
+            ref={(renderable: ScrollBoxRenderable) => props.scrollboxRef.set(renderable)}
+            {...chatTranscriptScrollOptions(props.maxHeight)}
         >
-            {children}
+            {props.children}
         </scrollbox>
     );
 }
@@ -83,15 +80,7 @@ const thinkingTheme: TerminalMarkdownTheme = {
     defaultTextStyle: { attributes: { italic: true, dim: true } },
 };
 
-export function MarkdownPanelBase({
-    text,
-    theme,
-    barColor,
-    barWidth,
-    streaming,
-    marginTop,
-    viewportColumns,
-}: {
+export type MarkdownPanelProps = {
     readonly text: string;
     readonly theme: TerminalMarkdownTheme;
     readonly barColor: string;
@@ -99,16 +88,18 @@ export function MarkdownPanelBase({
     readonly streaming?: boolean;
     readonly marginTop?: number;
     readonly viewportColumns: number;
-}): JSX.Element {
+};
+
+export function MarkdownPanelBase(props: MarkdownPanelProps): JSX.Element {
     return (
-        <box flexDirection="row" {...(marginTop !== undefined ? { marginTop } : {})}>
-            <box width={barWidth} backgroundColor={barColor} shouldFill={true} />
-            <box flexDirection="column" flexGrow={1}>
+        <box flexDirection="row" {...(props.marginTop !== undefined ? { marginTop: props.marginTop } : {})}>
+            <box width={props.barWidth} backgroundColor={props.barColor} shouldFill={true} flexShrink={0} />
+            <box flexDirection="column" flexGrow={1} minWidth={0}>
                 <Markdown
-                    text={text}
-                    theme={theme}
-                    width={viewportColumns}
-                    {...(streaming ? { streaming: true } : {})}
+                    text={props.text}
+                    theme={props.theme}
+                    width={Math.max(1, props.viewportColumns - props.barWidth)}
+                    {...(props.streaming === true ? { streaming: true } : {})}
                 />
             </box>
         </box>
@@ -117,23 +108,20 @@ export function MarkdownPanelBase({
 
 export const MarkdownPanel = MarkdownPanelBase;
 
-export function MessageBlockBase({
-    block,
-    isStreaming,
-    toolOutputExpanded,
-    viewportColumns,
-}: {
+export type MessageBlockProps = {
     readonly block: ChatBlock;
     readonly isStreaming?: boolean;
     readonly toolOutputExpanded: boolean;
     readonly viewportColumns: number;
-}): JSX.Element {
-    const prefix = blockPrefix[block.kind];
+};
 
-    if (block.kind === 'system') {
+export function MessageBlockBase(props: MessageBlockProps): JSX.Element {
+    const prefix = blockPrefix[props.block.kind];
+
+    if (props.block.kind === 'system') {
         return (
             <box flexDirection="column">
-                <For each={block.lines}>
+                <For each={props.block.lines}>
                     {(line) => (
                         <text selectable attributes={TextAttributes.DIM}>
                             {line}
@@ -144,21 +132,21 @@ export function MessageBlockBase({
         );
     }
 
-    if (block.kind === 'tool') {
-        const title = readToolBlockTitle(block.lines);
+    if (props.block.kind === 'tool') {
+        const title = readToolBlockTitle(props.block.lines);
         return (
             <box marginTop={1}>
                 <ToolCard
-                    lines={block.lines}
-                    expanded={toolOutputExpanded}
+                    lines={props.block.lines}
+                    expanded={props.toolOutputExpanded}
                     {...(title !== undefined ? { title } : {})}
                 />
             </box>
         );
     }
 
-    if (block.kind === 'thinking') {
-        const joined = joinBlockText(block.lines, prefix);
+    if (props.block.kind === 'thinking') {
+        const joined = joinBlockText(props.block.lines, prefix);
         return (
             <MarkdownPanel
                 text={joined}
@@ -166,33 +154,33 @@ export function MessageBlockBase({
                 barColor="#ff00ff"
                 barWidth={2}
                 marginTop={1}
-                viewportColumns={viewportColumns}
-                {...(isStreaming ? { streaming: true } : {})}
+                viewportColumns={props.viewportColumns}
+                {...(props.isStreaming === true ? { streaming: true } : {})}
             />
         );
     }
 
-    if (block.kind === 'assistant') {
-        const joined = joinBlockText(block.lines, prefix);
+    if (props.block.kind === 'assistant') {
+        const joined = joinBlockText(props.block.lines, prefix);
         return (
             <MarkdownPanel
                 text={joined}
                 theme={darkTheme}
                 barColor="#00ff00"
                 barWidth={1}
-                viewportColumns={viewportColumns}
-                {...(isStreaming ? { streaming: true } : {})}
+                viewportColumns={props.viewportColumns}
+                {...(props.isStreaming === true ? { streaming: true } : {})}
             />
         );
     }
 
-    const leftHex = BLOCK_LEFT_HEX[block.kind];
-    const isError = block.kind === 'error';
+    const leftHex = BLOCK_LEFT_HEX[props.block.kind];
+    const isError = props.block.kind === 'error';
     return (
         <box flexDirection="row">
             {leftHex !== undefined ? <box width={1} backgroundColor={leftHex} shouldFill={true} /> : null}
-            <box flexDirection="column" flexGrow={1}>
-                <For each={block.lines}>
+            <box flexDirection="column" flexGrow={1} minWidth={0}>
+                <For each={props.block.lines}>
                     {(line) => {
                         const content = prefix.length > 0 && line.startsWith(prefix) ? line.slice(prefix.length) : line;
                         return (
@@ -209,44 +197,32 @@ export function MessageBlockBase({
 
 export const MessageBlock = MessageBlockBase;
 
-export function ChatTranscript({
-    blocks,
-    scrollboxRef,
-    generating,
-    toolOutputExpanded,
-    viewportColumns,
-}: ChatTranscriptProps): JSX.Element {
-    if (blocks.length === 0) {
-        return (
-            <scrollbox
-                ref={(renderable: ScrollBoxRenderable) => scrollboxRef.set(renderable)}
-                focusable={false}
-                {...chatTranscriptScrollOptions()}
-            >
-                <text attributes={TextAttributes.DIM}>{''}</text>
-            </scrollbox>
-        );
-    }
-    const lastIndex = blocks.length - 1;
+export function ChatTranscript(props: ChatTranscriptProps): JSX.Element {
+    const viewport = useTerminalViewport();
+    const columns = (): number => props.viewportColumns ?? viewport().columns;
+
     return (
         <scrollbox
-            ref={(renderable: ScrollBoxRenderable) => scrollboxRef.set(renderable)}
+            ref={(renderable: ScrollBoxRenderable) => props.scrollboxRef.set(renderable)}
             focusable={false}
             {...chatTranscriptScrollOptions()}
         >
-            <For each={blocks}>
-                {(block, index) => {
-                    const streaming = generating && index() === lastIndex;
-                    return (
+            {props.blocks.length === 0 ? (
+                <text attributes={TextAttributes.DIM}>{''}</text>
+            ) : (
+                <For each={props.blocks}>
+                    {(block, index) => (
                         <MessageBlock
                             block={block}
-                            toolOutputExpanded={toolOutputExpanded}
-                            viewportColumns={viewportColumns}
-                            {...(streaming ? { isStreaming: true } : {})}
+                            toolOutputExpanded={props.toolOutputExpanded}
+                            viewportColumns={columns()}
+                            {...(props.generating && index() === props.blocks.length - 1
+                                ? { isStreaming: true }
+                                : {})}
                         />
-                    );
-                }}
-            </For>
+                    )}
+                </For>
+            )}
         </scrollbox>
     );
 }

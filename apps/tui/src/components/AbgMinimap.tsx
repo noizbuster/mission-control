@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 
 import type { AbgNodeStatus } from '@mission-control/protocol';
-import { For, type JSX } from 'solid-js';
+import { createMemo, For, type JSX, Show } from 'solid-js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
 import type { AbgOverlayStore } from '../state/abg-overlay-state.js';
@@ -89,32 +89,39 @@ function renderRow(row: VisualGraphRow, recentStatuses: Set<AbgNodeStatus>): JSX
     );
 }
 
-export function AbgMinimap({ store, viewport }: AbgMinimapProps): JSX.Element {
-    const state = useSolidStoreSelector(store, (snapshot) => snapshot);
-
-    if (state().nodes.size === 0) return null;
-
-    const input = buildInput(
-        state().nodes,
-        state().graphEdges,
-        state().activeNodeIds,
-        state().activeGraphId,
-        minimapMaxWidthForViewport(viewport),
-    );
-    const rendered = renderVisualGraph(input);
-    const recentStatuses = computeRecentStatuses(state().nodeChangedAtMs, state().nodes, Date.now());
+export function AbgMinimap(props: AbgMinimapProps): JSX.Element {
+    const state = useSolidStoreSelector(props.store, (snapshot) => snapshot);
+    const rendered = createMemo(() => {
+        const snap = state();
+        if (snap.nodes.size === 0) return undefined;
+        const input = buildInput(
+            snap.nodes,
+            snap.graphEdges,
+            snap.activeNodeIds,
+            snap.activeGraphId,
+            minimapMaxWidthForViewport(props.viewport),
+        );
+        return {
+            graph: renderVisualGraph(input),
+            recentStatuses: computeRecentStatuses(snap.nodeChangedAtMs, snap.nodes, Date.now()),
+        };
+    });
 
     return (
-        <box
-            position="absolute"
-            top={0}
-            right={0}
-            flexDirection="column"
-            flexShrink={0}
-            borderStyle="single"
-            borderColor="#404040"
-        >
-            <For each={rendered.rows}>{(row) => renderRow(row, recentStatuses)}</For>
-        </box>
+        <Show when={rendered()}>
+            {(view) => (
+                <box
+                    position="absolute"
+                    top={0}
+                    right={0}
+                    flexDirection="column"
+                    flexShrink={0}
+                    borderStyle="single"
+                    borderColor="#404040"
+                >
+                    <For each={view().graph.rows}>{(row) => renderRow(row, view().recentStatuses)}</For>
+                </box>
+            )}
+        </Show>
     );
 }

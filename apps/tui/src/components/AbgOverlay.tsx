@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 
 import { truncateTerminalText } from '@mission-control/tui';
-import { For, type JSX } from 'solid-js';
+import { createMemo, For, type JSX } from 'solid-js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
 import type { AbgOverlayState, AbgOverlayStore } from '../state/abg-overlay-state.js';
@@ -206,26 +206,25 @@ function FooterHint({ narrow }: { narrow: boolean }): JSX.Element {
     );
 }
 
-export function AbgOverlay({
-    store,
-    activeTab,
-    scrollOffset: _scrollOffset,
-    modelLabel,
-    viewport,
-    refreshMs = DEFAULT_REFRESH_MS,
-}: AbgOverlayProps): JSX.Element {
-    const state = useSolidStoreSelector(store, (snapshot) => snapshot);
-    const narrow = shouldCollapseViewportToOverview(viewport);
-    const visibleTab = visibleAbgOverlayTab(activeTab, viewport);
+export function AbgOverlay(props: AbgOverlayProps): JSX.Element {
+    const state = useSolidStoreSelector(props.store, (snapshot) => snapshot);
+    const refreshMs = () => props.refreshMs ?? DEFAULT_REFRESH_MS;
+    const narrow = createMemo(() => shouldCollapseViewportToOverview(props.viewport));
+    const visibleTab = createMemo(() => visibleAbgOverlayTab(props.activeTab, props.viewport));
 
     return (
         <box flexDirection="column" height="100%" shouldFill={true}>
-            <Header state={state()} modelLabel={modelLabel} refreshMs={refreshMs} />
-            <TabStrip activeTab={visibleTab} />
+            <Header state={state()} modelLabel={props.modelLabel} refreshMs={refreshMs()} />
+            <TabStrip activeTab={visibleTab()} />
             <box flexGrow={1} shouldFill={true}>
-                <PaneBody activeTab={visibleTab} state={state()} modelLabel={modelLabel} viewport={viewport} />
+                <PaneBody
+                    activeTab={visibleTab()}
+                    state={state()}
+                    modelLabel={props.modelLabel}
+                    viewport={props.viewport}
+                />
             </box>
-            <FooterHint narrow={narrow} />
+            <FooterHint narrow={narrow()} />
         </box>
     );
 }

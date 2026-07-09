@@ -63,16 +63,18 @@ describe('ChatBottomDockBase source topology', () => {
         const source = readChatBottomDockSource();
         const block = sliceBetween(source, 'export function ChatBottomDockBase', 'export function ChatBottomDock(');
 
-        expect(block.indexOf('<TopStatusBar')).toBeLessThan(block.indexOf('{promptPanels}'));
-        expect(block.indexOf('{promptPanels}')).toBeLessThan(block.indexOf("dockSlice.inputMode === 'question'"));
-        expect(block.indexOf("dockSlice.inputMode === 'question'")).toBeLessThan(block.indexOf('<BottomStatusBar'));
-        expect(block).toContain('<QuestionOverlay store={store} />');
+        expect(block.indexOf('<TopStatusBar')).toBeLessThan(block.indexOf('renderPromptAdjacentPanels'));
+        expect(block.indexOf('renderPromptAdjacentPanels')).toBeLessThan(
+            block.indexOf("props.dockSlice.inputMode === 'question'"),
+        );
+        expect(block.indexOf("props.dockSlice.inputMode === 'question'")).toBeLessThan(block.indexOf('<BottomStatusBar'));
+        expect(block).toContain('<QuestionOverlay store={props.store} />');
         expect(block).toContain('<ChatInputArea');
-        expect(block).toContain('textareaRef={textareaRef}');
-        expect(block).toContain('scrollboxRef={scrollboxRef}');
-        expect(block).toContain('focused={inputFocused}');
-        expect(block).toContain('viewportRows={viewportRows}');
-        expect(block).toContain('promptMenuInteractionsEnabled={menuPolicy.rows > 0}');
+        expect(block).toContain('textareaRef={props.textareaRef}');
+        expect(block).toContain('scrollboxRef={props.scrollboxRef}');
+        expect(block).toContain('focused={props.inputFocused ?? true}');
+        expect(block).toContain('viewportRows={props.viewportRows ?? DEFAULT_TERMINAL_VIEWPORT.rows}');
+        expect(block).toContain('promptMenuInteractionsEnabled={menuPolicy().rows > 0}');
         expect(readChatInputAreaSource()).toContain('useTuiPromptRef');
     });
 
@@ -98,7 +100,7 @@ describe('ChatBottomDockBase source topology', () => {
         const stdoutRowsToken = ['process', 'stdout', 'rows'].join('.');
 
         expect(source).toContain('viewportRows');
-        expect(source).toContain('halfPageScrollDelta(viewportRows)');
+        expect(source).toContain('halfPageScrollDelta(props.viewportRows)');
         expect(source).not.toContain(stdoutRowsToken);
     });
 });
@@ -172,7 +174,7 @@ describe('ChatBottomDockBase menu policy contract', () => {
         const block = sliceBetween(source, 'export function ChatBottomDockBase', 'export function ChatBottomDock(');
 
         expect(policy.menu.rows).toBe(0);
-        expect(block).toContain('promptMenuInteractionsEnabled={menuPolicy.rows > 0}');
+        expect(block).toContain('promptMenuInteractionsEnabled={menuPolicy().rows > 0}');
     });
 });
 

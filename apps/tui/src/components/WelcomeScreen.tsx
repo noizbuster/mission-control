@@ -1,6 +1,6 @@
 import { padEndToDisplayWidth, terminalDisplayWidth, truncateTerminalText } from '@mission-control/tui';
 import { TextAttributes } from '@opentui/core';
-import { For, type JSX } from 'solid-js';
+import { createMemo, For, type JSX, Show } from 'solid-js';
 import type {
     WelcomeData,
     WelcomeLspServer,
@@ -313,91 +313,118 @@ export function buildProjectDescriptor(
  * opentui primitives. Auto-hides once the user submits the first prompt (the
  * parent gates this on `snapshot.outputText === ''`).
  */
-export function WelcomeScreen({
-    data,
-    viewportColumns,
-    availableRows,
-    projectLabel,
-    gitBranch,
-    isWorktree,
-}: WelcomeScreenProps): JSX.Element {
-    const widthBudget = welcomeWidthBudget(viewportColumns);
-    const { label: modelLabel, value: modelValue } = formatModelLine(data);
-    const projectDescriptor = buildProjectDescriptor(projectLabel, gitBranch, isWorktree);
-    const lspGlyphs = formatLspGlyphs(data.lspServers);
-    const rowPlan = welcomeRowBudgetPlan({
-        data,
-        ...(availableRows !== undefined ? { availableRows } : {}),
-        ...(projectDescriptor !== undefined ? { projectDescriptor } : {}),
+export function WelcomeScreen(props: WelcomeScreenProps): JSX.Element {
+    const widthBudget = createMemo(() => welcomeWidthBudget(props.viewportColumns));
+    const modelLine = createMemo(() => formatModelLine(props.data));
+    const projectDescriptor = createMemo(() =>
+        buildProjectDescriptor(props.projectLabel, props.gitBranch, props.isWorktree),
+    );
+    const lspGlyphs = createMemo(() => formatLspGlyphs(props.data.lspServers));
+    const rowPlan = createMemo(() => {
+        const descriptor = projectDescriptor();
+        return welcomeRowBudgetPlan({
+            data: props.data,
+            ...(props.availableRows !== undefined ? { availableRows: props.availableRows } : {}),
+            ...(descriptor !== undefined ? { projectDescriptor: descriptor } : {}),
+        });
+    });
+    const compactContext = createMemo((): CompactWelcomeRowContext => {
+        const descriptor = projectDescriptor();
+        return {
+            data: props.data,
+            widthBudget: widthBudget(),
+            modelLine: { label: modelLine().label, value: modelLine().value },
+            ...(descriptor !== undefined ? { projectDescriptor: descriptor } : {}),
+        };
     });
 
-    if (rowPlan.mode === 'compact') {
-        const compactContext: CompactWelcomeRowContext = {
-            data,
-            widthBudget,
-            modelLine: { label: modelLabel, value: modelValue },
-            ...(projectDescriptor !== undefined ? { projectDescriptor } : {}),
-        };
-        return (
-            <box flexDirection="column" flexGrow={1} paddingLeft={2} paddingRight={2}>
-                <For each={rowPlan.compactRowKeys}>{(rowKey) => renderCompactWelcomeRow(rowKey, compactContext)}</For>
-            </box>
-        );
-    }
-
     return (
-        <box flexDirection="column" flexGrow={1} paddingLeft={2} paddingRight={2} paddingBottom={1}>
-            <WelcomeHeader version={data.version} />
-            <SectionHeader title="ENVIRONMENT" contentWidth={widthBudget.contentWidth} />
-            <TwoColumnRow label={modelLabel} value={modelValue} widthBudget={widthBudget} />
-            {projectDescriptor !== undefined ? (
-                <TwoColumnRow label="project" value={projectDescriptor} widthBudget={widthBudget} />
-            ) : null}
+        <Show
+            when={rowPlan().mode === 'compact'}
+            fallback={
+                <box flexDirection="column" flexGrow={1} paddingLeft={2} paddingRight={2} paddingBottom={1}>
+                    <WelcomeHeader version={props.data.version} />
+                    <SectionHeader title="ENVIRONMENT" contentWidth={widthBudget().contentWidth} />
+                    <TwoColumnRow
+                        label={modelLine().label}
+                        value={modelLine().value}
+                        widthBudget={widthBudget()}
+                    />
+                    {projectDescriptor() !== undefined ? (
+                        <TwoColumnRow
+                            label="project"
+                            value={projectDescriptor() ?? ''}
+                            widthBudget={widthBudget()}
+                        />
+                    ) : null}
 
-            <SectionHeader title="MCP SERVERS" contentWidth={widthBudget.contentWidth} />
-            {data.mcpServers.length === 0 ? (
-                <EmptyHint text="no servers configured" widthBudget={widthBudget} />
-            ) : (
-                <For each={data.mcpServers}>
-                    {(server) => {
-                        const row = formatMcpServerRow(server);
-                        return <TwoColumnRow label={row.label} value={row.value} widthBudget={widthBudget} />;
-                    }}
+                    <SectionHeader title="MCP SERVERS" contentWidth={widthBudget().contentWidth} />
+                    {props.data.mcpServers.length === 0 ? (
+                        <EmptyHint text="no servers configured" widthBudget={widthBudget()} />
+                    ) : (
+                        <For each={props.data.mcpServers}>
+                            {(server) => {
+                                const row = formatMcpServerRow(server);
+                                return (
+                                    <TwoColumnRow
+                                        label={row.label}
+                                        value={row.value}
+                                        widthBudget={widthBudget()}
+                                    />
+                                );
+                            }}
+                        </For>
+                    )}
+
+                    <SectionHeader title="PROJECT SKILLS" contentWidth={widthBudget().contentWidth} />
+                    {props.data.projectSkills.length === 0 ? (
+                        <EmptyHint
+                            text="no project-scoped skills (.mctrl/skills, .agents/skills)"
+                            widthBudget={widthBudget()}
+                        />
+                    ) : (
+                        <For each={props.data.projectSkills}>
+                            {(skill) => {
+                                const row = formatSkillRow(skill, widthBudget().skillValueWidth);
+                                return (
+                                    <TwoColumnRow
+                                        label={row.label}
+                                        value={row.value}
+                                        widthBudget={widthBudget()}
+                                    />
+                                );
+                            }}
+                        </For>
+                    )}
+
+                    <SectionHeader title="LSP SERVERS" contentWidth={widthBudget().contentWidth} />
+                    {lspGlyphs().length === 0 ? (
+                        <EmptyHint text="no servers in catalog" widthBudget={widthBudget()} />
+                    ) : (
+                        <LspGlyphRow glyphs={lspGlyphs()} />
+                    )}
+
+                    <SectionHeader title="RECENT SESSIONS" contentWidth={widthBudget().contentWidth} />
+                    {props.data.recentSessions.length === 0 ? (
+                        <EmptyHint text="no sessions yet for this project" widthBudget={widthBudget()} />
+                    ) : (
+                        <For each={props.data.recentSessions}>
+                            {(session) => <SessionRow session={session} widthBudget={widthBudget()} />}
+                        </For>
+                    )}
+
+                    <box marginTop={1}>
+                        <text attributes={TextAttributes.DIM}>{formatWelcomeHint(widthBudget().contentWidth)}</text>
+                    </box>
+                </box>
+            }
+        >
+            <box flexDirection="column" flexGrow={1} paddingLeft={2} paddingRight={2}>
+                <For each={rowPlan().compactRowKeys}>
+                    {(rowKey) => renderCompactWelcomeRow(rowKey, compactContext())}
                 </For>
-            )}
-
-            <SectionHeader title="PROJECT SKILLS" contentWidth={widthBudget.contentWidth} />
-            {data.projectSkills.length === 0 ? (
-                <EmptyHint text="no project-scoped skills (.mctrl/skills, .agents/skills)" widthBudget={widthBudget} />
-            ) : (
-                <For each={data.projectSkills}>
-                    {(skill) => {
-                        const row = formatSkillRow(skill, widthBudget.skillValueWidth);
-                        return <TwoColumnRow label={row.label} value={row.value} widthBudget={widthBudget} />;
-                    }}
-                </For>
-            )}
-
-            <SectionHeader title="LSP SERVERS" contentWidth={widthBudget.contentWidth} />
-            {lspGlyphs.length === 0 ? (
-                <EmptyHint text="no servers in catalog" widthBudget={widthBudget} />
-            ) : (
-                <LspGlyphRow glyphs={lspGlyphs} />
-            )}
-
-            <SectionHeader title="RECENT SESSIONS" contentWidth={widthBudget.contentWidth} />
-            {data.recentSessions.length === 0 ? (
-                <EmptyHint text="no sessions yet for this project" widthBudget={widthBudget} />
-            ) : (
-                <For each={data.recentSessions}>
-                    {(session) => <SessionRow session={session} widthBudget={widthBudget} />}
-                </For>
-            )}
-
-            <box marginTop={1}>
-                <text attributes={TextAttributes.DIM}>{formatWelcomeHint(widthBudget.contentWidth)}</text>
             </box>
-        </box>
+        </Show>
     );
 }
 

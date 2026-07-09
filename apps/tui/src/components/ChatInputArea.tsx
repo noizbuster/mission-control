@@ -60,26 +60,19 @@ export type ChatInputAreaProps = {
     readonly actions?: ChatAppActions;
 };
 
-export function ChatInputArea({
-    store,
-    textareaRef,
-    scrollboxRef,
-    focused,
-    viewportRows,
-    promptMenuInteractionsEnabled = true,
-    actions,
-}: ChatInputAreaProps): JSX.Element {
-    const snapshot = useSolidStoreSelector(store, selectInputAreaSlice);
+export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
+    const snapshot = useSolidStoreSelector(props.store, selectInputAreaSlice);
     const promptRef = useTuiPromptRef();
+    const promptMenuInteractionsEnabled = (): boolean => props.promptMenuInteractionsEnabled ?? true;
     let submitting = false;
     let lastEsc: number | undefined;
 
-    const plainText = (): string => textareaRef.get()?.plainText ?? snapshot().inputMirror;
+    const plainText = (): string => props.textareaRef.get()?.plainText ?? snapshot().inputMirror;
 
     const applyFileCompletion = (): boolean => {
-        const snap = store.getSnapshot();
+        const snap = props.store.getSnapshot();
         const completed = buildFileAutocompleteCompletion(snap.fileAutocomplete);
-        const textarea = textareaRef.get();
+        const textarea = props.textareaRef.get();
         if (completed === undefined || textarea === undefined) return false;
         const text = textarea.plainText;
         const atSuffix = `@${snap.fileAutocomplete.prefix}`;
@@ -88,13 +81,13 @@ export function ChatInputArea({
         const next = `${before}@${completed}`;
         textarea.setText(next);
         textarea.gotoBufferEnd();
-        store.setInputMirror(next);
+        props.store.setInputMirror(next);
         void promptRef.recordFileReference(fileCompletionFrecencyKey(completed));
         return true;
     };
 
     const handleSubmit = (): void => {
-        const captured = textareaRef.get()?.plainText ?? '';
+        const captured = props.textareaRef.get()?.plainText ?? '';
         if (submitting) return;
         submitting = true;
         setTimeout(() => {
@@ -102,42 +95,42 @@ export function ChatInputArea({
                 try {
                     if (captured.trim() === '') return;
 
-                    const snap = store.getSnapshot();
+                    const snap = props.store.getSnapshot();
 
-                    if (promptMenuInteractionsEnabled && snap.fileAutocomplete.open && applyFileCompletion()) {
+                    if (promptMenuInteractionsEnabled() && snap.fileAutocomplete.open && applyFileCompletion()) {
                         return;
                     }
 
-                    if (promptMenuInteractionsEnabled && captured.startsWith('#')) {
+                    if (promptMenuInteractionsEnabled() && captured.startsWith('#')) {
                         const insertText = resolveWorkflowCommandMenuInsertText(
                             captured,
                             snap.menuState,
                             snap.workflowNames,
                         );
                         if (insertText !== undefined) {
-                            textareaRef.get()?.setText(insertText);
-                            textareaRef.get()?.gotoBufferEnd();
-                            store.setInputMirror(insertText);
+                            props.textareaRef.get()?.setText(insertText);
+                            props.textareaRef.get()?.gotoBufferEnd();
+                            props.store.setInputMirror(insertText);
                             return;
                         }
                     }
 
-                    if (promptMenuInteractionsEnabled && captured.startsWith('/')) {
+                    if (promptMenuInteractionsEnabled() && captured.startsWith('/')) {
                         const insertText = resolveSlashCommandMenuInsertText(captured, snap.menuState);
                         if (insertText !== undefined && insertText.trimEnd() !== captured.trimEnd()) {
-                            textareaRef.get()?.setText(insertText);
-                            textareaRef.get()?.gotoBufferEnd();
-                            store.setInputMirror(insertText);
+                            props.textareaRef.get()?.setText(insertText);
+                            props.textareaRef.get()?.gotoBufferEnd();
+                            props.store.setInputMirror(insertText);
                             return;
                         }
                     }
 
                     let value = snap.pasteStore.expand(captured);
 
-                    if (promptMenuInteractionsEnabled && captured.startsWith('/')) {
+                    if (promptMenuInteractionsEnabled() && captured.startsWith('/')) {
                         const resolved = resolveSlashCommandMenuSubmission(captured, snap.menuState);
                         if (resolved !== captured) value = resolved;
-                    } else if (promptMenuInteractionsEnabled && captured.startsWith('#')) {
+                    } else if (promptMenuInteractionsEnabled() && captured.startsWith('#')) {
                         const resolved = resolveWorkflowCommandMenuSubmission(
                             captured,
                             snap.menuState,
@@ -147,13 +140,13 @@ export function ChatInputArea({
                     }
 
                     if (value === '/diff') {
-                        store.openDiffViewer(collectDiffEntries(store.getOutput()));
-                        textareaRef.get()?.clear();
+                        props.store.openDiffViewer(collectDiffEntries(props.store.getOutput()));
+                        props.textareaRef.get()?.clear();
                         return;
                     }
 
-                    store.submitLine(value);
-                    textareaRef.get()?.clear();
+                    props.store.submitLine(value);
+                    props.textareaRef.get()?.clear();
                 } finally {
                     submitting = false;
                 }
@@ -162,7 +155,7 @@ export function ChatInputArea({
     };
 
     const handleContentChange = (text: string): void => {
-        store.setInputMirror(text);
+        props.store.setInputMirror(text);
     };
 
     const handleKeyDown = (key: KeyEvent): void => {
@@ -172,9 +165,9 @@ export function ChatInputArea({
             return;
         }
 
-        const snap = store.getSnapshot();
+        const snap = props.store.getSnapshot();
 
-        if (promptMenuInteractionsEnabled && key.name === 'tab' && snap.fileAutocomplete.open) {
+        if (promptMenuInteractionsEnabled() && key.name === 'tab' && snap.fileAutocomplete.open) {
             key.preventDefault();
             applyFileCompletion();
             return;
@@ -184,17 +177,17 @@ export function ChatInputArea({
             key.preventDefault();
             if (snap.generating) {
                 lastEsc = undefined;
-                store.sendInterrupt('esc');
+                props.store.sendInterrupt('esc');
                 return;
             }
-            if (promptMenuInteractionsEnabled && snap.fileAutocomplete.open) {
-                store.closeMenus();
+            if (promptMenuInteractionsEnabled() && snap.fileAutocomplete.open) {
+                props.store.closeMenus();
                 return;
             }
             const text = plainText();
             if (text.length > 0) {
-                textareaRef.get()?.clear();
-                store.setInputMirror('');
+                props.textareaRef.get()?.clear();
+                props.store.setInputMirror('');
                 return;
             }
             const now = Date.now();
@@ -203,11 +196,11 @@ export function ChatInputArea({
             if (lastEsc !== undefined && now - lastEsc < DOUBLE_ESC_WINDOW_MS) {
                 lastEsc = undefined;
                 if (action === 'tree') {
-                    store.sendSlashCommand('/tree');
+                    props.store.sendSlashCommand('/tree');
                 } else if (action === 'fork') {
-                    store.sendSlashCommand('/fork');
+                    props.store.sendSlashCommand('/fork');
                 } else {
-                    store.sendInterrupt('esc');
+                    props.store.sendInterrupt('esc');
                 }
                 return;
             }
@@ -218,21 +211,21 @@ export function ChatInputArea({
         if (key.ctrl) {
             if (key.name === 'g') {
                 key.preventDefault();
-                store.toggleAbgOverlay();
+                props.store.toggleAbgOverlay();
                 return;
             }
             if (key.name === 'z') {
                 key.preventDefault();
-                const result = actions?.suspendTerminal?.();
+                const result = props.actions?.suspendTerminal?.();
                 if (result === undefined) {
-                    store.emitOutput(SUSPEND_ACTION_UNAVAILABLE_MESSAGE);
+                    props.store.emitOutput(SUSPEND_ACTION_UNAVAILABLE_MESSAGE);
                     return;
                 }
                 switch (result.kind) {
                     case 'suspended':
                         return;
                     case 'unsupported':
-                        store.emitOutput(result.message);
+                        props.store.emitOutput(result.message);
                         return;
                     default: {
                         const exhaustive: never = result;
@@ -243,43 +236,43 @@ export function ChatInputArea({
             if (key.name === 'd') {
                 key.preventDefault();
                 if (plainText().length === 0) {
-                    store.sendInterrupt('ctrl-c');
+                    props.store.sendInterrupt('ctrl-c');
                 } else {
-                    textareaRef.get()?.deleteChar();
+                    props.textareaRef.get()?.deleteChar();
                 }
                 return;
             }
             if (key.name === 't') {
                 key.preventDefault();
-                store.toggleShowThinking();
+                props.store.toggleShowThinking();
                 return;
             }
             if (key.name === 'o') {
                 key.preventDefault();
-                store.toggleToolOutputExpanded();
+                props.store.toggleToolOutputExpanded();
                 return;
             }
             if (key.name === 'p') {
                 key.preventDefault();
-                store.cycleModel(key.shift ? -1 : 1);
+                props.store.cycleModel(key.shift ? -1 : 1);
                 return;
             }
             if (key.name === 'e') {
                 key.preventDefault();
-                if (actions?.openExternalEditor === undefined) {
-                    store.emitOutput(NO_EDITOR_ACTION_MESSAGE);
+                if (props.actions?.openExternalEditor === undefined) {
+                    props.store.emitOutput(NO_EDITOR_ACTION_MESSAGE);
                     return;
                 }
-                void actions.openExternalEditor(plainText()).then((result) => {
+                void props.actions.openExternalEditor(plainText()).then((result) => {
                     switch (result.kind) {
                         case 'updated':
-                            textareaRef.get()?.setText(result.text);
-                            textareaRef.get()?.gotoBufferEnd();
-                            store.setInputMirror(result.text);
+                            props.textareaRef.get()?.setText(result.text);
+                            props.textareaRef.get()?.gotoBufferEnd();
+                            props.store.setInputMirror(result.text);
                             return;
                         case 'unavailable':
                         case 'failed':
-                            store.emitOutput(result.message);
+                            props.store.emitOutput(result.message);
                             return;
                         default: {
                             const exhaustive: never = result;
@@ -291,73 +284,73 @@ export function ChatInputArea({
             }
             if (key.name === 'r') {
                 key.preventDefault();
-                store.showRename();
+                props.store.showRename();
                 return;
             }
             if (key.name === 'v') {
                 key.preventDefault();
-                store.cycleModelVariant(key.shift ? -1 : 1);
+                props.store.cycleModelVariant(key.shift ? -1 : 1);
                 return;
             }
         }
 
         if (key.name === 'home') {
             key.preventDefault();
-            scrollboxRef.get()?.scrollTo(0);
+            props.scrollboxRef.get()?.scrollTo(0);
             return;
         }
         if (key.name === 'end') {
             key.preventDefault();
-            const scrollHeight = scrollboxRef.get()?.scrollHeight ?? 0;
-            scrollboxRef.get()?.scrollTo(scrollHeight);
+            const scrollHeight = props.scrollboxRef.get()?.scrollHeight ?? 0;
+            props.scrollboxRef.get()?.scrollTo(scrollHeight);
             return;
         }
         if (key.name === 'pageup') {
             key.preventDefault();
-            const half = halfPageScrollDelta(viewportRows);
-            scrollboxRef.get()?.scrollBy(-half);
+            const half = halfPageScrollDelta(props.viewportRows);
+            props.scrollboxRef.get()?.scrollBy(-half);
             return;
         }
         if (key.name === 'pagedown') {
             key.preventDefault();
-            const half = halfPageScrollDelta(viewportRows);
-            scrollboxRef.get()?.scrollBy(half);
+            const half = halfPageScrollDelta(props.viewportRows);
+            props.scrollboxRef.get()?.scrollBy(half);
             return;
         }
 
         if (key.name === 'up' || key.name === 'down') {
             const direction: 'up' | 'down' = key.name;
             const buffer = plainText();
-            const cursorOffset = textareaRef.get()?.cursorOffset ?? 0;
+            const cursorOffset = props.textareaRef.get()?.cursorOffset ?? 0;
             const atBound = direction === 'up' ? cursorOffset === 0 : cursorOffset === buffer.length;
             const historyOwnsArrows = snap.historyNavigation !== null;
-            const slashMenuOpen = promptMenuInteractionsEnabled && isSlashCommandMenuOpen(buffer);
-            const workflowMenuOpen = promptMenuInteractionsEnabled && isWorkflowCommandMenuOpen(buffer);
-            const fileAutoOpen = promptMenuInteractionsEnabled && snap.fileAutocomplete.open;
+            const slashMenuOpen = promptMenuInteractionsEnabled() && isSlashCommandMenuOpen(buffer);
+            const workflowMenuOpen = promptMenuInteractionsEnabled() && isWorkflowCommandMenuOpen(buffer);
+            const fileAutoOpen = promptMenuInteractionsEnabled() && snap.fileAutocomplete.open;
 
             const recallHistory =
                 historyOwnsArrows || (atBound && !slashMenuOpen && !workflowMenuOpen && !fileAutoOpen);
             if (recallHistory) {
                 key.preventDefault();
-                const recalled = store.recallHistory(direction, buffer);
-                textareaRef.get()?.setText(recalled);
-                textareaRef.get()?.gotoBufferEnd();
+                const recalled = props.store.recallHistory(direction, buffer);
+                props.textareaRef.get()?.setText(recalled);
+                props.textareaRef.get()?.gotoBufferEnd();
                 return;
             }
 
             if (slashMenuOpen) {
                 key.preventDefault();
-                store.navigateSlashMenu(direction);
+                props.store.navigateSlashMenu(direction);
                 return;
             }
             if (workflowMenuOpen) {
                 key.preventDefault();
-                store.navigateWorkflowMenu(direction);
+                props.store.navigateWorkflowMenu(direction);
                 return;
             }
             if (fileAutoOpen) {
                 key.preventDefault();
-                store.navigateFileAutocomplete(direction);
+                props.store.navigateFileAutocomplete(direction);
                 return;
             }
         }
@@ -368,15 +361,15 @@ export function ChatInputArea({
         const decision = evaluatePaste(text);
         if (decision.kind === 'literal') return;
         event.preventDefault();
-        const id = store.registerPaste(text);
-        textareaRef.get()?.insertText(makeMarker(id, decision.lineCount, decision.charCount));
+        const id = props.store.registerPaste(text);
+        props.textareaRef.get()?.insertText(makeMarker(id, decision.lineCount, decision.charCount));
     };
 
     return (
         <box flexDirection="column" flexShrink={0}>
             <ChatInputTextarea
-                textareaRef={textareaRef}
-                focused={focused}
+                textareaRef={props.textareaRef}
+                focused={props.focused}
                 onSubmit={handleSubmit}
                 onContentChange={handleContentChange}
                 onCursorChange={noopCursorChange}

@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 
 import { truncateTerminalText } from '@mission-control/tui';
-import { For, type JSX } from 'solid-js';
+import { createMemo, For, type JSX } from 'solid-js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import type { AbgOverlayState } from '../state/abg-overlay-state.js';
 import { graphStatusTheme, nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
@@ -142,9 +142,31 @@ function renderVisualRow(row: VisualGraphRow, spinnerGlyph: string): JSX.Element
     );
 }
 
-export function GraphPane({ state, viewport }: GraphPaneProps): JSX.Element {
+export function GraphPane(props: GraphPaneProps): JSX.Element {
     const { glyph: spinnerGlyph } = useSpinnerFrame();
-    if (isEmptyState(state)) {
+    const graphBounds = createMemo(() => visualGraphBoundsForViewport(props.viewport));
+    const visual = createMemo(() => {
+        const state = props.state;
+        if (isEmptyState(state)) return undefined;
+        const nodes = [...state.nodes.entries()];
+        const visualNodes: VisualGraphNode[] = nodes.map(([nodeId, status]) => ({
+            nodeId,
+            status,
+            isActive: state.activeNodeIds.includes(nodeId),
+        }));
+        const visualEdges: VisualGraphEdge[] = state.graphEdges.map((edge) => ({
+            from: edge.source,
+            to: edge.target,
+            ...(edge.condition !== undefined ? { label: edge.condition } : {}),
+        }));
+        return renderVisualGraph({
+            nodes: visualNodes,
+            edges: visualEdges,
+            maxWidth: graphBounds().maxWidth,
+        });
+    });
+
+    if (isEmptyState(props.state) || visual() === undefined) {
         return (
             <box flexDirection="column" marginTop={1}>
                 <text {...dimAttrs}>No active ABG run</text>
@@ -152,32 +174,26 @@ export function GraphPane({ state, viewport }: GraphPaneProps): JSX.Element {
         );
     }
 
+    const state = props.state;
     const graphId = state.focusedGraphId ?? state.activeGraphId ?? '(no graph)';
-    const nodes = [...state.nodes.entries()];
     const childGraphs = [...state.graphs.values()]
         .filter((summary) => summary.parentGraphId === graphId)
         .sort((left, right) => left.graphId.localeCompare(right.graphId));
-
-    const visualNodes: VisualGraphNode[] = nodes.map(([nodeId, status]) => ({
-        nodeId,
-        status,
-        isActive: state.activeNodeIds.includes(nodeId),
-    }));
-    const visualEdges: VisualGraphEdge[] = state.graphEdges.map((edge) => ({
-        from: edge.source,
-        to: edge.target,
-        ...(edge.condition !== undefined ? { label: edge.condition } : {}),
-    }));
-    const graphBounds = visualGraphBoundsForViewport(viewport);
-    const graphMaxWidth = graphBounds.maxWidth;
-    const visual = renderVisualGraph({ nodes: visualNodes, edges: visualEdges, maxWidth: graphMaxWidth });
-    const graphMaxHeight = graphBounds.maxHeight;
+    const graphMaxHeight = graphBounds().maxHeight;
+    const rendered = visual();
+    if (rendered === undefined) {
+        return (
+            <box flexDirection="column" marginTop={1}>
+                <text {...dimAttrs}>No active ABG run</text>
+            </box>
+        );
+    }
 
     return (
         <box flexDirection="column" marginTop={1}>
             <text {...boldAttrs}>{graphId}</text>
             <scrollbox marginLeft={2} maxHeight={graphMaxHeight} stickyScroll>
-                <For each={visual.rows}>{(row) => renderVisualRow(row, spinnerGlyph)}</For>
+                <For each={rendered.rows}>{(row) => renderVisualRow(row, spinnerGlyph)}</For>
             </scrollbox>
             {childGraphs.length > 0 ? (
                 <box marginTop={1} flexDirection="column">

@@ -2,7 +2,7 @@
 
 import { terminalDisplayWidth } from '@mission-control/tui';
 import { TextAttributes } from '@opentui/core';
-import type { JSX } from 'solid-js';
+import { createMemo, type JSX } from 'solid-js';
 import type { ApprovalLevel } from '../state/approval-level.js';
 import { type BottomDockPolicy, type BottomDockStatusPolicy, bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { APPROVAL_LEVEL_COLORS, STATUS_LINE_BG } from './overlay-theme.js';
@@ -220,18 +220,19 @@ export function formatBottomStatusRow(props: StatusBarProps): BottomStatusRowSha
  * reads as a continuous divider. Full-width dark-navy bg.
  */
 export function TopStatusBar(props: StatusBarProps): JSX.Element {
-    const { provider, model, variantLabel, contextLabel, fillCount } = formatTopStatusRow(props);
+    const row = createMemo(() => formatTopStatusRow(props));
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
             <text selectable>
-                <span style={{ dim: true }}>{provider}</span> <span style={{ bold: true }}>{model}</span>
-                {variantLabel !== undefined ? ` - ${variantLabel}` : null}
+                <span style={{ dim: true }}>{row().provider}</span>{' '}
+                <span style={{ bold: true }}>{row().model}</span>
+                {row().variantLabel !== undefined ? ` - ${row().variantLabel}` : null}
             </text>
             <text selectable> </text>
             <text selectable attributes={TextAttributes.DIM}>
-                {buildStatusDivider(fillCount)}
+                {buildStatusDivider(row().fillCount)}
             </text>
-            {contextLabel !== undefined ? <text selectable>{` ${contextLabel}`}</text> : null}
+            {row().contextLabel !== undefined ? <text selectable>{` ${row().contextLabel}`}</text> : null}
         </box>
     );
 }
@@ -245,25 +246,27 @@ export function TopStatusBar(props: StatusBarProps): JSX.Element {
  * filled with a dim divider. Full-width dark-navy bg.
  */
 export function BottomStatusBar(props: StatusBarProps): JSX.Element {
-    const { approvalLabel, approvalColor, projectLabel, sessionLabel, dimApproval, fillCount } =
-        formatBottomStatusRow(props);
+    const row = createMemo(() => formatBottomStatusRow(props));
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
             <text
                 selectable
-                {...(approvalColor !== undefined ? { fg: approvalColor } : {})}
-                {...(dimApproval ? { attributes: TextAttributes.DIM } : {})}
+                {...(() => {
+                    const color = row().approvalColor;
+                    return color !== undefined ? { fg: color } : {};
+                })()}
+                {...(row().dimApproval ? { attributes: TextAttributes.DIM } : {})}
             >
-                {approvalLabel}
+                {row().approvalLabel}
             </text>
             <text selectable> </text>
             <text selectable attributes={TextAttributes.DIM}>
-                {buildStatusDivider(fillCount)}
+                {buildStatusDivider(row().fillCount)}
             </text>
-            {projectLabel !== undefined ? <text selectable>{` ${projectLabel}`}</text> : null}
-            {sessionLabel !== undefined ? (
+            {row().projectLabel !== undefined ? <text selectable>{` ${row().projectLabel}`}</text> : null}
+            {row().sessionLabel !== undefined ? (
                 <text selectable {...(props.onCopySessionID !== undefined ? { onMouseUp: props.onCopySessionID } : {})}>
-                    {` ${sessionLabel}`}
+                    {` ${row().sessionLabel}`}
                 </text>
             ) : null}
         </box>

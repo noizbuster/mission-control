@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 
-import type { JSX } from 'solid-js';
+import { createMemo, type JSX } from 'solid-js';
 import { DEFAULT_TERMINAL_VIEWPORT } from '../platform/terminal-viewport.js';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
 import type { ChatAppActions } from '../state/chat-app-actions.js';
@@ -156,49 +156,76 @@ export function buildBottomStatusBarProps(input: StatusPropsInput): StatusBarPro
     };
 }
 
-export function ChatBottomDockBase({
-    store,
-    textareaRef,
-    scrollboxRef,
-    inputFocused = true,
-    viewportColumns = DEFAULT_TERMINAL_VIEWPORT.columns,
-    viewportRows = DEFAULT_TERMINAL_VIEWPORT.rows,
-    statusBarProps,
-    promptAdjacentPanel,
-    actions,
-    dockSlice,
-}: ChatBottomDockBaseProps): JSX.Element {
-    const dockPolicyValue = bottomDockPolicy({ columns: viewportColumns, rows: viewportRows });
-    const statusLayout = statusBarLayoutFromPolicy(dockPolicyValue);
-    const menuPolicy: BottomDockMenuPolicy = dockPolicyValue.menu;
-    const statusInput = { statusBarProps, statusLayout, dockSlice };
-    const topStatusBarProps = buildTopStatusBarProps(statusInput);
-    const bottomStatusBarProps = buildBottomStatusBarProps(statusInput);
-    const promptPanels = renderPromptAdjacentPanels({ dockSlice, menuPolicy, promptAdjacentPanel });
+export function ChatBottomDockBase(props: ChatBottomDockBaseProps): JSX.Element {
+    const dockPolicyValue = createMemo(() =>
+        bottomDockPolicy({
+            columns: props.viewportColumns ?? DEFAULT_TERMINAL_VIEWPORT.columns,
+            rows: props.viewportRows ?? DEFAULT_TERMINAL_VIEWPORT.rows,
+        }),
+    );
+    const statusLayout = createMemo(() => statusBarLayoutFromPolicy(dockPolicyValue()));
+    const menuPolicy = createMemo((): BottomDockMenuPolicy => dockPolicyValue().menu);
+    const topStatusBarProps = createMemo(() =>
+        buildTopStatusBarProps({
+            statusBarProps: props.statusBarProps,
+            statusLayout: statusLayout(),
+            dockSlice: props.dockSlice,
+        }),
+    );
+    const bottomStatusBarProps = createMemo(() =>
+        buildBottomStatusBarProps({
+            statusBarProps: props.statusBarProps,
+            statusLayout: statusLayout(),
+            dockSlice: props.dockSlice,
+        }),
+    );
 
     return (
         <box flexDirection="column" flexShrink={0}>
-            {topStatusBarProps !== undefined ? <TopStatusBar {...topStatusBarProps} /> : null}
-            {promptPanels}
-            {dockSlice.inputMode === 'question' ? (
-                <QuestionOverlay store={store} />
+            {(() => {
+                const top = topStatusBarProps();
+                return top !== undefined ? <TopStatusBar {...top} /> : null;
+            })()}
+            {renderPromptAdjacentPanels({
+                dockSlice: props.dockSlice,
+                menuPolicy: menuPolicy(),
+                promptAdjacentPanel: props.promptAdjacentPanel,
+            })}
+            {props.dockSlice.inputMode === 'question' ? (
+                <QuestionOverlay store={props.store} />
             ) : (
                 <ChatInputArea
-                    store={store}
-                    textareaRef={textareaRef}
-                    scrollboxRef={scrollboxRef}
-                    focused={inputFocused}
-                    viewportRows={viewportRows}
-                    promptMenuInteractionsEnabled={menuPolicy.rows > 0}
-                    {...(actions !== undefined ? { actions } : {})}
+                    store={props.store}
+                    textareaRef={props.textareaRef}
+                    scrollboxRef={props.scrollboxRef}
+                    focused={props.inputFocused ?? true}
+                    viewportRows={props.viewportRows ?? DEFAULT_TERMINAL_VIEWPORT.rows}
+                    promptMenuInteractionsEnabled={menuPolicy().rows > 0}
+                    {...(props.actions !== undefined ? { actions: props.actions } : {})}
                 />
             )}
-            {bottomStatusBarProps !== undefined ? <BottomStatusBar {...bottomStatusBarProps} /> : null}
+            {(() => {
+                const bottom = bottomStatusBarProps();
+                return bottom !== undefined ? <BottomStatusBar {...bottom} /> : null;
+            })()}
         </box>
     );
 }
 
 export function ChatBottomDock(props: ChatBottomDockProps): JSX.Element {
     const dockSlice = useSolidStoreSelector(props.store, selectChatBottomDockSlice);
-    return <ChatBottomDockBase {...props} dockSlice={dockSlice()} />;
+    return (
+        <ChatBottomDockBase
+            store={props.store}
+            textareaRef={props.textareaRef}
+            scrollboxRef={props.scrollboxRef}
+            dockSlice={dockSlice()}
+            {...(props.inputFocused !== undefined ? { inputFocused: props.inputFocused } : {})}
+            {...(props.viewportColumns !== undefined ? { viewportColumns: props.viewportColumns } : {})}
+            {...(props.viewportRows !== undefined ? { viewportRows: props.viewportRows } : {})}
+            {...(props.statusBarProps !== undefined ? { statusBarProps: props.statusBarProps } : {})}
+            {...(props.promptAdjacentPanel !== undefined ? { promptAdjacentPanel: props.promptAdjacentPanel } : {})}
+            {...(props.actions !== undefined ? { actions: props.actions } : {})}
+        />
+    );
 }

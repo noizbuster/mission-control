@@ -21,7 +21,8 @@ describe('chatTranscriptScrollOptions', () => {
         expect(opts.stickyStart).toBe('bottom');
         expect(opts.scrollAcceleration).toBeInstanceOf(MacOSScrollAccel);
         expect(opts.flexGrow).toBe(1);
-        expect(opts.width).toBe('100%');
+        expect(opts.minHeight).toBe(0);
+        expect(opts).not.toHaveProperty('width');
     });
 
     it('omits maxHeight when none is given (honors exactOptionalPropertyTypes)', () => {
@@ -43,13 +44,15 @@ describe('chatTranscriptScrollOptions', () => {
         const tall = chatTranscriptScrollOptions(24);
         const short = chatTranscriptScrollOptions(10);
 
-        expect([tall.stickyScroll, tall.stickyStart, tall.width, tall.maxHeight]).toEqual([true, 'bottom', '100%', 24]);
-        expect([short.stickyScroll, short.stickyStart, short.width, short.maxHeight]).toEqual([
+        expect([tall.stickyScroll, tall.stickyStart, tall.minHeight, tall.maxHeight]).toEqual([true, 'bottom', 0, 24]);
+        expect([short.stickyScroll, short.stickyStart, short.minHeight, short.maxHeight]).toEqual([
             true,
             'bottom',
-            '100%',
+            0,
             10,
         ]);
+        expect(tall).not.toHaveProperty('width');
+        expect(short).not.toHaveProperty('width');
         expect(short.scrollAcceleration).toBeInstanceOf(MacOSScrollAccel);
     });
 });
