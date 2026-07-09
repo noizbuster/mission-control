@@ -59,8 +59,11 @@ describe('mctrl keybind registry', () => {
         it('keeps ctrl+r as session_rename', () => {
             expect(defaults.session_rename).toBe('ctrl+r');
         });
-        it('keeps ctrl+v as clipboard_paste_image', () => {
-            expect(defaults.clipboard_paste_image).toBe('ctrl+v');
+        it('keeps ctrl+v as model_variant_cycle', () => {
+            expect(defaults.model_variant_cycle).toBe('ctrl+v');
+        });
+        it('keeps shift+ctrl+v as model_variant_cycle_reverse', () => {
+            expect(defaults.model_variant_cycle_reverse).toBe('shift+ctrl+v');
         });
         it('keeps ctrl+g as abg_overlay_toggle', () => {
             expect(defaults.abg_overlay_toggle).toBe('ctrl+g');

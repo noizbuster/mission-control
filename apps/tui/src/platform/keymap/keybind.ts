@@ -75,7 +75,7 @@ const keybind = (defaultValue: BindingValue, description: string): Definition =>
  *  - `leader === "ctrl+x"`.
  *  - `command_list === "alt+x"` (palette is NOT Ctrl+P; Ctrl+P is model_cycle).
  *  - No `input_clear` entry; no `input_*` value binds bare `ctrl+c`.
- *  - mctrl-documented chords preserved: ctrl+p/t/o/e/r/v/g/z.
+     *  - mctrl-documented chords preserved: ctrl+p/t/o/e/r/v/g/z.
  */
 export const Definitions = {
     leader: keybind(LeaderDefault, 'Leader key for keybind combinations'),
@@ -84,7 +84,6 @@ export const Definitions = {
     command_list: keybind('alt+x', 'Open command palette'),
     session_interrupt: keybind('escape', 'Interrupt current session'),
     terminal_suspend: keybind('ctrl+z', 'Suspend terminal'),
-    clipboard_paste_image: keybind('ctrl+v', 'Paste image from clipboard (or cycle model variant when no image)'),
     editor_open: keybind('ctrl+e', 'Open external editor'),
     session_rename: keybind('ctrl+r', 'Rename session'),
     abg_overlay_toggle: keybind('ctrl+g', 'Toggle ABG monitoring overlay'),
@@ -96,6 +95,8 @@ export const Definitions = {
     // model
     model_cycle: keybind('ctrl+p', 'Cycle to next model'),
     model_cycle_reverse: keybind('shift+ctrl+p', 'Cycle to previous model'),
+    model_variant_cycle: keybind('ctrl+v', 'Cycle to next model variant'),
+    model_variant_cycle_reverse: keybind('shift+ctrl+v', 'Cycle to previous model variant'),
     model_cycle_recent: keybind('f2', 'Next recently used model'),
     model_cycle_recent_reverse: keybind('shift+f2', 'Previous recently used model'),
     model_list: keybind('<leader>m', 'List available models'),
@@ -205,7 +206,6 @@ export const CommandMap = {
     command_list: 'command.palette.show',
     session_interrupt: 'session.interrupt',
     terminal_suspend: 'terminal.suspend',
-    clipboard_paste_image: 'clipboard.paste_image',
     editor_open: 'editor.open',
     session_rename: 'session.rename',
     abg_overlay_toggle: 'abg.overlay.toggle',
@@ -215,6 +215,8 @@ export const CommandMap = {
     tips_toggle: 'tips.toggle',
     model_cycle: 'model.cycle',
     model_cycle_reverse: 'model.cycle.reverse',
+    model_variant_cycle: 'model.variant_cycle',
+    model_variant_cycle_reverse: 'model.variant_cycle.reverse',
     model_cycle_recent: 'model.cycle_recent',
     model_cycle_recent_reverse: 'model.cycle_recent.reverse',
     model_list: 'model.list',
