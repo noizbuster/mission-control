@@ -31,28 +31,45 @@ export type ChatKeymapLayersDeps = {
     readonly handleSubmit: () => void;
 };
 
-/**
- * Registers every ChatApp keymap layer exactly once (managed textarea+submit,
- * menu-nav prio 200, messages-scroll, selection-copy, model-shortcuts,
- * session-shortcuts, undo/redo, ABG minimap). Dynamic imports keep
- * `@opentui/keymap` FFI out of the `--no-tui` graph.
- */
+function createMessagesScrollDeps(deps: ChatKeymapLayersDeps) {
+    const { store, renderer, clipboard, viewport, scrollboxRef } = deps;
+    return {
+        scrollboxRef,
+        clipboardService: clipboard,
+        getViewportRows: () => viewport().rows,
+        getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
+        getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
+        clearSelection: () => renderer.clearSelection(),
+    };
+}
+
+function navigateOpenMenu(store: ChatStore, textareaHandle: ChatTextareaHandle, direction: 'up' | 'down'): boolean {
+    const text = textareaHandle.get()?.plainText ?? '';
+    const snap = store.getSnapshot();
+    if (text.startsWith('/')) {
+        store.navigateSlashMenu(direction);
+    } else if (text.startsWith('#')) {
+        store.navigateWorkflowMenu(direction);
+    } else if (snap.fileAutocomplete.open) {
+        store.navigateFileAutocomplete(direction);
+    }
+    return true;
+}
+
+/** Registers every ChatApp keymap layer once; dynamic imports keep keymap FFI out of --no-tui. */
 export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
     const {
         store,
         keymap,
         renderer,
-        clipboard,
-        viewport,
         promptStash,
         localPreferences,
         textareaHandle,
-        scrollboxRef,
         promptMenuInteractionsEnabled,
         handleSubmit,
     } = deps;
 
-    // Managed textarea + chat submit layer (T3): suspends native keyBindings so keys are not double-processed; dynamically imported to keep @opentui/keymap FFI out of --no-tui.
+    // Managed textarea + chat submit layer (T3): suspends native keyBindings so keys are not double-processed.
     onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
@@ -60,8 +77,7 @@ export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
             ({ registerChatSubmitLayer, registerManagedTextareaComposition }) => {
                 if (disposed) return;
                 const offComposition = registerManagedTextareaComposition(keymap, renderer);
-                const submitHandler = (): void => handleSubmit();
-                const offSubmit = registerChatSubmitLayer(keymap, renderer, submitHandler);
+                const offSubmit = registerChatSubmitLayer(keymap, renderer, () => handleSubmit());
                 cleanup = (): void => {
                     offSubmit();
                     offComposition();
@@ -74,10 +90,7 @@ export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
         });
     });
 
-    // menu-navigation layer: priority 200 shadows the managed textarea layer for
-    // Up/Down while a `/`, `#`, or `@`-file autocomplete menu is open. Without it
-    // the textarea layer binds arrows to cursor movement and returns handled,
-    // stopping propagation before ChatInputArea.handleKeyDown can navigate menus.
+    // menu-navigation layer: priority 200 shadows managed textarea Up/Down while menus are open.
     onMount(() => {
         const offLayer = keymap.registerLayer({
             priority: 200,
@@ -90,39 +103,16 @@ export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
                     const token = text.slice(1);
                     return !token.includes(' ') && !token.includes('\n') && !token.includes('\t');
                 }
-                const snap = store.getSnapshot();
-                return snap.fileAutocomplete.open;
+                return store.getSnapshot().fileAutocomplete.open;
             },
             commands: [
                 {
                     name: 'menu.up',
-                    run: () => {
-                        const text = textareaHandle.get()?.plainText ?? '';
-                        const snap = store.getSnapshot();
-                        if (text.startsWith('/')) {
-                            store.navigateSlashMenu('up');
-                        } else if (text.startsWith('#')) {
-                            store.navigateWorkflowMenu('up');
-                        } else if (snap.fileAutocomplete.open) {
-                            store.navigateFileAutocomplete('up');
-                        }
-                        return true;
-                    },
+                    run: () => navigateOpenMenu(store, textareaHandle, 'up'),
                 },
                 {
                     name: 'menu.down',
-                    run: () => {
-                        const text = textareaHandle.get()?.plainText ?? '';
-                        const snap = store.getSnapshot();
-                        if (text.startsWith('/')) {
-                            store.navigateSlashMenu('down');
-                        } else if (text.startsWith('#')) {
-                            store.navigateWorkflowMenu('down');
-                        } else if (snap.fileAutocomplete.open) {
-                            store.navigateFileAutocomplete('down');
-                        }
-                        return true;
-                    },
+                    run: () => navigateOpenMenu(store, textareaHandle, 'down'),
                 },
             ],
             bindings: [
@@ -133,24 +123,15 @@ export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
         onCleanup(offLayer);
     });
 
-    // messages.* scroll + copy layer (T10): SESSION-scoped (not textarea-gated); clipboard built from the renderer (OSC52 via opentui native core).
+    // messages.* scroll layer (T10): SESSION-scoped; OSC52 clipboard via renderer.
     onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
         void import('../../platform/keymap/messages-scroll.js').then(({ registerMessagesScrollLayer }) => {
             if (disposed) return;
-            cleanup = registerMessagesScrollLayer(
-                keymap,
-                {
-                    scrollboxRef,
-                    clipboardService: clipboard,
-                    getViewportRows: () => viewport().rows,
-                    getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
-                    getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
-                    clearSelection: () => renderer.clearSelection(),
-                },
-                { isEnabled: () => store.getSnapshot().overlayMode === 'none' },
-            );
+            cleanup = registerMessagesScrollLayer(keymap, createMessagesScrollDeps(deps), {
+                isEnabled: () => store.getSnapshot().overlayMode === 'none',
+            });
         });
         onCleanup(() => {
             disposed = true;
@@ -158,26 +139,15 @@ export function useChatKeymapLayers(deps: ChatKeymapLayersDeps): void {
         });
     });
 
-    // selection.copy layer: high-priority + selection-gated, so the default
-    // ctrl+d copies a drag-selection but still deletes a char when nothing is
-    // selected. Same OSC52 path + deps as the scroll layer above.
+    // selection.copy layer: high-priority + selection-gated ctrl+d.
     onMount(() => {
         let disposed = false;
         let cleanup: (() => void) | undefined;
         void import('../../platform/keymap/messages-scroll.js').then(({ registerSelectionCopyLayer }) => {
             if (disposed) return;
-            cleanup = registerSelectionCopyLayer(
-                keymap,
-                {
-                    scrollboxRef,
-                    clipboardService: clipboard,
-                    getViewportRows: () => viewport().rows,
-                    getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
-                    getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
-                    clearSelection: () => renderer.clearSelection(),
-                },
-                { isEnabled: () => store.getSnapshot().overlayMode === 'none' },
-            );
+            cleanup = registerSelectionCopyLayer(keymap, createMessagesScrollDeps(deps), {
+                isEnabled: () => store.getSnapshot().overlayMode === 'none',
+            });
         });
         onCleanup(() => {
             disposed = true;
