@@ -66,7 +66,7 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 - Renderer code should consume protocol/core events, not private runtime fields.
 - The noninteractive renderers consume already-redacted output (provider/tool output is redacted upstream in `packages/core`). Never read raw provider or tool structured output in a renderer.
 - Legacy component test-renderer packages are intentionally not dependencies. Test renderer logic via pure exported helpers or OpenTUI/Solid headless render paths (in `apps/tui`). Never mount the full TUI tree in a unit test.
-- Interactive TUI layout must derive from `TerminalViewport { columns, rows }` via `useTerminalViewport()` (now in `apps/tui/src/platform/`). Direct `process.stdout.columns/rows` reads are reserved for noninteractive stdout renderers (`src/ui/renderers.ts`) and low-level terminal seams, not interactive code.
+- Interactive TUI layout must use OpenTUI `useTerminalDimensions()` (width/height in JSX). Direct `process.stdout.columns/rows` reads are reserved for noninteractive stdout renderers (`src/ui/renderers.ts`) and low-level terminal seams, not interactive code.
 - The CLI must never statically import `@opentui/*` or `solid-js`. All TUI access goes through `@mission-control/tui` lazy imports inside the `useTui` branch so `mc --no-tui` stays opentui-free.
 - `exactOptionalPropertyTypes` is active - use conditional spreads for optional props (`...(cond ? { prop: val } : {})`), and when sourcing opentui props from `| undefined` helpers, assign to a local first and narrow before spreading.
 - User input echoed to outputText uses `You: ` prefix so `parseMessageBlocks` can classify it.

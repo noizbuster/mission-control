@@ -417,8 +417,15 @@ export async function runInteractiveChatSession(
         }
     };
 
-    setTerminalTitle(formatAppTitle(getVersion()));
-    void syncSessionDisplayName(currentSessionId);
+    if (tuiHandle === undefined) {
+        setTerminalTitle(formatAppTitle(getVersion()));
+        void syncSessionDisplayName(currentSessionId);
+    } else {
+        setTimeout(() => {
+            setTerminalTitle(formatAppTitle(getVersion()));
+            void syncSessionDisplayName(currentSessionId);
+        }, 0);
+    }
 
     if (tuiHandle !== undefined) {
         tuiHandleRef = tuiHandle;

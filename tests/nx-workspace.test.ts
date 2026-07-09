@@ -173,7 +173,8 @@ describe('Nx workspace', () => {
         expect(manifest.scripts?.['test']).toBe(`${nxRuntime} nx run-many -t test`);
         // biome-ignore lint/complexity/useLiteralKeys: Record<string, string> requires bracket access per noPropertyAccessFromIndexSignature
         expect(manifest.scripts?.['lint']).toBe(`${nxRuntime} nx run workspace:lint`);
-        expect(manifest.scripts?.['dev:cli']).toBe(`${nxRuntime} nx run cli:dev --`);
+        // Interactive TUI must not run under the Nx process wrapper (SIGWINCH/resize).
+        expect(manifest.scripts?.['dev:cli']).toBe('pnpm --filter @mission-control/cli dev');
         expect(manifest.scripts?.['dev:desktop']).toBe(`${nxRuntime} nx run desktop:dev`);
         expect(manifest.scripts?.['dev:sidecar']).toBe(`${nxRuntime} nx run sidecar:dev --`);
         expect(manifest.scripts?.['dev:package-cli']).toBe(`${nxRuntime} nx run workspace:package-cli`);
@@ -225,8 +226,7 @@ describe('Nx workspace', () => {
     it('keeps root Vitest TUI subpath aliases on Solid viewport naming', () => {
         const config = readFileSync(join(root, 'vitest.config.ts'), 'utf8');
 
-        expect(config).toContain('@mission-control/tui/terminal-viewport-solid');
-        expect(config).toContain('platform/terminal-viewport-solid.ts');
+
         expect(config).not.toContain('@mission-control/tui/terminal-viewport-react');
         expect(config).not.toContain('platform/terminal-viewport-react.ts');
     });

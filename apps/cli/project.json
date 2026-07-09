@@ -4,11 +4,18 @@
   "projectType": "application",
   "root": "apps/cli",
   "sourceRoot": "apps/cli/src",
-  "implicitDependencies": ["config", "core", "protocol", "tui"],
+  "implicitDependencies": [
+    "config",
+    "core",
+    "protocol",
+    "tui"
+  ],
   "targets": {
     "build": {
       "executor": "nx:run-commands",
-      "outputs": ["{projectRoot}/dist"],
+      "outputs": [
+        "{projectRoot}/dist"
+      ],
       "options": {
         "cwd": "apps/cli",
         "command": "tsc -p tsconfig.json"
@@ -31,15 +38,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/cli",
-        "command": "{ nx run core:build --outputStyle=stream >/dev/null 2>&1 || nx run core:build --outputStyle=stream; } && pnpm dev --",
-        "forwardAllArgs": true
-      }
-    },
-    "dev-bun": {
-      "executor": "nx:run-commands",
-      "options": {
-        "cwd": "apps/cli",
-        "command": "{ nx run core:build --outputStyle=stream >/dev/null 2>&1 || nx run core:build --outputStyle=stream; } && pnpm dev:bun --",
+        "command": "pnpm dev",
         "forwardAllArgs": true
       }
     }

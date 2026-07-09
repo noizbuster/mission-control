@@ -9,6 +9,7 @@ describe('CLI entrypoint', () => {
         const help = createHelpText();
 
         expect(source.startsWith('#!/usr/bin/env -S node --experimental-ffi')).toBe(true);
+        expect(source).toContain('export async function runCli');
         expect(getVersion()).toBe('0.1.0');
         expect(help).toContain('mc');
         expect(help).toContain('mctrl remains available as an alias');

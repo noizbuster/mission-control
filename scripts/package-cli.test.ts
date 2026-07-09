@@ -212,7 +212,7 @@ function packageJson(name: string, exportsMap: Record<string, string>, dependenc
 
 function fixtureCliEntrypoint(): string {
     return [
-        '#!/usr/bin/env node',
+        '#!/usr/bin/env -S node --experimental-ffi',
         "import { mkdirSync, writeFileSync } from 'node:fs';",
         "import { join } from 'node:path';",
         '',

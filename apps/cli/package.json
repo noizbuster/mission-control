@@ -17,8 +17,7 @@
   "scripts": {
     "prebuild": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run tui:build",
     "build": "tsc -p tsconfig.json",
-    "dev": "sh -c 'while [ \"${1:-}\" = \"--\" ]; do shift; done; pnpm build >/dev/null && node --experimental-ffi dist/index.js \"$@\"' --",
-    "dev:bun": "sh -c 'while [ \"${1:-}\" = \"--\" ]; do shift; done; pnpm build >/dev/null && bun dist/index.js \"$@\"' --",
+    "dev": "pnpm build && node --experimental-ffi dist/index.js",
     "test": "sh -c 'cd ../.. && while [ \"${1:-}\" = \"--\" ]; do shift; done; vitest run --reporter verbose \"$@\"' --",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

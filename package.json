@@ -9,8 +9,7 @@
   },
   "scripts": {
     "build": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run-many -t build",
-    "dev:cli": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run cli:dev --",
-    "dev:cli:bun": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run cli:dev-bun --",
+    "dev:cli": "pnpm --filter @mission-control/cli dev",
     "dev:desktop": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run desktop:dev",
     "dev:package-cli": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run workspace:package-cli",
     "dev:sidecar": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run sidecar:dev --",
@@ -36,5 +35,10 @@
     "typescript": "^7.0.2",
     "vite-plugin-solid": "^2.11.12",
     "vitest": "^4.1.10"
+  },
+  "pnpm": {
+    "overrides": {
+      "solid-js": "1.9.14"
+    }
   }
 }

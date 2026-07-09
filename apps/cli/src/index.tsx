@@ -156,14 +156,9 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
     }
 }
 
-function isCliEntrypoint(): boolean {
-    const entryPath = process.argv[1];
-    return entryPath !== undefined && import.meta.url === pathToFileURL(entryPath).href;
-}
-
-if (isCliEntrypoint()) {
+export async function runCli(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
     try {
-        await main();
+        await main(argv);
     } catch (error: unknown) {
         if (error instanceof Error) {
             process.stderr.write(`${error.message}\n`);
@@ -174,6 +169,15 @@ if (isCliEntrypoint()) {
     } finally {
         await disposeAllMissionControlServices().catch(() => {});
     }
+}
+
+function isCliEntrypoint(): boolean {
+    const entryPath = process.argv[1];
+    return entryPath !== undefined && import.meta.url === pathToFileURL(entryPath).href;
+}
+
+if (isCliEntrypoint()) {
+    await runCli();
 }
 
 function assertNever(value: never): never {
