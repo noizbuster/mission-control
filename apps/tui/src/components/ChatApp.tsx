@@ -1,6 +1,5 @@
 /** @jsxImportSource @opentui/solid */
 
-import type { ModelProviderSelection } from '@mission-control/protocol';
 import { type ChatBlock, extractLastAssistantText, parseMessageBlocks } from '@mission-control/tui/chat';
 import { type ScrollBoxRenderable, TextAttributes, type TextareaRenderable } from '@opentui/core';
 import { useKeymap } from '@opentui/keymap/solid';
@@ -31,7 +30,6 @@ import {
     resolveSlashCommandMenuInsertText,
     resolveWorkflowCommandMenuInsertText,
 } from '../state/interactive-chat-command-menu.js';
-import { parseModelSelection } from '../state/interactive-chat-model.js';
 import type { MissionControlServicesLike } from '../state/mission-services-types.js';
 import type { WelcomeData } from '../state/welcome-data-types.js';
 import { AbgMinimap } from './AbgMinimap.js';
@@ -39,6 +37,12 @@ import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from './AbgOverlay.j
 import { ChatBottomDock } from './ChatBottomDock.js';
 import { type ChatTextareaHandle } from './ChatInputTextarea.js';
 import { type ChatScrollboxHandle, ChatTranscript } from './ChatTranscript.js';
+import {
+    parseModelPreferenceKeys,
+    preserveBlockReferences,
+    promptPanelRepaintKey,
+    recentModelPreferenceSelections,
+} from './chat-app/chat-app-helpers.js';
 import { bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { MissionPanelOverlay } from './MissionPanelOverlay.js';
 import { ModelsOverlay } from './ModelsOverlay.js';
@@ -57,24 +61,13 @@ import { Toast } from './Toast.js';
 import { WelcomeScreen } from './WelcomeScreen.js';
 import { basename } from 'node:path';
 
-/**
- * Reuse previous block references when content (kind + element-wise lines) is unchanged.
- * Precondition for memoized MessageBlock rendering: without reference stability, memo never skips.
- */
-export function preserveBlockReferences(fresh: readonly ChatBlock[], prev: readonly ChatBlock[]): readonly ChatBlock[] {
-    return fresh.map((block, i) => {
-        const old = prev[i];
-        if (
-            old !== undefined &&
-            old.kind === block.kind &&
-            old.lines.length === block.lines.length &&
-            old.lines.every((line, j) => line === block.lines[j])
-        ) {
-            return old;
-        }
-        return block;
-    });
-}
+export {
+    type PromptPanelRepaintKeyInput,
+    parseModelPreferenceKeys,
+    preserveBlockReferences,
+    promptPanelRepaintKey,
+    recentModelPreferenceSelections,
+} from './chat-app/chat-app-helpers.js';
 
 // Two memos: outer avoids re-parsing when outputText is stable (overlay toggles);
 // inner avoids re-comparing when the parse result is stable. prevRef holds the last
@@ -96,32 +89,6 @@ function AgentSpinner({ text }: { readonly text: string }): JSX.Element {
             <text fg="#00ffff">{`${glyph} ${text}`}</text>
         </box>
     );
-}
-
-export type PromptPanelRepaintKeyInput = {
-    readonly inputMirror: string;
-    readonly fileAutocompleteOpen: boolean;
-    readonly fileMatchCount: number;
-    readonly menuRows: number;
-};
-
-export function promptPanelRepaintKey(input: PromptPanelRepaintKeyInput): string {
-    if (input.menuRows <= 0) return 'none';
-    if (input.inputMirror.startsWith('/')) return `slash:${input.inputMirror}`;
-    if (input.inputMirror.startsWith('#')) return `workflow:${input.inputMirror}`;
-    if (input.fileAutocompleteOpen) return `file:${input.inputMirror}:${input.fileMatchCount}`;
-    return 'none';
-}
-
-function parseModelPreferenceKeys(keys: readonly string[]): readonly ModelProviderSelection[] {
-    return keys.flatMap((key) => {
-        const selection = parseModelSelection(key);
-        return selection === undefined ? [] : [selection];
-    });
-}
-
-function recentModelPreferenceSelections(keys: readonly string[]): readonly ModelProviderSelection[] {
-    return [...parseModelPreferenceKeys(keys)].reverse();
 }
 
 export type ChatAppProps = {
@@ -765,12 +732,8 @@ export function ChatApp({
                         {...(statusBarProps?.workspaceRoot !== undefined
                             ? { projectLabel: basename(statusBarProps.workspaceRoot) }
                             : {})}
-                        {...(statusBarProps?.gitBranch !== undefined
-                            ? { gitBranch: statusBarProps.gitBranch }
-                            : {})}
-                        {...(statusBarProps?.isWorktree !== undefined
-                            ? { isWorktree: statusBarProps.isWorktree }
-                            : {})}
+                        {...(statusBarProps?.gitBranch !== undefined ? { gitBranch: statusBarProps.gitBranch } : {})}
+                        {...(statusBarProps?.isWorktree !== undefined ? { isWorktree: statusBarProps.isWorktree } : {})}
                     />
                 ) : (
                     transcript()
@@ -840,9 +803,7 @@ export function ChatApp({
                             store={store}
                             workspaceRoot={statusBarProps?.workspaceRoot}
                             {...(actions !== undefined ? { actions } : {})}
-                            {...(missionControlServices !== undefined
-                                ? { services: missionControlServices }
-                                : {})}
+                            {...(missionControlServices !== undefined ? { services: missionControlServices } : {})}
                         />
                     </ModalPopup>
                 ) : null}
