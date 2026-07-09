@@ -101,7 +101,7 @@ export function resolveModelCommand(
         };
     }
 
-    const selection = parseModelSelectionInput(trimmed);
+    const selection = parseModelSelection(trimmed);
     if (selection === undefined) {
         return {
             type: 'invalid',
@@ -168,7 +168,7 @@ export function formatModelSelection(selection: ModelProviderSelection): string 
     return `${selection.providerID}/${selection.modelID}${selection.variantID === undefined ? '' : `#${selection.variantID}`}`;
 }
 
-function parseModelSelectionInput(input: string): ModelProviderSelection | undefined {
+export function parseModelSelection(input: string): ModelProviderSelection | undefined {
     const parts = input.split(/\s+/).filter((part) => part.length > 0);
     if (parts.length === 1) {
         return parseProviderModelShorthand(parts[0] ?? '');

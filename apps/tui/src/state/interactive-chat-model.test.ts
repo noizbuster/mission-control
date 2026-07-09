@@ -3,6 +3,7 @@ import {
     createModelChoices,
     createVariantChoices,
     formatModelSelection,
+    parseModelSelection,
     resolveModelCommand,
 } from './interactive-chat-model.js';
 
@@ -116,6 +117,19 @@ describe('interactive chat model command', () => {
             selection: currentSelection,
             availableForCoding: true,
         });
+    });
+
+    it('parses persisted provider/model preference keys', () => {
+        expect(parseModelSelection('openai/gpt-5.5#reasoning-high')).toEqual({
+            providerID: 'openai',
+            modelID: 'gpt-5.5',
+            variantID: 'reasoning-high',
+        });
+        expect(parseModelSelection('openrouter/anthropic/claude-3-haiku')).toEqual({
+            providerID: 'openrouter',
+            modelID: 'anthropic/claude-3-haiku',
+        });
+        expect(parseModelSelection('missing')).toBeUndefined();
     });
 
     it('formats variant choices separately from model choices', () => {

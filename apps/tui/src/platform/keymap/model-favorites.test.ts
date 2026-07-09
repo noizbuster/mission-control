@@ -187,9 +187,11 @@ describe('ModelFavorites', () => {
 // Layer dispatch
 // ---------------------------------------------------------------------------
 
-interface SpyDeps extends ModelShortcutsDeps {
+interface SpyDeps extends Omit<ModelShortcutsDeps, 'frecency' | 'favorites'> {
     readonly selected: ModelProviderSelection[];
     readonly notices: string[];
+    readonly frecency: ModelFrecency;
+    readonly favorites: ModelFavorites;
 }
 
 function buildSpyDeps(overrides: Partial<Omit<ModelShortcutsDeps, 'frecency' | 'favorites'>> = {}): SpyDeps {

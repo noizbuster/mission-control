@@ -173,6 +173,56 @@ export class ModelFrecency {
     }
 }
 
+export interface ModelFrecencyLike {
+    readonly size: number;
+    record(selection: ModelProviderSelection): void;
+    seedFrom(selections: readonly ModelProviderSelection[]): void;
+    next(): ModelProviderSelection | undefined;
+    prev(): ModelProviderSelection | undefined;
+    ordered(): readonly ModelProviderSelection[];
+}
+
+export type PreferenceBackedModelFrecencyInput = {
+    readonly getRecentModels: () => readonly ModelProviderSelection[];
+    readonly recordRecentModel: (selection: ModelProviderSelection) => void;
+};
+
+export function createPreferenceBackedModelFrecency(input: PreferenceBackedModelFrecencyInput): ModelFrecencyLike {
+    let cursor = 0;
+    let seededEntries: readonly ModelProviderSelection[] = [];
+
+    const entries = (): readonly ModelProviderSelection[] => {
+        const storedEntries = input.getRecentModels();
+        return storedEntries.length > 0 ? storedEntries : seededEntries;
+    };
+
+    const selectByCursor = (direction: 1 | -1): ModelProviderSelection | undefined => {
+        const currentEntries = entries();
+        if (currentEntries.length <= 1) return undefined;
+        if (cursor >= currentEntries.length) cursor = 0;
+        cursor = (cursor + direction + currentEntries.length) % currentEntries.length;
+        return currentEntries[cursor];
+    };
+
+    return Object.freeze({
+        get size(): number {
+            return entries().length;
+        },
+        record(selection: ModelProviderSelection): void {
+            cursor = 0;
+            input.recordRecentModel(selection);
+        },
+        seedFrom(selections: readonly ModelProviderSelection[]): void {
+            if (entries().length > 0) return;
+            seededEntries = selections.slice(0, FRECENCY_MAX_ENTRIES);
+            cursor = 0;
+        },
+        next: () => selectByCursor(1),
+        prev: () => selectByCursor(-1),
+        ordered: () => [...entries()],
+    });
+}
+
 // ---------------------------------------------------------------------------
 // ModelFavorites
 // ---------------------------------------------------------------------------
@@ -212,11 +262,31 @@ export class ModelFavorites {
     }
 
     private slotIndex(slot: number): number {
-        if (slot < 1 || slot > MODEL_FAVORITES_SLOT_COUNT || !Number.isInteger(slot)) {
-            throw new Error(`Invalid favorite slot: ${slot} (expected 1..${MODEL_FAVORITES_SLOT_COUNT})`);
-        }
-        return slot - 1;
+        return favoriteSlotIndex(slot);
     }
+}
+
+export interface ModelFavoritesLike {
+    get(slot: number): ModelProviderSelection | undefined;
+}
+
+export type PreferenceBackedModelFavoritesInput = {
+    readonly getFavoriteModels: () => readonly ModelProviderSelection[];
+};
+
+export function createPreferenceBackedModelFavorites(input: PreferenceBackedModelFavoritesInput): ModelFavoritesLike {
+    return Object.freeze({
+        get(slot: number): ModelProviderSelection | undefined {
+            return input.getFavoriteModels()[favoriteSlotIndex(slot)];
+        },
+    });
+}
+
+function favoriteSlotIndex(slot: number): number {
+    if (slot < 1 || slot > MODEL_FAVORITES_SLOT_COUNT || !Number.isInteger(slot)) {
+        throw new Error(`Invalid favorite slot: ${slot} (expected 1..${MODEL_FAVORITES_SLOT_COUNT})`);
+    }
+    return slot - 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -234,9 +304,9 @@ export class ModelFavorites {
  */
 export interface ModelShortcutsDeps {
     /** The recency store powering F2 / Shift+F2. */
-    readonly frecency: ModelFrecency;
+    readonly frecency: ModelFrecencyLike;
     /** The favorites store powering `<leader>1..9`. */
-    readonly favorites: ModelFavorites;
+    readonly favorites: ModelFavoritesLike;
     /** Available model selections, used to lazily seed an empty frecency. */
     getModelSelections(): readonly ModelProviderSelection[];
     /** The currently active model selection, or `undefined` when unknown. */
