@@ -89,6 +89,20 @@ import {
     TranscriptDeliveryModeSchema,
     TranscriptEventMetadataSchema,
     TranscriptVisibilitySchema,
+    TuiFrecencyRecordSchema,
+    TuiKvEntrySchema,
+    TuiKvNamespaceSchema,
+    TuiLocalPreferencesSchema,
+    TuiPluginCapabilitySchema,
+    TuiPluginCommandDescriptorSchema,
+    TuiPluginDiagnosticSchema,
+    TuiPluginManifestSchema,
+    TuiPluginRedactedErrorSchema,
+    TuiPluginRouteDescriptorSchema,
+    TuiPluginSlotDescriptorSchema,
+    TuiPromptHistoryEntrySchema,
+    TuiPromptStashEntrySchema,
+    TuiThemePreferenceSchema,
     WorkflowDiscoveryDiagnosticSchema,
     WorkflowSpecSchema,
 } from '../packages/protocol/src/index.js';
@@ -201,6 +215,13 @@ describe('protocol public exports', () => {
         expect(BudgetConfigSchema.shape.budgetCents).toBeDefined();
         expect(AbgOverlayPrefsSchema.shape.activeTabIndex).toBeDefined();
         expect(AbgOverlayPrefsSchema.parse({}).activeTabIndex).toBe(0);
+        expect(TuiPluginSlotDescriptorSchema.shape.componentRef).toBeDefined();
+        expect(TuiPluginRouteDescriptorSchema.shape.path).toBeDefined();
+        expect(TuiPluginCommandDescriptorSchema.shape.title).toBeDefined();
+        expect(
+            TuiPluginRedactedErrorSchema.parse({ pluginName: 'demo', code: 'x', message: 'redacted', redacted: true })
+                .redacted,
+        ).toBe(true);
     });
 
     it('exports workflow system schemas (Category, Mode, Delivery, PolicyEffectRule, WorkflowSpec)', () => {
@@ -337,5 +358,18 @@ describe('protocol public exports', () => {
                 systemPrompt: 'You are agent one.',
             }).tools,
         ).toEqual([]);
+    });
+
+    it('exports TUI provider data schemas', () => {
+        expect(TuiKvEntrySchema.parse({ key: 'draft', schemaKey: 'string', value: 'hello' }).schemaKey).toBe('string');
+        expect(TuiKvNamespaceSchema.shape.entries).toBeDefined();
+        expect(TuiLocalPreferencesSchema.shape.recentModels).toBeDefined();
+        expect(TuiPromptHistoryEntrySchema.shape.timestamp).toBeDefined();
+        expect(TuiPromptStashEntrySchema.shape.cursorOffset).toBeDefined();
+        expect(TuiFrecencyRecordSchema.shape.accessCount).toBeDefined();
+        expect(TuiThemePreferenceSchema.shape.customOverrides).toBeDefined();
+        expect(TuiPluginManifestSchema.shape.capabilities).toBeDefined();
+        expect(TuiPluginCapabilitySchema.shape.capability).toBeDefined();
+        expect(TuiPluginDiagnosticSchema.shape.redacted).toBeDefined();
     });
 });
