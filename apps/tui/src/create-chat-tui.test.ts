@@ -9,31 +9,51 @@ function readCreateChatTuiSource(): string {
     return readFileSync(resolve(process.cwd(), 'apps/tui/src/create-chat-tui.tsx'), 'utf8');
 }
 
+const CHAT_TUI_HANDLE_METHODS = [
+    'waitForEvent',
+    'emitOutput',
+    'replaceOutputText',
+    'getOutput',
+    'showModelPicker',
+    'showSessionPicker',
+    'showAgentsDashboard',
+    'reloadAgentsDashboard',
+    'hideAgentsDashboard',
+    'showMissionPanel',
+    'reloadMissions',
+    'hideMissionPanel',
+    'showModelsOverlay',
+    'showLevelPicker',
+    'setApprovalLevel',
+    'setSessionId',
+    'setSessionDisplayName',
+    'setContextTokensUsed',
+    'setModelCycleChoices',
+    'setModelSelection',
+    'setGenerating',
+    'setWorkflowNames',
+    'setAgentStatus',
+    'clearAgentStatus',
+    'showTransientNotice',
+    'isShowThinking',
+    'isToolOutputExpanded',
+    'showApproval',
+    'hideApproval',
+    'showQuestion',
+    'showQuestionBatch',
+    'applyAbgOverlayPrefs',
+    'getAbgOverlayPrefsSnapshot',
+    'unmount',
+] as const;
+
 describe('create-chat-tui', () => {
-    it('returns a handle structurally assignable to ChatTuiHandle', () => {
+    it('returns a handle structurally assignable to ChatTuiHandle with full method surface', () => {
         const store = createChatStore();
         const handle: ChatTuiHandle = createChatTuiHandle(store, () => {});
 
-        expect(typeof handle.waitForEvent).toBe('function');
-        expect(typeof handle.emitOutput).toBe('function');
-        expect(typeof handle.replaceOutputText).toBe('function');
-        expect(typeof handle.getOutput).toBe('function');
-        expect(typeof handle.showModelPicker).toBe('function');
-        expect(typeof handle.showLevelPicker).toBe('function');
-        expect(typeof handle.setApprovalLevel).toBe('function');
-        expect(typeof handle.setModelCycleChoices).toBe('function');
-        expect(typeof handle.setGenerating).toBe('function');
-        expect(typeof handle.setWorkflowNames).toBe('function');
-        expect(typeof handle.setAgentStatus).toBe('function');
-        expect(typeof handle.clearAgentStatus).toBe('function');
-        expect(typeof handle.isShowThinking).toBe('function');
-        expect(typeof handle.isToolOutputExpanded).toBe('function');
-        expect(typeof handle.showApproval).toBe('function');
-        expect(typeof handle.hideApproval).toBe('function');
-        expect(typeof handle.showQuestion).toBe('function');
-        expect(typeof handle.applyAbgOverlayPrefs).toBe('function');
-        expect(typeof handle.getAbgOverlayPrefsSnapshot).toBe('function');
-        expect(typeof handle.unmount).toBe('function');
+        for (const method of CHAT_TUI_HANDLE_METHODS) {
+            expect(typeof handle[method]).toBe('function');
+        }
         expect('onModelCycleSelect' in handle).toBe(true);
         expect('onRenameSubmit' in handle).toBe(true);
     });
@@ -141,5 +161,20 @@ describe('create-chat-tui', () => {
         expect(source).toContain("await import('@mission-control/tui/providers')");
         expect(source).toContain('createComponent(MissionControlTuiProviders');
         expect(source).not.toContain("await import('@mission-control/tui/keymap-provider')");
+    });
+
+    it('mounts ChatApp with store-only props and no external ref or chrome fan-out', () => {
+        const source = readCreateChatTuiSource();
+
+        expect(source).toContain('createComponent(ChatApp, { store })');
+        expect(source).not.toContain('textareaRef:');
+        expect(source).not.toContain('scrollboxRef:');
+        expect(source).not.toContain('statusBarProps');
+        expect(source).not.toContain('welcomeData');
+        expect(source).not.toContain('setTextareaRef');
+        expect(source).not.toContain('setScrollboxRef');
+        expect(source).not.toContain('abgOverlayController:');
+        expect(source).not.toContain('missionControlServices:');
+        expect(source).not.toContain('actions:');
     });
 });

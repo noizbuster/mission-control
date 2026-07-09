@@ -1,7 +1,5 @@
 import { getModelContextLimit } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
-import type { StatusBarProps } from './components/StatusBar.js';
 import type { ChatTuiHandle, ChatTuiRuntimeOptions } from './state/chat-tui-types.js';
 import type { ModelsOverlayRoleRow } from './state/index.js';
 import { type ChatStore, createChatStore } from './state/index.js';
@@ -103,38 +101,13 @@ export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHan
     const { ChatApp } = await import('@mission-control/tui/chat-app');
     const { createComponent } = await import('solid-js/web');
 
-    const setTextareaRef: (renderable: TextareaRenderable) => void = () => {};
-    const setScrollboxRef: (renderable: ScrollBoxRenderable) => void = () => {};
-
-    const statusBarProps: StatusBarProps = {
-        providerID: options.providerID,
-        modelID: options.modelID,
-        ...(options.sessionID !== undefined ? { sessionID: options.sessionID } : {}),
-        ...(options.workspaceRoot !== undefined ? { workspaceRoot: options.workspaceRoot } : {}),
-        ...(options.gitBranch !== undefined ? { gitBranch: options.gitBranch } : {}),
-        ...(options.isWorktree ? { isWorktree: options.isWorktree } : {}),
-    };
-
     const mountResult = await mountOpenTui(() =>
         createComponent(MissionControlTuiProviders, {
             useRenderer,
             runtimeOptions: options,
             chatStore: store,
             get children() {
-                return createComponent(ChatApp, {
-                    store,
-                    textareaRef: setTextareaRef,
-                    scrollboxRef: setScrollboxRef,
-                    statusBarProps,
-                    ...(options.welcomeData !== undefined ? { welcomeData: options.welcomeData } : {}),
-                    ...(options.abgOverlayController !== undefined
-                        ? { abgOverlayController: options.abgOverlayController }
-                        : {}),
-                    ...(options.missionControlServices !== undefined
-                        ? { missionControlServices: options.missionControlServices }
-                        : {}),
-                    ...(options.actions !== undefined ? { actions: options.actions } : {}),
-                });
+                return createComponent(ChatApp, { store });
             },
         }),
     );

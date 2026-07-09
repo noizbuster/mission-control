@@ -16,22 +16,21 @@ import {
 } from '../platform/keymap/diff-viewer.js';
 import { hardResetRendererSurface } from '../platform/opentui-renderer.js';
 import {
+    useChatSession,
     useTuiClipboard,
     useTuiLocalPreferences,
     useTuiPromptStash,
+    useTuiRuntime,
     useTuiToast,
 } from '../platform/providers/index.js';
+import type { TuiRuntimeProviderValue } from '../platform/providers/runtime-context.js';
 import { useTerminalViewport } from '../platform/terminal-viewport-solid.js';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
-import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
-import type { ChatAppActions } from '../state/chat-app-actions.js';
-import type { ChatStore } from '../state/chat-store.js';
+import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
 import {
     resolveSlashCommandMenuInsertText,
     resolveWorkflowCommandMenuInsertText,
 } from '../state/interactive-chat-command-menu.js';
-import type { MissionControlServicesLike } from '../state/mission-services-types.js';
-import type { WelcomeData } from '../state/welcome-data-types.js';
 import { AbgMinimap } from './AbgMinimap.js';
 import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from './AbgOverlay.js';
 import { ChatBottomDock } from './ChatBottomDock.js';
@@ -93,40 +92,46 @@ function AgentSpinner({ text }: { readonly text: string }): JSX.Element {
 
 export type ChatAppProps = {
     readonly store: ChatStore;
-    readonly textareaRef: (renderable: TextareaRenderable) => void;
-    readonly scrollboxRef: (renderable: ScrollBoxRenderable) => void;
-    readonly statusBarProps?: StatusBarProps;
-    readonly welcomeData?: WelcomeData;
-    readonly abgOverlayController?: AbgOverlayController;
-    readonly missionControlServices?: MissionControlServicesLike;
-    readonly actions?: ChatAppActions;
 };
 
-export function ChatApp({
-    store,
-    textareaRef,
-    scrollboxRef,
-    statusBarProps,
-    welcomeData,
-    abgOverlayController,
-    missionControlServices,
-    actions,
-}: ChatAppProps): JSX.Element {
+export function deriveStatusBarProps(runtime: TuiRuntimeProviderValue, snap: ChatStoreState): StatusBarProps {
+    const selection = snap.currentModelSelection;
+    const providerID = selection?.providerID ?? runtime.providerID;
+    const modelID = selection?.modelID ?? runtime.modelID;
+    const variantID = selection?.variantID ?? snap.currentModelVariantID ?? runtime.variantID;
+    const sessionID = snap.sessionId.length > 0 ? snap.sessionId : runtime.sessionID;
+    return {
+        providerID,
+        modelID,
+        ...(variantID !== undefined ? { variantID } : {}),
+        ...(sessionID !== undefined && sessionID.length > 0 ? { sessionID } : {}),
+        ...(runtime.workspaceRoot !== undefined ? { workspaceRoot: runtime.workspaceRoot } : {}),
+        ...(runtime.gitBranch !== undefined ? { gitBranch: runtime.gitBranch } : {}),
+        ...(runtime.isWorktree ? { isWorktree: true } : {}),
+    };
+}
+
+export function ChatApp({ store }: ChatAppProps): JSX.Element {
     const snapshot = useSolidStoreSelector(store, (state) => state);
+    const runtime = useTuiRuntime();
+    const session = useChatSession();
+    const welcomeData = session.welcomeData;
+    const abgOverlayController = session.abgOverlayController;
+    const missionControlServices = session.missionControlServices;
+    const actions = session.actions;
+    const statusBarProps = createMemo(() => deriveStatusBarProps(runtime, snapshot()));
     let textarea: TextareaRenderable | undefined;
     let scrollbox: ScrollBoxRenderable | undefined;
     const textareaHandle: ChatTextareaHandle = {
         get: () => textarea,
         set: (renderable) => {
             textarea = renderable;
-            textareaRef(renderable);
         },
     };
     const scrollboxHandle: ChatScrollboxHandle = {
         get: () => scrollbox,
         set: (renderable) => {
             scrollbox = renderable;
-            scrollboxRef(renderable);
         },
     };
     const keymapScrollboxRef = {
@@ -682,9 +687,10 @@ export function ChatApp({
                 );
             }
 
+            const bar = statusBarProps();
             const selection = snap.currentModelSelection;
-            const providerID = selection?.providerID ?? statusBarProps?.providerID ?? '';
-            const modelID = selection?.modelID ?? statusBarProps?.modelID ?? '';
+            const providerID = selection?.providerID ?? bar.providerID;
+            const modelID = selection?.modelID ?? bar.modelID;
             const variantID = snap.currentModelVariantID;
             const modelLabel = `${providerID}/${modelID}${variantID !== undefined ? `#${variantID}` : ''}`;
             const activeTab: AbgOverlayTab = ABG_OVERLAY_TABS[abgActiveTab()] ?? 'overview';
@@ -722,6 +728,7 @@ export function ChatApp({
             );
         }
 
+        const bar = statusBarProps();
         const upperOutputRegion = (
             <>
                 {showWelcome() && welcomeData !== undefined ? (
@@ -729,11 +736,11 @@ export function ChatApp({
                         data={welcomeData}
                         viewportColumns={viewport().columns}
                         availableRows={dockPolicy().transcript.rows}
-                        {...(statusBarProps?.workspaceRoot !== undefined
-                            ? { projectLabel: basename(statusBarProps.workspaceRoot) }
+                        {...(bar.workspaceRoot !== undefined
+                            ? { projectLabel: basename(bar.workspaceRoot) }
                             : {})}
-                        {...(statusBarProps?.gitBranch !== undefined ? { gitBranch: statusBarProps.gitBranch } : {})}
-                        {...(statusBarProps?.isWorktree !== undefined ? { isWorktree: statusBarProps.isWorktree } : {})}
+                        {...(bar.gitBranch !== undefined ? { gitBranch: bar.gitBranch } : {})}
+                        {...(bar.isWorktree !== undefined ? { isWorktree: bar.isWorktree } : {})}
                     />
                 ) : (
                     transcript()
@@ -757,7 +764,7 @@ export function ChatApp({
                 inputFocused={!overlayActive()}
                 viewportColumns={viewport().columns}
                 viewportRows={viewport().rows}
-                {...(statusBarProps !== undefined ? { statusBarProps } : {})}
+                statusBarProps={bar}
                 {...(actions !== undefined ? { actions } : {})}
             />
         );
@@ -792,7 +799,7 @@ export function ChatApp({
                     <ModalPopup>
                         <AgentsDashboardOverlay
                             store={store}
-                            workspaceRoot={statusBarProps?.workspaceRoot}
+                            workspaceRoot={bar.workspaceRoot}
                             {...(actions !== undefined ? { actions } : {})}
                         />
                     </ModalPopup>
@@ -801,7 +808,7 @@ export function ChatApp({
                     <ModalPopup>
                         <MissionPanelOverlay
                             store={store}
-                            workspaceRoot={statusBarProps?.workspaceRoot}
+                            workspaceRoot={bar.workspaceRoot}
                             {...(actions !== undefined ? { actions } : {})}
                             {...(missionControlServices !== undefined ? { services: missionControlServices } : {})}
                         />
