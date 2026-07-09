@@ -16,6 +16,17 @@ function readChatAppSource(): string {
     return readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatApp.tsx'), 'utf8');
 }
 
+function readChatRepaintEffectsSource(): string {
+    return readFileSync(
+        resolve(process.cwd(), 'apps/tui/src/components/chat-app/use-chat-repaint-effects.ts'),
+        'utf8',
+    );
+}
+
+function readChatAppTopologyUnion(): string {
+    return `${readChatAppSource()}\n${readChatRepaintEffectsSource()}`;
+}
+
 function matchCount(source: string, needle: string): number {
     return source.split(needle).length - 1;
 }
@@ -72,10 +83,22 @@ describe('ChatApp source topology', () => {
     });
 
     it('requests a full OpenTUI repaint when terminal viewport columns or rows change', () => {
-        const source = readChatAppSource();
-        const viewportRepaintBlock = sliceBetween(source, 'let prevViewport = viewport();', 'let prevOverlayMode');
+        const chatAppSource = readChatAppSource();
+        const repaintSource = readChatRepaintEffectsSource();
+        const union = readChatAppTopologyUnion();
+        const viewportRepaintBlock = sliceBetween(
+            repaintSource,
+            'let prevViewport = viewport();',
+            'let prevOverlayMode',
+        );
 
-        expect(source).toContain("import { hardResetRendererSurface } from '../platform/opentui-renderer.js';");
+        expect(chatAppSource).toContain('useChatRepaintEffects');
+        expect(chatAppSource).not.toContain('hardResetRendererSurface(renderer)');
+        expect(chatAppSource).not.toContain("Reflect.set(renderer, 'forceFullRepaintRequested'");
+        expect(repaintSource).toContain('hardResetRendererSurface');
+        expect(repaintSource).toContain("Reflect.set(renderer, 'forceFullRepaintRequested', true)");
+        expect(repaintSource).toContain('}, 500)');
+        expect(union).toContain('hardResetRendererSurface(renderer)');
         expect(viewportRepaintBlock).toContain('const currentViewport = viewport();');
         expect(viewportRepaintBlock).toContain('prevViewport.columns !== currentViewport.columns');
         expect(viewportRepaintBlock).toContain('prevViewport.rows !== currentViewport.rows');

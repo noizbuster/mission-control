@@ -14,7 +14,6 @@ import {
     prevFile,
     prevHunk,
 } from '../platform/keymap/diff-viewer.js';
-import { hardResetRendererSurface } from '../platform/opentui-renderer.js';
 import {
     useChatSession,
     useTuiClipboard,
@@ -42,6 +41,7 @@ import {
     promptPanelRepaintKey,
     recentModelPreferenceSelections,
 } from './chat-app/chat-app-helpers.js';
+import { useChatRepaintEffects } from './chat-app/use-chat-repaint-effects.js';
 import { bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { MissionPanelOverlay } from './MissionPanelOverlay.js';
 import { ModelsOverlay } from './ModelsOverlay.js';
@@ -601,58 +601,12 @@ export function ChatApp({ store }: ChatAppProps): JSX.Element {
         }),
     );
 
-    // opentui's double-buffer diff can miss cells when a wide character (Korean
-    // Hangul, emoji) is replaced by a narrow one — the continuation cell is not
-    // marked dirty, leaving stale pixels that look like garbled text. Force a
-    // full repaint (skip the diff, write every cell) when the view changes
-    // dramatically: viewport resize, overlay open/close, and when a streaming
-    // response finishes.
-    let prevViewport = viewport();
-    createEffect(() => {
-        const currentViewport = viewport();
-        if (prevViewport.columns !== currentViewport.columns || prevViewport.rows !== currentViewport.rows) {
-            prevViewport = currentViewport;
-            hardResetRendererSurface(renderer);
-        }
-    });
-
-    let prevOverlayMode = snapshot().overlayMode;
-    createEffect(() => {
-        if (prevOverlayMode !== snapshot().overlayMode) {
-            prevOverlayMode = snapshot().overlayMode;
-            Reflect.set(renderer, 'forceFullRepaintRequested', true);
-            renderer.requestRender();
-        }
-    });
-
-    let prevPromptRepaintKey = promptRepaintKey();
-    createEffect(() => {
-        if (prevPromptRepaintKey !== promptRepaintKey()) {
-            prevPromptRepaintKey = promptRepaintKey();
-            Reflect.set(renderer, 'forceFullRepaintRequested', true);
-            renderer.requestRender();
-        }
-    });
-
-    let prevGenerating = snapshot().generating;
-    createEffect(() => {
-        if (prevGenerating && !snapshot().generating) {
-            Reflect.set(renderer, 'forceFullRepaintRequested', true);
-            renderer.requestRender();
-        }
-        prevGenerating = snapshot().generating;
-    });
-
-    // During streaming, opentui's cell-diff can miss wide-character continuation
-    // cells on every incremental text update. A periodic full repaint corrects
-    // the accumulated errors without the per-frame cost of always skipping diff.
-    createEffect(() => {
-        if (!snapshot().generating) return;
-        const timer = setInterval(() => {
-            Reflect.set(renderer, 'forceFullRepaintRequested', true);
-            renderer.requestRender();
-        }, 500);
-        onCleanup(() => clearInterval(timer));
+    useChatRepaintEffects({
+        renderer,
+        viewport,
+        overlayMode: () => snapshot().overlayMode,
+        generating: () => snapshot().generating,
+        promptRepaintKey,
     });
 
     const transcript = createMemo(() => (
