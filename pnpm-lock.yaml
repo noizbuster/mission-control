@@ -120,7 +120,7 @@ importers:
         version: 0.4.3(typescript@7.0.2)(web-tree-sitter@0.25.10)
       '@opentui/keymap':
         specifier: ^0.4.3
-        version: 0.4.3(@opentui/react@0.4.3(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.2)(web-tree-sitter@0.25.10)(ws@8.21.0))(@opentui/solid@0.4.3(solid-js@1.9.12)(typescript@7.0.2)(web-tree-sitter@0.25.10))(react@19.2.7)(solid-js@1.9.12)(typescript@7.0.2)(web-tree-sitter@0.25.10)
+        version: 0.4.3(@opentui/solid@0.4.3(solid-js@1.9.12)(typescript@7.0.2)(web-tree-sitter@0.25.10))(react@19.2.7)(solid-js@1.9.12)(typescript@7.0.2)(web-tree-sitter@0.25.10)
       '@opentui/solid':
         specifier: ^0.4.3
         version: 0.4.3(solid-js@1.9.12)(typescript@7.0.2)(web-tree-sitter@0.25.10)
@@ -838,13 +838,6 @@ packages:
         optional: true
       solid-js:
         optional: true
-
-  '@opentui/react@0.4.3':
-    resolution: {integrity: sha512-HtC/+lMURaZlifiJNVsn84YqKMywXQmkeSNbUTlbbeS6YM6reahaacnZEYZdnEUgklO6+r/J1tG8UBhqO26X7Q==}
-    peerDependencies:
-      react: '>=19.2.0'
-      react-devtools-core: ^7.0.1
-      ws: ^8.18.0
 
   '@opentui/solid@0.4.3':
     resolution: {integrity: sha512-RcV0+S8HMdXOASyr7HmJUBuTUIaFPzAxMDa44VftS5C2JUgrmAuWo0Njv1q3TWRB1owjHnyKhEfWGKq7A82wxw==}
@@ -2133,19 +2126,10 @@ packages:
     resolution: {integrity: sha512-K5zQjDllxWkf7Z5xJdV0/B0WTNqx6vxG70zJE4N0kBs4LovmEYWJzQGxC9bS9RAKu3bgM40lrd5zoLJ12MQ5BA==}
     engines: {node: '>= 0.10'}
 
-  react-devtools-core@7.0.1:
-    resolution: {integrity: sha512-C3yNvRHaizlpiASzy7b9vbnBGLrhvdhl1CbdU6EnZgxPNbai60szdLtl+VL76UNOt5bOoVTOz5rNWZxgGt+Gsw==}
-
   react-dom@19.2.7:
     resolution: {integrity: sha512-t0BRVXvbiE/o20Hfw669rLbMCDWtYZLvmJigy2f0MxsXF+71pxhR3xOkspmsO8h3ZlNzyibAmtCa3l4lYKk6gQ==}
     peerDependencies:
       react: ^19.2.7
-
-  react-reconciler@0.33.0:
-    resolution: {integrity: sha512-KetWRytFv1epdpJc3J4G75I4WrplZE5jOL7Yq0p34+OVOKF4Se7WrdIdVC45XsSSmUTlht2FM/fM1FZb1mfQeA==}
-    engines: {node: '>=0.10.0'}
-    peerDependencies:
-      react: ^19.2.0
 
   react@19.2.7:
     resolution: {integrity: sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ==}
@@ -2240,10 +2224,6 @@ packages:
   shebang-regex@3.0.0:
     resolution: {integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==}
     engines: {node: '>=8'}
-
-  shell-quote@1.9.0:
-    resolution: {integrity: sha512-Iov+JwFv/2HcTpcwNMKd8+IWNb8tboQJNQTkAY/LLVK7gGH9jy+LGkVqPxfekHl+yMmiqXszdGWXgkfml7hjqA==}
-    engines: {node: '>= 0.4'}
 
   side-channel-list@1.0.1:
     resolution: {integrity: sha512-mjn/0bi/oUURjc5Xl7IaWi/OJJJumuoJFQJfDDyO46+hBWsfaVM65TBHq2eoZBhzl9EchxOijpkbRC8SVBQU0w==}
@@ -2536,18 +2516,6 @@ packages:
 
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
-
-  ws@7.5.11:
-    resolution: {integrity: sha512-zS54Oen9bITtp7kp2XM3AydrCIq1D+HwJOuH+c+e4LfpL/lotP5osijd+UoMnxwAam1GN8R4KtLAyIrIcBNpiA==}
-    engines: {node: '>=8.3.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: ^5.0.2
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
 
   ws@8.21.0:
     resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
@@ -3200,29 +3168,16 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@opentui/keymap@0.4.3(@opentui/react@0.4.3(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.2)(web-tree-sitter@0.25.10)(ws@8.21.0))(@opentui/solid@0.4.3(solid-js@1.9.12)(typescript@7.0.2)(web-tree-sitter@0.25.10))(react@19.2.7)(solid-js@1.9.12)(typescript@7.0.2)(web-tree-sitter@0.25.10)':
+  '@opentui/keymap@0.4.3(@opentui/solid@0.4.3(solid-js@1.9.12)(typescript@7.0.2)(web-tree-sitter@0.25.10))(react@19.2.7)(solid-js@1.9.12)(typescript@7.0.2)(web-tree-sitter@0.25.10)':
     dependencies:
       '@opentui/core': 0.4.3(typescript@7.0.2)(web-tree-sitter@0.25.10)
     optionalDependencies:
-      '@opentui/react': 0.4.3(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.2)(web-tree-sitter@0.25.10)(ws@8.21.0)
       '@opentui/solid': 0.4.3(solid-js@1.9.12)(typescript@7.0.2)(web-tree-sitter@0.25.10)
       react: 19.2.7
       solid-js: 1.9.12
     transitivePeerDependencies:
       - typescript
       - web-tree-sitter
-
-  '@opentui/react@0.4.3(react-devtools-core@7.0.1)(react@19.2.7)(typescript@7.0.2)(web-tree-sitter@0.25.10)(ws@8.21.0)':
-    dependencies:
-      '@opentui/core': 0.4.3(typescript@7.0.2)(web-tree-sitter@0.25.10)
-      react: 19.2.7
-      react-devtools-core: 7.0.1
-      react-reconciler: 0.33.0(react@19.2.7)
-      ws: 8.21.0
-    transitivePeerDependencies:
-      - typescript
-      - web-tree-sitter
-    optional: true
 
   '@opentui/solid@0.4.3(solid-js@1.9.12)(typescript@7.0.2)(web-tree-sitter@0.25.10)':
     dependencies:
@@ -4426,25 +4381,10 @@ snapshots:
       iconv-lite: 0.7.2
       unpipe: 1.0.0
 
-  react-devtools-core@7.0.1:
-    dependencies:
-      shell-quote: 1.9.0
-      ws: 7.5.11
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-    optional: true
-
   react-dom@19.2.7(react@19.2.7):
     dependencies:
       react: 19.2.7
       scheduler: 0.27.0
-
-  react-reconciler@0.33.0(react@19.2.7):
-    dependencies:
-      react: 19.2.7
-      scheduler: 0.27.0
-    optional: true
 
   react@19.2.7: {}
 
@@ -4557,9 +4497,6 @@ snapshots:
       shebang-regex: 3.0.0
 
   shebang-regex@3.0.0: {}
-
-  shell-quote@1.9.0:
-    optional: true
 
   side-channel-list@1.0.1:
     dependencies:
@@ -4851,9 +4788,6 @@ snapshots:
       strip-ansi: 6.0.1
 
   wrappy@1.0.2: {}
-
-  ws@7.5.11:
-    optional: true
 
   ws@8.21.0: {}
 
