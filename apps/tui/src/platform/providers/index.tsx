@@ -8,6 +8,7 @@ import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
 import type { ClipboardServiceRenderer } from '../clipboard-service.js';
 import { CommandPaletteOverlay } from '../keymap/command-palette.js';
 import { ChatKeymapProvider } from '../keymap/keymap-provider.js';
+import { MissionControlChatSessionGate } from './chat-session-context.js';
 import { MissionControlClipboardToastProviders } from './clipboard-toast-context.js';
 import { TuiProviderLifecycleScope } from './context-base.js';
 import {
@@ -35,6 +36,7 @@ import {
 import { MissionControlRuntimeProviders, type MissionControlTuiProviderEnvironment } from './runtime-context.js';
 import { MissionControlRuntimeEventsProvider } from './runtime-events-context.js';
 
+export * from './chat-session-context.js';
 export * from './clipboard-toast-context.js';
 export * from './context-base.js';
 export * from './local-preferences-context.js';
@@ -80,66 +82,74 @@ export function composeMissionControlProviderTree<TRenderer extends ClipboardSer
                 runtimeOptions={props.runtimeOptions}
                 {...(props.environment !== undefined ? { environment: props.environment } : {})}
             >
-                <MissionControlRuntimeEventsProvider runtimeOptions={props.runtimeOptions}>
-                    <MissionControlProjectSyncProvider
-                        {...(props.chatStore !== undefined ? { chatStore: props.chatStore } : {})}
-                    >
-                        <MissionControlRouteThemeProviders
-                            {...(props.themePreferenceStore !== undefined
-                                ? { themePreferenceStore: props.themePreferenceStore }
-                                : {})}
+                <MissionControlChatSessionGate
+                    runtimeOptions={props.runtimeOptions}
+                    {...(props.chatStore !== undefined ? { chatStore: props.chatStore } : {})}
+                >
+                    <MissionControlRuntimeEventsProvider runtimeOptions={props.runtimeOptions}>
+                        <MissionControlProjectSyncProvider
+                            {...(props.chatStore !== undefined ? { chatStore: props.chatStore } : {})}
                         >
-                            <MissionControlLocalPreferencesProvider
-                                {...(props.localPreferencesStore !== undefined
-                                    ? { localPreferencesStore: props.localPreferencesStore }
+                            <MissionControlRouteThemeProviders
+                                {...(props.themePreferenceStore !== undefined
+                                    ? { themePreferenceStore: props.themePreferenceStore }
                                     : {})}
                             >
-                                <MissionControlPromptHistoryProvider
-                                    {...(props.promptHistoryStore !== undefined
-                                        ? { promptHistoryStore: props.promptHistoryStore }
+                                <MissionControlLocalPreferencesProvider
+                                    {...(props.localPreferencesStore !== undefined
+                                        ? { localPreferencesStore: props.localPreferencesStore }
                                         : {})}
-                                    {...(props.chatStore !== undefined ? { chatStore: props.chatStore } : {})}
                                 >
-                                    <MissionControlPromptServicesProvider
-                                        {...(props.promptStashStore !== undefined
-                                            ? { promptStashStore: props.promptStashStore }
-                                            : {})}
-                                        {...(props.frecencyStore !== undefined
-                                            ? { frecencyStore: props.frecencyStore }
+                                    <MissionControlPromptHistoryProvider
+                                        {...(props.promptHistoryStore !== undefined
+                                            ? { promptHistoryStore: props.promptHistoryStore }
                                             : {})}
                                         {...(props.chatStore !== undefined ? { chatStore: props.chatStore } : {})}
                                     >
-                                        <MissionControlClipboardToastProviders useRenderer={props.useRenderer}>
-                                            <KeymapProviderComponent useRenderer={props.useRenderer}>
-                                                <MissionControlDialogProvider>
-                                                    <MissionControlPluginRuntimeProvider
-                                                        {...(props.pluginManifestStore !== undefined
-                                                            ? { manifestStore: props.pluginManifestStore }
-                                                            : {})}
-                                                        {...(props.pluginKvStore !== undefined
-                                                            ? { kvStore: props.pluginKvStore }
-                                                            : {})}
-                                                        {...(props.allowedPluginCapabilities !== undefined
-                                                            ? { allowedCapabilities: props.allowedPluginCapabilities }
-                                                            : {})}
-                                                        {...(props.plugins !== undefined
-                                                            ? { plugins: props.plugins }
-                                                            : {})}
-                                                    >
-                                                        {props.renderKeymapChrome === true ? (
-                                                            <CommandPaletteOverlay />
-                                                        ) : null}
-                                                        {props.children}
-                                                    </MissionControlPluginRuntimeProvider>
-                                                </MissionControlDialogProvider>
-                                            </KeymapProviderComponent>
-                                        </MissionControlClipboardToastProviders>
-                                    </MissionControlPromptServicesProvider>
-                                </MissionControlPromptHistoryProvider>
-                            </MissionControlLocalPreferencesProvider>
-                        </MissionControlRouteThemeProviders>
-                    </MissionControlProjectSyncProvider>
-                </MissionControlRuntimeEventsProvider>
+                                        <MissionControlPromptServicesProvider
+                                            {...(props.promptStashStore !== undefined
+                                                ? { promptStashStore: props.promptStashStore }
+                                                : {})}
+                                            {...(props.frecencyStore !== undefined
+                                                ? { frecencyStore: props.frecencyStore }
+                                                : {})}
+                                            {...(props.chatStore !== undefined ? { chatStore: props.chatStore } : {})}
+                                        >
+                                            <MissionControlClipboardToastProviders useRenderer={props.useRenderer}>
+                                                <KeymapProviderComponent useRenderer={props.useRenderer}>
+                                                    <MissionControlDialogProvider>
+                                                        <MissionControlPluginRuntimeProvider
+                                                            {...(props.pluginManifestStore !== undefined
+                                                                ? { manifestStore: props.pluginManifestStore }
+                                                                : {})}
+                                                            {...(props.pluginKvStore !== undefined
+                                                                ? { kvStore: props.pluginKvStore }
+                                                                : {})}
+                                                            {...(props.allowedPluginCapabilities !== undefined
+                                                                ? {
+                                                                      allowedCapabilities:
+                                                                          props.allowedPluginCapabilities,
+                                                                  }
+                                                                : {})}
+                                                            {...(props.plugins !== undefined
+                                                                ? { plugins: props.plugins }
+                                                                : {})}
+                                                        >
+                                                            {props.renderKeymapChrome === true ? (
+                                                                <CommandPaletteOverlay />
+                                                            ) : null}
+                                                            {props.children}
+                                                        </MissionControlPluginRuntimeProvider>
+                                                    </MissionControlDialogProvider>
+                                                </KeymapProviderComponent>
+                                            </MissionControlClipboardToastProviders>
+                                        </MissionControlPromptServicesProvider>
+                                    </MissionControlPromptHistoryProvider>
+                                </MissionControlLocalPreferencesProvider>
+                            </MissionControlRouteThemeProviders>
+                        </MissionControlProjectSyncProvider>
+                    </MissionControlRuntimeEventsProvider>
+                </MissionControlChatSessionGate>
             </MissionControlRuntimeProviders>
         </TuiProviderLifecycleScope>
     );
