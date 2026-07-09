@@ -23,8 +23,19 @@ function readChatRepaintEffectsSource(): string {
     );
 }
 
+function readChatAppModuleSource(relativePath: string): string {
+    return readFileSync(resolve(process.cwd(), 'apps/tui/src/components', relativePath), 'utf8');
+}
+
 function readChatAppTopologyUnion(): string {
-    return `${readChatAppSource()}\n${readChatRepaintEffectsSource()}`;
+    return [
+        readChatAppSource(),
+        readChatRepaintEffectsSource(),
+        readChatAppModuleSource('chat-app/use-chat-transient-toast.ts'),
+        readChatAppModuleSource('chat-app/use-chat-selection-mouseup.ts'),
+        readChatAppModuleSource('chat-app/use-chat-submit.ts'),
+        readChatAppModuleSource('chat-app/use-chat-renderable-handles.ts'),
+    ].join('\n');
 }
 
 function matchCount(source: string, needle: string): number {
@@ -135,14 +146,15 @@ describe('ChatApp source topology', () => {
 
     it('uses provider-backed clipboard and toast services instead of local ad-hoc services', () => {
         const source = readChatAppSource();
+        const union = readChatAppTopologyUnion();
 
         expect(source).toContain('useTuiClipboard');
-        expect(source).toContain('useTuiToast');
+        expect(union).toContain('useTuiToast');
         expect(source).toContain('useTuiLocalPreferences');
-        expect(source).not.toContain('createClipboardService(renderer)');
-        expect(source).not.toContain('const [toast, setToast]');
-        expect(source).not.toContain('new ModelFrecency()');
-        expect(source).not.toContain('new ModelFavorites()');
+        expect(union).not.toContain('createClipboardService(renderer)');
+        expect(union).not.toContain('const [toast, setToast]');
+        expect(union).not.toContain('new ModelFrecency()');
+        expect(union).not.toContain('new ModelFavorites()');
     });
 
     it('derives the welcome row budget from the live viewport dock policy without stdout row reads', () => {

@@ -1,47 +1,37 @@
 /** @jsxImportSource @opentui/solid */
 
-import { type ChatBlock, extractLastAssistantText, parseMessageBlocks } from '@mission-control/tui/chat';
-import { type ScrollBoxRenderable, TextAttributes, type TextareaRenderable } from '@opentui/core';
+import { type ChatBlock, parseMessageBlocks } from '@mission-control/tui/chat';
+import { TextAttributes } from '@opentui/core';
 import { useKeymap } from '@opentui/keymap/solid';
-import { useKeyboard, useRenderer } from '@opentui/solid';
-import { type Accessor, createEffect, createMemo, createSignal, type JSX, onCleanup, onMount } from 'solid-js';
-import {
-    buildDiffViewerModel,
-    DiffViewerOverlay,
-    moveLine,
-    nextFile,
-    nextHunk,
-    prevFile,
-    prevHunk,
-} from '../platform/keymap/diff-viewer.js';
+import { useRenderer } from '@opentui/solid';
+import { type Accessor, createMemo, createSignal, type JSX } from 'solid-js';
+import { buildDiffViewerModel, DiffViewerOverlay } from '../platform/keymap/diff-viewer.js';
 import {
     useChatSession,
     useTuiClipboard,
     useTuiLocalPreferences,
     useTuiPromptStash,
     useTuiRuntime,
-    useTuiToast,
 } from '../platform/providers/index.js';
 import type { TuiRuntimeProviderValue } from '../platform/providers/runtime-context.js';
 import { useTerminalViewport } from '../platform/terminal-viewport-solid.js';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
 import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
-import {
-    resolveSlashCommandMenuInsertText,
-    resolveWorkflowCommandMenuInsertText,
-} from '../state/interactive-chat-command-menu.js';
 import { AbgMinimap } from './AbgMinimap.js';
 import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from './AbgOverlay.js';
 import { ChatBottomDock } from './ChatBottomDock.js';
-import { type ChatTextareaHandle } from './ChatInputTextarea.js';
-import { type ChatScrollboxHandle, ChatTranscript } from './ChatTranscript.js';
+import { ChatTranscript } from './ChatTranscript.js';
 import {
-    parseModelPreferenceKeys,
     preserveBlockReferences,
     promptPanelRepaintKey,
-    recentModelPreferenceSelections,
 } from './chat-app/chat-app-helpers.js';
+import { useChatGlobalKeyboard } from './chat-app/use-chat-global-keyboard.js';
+import { useChatKeymapLayers } from './chat-app/use-chat-keymap-layers.js';
+import { useChatRenderableHandles } from './chat-app/use-chat-renderable-handles.js';
 import { useChatRepaintEffects } from './chat-app/use-chat-repaint-effects.js';
+import { useChatSelectionMouseUp } from './chat-app/use-chat-selection-mouseup.js';
+import { useChatSubmit } from './chat-app/use-chat-submit.js';
+import { useChatTransientToast } from './chat-app/use-chat-transient-toast.js';
 import { bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { MissionPanelOverlay } from './MissionPanelOverlay.js';
 import { ModelsOverlay } from './ModelsOverlay.js';
@@ -120,25 +110,7 @@ export function ChatApp({ store }: ChatAppProps): JSX.Element {
     const missionControlServices = session.missionControlServices;
     const actions = session.actions;
     const statusBarProps = createMemo(() => deriveStatusBarProps(runtime, snapshot()));
-    let textarea: TextareaRenderable | undefined;
-    let scrollbox: ScrollBoxRenderable | undefined;
-    const textareaHandle: ChatTextareaHandle = {
-        get: () => textarea,
-        set: (renderable) => {
-            textarea = renderable;
-        },
-    };
-    const scrollboxHandle: ChatScrollboxHandle = {
-        get: () => scrollbox,
-        set: (renderable) => {
-            scrollbox = renderable;
-        },
-    };
-    const keymapScrollboxRef = {
-        get current(): ScrollBoxRenderable | null {
-            return scrollbox ?? null;
-        },
-    };
+    const { textareaHandle, scrollboxHandle, keymapScrollboxRef } = useChatRenderableHandles();
 
     // Seeded from persisted prefs so a user's last tab/scroll survives an overlay reopen.
     const initialPrefs = store.getAbgOverlayPrefsSnapshot();
@@ -148,445 +120,43 @@ export function ChatApp({ store }: ChatAppProps): JSX.Element {
     const keymap = useKeymap();
     const renderer = useRenderer();
     const clipboard = useTuiClipboard();
-    const toast = useTuiToast();
     const promptStash = useTuiPromptStash();
     const localPreferences = useTuiLocalPreferences();
     const viewport = useTerminalViewport();
     const dockPolicy = createMemo(() => bottomDockPolicy(viewport()));
     const promptMenuInteractionsEnabled = createMemo(() => dockPolicy().menu.rows > 0);
 
-    createEffect(() => {
-        const noticeId = snapshot().transientNotice?.id;
-        const noticeMessage = snapshot().transientNotice?.message;
-        if (noticeId !== undefined && noticeMessage !== undefined) {
-            toast.show({ message: noticeMessage, variant: 'info' });
-        }
-    });
-
-    // Read-only mouse-up hook: when a drag-selection exists, surface the
-    // keyboard-copy hint. The copy itself stays keyboard-only (Ctrl+D).
-    const handleSelectionMouseUp = (): void => {
-        const selection = renderer.getSelection();
-        if (selection === null) return;
-        if (selection.getSelectedText().length === 0) return;
-        toast.show({ message: 'Copy selection: Ctrl+D', variant: 'info' });
-    };
-
-    let handleSubmit = (): void => {};
-    let submitting = false;
-
+    useChatTransientToast(store);
+    const handleSelectionMouseUp = useChatSelectionMouseUp();
     // Wire the submit handler the chat.submit keymap layer (T3) invokes. The
     // keymap owns the return/kpenter chord (native keyBindings are suspended),
-    // so this is the sole Enter-submit path. Mirrors ChatInputArea.handleSubmit's
-    // IME-safe double-defer + re-entrancy guard + empty check.
-    handleSubmit = (): void => {
-        if (submitting) return;
-        submitting = true;
-        const captured = textareaHandle.get()?.plainText ?? '';
-        setTimeout(() => {
-            setTimeout(() => {
-                try {
-                    if (captured.trim() === '') return;
-                    const snap = store.getSnapshot();
-                    if (promptMenuInteractionsEnabled() && captured.startsWith('#')) {
-                        const insertText = resolveWorkflowCommandMenuInsertText(
-                            captured,
-                            snap.menuState,
-                            snap.workflowNames,
-                        );
-                        if (insertText !== undefined) {
-                            textareaHandle.get()?.setText(insertText);
-                            textareaHandle.get()?.gotoBufferEnd();
-                            store.setInputMirror(insertText);
-                            return;
-                        }
-                    }
-
-                    if (promptMenuInteractionsEnabled() && captured.startsWith('/')) {
-                        const insertText = resolveSlashCommandMenuInsertText(captured, snap.menuState);
-                        if (insertText !== undefined && insertText.trimEnd() !== captured.trimEnd()) {
-                            textareaHandle.get()?.setText(insertText);
-                            textareaHandle.get()?.gotoBufferEnd();
-                            store.setInputMirror(insertText);
-                            return;
-                        }
-                    }
-
-                    store.submitLine(captured);
-                    textareaHandle.get()?.clear();
-                } finally {
-                    submitting = false;
-                }
-            }, 0);
-        }, 0);
-    };
-
-    useKeyboard((key) => {
-        const isCtrlC = key.ctrl && key.name === 'c';
-        if (isCtrlC) {
-            const snap = store.getSnapshot();
-            // While streaming, Ctrl+C stops the agent rather than clearing the draft.
-            if (snap.generating) {
-                store.sendInterrupt('ctrl-c');
-                return;
-            }
-            const text = textareaHandle.get()?.plainText ?? snap.inputMirror;
-            if (text.length > 0) {
-                textareaHandle.get()?.clear();
-                store.setInputMirror('');
-                return;
-            }
-            store.sendInterrupt('ctrl-c');
-            return;
-        }
-        // Global sink is overlay-only: when the textarea holds focus, its onKeyDown
-        // (in ChatInputArea) owns chords like Ctrl+G. Without this guard, the opening
-        // Ctrl+G would double-toggle: textarea opens the overlay, then this sink reads
-        // the updated snapshot and immediately closes it.
-        if (textareaHandle.get()?.focused) {
-            return;
-        }
-        const snap = store.getSnapshot();
-        if (snap.overlayMode === 'abg') {
-            if (key.name === 'escape' || (key.ctrl && key.name === 'g')) {
-                key.preventDefault();
-                store.toggleAbgOverlay();
-                return;
-            }
-            if (key.name >= '1' && key.name <= '8') {
-                const idx = Number.parseInt(key.name, 10) - 1;
-                setAbgActiveTab(idx);
-                setAbgScrollOffset(0);
-                return;
-            }
-            if (key.name === 'tab') {
-                setAbgActiveTab((i) => (i + 1) % ABG_OVERLAY_TABS.length);
-                setAbgScrollOffset(0);
-                return;
-            }
-            if (key.name === 'up') {
-                setAbgScrollOffset((o) => o + 1);
-                return;
-            }
-            if (key.name === 'down') {
-                setAbgScrollOffset((o) => Math.max(0, o - 1));
-                return;
-            }
-            if (key.name === 'r' && abgOverlayController !== undefined) {
-                abgOverlayController.flushNow();
-                return;
-            }
-            if (key.name === 'c' && abgOverlayController !== undefined) {
-                abgOverlayController.clearTimeline();
-                return;
-            }
-        }
-        if (snap.overlayMode === 'diff-viewer') {
-            const model = buildDiffViewerModel(snap.diffViewerEntries);
-            const cursor = snap.diffViewerCursor;
-            if (key.name === 'escape' || key.name === 'q') {
-                key.preventDefault();
-                store.hideDiffViewer();
-                return;
-            }
-            if (key.name === 'j') {
-                key.preventDefault();
-                store.setDiffViewerCursor(moveLine(model, cursor, 1));
-                return;
-            }
-            if (key.name === 'k') {
-                key.preventDefault();
-                store.setDiffViewerCursor(moveLine(model, cursor, -1));
-                return;
-            }
-            if (key.name === ']') {
-                key.preventDefault();
-                store.setDiffViewerCursor(nextHunk(model, cursor));
-                return;
-            }
-            if (key.name === '[') {
-                key.preventDefault();
-                store.setDiffViewerCursor(prevHunk(model, cursor));
-                return;
-            }
-            if (key.name === 'n') {
-                key.preventDefault();
-                store.setDiffViewerCursor(nextFile(model, cursor));
-                return;
-            }
-            if (key.name === 'p') {
-                key.preventDefault();
-                store.setDiffViewerCursor(prevFile(model, cursor));
-                return;
-            }
-        }
+    // so this is the sole Enter-submit path.
+    const handleSubmit = useChatSubmit({
+        store,
+        textareaHandle,
+        promptMenuInteractionsEnabled,
     });
 
-    // Managed textarea + chat submit layer (T3): suspends native keyBindings so keys are not double-processed; dynamically imported to keep @opentui/keymap FFI out of --no-tui.
-    onMount(() => {
-        let disposed = false;
-        let cleanup: (() => void) | undefined;
-        void import('../platform/keymap/keymap-managed-layer.js').then(
-            ({ registerChatSubmitLayer, registerManagedTextareaComposition }) => {
-                if (disposed) return;
-                const offComposition = registerManagedTextareaComposition(keymap, renderer);
-                const submitHandler = (): void => handleSubmit();
-                const offSubmit = registerChatSubmitLayer(keymap, renderer, submitHandler);
-                cleanup = (): void => {
-                    offSubmit();
-                    offComposition();
-                };
-            },
-        );
-        onCleanup(() => {
-            disposed = true;
-            cleanup?.();
-        });
+    useChatGlobalKeyboard({
+        store,
+        textareaHandle,
+        setAbgActiveTab,
+        setAbgScrollOffset,
+        abgOverlayController,
     });
 
-    // menu-navigation layer: priority 200 shadows the managed textarea layer for
-    // Up/Down while a `/`, `#`, or `@`-file autocomplete menu is open. Without it
-    // the textarea layer binds arrows to cursor movement and returns handled,
-    // stopping propagation before ChatInputArea.handleKeyDown can navigate menus.
-    onMount(() => {
-        const offLayer = keymap.registerLayer({
-            priority: 200,
-            enabled: (): boolean => {
-                if (!promptMenuInteractionsEnabled()) {
-                    return false;
-                }
-                const text = textareaHandle.get()?.plainText ?? '';
-                if (text.startsWith('/') || text.startsWith('#')) {
-                    const token = text.slice(1);
-                    return !token.includes(' ') && !token.includes('\n') && !token.includes('\t');
-                }
-                const snap = store.getSnapshot();
-                return snap.fileAutocomplete.open;
-            },
-            commands: [
-                {
-                    name: 'menu.up',
-                    run: () => {
-                        const text = textareaHandle.get()?.plainText ?? '';
-                        const snap = store.getSnapshot();
-                        if (text.startsWith('/')) {
-                            store.navigateSlashMenu('up');
-                        } else if (text.startsWith('#')) {
-                            store.navigateWorkflowMenu('up');
-                        } else if (snap.fileAutocomplete.open) {
-                            store.navigateFileAutocomplete('up');
-                        }
-                        return true;
-                    },
-                },
-                {
-                    name: 'menu.down',
-                    run: () => {
-                        const text = textareaHandle.get()?.plainText ?? '';
-                        const snap = store.getSnapshot();
-                        if (text.startsWith('/')) {
-                            store.navigateSlashMenu('down');
-                        } else if (text.startsWith('#')) {
-                            store.navigateWorkflowMenu('down');
-                        } else if (snap.fileAutocomplete.open) {
-                            store.navigateFileAutocomplete('down');
-                        }
-                        return true;
-                    },
-                },
-            ],
-            bindings: [
-                { key: 'up', cmd: 'menu.up' },
-                { key: 'down', cmd: 'menu.down' },
-            ],
-        });
-        onCleanup(offLayer);
-    });
-
-    // messages.* scroll + copy layer (T10): SESSION-scoped (not textarea-gated); clipboard built from the renderer (OSC52 via opentui native core).
-    onMount(() => {
-        let disposed = false;
-        let cleanup: (() => void) | undefined;
-        void import('../platform/keymap/messages-scroll.js').then(({ registerMessagesScrollLayer }) => {
-            if (disposed) return;
-            cleanup = registerMessagesScrollLayer(
-                keymap,
-                {
-                    scrollboxRef: keymapScrollboxRef,
-                    clipboardService: clipboard,
-                    getViewportRows: () => viewport().rows,
-                    getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
-                    getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
-                    clearSelection: () => renderer.clearSelection(),
-                },
-                { isEnabled: () => store.getSnapshot().overlayMode === 'none' },
-            );
-        });
-        onCleanup(() => {
-            disposed = true;
-            cleanup?.();
-        });
-    });
-
-    // selection.copy layer: high-priority + selection-gated, so the default
-    // ctrl+d copies a drag-selection but still deletes a char when nothing is
-    // selected. Same OSC52 path + deps as the scroll layer above.
-    onMount(() => {
-        let disposed = false;
-        let cleanup: (() => void) | undefined;
-        void import('../platform/keymap/messages-scroll.js').then(({ registerSelectionCopyLayer }) => {
-            if (disposed) return;
-            cleanup = registerSelectionCopyLayer(
-                keymap,
-                {
-                    scrollboxRef: keymapScrollboxRef,
-                    clipboardService: clipboard,
-                    getViewportRows: () => viewport().rows,
-                    getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
-                    getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
-                    clearSelection: () => renderer.clearSelection(),
-                },
-                { isEnabled: () => store.getSnapshot().overlayMode === 'none' },
-            );
-        });
-        onCleanup(() => {
-            disposed = true;
-            cleanup?.();
-        });
-    });
-
-    // model-shortcuts layer (T11): F2/leader+N; selectModel routes through store.onModelCycleSelect (same path as Ctrl+P).
-    onMount(() => {
-        let disposed = false;
-        let cleanup: (() => void) | undefined;
-        void import('../platform/keymap/model-favorites.js').then(
-            ({
-                createPreferenceBackedModelFavorites,
-                createPreferenceBackedModelFrecency,
-                registerModelShortcutsLayer,
-            }) => {
-                if (disposed) return;
-                cleanup = registerModelShortcutsLayer(keymap, {
-                    frecency: createPreferenceBackedModelFrecency({
-                        getRecentModels: () =>
-                            recentModelPreferenceSelections(localPreferences.preferences().recentModels),
-                        recordRecentModel: (selection) => {
-                            void localPreferences.addRecentModel(selection);
-                        },
-                    }),
-                    favorites: createPreferenceBackedModelFavorites({
-                        getFavoriteModels: () =>
-                            parseModelPreferenceKeys(localPreferences.preferences().favoriteModels),
-                    }),
-                    getModelSelections: () => store.getSnapshot().modelCycleChoices.map((choice) => choice.selection),
-                    getCurrentSelection: () => {
-                        const snap = store.getSnapshot();
-                        return snap.modelCycleChoices[snap.modelCycleIndex]?.selection;
-                    },
-                    selectModel: (selection) => {
-                        store.setModelSelection(selection);
-                    },
-                    emitNotice: (text) => {
-                        store.emitOutput(text);
-                    },
-                });
-            },
-        );
-        onCleanup(() => {
-            disposed = true;
-            cleanup?.();
-        });
-    });
-
-    // session-shortcuts layer (T12): session-tree nav + prompt stash; priority -100 so bare arrows yield to editing while focused.
-    onMount(() => {
-        let disposed = false;
-        let cleanup: (() => void) | undefined;
-        void import('../platform/keymap/session-shortcuts.js').then(({ registerSessionShortcutsLayer }) => {
-            if (disposed) return;
-            cleanup = registerSessionShortcutsLayer(
-                keymap,
-                {
-                    navigateSessionTree: () => store.sendSlashCommand('/tree'),
-                    captureInput: () => ({
-                        text: textareaHandle.get()?.plainText ?? '',
-                        cursor: textareaHandle.get()?.cursorOffset ?? 0,
-                    }),
-                    clearInput: () => {
-                        textareaHandle.get()?.clear();
-                        store.setInputMirror('');
-                    },
-                    restoreInput: (entry) => {
-                        const textarea = textareaHandle.get();
-                        if (textarea !== undefined) {
-                            textarea.setText(entry.text);
-                            textarea.cursorOffset = entry.cursor;
-                        }
-                        store.setInputMirror(entry.text);
-                    },
-                    emitNotice: (text) => {
-                        store.emitOutput(text);
-                    },
-                },
-                {
-                    isEnabled: () => store.getSnapshot().overlayMode === 'none',
-                    promptStashService: {
-                        count: () => promptStash.entries().length,
-                        pushDraft: async (entry) => {
-                            await promptStash.pushDraft({ text: entry.text, cursorOffset: entry.cursor });
-                        },
-                        popDraft: async () => {
-                            const entry = await promptStash.popDraft();
-                            return entry === undefined ? undefined : { text: entry.text, cursor: entry.cursorOffset };
-                        },
-                    },
-                },
-            );
-        });
-        onCleanup(() => {
-            disposed = true;
-            cleanup?.();
-        });
-    });
-
-    // message undo/redo layer (T15): leader+u/r hides/restores the last exchange in the VIEW only (durable session store untouched); single-level.
-    onMount(() => {
-        let disposed = false;
-        let cleanup: (() => void) | undefined;
-        void import('../platform/keymap/message-undo-redo.js').then(({ registerMessageUndoRedoLayer }) => {
-            if (disposed) return;
-            cleanup = registerMessageUndoRedoLayer(keymap, {
-                getOutputText: () => store.getSnapshot().outputText,
-                replaceOutputText: (text) => store.replaceOutputText(text),
-                isGenerating: () => store.getSnapshot().generating,
-                emitNotice: (text) => {
-                    store.emitOutput(text);
-                },
-            });
-        });
-        onCleanup(() => {
-            disposed = true;
-            cleanup?.();
-        });
-    });
-
-    // ABG minimap toggle layer: <leader>g (Ctrl+X then G) toggles the compact
-    // upper-right minimap. Enabled only when no overlay is active so the chord
-    // does not fire inside the full ABG overlay (which has its own Ctrl+G close).
-    onMount(() => {
-        let disposed = false;
-        let cleanup: (() => void) | undefined;
-        void import('../platform/keymap/leader-addons.js').then(({ registerAbgMinimapToggleLayer }) => {
-            if (disposed) return;
-            cleanup = registerAbgMinimapToggleLayer(keymap, {
-                toggleMinimap: () => store.toggleAbgMinimap(),
-                isEnabled: () => store.getSnapshot().overlayMode === 'none',
-            });
-        });
-        onCleanup(() => {
-            disposed = true;
-            cleanup?.();
-        });
+    useChatKeymapLayers({
+        store,
+        keymap,
+        renderer,
+        clipboard,
+        viewport,
+        promptStash,
+        localPreferences,
+        textareaHandle,
+        scrollboxRef: keymapScrollboxRef,
+        promptMenuInteractionsEnabled: () => promptMenuInteractionsEnabled(),
+        handleSubmit,
     });
 
     const messageBlocks = createStableMessageBlocks(() => snapshot().outputText);
