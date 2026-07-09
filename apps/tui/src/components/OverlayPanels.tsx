@@ -1,7 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-// allow: SIZE_OK — collection of overlay components sharing the same imports,
-// useStoreSnapshot helper, and opentui rendering context. Each overlay is a
-// self-contained unit; splitting would duplicate the pragma + helper boilerplate.
+// allow: SIZE_OK — collection of overlay components sharing the same imports.
 import { resolveUserConfigDir } from '@mission-control/core';
 import { padEndToDisplayWidth } from '@mission-control/tui';
 import { MouseButton, type MouseEvent, TextAttributes } from '@opentui/core';
@@ -31,9 +29,7 @@ import {
 
 const MODEL_PICKER_MAX_VISIBLE = 10;
 
-function useStoreSnapshot(store: ChatStore) {
-    return useSolidStoreSelector(store, (snapshot) => snapshot);
-}
+
 
 // ---------------------------------------------------------------------------
 // ApprovalOverlay
@@ -42,7 +38,7 @@ function useStoreSnapshot(store: ChatStore) {
 export type ApprovalOverlayProps = { readonly store: ChatStore };
 
 export function ApprovalOverlay({ store }: ApprovalOverlayProps): JSX.Element {
-    const snapshot = useStoreSnapshot(store);
+    const snapshot = useSolidStoreSelector(store, (snapshot) => snapshot);
 
     useKeyboard((key) => {
         if (key.name === 'up') {
@@ -107,7 +103,7 @@ export function ApprovalOverlay({ store }: ApprovalOverlayProps): JSX.Element {
 export type QuestionOverlayProps = { readonly store: ChatStore };
 
 export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
-    const snapshot = useStoreSnapshot(store);
+    const snapshot = useSolidStoreSelector(store, (snapshot) => snapshot);
 
     const multiBatch = createMemo(
         () =>
@@ -422,7 +418,7 @@ export function QuestionOverlay({ store }: QuestionOverlayProps): JSX.Element {
 export type ModelPickerOverlayProps = { readonly store: ChatStore };
 
 export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Element {
-    const snapshot = useStoreSnapshot(store);
+    const snapshot = useSolidStoreSelector(store, (snapshot) => snapshot);
     const promptChoices = createMemo(() =>
         snapshot().modelPickerChoices.map((choice) => ({
             id: choice.id,
@@ -487,7 +483,7 @@ export function ModelPickerOverlay({ store }: ModelPickerOverlayProps): JSX.Elem
 export type LevelPickerOverlayProps = { readonly store: ChatStore };
 
 export function LevelPickerOverlay({ store }: LevelPickerOverlayProps): JSX.Element {
-    const snapshot = useStoreSnapshot(store);
+    const snapshot = useSolidStoreSelector(store, (snapshot) => snapshot);
 
     useKeyboard((key) => {
         if (key.name === 'up') {
@@ -542,7 +538,7 @@ export function LevelPickerOverlay({ store }: LevelPickerOverlayProps): JSX.Elem
 export type RenameOverlayProps = { readonly store: ChatStore };
 
 export function RenameOverlay({ store }: RenameOverlayProps): JSX.Element {
-    const snapshot = useStoreSnapshot(store);
+    const snapshot = useSolidStoreSelector(store, (snapshot) => snapshot);
 
     useKeyboard((key) => {
         if (key.name === 'return') {
@@ -587,7 +583,7 @@ export function RenameOverlay({ store }: RenameOverlayProps): JSX.Element {
 export type SessionPickerOverlayProps = { readonly store: ChatStore };
 
 export function SessionPickerOverlay({ store }: SessionPickerOverlayProps): JSX.Element {
-    const snapshot = useStoreSnapshot(store);
+    const snapshot = useSolidStoreSelector(store, (snapshot) => snapshot);
     const view = createMemo(() =>
         createSessionPickerView(
             snapshot().sessionPickerKeypress,
@@ -657,7 +653,7 @@ export type AgentsDashboardOverlayProps = {
 };
 
 export function AgentsDashboardOverlay({ store, workspaceRoot, actions }: AgentsDashboardOverlayProps): JSX.Element {
-    const snapshot = useStoreSnapshot(store);
+    const snapshot = useSolidStoreSelector(store, (snapshot) => snapshot);
     const [editBuffer, setEditBuffer] = createSignal('');
     const dashboard = createMemo(() => snapshot().agentsDashboard);
     const view = createMemo(() => createAgentsDashboardView(dashboard(), AGENTS_DASHBOARD_MAX_VISIBLE));

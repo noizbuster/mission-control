@@ -1,12 +1,10 @@
 import { extractLastAssistantText } from '@mission-control/tui/chat';
 import type { CliRenderer, ScrollBoxRenderable } from '@opentui/core';
-import type { Accessor } from 'solid-js';
 import { onCleanup, onMount } from 'solid-js';
 import type { OpenTuiKeymap } from '../platform/keymap/keymap-instance.js';
 import type { TuiClipboardService } from '../platform/providers/clipboard-toast-context.js';
 import type { TuiLocalPreferencesService } from '../platform/providers/local-preferences-context.js';
 import type { TuiPromptStashService } from '../platform/providers/prompt-services-context.js';
-import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import type { ChatStore } from '../state/chat-store.js';
 import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
 import { parseModelPreferenceKeys, recentModelPreferenceSelections } from './app-helpers.js';
@@ -20,7 +18,7 @@ export type KeymapLayersDeps = {
     readonly keymap: OpenTuiKeymap;
     readonly renderer: CliRenderer;
     readonly clipboard: TuiClipboardService;
-    readonly viewport: Accessor<TerminalViewport>;
+    readonly getViewportRows: () => number;
     readonly promptStash: TuiPromptStashService;
     readonly localPreferences: TuiLocalPreferencesService;
     readonly textareaHandle: ChatTextareaHandle;
@@ -32,11 +30,11 @@ export type KeymapLayersDeps = {
 };
 
 function createMessagesScrollDeps(deps: KeymapLayersDeps) {
-    const { store, renderer, clipboard, viewport, scrollboxRef } = deps;
+    const { store, renderer, clipboard, getViewportRows, scrollboxRef } = deps;
     return {
         scrollboxRef,
         clipboardService: clipboard,
-        getViewportRows: () => viewport().rows,
+        getViewportRows,
         getLastAssistantText: () => extractLastAssistantText(store.getSnapshot().outputText),
         getSelectionText: () => renderer.getSelection()?.getSelectedText() ?? '',
         clearSelection: () => renderer.clearSelection(),

@@ -20,7 +20,6 @@ export type NormalLayoutProps = {
     readonly snap: ChatStoreState;
     readonly viewport: TerminalViewport;
     readonly statusBarProps: StatusBarProps;
-    readonly onMouseUp: () => void;
     readonly textareaHandle: ChatTextareaHandle;
     readonly scrollboxHandle: ChatScrollboxHandle;
     readonly overlayActive: boolean;
@@ -35,26 +34,14 @@ export type NormalLayoutProps = {
     readonly abgOverlayController: AbgOverlayController | undefined;
 };
 
-/**
- * Normal chat root: upper output region, bottom dock, and modal overlays.
- * Full-screen overlays are handled by {@link FullscreenOverlays} before this mounts.
- */
+/** OpenCode body: flexGrow main + flexShrink bottom as siblings of the sized root. */
 export function NormalLayout(props: NormalLayoutProps): JSX.Element {
     return (
-        // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive, not a DOM element; mouse-up only surfaces the copy-hint toast.
-        <box
-            flexDirection="column"
-            width={props.viewport.columns}
-            height={props.viewport.rows}
-            backgroundColor="#000000"
-            onMouseUp={props.onMouseUp}
-        >
-            <box flexDirection="column" flexGrow={1} minHeight={0}>
+        <>
+            <box flexDirection="column" flexGrow={1} minHeight={0} width="100%">
                 <UpperRegion
                     showWelcome={props.showWelcome}
                     welcomeData={props.welcomeData}
-                    viewport={props.viewport}
-                    availableRows={props.dockPolicy.transcript.rows}
                     statusBarProps={props.statusBarProps}
                     transcript={props.transcript}
                     showAgentIndicator={props.showAgentIndicator}
@@ -64,14 +51,12 @@ export function NormalLayout(props: NormalLayoutProps): JSX.Element {
                     abgOverlayController={props.abgOverlayController}
                 />
             </box>
-            <box flexShrink={0}>
+            <box flexShrink={0} width="100%">
                 <ChatBottomDock
                     store={props.store}
                     textareaRef={props.textareaHandle}
                     scrollboxRef={props.scrollboxHandle}
                     inputFocused={!props.overlayActive}
-                    viewportColumns={props.viewport.columns}
-                    viewportRows={props.viewport.rows}
                     statusBarProps={props.statusBarProps}
                     {...(props.actions !== undefined ? { actions: props.actions } : {})}
                 />
@@ -83,6 +68,6 @@ export function NormalLayout(props: NormalLayoutProps): JSX.Element {
                 actions={props.actions}
                 missionControlServices={props.missionControlServices}
             />
-        </box>
+        </>
     );
 }

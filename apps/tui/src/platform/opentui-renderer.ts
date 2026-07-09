@@ -1,9 +1,11 @@
 /**
- * opentui renderer mount/unmount — OpenCode-aligned.
+ * OpenTUI mount — OpenCode createCliRenderer + render
+ * (ref/opencode/packages/tui/src/app.tsx).
  *
- * Resize is owned solely by OpenTUI CliRenderer (built-in terminal resize →
- * processResize → "resize" event → useTerminalDimensions). No poll, no stdout
- * listener, no force-repaint ladder — same as OpenCode.
+ * processResize emits "resize" then requestRender. Solid useTerminalDimensions
+ * registers onMount during render. Full-paint attaches after render so it runs
+ * after Solid resize handlers; queueMicrotask lets prop/layout effects flush
+ * before forceFullRepaint (Node expand blanks otherwise).
  */
 
 import type { CliRenderer } from '@opentui/core';
@@ -14,19 +16,33 @@ export interface OpenTuiMountResult {
     unmount(): void;
 }
 
+export function attachResizeFullPaint(renderer: CliRenderer): () => void {
+    const onResize = (): void => {
+        queueMicrotask(() => {
+            Reflect.set(renderer, 'forceFullRepaintRequested', true);
+            renderer.requestRender();
+        });
+    };
+    renderer.on('resize', onResize);
+    return (): void => {
+        renderer.off('resize', onResize);
+    };
+}
+
 export async function mountOpenTui(app: () => JSX.Element): Promise<OpenTuiMountResult> {
     const { createCliRenderer } = await import('@opentui/core');
     const { render } = await import('@opentui/solid');
 
     const renderer = await createCliRenderer({
-        exitOnCtrlC: false,
-        targetFps: 60,
         externalOutputMode: 'passthrough',
+        targetFps: 60,
+        exitOnCtrlC: false,
+        useKittyKeyboard: {},
         autoFocus: false,
         openConsoleOnError: false,
-        useKittyKeyboard: {},
     });
     await render(app, renderer);
+    const detachResizeFullPaint = attachResizeFullPaint(renderer);
 
     let unmounted = false;
     return {
@@ -34,6 +50,7 @@ export async function mountOpenTui(app: () => JSX.Element): Promise<OpenTuiMount
         unmount(): void {
             if (unmounted) return;
             unmounted = true;
+            detachResizeFullPaint();
             renderer.destroy();
         },
     };

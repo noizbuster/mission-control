@@ -9,7 +9,7 @@ const chatAppRootFile = 'apps/tui/src/app.tsx';
 const createChatTuiFile = 'apps/tui/src/create-chat-tui.tsx';
 const testFilePattern = /\.(test|spec)\.(ts|tsx)$/u;
 
-const ROOT_BOX_NEEDLE = 'width={props.viewport.columns}';
+const ROOT_BOX_NEEDLE = 'width={dimensions().width}';
 
 const MODAL_MODES = [
     'approval',
@@ -50,10 +50,6 @@ function readSource(relativePath: string): string {
     return readFileSync(resolve(root, relativePath), 'utf8');
 }
 
-/** TEMP: solid-red App probe during resize diagnosis — skip full-composer pins. */
-function isResizeProbeApp(): boolean {
-    return readSource(chatAppRootFile).includes('RESIZE PROBE');
-}
 
 function collectAppModuleFiles(): readonly string[] {
     const absoluteDir = resolve(root, chatAppDir);
@@ -118,8 +114,6 @@ describe('App multi-file topology union', () => {
     });
 
     it('uses provider hooks instead of ad-hoc clipboard/toast/frecency construction', () => {
-        if (isResizeProbeApp()) return;
-
         const chatAppSource = readSource(chatAppRootFile);
         const union = readAppTopologyUnion();
 
@@ -181,15 +175,14 @@ describe('AppProps and mount shape', () => {
 
 describe('App thin composer topology', () => {
     it('thins App to hooks plus fullscreen vs normal branch', () => {
-        if (isResizeProbeApp()) return;
-
         const source = readSource(chatAppRootFile);
 
         expect(source).toContain('useTerminalDimensions');
         expect(source).not.toContain('useRendererDimensions');
         expect(source).not.toContain('setInterval(sync, 250)');
         expect(source).toContain('FullscreenOverlays');
-        expect(source).toContain('NormalLayout');
+        expect(source).toContain('UpperRegion');
+        expect(source).toContain('ChatBottomDock');
         expect(source).toContain('useGlobalKeyboard');
         expect(source).toContain('useKeymapLayers');
         expect(source).toContain('useRepaintEffects');
@@ -199,36 +192,27 @@ describe('App thin composer topology', () => {
         expect(source).toContain('useRenderableHandles');
         expect(source).not.toContain('function AgentSpinner');
         expect(source).not.toContain('function ModalPopup');
-        expect(source).not.toContain('<ChatBottomDock');
+        expect(source).not.toContain('<NormalLayout');
         expect(source).not.toContain('<ModalPopup');
         expect(source).not.toContain('useKeyboard');
         expect(source).not.toContain('onMount(');
+        expect(source).not.toContain('syncShellSize');
         expect(source).not.toContain("import('../platform/keymap/");
         expect(source).not.toContain('hardResetRendererSurface(renderer)');
-        expect(source).not.toContain("Reflect.set(renderer, 'forceFullRepaintRequested'");
         expect(matchCount(source, 'useKeymapLayers')).toBe(2);
     });
 
-    it('branches fullscreen vs normal via Show without memoizing JSX trees', () => {
+    it('branches fullscreen vs normal via Show with OpenCode flex siblings', () => {
         const chatAppSource = readSource(chatAppRootFile);
         const fullscreenSource = readSource(join(chatAppDir, 'FullscreenOverlays.tsx'));
 
-        // TEMP: App may be a solid-red resize probe during diagnosis.
-        if (chatAppSource.includes('RESIZE PROBE')) {
-            expect(chatAppSource).toContain('useTerminalDimensions');
-            expect(chatAppSource).toContain('dimensions().width');
-            expect(chatAppSource).toContain('dimensions().height');
-            expect(chatAppSource).toContain('backgroundColor="#ff0000"');
-            // Must NOT freeze first read outside JSX (Solid one-shot).
-            expect(chatAppSource).not.toMatch(/const cols = /);
-            expect(chatAppSource).not.toMatch(/const rows = /);
-            return;
-        }
-
         expect(chatAppSource).toContain('<Show');
         expect(chatAppSource).toContain('isFullscreenOverlay');
-        expect(chatAppSource).toContain('<NormalLayout');
         expect(chatAppSource).toContain('<FullscreenOverlays');
+        expect(chatAppSource).toContain('<ChatBottomDock');
+        expect(chatAppSource).toContain('flexGrow={1}');
+        expect(chatAppSource).toContain('minHeight={0}');
+        expect(chatAppSource).toContain('flexShrink={0}');
         expect(chatAppSource).not.toContain('createMemo((): JSX.Element');
         expect(chatAppSource).not.toContain('const transcript = createMemo');
         expect(chatAppSource).not.toContain('const rootContent = createMemo');
@@ -237,60 +221,71 @@ describe('App thin composer topology', () => {
             expect(fullscreenSource).toContain(`snap.overlayMode === '${mode}'`);
         }
         expect(fullscreenSource).toContain('ABG overlay unavailable in this session.');
-        expect(matchCount(fullscreenSource, 'width={props.viewport.columns}')).toBeGreaterThanOrEqual(3);
-        expect(matchCount(fullscreenSource, 'height={props.viewport.rows}')).toBeGreaterThanOrEqual(3);
     });
 });
 
-describe('NormalLayout order and dock wiring', () => {
-    it('pins the root box to live viewport pixels with minHeight=0 flex chain', () => {
-        const layoutSource = readSource(join(chatAppDir, 'NormalLayout.tsx'));
-        expect(layoutSource).toContain(ROOT_BOX_NEEDLE);
-        expect(layoutSource).toContain('height={props.viewport.rows}');
-        expect(layoutSource).toContain('onMouseUp={props.onMouseUp}');
-        expect(layoutSource).toContain('flexGrow={1} minHeight={0}');
-        expect(layoutSource).toContain('flexShrink={0}');
-        expect(layoutSource).toContain('backgroundColor="#000000"');
-        expect(layoutSource).not.toContain('shouldFill={true}');
-        expect(layoutSource).not.toContain('const bar = props.statusBarProps');
+describe('App OpenCode layout wiring', () => {
+    it('pins App root to dimensions().width/height like OpenCode', () => {
+        const appSource = readSource(chatAppRootFile);
+        expect(appSource).toContain(ROOT_BOX_NEEDLE);
+        expect(appSource).toContain('height={dimensions().height}');
+        expect(appSource).toContain('useTerminalDimensions');
+        expect(appSource).toContain('onMouseUp={handleSelectionMouseUp}');
+        expect(appSource).not.toContain('syncShellSize');
+        expect(appSource).not.toContain("process.on('SIGWINCH'");
+        expect(appSource).toContain('flexGrow={1}');
+        expect(appSource).toContain('minHeight={0}');
+        expect(appSource).toContain('flexShrink={0}');
+        expect(appSource).toContain('<ChatBottomDock');
     });
 
-    it('keeps upper output region, bottom dock, and modal overlays as ordered root children', () => {
-        const layoutSource = readSource(join(chatAppDir, 'NormalLayout.tsx'));
-        const rootBoxIndex = layoutSource.indexOf(ROOT_BOX_NEEDLE);
-        expect(rootBoxIndex).toBeGreaterThanOrEqual(0);
-
-        const rootBlock = layoutSource.slice(rootBoxIndex);
-        const upperIndex = rootBlock.indexOf('<UpperRegion');
-        const dockIndex = rootBlock.indexOf('<ChatBottomDock');
-        const modalIndex = rootBlock.indexOf('<ModalOverlays');
+    it('keeps upper output region, bottom dock, and modal overlays as ordered body children', () => {
+        const appSource = readSource(chatAppRootFile);
+        const upperIndex = appSource.indexOf('<UpperRegion');
+        const dockIndex = appSource.indexOf('<ChatBottomDock');
+        const modalIndex = appSource.indexOf('<ModalOverlays');
 
         expect(upperIndex).toBeGreaterThanOrEqual(0);
         expect(dockIndex).toBeGreaterThan(upperIndex);
         expect(modalIndex).toBeGreaterThan(dockIndex);
     });
 
-    it('wires ChatBottomDock exactly once with refs, focus, and raw viewport dimensions', () => {
-        const layoutSource = readSource(join(chatAppDir, 'NormalLayout.tsx'));
-        const dockBlock = sliceBetween(layoutSource, '<ChatBottomDock', '/>');
+    it('wires ChatBottomDock with refs and focus (live dimensions inside dock)', () => {
+        const appSource = readSource(chatAppRootFile);
+        const dockSource = readSource(resolve(root, 'apps/tui/src/components/ChatBottomDock.tsx'));
+        const dockBlock = sliceBetween(appSource, '<ChatBottomDock', '/>');
 
-        expect(matchCount(layoutSource, '<ChatBottomDock')).toBe(1);
+        expect(matchCount(appSource, '<ChatBottomDock')).toBe(1);
         expect(dockBlock).toContain('store={props.store}');
-        expect(dockBlock).toContain('textareaRef={props.textareaHandle}');
-        expect(dockBlock).toContain('scrollboxRef={props.scrollboxHandle}');
-        expect(dockBlock).toContain('inputFocused={!props.overlayActive}');
-        expect(dockBlock).toContain('viewportColumns={props.viewport.columns}');
-        expect(dockBlock).toContain('viewportRows={props.viewport.rows}');
-        expect(dockBlock).not.toContain('statusLayout=');
-        expect(dockBlock).not.toContain('menuPolicy=');
+        expect(dockBlock).toContain('textareaRef={textareaHandle}');
+        expect(dockBlock).toContain('scrollboxRef={scrollboxHandle}');
+        expect(dockBlock).toContain('inputFocused={!overlayActive()}');
+        expect(dockSource).toContain('useTerminalDimensions');
+        expect(dockSource).toContain('dimensions().width');
+        expect(dockSource).toContain('dimensions().height');
     });
 
-    it('derives welcome row budget from dock policy without stdout row reads', () => {
-        const layoutSource = readSource(join(chatAppDir, 'NormalLayout.tsx'));
+    it('keeps dock as a flexShrink sibling of the flexGrow upper region', () => {
+        const appSource = readSource(chatAppRootFile);
+        const mainStart = appSource.indexOf('function AppMain');
+        const mainSource = appSource.slice(mainStart);
+        const upperBox = mainSource.indexOf('flexGrow={1}');
+        const dockBox = mainSource.indexOf('flexShrink={0}');
+        const dock = mainSource.indexOf('<ChatBottomDock');
+        expect(upperBox).toBeGreaterThanOrEqual(0);
+        expect(dockBox).toBeGreaterThan(upperBox);
+        expect(dock).toBeGreaterThan(dockBox);
+    });
+
+    it('derives welcome row budget from live dimensions inside UpperRegion', () => {
         const upperSource = readSource(join(chatAppDir, 'UpperRegion.tsx'));
 
-        expect(layoutSource).toContain('availableRows={props.dockPolicy.transcript.rows}');
-        expect(upperSource).toContain('availableRows={props.availableRows}');
+        expect(upperSource).toContain('useTerminalDimensions');
+        expect(upperSource).toContain('bottomDockPolicy');
+        expect(upperSource).toContain('availableRows={availableRows()}');
+        expect(upperSource).toContain('viewportColumns={dimensions().width}');
+        expect(upperSource).not.toContain('props.availableRows');
+        expect(upperSource).not.toContain('props.viewport');
     });
 });
 
@@ -300,8 +295,8 @@ describe('UpperRegion and fullscreen feature inventory', () => {
 
         expect(upperSource).toContain('flexGrow={1} minHeight={0}');
         expect(upperSource).toContain('<WelcomeScreen');
-        expect(upperSource).toContain('viewportColumns={props.viewport.columns}');
-        expect(upperSource).toContain('availableRows={props.availableRows}');
+        expect(upperSource).toContain('viewportColumns={dimensions().width}');
+        expect(upperSource).toContain('availableRows={availableRows()}');
         expect(upperSource).toContain('props.transcript');
         expect(upperSource).toContain('<AgentSpinner');
         expect(upperSource).toContain('<Toast');
@@ -315,9 +310,10 @@ describe('UpperRegion and fullscreen feature inventory', () => {
         const abgOverlayBlock = sliceBetween(fullscreenSource, '<AbgOverlay', '/>');
 
         expect(abgOverlayBlock).toContain('viewport={props.viewport}');
-        expect(upperSource).toContain(
-            '<AbgMinimap store={props.abgOverlayController.store} viewport={props.viewport} />',
-        );
+        expect(upperSource).toContain('useTerminalDimensions');
+        expect(upperSource).toContain('dimensions().width');
+        expect(upperSource).toContain('dimensions().height');
+        expect(upperSource).toContain('<AbgMinimap');
         expect(fullscreenSource).toContain('diff-viewer');
         expect(fullscreenSource).toContain('models-overlay');
         expect(fullscreenSource).toContain('<ModelsOverlay');
@@ -327,22 +323,20 @@ describe('UpperRegion and fullscreen feature inventory', () => {
 describe('ModalOverlays seven ModalPopup modes', () => {
     it('keeps all seven modal modes through ModalPopup after the dock sibling', () => {
         const modalSource = readSource(join(chatAppDir, 'ModalOverlays.tsx'));
-        const layoutSource = readSource(join(chatAppDir, 'NormalLayout.tsx'));
+        const appSource = readSource(chatAppRootFile);
 
         for (const mode of MODAL_MODES) {
             expect(modalSource).toContain(`overlayMode === '${mode}'`);
         }
         expect(matchCount(modalSource, '<ModalPopup>')).toBe(7);
-        expect(modalSource).toContain('<ApprovalOverlay store={store} />');
+        expect(modalSource).toContain('<ApprovalOverlay store={props.store} />');
         expect(modalSource).toContain('<MissionPanelOverlay');
-        expect(layoutSource.indexOf('<ChatBottomDock')).toBeLessThan(layoutSource.indexOf('<ModalOverlays'));
+        expect(appSource.indexOf('<ChatBottomDock')).toBeLessThan(appSource.indexOf('<ModalOverlays'));
     });
 });
 
 describe('keyboard and keymap layer topology', () => {
     it('routes global keyboard sink Ctrl+C through use-global-keyboard', () => {
-        if (isResizeProbeApp()) return;
-
         const chatAppSource = readSource(chatAppRootFile);
         const keyboardSource = readSource(join(chatAppDir, 'use-global-keyboard.ts'));
 
@@ -354,8 +348,6 @@ describe('keyboard and keymap layer topology', () => {
     });
 
     it('registers keymap layers only in use-keymap-layers', () => {
-        if (isResizeProbeApp()) return;
-
         const chatAppSource = readSource(chatAppRootFile);
         const keymapSource = readSource(join(chatAppDir, 'use-keymap-layers.ts'));
 
@@ -374,9 +366,7 @@ describe('keyboard and keymap layer topology', () => {
 });
 
 describe('repaint effects topology', () => {
-    it('pins forceFullRepaint on discrete UI transitions without a generating interval', () => {
-        if (isResizeProbeApp()) return;
-
+    it('pins requestRender on discrete UI transitions without forceFullRepaint or intervals', () => {
         const chatAppSource = readSource(chatAppRootFile);
         const repaintSource = readSource(join(chatAppDir, 'use-repaint-effects.ts'));
         const repaintCall = sliceBetween(chatAppSource, 'useRepaintEffects({', '});');
@@ -387,7 +377,8 @@ describe('repaint effects topology', () => {
         expect(repaintCall).toContain('generating');
         expect(repaintCall).toContain('promptRepaintKey');
         expect(repaintCall).not.toContain('viewport');
-        expect(repaintSource).toContain("Reflect.set(renderer, 'forceFullRepaintRequested', true)");
+        expect(repaintSource).toContain('renderer.requestRender()');
+        expect(repaintSource).not.toContain('forceFullRepaintRequested');
         expect(repaintSource).not.toContain('setInterval');
         expect(repaintSource).not.toContain('}, 500)');
         expect(repaintSource).not.toContain('hardResetRendererSurface');
@@ -400,26 +391,24 @@ describe('repaint effects topology', () => {
 
 describe('app import-graph invariants', () => {
     it('App imports layout and hooks only from ./app/', () => {
-        if (isResizeProbeApp()) return;
-
         const source = readSource(chatAppRootFile);
         const importLines = source
             .split('\n')
             .filter((line) => line.includes("from './app/") || line.includes('from "./app/'));
 
         expect(importLines.some((line) => line.includes('FullscreenOverlays'))).toBe(true);
-        expect(importLines.some((line) => line.includes('NormalLayout'))).toBe(true);
+        expect(importLines.some((line) => line.includes('UpperRegion'))).toBe(true);
+        expect(importLines.some((line) => line.includes('ModalOverlays'))).toBe(true);
         expect(importLines.some((line) => line.includes('use-global-keyboard'))).toBe(true);
         expect(importLines.some((line) => line.includes('use-keymap-layers'))).toBe(true);
         expect(importLines.some((line) => line.includes('use-repaint-effects'))).toBe(true);
+        expect(source).toContain("from './components/ChatBottomDock.js'");
         expect(source).not.toContain("from './AgentSpinner");
         expect(source).not.toContain("from './ModalPopup");
-        expect(source).not.toContain("from './ChatBottomDock");
+        expect(source).not.toContain("from './NormalLayout");
     });
 
     it('layout modules do not reintroduce dual prop fan-out from create-chat-tui', () => {
-        if (isResizeProbeApp()) return;
-
         const createSource = readSource(createChatTuiFile);
         const chatAppSource = readSource(chatAppRootFile);
 

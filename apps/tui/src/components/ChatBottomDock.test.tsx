@@ -73,7 +73,8 @@ describe('ChatBottomDockBase source topology', () => {
         expect(block).toContain('textareaRef={props.textareaRef}');
         expect(block).toContain('scrollboxRef={props.scrollboxRef}');
         expect(block).toContain('focused={props.inputFocused ?? true}');
-        expect(block).toContain('viewportRows={props.viewportRows ?? DEFAULT_TERMINAL_VIEWPORT.rows}');
+        expect(block).toContain('useTerminalDimensions');
+        expect(block).toContain('viewportRows={dimensions().height}');
         expect(block).toContain('promptMenuInteractionsEnabled={menuPolicy().rows > 0}');
         expect(readChatInputAreaSource()).toContain('useTuiPromptRef');
     });

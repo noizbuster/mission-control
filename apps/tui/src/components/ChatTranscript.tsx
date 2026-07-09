@@ -2,8 +2,8 @@
 
 import { blockPrefix, type ChatBlock, joinBlockText, readToolBlockTitle } from '@mission-control/tui/chat';
 import { MacOSScrollAccel, type ScrollAcceleration, type ScrollBoxRenderable, TextAttributes } from '@opentui/core';
+import { useTerminalDimensions } from '@opentui/solid';
 import { For, type JSX } from 'solid-js';
-import { useTerminalViewport } from '../platform/terminal-viewport-solid.js';
 import { Markdown } from './markdown/Markdown.js';
 import { darkTheme, type TerminalMarkdownTheme } from './markdown/theme.js';
 import { ToolCard } from './ToolCard.js';
@@ -46,7 +46,6 @@ export type ChatTranscriptProps = {
     readonly scrollboxRef: ChatScrollboxHandle;
     readonly generating: boolean;
     readonly toolOutputExpanded: boolean;
-    readonly viewportColumns?: number;
 };
 
 export type ChatTranscriptScrollboxProps = {
@@ -198,8 +197,7 @@ export function MessageBlockBase(props: MessageBlockProps): JSX.Element {
 export const MessageBlock = MessageBlockBase;
 
 export function ChatTranscript(props: ChatTranscriptProps): JSX.Element {
-    const viewport = useTerminalViewport();
-    const columns = (): number => props.viewportColumns ?? viewport().columns;
+    const dimensions = useTerminalDimensions();
 
     return (
         <scrollbox
@@ -215,7 +213,7 @@ export function ChatTranscript(props: ChatTranscriptProps): JSX.Element {
                         <MessageBlock
                             block={block}
                             toolOutputExpanded={props.toolOutputExpanded}
-                            viewportColumns={columns()}
+                            viewportColumns={dimensions().width}
                             {...(props.generating && index() === props.blocks.length - 1
                                 ? { isStreaming: true }
                                 : {})}

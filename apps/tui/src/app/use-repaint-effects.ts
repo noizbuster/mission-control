@@ -12,16 +12,10 @@ export type UseRepaintEffectsDeps = {
     readonly promptRepaintKey: Accessor<string>;
 };
 
-function requestFullRepaint(renderer: ChatRepaintRenderer): void {
-    Reflect.set(renderer, 'forceFullRepaintRequested', true);
-    renderer.requestRender();
-}
-
 /**
- * Occasional full-repaint for CJK/emoji double-buffer drift.
- * OpenCode has no periodic force-repaint; a 500ms interval while generating
- * races OpenTUI processResize and blanks expanded cells after shrink-then-grow.
- * Only fire on discrete UI transitions (overlay / prompt / stream end).
+ * OpenCode does not force-full-repaint on UI transitions. Full repaint races
+ * OpenTUI processResize and blanks expanded cells after shrink-then-grow.
+ * Only schedule a normal requestRender on discrete UI changes.
  */
 export function useRepaintEffects(deps: UseRepaintEffectsDeps): void {
     const { renderer, overlayMode, generating, promptRepaintKey } = deps;
@@ -30,7 +24,7 @@ export function useRepaintEffects(deps: UseRepaintEffectsDeps): void {
     createEffect(() => {
         if (prevOverlayMode !== overlayMode()) {
             prevOverlayMode = overlayMode();
-            requestFullRepaint(renderer);
+            renderer.requestRender();
         }
     });
 
@@ -38,14 +32,14 @@ export function useRepaintEffects(deps: UseRepaintEffectsDeps): void {
     createEffect(() => {
         if (prevPromptRepaintKey !== promptRepaintKey()) {
             prevPromptRepaintKey = promptRepaintKey();
-            requestFullRepaint(renderer);
+            renderer.requestRender();
         }
     });
 
     let prevGenerating = generating();
     createEffect(() => {
         if (prevGenerating && !generating()) {
-            requestFullRepaint(renderer);
+            renderer.requestRender();
         }
         prevGenerating = generating();
     });

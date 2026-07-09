@@ -1,10 +1,9 @@
 /** @jsxImportSource @opentui/solid */
 import { type AgentEvent, type AgentEventEnvelope } from '@mission-control/protocol';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
-import { createMemo, createSignal } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { AbgOverlay } from './components/AbgOverlay.js';
 import { mountOpenTui, type OpenTuiMountResult } from './platform/opentui-renderer.js';
-import { createTerminalViewportCache } from './platform/terminal-viewport.js';
 import { createAbgOverlayStore, projectAgentEvent } from './state/index.js';
 
 export type ReplayOverlayOptions = {
@@ -50,9 +49,7 @@ export async function runReplayOverlay(options: ReplayOverlayOptions): Promise<v
             const [scrollOffset, setScrollOffset] = createSignal(0);
             const [liveOutput, setLiveOutput] = createSignal(true);
             const [cursorValue, setCursorValue] = createSignal(cursor);
-            const terminalDimensions = useTerminalDimensions();
-            const viewportCache = createTerminalViewportCache();
-            const viewport = createMemo(() => viewportCache(terminalDimensions()));
+            const dimensions = useTerminalDimensions();
 
             const stepAndPublish = (target: number): void => {
                 stepTo(target);
@@ -119,7 +116,7 @@ export async function runReplayOverlay(options: ReplayOverlayOptions): Promise<v
                         activeTab={tabByIndex(activeTab())}
                         scrollOffset={scrollOffset()}
                         modelLabel={options.modelLabel ?? 'replay'}
-                        viewport={viewport()}
+                        viewport={{ columns: dimensions().width, rows: dimensions().height }}
                     />
                     <box marginTop={1}>
                         <text {...dimAttrs}>

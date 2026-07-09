@@ -1,11 +1,12 @@
 /** @jsxImportSource @opentui/solid */
 
 import { basename } from 'node:path';
+import { useTerminalDimensions } from '@opentui/solid';
 import type { JSX } from 'solid-js';
-import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
 import type { WelcomeData } from '../state/welcome-data-types.js';
 import { AbgMinimap } from '../components/AbgMinimap.js';
+import { bottomDockPolicy } from '../components/chat-bottom-dock-policy.js';
 import type { StatusBarProps } from '../components/StatusBar.js';
 import { Toast } from '../components/Toast.js';
 import { WelcomeScreen } from '../components/WelcomeScreen.js';
@@ -14,8 +15,6 @@ import { AgentSpinner } from './AgentSpinner.js';
 export type UpperRegionProps = {
     readonly showWelcome: boolean;
     readonly welcomeData: WelcomeData | undefined;
-    readonly viewport: TerminalViewport;
-    readonly availableRows: number;
     readonly statusBarProps: StatusBarProps;
     readonly transcript: JSX.Element;
     readonly showAgentIndicator: boolean;
@@ -27,14 +26,21 @@ export type UpperRegionProps = {
 
 /** Upper output region: welcome or transcript, agent spinner, toast, ABG minimap. */
 export function UpperRegion(props: UpperRegionProps): JSX.Element {
+    const dimensions = useTerminalDimensions();
+    const availableRows = () =>
+        bottomDockPolicy({
+            columns: dimensions().width,
+            rows: dimensions().height,
+        }).transcript.rows;
+
     return (
         <box flexDirection="column" flexGrow={1} minHeight={0} width="100%">
             <box flexDirection="column" flexGrow={1} minHeight={0}>
                 {props.showWelcome && props.welcomeData !== undefined ? (
                     <WelcomeScreen
                         data={props.welcomeData}
-                        viewportColumns={props.viewport.columns}
-                        availableRows={props.availableRows}
+                        viewportColumns={dimensions().width}
+                        availableRows={availableRows()}
                         {...(props.statusBarProps.workspaceRoot !== undefined
                             ? { projectLabel: basename(props.statusBarProps.workspaceRoot) }
                             : {})}
@@ -56,7 +62,10 @@ export function UpperRegion(props: UpperRegionProps): JSX.Element {
             ) : null}
             <Toast />
             {props.showAbgMinimap && props.abgOverlayController !== undefined ? (
-                <AbgMinimap store={props.abgOverlayController.store} viewport={props.viewport} />
+                <AbgMinimap
+                    store={props.abgOverlayController.store}
+                    viewport={{ columns: dimensions().width, rows: dimensions().height }}
+                />
             ) : null}
         </box>
     );

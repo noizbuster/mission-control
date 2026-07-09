@@ -1,10 +1,8 @@
-import { createSignal, onCleanup, onMount } from 'solid-js';
+import { type Accessor, createSignal, onCleanup, onMount } from 'solid-js';
 
 /**
- * Shared braille spinner primitives. Default mode is `'static'` (no interval, no re-renders)
- * because the terminal renderer's per-frame re-render writes ANSI redraw escapes to stdout and
- * disrupts terminal mouse text selection. `'animate'` restores the 80ms braille animation. Set
- * via `MCTRL_SPINNER`.
+ * Shared braille spinner primitives. Default mode is `'static'` (no interval)
+ * because animated frames force terminal redraws. Opt in with `MCTRL_SPINNER=animate`.
  */
 export const SPINNER_FRAMES = [
     '\u280B',
@@ -27,13 +25,7 @@ export function resolveSpinnerMode(env: NodeJS.ProcessEnv = process.env): 'stati
     return env[SPINNER_MODE_ENV] === 'animate' ? 'animate' : 'static';
 }
 
-/**
- * Drive an animated spinner frame. Returns the current glyph and whether animation is active.
- * In `'static'` mode (the default) the glyph is fixed and no interval is scheduled, so callers
- * that embed the glyph in a dense layout (e.g. per-node graph rows) do not trigger per-frame
- * renderer redraws unless the operator opts in via `MCTRL_SPINNER=animate`.
- */
-export function useSpinnerFrame(): { readonly glyph: string; readonly animated: boolean } {
+export function useSpinnerFrame(): { readonly glyph: Accessor<string>; readonly animated: boolean } {
     const mode = resolveSpinnerMode();
     const [frame, setFrame] = createSignal(0);
     onMount(() => {
@@ -47,6 +39,7 @@ export function useSpinnerFrame(): { readonly glyph: string; readonly animated: 
             clearInterval(timer);
         });
     });
-    const glyph = mode === 'static' ? SPINNER_STATIC_GLYPH : (SPINNER_FRAMES[frame()] ?? SPINNER_STATIC_GLYPH);
+    const glyph = (): string =>
+        mode === 'static' ? SPINNER_STATIC_GLYPH : (SPINNER_FRAMES[frame()] ?? SPINNER_STATIC_GLYPH);
     return { glyph, animated: mode === 'animate' };
 }

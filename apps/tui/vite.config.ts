@@ -1,3 +1,4 @@
+import type { Plugin } from 'vite';
 import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 import { fileURLToPath } from 'node:url';
@@ -19,10 +20,9 @@ const entryPoints = {
     'platform/opentui-renderer': sourceEntry('./src/platform/opentui-renderer.ts'),
     'platform/keymap/keymap-provider': sourceEntry('./src/platform/keymap/keymap-provider.tsx'),
     'platform/providers/index': sourceEntry('./src/platform/providers/index.tsx'),
-    'platform/terminal-viewport-solid': sourceEntry('./src/platform/terminal-viewport-solid.ts'),
     'components/StatusBar': sourceEntry('./src/components/StatusBar.tsx'),
     'components/AbgOverlay': sourceEntry('./src/components/AbgOverlay.tsx'),
-    'app': sourceEntry('./src/app.tsx'),
+    app: sourceEntry('./src/app.tsx'),
     'create-chat-tui': sourceEntry('./src/create-chat-tui.tsx'),
     'replay-overlay': sourceEntry('./src/replay-overlay.tsx'),
 } satisfies Record<string, string>;
@@ -59,6 +59,27 @@ function isExternalDependency(id: string): boolean {
     return externalPackages.some((packageName) => id === packageName || id.startsWith(`${packageName}/`));
 }
 
+// Node resolves bare `solid-js` to the SSR build (onMount no-op). Force client runtime.
+function rewriteSolidJsNodeImports(): Plugin {
+    const rewrite = (code: string): string =>
+        code
+            .replace(/(from\s+["'])solid-js\/store(["'])/g, '$1solid-js/store/dist/store.js$2')
+            .replace(/(from\s+["'])solid-js(["'])/g, '$1solid-js/dist/solid.js$2')
+            .replace(/(import\s*\(\s*["'])solid-js\/store(["']\s*\))/g, '$1solid-js/store/dist/store.js$2')
+            .replace(/(import\s*\(\s*["'])solid-js(["']\s*\))/g, '$1solid-js/dist/solid.js$2');
+
+    return {
+        name: 'rewrite-solid-js-node-imports',
+        enforce: 'post',
+        generateBundle(_options, bundle) {
+            for (const chunk of Object.values(bundle)) {
+                if (chunk.type !== 'chunk') continue;
+                chunk.code = rewrite(chunk.code);
+            }
+        },
+    };
+}
+
 export default defineConfig(({ mode }) => ({
     plugins: [
         solidPlugin({
@@ -77,6 +98,7 @@ export default defineConfig(({ mode }) => ({
                 ],
             },
         }),
+        rewriteSolidJsNodeImports(),
     ],
     resolve: mode === 'test' ? { alias: { '@mission-control/core': coreTestShim } } : undefined,
     build: {

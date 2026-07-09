@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 
 import { truncateTerminalText } from '@mission-control/tui';
-import { createMemo, For, type JSX } from 'solid-js';
+import { For, type JSX } from 'solid-js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
 import type { AbgOverlayState, AbgOverlayStore } from '../state/abg-overlay-state.js';
@@ -209,8 +209,8 @@ function FooterHint({ narrow }: { narrow: boolean }): JSX.Element {
 export function AbgOverlay(props: AbgOverlayProps): JSX.Element {
     const state = useSolidStoreSelector(props.store, (snapshot) => snapshot);
     const refreshMs = () => props.refreshMs ?? DEFAULT_REFRESH_MS;
-    const narrow = createMemo(() => shouldCollapseViewportToOverview(props.viewport));
-    const visibleTab = createMemo(() => visibleAbgOverlayTab(props.activeTab, props.viewport));
+    const narrow = () => shouldCollapseViewportToOverview(props.viewport);
+    const visibleTab = () => visibleAbgOverlayTab(props.activeTab, props.viewport);
 
     return (
         <box flexDirection="column" height="100%" shouldFill={true}>

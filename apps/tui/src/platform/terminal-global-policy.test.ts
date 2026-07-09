@@ -5,7 +5,7 @@ import { relative, resolve } from 'node:path';
 /**
  * Enforces that interactive TUI components and keymap layers never read terminal
  * dimensions directly via `process.stdout.columns/rows`. They must derive layout
- * from `TerminalViewport { columns, rows }` via `useTerminalViewport()`.
+ * from OpenTUI `useTerminalDimensions()` (width/height).
  *
  * Direct `process.stdout` reads are reserved for noninteractive stdout renderers
  * (which live in `apps/cli/src/ui/`) and low-level terminal seams that have

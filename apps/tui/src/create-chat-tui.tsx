@@ -96,11 +96,10 @@ export async function createChatTui(options: ChatTuiOptions): Promise<ChatTuiHan
     });
 
     const { useRenderer } = await import('@opentui/solid');
-    const { MissionControlTuiProviders } = await import('@mission-control/tui/providers');
     const { mountOpenTui } = await import('@mission-control/tui/opentui-renderer');
     const { App } = await import('@mission-control/tui/app');
-    const { createComponent } = await import('solid-js/web');
-
+    const { createComponent } = await import('solid-js');
+    const { MissionControlTuiProviders } = await import('@mission-control/tui/providers');
     const mountResult = await mountOpenTui(() =>
         createComponent(MissionControlTuiProviders, {
             useRenderer,

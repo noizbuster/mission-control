@@ -76,7 +76,6 @@ export function dockNodeForSlice(
     dockSlice: ChatBottomDockSlice,
     _menuPolicy: BottomDockMenuPolicy,
     promptAdjacentPanel?: JSX.Element,
-    viewportColumns?: number,
 ): unknown {
     const store = createChatStore();
     return ChatBottomDockBase({
@@ -84,7 +83,6 @@ export function dockNodeForSlice(
         textareaRef: asTextareaRef(createRecordingTextarea()),
         scrollboxRef: asScrollboxRef(createRecordingScrollbox()),
         statusBarProps: baseStatusProps(),
-        ...(viewportColumns !== undefined ? { viewportColumns } : {}),
         ...(promptAdjacentPanel !== undefined ? { promptAdjacentPanel } : {}),
         dockSlice,
     });

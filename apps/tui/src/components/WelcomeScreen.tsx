@@ -1,6 +1,6 @@
 import { padEndToDisplayWidth, terminalDisplayWidth, truncateTerminalText } from '@mission-control/tui';
 import { TextAttributes } from '@opentui/core';
-import { createMemo, For, type JSX, Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import type {
     WelcomeData,
     WelcomeLspServer,
@@ -314,21 +314,20 @@ export function buildProjectDescriptor(
  * parent gates this on `snapshot.outputText === ''`).
  */
 export function WelcomeScreen(props: WelcomeScreenProps): JSX.Element {
-    const widthBudget = createMemo(() => welcomeWidthBudget(props.viewportColumns));
-    const modelLine = createMemo(() => formatModelLine(props.data));
-    const projectDescriptor = createMemo(() =>
-        buildProjectDescriptor(props.projectLabel, props.gitBranch, props.isWorktree),
-    );
-    const lspGlyphs = createMemo(() => formatLspGlyphs(props.data.lspServers));
-    const rowPlan = createMemo(() => {
+    const widthBudget = () => welcomeWidthBudget(props.viewportColumns);
+    const modelLine = () => formatModelLine(props.data);
+    const projectDescriptor = () =>
+        buildProjectDescriptor(props.projectLabel, props.gitBranch, props.isWorktree);
+    const lspGlyphs = () => formatLspGlyphs(props.data.lspServers);
+    const rowPlan = () => {
         const descriptor = projectDescriptor();
         return welcomeRowBudgetPlan({
             data: props.data,
             ...(props.availableRows !== undefined ? { availableRows: props.availableRows } : {}),
             ...(descriptor !== undefined ? { projectDescriptor: descriptor } : {}),
         });
-    });
-    const compactContext = createMemo((): CompactWelcomeRowContext => {
+    };
+    const compactContext = (): CompactWelcomeRowContext => {
         const descriptor = projectDescriptor();
         return {
             data: props.data,
@@ -336,7 +335,7 @@ export function WelcomeScreen(props: WelcomeScreenProps): JSX.Element {
             modelLine: { label: modelLine().label, value: modelLine().value },
             ...(descriptor !== undefined ? { projectDescriptor: descriptor } : {}),
         };
-    });
+    };
 
     return (
         <Show

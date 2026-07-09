@@ -21,7 +21,6 @@
     "./opentui-renderer": "./dist/platform/opentui-renderer.js",
     "./keymap-provider": "./dist/platform/keymap/keymap-provider.js",
     "./providers": "./dist/platform/providers/index.js",
-    "./terminal-viewport-solid": "./dist/platform/terminal-viewport-solid.js",
     "./status-bar": "./dist/components/StatusBar.js",
     "./abg-overlay": "./dist/components/AbgOverlay.js",
     "./app": "./dist/app.js",
@@ -39,7 +38,7 @@
     "diff": "^9.0.0",
     "marked": "^18.0.5",
     "remend": "^1.3.0",
-    "solid-js": "^1.9.12",
+    "solid-js": "^1.9.14",
     "web-tree-sitter": "^0.25.10",
     "wrap-ansi": "^10.0.0"
   },

@@ -20,7 +20,9 @@ import {
     promptPanelRepaintKey,
 } from './app/app-helpers.js';
 import { FullscreenOverlays } from './app/FullscreenOverlays.js';
-import { NormalLayout } from './app/NormalLayout.js';
+import { ModalOverlays } from './app/ModalOverlays.js';
+import { UpperRegion } from './app/UpperRegion.js';
+import { KeymapChrome } from './platform/keymap/keymap-chrome.js';
 import { useGlobalKeyboard } from './app/use-global-keyboard.js';
 import { useKeymapLayers } from './app/use-keymap-layers.js';
 import { useRenderableHandles } from './app/use-renderable-handles.js';
@@ -28,6 +30,7 @@ import { useRepaintEffects } from './app/use-repaint-effects.js';
 import { useSelectionMouseUp } from './app/use-selection-mouseup.js';
 import { useSubmit } from './app/use-submit.js';
 import { useTransientToast } from './app/use-transient-toast.js';
+import { ChatBottomDock } from './components/ChatBottomDock.js';
 import { bottomDockPolicy } from './components/chat-bottom-dock-policy.js';
 
 export {
@@ -53,13 +56,16 @@ export type AppProps = {
     readonly store: ChatStore;
 };
 
-/**
- * Solid components run once: never freeze dimensions with
- * `const w = viewport().columns`. Always read accessors inside JSX
- * (`viewport().columns`) so resize reflows — same as OpenCode's
- * `dimensions().width`.
- */
 export function App(props: AppProps): JSX.Element {
+    return <AppMain store={props.store} />;
+}
+
+/**
+ * Root shell matches ref/opencode packages/tui app.tsx:
+ * width={dimensions().width} height={dimensions().height}, flex column,
+ * main flexGrow+minHeight={0}, bottom flexShrink={0}. No custom SIGWINCH.
+ */
+function AppMain(props: AppProps): JSX.Element {
     const snapshot = useSolidStoreSelector(props.store, (state) => state);
     const runtime = useTuiRuntime();
     const session = useChatSession();
@@ -67,7 +73,7 @@ export function App(props: AppProps): JSX.Element {
     const abgOverlayController = session.abgOverlayController;
     const missionControlServices = session.missionControlServices;
     const actions = session.actions;
-    const statusBarProps = createMemo(() => deriveStatusBarProps(runtime, snapshot()));
+    const statusBarProps = () => deriveStatusBarProps(runtime, snapshot());
     const { textareaHandle, scrollboxHandle, keymapScrollboxRef } = useRenderableHandles();
 
     const initialPrefs = props.store.getAbgOverlayPrefsSnapshot();
@@ -79,14 +85,13 @@ export function App(props: AppProps): JSX.Element {
     const clipboard = useTuiClipboard();
     const promptStash = useTuiPromptStash();
     const localPreferences = useTuiLocalPreferences();
-    // OpenCode: useTerminalDimensions() + read .width/.height inside JSX/memos only.
     const dimensions = useTerminalDimensions();
-    const viewport = createMemo(() => ({
-        columns: dimensions().width,
-        rows: dimensions().height,
-    }));
-    const dockPolicy = createMemo(() => bottomDockPolicy(viewport()));
-    const promptMenuInteractionsEnabled = createMemo(() => dockPolicy().menu.rows > 0);
+    const dockPolicy = () =>
+        bottomDockPolicy({
+            columns: dimensions().width,
+            rows: dimensions().height,
+        });
+    const promptMenuInteractionsEnabled = () => dockPolicy().menu.rows > 0;
 
     useTransientToast(props.store);
     const handleSelectionMouseUp = useSelectionMouseUp();
@@ -109,7 +114,7 @@ export function App(props: AppProps): JSX.Element {
         keymap,
         renderer,
         clipboard,
-        viewport,
+        getViewportRows: () => dimensions().height,
         promptStash,
         localPreferences,
         textareaHandle,
@@ -119,18 +124,15 @@ export function App(props: AppProps): JSX.Element {
     });
 
     const messageBlocks = createStableMessageBlocks(() => snapshot().outputText);
-    const overlayActive = createMemo(() => snapshot().overlayMode !== 'none');
-    const showWelcome = createMemo(
-        () => welcomeData !== undefined && snapshot().outputText === '' && !overlayActive(),
-    );
-    const promptRepaintKey = createMemo(() =>
+    const overlayActive = () => snapshot().overlayMode !== 'none';
+    const showWelcome = () => welcomeData !== undefined && snapshot().outputText === '' && !overlayActive();
+    const promptRepaintKey = () =>
         promptPanelRepaintKey({
             inputMirror: snapshot().inputMirror,
             fileAutocompleteOpen: snapshot().fileAutocomplete.open,
             fileMatchCount: snapshot().fileAutocomplete.matches.length,
             menuRows: dockPolicy().menu.rows,
-        }),
-    );
+        });
 
     useRepaintEffects({
         renderer,
@@ -139,57 +141,74 @@ export function App(props: AppProps): JSX.Element {
         promptRepaintKey,
     });
 
-    const showAgentIndicator = createMemo(() => !overlayActive());
-    const showAbgMinimap = createMemo(
-        () => snapshot().abgMinimapVisible && !overlayActive() && abgOverlayController !== undefined,
-    );
-    const isFullscreenOverlay = createMemo(() => {
+    const showAgentIndicator = () => !overlayActive();
+    const showAbgMinimap = () =>
+        snapshot().abgMinimapVisible && !overlayActive() && abgOverlayController !== undefined;
+    const isFullscreenOverlay = () => {
         const mode = snapshot().overlayMode;
         return mode === 'abg' || mode === 'diff-viewer' || mode === 'models-overlay';
-    });
+    };
 
     return (
-        <Show
-            when={isFullscreenOverlay()}
-            fallback={
-                <NormalLayout
+        // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive; mouse-up surfaces copy-hint toast.
+        <box
+            width={dimensions().width}
+            height={dimensions().height}
+            flexDirection="column"
+            backgroundColor="#000000"
+            onMouseUp={handleSelectionMouseUp}
+        >
+            <Show when={isFullscreenOverlay()}>
+                <FullscreenOverlays
                     store={props.store}
                     snap={snapshot()}
-                    viewport={viewport()}
+                    viewport={{ columns: dimensions().width, rows: dimensions().height }}
                     statusBarProps={statusBarProps()}
-                    onMouseUp={handleSelectionMouseUp}
-                    textareaHandle={textareaHandle}
-                    scrollboxHandle={scrollboxHandle}
-                    overlayActive={overlayActive()}
+                    abgOverlayController={abgOverlayController}
+                    abgActiveTabIndex={abgActiveTab()}
+                    abgScrollOffset={abgScrollOffset()}
+                />
+            </Show>
+            <Show when={!isFullscreenOverlay()}>
+                <box flexDirection="column" flexGrow={1} minHeight={0} width="100%">
+                    <UpperRegion
+                        showWelcome={showWelcome()}
+                        welcomeData={welcomeData}
+                        statusBarProps={statusBarProps()}
+                        transcript={
+                            <ChatTranscript
+                                blocks={messageBlocks()}
+                                scrollboxRef={scrollboxHandle}
+                                generating={snapshot().generating}
+                                toolOutputExpanded={snapshot().toolOutputExpanded}
+                            />
+                        }
+                        showAgentIndicator={showAgentIndicator()}
+                        agentStatusText={snapshot().agentStatusText}
+                        generating={snapshot().generating}
+                        showAbgMinimap={showAbgMinimap()}
+                        abgOverlayController={abgOverlayController}
+                    />
+                </box>
+                <box flexShrink={0} width="100%">
+                    <ChatBottomDock
+                        store={props.store}
+                        textareaRef={textareaHandle}
+                        scrollboxRef={scrollboxHandle}
+                        inputFocused={!overlayActive()}
+                        statusBarProps={statusBarProps()}
+                        {...(actions !== undefined ? { actions } : {})}
+                    />
+                </box>
+                <ModalOverlays
+                    store={props.store}
+                    overlayMode={snapshot().overlayMode}
+                    workspaceRoot={statusBarProps().workspaceRoot}
                     actions={actions}
                     missionControlServices={missionControlServices}
-                    showWelcome={showWelcome()}
-                    welcomeData={welcomeData}
-                    dockPolicy={dockPolicy()}
-                    transcript={
-                        <ChatTranscript
-                            blocks={messageBlocks()}
-                            scrollboxRef={scrollboxHandle}
-                            generating={snapshot().generating}
-                            toolOutputExpanded={snapshot().toolOutputExpanded}
-                            viewportColumns={viewport().columns}
-                        />
-                    }
-                    showAgentIndicator={showAgentIndicator()}
-                    showAbgMinimap={showAbgMinimap()}
-                    abgOverlayController={abgOverlayController}
                 />
-            }
-        >
-            <FullscreenOverlays
-                store={props.store}
-                snap={snapshot()}
-                viewport={viewport()}
-                statusBarProps={statusBarProps()}
-                abgOverlayController={abgOverlayController}
-                abgActiveTabIndex={abgActiveTab()}
-                abgScrollOffset={abgScrollOffset()}
-            />
-        </Show>
+            </Show>
+            <KeymapChrome />
+        </box>
     );
 }

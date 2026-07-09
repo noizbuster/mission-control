@@ -2,7 +2,7 @@
 
 import { terminalDisplayWidth } from '@mission-control/tui';
 import { TextAttributes } from '@opentui/core';
-import { createMemo, type JSX } from 'solid-js';
+import type { JSX } from 'solid-js';
 import type { ApprovalLevel } from '../state/approval-level.js';
 import { type BottomDockPolicy, type BottomDockStatusPolicy, bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { APPROVAL_LEVEL_COLORS, STATUS_LINE_BG } from './overlay-theme.js';
@@ -220,9 +220,9 @@ export function formatBottomStatusRow(props: StatusBarProps): BottomStatusRowSha
  * reads as a continuous divider. Full-width dark-navy bg.
  */
 export function TopStatusBar(props: StatusBarProps): JSX.Element {
-    const row = createMemo(() => formatTopStatusRow(props));
+    const row = () => formatTopStatusRow(props);
     return (
-        <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
+        <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0} width="100%">
             <text selectable>
                 <span style={{ dim: true }}>{row().provider}</span>{' '}
                 <span style={{ bold: true }}>{row().model}</span>
@@ -246,9 +246,9 @@ export function TopStatusBar(props: StatusBarProps): JSX.Element {
  * filled with a dim divider. Full-width dark-navy bg.
  */
 export function BottomStatusBar(props: StatusBarProps): JSX.Element {
-    const row = createMemo(() => formatBottomStatusRow(props));
+    const row = () => formatBottomStatusRow(props);
     return (
-        <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0}>
+        <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0} width="100%">
             <text
                 selectable
                 {...(() => {

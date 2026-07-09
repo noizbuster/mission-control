@@ -22,22 +22,25 @@ describe('ChatInputTextarea', () => {
 
             expect(source).toContain("border={['left', 'right']}");
             expect(source).toContain('width="100%"');
-            expect(source).toContain('flexGrow={1}');
+            expect(source).toContain('flexShrink={0}');
+            expect(source).toContain('minHeight={1}');
         });
     });
 
     describe('textarea handle contract', () => {
-        it('reads content from textareaRef.get().plainText and falls back to an empty string', () => {
+        it('reads content from props.textareaRef and falls back to an empty string', () => {
             const source = readTextareaSource();
 
-            expect(source).toContain("const text = textareaRef.get()?.plainText ?? '';");
-            expect(source).toContain('onContentChange(text);');
+            expect(source).toContain("const text = props.textareaRef.get()?.plainText ?? '';");
+            expect(source).toContain('props.onContentChange(text);');
         });
 
         it('uses a Solid callback ref to update the production handle shape', () => {
             const source = readTextareaSource();
 
-            expect(source).toContain('ref={(renderable: TextareaRenderable) => textareaRef.set(renderable)}');
+            expect(source).toContain(
+                'ref={(renderable: TextareaRenderable) => props.textareaRef.set(renderable)}',
+            );
             expect(source).not.toContain('.current');
         });
     });
@@ -47,13 +50,13 @@ describe('ChatInputTextarea', () => {
             const source = readTextareaSource();
             const disabledBlock = source.slice(
                 source.indexOf('const handleKeyDown'),
-                source.indexOf('const cursorColor'),
+                source.indexOf('return ('),
             );
 
-            expect(disabledBlock).toContain('if (disabled)');
+            expect(disabledBlock).toContain('if (props.disabled)');
             expect(disabledBlock).toContain('key.preventDefault();');
             expect(disabledBlock).toContain('return;');
-            expect(disabledBlock).toContain('onKeyDown(key);');
+            expect(disabledBlock).toContain('props.onKeyDown(key);');
         });
     });
 
@@ -61,8 +64,7 @@ describe('ChatInputTextarea', () => {
         it('keeps dim and bright cursor colors for disabled/enabled states', () => {
             const source = readTextareaSource();
 
-            expect(source).toContain("const cursorColor = disabled ? '#333333' : '#ffffff';");
-            expect(source).toContain('cursorColor={cursorColor}');
+            expect(source).toContain("cursorColor={props.disabled ? '#333333' : '#ffffff'}");
         });
     });
 
@@ -70,7 +72,9 @@ describe('ChatInputTextarea', () => {
         it('uses an exactOptionalPropertyTypes-safe conditional spread', () => {
             const source = readTextareaSource();
 
-            expect(source).toContain('{...(placeholder !== undefined ? { placeholder } : {})}');
+            expect(source).toContain(
+                '{...(props.placeholder !== undefined ? { placeholder: props.placeholder } : {})}',
+            );
         });
     });
 
@@ -83,6 +87,14 @@ describe('ChatInputTextarea', () => {
             expect(source).toContain("{ name: 'return', shift: true, action: 'newline' }");
             expect(source).toContain("{ name: 'return', action: 'submit' }");
             expect(source).toContain("{ name: 'kpenter', action: 'submit' }");
+        });
+    });
+
+    describe('props reactivity', () => {
+        it('does not destructure props (Solid one-shot freeze)', () => {
+            const source = readTextareaSource();
+            expect(source).toContain('export function ChatInputTextareaBase(props: ChatInputTextareaProps)');
+            expect(source).not.toMatch(/export function ChatInputTextareaBase\(\{/);
         });
     });
 });

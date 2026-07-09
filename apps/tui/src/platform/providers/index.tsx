@@ -6,7 +6,6 @@ import type { JSX } from 'solid-js';
 import type { ChatStore } from '../../state/chat-store.js';
 import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
 import type { ClipboardServiceRenderer } from '../clipboard-service.js';
-import { CommandPaletteOverlay } from '../keymap/command-palette.js';
 import { ChatKeymapProvider } from '../keymap/keymap-provider.js';
 import { MissionControlChatSessionGate } from './chat-session-context.js';
 import { MissionControlClipboardToastProviders } from './clipboard-toast-context.js';
@@ -67,7 +66,6 @@ export type MissionControlTuiProviderTreeProps<TRenderer extends ClipboardServic
     readonly pluginKvStore?: TuiPluginKvStoreLike;
     readonly allowedPluginCapabilities?: readonly TuiPluginCapabilityId[];
     readonly plugins?: readonly TuiPluginRuntimeDefinition[];
-    readonly renderKeymapChrome?: boolean;
     readonly chatStore?: ChatStore;
     readonly children: JSX.Element;
 };
@@ -135,9 +133,6 @@ export function composeMissionControlProviderTree<TRenderer extends ClipboardSer
                                                                 ? { plugins: props.plugins }
                                                                 : {})}
                                                         >
-                                                            {props.renderKeymapChrome === true ? (
-                                                                <CommandPaletteOverlay />
-                                                            ) : null}
                                                             {props.children}
                                                         </MissionControlPluginRuntimeProvider>
                                                     </MissionControlDialogProvider>
@@ -227,7 +222,6 @@ export function MissionControlTuiProviders<TRenderer extends ClipboardServiceRen
             : {}),
         ...(props.plugins !== undefined ? { plugins: props.plugins } : {}),
         ...(props.chatStore !== undefined ? { chatStore: props.chatStore } : {}),
-        renderKeymapChrome: true,
         get children() {
             return props.children;
         },

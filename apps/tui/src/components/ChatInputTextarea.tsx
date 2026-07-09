@@ -32,54 +32,49 @@ export type ChatInputTextareaProps = {
     readonly focused: boolean;
 };
 
-export function ChatInputTextareaBase({
-    placeholder,
-    disabled = false,
-    onSubmit,
-    onContentChange,
-    onCursorChange,
-    onKeyDown,
-    onPaste,
-    textareaRef,
-    focused,
-}: ChatInputTextareaProps): JSX.Element {
+export function ChatInputTextareaBase(props: ChatInputTextareaProps): JSX.Element {
     const handleContentChange = (): void => {
-        const text = textareaRef.get()?.plainText ?? '';
-        onContentChange(text);
+        const text = props.textareaRef.get()?.plainText ?? '';
+        props.onContentChange(text);
     };
 
     const handleKeyDown = (key: KeyEvent): void => {
-        if (disabled) {
+        if (props.disabled) {
             key.preventDefault();
             return;
         }
-        onKeyDown(key);
+        props.onKeyDown(key);
     };
 
-    const cursorColor = disabled ? '#333333' : '#ffffff';
-
     return (
-        <box backgroundColor="#0a0a0a" border={['left', 'right']} borderColor="#00ffff" flexGrow={1} width="100%">
+        <box
+            backgroundColor="#0a0a0a"
+            border={['left', 'right']}
+            borderColor="#00ffff"
+            flexShrink={0}
+            width="100%"
+            minHeight={1}
+        >
             <textarea
-                ref={(renderable: TextareaRenderable) => textareaRef.set(renderable)}
+                ref={(renderable: TextareaRenderable) => props.textareaRef.set(renderable)}
                 width="100%"
-                focused={focused}
+                focused={props.focused}
                 placeholderColor="#666666"
                 textColor="#ffffff"
                 focusedBackgroundColor="#0a0a0a"
-                cursorColor={cursorColor}
+                cursorColor={props.disabled ? '#333333' : '#ffffff'}
                 onContentChange={handleContentChange}
-                onCursorChange={onCursorChange}
+                onCursorChange={props.onCursorChange}
                 onKeyDown={handleKeyDown}
-                onSubmit={onSubmit}
-                onPaste={onPaste}
+                onSubmit={props.onSubmit}
+                onPaste={props.onPaste}
                 keyBindings={[
                     ...defaultTextareaKeyBindings,
                     { name: 'return', shift: true, action: 'newline' },
                     { name: 'return', action: 'submit' },
                     { name: 'kpenter', action: 'submit' },
                 ]}
-                {...(placeholder !== undefined ? { placeholder } : {})}
+                {...(props.placeholder !== undefined ? { placeholder: props.placeholder } : {})}
             />
         </box>
     );

@@ -42,7 +42,7 @@ src/
 |   `-- diff/                 # diff pipeline: DiffView.tsx, render-diff.ts
 |-- platform/                 # OpenTUI platform layer
 |   |-- opentui-renderer.ts   # mountOpenTui/unmount (dynamic-imports createCliRenderer + Solid render/root)
-|   |-- terminal-viewport.ts, terminal-viewport-solid.ts  # TerminalViewport normalization, useTerminalViewport()
+|   |-- terminal-viewport.ts  # pure TerminalViewport {columns,rows} normalize helper
 |   |-- clipboard-service.ts, selection-copy.ts  # OSC52 clipboard, mouseup selection copy
 |   |-- providers/            # Solid provider root + provider hook services
 |   `-- keymap/               # keybind, keymap-instance, keymap-provider, managed-layer, command-palette, which-key, diff-viewer, messages-scroll, etc.
@@ -69,7 +69,7 @@ src/
 | CLI side-effect interface | `src/state/chat-app-actions.ts` | `ChatAppActions` callback interface (`loadDashboardAgentEntries`, `loadMissionPanelRows`, `toggleAgentDisabled`, `setAgentModelOverride`, `isValidModelPattern`). CLI provides implementations; components call them. |
 | Chat block parsing | `src/chat.ts` (via `@mission-control/tui/chat`) | `parseMessageBlocks` splits `outputText` into `ChatBlock` records (user/assistant/thinking/error/tool/system). Pure, zero imports. |
 | Chat test support | `src/components/chat-test-support.ts` | `TextareaLike`, `createRecordingTextarea`, `createRecordingScrollbox`, `makeKeyEvent`, and framework-free test helpers for native renderable seams. |
-| Root component | `src/app.tsx` | Thin composer: wires hooks, then branches fullscreen (`FullscreenOverlays`) vs normal (`NormalLayout`). Layout modules live under `src/app/` (`AgentSpinner`, `ModalPopup`, upper region, modal overlays). Reads `ChatStore` snapshots through Solid signals/accessors. |
+| Root component | `src/app.tsx` | Thin composer: wires hooks, then branches fullscreen (`FullscreenOverlays`) vs normal flex siblings (upper + dock + modals). Layout modules live under `src/app/` (`AgentSpinner`, `ModalPopup`, upper region, modal overlays). Reads `ChatStore` snapshots through Solid signals/accessors. |
 | Input textarea | `src/components/ChatInputTextarea.tsx` | Wraps native `<textarea>` (`TextareaRenderable`): owns editable text, cursor, selection, IME composition. |
 | Output transcript | `src/components/ChatTranscript.tsx` | Wraps native `<scrollbox>` (`ScrollBoxRenderable`): owns output scroll and windowing via `stickyScroll`. |
 | Overlay panels | `src/components/OverlayPanels.tsx` | Approval, question, model picker, level picker, rename overlays. Arrow-key navigation over `ChatStore`. |
@@ -84,7 +84,7 @@ src/
 | Diff renderer | `src/components/diff/` | `render-diff.ts` classifies mctrl no-line-number diffs; `DiffView.tsx` renders green/red/cyan with inverse intra-line spans. `kindStyle`/`splitLineSpans` exported for tests. |
 | opentui renderer mount | `src/platform/opentui-renderer.ts` | `mountOpenTui(element)` dynamic-imports the OpenTUI renderer and Solid root/render entrypoints, returns `{ renderer, root, unmount }`. Dynamic imports keep both packages out of the eager module graph for non-TUI CLI runs. `unmount()` is idempotent. |
 | Provider root | `src/platform/providers/index.tsx` | `MissionControlTuiProviders` composes runtime, paths/config, runtime events, project/session replay, route/dialog/theme, local preferences, prompt history, prompt services, clipboard/toast, keymap, and plugin runtime providers. Exported only through `@mission-control/tui/providers`; the main barrel stays provider-free. |
-| Terminal viewport | `src/platform/terminal-viewport.ts`, `src/platform/terminal-viewport-solid.ts` | Normalizes OpenTUI dimensions into `TerminalViewport { columns, rows }`; `useTerminalViewport()` is the interactive TUI layout source of truth. Resize is OpenTUI SIGWINCH only; layout must use `flexGrow={1} minHeight={0}` on the scroll chain (OpenCode pattern) so Yoga can shrink/grow. Do not memoize JSX subtrees on viewport changes. |
+| Terminal dimensions | `useTerminalDimensions()` from `@opentui/solid` | OpenCode pattern: read `dimensions().width` / `dimensions().height` in JSX. Pure `TerminalViewport` helper lives in `terminal-viewport.ts` for non-Solid normalize only. Resize is OpenTUI SIGWINCH; layout uses `flexGrow={1} minHeight={0}`. Do not wrap dimensions in createMemo/cache. |
 | Keymap provider | `src/platform/keymap/keymap-provider.tsx` | Solid provider around `@opentui/keymap/solid`: `KeymapProvider`, `useBindings`, and `useKeymapSelector` return accessors. Layer predicates should read signals directly through the existing signal-matcher helper. |
 | Clipboard copy | `src/platform/clipboard-service.ts`, `src/platform/selection-copy.ts` | OSC52 clipboard service plus mouseup selection-copy; `isOsc52Supported()` gates the stderr fallback. |
 | Keymap layers | `src/platform/keymap/` | OpenTUI keymap instance, managed textarea composition (`keymap-managed-layer.ts`), command palette, which-key, diff viewer, message scrolling, selection copy, paste markers, and kill-ring layers. Keybind registry in `keybind.ts`; chord conflicts pinned by `chord-conflicts.test.ts`. |
@@ -99,7 +99,7 @@ OpenTUI ships a Zig native core (`libopentui.so` / `.dylib` / `.dll`) accessed t
 
 ### Build Configuration
 
-The TUI package builds with Vite in library mode. `apps/tui/vite.config.ts` declares object entries that mirror `apps/tui/package.json` subpath exports, including `platform/terminal-viewport-solid` for `./terminal-viewport-solid`.
+The TUI package builds with Vite in library mode. `apps/tui/vite.config.ts` declares object entries that mirror `apps/tui/package.json` subpath exports.
 
 `vite-plugin-solid` is configured with `solid: { moduleName: '@opentui/solid', generate: 'universal' }`. Its Babel module-resolver maps `solid-js` to `solid-js/dist/solid.js` and `solid-js/store` to `solid-js/store/dist/store.js` so Node execution lands on the published runtime files.
 
@@ -175,7 +175,7 @@ Flat `<text>` blocks are explicitly `selectable`; `Markdown` leaves default sele
 - Provider modules are accessed via `@mission-control/tui/providers`. Keep provider hook modules under `src/platform/providers/`; do not move provider runtime imports into `src/state/` or `src/index.ts`.
 - Impure mount-surface modules (`create-chat-tui.tsx`, `replay-overlay.tsx`, `keymap-provider`) MUST be behind dedicated subpath exports, not the main barrel. Adding them to the barrel triggers circular init races where state modules import pure primitives from the barrel.
 - Visible-width math (wrapping, table columns, bar row counts) counts East Asian Wide glyphs as 2 columns. `wrap-ansi` relies on `string-width`/`get-east-asian-width`, so CJK never overflows.
-- Interactive TUI layout must derive from `TerminalViewport { columns, rows }` via `useTerminalViewport()` from `platform/terminal-viewport-solid.ts`. Direct `process.stdout.columns/rows` reads are forbidden in components and keymaps. Enforced by `platform/terminal-global-policy.test.ts`.
+- Interactive TUI layout must use `useTerminalDimensions()` from `@opentui/solid` and read `.width`/`.height` in JSX (OpenCode). Direct `process.stdout.columns/rows` reads are forbidden in components and keymaps. Enforced by `platform/terminal-global-policy.test.ts`.
 - Solid components run once. **Never** freeze reactive values:
   - ❌ `const w = dimensions().width` / `const cols = viewport().columns` then use `w`/`cols` in JSX
   - ❌ `function Foo({ viewportColumns })` for size props
@@ -189,7 +189,7 @@ Flat `<text>` blocks are explicitly `selectable`; `Markdown` leaves default sele
 ## Tests
 
 - Colocated `*.test.ts`/`*.test.tsx` files under `src` are the package test surface.
-- `src/app/app-topology.test.ts` is the multi-file App topology suite: source-union + import-graph pins for mount shape (`createComponent(App, { store })`), store-only `AppProps`, no `ChatAppSplitShell`, no SlashMenu/FileAutocomplete in app modules, 7 ModalPopup modes, fullscreen abg/diff/models, normal layout order upper→dock→modals + `onMouseUp`, keymap layers, Ctrl+C global sink, forceFullRepaint/500ms for non-resize drift only, and provider hooks. `app.test.ts` keeps only the public re-export smoke. Terminal resize is owned by OpenTUI SIGWINCH only (`platform/opentui-renderer.ts`); do not reintroduce poll/`renderer.resize`/hardReset on that path.
+- `src/app/app-topology.test.ts` is the multi-file App topology suite: source-union + import-graph pins for mount shape (`createComponent(App, { store })`), store-only `AppProps`, no `ChatAppSplitShell`, no SlashMenu/FileAutocomplete in app modules, 7 ModalPopup modes, fullscreen abg/diff/models, OpenCode flex upper→dock→modals + `onMouseUp`, keymap layers, Ctrl+C global sink, repaint-on-transition via `requestRender` only, and provider hooks. `app.test.ts` keeps only the public re-export smoke. Terminal resize is OpenTUI SIGWINCH + `attachResizeFullPaint` after Solid mount (`platform/opentui-renderer.ts`); do not reintroduce poll/`renderer.resize`/hardReset ladders.
 - `src/import-graph.test.ts` scans the 3 pure source files and asserts no `@opentui/*`, framework-runtime, `apps/cli`, or `@mission-control/cli` imports. Keep it green when adding pure modules.
 - `tests/tui-cli-boundary.test.ts` (root) scans all non-test source under `src/` and asserts no `apps/cli`/`../cli`/`@mission-control/cli` references.
 - `platform/terminal-global-policy.test.ts` scans `src/` for direct `process.stdout.columns/rows` reads. No allowed files.

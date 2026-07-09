@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 
 import { TextAttributes } from '@opentui/core';
-import type { JSX } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { buildDiffViewerModel, DiffViewerOverlay } from '../platform/keymap/diff-viewer.js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
@@ -21,62 +21,56 @@ export type FullscreenOverlaysProps = {
     readonly abgScrollOffset: number;
 };
 
-/**
- * Full-screen overlay modes that replace the normal chat root layout.
- * Returns null when the active overlay is not a full-screen mode.
- * Shell uses 100% size so it tracks OpenTUI root after processResize.
- */
-export function FullscreenOverlays(props: FullscreenOverlaysProps): JSX.Element | null {
-    if (props.snap.overlayMode === 'abg') {
-        if (props.abgOverlayController === undefined) {
-            return (
-                <box flexDirection="column" width={props.viewport.columns} height={props.viewport.rows} backgroundColor="#000000">
-                    <OverlayFrame variant="view" title="ABG Overlay" hint="(Ctrl+G or Esc to close)">
-                        <text attributes={TextAttributes.DIM}>{'ABG overlay unavailable in this session.'}</text>
-                    </OverlayFrame>
-                </box>
-            );
-        }
-
+export function FullscreenOverlays(props: FullscreenOverlaysProps): JSX.Element {
+    const modelLabel = (): string => {
         const selection = props.snap.currentModelSelection;
         const providerID = selection?.providerID ?? props.statusBarProps.providerID;
         const modelID = selection?.modelID ?? props.statusBarProps.modelID;
         const variantID = props.snap.currentModelVariantID;
-        const modelLabel = `${providerID}/${modelID}${variantID !== undefined ? `#${variantID}` : ''}`;
-        const activeTab: AbgOverlayTab = ABG_OVERLAY_TABS[props.abgActiveTabIndex] ?? 'overview';
+        return `${providerID}/${modelID}${variantID !== undefined ? `#${variantID}` : ''}`;
+    };
+    const activeTab = (): AbgOverlayTab => ABG_OVERLAY_TABS[props.abgActiveTabIndex] ?? 'overview';
 
-        return (
-            <box flexDirection="column" width={props.viewport.columns} height={props.viewport.rows} backgroundColor="#000000">
-                <AbgOverlay
-                    store={props.abgOverlayController.store}
-                    activeTab={activeTab}
-                    scrollOffset={props.abgScrollOffset}
-                    modelLabel={modelLabel}
-                    viewport={props.viewport}
-                />
-            </box>
-        );
-    }
-
-    if (props.snap.overlayMode === 'diff-viewer') {
-        const entries = props.snap.diffViewerEntries;
-        const cursor = props.snap.diffViewerCursor;
-        const model = buildDiffViewerModel(entries);
-
-        return (
-            <box flexDirection="column" width={props.viewport.columns} height={props.viewport.rows} backgroundColor="#000000">
-                <DiffViewerOverlay entries={entries} model={model} cursor={cursor} />
-            </box>
-        );
-    }
-
-    if (props.snap.overlayMode === 'models-overlay') {
-        return (
-            <box flexDirection="column" width={props.viewport.columns} height={props.viewport.rows} backgroundColor="#000000">
-                <ModelsOverlay store={props.store} />
-            </box>
-        );
-    }
-
-    return null;
+    return (
+        <>
+            <Show when={props.snap.overlayMode === 'abg'}>
+                <box flexDirection="column" width="100%" height="100%" backgroundColor="#000000" shouldFill={true}>
+                    <Show
+                        when={props.abgOverlayController}
+                        fallback={
+                            <OverlayFrame variant="view" title="ABG Overlay" hint="(Ctrl+G or Esc to close)">
+                                <text attributes={TextAttributes.DIM}>
+                                    {'ABG overlay unavailable in this session.'}
+                                </text>
+                            </OverlayFrame>
+                        }
+                    >
+                        {(controller) => (
+                            <AbgOverlay
+                                store={controller().store}
+                                activeTab={activeTab()}
+                                scrollOffset={props.abgScrollOffset}
+                                modelLabel={modelLabel()}
+                                viewport={props.viewport}
+                            />
+                        )}
+                    </Show>
+                </box>
+            </Show>
+            <Show when={props.snap.overlayMode === 'diff-viewer'}>
+                <box flexDirection="column" width="100%" height="100%" backgroundColor="#000000" shouldFill={true}>
+                    <DiffViewerOverlay
+                        entries={props.snap.diffViewerEntries}
+                        model={buildDiffViewerModel(props.snap.diffViewerEntries)}
+                        cursor={props.snap.diffViewerCursor}
+                    />
+                </box>
+            </Show>
+            <Show when={props.snap.overlayMode === 'models-overlay'}>
+                <box flexDirection="column" width="100%" height="100%" backgroundColor="#000000" shouldFill={true}>
+                    <ModelsOverlay store={props.store} />
+                </box>
+            </Show>
+        </>
+    );
 }

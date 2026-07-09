@@ -27,51 +27,49 @@ export type ModalOverlaysProps = {
  * Seven modal popup modes rendered as absolute siblings over the normal layout.
  */
 export function ModalOverlays(props: ModalOverlaysProps): JSX.Element {
-    const { store, overlayMode, workspaceRoot, actions, missionControlServices } = props;
-
     return (
         <>
-            {overlayMode === 'approval' ? (
+            {props.overlayMode === 'approval' ? (
                 <ModalPopup>
-                    <ApprovalOverlay store={store} />
+                    <ApprovalOverlay store={props.store} />
                 </ModalPopup>
             ) : null}
-            {overlayMode === 'model-picker' ? (
+            {props.overlayMode === 'model-picker' ? (
                 <ModalPopup>
-                    <ModelPickerOverlay store={store} />
+                    <ModelPickerOverlay store={props.store} />
                 </ModalPopup>
             ) : null}
-            {overlayMode === 'level-picker' ? (
+            {props.overlayMode === 'level-picker' ? (
                 <ModalPopup>
-                    <LevelPickerOverlay store={store} />
+                    <LevelPickerOverlay store={props.store} />
                 </ModalPopup>
             ) : null}
-            {overlayMode === 'rename' ? (
+            {props.overlayMode === 'rename' ? (
                 <ModalPopup>
-                    <RenameOverlay store={store} />
+                    <RenameOverlay store={props.store} />
                 </ModalPopup>
             ) : null}
-            {overlayMode === 'session-picker' ? (
+            {props.overlayMode === 'session-picker' ? (
                 <ModalPopup>
-                    <SessionPickerOverlay store={store} />
+                    <SessionPickerOverlay store={props.store} />
                 </ModalPopup>
             ) : null}
-            {overlayMode === 'agents-dashboard' ? (
+            {props.overlayMode === 'agents-dashboard' ? (
                 <ModalPopup>
                     <AgentsDashboardOverlay
-                        store={store}
-                        workspaceRoot={workspaceRoot}
-                        {...(actions !== undefined ? { actions } : {})}
+                        store={props.store}
+                        workspaceRoot={props.workspaceRoot}
+                        {...(props.actions !== undefined ? { actions: props.actions } : {})}
                     />
                 </ModalPopup>
             ) : null}
-            {overlayMode === 'mission-panel' ? (
+            {props.overlayMode === 'mission-panel' ? (
                 <ModalPopup>
                     <MissionPanelOverlay
-                        store={store}
-                        workspaceRoot={workspaceRoot}
-                        {...(actions !== undefined ? { actions } : {})}
-                        {...(missionControlServices !== undefined ? { services: missionControlServices } : {})}
+                        store={props.store}
+                        workspaceRoot={props.workspaceRoot}
+                        {...(props.actions !== undefined ? { actions: props.actions } : {})}
+                        {...(props.missionControlServices !== undefined ? { services: props.missionControlServices } : {})}
                     />
                 </ModalPopup>
             ) : null}
