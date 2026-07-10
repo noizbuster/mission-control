@@ -69,6 +69,11 @@ import {
 } from './interactive-chat-loop-support.js';
 import { createTerminalModelSelector } from './interactive-chat-model-selector.js';
 import { createSessionNavigationController } from './interactive-chat-session-navigation.js';
+import {
+    createSessionTitleWriteQueue,
+    drainSessionTitleWriteQueue,
+    initializeInteractiveSessionTitle,
+} from './interactive-chat-session-title.js';
 import { formatModelProviderStatus } from './interactive-chat-status.js';
 import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack.js';
 import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
@@ -359,6 +364,24 @@ export async function runInteractiveChatSession(
         },
     };
     const switchSessionStore = options.switchSessionStore;
+    let manualRenameRevision = 0;
+    const enqueueSessionTitleWrite = createSessionTitleWriteQueue();
+    const titleGenerationAbortController = new AbortController();
+    const titleGenerationTasks = new Set<Promise<void>>();
+    const invalidateTitleGeneration = (): void => {
+        manualRenameRevision += 1;
+        titleGenerationAbortController.abort();
+    };
+    const registerTitleGenerationTask = (task: Promise<void>): void => {
+        const settledTask = task.then(
+            () => undefined,
+            () => undefined,
+        );
+        titleGenerationTasks.add(settledTask);
+        void settledTask.then(() => {
+            titleGenerationTasks.delete(settledTask);
+        });
+    };
     const sessionNavigation =
         switchSessionStore === undefined
             ? undefined
@@ -366,6 +389,8 @@ export async function runInteractiveChatSession(
                   getCurrentSessionId: () => (currentSessionStore === undefined ? undefined : currentSessionId),
                   getCurrentStore: () => currentSessionStore,
                   switchSessionStore: async (sessionId) => {
+                      invalidateTitleGeneration();
+                      await drainSessionTitleWriteQueue(enqueueSessionTitleWrite);
                       const store = await switchSessionStore(sessionId);
                       currentSessionId = sessionId;
                       currentSessionStore = store;
@@ -402,19 +427,28 @@ export async function runInteractiveChatSession(
     };
 
     const applySessionRenameEffects = async (name: string): Promise<void> => {
+        const targetSessionId = currentSessionId;
+        const targetModelProviderSelection = currentModelProviderSelection;
         tuiHandle?.setSessionDisplayName(name);
-        setTerminalTitle(formatSessionTitle(currentSessionId, name));
-        if (sessionNavigation !== undefined && currentSessionId !== undefined) {
+        setTerminalTitle(formatSessionTitle(targetSessionId, name));
+        if (sessionNavigation !== undefined && targetSessionId !== undefined) {
             try {
-                await sessionNavigation.renameSession({
-                    name,
-                    modelProviderSelection: currentModelProviderSelection,
+                await enqueueSessionTitleWrite(async () => {
+                    if (currentSessionId !== targetSessionId) return;
+                    await sessionNavigation.renameSession({
+                        name,
+                        modelProviderSelection: targetModelProviderSelection,
+                    });
                 });
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 chatOutput.write(`Could not persist session rename: ${message}\n`);
             }
         }
+    };
+    const applyManualSessionRename = async (name: string): Promise<void> => {
+        invalidateTitleGeneration();
+        await applySessionRenameEffects(name);
     };
 
     if (tuiHandle === undefined) {
@@ -448,7 +482,10 @@ export async function runInteractiveChatSession(
         };
         tuiHandle.onRenameSubmit = (name: string) => {
             sessionDisplayNameController.update(name);
-            void applySessionRenameEffects(name);
+            void applyManualSessionRename(name).then(
+                () => undefined,
+                () => undefined,
+            );
         };
     }
 
@@ -633,9 +670,46 @@ export async function runInteractiveChatSession(
             ) {
                 const ensured = await options.ensureSession();
                 currentSessionId = ensured.sessionId;
-                tuiHandle?.setSessionId(currentSessionId);
-                void syncSessionDisplayName(currentSessionId);
                 currentSessionStore = ensured.store;
+                tuiHandle?.setSessionId(currentSessionId);
+                const titleNavigation = sessionNavigation;
+                if (action.kind === 'prompt' && titleNavigation !== undefined) {
+                    await initializeInteractiveSessionTitle({
+                        sessionId: currentSessionId,
+                        prompt: action.prompt,
+                        state: {
+                            snapshot: () => ({
+                                sessionId: currentSessionId,
+                                displayName: sessionDisplayNameController.current(),
+                                manualRenameRevision,
+                            }),
+                            displayTitle: (title) => {
+                                sessionDisplayNameController.update(title);
+                                tuiHandle?.setSessionDisplayName(title);
+                                setTerminalTitle(formatSessionTitle(currentSessionId, title));
+                            },
+                            persistTitle: async (title) => {
+                                await titleNavigation.renameSession({
+                                    name: title,
+                                    modelProviderSelection: currentModelProviderSelection,
+                                });
+                            },
+                            enqueueWrite: enqueueSessionTitleWrite,
+                        },
+                        model: {
+                            activeSelection: currentModelProviderSelection,
+                            ...(currentProvider !== undefined ? { activeProvider: currentProvider } : {}),
+                            ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
+                            ...(options.resolveProviderForSelection !== undefined
+                                ? { resolveProviderForSelection: options.resolveProviderForSelection }
+                                : {}),
+                        },
+                        signal: titleGenerationAbortController.signal,
+                        registerBackgroundTask: registerTitleGenerationTask,
+                    });
+                } else {
+                    void syncSessionDisplayName(currentSessionId);
+                }
             }
             let result: ChatActionResult;
             const isPickerAction =
@@ -663,7 +737,7 @@ export async function runInteractiveChatSession(
                     onWorkflowStarted,
                     ...(options.plainPromptGraph !== undefined ? { plainPromptGraph: options.plainPromptGraph } : {}),
                     sessionDisplayName: sessionDisplayNameController,
-                    onSessionRenamed: applySessionRenameEffects,
+                    onSessionRenamed: applyManualSessionRename,
                     undoRedo: undoRedoController,
                     ...(sessionNavigation !== undefined ? { sessionNavigation } : {}),
                     ...(options.engine !== undefined ? { engine: options.engine } : {}),
@@ -805,6 +879,10 @@ export async function runInteractiveChatSession(
             }
             currentModelProviderSelection = result.modelProviderSelection;
             activeTurn = result.activeTurn;
+            if (result.sessionId !== undefined && result.sessionId !== currentSessionId) {
+                invalidateTitleGeneration();
+                await drainSessionTitleWriteQueue(enqueueSessionTitleWrite);
+            }
             currentSessionId = result.sessionId ?? currentSessionId;
             tuiHandle?.setSessionId(currentSessionId ?? '');
             if (result.sessionId !== undefined) {
@@ -824,6 +902,9 @@ export async function runInteractiveChatSession(
     } finally {
         unregisterProcessCleanup?.();
         activeTurn?.interrupt('force');
+        titleGenerationAbortController.abort();
+        await Promise.all(titleGenerationTasks);
+        await drainSessionTitleWriteQueue(enqueueSessionTitleWrite);
         abgOverlayController?.reset();
         chatInput.close();
         resetTerminalTitle();

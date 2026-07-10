@@ -217,6 +217,7 @@ export {
 export {
     createProviderAuthStoreCredentialResolver,
     type ProviderAuthStoreCredentialResolverAuthStore,
+    redactProviderAuthStoreCredentialText,
     summarizeProviderCredential,
 } from './providers/provider-auth-resolver.js';
 export {

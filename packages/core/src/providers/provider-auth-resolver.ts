@@ -9,6 +9,14 @@ import type { ProviderAuthStore } from './provider-auth-store.js';
 
 export type ProviderAuthStoreCredentialResolverAuthStore = Pick<ProviderAuthStore, 'readAuthFile'>;
 
+export async function redactProviderAuthStoreCredentialText(
+    authStore: ProviderAuthStoreCredentialResolverAuthStore,
+    text: string,
+): Promise<string> {
+    const authFile = await authStore.readAuthFile();
+    return redactCredentialText(text, credentialSecretsFromAuthFile(authFile));
+}
+
 export function createProviderAuthStoreCredentialResolver(
     authStore: ProviderAuthStoreCredentialResolverAuthStore,
 ): ProviderCredentialResolver {

@@ -1,4 +1,4 @@
-import type { AgentEvent, ProviderCredential } from '@mission-control/protocol';
+import type { AgentEvent, ProviderAuthFile, ProviderCredential } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
 import {
@@ -8,6 +8,7 @@ import {
     redactCredentialText,
     summarizeResolvedProviderCredential,
 } from './credential-resolver.js';
+import { redactProviderAuthStoreCredentialText } from './provider-auth-resolver.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -124,6 +125,57 @@ describe('ProviderCredentialResolver', () => {
         await expect(missingCredential).rejects.not.toMatchObject({
             message: expect.stringContaining(refreshToken),
         });
+    });
+
+    it('redacts every exact stored secret while preserving public credential fields', async () => {
+        // Given: arbitrary credentials that do not match token-pattern redaction.
+        const apiKey = 'arbitrary_api_value_12345';
+        const fieldSecret = 'arbitrary_field_value_67890';
+        const publicValue = 'https://public.example.test';
+        const accessToken = 'arbitrary_oauth_access_24680';
+        const refreshToken = 'arbitrary_oauth_refresh_13579';
+        const authFile: ProviderAuthFile = {
+            $schema: 'https://mission-control.local/auth.schema.json',
+            credentials: {
+                custom: apiKeyCredential('custom', apiKey),
+                fields: fieldsCredential('fields', fieldSecret, publicValue),
+                oauth: oauthCredential('oauth', accessToken, refreshToken),
+            },
+        };
+
+        // When: text is redacted directly from the persisted auth store boundary.
+        const redacted = await redactProviderAuthStoreCredentialText(
+            { readAuthFile: async () => authFile },
+            `api ${apiKey} field ${fieldSecret} public ${publicValue} access ${accessToken} refresh ${refreshToken}`,
+        );
+
+        // Then: all secret credential variants are removed while public values survive.
+        expect(redacted).toBe(
+            `api [REDACTED_CREDENTIAL] field [REDACTED_CREDENTIAL] public ${publicValue} access [REDACTED_CREDENTIAL] refresh [REDACTED_CREDENTIAL]`,
+        );
+    });
+
+    it('redacts overlapping stored secrets longest-first', async () => {
+        // Given: a short stored secret that is also the prefix of a longer stored secret.
+        const shortSecret = 'arbitrary-overlap';
+        const longSecret = `${shortSecret}-and-more`;
+        const authFile: ProviderAuthFile = {
+            $schema: 'https://mission-control.local/auth.schema.json',
+            credentials: {
+                short: apiKeyCredential('short', shortSecret),
+                long: apiKeyCredential('long', longSecret),
+            },
+        };
+
+        // When: text containing only the longer secret crosses the auth-store redaction boundary.
+        const redacted = await redactProviderAuthStoreCredentialText(
+            { readAuthFile: async () => authFile },
+            `token ${longSecret} done`,
+        );
+
+        // Then: the entire longer secret is replaced without leaving its unmatched suffix.
+        expect(redacted).toBe('token [REDACTED_CREDENTIAL] done');
+        expect(redacted).not.toContain('-and-more');
     });
 });
 

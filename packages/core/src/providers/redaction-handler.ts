@@ -29,9 +29,13 @@ const DEFAULT_CREDENTIAL_PATTERNS: readonly CredentialPattern[] = [
 ];
 
 export function redactCredentialText(text: string, secrets: readonly string[] = []): string {
-    const exactRedacted = secrets
-        .filter((secret) => secret.length > 0)
-        .reduce((current, secret) => current.split(secret).join(REDACTED_CREDENTIAL), text);
+    const exactSecrets = [...new Set(secrets.filter((secret) => secret.length > 0))].sort(
+        (left, right) => right.length - left.length,
+    );
+    const exactRedacted = exactSecrets.reduce(
+        (current, secret) => current.split(secret).join(REDACTED_CREDENTIAL),
+        text,
+    );
 
     return DEFAULT_CREDENTIAL_PATTERNS.reduce(
         (current, credentialPattern) => current.replace(credentialPattern.pattern, credentialPattern.replacement),
