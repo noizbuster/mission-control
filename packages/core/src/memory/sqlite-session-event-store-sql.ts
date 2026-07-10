@@ -80,13 +80,13 @@ export async function updateSqliteSessionAfterAppend(
         sql: 'UPDATE session_event_sequences SET next_seq = ?, updated_at = ? WHERE session_id = ?',
         args: [input.sequence + 1, input.sequenceUpdatedAt, input.sessionId],
     });
+    const nextStatus = sessionStatusAfterEvent(input.event);
+    const clearsWait = clearsPendingApprovalWait(input.event);
     await input.client.execute({
         sql: `
             UPDATE sessions
             SET status = CASE
-                    WHEN ? = 'session.stopped' THEN 'stopped'
-                    WHEN ? = 'run.blocked' THEN 'awaiting'
-                    WHEN ? THEN 'running'
+                    WHEN ? IS NOT NULL THEN ?
                     ELSE status
                 END,
                 awaiting_reason = CASE
@@ -107,15 +107,14 @@ export async function updateSqliteSessionAfterAppend(
             WHERE session_id = ?
         `,
         args: [
+            nextStatus,
+            nextStatus,
             input.event.type,
-            input.event.type,
-            clearsPendingApprovalWait(input.event),
-            input.event.type,
-            clearsPendingApprovalWait(input.event),
+            clearsWait,
             input.event.type,
             input.event.type,
             approvalWaitId(input.event),
-            clearsPendingApprovalWait(input.event),
+            clearsWait,
             input.event.type,
             input.event.type,
             input.activityAt,
@@ -138,8 +137,28 @@ export async function updateSqliteSessionAfterAppend(
             createdAt: input.activityAt,
         });
     }
-    if (clearsPendingApprovalWait(input.event) || input.event.type === 'session.stopped') {
+    if (clearsWait || input.event.type === 'session.stopped') {
         await resolveApprovalWaits({ client: input.client, sessionId: input.sessionId, resolvedAt: input.activityAt });
+    }
+}
+
+function sessionStatusAfterEvent(event: AgentEvent): 'stopped' | 'awaiting' | 'running' | 'idle' | null {
+    switch (event.type) {
+        case 'session.stopped':
+            return 'stopped';
+        case 'run.blocked':
+            return 'awaiting';
+        case 'run.completed':
+        case 'run.failed':
+        case 'run.interrupted':
+            return 'idle';
+        case 'run.started':
+        case 'approval.updated':
+        case 'approval.resumed':
+        case 'tool.completed':
+            return 'running';
+        default:
+            return null;
     }
 }
 

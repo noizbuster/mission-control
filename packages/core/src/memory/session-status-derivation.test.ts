@@ -135,6 +135,53 @@ describe('session lifecycle derivation', () => {
         // Then: the terminal lifecycle wins over stale waits.
         expect(derived).toEqual({ status: 'stopped' });
     });
+
+    it('projects idle after run.completed and running while a run is active', () => {
+        // Given: a session that starts a run, then completes it.
+        const activeReplay = projectSessionReplay({
+            sessionId: SESSION_ID,
+            envelopes: [
+                envelope(sessionStartedEvent(), 0, 'event_session_started'),
+                envelope(
+                    runEvent(SESSION_ID, 'run.started', 'run started', {
+                        command: 'run',
+                        state: 'running',
+                        runId: 'run_active',
+                    }),
+                    1,
+                    'event_run_started',
+                ),
+            ],
+        });
+        const completedReplay = projectSessionReplay({
+            sessionId: SESSION_ID,
+            envelopes: [
+                envelope(sessionStartedEvent(), 0, 'event_session_started'),
+                envelope(
+                    runEvent(SESSION_ID, 'run.started', 'run started', {
+                        command: 'run',
+                        state: 'running',
+                        runId: 'run_active',
+                    }),
+                    1,
+                    'event_run_started',
+                ),
+                envelope(
+                    runEvent(SESSION_ID, 'run.completed', 'run completed', {
+                        command: 'run',
+                        state: 'completed',
+                        runId: 'run_active',
+                    }),
+                    2,
+                    'event_run_completed',
+                ),
+            ],
+        });
+
+        // When/Then: active runs stay running; terminal run events return idle.
+        expect(activeReplay.snapshot.status).toBe('running');
+        expect(completedReplay.snapshot.status).toBe('idle');
+    });
 });
 
 function input(overrides: Partial<SessionLifecycleDerivationInput> = {}): SessionLifecycleDerivationInput {

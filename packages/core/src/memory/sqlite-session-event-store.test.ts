@@ -3,6 +3,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { SqlAgentJobMirror } from '../agents/agent-job-sql-mirror.js';
 import { localRuntimeDbUrl } from '../runtime/local-runtime-db.js';
 import { SqlSessionInputDelivery } from '../runtime/session-input-delivery-sql.js';
+import {
+    approvalEvent,
+    runEvent,
+    sessionStoppedEvent,
+    toolCompletedEvent,
+} from '../session-replay-coding-test-support.js';
 import { JsonlSessionEventStore } from './jsonl-session-event-store.js';
 import { replayParityEvents, replayParitySummary } from './session-replay-parity-fixtures.js';
 import { SqliteSessionEventStore } from './sqlite-session-event-store.js';
@@ -252,5 +258,147 @@ describe('SqliteSessionEventStore', () => {
                 },
             },
         });
+    });
+
+    it('returns sessions.status to idle after run terminal events', async () => {
+        // Given: a durable session that starts a run.
+        const sessionId = 'session_status_idle_after_run';
+        const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('status-idle');
+        const store = await SqliteSessionEventStore.open({
+            url: sqliteUrl,
+            sessionId,
+            createEventId: (_event, sequence) => `event_${sequence}`,
+        });
+
+        try {
+            await store.append(sessionStartedEvent(sessionId));
+            await store.append(
+                runEvent(sessionId, 'run.started', 'run started', {
+                    command: 'run',
+                    state: 'running',
+                    runId: 'run_1',
+                }),
+            );
+
+            // When: the run completes normally.
+            await store.append(
+                runEvent(sessionId, 'run.completed', 'run completed', {
+                    command: 'run',
+                    state: 'completed',
+                    runId: 'run_1',
+                }),
+            );
+
+            // Then: the session is idle between turns (not stuck running).
+            const client = createClient({ url: sqliteUrl });
+            const afterCompleted = await client.execute(
+                'SELECT status, awaiting_reason, primary_wait_id FROM sessions WHERE session_id = ?',
+                [sessionId],
+            );
+            expect(afterCompleted.rows).toEqual([
+                { status: 'idle', awaiting_reason: null, primary_wait_id: null },
+            ]);
+
+            // When: later terminal run outcomes land on a fresh run.
+            await store.append(
+                runEvent(sessionId, 'run.started', 'run started again', {
+                    command: 'run',
+                    state: 'running',
+                    runId: 'run_2',
+                }),
+            );
+            await store.append(
+                runEvent(sessionId, 'run.failed', 'run failed', {
+                    command: 'run',
+                    state: 'failed',
+                    runId: 'run_2',
+                    reason: 'provider exploded',
+                }),
+            );
+            const afterFailed = await client.execute('SELECT status FROM sessions WHERE session_id = ?', [sessionId]);
+            expect(afterFailed.rows).toEqual([{ status: 'idle' }]);
+
+            await store.append(
+                runEvent(sessionId, 'run.started', 'run started third', {
+                    command: 'run',
+                    state: 'running',
+                    runId: 'run_3',
+                }),
+            );
+            await store.append(
+                runEvent(sessionId, 'run.interrupted', 'run interrupted', {
+                    command: 'interrupt',
+                    state: 'interrupted',
+                    runId: 'run_3',
+                }),
+            );
+            const afterInterrupted = await client.execute('SELECT status FROM sessions WHERE session_id = ?', [
+                sessionId,
+            ]);
+            expect(afterInterrupted.rows).toEqual([{ status: 'idle' }]);
+            client.close();
+        } finally {
+            await store.close();
+        }
+    });
+
+    it('keeps mid-run status running and maps blocked/stopped correctly', async () => {
+        // Given: a session with an active run that blocks on approval.
+        const sessionId = 'session_status_mid_run';
+        const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('status-mid-run');
+        const store = await SqliteSessionEventStore.open({
+            url: sqliteUrl,
+            sessionId,
+            createEventId: (_event, sequence) => `event_${sequence}`,
+        });
+
+        try {
+            await store.append(sessionStartedEvent(sessionId));
+            await store.append(
+                runEvent(sessionId, 'run.started', 'run started', {
+                    command: 'run',
+                    state: 'running',
+                    runId: 'run_1',
+                }),
+            );
+            await store.append(approvalEvent(sessionId, 'approval.requested', 'pending'));
+            await store.append(
+                runEvent(sessionId, 'run.blocked', 'waiting for approval: file.patch', {
+                    command: 'run',
+                    state: 'blocked_on_approval',
+                    runId: 'run_1',
+                    reason: 'waiting for approval: file.patch',
+                    toolCallId: 'patch_call',
+                }),
+            );
+
+            const client = createClient({ url: sqliteUrl });
+            const afterBlocked = await client.execute(
+                'SELECT status, awaiting_reason, primary_wait_id FROM sessions WHERE session_id = ?',
+                [sessionId],
+            );
+            expect(afterBlocked.rows).toEqual([
+                { status: 'awaiting', awaiting_reason: 'approval', primary_wait_id: 'approval_patch' },
+            ]);
+
+            // When: approval resolves and the tool finishes mid-run.
+            await store.append(approvalEvent(sessionId, 'approval.updated', 'approved'));
+            const afterApproval = await client.execute('SELECT status, awaiting_reason FROM sessions WHERE session_id = ?', [
+                sessionId,
+            ]);
+            expect(afterApproval.rows).toEqual([{ status: 'running', awaiting_reason: null }]);
+
+            await store.append(toolCompletedEvent(sessionId));
+            const afterTool = await client.execute('SELECT status FROM sessions WHERE session_id = ?', [sessionId]);
+            expect(afterTool.rows).toEqual([{ status: 'running' }]);
+
+            // When: the session stops.
+            await store.append(sessionStoppedEvent(sessionId));
+            const afterStopped = await client.execute('SELECT status FROM sessions WHERE session_id = ?', [sessionId]);
+            expect(afterStopped.rows).toEqual([{ status: 'stopped' }]);
+            client.close();
+        } finally {
+            await store.close();
+        }
     });
 });

@@ -11,12 +11,22 @@ export function deriveReplaySession(sessionId: string, events: readonly AgentEve
     let stoppedAt: string | undefined;
     let awaiting: SessionAwaitingDetails | undefined;
     let latestPendingApproval: ApprovalRecord | undefined;
+    let sawRunLifecycle = false;
+    let hasActiveRun = false;
     for (const event of events) {
         if (event.approvalRecord?.state === 'pending') {
             latestPendingApproval = event.approvalRecord;
         }
         if (clearsAwaiting(event)) {
             awaiting = undefined;
+        }
+        if (event.type === 'run.started') {
+            sawRunLifecycle = true;
+            hasActiveRun = true;
+        }
+        if (event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.interrupted') {
+            sawRunLifecycle = true;
+            hasActiveRun = false;
         }
         if (event.type === 'run.blocked' && event.run?.state === 'blocked_on_approval') {
             const approvalAwaiting = approvalAwaitingDetails(event.run, latestPendingApproval);
@@ -33,11 +43,32 @@ export function deriveReplaySession(sessionId: string, events: readonly AgentEve
     }
     return {
         id: sessionId,
-        status: stoppedAt === undefined ? (awaiting === undefined ? 'running' : 'awaiting') : 'stopped',
+        status: replaySessionStatus({ stoppedAt, awaiting, sawRunLifecycle, hasActiveRun }),
         startedAt: sessionStarted?.timestamp ?? new Date(0).toISOString(),
         ...(stoppedAt === undefined && awaiting !== undefined ? { awaiting } : {}),
         ...(stoppedAt !== undefined ? { stoppedAt } : {}),
     };
+}
+
+function replaySessionStatus(input: {
+    readonly stoppedAt: string | undefined;
+    readonly awaiting: SessionAwaitingDetails | undefined;
+    readonly sawRunLifecycle: boolean;
+    readonly hasActiveRun: boolean;
+}): AgentSession['status'] {
+    if (input.stoppedAt !== undefined) {
+        return 'stopped';
+    }
+    if (input.awaiting !== undefined) {
+        return 'awaiting';
+    }
+    // Sessions that never emitted run lifecycle events keep the legacy default of
+    // `running` so task-only demos and empty projections stay stable. Once a run
+    // lifecycle is observed, terminal run events return the session to `idle`.
+    if (input.sawRunLifecycle) {
+        return input.hasActiveRun ? 'running' : 'idle';
+    }
+    return 'running';
 }
 
 function approvalAwaitingDetails(
