@@ -559,7 +559,9 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         expect(signals.some((signal) => signal.type === 'failure')).toBe(false);
     });
 
-    it('auto-defaults to false for a boolean gate with no outputDefault when parsing fails', async () => {
+    it('fails closed for a boolean gate with no outputDefault when parsing fails', async () => {
+        // Without outputDefault, free-text must not write false and dead-end the graph
+        // (research-complete requires true). Fail so the node can retry.
         const blackboard = seedBlackboard();
         const context: AbgNodeRunContext = {
             graphId: 'g_bool_no_default',
@@ -571,15 +573,15 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
             id: 'gate',
             kind: 'llm',
             config: {
-                outputKey: 'guard.cleared',
+                outputKey: 'explore.complete',
                 outputShape: 'boolean',
             },
         } as const;
 
         const signals = await collectSignals(runLlmActorNode(node, context));
 
-        expect(blackboard.get('guard.cleared')).toBe(false);
-        expect(signals.some((signal) => signal.type === 'failure')).toBe(false);
+        expect(blackboard.has('explore.complete')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
     });
 
     it('auto-defaults to empty array for an array node with no outputDefault when parsing fails', async () => {

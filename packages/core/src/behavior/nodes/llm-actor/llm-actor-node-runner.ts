@@ -478,9 +478,9 @@ function applyShapeDefaultFallback(
     if (shape === 'array') {
         return { ok: true, value: [] };
     }
-    if (shape === 'boolean') {
-        return { ok: true, value: false };
-    }
+    // Boolean without explicit outputDefault fails closed so free-text synthesis can retry
+    // (and eventually hit force-complete → true) instead of writing false and dead-ending
+    // with no matching edge (no final-respond).
     return parsed;
 }
 
