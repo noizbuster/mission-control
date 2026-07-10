@@ -140,11 +140,16 @@ describe('bounded ABG graph coordinator', () => {
         });
     });
 
-    it('force-completes a node stuck in a tool loop instead of killing the graph', async () => {
+    it('soft-lands a tool loop near maxNodeRuns instead of graph_loop_limit', async () => {
+        // Given: infinite productive tool self-loop
+        // When: totalNodeRuns reaches maxNodeRuns - 1
+        // Then: soft-land clears loop_active and graph completes (not graph.failed)
         const registry = createAbgNodeRegistry();
+        let runs = 0;
         registry.register(
             'always-tool-use',
             async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                runs += 1;
                 yield { type: 'started', graphId: context.graphId, nodeId: node.id };
                 context.blackboard?.set('llm.loop_active', true);
                 yield createAbgEmitSignal({
@@ -163,7 +168,7 @@ describe('bounded ABG graph coordinator', () => {
             graph: {
                 id: 'loop-active-stuck',
                 entryNodeId: 'spinner',
-                defaults: { retryLimit: 2, maxNodeRuns: 64 },
+                defaults: { retryLimit: 2, maxNodeRuns: 8 },
                 nodes: [{ id: 'spinner', kind: 'llm', implementation: 'always-tool-use' }],
                 edges: [{ source: 'spinner', target: 'spinner', condition: 'llm-loop-active', priority: 5 }],
                 rules: [
@@ -178,14 +183,17 @@ describe('bounded ABG graph coordinator', () => {
         });
 
         expect(result.status).toBe('completed');
-        expect(result.events.some((e) => e.type === 'node.failed' && e.abg?.signalType === 'fallback')).toBe(true);
+        expect(runs).toBe(7);
+        expect(result.events.some((e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_loop_soft_landed')).toBe(
+            true,
+        );
         expect(result.events.some((e) => e.type === 'graph.completed')).toBe(true);
     });
 
-    it('force-complete promotes boolean outputKey so completion edges still fire', async () => {
-        // Given: research-like node loops on tools until budget exhausts
-        // When: loop budget force-completes
-        // Then: explore.complete becomes true and synthesizer runs
+    it('soft-land promotes boolean outputKey so synthesis can still run', async () => {
+        // Given: research loops with tools until near maxNodeRuns
+        // When: soft-land fires
+        // Then: explore.complete=true and final synthesizer runs within the reserved slot
         const registry = createAbgNodeRegistry();
         let researchRuns = 0;
         registry.register(
@@ -220,9 +228,9 @@ describe('bounded ABG graph coordinator', () => {
             ...baseInput,
             registry,
             graph: {
-                id: 'research-force-complete',
+                id: 'research-soft-land',
                 entryNodeId: 'research',
-                defaults: { retryLimit: 2, maxNodeRuns: 64 },
+                defaults: { retryLimit: 2, maxNodeRuns: 8 },
                 nodes: [
                     {
                         id: 'research',
@@ -253,11 +261,75 @@ describe('bounded ABG graph coordinator', () => {
         });
 
         expect(result.status).toBe('completed');
-        expect(researchRuns).toBeGreaterThanOrEqual(24);
-        expect(result.events.some((e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_loop_budget_exhausted')).toBe(
+        expect(researchRuns).toBe(7);
+        expect(result.events.some((e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_loop_soft_landed')).toBe(
             true,
         );
         expect(result.events.some((e) => e.type === 'node.completed' && e.abg?.nodeId === 'final')).toBe(true);
+    });
+
+    it('allows many productive tool turns under maxNodeRuns without soft-land', async () => {
+        // Productive research turns must not be capped by a separate small loop budget.
+        const registry = createAbgNodeRegistry();
+        let runs = 0;
+        registry.register(
+            'tool-then-done',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                runs += 1;
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                if (runs < 20) {
+                    context.blackboard?.set('llm.loop_active', true);
+                    yield createAbgEmitSignal({
+                        graphId: context.graphId,
+                        nodeId: node.id,
+                        eventType: 'tool.completed',
+                        timestamp: context.now(),
+                    });
+                } else {
+                    context.blackboard?.set('llm.loop_active', false);
+                    context.blackboard?.set('explore.complete', true);
+                }
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'long-research',
+                entryNodeId: 'research',
+                defaults: { retryLimit: 2, maxNodeRuns: 48 },
+                nodes: [
+                    {
+                        id: 'research',
+                        kind: 'llm',
+                        implementation: 'tool-then-done',
+                        config: { outputKey: 'explore.complete', outputShape: 'boolean' },
+                    },
+                ],
+                edges: [
+                    {
+                        source: 'research',
+                        target: 'research',
+                        condition: 'llm-loop-active',
+                        priority: 5,
+                    },
+                ],
+                rules: [
+                    {
+                        id: 'llm-loop-active',
+                        description: 'llm loop active',
+                        when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true },
+                    },
+                ],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('completed');
+        expect(runs).toBe(20);
+        expect(result.events.some((e) => e.abg?.error?.code === 'node_loop_soft_landed')).toBe(false);
     });
 
     it('retries a provider_aborted failure up to the cap instead of failing terminally (no abort signal)', async () => {

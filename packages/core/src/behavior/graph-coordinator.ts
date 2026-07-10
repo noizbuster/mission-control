@@ -81,39 +81,11 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                             );
                         }
                     } else if (result.hadProductiveToolUse === true) {
+                        // Productive tool use is progress (observe→act), not a "stuck" signal.
+                        // Only soft-land when the graph hard ceiling is about to fire so a
+                        // completion edge (final-respond) can still run instead of graph_loop_limit.
                         state.consecutiveToolFailuresByNodeId.set(result.node.id, 0);
-                        const reentries = (state.consecutiveLoopActiveReentriesByNodeId.get(result.node.id) ?? 0) + 1;
-                        state.consecutiveLoopActiveReentriesByNodeId.set(result.node.id, reentries);
-                        if (reentries >= state.maxLoopActiveReentries) {
-                            // Force-complete the tool self-loop so the graph can advance. For
-                            // boolean completion gates (explore.complete etc.), set the key true
-                            // so research-complete → final-respond still runs a synthesis turn
-                            // instead of silently completing with no answer (session failure mode).
-                            state.blackboard.set('llm.loop_active', false);
-                            forceCompleteBooleanOutputKey(result.node, state);
-                            state.consecutiveLoopActiveReentriesByNodeId.set(result.node.id, 0);
-                            state.events.push({
-                                type: 'node.failed',
-                                timestamp: input.now(),
-                                sessionId: input.sessionId,
-                                message: `ABG node loop budget exhausted, force-completing: ${result.node.id} (${reentries} re-entries without structured completion)`,
-                                durability: 'durable',
-                                nativeSidecarStatus: 'mock',
-                                modelProviderSelection: input.modelProviderSelection,
-                                abg: {
-                                    graphId: graph.id,
-                                    nodeId: result.node.id,
-                                    signalType: 'fallback',
-                                    error: {
-                                        code: 'node_loop_budget_exhausted',
-                                        message: `force-completing after ${reentries} re-entries`,
-                                        retryable: false,
-                                    },
-                                },
-                            });
-                        }
-                    } else {
-                        state.consecutiveLoopActiveReentriesByNodeId.set(result.node.id, 0);
+                        softLandToolLoopIfNearMaxNodeRuns(result.node, state, graph.id, input);
                     }
                     state.consecutiveFailuresByNodeId.set(result.node.id, 0);
                     enqueueSelectedTargets(
@@ -327,10 +299,46 @@ function assertNeverQueuedNodeResult(result: never): never {
 }
 
 /**
- * When the tool self-loop is force-completed, promote a boolean outputKey to true so
- * completion edges (research-complete → final-respond) can still fire. Without this the
- * queue empties and the graph "succeeds" with no synthesis turn.
+ * Soft-land a tool self-loop when only one node-run remains under maxNodeRuns.
+ * Productive tool re-entries are unbounded until this graph ceiling; counting them
+ * as a separate "loop budget" wrongly kills long research.
  */
+function softLandToolLoopIfNearMaxNodeRuns(
+    node: AbgNodeSpec,
+    state: CoordinatorState,
+    graphId: string,
+    input: AbgGraphRunnerInput,
+): void {
+    if (state.blackboard.get('llm.loop_active') !== true) {
+        return;
+    }
+    // Reserve one run for a completion/synthesis successor (or a clean exit).
+    if (state.totalNodeRuns < state.maxNodeRuns - 1) {
+        return;
+    }
+    state.blackboard.set('llm.loop_active', false);
+    forceCompleteBooleanOutputKey(node, state);
+    state.events.push({
+        type: 'node.failed',
+        timestamp: input.now(),
+        sessionId: input.sessionId,
+        message: `ABG node soft-landed at maxNodeRuns: ${node.id} (${state.totalNodeRuns}/${state.maxNodeRuns})`,
+        durability: 'durable',
+        nativeSidecarStatus: 'mock',
+        modelProviderSelection: input.modelProviderSelection,
+        abg: {
+            graphId,
+            nodeId: node.id,
+            signalType: 'fallback',
+            error: {
+                code: 'node_loop_soft_landed',
+                message: `soft-landed at maxNodeRuns ${state.maxNodeRuns}`,
+                retryable: false,
+            },
+        },
+    });
+}
+
 function forceCompleteBooleanOutputKey(node: AbgNodeSpec, state: CoordinatorState): void {
     const outputKey = node.config?.['outputKey'];
     if (typeof outputKey !== 'string' || outputKey.length === 0) {

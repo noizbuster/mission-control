@@ -21,8 +21,6 @@ import { projectAbgSignalToEvent } from './signals.js';
 
 const defaultRetryLimit = 2;
 const defaultMaxNodeRuns = 48;
-/** Productive tool re-entries allowed before force-complete (independent of retryLimit). */
-export const defaultLoopActiveReentryBudget = 24;
 const defaultGraphNodeConcurrency = 2;
 const defaultProviderToolCallConcurrency = 4;
 const defaultShellConcurrency = 1;
@@ -34,17 +32,7 @@ export type CoordinatorState = {
     readonly attemptsByNodeId: Map<string, number>;
     readonly consecutiveFailuresByNodeId: Map<string, number>;
     readonly consecutiveToolFailuresByNodeId: Map<string, number>;
-    /**
-     * Per-node counter for consecutive `hadProductiveToolUse=true` completions. Bounds the
-     * LLM self-loop (`llm-loop-active`) so a stuck model terminates with
-     * `node_loop_budget_exhausted` instead of spinning until `maxNodeRuns`. Distinct from
-     * `consecutiveFailuresByNodeId` (failure retries) and `consecutiveToolFailuresByNodeId`
-     * (retryable tool failures): this counter fires on SUCCESSFUL tool-using turns.
-     */
-    readonly consecutiveLoopActiveReentriesByNodeId: Map<string, number>;
     readonly maxAttempts: number;
-    /** Max consecutive productive tool re-entries before force-complete (default 24). */
-    readonly maxLoopActiveReentries: number;
     readonly maxNodeRuns: number;
     readonly graphNodeConcurrency: number;
     readonly providerToolCallConcurrency: number;
@@ -106,9 +94,7 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         attemptsByNodeId: new Map(),
         consecutiveFailuresByNodeId: new Map(),
         consecutiveToolFailuresByNodeId: new Map(),
-        consecutiveLoopActiveReentriesByNodeId: new Map(),
         maxAttempts: (graph.defaults?.retryLimit ?? defaultRetryLimit) + 1,
-        maxLoopActiveReentries: defaultLoopActiveReentryBudget,
         maxNodeRuns: graph.defaults?.maxNodeRuns ?? input.maxNodeRuns ?? defaultMaxNodeRuns,
         graphNodeConcurrency: input.graphNodeConcurrency ?? defaultGraphNodeConcurrency,
         providerToolCallConcurrency: input.providerToolCallConcurrency ?? defaultProviderToolCallConcurrency,
