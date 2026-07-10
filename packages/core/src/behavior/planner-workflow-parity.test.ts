@@ -283,6 +283,34 @@ describe('planner workflow parity: planner-readonly child consultations', () => 
         const prompt = configString(findNode(graph, 'research'), 'systemPrompt') ?? '';
         expect(prompt).toContain(PLANNER_READONLY_CHILD_CONTEXT);
     });
+
+    it('explore requires boolean explore.complete === true (not key.exists)', () => {
+        const graph = createPlannerWorkflowGraph();
+        const node = findNode(graph, 'explore');
+        expect(configString(node, 'outputKey')).toBe('explore.complete');
+        expect(configString(node, 'outputShape')).toBe('boolean');
+        expect(node.config?.['outputDefault']).toBeUndefined();
+        const rule = graph.rules.find((candidate) => candidate.id === 'explore-complete');
+        expect(rule?.when).toEqual({
+            kind: 'blackboard.value.equals',
+            key: 'explore.complete',
+            value: true,
+        });
+    });
+
+    it('research requires boolean research.complete === true (not key.exists)', () => {
+        const graph = createPlannerWorkflowGraph();
+        const node = findNode(graph, 'research');
+        expect(configString(node, 'outputKey')).toBe('research.complete');
+        expect(configString(node, 'outputShape')).toBe('boolean');
+        expect(node.config?.['outputDefault']).toBeUndefined();
+        const rule = graph.rules.find((candidate) => candidate.id === 'research-complete');
+        expect(rule?.when).toEqual({
+            kind: 'blackboard.value.equals',
+            key: 'research.complete',
+            value: true,
+        });
+    });
 });
 
 describe('planner workflow parity: runtime outputKey persistence', () => {

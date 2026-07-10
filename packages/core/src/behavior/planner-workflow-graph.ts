@@ -204,8 +204,11 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                         'Explore the relevant codebase areas to ground the plan in real structure. ' +
                         'Cite file:line evidence for every claim. ' +
                         PLANNER_READONLY_CHILD_CONTEXT +
-                        ' Set explore.complete when exploration is done.',
+                        ' Multi-turn: keep calling tools until exploration is grounded. While exploring, ' +
+                        'call tools and do NOT output true. When ready, synthesize findings, then on the ' +
+                        'LAST line output EXACTLY `true` (boolean) — no quotes, no formatting, no extra text.',
                     outputKey: 'explore.complete',
+                    outputShape: 'boolean',
                 },
             },
             {
@@ -219,8 +222,11 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                         'it plannable WITHOUT interrogating the user — adopt and ANNOUNCE defensible ' +
                         'defaults (industry standard or repo convention) with rationale. ' +
                         PLANNER_READONLY_CHILD_CONTEXT +
-                        ' Set research.complete when research is done.',
+                        ' Multi-turn: keep calling tools until research is grounded. While researching, ' +
+                        'call tools and do NOT output true. When ready, synthesize findings, then on the ' +
+                        'LAST line output EXACTLY `true` (boolean) — no quotes, no formatting, no extra text.',
                     outputKey: 'research.complete',
+                    outputShape: 'boolean',
                 },
             },
             {
@@ -389,12 +395,12 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
             {
                 id: 'explore-complete',
                 description: 'codebase exploration finished',
-                when: { kind: 'blackboard.key.exists', key: 'explore.complete' },
+                when: { kind: 'blackboard.value.equals', key: 'explore.complete', value: true },
             },
             {
                 id: 'research-complete',
                 description: 'best-practice research finished',
-                when: { kind: 'blackboard.key.exists', key: 'research.complete' },
+                when: { kind: 'blackboard.value.equals', key: 'research.complete', value: true },
             },
             {
                 id: 'defaults-adopted',
