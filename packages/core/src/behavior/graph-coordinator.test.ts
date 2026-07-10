@@ -349,6 +349,87 @@ describe('bounded ABG graph coordinator', () => {
         expect(result.events.some((e) => e.type === 'node.completed' && e.abg?.nodeId === 'final')).toBe(true);
     });
 
+    it('soft-lands when two tool turns oscillate A↔B', async () => {
+        const registry = createAbgNodeRegistry();
+        let runs = 0;
+        registry.register(
+            'ping-pong',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                runs += 1;
+                const pattern = runs % 2 === 1 ? '**/*.ts' : '**/*.md';
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                context.blackboard?.set('llm.loop_active', true);
+                yield createAbgEmitSignal({
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    eventType: 'llm.tool_call.proposed',
+                    timestamp: context.now(),
+                    payload: { toolCallId: `c${runs}`, toolName: 'glob', input: { pattern } },
+                });
+                yield createAbgEmitSignal({
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    eventType: 'tool.completed',
+                    timestamp: context.now(),
+                    payload: { toolCallId: `c${runs}`, toolName: 'glob', output: 'ok' },
+                });
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+        registry.register(
+            'synth',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id, result: { text: 'done' } };
+            },
+        );
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'oscillate-tool',
+                entryNodeId: 'research',
+                defaults: { retryLimit: 2, maxNodeRuns: 64 },
+                nodes: [
+                    {
+                        id: 'research',
+                        kind: 'llm',
+                        implementation: 'ping-pong',
+                        config: { outputKey: 'explore.complete', outputShape: 'boolean' },
+                    },
+                    { id: 'final', kind: 'llm', implementation: 'synth' },
+                ],
+                edges: [
+                    { source: 'research', target: 'final', condition: 'research-complete', priority: 10 },
+                    { source: 'research', target: 'research', condition: 'llm-loop-active', priority: 5 },
+                ],
+                rules: [
+                    {
+                        id: 'research-complete',
+                        description: 'research done',
+                        when: { kind: 'blackboard.value.equals', key: 'explore.complete', value: true },
+                    },
+                    {
+                        id: 'llm-loop-active',
+                        description: 'llm loop active',
+                        when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true },
+                    },
+                ],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('completed');
+        expect(runs).toBe(4);
+        expect(
+            result.events.some(
+                (e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_oscillating_tool_pattern',
+            ),
+        ).toBe(true);
+        expect(result.events.some((e) => e.type === 'node.completed' && e.abg?.nodeId === 'final')).toBe(true);
+    });
+
     it('fails the graph when the same tool-failure combination repeats', async () => {
         // Given: node "succeeds" but only with the same retryable tool failure each turn
         // When: identical failure signature hits streak limit (3)

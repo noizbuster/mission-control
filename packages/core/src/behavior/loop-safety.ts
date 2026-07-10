@@ -1,9 +1,10 @@
 /**
  * Loop-safety detectors for ABG tool self-loops.
  *
- * Productive tool use is progress — we do NOT count tool volume. We only trip when
- * the *same* tool turn (or the same failure combination) repeats with no change,
- * which is the observable signature of an infinite / thrashing loop.
+ * Productive tool use is progress — we do NOT count tool volume. We trip when:
+ * - the same tool turn repeats consecutively, or
+ * - a short cycle of turns oscillates (A↔B, A→B→C→A, …), or
+ * - the same failure combination repeats.
  */
 
 export type ToolActionFingerprint = {
@@ -16,24 +17,32 @@ export type ToolActionFingerprint = {
 export type LoopSafetyLimits = {
     readonly identicalTurnStreak: number;
     readonly identicalFailureStreak: number;
+    /** How many full periods of a short cycle must complete before soft-land (default 2 → A,B,A,B). */
+    readonly cycleConfirmations: number;
+    /** Max cycle period to detect (default 3 covers A↔B and A→B→C). */
+    readonly maxCyclePeriod: number;
+    readonly recentHistorySize: number;
 };
 
 export const DEFAULT_LOOP_SAFETY_LIMITS: LoopSafetyLimits = {
     identicalTurnStreak: 3,
     identicalFailureStreak: 3,
+    cycleConfirmations: 2,
+    maxCyclePeriod: 3,
+    recentHistorySize: 12,
 };
 
 export type LoopSafetyTrip =
     | {
           readonly kind: 'soft_land';
-          readonly code: 'repeated_tool_pattern';
+          readonly code: 'repeated_tool_pattern' | 'oscillating_tool_pattern';
           readonly message: string;
           readonly streak: number;
           readonly signature: string;
       }
     | {
           readonly kind: 'fail';
-          readonly code: 'repeated_failure_pattern';
+          readonly code: 'repeated_failure_pattern' | 'oscillating_failure_pattern';
           readonly message: string;
           readonly streak: number;
           readonly signature: string;
@@ -44,6 +53,9 @@ export type LoopSafetyNodeState = {
     identicalTurnStreak: number;
     lastFailureSignature: string | undefined;
     identicalFailureStreak: number;
+    /** Ring of recent turn signatures for short-cycle / oscillation detection. */
+    recentTurnSignatures: string[];
+    recentFailureSignatures: string[];
 };
 
 export function createLoopSafetyNodeState(): LoopSafetyNodeState {
@@ -52,6 +64,8 @@ export function createLoopSafetyNodeState(): LoopSafetyNodeState {
         identicalTurnStreak: 0,
         lastFailureSignature: undefined,
         identicalFailureStreak: 0,
+        recentTurnSignatures: [],
+        recentFailureSignatures: [],
     };
 }
 
@@ -118,8 +132,8 @@ export function failureSignatureFromActions(actions: readonly ToolActionFingerpr
 }
 
 /**
- * Record a completed tool turn. Identical consecutive turn signatures trip soft-land.
- * A different signature resets the streak (progress).
+ * Record a completed tool turn.
+ * Soft-lands on: consecutive identical signatures, OR short oscillating cycles (A↔B, …).
  */
 export function recordToolTurn(
     state: LoopSafetyNodeState,
@@ -138,10 +152,12 @@ export function recordToolTurn(
         state.lastTurnSignature = signature;
         state.identicalTurnStreak = 1;
     }
-    // Clear failure streak on any settled tool activity that includes a completion.
+    pushRecent(state.recentTurnSignatures, signature, limits.recentHistorySize);
+    // Clear failure history on any settled tool activity that includes a completion.
     if (actions.some((a) => a.outcome === 'completed')) {
         state.lastFailureSignature = undefined;
         state.identicalFailureStreak = 0;
+        state.recentFailureSignatures = [];
     }
     if (state.identicalTurnStreak >= limits.identicalTurnStreak) {
         return {
@@ -152,12 +168,21 @@ export function recordToolTurn(
             signature,
         };
     }
+    const cycle = detectShortCycle(state.recentTurnSignatures, limits);
+    if (cycle !== undefined) {
+        return {
+            kind: 'soft_land',
+            code: 'oscillating_tool_pattern',
+            message: `tool turn cycle of period ${cycle.period} repeated ${cycle.confirmations} times`,
+            streak: cycle.period * cycle.confirmations,
+            signature: cycle.signature,
+        };
+    }
     return undefined;
 }
 
 /**
- * Record a tool-failure-only turn (or node failure). Identical consecutive failure
- * combinations trip a hard fail after the streak limit.
+ * Record a tool-failure-only turn. Identical consecutive failures or short failure cycles trip fail.
  */
 export function recordFailureTurn(
     state: LoopSafetyNodeState,
@@ -175,6 +200,7 @@ export function recordFailureTurn(
         state.lastFailureSignature = signature;
         state.identicalFailureStreak = 1;
     }
+    pushRecent(state.recentFailureSignatures, signature, limits.recentHistorySize);
     if (state.identicalFailureStreak >= limits.identicalFailureStreak) {
         return {
             kind: 'fail',
@@ -183,6 +209,62 @@ export function recordFailureTurn(
             streak: state.identicalFailureStreak,
             signature,
         };
+    }
+    const cycle = detectShortCycle(state.recentFailureSignatures, limits);
+    if (cycle !== undefined) {
+        return {
+            kind: 'fail',
+            code: 'oscillating_failure_pattern',
+            message: `failure cycle of period ${cycle.period} repeated ${cycle.confirmations} times`,
+            streak: cycle.period * cycle.confirmations,
+            signature: cycle.signature,
+        };
+    }
+    return undefined;
+}
+
+function pushRecent(history: string[], signature: string, maxSize: number): void {
+    history.push(signature);
+    if (history.length > maxSize) {
+        history.splice(0, history.length - maxSize);
+    }
+}
+
+/**
+ * Detect a pure short cycle in the recent signature history.
+ * Example period 2 with 2 confirmations: A,B,A,B (length 4).
+ * Requires at least two distinct signatures (period >= 2) so AAA is handled by identical streak.
+ */
+export function detectShortCycle(
+    history: readonly string[],
+    limits: LoopSafetyLimits = DEFAULT_LOOP_SAFETY_LIMITS,
+): { readonly period: number; readonly confirmations: number; readonly signature: string } | undefined {
+    const maxPeriod = limits.maxCyclePeriod;
+    const confirmations = limits.cycleConfirmations;
+    for (let period = 2; period <= maxPeriod; period += 1) {
+        const need = period * confirmations;
+        if (history.length < need) {
+            continue;
+        }
+        const window = history.slice(history.length - need);
+        const pattern = window.slice(0, period);
+        if (new Set(pattern).size < 2) {
+            continue;
+        }
+        let pure = true;
+        for (let i = 0; i < need; i += 1) {
+            if (window[i] !== pattern[i % period]) {
+                pure = false;
+                break;
+            }
+        }
+        if (pure) {
+            return {
+                period,
+                confirmations,
+                signature: `period${period}:${pattern.join('||')}`,
+            };
+        }
     }
     return undefined;
 }

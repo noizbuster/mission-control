@@ -406,7 +406,9 @@ function softLandToolLoop(
         'eventCode' in trip
             ? trip.eventCode
             : trip.kind === 'soft_land'
-              ? 'node_repeated_tool_pattern'
+              ? trip.code === 'oscillating_tool_pattern'
+                  ? 'node_oscillating_tool_pattern'
+                  : 'node_repeated_tool_pattern'
               : trip.code;
     const message = trip.message;
     state.events.push({
