@@ -12,11 +12,6 @@ const testFilePattern = /\.(test|spec)\.(ts|tsx)$/u;
 const ROOT_BOX_NEEDLE = 'width={dimensions().width}';
 
 const MODAL_MODES = [
-    'approval',
-    'model-picker',
-    'level-picker',
-    'rename',
-    'session-picker',
     'agents-dashboard',
     'mission-panel',
 ] as const;
@@ -320,16 +315,15 @@ describe('UpperRegion and fullscreen feature inventory', () => {
     });
 });
 
-describe('ModalOverlays seven ModalPopup modes', () => {
-    it('keeps all seven modal modes through ModalPopup after the dock sibling', () => {
+describe('ModalOverlays two ModalPopup modes', () => {
+    it('keeps remaining modal modes through ModalPopup after the dock sibling', () => {
         const modalSource = readSource(join(chatAppDir, 'ModalOverlays.tsx'));
         const appSource = readSource(chatAppRootFile);
 
         for (const mode of MODAL_MODES) {
             expect(modalSource).toContain(`overlayMode === '${mode}'`);
         }
-        expect(matchCount(modalSource, '<ModalPopup>')).toBe(7);
-        expect(modalSource).toContain('<ApprovalOverlay store={props.store} />');
+        expect(matchCount(modalSource, '<ModalPopup>')).toBe(2);
         expect(modalSource).toContain('<MissionPanelOverlay');
         expect(appSource.indexOf('<ChatBottomDock')).toBeLessThan(appSource.indexOf('<ModalOverlays'));
     });

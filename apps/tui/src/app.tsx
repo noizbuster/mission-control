@@ -30,6 +30,8 @@ import { useRepaintEffects } from './app/use-repaint-effects.js';
 import { useSelectionMouseUp } from './app/use-selection-mouseup.js';
 import { useSubmit } from './app/use-submit.js';
 import { useTransientToast } from './app/use-transient-toast.js';
+import { DialogHost } from './components/dialog/dialog-host.js';
+import { DialogProvider } from './components/dialog/dialog.js';
 import { ChatBottomDock } from './components/ChatBottomDock.js';
 import { bottomDockPolicy } from './components/chat-bottom-dock-policy.js';
 
@@ -150,65 +152,68 @@ function AppMain(props: AppProps): JSX.Element {
     };
 
     return (
-        // biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive; mouse-up surfaces copy-hint toast.
-        <box
-            width={dimensions().width}
-            height={dimensions().height}
-            flexDirection="column"
-            backgroundColor="#000000"
-            onMouseUp={handleSelectionMouseUp}
-        >
-            <Show when={isFullscreenOverlay()}>
-                <FullscreenOverlays
-                    store={props.store}
-                    snap={snapshot()}
-                    viewport={{ columns: dimensions().width, rows: dimensions().height }}
-                    statusBarProps={statusBarProps()}
-                    abgOverlayController={abgOverlayController}
-                    abgActiveTabIndex={abgActiveTab()}
-                    abgScrollOffset={abgScrollOffset()}
-                />
-            </Show>
-            <Show when={!isFullscreenOverlay()}>
-                <box flexDirection="column" flexGrow={1} minHeight={0} width="100%">
-                    <UpperRegion
-                        showWelcome={showWelcome()}
-                        welcomeData={welcomeData}
-                        statusBarProps={statusBarProps()}
-                        transcript={
-                            <ChatTranscript
-                                blocks={messageBlocks()}
-                                scrollboxRef={scrollboxHandle}
-                                generating={snapshot().generating}
-                                toolOutputExpanded={snapshot().toolOutputExpanded}
-                            />
-                        }
-                        showAgentIndicator={showAgentIndicator()}
-                        agentStatusText={snapshot().agentStatusText}
-                        generating={snapshot().generating}
-                        showAbgMinimap={showAbgMinimap()}
-                        abgOverlayController={abgOverlayController}
-                    />
-                </box>
-                <box flexShrink={0} width="100%">
-                    <ChatBottomDock
+        <DialogProvider>
+            <DialogHost store={props.store} />
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: opentui terminal primitive; mouse-up surfaces copy-hint toast. */}
+            <box
+                width={dimensions().width}
+                height={dimensions().height}
+                flexDirection="column"
+                backgroundColor="#000000"
+                onMouseUp={handleSelectionMouseUp}
+            >
+                <Show when={isFullscreenOverlay()}>
+                    <FullscreenOverlays
                         store={props.store}
-                        textareaRef={textareaHandle}
-                        scrollboxRef={scrollboxHandle}
-                        inputFocused={!overlayActive()}
+                        snap={snapshot()}
+                        viewport={{ columns: dimensions().width, rows: dimensions().height }}
                         statusBarProps={statusBarProps()}
-                        {...(actions !== undefined ? { actions } : {})}
+                        abgOverlayController={abgOverlayController}
+                        abgActiveTabIndex={abgActiveTab()}
+                        abgScrollOffset={abgScrollOffset()}
                     />
-                </box>
-                <ModalOverlays
-                    store={props.store}
-                    overlayMode={snapshot().overlayMode}
-                    workspaceRoot={statusBarProps().workspaceRoot}
-                    actions={actions}
-                    missionControlServices={missionControlServices}
-                />
-            </Show>
-            <KeymapChrome />
-        </box>
+                </Show>
+                <Show when={!isFullscreenOverlay()}>
+                    <box flexDirection="column" flexGrow={1} minHeight={0} width="100%">
+                        <UpperRegion
+                            showWelcome={showWelcome()}
+                            welcomeData={welcomeData}
+                            statusBarProps={statusBarProps()}
+                            transcript={
+                                <ChatTranscript
+                                    blocks={messageBlocks()}
+                                    scrollboxRef={scrollboxHandle}
+                                    generating={snapshot().generating}
+                                    toolOutputExpanded={snapshot().toolOutputExpanded}
+                                />
+                            }
+                            showAgentIndicator={showAgentIndicator()}
+                            agentStatusText={snapshot().agentStatusText}
+                            generating={snapshot().generating}
+                            showAbgMinimap={showAbgMinimap()}
+                            abgOverlayController={abgOverlayController}
+                        />
+                    </box>
+                    <box flexShrink={0} width="100%">
+                        <ChatBottomDock
+                            store={props.store}
+                            textareaRef={textareaHandle}
+                            scrollboxRef={scrollboxHandle}
+                            inputFocused={!overlayActive()}
+                            statusBarProps={statusBarProps()}
+                            {...(actions !== undefined ? { actions } : {})}
+                        />
+                    </box>
+                    <ModalOverlays
+                        store={props.store}
+                        overlayMode={snapshot().overlayMode}
+                        workspaceRoot={statusBarProps().workspaceRoot}
+                        actions={actions}
+                        missionControlServices={missionControlServices}
+                    />
+                </Show>
+                <KeymapChrome />
+            </box>
+        </DialogProvider>
     );
 }
