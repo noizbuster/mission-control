@@ -39,10 +39,6 @@ import {
     navigateFileAutocompleteUp,
     updateFileAutocomplete,
 } from './interactive-chat-file-autocomplete.js';
-import {
-    type ChatInputHistory,
-    createChatInputHistoryFromEntries,
-} from './interactive-chat-input-history.js';
 import { createVariantChoices, type ModelChoice } from './interactive-chat-model.js';
 import {
     type ModelsOverlayRoleRow,
@@ -193,7 +189,6 @@ export type ChatStoreState = {
     readonly currentModelVariantID: string | undefined;
     readonly menuState: SlashCommandMenuState;
     readonly fileAutocomplete: FileAutocompleteState;
-    readonly history: ChatInputHistory;
     readonly historyEntries: readonly HistoryPickerEntry[];
     readonly historyPicker: HistoryPickerState;
     readonly pasteStore: PasteMarkerStore;
@@ -325,7 +320,6 @@ export class ChatStore {
         this.workspaceRoot = options?.workspaceRoot ?? process.cwd();
         this.authStore = options?.authStore;
         const historyEntries = options?.initialHistoryEntries !== undefined ? [...options.initialHistoryEntries] : [];
-        const history = createChatInputHistoryFromEntries(historyEntries.map((entry) => entry.text));
         this.state = {
             outputText: '',
             sessionId: '',
@@ -343,7 +337,6 @@ export class ChatStore {
             currentModelVariantID: undefined,
             menuState: createSlashCommandMenuState(),
             fileAutocomplete: createFileAutocompleteState(),
-            history,
             historyEntries,
             historyPicker: createHistoryPickerState(),
             pasteStore: new PasteMarkerStore(),
@@ -928,7 +921,6 @@ export class ChatStore {
 
     setHistoryEntries(entries: readonly HistoryPickerEntry[]): void {
         this.state.historyEntries = [...entries];
-        this.state.history = createChatInputHistoryFromEntries(entries.map((entry) => entry.text));
         this.state.historyPicker = createHistoryPickerState();
         this.publish();
     }
@@ -1571,9 +1563,6 @@ export class ChatStore {
     submitLine(value: string): void {
         this.enqueueEvent({ type: 'line', value });
         this.appendHistoryEntry(value);
-        this.state.history = createChatInputHistoryFromEntries(
-            this.state.historyEntries.map((entry) => entry.text),
-        );
         if (this.state.historyPicker.open) {
             this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
         }

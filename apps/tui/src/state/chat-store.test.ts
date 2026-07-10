@@ -1553,7 +1553,6 @@ describe('chat-store — history picker + timestamped entries', () => {
             makeHistoryEntry('a', 'older', 1),
             makeHistoryEntry('b', 'newer', 2),
         ]);
-        expect(store.getSnapshot().history.entries).toEqual(['older', 'newer']);
         expect(store.getSnapshot().historyPickerView.total).toBe(2);
     });
 
@@ -1607,7 +1606,7 @@ describe('chat-store — history picker + timestamped entries', () => {
         expect(entries[0]?.id).toMatch(/^hist-\d+$/);
         expect(entries[0]?.timestamp).toBeGreaterThanOrEqual(before);
         expect(entries[1]?.text).toBe('world');
-        expect(store.getSnapshot().history.entries).toEqual(['hello', 'world']);
+        expect(store.getSnapshot().historyEntries.map((entry) => entry.text)).toEqual(['hello', 'world']);
     });
 
     it('confirm on empty history returns undefined and closes', () => {
@@ -1640,7 +1639,6 @@ describe('chat-store — history picker + timestamped entries', () => {
         expect(snapshot.historyEntries.map((entry) => entry.text)).toEqual(['one', 'two']);
         expect(snapshot.historyPicker.open).toBe(false);
         expect(snapshot.historyPickerView.total).toBe(2);
-        expect(snapshot.history.entries).toEqual(['one', 'two']);
     });
 
     it('openHistoryPicker is a no-op when already open', () => {

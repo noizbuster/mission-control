@@ -24,7 +24,6 @@ export * from './history-picker-state.js';
 export * from './interactive-chat-command-menu.js';
 export * from './interactive-chat-cursor-navigation.js';
 export * from './interactive-chat-file-autocomplete.js';
-export * from './interactive-chat-input-history.js';
 export * from './interactive-chat-model.js';
 export * from './interactive-chat-terminal-keys.js';
 export * from './mission-services-types.js';

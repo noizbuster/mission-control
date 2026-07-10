@@ -150,7 +150,7 @@ Use Solid callback refs, local variables, or signals for native renderable handl
 
 ### Keyboard Routing
 
-OpenTUI's `useKeyboard` delivers one `KeyEvent` per physical keypress. Editing keys (printable input, backspace, arrows, word-move, Enter-submit, IME) stay on `TextareaRenderable` and the managed textarea keymap layer. App chords, transcript scroll, history recall, autocomplete completion, and submit run from the textarea `onKeyDown` handler with raw `KeyEvent.preventDefault()` when handled. Overlays read keyboard input through their mounted handlers while focus is redirected away from the textarea. Ctrl+C is always routed through the global keyboard sink so interrupt/exit works during focus races.
+OpenTUI's `useKeyboard` delivers one `KeyEvent` per physical keypress. Editing keys (printable input, backspace, arrows, word-move, Enter-submit, IME) stay on `TextareaRenderable` and the managed textarea keymap layer. App chords, transcript scroll, prompt history list-select (Up at buffer start opens the 2-column history picker; Enter inserts fill-only; Esc closes), autocomplete completion, and submit run from the textarea `onKeyDown` handler with raw `KeyEvent.preventDefault()` when handled. Overlays read keyboard input through their mounted handlers while focus is redirected away from the textarea. Ctrl+C is always routed through the global keyboard sink so interrupt/exit works during focus races.
 
 Use `@opentui/keymap/solid` for component-facing bindings. `KeymapProvider` supplies the keymap, `useBindings` registers Solid lifecycle-bound layers, and `useKeymapSelector` returns an `Accessor`. Do not add a custom selector bridge; compose keymap state with Solid accessors and existing pure helpers.
 
