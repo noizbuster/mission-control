@@ -1,9 +1,16 @@
 /** @jsxImportSource @opentui/solid */
 
 import { useRenderer, useTerminalDimensions } from '@opentui/solid';
-import { batch, createContext, createEffect, onCleanup, Show, useContext, type JSX, type ParentProps } from 'solid-js';
-import { type Renderable, RGBA } from '@opentui/core';
+import { batch, createContext, createEffect, createSignal, For, onCleanup, Show, useContext, type JSX, type ParentProps } from 'solid-js';
+import { TextAttributes, type Renderable } from '@opentui/core';
+import { useKeyboard } from '@opentui/solid';
 import { createStore } from 'solid-js/store';
+import {
+    APPROVAL_LEVEL_PICKER_ENTRIES,
+    APPROVAL_OPTIONS,
+    type ChatStore,
+} from '../../state/chat-store.js';
+import { useSolidStoreSelector } from '../../platform/use-solid-store-selector.js';
 import { useModeStack } from '../../platform/keymap/mode-stack.js';
 import { useTuiClipboard, useTuiToast } from '../../platform/providers/clipboard-toast-context.js';
 import { useTuiTheme } from '../../platform/providers/route-dialog-theme-context.js';
@@ -26,11 +33,13 @@ export function Dialog(
     const renderer = useRenderer();
 
     let dismiss = false;
-    const width = (): number => {
+    const panelWidth = (): number => {
         if (props.size === 'xlarge') return 116;
         if (props.size === 'large') return 88;
         return 60;
     };
+    const horizontalPadding = (): number =>
+        Math.max(0, Math.floor((dimensions().width - panelWidth()) / 2));
 
     return (
         // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; click-outside-to-close is a dialog UX pattern
@@ -45,29 +54,17 @@ export function Dialog(
                 }
                 props.onClose();
             }}
-            width={dimensions().width}
-            height={dimensions().height}
-            alignItems="center"
             position="absolute"
             zIndex={3000}
-            paddingTop={Math.floor(dimensions().height / 4)}
-            left={0}
-            top={0}
-            backgroundColor={RGBA.fromInts(0, 0, 0, 150)}
+            top={1}
+            left={horizontalPadding()}
+            right={horizontalPadding()}
+            backgroundColor={theme.overlayTheme().panelBg}
+            borderStyle="single"
+            borderColor="#808080"
+            paddingTop={1}
         >
-            {/* biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; inner panel swallows click to prevent close */}
-            <box
-                onMouseUp={(e: { stopPropagation(): void }) => {
-                    dismiss = false;
-                    e.stopPropagation();
-                }}
-                width={width()}
-                maxWidth={dimensions().width - 2}
-                backgroundColor={theme.overlayTheme().panelBg}
-                paddingTop={1}
-            >
-                {props.children}
-            </box>
+            {props.children}
         </box>
     );
 }
@@ -180,35 +177,304 @@ function init(): DialogContext {
  */
 export function DialogProvider(props: ParentProps): JSX.Element {
     const value = init();
-    const renderer = useRenderer();
-    const toast = useTuiToast();
-    const clipboard = useTuiClipboard();
 
     function copySelection(): boolean {
-        const selection = renderer.getSelection?.();
-        if (!selection) return false;
-        const text = selection.getSelectedText();
-        if (!text) return false;
-        void clipboard.copyToClipboard(text).then(
-            () => toast.show({ message: 'Copied to clipboard', variant: 'info' }),
-            (error: unknown) => toast.error(error),
-        );
-        renderer.clearSelection?.();
-        return true;
+        return false;
     }
 
     return (
         <DialogContextCtx.Provider value={value}>
             {props.children}
-            {/* biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; selection-copy on mouseUp is the clipboard contract */}
-            <box position="absolute" zIndex={3000} onMouseUp={() => copySelection()}>
-                <Show when={value.stack.length}>
-                    <Dialog onClose={() => value.clear()} size={value.size}>
-                        {value.stack[value.stack.length - 1]!.element}
-                    </Dialog>
-                </Show>
-            </box>
         </DialogContextCtx.Provider>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// DialogOverlay: renders all 5 hosted dialog types inline via <Show>
+// conditionals. Each dialog uses useKeyboard for input (no useBindings/textarea)
+// to avoid the Solid context loss that occurs when components are created
+// inside createEffect or createMemo.
+// ---------------------------------------------------------------------------
+
+export function DialogOverlay(props: { readonly store: ChatStore }): JSX.Element {
+    const snapshot = useSolidStoreSelector(props.store, (s) => s);
+    const overlayMode = () => snapshot().overlayMode;
+
+    return (
+        <>
+            <Show when={overlayMode() === 'rename'}>
+                <DialogFrame>
+                    <RenameDialogBox store={props.store} />
+                </DialogFrame>
+            </Show>
+            <Show when={overlayMode() === 'session-picker'}>
+                <DialogFrame>
+                    <SessionPickerDialogBox store={props.store} />
+                </DialogFrame>
+            </Show>
+            <Show when={overlayMode() === 'approval'}>
+                <DialogFrame>
+                    <ApprovalDialogBox store={props.store} />
+                </DialogFrame>
+            </Show>
+            <Show when={overlayMode() === 'level-picker'}>
+                <DialogFrame>
+                    <LevelPickerDialogBox store={props.store} />
+                </DialogFrame>
+            </Show>
+            <Show when={overlayMode() === 'model-picker'}>
+                <DialogFrame>
+                    <ModelPickerDialogBox store={props.store} />
+                </DialogFrame>
+            </Show>
+        </>
+    );
+}
+
+function DialogFrame(props: ParentProps): JSX.Element {
+    return (
+        <box
+            position="absolute"
+            top={2}
+            left={20}
+            right={20}
+            backgroundColor="#0a0a0a"
+            borderStyle="single"
+            borderColor="#808080"
+            zIndex={3000}
+        >
+            {props.children}
+        </box>
+    );
+}
+
+type ListRow = { readonly label: string; readonly description?: string };
+
+function useListNavigation(
+    count: () => number,
+    onSelect: (index: number) => void,
+    onCancel: () => void,
+) {
+    const [selected, setSelected] = createSignal(0);
+
+    useKeyboard((key) => {
+        const len = count();
+        if (len === 0) return;
+        if (key.name === 'up' || (key.ctrl && key.name === 'p')) {
+            key.preventDefault();
+            setSelected((prev) => (prev - 1 + len) % len);
+            return;
+        }
+        if (key.name === 'down' || (key.ctrl && key.name === 'n')) {
+            key.preventDefault();
+            setSelected((prev) => (prev + 1) % len);
+            return;
+        }
+        if (key.name === 'return') {
+            key.preventDefault();
+            onSelect(selected());
+            return;
+        }
+        if (key.name === 'escape') {
+            key.preventDefault();
+            onCancel();
+            return;
+        }
+    });
+
+    return selected;
+}
+
+function ListView(props: {
+    readonly title: string;
+    readonly rows: readonly ListRow[];
+    readonly selected: () => number;
+    readonly footer?: string;
+}): JSX.Element {
+    return (
+        <box paddingLeft={2} paddingRight={2} gap={1}>
+            <text attributes={TextAttributes.BOLD} fg="#ffffff">{` ${props.title} `}</text>
+            <For each={props.rows}>
+                {(row, index) => (
+                    <box flexDirection="column">
+                        <box flexDirection="row">
+                            <text fg={props.selected() === index() ? '#ffff00' : '#666666'}>
+                                {props.selected() === index() ? '\u276f ' : '  '}
+                            </text>
+                            <text fg={props.selected() === index() ? '#ffffff' : '#aaaaaa'}>
+                                {row.label}
+                            </text>
+                        </box>
+                        {row.description !== undefined ? (
+                            <text fg="#666666">{`    ${row.description}`}</text>
+                        ) : null}
+                    </box>
+                )}
+            </For>
+            {props.footer !== undefined ? (
+                <text fg="#888888">{props.footer}</text>
+            ) : null}
+        </box>
+    );
+}
+
+function RenameDialogBox(props: { store: ChatStore }): JSX.Element {
+    const snapshot = useSolidStoreSelector(props.store, (s) => s);
+    const [buffer, setBuffer] = createSignal(snapshot().renameBuffer);
+
+    useKeyboard((key) => {
+        if (key.name === 'return') {
+            key.preventDefault();
+            props.store.submitRename(buffer());
+            return;
+        }
+        if (key.name === 'escape') {
+            key.preventDefault();
+            props.store.cancelRename();
+            return;
+        }
+        if (key.name === 'backspace') {
+            key.preventDefault();
+            setBuffer((prev) => prev.slice(0, -1));
+            return;
+        }
+        if (key.sequence !== undefined && key.sequence.length === 1 && key.sequence >= ' ' && key.sequence <= '~') {
+            key.preventDefault();
+            setBuffer((prev) => prev + key.sequence);
+        }
+    });
+
+    return (
+        <box paddingLeft={2} paddingRight={2} gap={1}>
+            <text attributes={TextAttributes.BOLD} fg="#ffffff">{' Rename Session '}</text>
+            <box flexDirection="row">
+                <text fg="#00ffff">{'>'}</text>
+                <text fg="#ffffff">{buffer()}</text>
+                <text bg="#ffffff" fg="#000000">{'\u2588'}</text>
+            </box>
+            <text fg="#888888">{'\u23ce'} submit · esc cancel</text>
+        </box>
+    );
+}
+
+function SessionPickerDialogBox(props: { store: ChatStore }): JSX.Element {
+    const snapshot = useSolidStoreSelector(props.store, (s) => s);
+    const entries = () => snapshot().sessionPickerEntries;
+    const rows = (): ListRow[] =>
+        entries().map((e) => ({
+            label: e.label.length > 0 ? e.label : e.sessionId,
+            ...(e.updatedAt !== undefined ? { description: e.updatedAt } : {}),
+        }));
+
+    const selected = useListNavigation(
+        () => entries().length,
+        (index) => {
+            const entry = entries()[index];
+            if (entry !== undefined) props.store.hideSessionPicker(entry.sessionId);
+        },
+        () => props.store.hideSessionPicker(undefined),
+    );
+
+    return (
+        <ListView
+            title="Select Session"
+            rows={rows()}
+            selected={selected}
+            footer="{'\u2191/\u2193'} navigate · {'\u23ce'} select · esc cancel"
+        />
+    );
+}
+
+function ApprovalDialogBox(props: { store: ChatStore }): JSX.Element {
+    const snapshot = useSolidStoreSelector(props.store, (s) => s);
+    const rows: ListRow[] = APPROVAL_OPTIONS.map((opt) => ({
+        label: opt.label,
+        description: opt.description,
+    }));
+
+    const selected = useListNavigation(
+        () => rows.length,
+        (index) => {
+            props.store.hideApproval();
+            props.store.enqueueEvent({ type: 'line', value: APPROVAL_OPTIONS[index]!.key });
+        },
+        () => props.store.hideApproval(),
+    );
+
+    const toolName = () => snapshot().approvalToolName;
+    const action = () => snapshot().approvalAction;
+
+    return (
+        <box paddingLeft={2} paddingRight={2} gap={1}>
+            <text attributes={TextAttributes.BOLD} fg="#ffffff">{' Approval Required '}</text>
+            <text fg="#aaaaaa">{`${toolName()} — ${action()}`}</text>
+            <For each={rows}>
+                {(row, index) => (
+                    <box flexDirection="column">
+                        <box flexDirection="row">
+                            <text fg={selected() === index() ? '#ffff00' : '#666666'}>
+                                {selected() === index() ? '\u276f ' : '  '}
+                            </text>
+                            <text fg={selected() === index() ? '#ffffff' : '#aaaaaa'}>{row.label}</text>
+                        </box>
+                        {row.description !== undefined ? (
+                            <text fg="#666666">{`    ${row.description}`}</text>
+                        ) : null}
+                    </box>
+                )}
+            </For>
+            <text fg="#888888">{'\u2191/\u2193'} navigate · {'\u23ce'} select · esc deny</text>
+        </box>
+    );
+}
+
+function LevelPickerDialogBox(props: { store: ChatStore }): JSX.Element {
+    const rows: ListRow[] = APPROVAL_LEVEL_PICKER_ENTRIES.map((entry) => ({
+        label: entry.label,
+        description: entry.desc,
+    }));
+
+    const selected = useListNavigation(
+        () => rows.length,
+        (index) => props.store.hideLevelPicker(APPROVAL_LEVEL_PICKER_ENTRIES[index]!.id),
+        () => props.store.hideLevelPicker(undefined),
+    );
+
+    return (
+        <ListView
+            title="Select Approval Level"
+            rows={rows}
+            selected={selected}
+            footer="{'\u2191/\u2193'} navigate · {'\u23ce'} select · esc cancel"
+        />
+    );
+}
+
+function ModelPickerDialogBox(props: { store: ChatStore }): JSX.Element {
+    const snapshot = useSolidStoreSelector(props.store, (s) => s);
+    const choices = () => snapshot().modelPickerChoices;
+    const rows = (): ListRow[] =>
+        choices().map((c) => ({
+            label: c.label,
+            ...(c.unavailableReason !== undefined ? { description: c.unavailableReason } : {}),
+        }));
+
+    const selected = useListNavigation(
+        () => choices().length,
+        (index) => {
+            const choice = choices()[index];
+            if (choice !== undefined) props.store.hideModelPicker(choice.selection);
+        },
+        () => props.store.hideModelPicker(undefined),
+    );
+
+    return (
+        <ListView
+            title="Select Model"
+            rows={rows()}
+            selected={selected}
+            footer="{'\u2191/\u2193'} navigate · {'\u23ce'} select · esc cancel"
+        />
     );
 }
 

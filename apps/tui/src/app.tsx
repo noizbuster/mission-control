@@ -31,7 +31,7 @@ import { useSelectionMouseUp } from './app/use-selection-mouseup.js';
 import { useSubmit } from './app/use-submit.js';
 import { useTransientToast } from './app/use-transient-toast.js';
 import { DialogHost } from './components/dialog/dialog-host.js';
-import { DialogProvider } from './components/dialog/dialog.js';
+import { DialogOverlay, DialogProvider } from './components/dialog/dialog.js';
 import { ChatBottomDock } from './components/ChatBottomDock.js';
 import { bottomDockPolicy } from './components/chat-bottom-dock-policy.js';
 
@@ -211,6 +211,7 @@ function AppMain(props: AppProps): JSX.Element {
                         actions={actions}
                         missionControlServices={missionControlServices}
                     />
+                    <DialogOverlay store={props.store} />
                 </Show>
                 <KeymapChrome />
             </box>

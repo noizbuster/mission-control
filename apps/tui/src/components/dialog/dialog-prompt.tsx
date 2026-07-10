@@ -1,11 +1,12 @@
 /** @jsxImportSource @opentui/solid */
 
-import { type TextareaRenderable, TextAttributes } from '@opentui/core';
-import { useBindings } from '@opentui/keymap/solid';
+import { TextAttributes } from '@opentui/core';
+import { useKeyboard } from '@opentui/solid';
 import { createEffect, createSignal, onMount, Show, type JSX } from 'solid-js';
 import { useSpinnerFrame } from '../spinner.js';
 import { useTuiTheme } from '../../platform/providers/route-dialog-theme-context.js';
 import { type DialogContext, useDialog } from './dialog.js';
+import { printableCharFromKey } from '../overlay-key-input.js';
 
 export type DialogPromptProps = {
     readonly title: string;
@@ -18,65 +19,41 @@ export type DialogPromptProps = {
     readonly onCancel?: () => void;
 };
 
-function confirm(
-    props: DialogPromptProps,
-    textarea: TextareaRenderable,
-): void {
-    if (props.busy) return;
-    props.onConfirm?.(textarea.plainText);
-}
-
 export function DialogPrompt(props: DialogPromptProps): JSX.Element {
     const dialog = useDialog();
     const theme = useTuiTheme();
     const spinner = useSpinnerFrame();
-    const [textareaTarget, setTextareaTarget] = createSignal<TextareaRenderable | undefined>();
-    let textarea: TextareaRenderable | undefined;
+    const [buffer, setBuffer] = createSignal(props.value ?? '');
 
-    useBindings(() => ({
-        ...(textareaTarget() !== undefined ? { target: textareaTarget } : {}),
-        enabled: textareaTarget() !== undefined && props.busy !== true,
-        priority: 1,
-        bindings: [
-            {
-                key: 'return',
-                desc: 'Submit dialog prompt',
-                group: 'Dialog',
-                cmd: () => {
-                    if (textarea === undefined) return;
-                    confirm(props, textarea);
-                },
-            },
-        ],
-    }));
+    useKeyboard((key) => {
+        if (props.busy) return;
+        if (key.name === 'return') {
+            key.preventDefault();
+            props.onConfirm?.(buffer());
+            return;
+        }
+        if (key.name === 'escape') {
+            key.preventDefault();
+            dialog.clear();
+            return;
+        }
+        if (key.name === 'backspace') {
+            key.preventDefault();
+            setBuffer((prev) => prev.slice(0, -1));
+            return;
+        }
+        const ch = printableCharFromKey(key);
+        if (ch !== undefined) {
+            key.preventDefault();
+            setBuffer((prev) => prev + ch);
+        }
+    });
 
     onMount(() => {
         dialog.setSize('medium');
-        setTimeout(() => {
-            if (textarea === undefined) return;
-            if (textarea.isDestroyed) return;
-            if (props.busy) return;
-            textarea.focus();
-        }, 1);
-        if (textarea !== undefined) {
-            textarea.gotoLineEnd();
-        }
-    });
-
-    createEffect(() => {
-        if (textarea === undefined) return;
-        if (textarea.isDestroyed) return;
-        const traits = props.busy ? { suspend: true, status: 'BUSY' } : {};
-        textarea.traits = traits;
-        if (props.busy) {
-            textarea.blur();
-            return;
-        }
-        textarea.focus();
     });
 
     const textColor = (): string => (props.busy ? '#888888' : '#ffffff');
-    const cursorColor = (): string => (props.busy ? '#444444' : '#ffffff');
 
     return (
         <box paddingLeft={2} paddingRight={2} gap={1}>
@@ -91,19 +68,14 @@ export function DialogPrompt(props: DialogPromptProps): JSX.Element {
             </box>
             <box gap={1}>
                 {props.description}
-                <textarea
-                    height={3}
-                    ref={(val: TextareaRenderable) => {
-                        textarea = val;
-                        setTextareaTarget(val);
-                    }}
-                    {...(props.value !== undefined ? { initialValue: props.value } : {})}
-                    placeholder={props.placeholder ?? 'Enter text'}
-                    placeholderColor="#666666"
-                    textColor={textColor()}
-                    focusedTextColor={textColor()}
-                    cursorColor={cursorColor()}
-                />
+                <box flexDirection="row">
+                    <text fg="#00ffff">{'>'}</text>
+                    <text fg={textColor()}>{buffer()}</text>
+                    <Show when={buffer().length === 0 && props.placeholder !== undefined}>
+                        <text fg="#666666">{props.placeholder}</text>
+                    </Show>
+                    <text bg="#ffffff" fg="#000000">{'\u2588'}</text>
+                </box>
                 <Show when={props.busy}>
                     <box flexDirection="row" gap={1}>
                         <text fg="#888888">{spinner.glyph()}</text>

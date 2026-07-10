@@ -92,10 +92,6 @@ export function DialogSelect<T>(props: DialogSelectProps<T>): JSX.Element {
         if (len === 0) return;
         const clamped = ((index % len) + len) % len;
         setStore('selected', clamped);
-        const opt = filtered()[clamped];
-        if (opt !== undefined) {
-            props.onSelect?.(opt);
-        }
     }
 
     function pageUp(): void {
