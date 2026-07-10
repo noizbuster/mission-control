@@ -18,6 +18,8 @@ import {
 } from './graph-coordinator-helpers.js';
 import type { AbgGraphRunnerInput } from './graph-runner.js';
 import { attemptEvent, modelCallEvent, toolLifecycleEvent } from './graph-runner-events.js';
+import type { ToolActionFingerprint } from './loop-safety.js';
+import { toolActionFromEmit } from './loop-safety.js';
 import type { AbgNodeRegistry } from './node-registry.js';
 import { runAbgNode } from './node-registry.js';
 import { projectAbgSignalToEvent } from './signals.js';
@@ -31,6 +33,7 @@ export type QueuedNodeResult =
           readonly lastPolicyDecision?: AbgPolicyDecision;
           readonly hadOnlyRetryableToolFailures?: boolean;
           readonly hadProductiveToolUse?: boolean;
+          readonly toolActions?: readonly ToolActionFingerprint[];
       }
     | {
           readonly kind: 'failed';
@@ -38,6 +41,7 @@ export type QueuedNodeResult =
           readonly attempt: number;
           readonly lastSignal?: AbgSignal;
           readonly terminal?: boolean;
+          readonly toolActions?: readonly ToolActionFingerprint[];
       }
     | {
           readonly kind: 'blocked';
@@ -53,6 +57,7 @@ type NodeRunResult = {
     readonly terminal?: boolean;
     readonly hadOnlyRetryableToolFailures?: boolean;
     readonly hadProductiveToolUse?: boolean;
+    readonly toolActions: readonly ToolActionFingerprint[];
 };
 
 export async function runQueuedNode(
@@ -94,6 +99,7 @@ export async function runQueuedNode(
             attempt,
             ...(runResult.lastSignal !== undefined ? { lastSignal: runResult.lastSignal } : {}),
             ...(runResult.terminal === true ? { terminal: true } : {}),
+            ...(runResult.toolActions.length > 0 ? { toolActions: runResult.toolActions } : {}),
         };
     }
     if (runResult.status === 'blocked') {
@@ -115,6 +121,7 @@ export async function runQueuedNode(
         ...(runResult.lastPolicyDecision !== undefined ? { lastPolicyDecision: runResult.lastPolicyDecision } : {}),
         ...(runResult.hadOnlyRetryableToolFailures === true ? { hadOnlyRetryableToolFailures: true } : {}),
         ...(runResult.hadProductiveToolUse === true ? { hadProductiveToolUse: true } : {}),
+        ...(runResult.toolActions.length > 0 ? { toolActions: runResult.toolActions } : {}),
     };
 }
 
@@ -184,7 +191,7 @@ function runApprovedHumanApprovalNode(
             }),
         );
     }
-    return { status: 'completed', lastSignal: successSignal };
+    return { status: 'completed', lastSignal: successSignal, toolActions: [] };
 }
 
 async function runNode(
@@ -205,6 +212,9 @@ async function runNode(
     let terminal = false;
     let retryableToolFailures = 0;
     let completedTools = 0;
+    const toolActions: ToolActionFingerprint[] = [];
+    // Map proposed toolCallId → inputDigest so completed/failed emits (no input field) still fingerprint.
+    const proposedInputByCallId = new Map<string, string>();
     for await (const signal of runAbgNode(registry, node, runContext(graph, registry, input, state))) {
         await input.onSignal?.(signal);
         lastSignal = signal;
@@ -235,6 +245,15 @@ async function runNode(
             if (signal.event.type === 'tool.failed' && isRetryableToolFailurePayload(signal.event.payload)) {
                 retryableToolFailures += 1;
             }
+            rememberProposedInput(signal.event.type, signal.event.payload, proposedInputByCallId);
+            const action = toolActionFromEmitWithProposedInput(
+                signal.event.type,
+                signal.event.payload,
+                proposedInputByCallId,
+            );
+            if (action !== undefined) {
+                toolActions.push(action);
+            }
         }
         state.events.push(
             projectAbgSignalToEvent({
@@ -253,6 +272,7 @@ async function runNode(
     const hadProductiveToolUse = completedTools > 0;
     return {
         status: blocked ? 'blocked' : failed ? 'failed' : 'completed',
+        toolActions,
         ...(lastSignal !== undefined ? { lastSignal } : {}),
         ...(lastEventType !== undefined ? { lastEventType } : {}),
         ...(lastPolicyDecision !== undefined ? { lastPolicyDecision } : {}),
@@ -261,6 +281,48 @@ async function runNode(
         ...(hadOnlyRetryableToolFailures ? { hadOnlyRetryableToolFailures: true } : {}),
         ...(hadProductiveToolUse ? { hadProductiveToolUse: true } : {}),
     };
+}
+
+function rememberProposedInput(
+    eventType: string,
+    payload: unknown,
+    proposedInputByCallId: Map<string, string>,
+): void {
+    if (eventType !== 'llm.tool_call.proposed' || typeof payload !== 'object' || payload === null) {
+        return;
+    }
+    const record = payload as Record<string, unknown>;
+    const toolCallId = typeof record['toolCallId'] === 'string' ? record['toolCallId'] : undefined;
+    if (toolCallId === undefined) {
+        return;
+    }
+    const action = toolActionFromEmit(eventType, payload);
+    if (action !== undefined) {
+        proposedInputByCallId.set(toolCallId, action.inputDigest);
+    }
+}
+
+function toolActionFromEmitWithProposedInput(
+    eventType: string,
+    payload: unknown,
+    proposedInputByCallId: Map<string, string>,
+): ToolActionFingerprint | undefined {
+    const action = toolActionFromEmit(eventType, payload);
+    if (action === undefined) {
+        return undefined;
+    }
+    if (action.inputDigest.length > 0 || typeof payload !== 'object' || payload === null) {
+        return action;
+    }
+    const toolCallId = (payload as Record<string, unknown>)['toolCallId'];
+    if (typeof toolCallId !== 'string') {
+        return action;
+    }
+    const digest = proposedInputByCallId.get(toolCallId);
+    if (digest === undefined) {
+        return action;
+    }
+    return { ...action, inputDigest: digest };
 }
 
 /**
