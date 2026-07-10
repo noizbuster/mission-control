@@ -4,6 +4,7 @@ import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
 import { projectSessionReplay } from '../session-replay.js';
 import { createDeterministicProvider } from './deterministic-provider.js';
 import { ProviderTurnRunner } from './provider-turn-runner.js';
+import { closeProviderChunkIterator } from './provider-turn-timeout.js';
 import type { ProviderAdapter } from './provider-turn-types.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -262,6 +263,51 @@ describe('ProviderTurnRunner', () => {
         expect(observedSignal?.aborted).toBe(true);
     });
 
+    it('surfaces timeout without waiting forever for a non-cooperative iterator close', async () => {
+        // Given
+        let closeCalls = 0;
+        const provider: ProviderAdapter = {
+            streamTurn() {
+                return {
+                    [Symbol.asyncIterator]() {
+                        return {
+                            next: () => new Promise<IteratorResult<ProviderStreamChunk>>(() => {}),
+                            return: () => {
+                                closeCalls += 1;
+                                return new Promise<IteratorResult<ProviderStreamChunk>>(() => {});
+                            },
+                        };
+                    },
+                };
+            },
+        };
+        const runner = new ProviderTurnRunner({ provider, timeoutMs: 10, retryLimit: 0 });
+
+        // When
+        const outcome = await Promise.race([
+            runner.runTurn(turnInput('session_noncooperative_close', 'request_noncooperative_close')),
+            new Promise<'hung'>((resolve) => setTimeout(() => resolve('hung'), 100)),
+        ]);
+
+        // Then
+        expect(outcome).not.toBe('hung');
+        if (outcome !== 'hung') {
+            expect(outcome).toMatchObject({ status: 'failed', error: { code: 'provider_timeout' } });
+        }
+        expect(closeCalls).toBe(1);
+    });
+
+    it('absorbs synchronous iterator close failures', async () => {
+        const iterator: AsyncIterator<ProviderStreamChunk> = {
+            next: () => new Promise<IteratorResult<ProviderStreamChunk>>(() => {}),
+            return: () => {
+                throw new Error('sync close failure');
+            },
+        };
+
+        await expect(closeProviderChunkIterator(iterator)).resolves.toBeUndefined();
+    });
+
     it('retries retryable provider failures only up to the configured cap', async () => {
         // Given
         const { store, sessionId } = await openStore('session_provider_retry');
@@ -292,6 +338,33 @@ describe('ProviderTurnRunner', () => {
         expect(result).toMatchObject({ status: 'completed', attempts: 2 });
         expect(result.envelopes.at(-1)?.event.message).toBe('recovered');
         expect(provider.attemptCount()).toBe(2);
+    });
+
+    it('does not record a phantom attempt when aborted during retry backoff', async () => {
+        // Given
+        const controller = new AbortController();
+        const provider = createDeterministicProvider([
+            [
+                {
+                    kind: 'response_failed',
+                    error: { code: 'provider_rate_limited', message: 'try again', retryable: true },
+                },
+            ],
+            [{ kind: 'response_completed', content: 'must not run' }],
+        ]);
+        const runner = new ProviderTurnRunner({ provider, retryLimit: 1, retryBaseDelayMs: 50 });
+        setTimeout(() => controller.abort(), 10);
+
+        // When
+        const result = await runner.runTurn({
+            ...turnInput('session_abort_backoff', 'request_abort_backoff'),
+            signal: controller.signal,
+        });
+
+        // Then
+        expect(result).toMatchObject({ status: 'failed', attempts: 1, error: { code: 'provider_aborted' } });
+        expect(provider.attemptCount()).toBe(1);
+        expect(result.envelopes.filter((envelope) => envelope.event.type === 'model.call.started')).toHaveLength(1);
     });
 
     it('retries a thrown transient provider error (fetch/ECONNRESET) and completes on the next attempt', async () => {
@@ -336,7 +409,7 @@ describe('ProviderTurnRunner', () => {
         }
     });
 
-    it('retries immediately on the first retry then applies exponential backoff up to the cap', async () => {
+    it('applies exponential backoff starting with the first retry', async () => {
         const provider = createDeterministicProvider([
             [
                 {
@@ -371,7 +444,7 @@ describe('ProviderTurnRunner', () => {
 
         expect(result).toMatchObject({ status: 'completed', attempts: 4 });
         expect(provider.attemptCount()).toBe(4);
-        expect(elapsed).toBeGreaterThanOrEqual(140);
+        expect(elapsed).toBeGreaterThanOrEqual(340);
     });
 
     it('caps retry delay at maxRetryDelayMs', async () => {
@@ -414,7 +487,7 @@ describe('ProviderTurnRunner', () => {
         const elapsed = Date.now() - start;
 
         expect(result).toMatchObject({ status: 'completed', attempts: 5 });
-        expect(elapsed).toBeGreaterThanOrEqual(390);
+        expect(elapsed).toBeGreaterThanOrEqual(540);
     });
 });
 

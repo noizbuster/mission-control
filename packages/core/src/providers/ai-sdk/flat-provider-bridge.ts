@@ -11,8 +11,9 @@
  *
  * This bridge wraps a flat `ProviderAdapter` AS a `LanguageModelV3` so the graph engine can drive
  * the SAME injected flat provider the flat engine would: it converts the SDK's standardized
- * message list + tool list into a flat `ProviderTurnRequest`, drives `streamTurn`, and translates
- * the resulting `ProviderStreamChunk` stream back into `LanguageModelV3StreamPart`s. So an
+ * message list + tool list into a flat `ProviderTurnRequest`, drives `streamTurn` with the flat
+ * runner's retry/backoff policy, and translates the resulting `ProviderStreamChunk` stream back
+ * into `LanguageModelV3StreamPart`s. So an
  * injected deterministic/local-echo provider runs unchanged on the graph engine — no per-test
  * rewrite — which lets the flip-default run the credential-free flat-path tests on the graph to
  * verify engine parity.
@@ -44,7 +45,15 @@ import type {
     ProviderUsage,
     ToolDefinition,
 } from '@mission-control/protocol';
-import { type ProviderAdapter, type ProviderAdapterContext, type ProviderTurnRequest } from '../provider-turn-types.js';
+import { closeProviderChunkIterator, nextProviderChunk } from '../provider-turn-timeout.js';
+import { type ProviderAdapter, ProviderTurnError, type ProviderTurnRequest } from '../provider-turn-types.js';
+
+const DEFAULT_TIMEOUT_MS = 120_000;
+const DEFAULT_RETRY_LIMIT = 7;
+const DEFAULT_RETRY_BASE_DELAY_MS = 1_000;
+const DEFAULT_MAX_RETRY_DELAY_MS = 30_000;
+const MAX_RETRY_LIMIT = 100;
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 export type FlatProviderBridgeOptions = {
     readonly provider: ProviderAdapter;
@@ -52,6 +61,11 @@ export type FlatProviderBridgeOptions = {
     readonly modelID: string;
     readonly variantID?: string;
     readonly sessionId?: string;
+    readonly retryLimit?: number;
+    readonly timeoutMs?: number;
+    readonly retryBaseDelayMs?: number;
+    readonly maxRetryDelayMs?: number;
+    readonly retrySleep?: (delayMs: number, signal: AbortSignal) => Promise<void>;
 };
 
 /**
@@ -62,23 +76,53 @@ export type FlatProviderBridgeOptions = {
 export class FlatProviderBridgeError extends Error {
     readonly name = 'FlatProviderBridgeError';
     readonly error: ProtocolError;
+    readonly retryExhausted: boolean;
 
-    constructor(error: ProtocolError) {
+    constructor(error: ProtocolError, retryExhausted = false) {
         super(error.message);
         this.error = error;
+        this.retryExhausted = retryExhausted;
     }
 }
 
 /**
  * Wrap a flat `ProviderAdapter` as an AI-SDK `LanguageModelV3`. The graph's `streamText` call
- * drives `doStream`, which runs one flat `streamTurn` against the (injected) provider and
- * re-encodes the chunk stream for the SDK. `doGenerate` is unsupported — the graph path only
- * streams.
+ * drives `doStream`, which runs the flat provider and re-encodes its chunk stream for the SDK.
+ * Retryable failures stay inside this bridge so the graph path gets the same bounded exponential
+ * backoff as the flat runner. `doGenerate` is unsupported — the graph path only streams.
  */
 export function wrapFlatProviderAsSdkModel(options: FlatProviderBridgeOptions): LanguageModelV3 {
     const provider = options.provider;
     const providerID = options.providerID;
     const modelID = options.modelID;
+    const retryLimit = boundedIntegerOption({
+        name: 'retryLimit',
+        value: options.retryLimit,
+        fallback: DEFAULT_RETRY_LIMIT,
+        min: 0,
+        max: MAX_RETRY_LIMIT,
+    });
+    const timeoutMs = boundedIntegerOption({
+        name: 'timeoutMs',
+        value: options.timeoutMs,
+        fallback: DEFAULT_TIMEOUT_MS,
+        min: 1,
+        max: MAX_TIMER_DELAY_MS,
+    });
+    const retryBaseDelayMs = boundedIntegerOption({
+        name: 'retryBaseDelayMs',
+        value: options.retryBaseDelayMs,
+        fallback: DEFAULT_RETRY_BASE_DELAY_MS,
+        min: 0,
+        max: MAX_TIMER_DELAY_MS,
+    });
+    const maxRetryDelayMs = boundedIntegerOption({
+        name: 'maxRetryDelayMs',
+        value: options.maxRetryDelayMs,
+        fallback: DEFAULT_MAX_RETRY_DELAY_MS,
+        min: 0,
+        max: MAX_TIMER_DELAY_MS,
+    });
     return {
         specificationVersion: 'v3',
         provider: providerID,
@@ -101,13 +145,184 @@ export function wrapFlatProviderAsSdkModel(options: FlatProviderBridgeOptions): 
                 messages: sdkPromptToAgentMessages(callOptions.prompt),
                 ...(callOptions.tools !== undefined ? { tools: sdkToolsToToolDefinitions(callOptions.tools) } : {}),
             };
-            const context: ProviderAdapterContext = {
-                attempt: 1,
-                signal: callOptions.abortSignal ?? new AbortController().signal,
-            };
-            const iterator = provider.streamTurn(request, context)[Symbol.asyncIterator]();
-            return { stream: bridgeFlatStream(iterator, context.signal) };
+            const signal = callOptions.abortSignal ?? new AbortController().signal;
+            const iterator = retryProviderStream({
+                provider,
+                request,
+                signal,
+                timeoutMs,
+                retryLimit,
+                retryBaseDelayMs,
+                maxRetryDelayMs,
+                retrySleep: options.retrySleep ?? abortableSleep,
+            })[Symbol.asyncIterator]();
+            return { stream: bridgeFlatStream(iterator, signal) };
         },
+    };
+}
+
+type RetryingProviderStreamInput = {
+    readonly provider: ProviderAdapter;
+    readonly request: ProviderTurnRequest;
+    readonly signal: AbortSignal;
+    readonly timeoutMs: number;
+    readonly retryLimit: number;
+    readonly retryBaseDelayMs: number;
+    readonly maxRetryDelayMs: number;
+    readonly retrySleep: (delayMs: number, signal: AbortSignal) => Promise<void>;
+};
+
+async function* retryProviderStream(input: RetryingProviderStreamInput): AsyncIterable<ProviderStreamChunk> {
+    const maxAttempts = Math.max(1, Math.trunc(input.retryLimit) + 1);
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        if (input.signal.aborted) {
+            throw new FlatProviderBridgeError(abortedError());
+        }
+        let error: ProtocolError | undefined;
+        let outputEscaped = false;
+        const attemptAbort = new AbortController();
+        const removeOuterAbort = forwardAbort(input.signal, attemptAbort);
+        let iterator: AsyncIterator<ProviderStreamChunk> | undefined;
+        try {
+            iterator = closeOnce(
+                input.provider
+                    .streamTurn(input.request, { attempt, signal: attemptAbort.signal })
+                    [Symbol.asyncIterator](),
+            );
+            while (true) {
+                const next = await nextProviderChunk({
+                    iterator,
+                    signal: attemptAbort.signal,
+                    timeoutMs: input.timeoutMs,
+                    onTimeout: () => {
+                        attemptAbort.abort();
+                    },
+                });
+                if (next.done === true) {
+                    error = unknownProviderError('provider stream ended before completion');
+                    break;
+                }
+                const chunk = next.value;
+                if (chunk.kind === 'response_failed') {
+                    error = chunk.error;
+                    break;
+                }
+                if (chunk.kind === 'response_completed') {
+                    yield chunk;
+                    return;
+                }
+                outputEscaped ||= isExternallyVisibleChunk(chunk);
+                yield chunk;
+            }
+        } catch (cause) {
+            error = normalizeRetryError(cause, input.signal);
+        } finally {
+            if (iterator !== undefined) {
+                void closeProviderChunkIterator(iterator);
+            }
+            removeOuterAbort();
+        }
+        if (error === undefined) {
+            return;
+        }
+        if (!error.retryable) {
+            throw new FlatProviderBridgeError(error);
+        }
+        if (outputEscaped) {
+            throw new FlatProviderBridgeError(error, true);
+        }
+        if (attempt === maxAttempts) {
+            throw new FlatProviderBridgeError(error, true);
+        }
+        const delayMs = computeRetryDelayMs(attempt, input.retryBaseDelayMs, input.maxRetryDelayMs);
+        if (delayMs > 0) {
+            await input.retrySleep(delayMs, input.signal);
+        }
+    }
+}
+
+function closeOnce(iterator: AsyncIterator<ProviderStreamChunk>): AsyncIterator<ProviderStreamChunk> {
+    let closeResult: Promise<IteratorResult<ProviderStreamChunk>> | undefined;
+    return {
+        next: () => iterator.next(),
+        return: () => {
+            closeResult ??=
+                iterator.return !== undefined
+                    ? Promise.resolve(iterator.return())
+                    : Promise.resolve({ done: true, value: undefined });
+            return closeResult;
+        },
+    };
+}
+
+function isExternallyVisibleChunk(chunk: ProviderStreamChunk): boolean {
+    return chunk.kind !== 'response_started' && chunk.kind !== 'tool_call_delta';
+}
+
+function normalizeRetryError(error: unknown, signal: AbortSignal): ProtocolError {
+    if (error instanceof FlatProviderBridgeError || error instanceof ProviderTurnError) {
+        return error.error;
+    }
+    if (signal.aborted) {
+        return { code: 'provider_aborted', message: 'provider turn aborted', retryable: false };
+    }
+    return {
+        code: 'unknown',
+        message: error instanceof Error ? error.message : String(error),
+        retryable: true,
+    };
+}
+
+function unknownProviderError(message: string): ProtocolError {
+    return { code: 'unknown', message, retryable: true };
+}
+
+function computeRetryDelayMs(attempt: number, baseMs: number, capMs: number): number {
+    return Math.min(baseMs * 2 ** (attempt - 1), capMs);
+}
+
+function boundedIntegerOption(input: {
+    readonly name: string;
+    readonly value: number | undefined;
+    readonly fallback: number;
+    readonly min: number;
+    readonly max: number;
+}): number {
+    const resolved = input.value ?? input.fallback;
+    if (!Number.isSafeInteger(resolved) || resolved < input.min || resolved > input.max) {
+        throw new RangeError(
+            `${input.name} must be a safe integer between ${String(input.min)} and ${String(input.max)}`,
+        );
+    }
+    return resolved;
+}
+
+function abortableSleep(delayMs: number, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+        const onAbort = (): void => {
+            clearTimeout(timer);
+            resolve();
+        };
+        const timer = setTimeout(() => {
+            signal.removeEventListener('abort', onAbort);
+            resolve();
+        }, delayMs);
+        signal.addEventListener('abort', onAbort, { once: true });
+    });
+}
+
+function forwardAbort(source: AbortSignal, target: AbortController): () => void {
+    if (source.aborted) {
+        target.abort();
+        return () => undefined;
+    }
+    const abort = (): void => {
+        target.abort();
+    };
+    source.addEventListener('abort', abort, { once: true });
+    return () => {
+        source.removeEventListener('abort', abort);
     };
 }
 
@@ -381,7 +596,7 @@ function bridgeFlatStream(
                 controller.error(error instanceof Error ? error : new Error(String(error)));
                 return;
             } finally {
-                void iterator.return?.({ done: true, value: undefined });
+                void closeProviderChunkIterator(iterator);
             }
             controller.close();
         },

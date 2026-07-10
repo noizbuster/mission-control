@@ -237,6 +237,93 @@ describe('bounded ABG graph coordinator', () => {
         expect(attemptsFor(result.events, 'flaky')).toEqual([1, 2]);
     });
 
+    it('fails once when a provider reports that its retry budget is exhausted', async () => {
+        // Given
+        const registry = createAbgNodeRegistry();
+        registry.register(
+            'retry-exhausted-provider',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                yield {
+                    type: 'failure',
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    error: {
+                        code: 'provider_rate_limited',
+                        message: 'temporarily overloaded',
+                        retryable: true,
+                        retryExhausted: true,
+                        providerError: true,
+                    },
+                };
+            },
+        );
+
+        // When
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'provider-retry-exhausted',
+                entryNodeId: 'limited',
+                defaults: { retryLimit: 2 },
+                nodes: [{ id: 'limited', kind: 'llm', implementation: 'retry-exhausted-provider' }],
+                edges: [],
+                rules: [],
+                policies: [],
+            },
+        });
+
+        // Then
+        expect(result.status).toBe('failed');
+        expect(attemptsFor(result.events, 'limited')).toEqual([1]);
+        expect(result.terminalError).toEqual({
+            code: 'provider_rate_limited',
+            message: 'temporarily overloaded',
+            retryable: true,
+        });
+        expect(
+            result.events.find((event) => event.type === 'attempt.failed' && event.abg?.nodeId === 'limited')?.abg
+                ?.error?.retryable,
+        ).toBe(false);
+    });
+
+    it('does not misclassify a non-provider retryable-false failure as a provider terminal error', async () => {
+        // Given
+        const registry = createAbgNodeRegistry();
+        registry.register(
+            'non-provider-failure',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                yield {
+                    type: 'failure',
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    error: { code: 'validation_failed', message: 'invalid action state', retryable: false },
+                };
+            },
+        );
+
+        // When
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'non-provider-failure',
+                entryNodeId: 'invalid',
+                defaults: { retryLimit: 2 },
+                nodes: [{ id: 'invalid', kind: 'action', implementation: 'non-provider-failure' }],
+                edges: [],
+                rules: [],
+                policies: [],
+            },
+        });
+
+        // Then
+        expect(attemptsFor(result.events, 'invalid')).toEqual([1, 2, 3]);
+        expect(result.events.at(-1)?.message).not.toContain('provider error');
+    });
+
     it('short-circuits as provider_aborted when the run-owner abort signal is already set', async () => {
         const registry = createAbgNodeRegistry();
         registry.register('always-fail', failTimesBeforeSuccess(Number.POSITIVE_INFINITY));

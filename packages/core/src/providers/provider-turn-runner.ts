@@ -90,6 +90,21 @@ export class ProviderTurnRunner {
                 };
             }
             await sleepBeforeRetry(signal, attempt, this.options.retryBaseDelayMs, this.options.maxRetryDelayMs);
+            if (signal.aborted) {
+                const failedChunk = redactProviderChunk(
+                    responseFailedChunk(input, state.nextProviderSequence, abortedProviderError()),
+                );
+                if (failedChunk.kind !== 'response_failed') {
+                    throw new TypeError(`Unexpected failed provider chunk kind: ${failedChunk.kind}`);
+                }
+                await this.emitEnvelope(input, state, failedChunk, 'durable');
+                return {
+                    status: 'failed',
+                    error: failedChunk.error,
+                    attempts: attempt,
+                    envelopes: state.durableEnvelopes,
+                };
+            }
         }
 
         const error = unknownProviderError('provider retry loop ended unexpectedly');
@@ -156,7 +171,7 @@ export class ProviderTurnRunner {
             return { kind: 'failed', error: normalizeProviderError(error, signal) };
         } finally {
             if (attemptAbort.signal.aborted && iterator !== undefined) {
-                await closeProviderChunkIterator(iterator);
+                void closeProviderChunkIterator(iterator);
             }
             removeOuterAbort();
         }
@@ -265,8 +280,7 @@ function unknownProviderError(message: string): ProtocolError {
 }
 
 function computeRetryDelayMs(retryNumber: number, baseMs: number, capMs: number): number {
-    if (retryNumber <= 1) return 0;
-    const exponent = retryNumber - 2;
+    const exponent = retryNumber - 1;
     const candidate = baseMs * 2 ** exponent;
     return Math.min(capMs, candidate);
 }

@@ -23,6 +23,8 @@ import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { assembleSystemPrompt } from '../../../context/system-prompt.js';
+import { wrapFlatProviderAsSdkModel } from '../../../providers/ai-sdk/flat-provider-bridge.js';
+import { createDeterministicProvider } from '../../../providers/deterministic-provider.js';
 import { ToolRegistry } from '../../../tools/tool-registry.js';
 import type { ToolRegistration } from '../../../tools/tool-registry-types.js';
 import {
@@ -33,7 +35,7 @@ import {
     type PolicyGateFn,
 } from './abg-tool-bridge.js';
 import { abgSignalsFromStreamPart, type StreamPartAdapterContext } from './ai-sdk-adapter.js';
-import { runLlmActor } from './llm-actor-node.js';
+import { type LlmActorModel, runLlmActor } from './llm-actor-node.js';
 
 const NOW = '2026-06-16T00:00:00.000Z';
 const tick = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -116,7 +118,7 @@ function buildEchoTools(policyGate: PolicyGateFn): ReturnType<typeof bridgeAdver
 const messages: ModelMessage[] = [{ role: 'user', content: 'please echo hi' }];
 
 async function collectSignals(
-    model: MockLanguageModelV3,
+    model: LlmActorModel,
     tools: ReturnType<typeof buildEchoTools>,
 ): Promise<readonly AbgSignal[]> {
     const collected: AbgSignal[] = [];
@@ -231,6 +233,42 @@ describe('LLMActor node — Phase 0 gating spike', () => {
         expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
         expect(signals.some((signal) => signal.type === 'success')).toBe(false);
         expect(eventTypes(signals)).toContain('llm.error');
+    });
+
+    it('marks a flat-provider retry exhaustion for the graph coordinator', async () => {
+        // Given
+        const provider = createDeterministicProvider([
+            {
+                kind: 'response_failed',
+                error: {
+                    code: 'provider_rate_limited',
+                    message: 'temporarily overloaded',
+                    retryable: true,
+                },
+            },
+        ]);
+        const model = wrapFlatProviderAsSdkModel({
+            provider,
+            providerID: 'zai-coding-plan',
+            modelID: 'glm-5.2',
+            retryLimit: 0,
+        });
+        const tools = buildEchoTools(async () => ({ allowed: true }));
+
+        // When
+        const signals = await collectSignals(model, tools);
+
+        // Then
+        expect(signals.at(-1)).toMatchObject({
+            type: 'failure',
+            error: {
+                code: 'provider_rate_limited',
+                message: 'temporarily overloaded',
+                retryable: true,
+                retryExhausted: true,
+                providerError: true,
+            },
+        });
     });
 
     it('control: a 2-step budget makes the SDK loop (why stepCountIs(1) is the keystone)', async () => {

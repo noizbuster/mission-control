@@ -3,6 +3,8 @@ import { ProviderTurnError } from './provider-turn-types.js';
 
 export type ProviderChunkIterator = AsyncIterator<ProviderStreamChunk>;
 
+const iteratorClosePromises = new WeakMap<ProviderChunkIterator, Promise<void>>();
+
 export type NextProviderChunkInput = {
     readonly iterator: ProviderChunkIterator;
     readonly signal: AbortSignal;
@@ -47,7 +49,7 @@ export function nextProviderChunk(input: NextProviderChunkInput): Promise<Iterat
             if (beforeCloseResult !== undefined) {
                 await beforeCloseResult;
             }
-            await closeIterator(iterator);
+            await closeProviderChunkIterator(iterator);
         };
         const succeed = (result: IteratorResult<ProviderStreamChunk>) => {
             if (settled) {
@@ -63,8 +65,14 @@ export function nextProviderChunk(input: NextProviderChunkInput): Promise<Iterat
     });
 }
 
-export async function closeProviderChunkIterator(iterator: ProviderChunkIterator): Promise<void> {
-    await closeIterator(iterator);
+export function closeProviderChunkIterator(iterator: ProviderChunkIterator): Promise<void> {
+    const existing = iteratorClosePromises.get(iterator);
+    if (existing !== undefined) {
+        return existing;
+    }
+    const closing = closeIterator(iterator);
+    iteratorClosePromises.set(iterator, closing);
+    return closing;
 }
 
 async function closeIterator(iterator: ProviderChunkIterator): Promise<void> {
@@ -72,7 +80,9 @@ async function closeIterator(iterator: ProviderChunkIterator): Promise<void> {
     if (close === undefined) {
         return;
     }
-    await close.call(iterator).catch(() => undefined);
+    try {
+        await close.call(iterator);
+    } catch {}
 }
 
 function abortedError() {

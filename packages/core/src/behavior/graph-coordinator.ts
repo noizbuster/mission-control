@@ -122,22 +122,23 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     );
                     break;
                 case 'failed': {
-                    // A terminal tool-settlement failure (a `command_not_allowed` under
-                    // `haltOnFailedToolSettlement`) is non-retryable: the model cannot fix it by
-                    // re-running, so fail the run immediately instead of consuming the retry
-                    // budget. Parity with the flat run coordinator's fail-fast on a terminal
-                    // tool settlement. A denial is NOT terminal — the LLMActor surfaces it to the
-                    // model so the run can adapt. The toolCallId travels on the run's tool.failed
-                    // event (set via the adapter), so it surfaces on `session.stopped` without
-                    // threading it here.
+                    // Fail explicit non-retryable provider errors and terminal tool settlements
+                    // immediately instead of consuming the graph retry budget. A denial is NOT
+                    // terminal — the LLMActor surfaces it to the model so the run can adapt. The
+                    // toolCallId travels on the run's tool.failed event (set via the adapter), so it
+                    // surfaces on `session.stopped` without threading it here.
                     if (result.terminal === true) {
+                        const terminalError = terminalErrorFromSignal(result.lastSignal);
+                        const isToolSettlement = terminalError?.code === 'tool_settlement_failed';
                         return failGraph(
                             graph.id,
                             input,
                             state.events,
-                            'tool_settlement_failed',
-                            `ABG run failed on a non-retryable tool settlement: ${result.node.id}`,
-                            terminalErrorFromSignal(result.lastSignal),
+                            terminalError?.code ?? 'node_failed',
+                            isToolSettlement
+                                ? `ABG run failed on a non-retryable tool settlement: ${result.node.id}`
+                                : `ABG run failed on a non-retryable provider error: ${result.node.id}`,
+                            terminalError,
                         );
                     }
                     const consecutiveFailures = (state.consecutiveFailuresByNodeId.get(result.node.id) ?? 0) + 1;

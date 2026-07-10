@@ -85,7 +85,7 @@ export async function runQueuedNode(
                 input,
                 attempt,
                 state.maxAttempts,
-                attemptFailureError(node, attempt, state.maxAttempts),
+                attemptFailureError(node, attempt, state.maxAttempts, runResult.terminal === true),
             ),
         );
         return {
@@ -214,7 +214,7 @@ async function runNode(
                 blocked = true;
             } else {
                 failed = true;
-                if (isTerminalToolFailureError(signal.error)) {
+                if (isTerminalToolFailureError(signal.error) || isTerminalProviderError(signal.error)) {
                     terminal = true;
                 }
             }
@@ -319,6 +319,15 @@ function isTerminalToolFailureError(error: unknown): boolean {
     return error.code === 'tool_settlement_failed';
 }
 
+function isTerminalProviderError(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null || !('providerError' in error) || error.providerError !== true) {
+        return false;
+    }
+    const retryExhausted = 'retryExhausted' in error && error.retryExhausted === true;
+    const explicitlyNonRetryable = 'retryable' in error && error.retryable === false;
+    return retryExhausted || explicitlyNonRetryable;
+}
+
 /**
  * Pull a policy decision out of a `policy.evaluated` emit signal so rule-gated edges
  * can match on it via `policy.decision.equals`. Validated with the schema (never trusts
@@ -337,8 +346,13 @@ function extractPolicyDecision(signal: AbgSignal): AbgPolicyDecision | undefined
     return parsed.success ? parsed.data : undefined;
 }
 
-function attemptFailureError(node: AbgNodeSpec, attempt: number, maxAttempts: number): AbgRuntimeError {
-    const retryable = attempt < maxAttempts;
+function attemptFailureError(
+    node: AbgNodeSpec,
+    attempt: number,
+    maxAttempts: number,
+    terminal: boolean,
+): AbgRuntimeError {
+    const retryable = !terminal && attempt < maxAttempts;
     return {
         code: retryable ? 'node_attempt_failed' : 'node_retry_exhausted',
         message: retryable ? `ABG node attempt failed: ${node.id}` : `ABG node retry limit exhausted: ${node.id}`,

@@ -123,6 +123,8 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         // carrying a secret does not leak into the `llm.error` emit (rendered + persisted).
         const message = redactCredentialText(errorToString(error));
         const errorCode = extractProviderErrorCode(error);
+        const retryable = extractProviderErrorRetryable(error);
+        const retryExhausted = extractProviderRetryExhausted(error);
         yield createAbgEmitSignal({
             graphId: input.graphId,
             nodeId,
@@ -139,7 +141,16 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             type: 'failure',
             nodeId,
             ...graphIdPart,
-            error: errorCode !== undefined ? { message, code: errorCode } : message,
+            error:
+                errorCode !== undefined
+                    ? {
+                          message,
+                          code: errorCode,
+                          providerError: true,
+                          ...(retryable !== undefined ? { retryable } : {}),
+                          ...(retryExhausted ? { retryExhausted: true } : {}),
+                      }
+                    : message,
         };
         return;
     }
@@ -249,6 +260,27 @@ function extractProviderErrorCode(error: unknown): string | undefined {
         }
     }
     return codeOfString(error);
+}
+
+function extractProviderErrorRetryable(error: unknown): boolean | undefined {
+    if (hasField(error, 'error')) {
+        const nested = retryableOf(error.error);
+        if (nested !== undefined) {
+            return nested;
+        }
+    }
+    return retryableOf(error);
+}
+
+function extractProviderRetryExhausted(error: unknown): boolean {
+    return hasField(error, 'retryExhausted') && error.retryExhausted === true;
+}
+
+function retryableOf(value: unknown): boolean | undefined {
+    if (typeof value === 'object' && value !== null && hasField(value, 'retryable')) {
+        return typeof value.retryable === 'boolean' ? value.retryable : undefined;
+    }
+    return undefined;
 }
 
 function codeOfString(value: unknown): string | undefined {
