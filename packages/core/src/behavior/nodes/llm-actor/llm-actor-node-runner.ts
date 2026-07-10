@@ -293,15 +293,24 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         blackboard.appendMessages(turnResult.responseMessages);
         const outputKey = readStringConfig(node, 'outputKey');
         if (outputKey !== undefined) {
+            // Empty text is only a completion signal when the model did NOT propose tools.
+            // Tool-only turns (empty text + tool calls) must keep llm.loop_active so the
+            // graph re-enters for multi-turn research; free-text without a parseable value
+            // also fails closed into the leave-loop path when tools keep the loop open.
+            const text = turnResult.text.trim();
             const parsed: ParseStructuredOutputResult =
-                turnResult.text.trim().length > 0
-                    ? parseStructuredOutput(turnResult.text, readOutputShape(node))
-                    : { ok: true, value: true };
-            const outputResult = applyShapeDefaultFallback(
-                node,
-                applyEnumConstraint(node, parsed),
-                readOutputShape(node),
-            );
+                text.length > 0
+                    ? parseStructuredOutput(text, readOutputShape(node))
+                    : proposedToolCalls > 0
+                      ? { ok: false, error: 'empty text with tool calls is not a completion signal' }
+                      : { ok: true, value: true };
+            const constrained = applyEnumConstraint(node, parsed);
+            // While tools keep the loop open, do not shape-default a failed parse into a
+            // completion value (boolean→false / array→[]). That would clear loop_active and
+            // kill multi-turn research on free-text like "I'll explore...".
+            const outputResult = loopActive
+                ? constrained
+                : applyShapeDefaultFallback(node, constrained, readOutputShape(node));
             if (outputResult.ok) {
                 blackboard.set(outputKey, outputResult.value);
                 yield createAbgEmitSignal({

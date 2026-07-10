@@ -643,6 +643,113 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         expect(blackboard.get('wave.complete')).toBe(true);
     });
 
+    function registryWithProbe(): ToolRegistry {
+        const registry = new ToolRegistry();
+        registry.register({
+            name: 'probe',
+            description: 'read-only probe',
+            capabilityClasses: ['read'],
+            parametersJsonSchema: {
+                type: 'object',
+                properties: {},
+                required: [],
+                additionalProperties: false,
+            },
+            inputSchema: z.object({}),
+            outputSchema: z.object({ ok: z.boolean() }),
+            outputLimit: { maxModelOutputChars: 32 },
+            execute: async () => ({ ok: true }),
+        });
+        return registry;
+    }
+
+    function modelWithToolCall(text: string | null): MockLanguageModelV3 {
+        const chunks: LanguageModelV3StreamPart[] = [{ type: 'stream-start', warnings: [] }];
+        if (text !== null) {
+            chunks.push(
+                { type: 'text-start', id: 't1' },
+                { type: 'text-delta', id: 't1', delta: text },
+                { type: 'text-end', id: 't1' },
+            );
+        }
+        chunks.push(
+            { type: 'tool-input-start', id: 'call_probe', toolName: 'probe' },
+            { type: 'tool-input-delta', id: 'call_probe', delta: '{}' },
+            { type: 'tool-input-end', id: 'call_probe' },
+            { type: 'tool-call', toolCallId: 'call_probe', toolName: 'probe', input: '{}' },
+            { type: 'finish', finishReason: { unified: 'tool-calls', raw: undefined }, usage: buildUsage() },
+        );
+        return new MockLanguageModelV3({
+            provider: 'test',
+            modelId: 'mock-tool-call',
+            doStream: async () => ({ stream: convertArrayToReadableStream(chunks) }),
+        });
+    }
+
+    it('does not write outputKey and keeps loop_active for tool call + empty text', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_tool_empty',
+            now: () => NOW,
+            sdkModel: modelWithToolCall(''),
+            blackboard,
+            toolRegistry: registryWithProbe(),
+        };
+        const node = {
+            id: 'research-explore',
+            kind: 'llm' as const,
+            capabilities: ['read'],
+            config: { outputKey: 'explore.complete', outputShape: 'boolean' },
+        };
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.has('explore.complete')).toBe(false);
+        expect(blackboard.get('llm.loop_active')).toBe(true);
+    });
+
+    it('does not complete on free prose with a tool call when outputShape is boolean', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_tool_prose',
+            now: () => NOW,
+            sdkModel: modelWithToolCall("I'll explore the codebase next."),
+            blackboard,
+            toolRegistry: registryWithProbe(),
+        };
+        const node = {
+            id: 'research-explore',
+            kind: 'llm' as const,
+            capabilities: ['read'],
+            config: { outputKey: 'explore.complete', outputShape: 'boolean' },
+        };
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.has('explore.complete')).toBe(false);
+        expect(blackboard.get('llm.loop_active')).toBe(true);
+    });
+
+    it('writes explore.complete true and clears loop when last line is true with no tools', async () => {
+        const blackboard = seedBlackboard();
+        const context: AbgNodeRunContext = {
+            graphId: 'g_bool_true_complete',
+            now: () => NOW,
+            sdkModel: modelReturning('Here is the grounded synthesis.\ntrue'),
+            blackboard,
+        };
+        const node = {
+            id: 'research-explore',
+            kind: 'llm' as const,
+            config: { outputKey: 'explore.complete', outputShape: 'boolean' },
+        };
+
+        await collectSignals(runLlmActorNode(node, context));
+
+        expect(blackboard.get('explore.complete')).toBe(true);
+        expect(blackboard.get('llm.loop_active')).toBe(false);
+    });
+
     it('leaves the blackboard untouched for nodes without an outputKey', async () => {
         const blackboard = seedBlackboard();
         const context: AbgNodeRunContext = {
