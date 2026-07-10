@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createChatStore } from '../state/chat-store.js';
 import { fileCompletionFrecencyKey } from './ChatInputArea.js';
 import { createRecordingTextarea, makeKeyEvent } from './chat-test-support.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 function readChatInputAreaSource(): string {
     return readFileSync(resolve(process.cwd(), 'apps/tui/src/components/ChatInputArea.tsx'), 'utf8');
@@ -79,9 +79,9 @@ describe('ChatInputArea history picker keyboard contract', () => {
     });
 
     it('makeKeyEvent supports the history picker key names used by the handler', () => {
-        const up = makeKeyEvent({ name: 'up' });
-        const enter = makeKeyEvent({ name: 'return' });
-        const esc = makeKeyEvent({ name: 'escape' });
+        const up = makeKeyEvent('up');
+        const enter = makeKeyEvent('return');
+        const esc = makeKeyEvent('escape');
         expect(up.name).toBe('up');
         expect(enter.name).toBe('return');
         expect(esc.name).toBe('escape');

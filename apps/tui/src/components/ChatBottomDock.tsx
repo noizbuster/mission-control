@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 
 import { useTerminalDimensions } from '@opentui/solid';
-import { Show, type JSX } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
 import type { ChatAppActions } from '../state/chat-app-actions.js';
 import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
@@ -103,10 +103,8 @@ function renderPromptAdjacentPanels({
     const historyPickerOpen = dockSlice.historyPicker.open;
     const showHistoryPicker = historyPickerOpen && menuPolicy.rows > 0;
     const showSlashOrWorkflow =
-        !historyPickerOpen &&
-        (dockSlice.inputMirror.startsWith('/') || dockSlice.inputMirror.startsWith('#'));
-    const showFileAutocomplete =
-        !historyPickerOpen && !showSlashOrWorkflow && dockSlice.fileAutocomplete.open;
+        !historyPickerOpen && (dockSlice.inputMirror.startsWith('/') || dockSlice.inputMirror.startsWith('#'));
+    const showFileAutocomplete = !historyPickerOpen && !showSlashOrWorkflow && dockSlice.fileAutocomplete.open;
     const showPolicyMenu = menuPolicy.rows > 0 && (showSlashOrWorkflow || showFileAutocomplete);
     const hasPromptAdjacentPanel = promptAdjacentPanel !== undefined && promptAdjacentPanel !== null;
 

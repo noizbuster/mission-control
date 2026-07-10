@@ -161,15 +161,28 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
     const handleKeyDown = (key: KeyEvent): void => {
         const snap = props.store.getSnapshot();
 
-        const hostedOverlayActive = snap.overlayMode === 'rename' || snap.overlayMode === 'approval' ||
-            snap.overlayMode === 'level-picker' || snap.overlayMode === 'model-picker' ||
+        const hostedOverlayActive =
+            snap.overlayMode === 'rename' ||
+            snap.overlayMode === 'approval' ||
+            snap.overlayMode === 'level-picker' ||
+            snap.overlayMode === 'model-picker' ||
             snap.overlayMode === 'session-picker';
 
         if (hostedOverlayActive) {
-            if (key.name === 'up' || key.name === 'down' || key.name === 'left' || key.name === 'right' ||
-                key.name === 'pageup' || key.name === 'pagedown' || key.name === 'home' || key.name === 'end' ||
-                key.name === 'return' || key.name === 'escape' || key.name === 'backspace' ||
-                key.name === 'tab') {
+            if (
+                key.name === 'up' ||
+                key.name === 'down' ||
+                key.name === 'left' ||
+                key.name === 'right' ||
+                key.name === 'pageup' ||
+                key.name === 'pagedown' ||
+                key.name === 'home' ||
+                key.name === 'end' ||
+                key.name === 'return' ||
+                key.name === 'escape' ||
+                key.name === 'backspace' ||
+                key.name === 'tab'
+            ) {
                 return;
             }
             const ch = String.fromCodePoint((key as { baseCode?: number }).baseCode ?? 0);

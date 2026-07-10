@@ -1,12 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 
-import {
-    padEndToDisplayWidth,
-    terminalDisplayWidth,
-    truncateTerminalText,
-} from '@mission-control/tui';
+import { padEndToDisplayWidth, terminalDisplayWidth, truncateTerminalText } from '@mission-control/tui';
 import { TextAttributes } from '@opentui/core';
-import { For, type JSX } from 'solid-js';
+import { createMemo, For, type JSX, Show } from 'solid-js';
 import {
     createHistoryPickerView,
     type HistoryPickerEntry,
@@ -83,67 +79,68 @@ export function layoutHistoryPickerRow(
         const content = `${marker}${padded}`;
         const time =
             index === 0
-                ? padEndToDisplayWidth(
-                      truncateTerminalText(row.timeColumn, timeColumnWidth, '\u2026'),
-                      timeColumnWidth,
-                  )
+                ? padEndToDisplayWidth(truncateTerminalText(row.timeColumn, timeColumnWidth, '\u2026'), timeColumnWidth)
                 : undefined;
         lines.push({ content, time, selected: row.selected });
     }
     return lines;
 }
 
-export function HistoryPickerPanel(props: HistoryPickerPanelProps): JSX.Element | null {
-    if (!props.pickerState.open) return null;
-    if (props.maxLines <= 0) return null;
-
-    const nowMs = props.nowMs ?? Date.now();
-    const columns = props.columns ?? DEFAULT_COLUMNS;
-    const showFooter = props.showFooter ?? true;
-    const view = createHistoryPickerView(props.entries, props.pickerState, props.maxLines, nowMs);
-
-    const header =
-        view.empty || view.totalCount === 0
-            ? 'Prompt history'
-            : `Prompt history (${view.totalCount})`;
-
-    if (view.empty) {
-        return (
-            <OverlayFrame variant="panel" title={header} {...(showFooter ? { footer: FOOTER } : {})}>
-                <text attributes={TextAttributes.DIM}> No prompt history</text>
-            </OverlayFrame>
-        );
-    }
-
-    const timeColumnWidth = computeHistoryTimeColumnWidth(view.rows.map((row) => row.timeColumn));
-    const contentWidth = computeHistoryContentColumnWidth(columns, timeColumnWidth);
+export function HistoryPickerPanel(props: HistoryPickerPanelProps): JSX.Element {
+    const open = (): boolean => props.pickerState.open && props.maxLines > 0;
+    const view = createMemo(() => {
+        const nowMs = props.nowMs ?? Date.now();
+        return createHistoryPickerView(props.entries, props.pickerState, props.maxLines, nowMs);
+    });
+    const columns = (): number => props.columns ?? DEFAULT_COLUMNS;
+    const showFooter = (): boolean => props.showFooter ?? true;
+    const header = createMemo(() => {
+        const current = view();
+        if (current.empty || current.totalCount === 0) {
+            return 'Prompt history';
+        }
+        return `Prompt history (${current.totalCount})`;
+    });
+    const timeColumnWidth = createMemo(() => {
+        const current = view();
+        if (current.empty) {
+            return MIN_TIME_COLUMN_WIDTH;
+        }
+        return computeHistoryTimeColumnWidth(current.rows.map((row) => row.timeColumn));
+    });
+    const contentWidth = createMemo(() => computeHistoryContentColumnWidth(columns(), timeColumnWidth()));
 
     return (
-        <OverlayFrame variant="panel" title={header} {...(showFooter ? { footer: FOOTER } : {})}>
-            <For each={view.rows}>
-                {(row) => {
-                    const lines = layoutHistoryPickerRow(row, contentWidth, timeColumnWidth);
-                    return (
-                        <box flexDirection="column">
-                            <For each={lines}>
-                                {(line) => {
-                                    const selectedBg = line.selected ? { bg: SELECTED_BG } : {};
-                                    return (
-                                        <box flexDirection="row" height={1}>
-                                            <text {...selectedBg}>{line.content}</text>
-                                            {line.time !== undefined ? (
-                                                <text attributes={TextAttributes.DIM} {...selectedBg}>
-                                                    {`  ${line.time}`}
-                                                </text>
-                                            ) : null}
-                                        </box>
-                                    );
-                                }}
-                            </For>
-                        </box>
-                    );
-                }}
-            </For>
-        </OverlayFrame>
+        <Show when={open()}>
+            <OverlayFrame variant="panel" title={header()} {...(showFooter() ? { footer: FOOTER } : {})}>
+                <Show when={!view().empty} fallback={<text attributes={TextAttributes.DIM}> No prompt history</text>}>
+                    <For each={view().empty ? [] : view().rows}>
+                        {(row) => {
+                            const lines = (): readonly HistoryPickerLayoutLine[] =>
+                                layoutHistoryPickerRow(row, contentWidth(), timeColumnWidth());
+                            return (
+                                <box flexDirection="column">
+                                    <For each={lines()}>
+                                        {(line) => {
+                                            const selectedBg = line.selected ? { bg: SELECTED_BG } : {};
+                                            return (
+                                                <box flexDirection="row" height={1}>
+                                                    <text {...selectedBg}>{line.content}</text>
+                                                    {line.time !== undefined ? (
+                                                        <text attributes={TextAttributes.DIM} {...selectedBg}>
+                                                            {`  ${line.time}`}
+                                                        </text>
+                                                    ) : null}
+                                                </box>
+                                            );
+                                        }}
+                                    </For>
+                                </box>
+                            );
+                        }}
+                    </For>
+                </Show>
+            </OverlayFrame>
+        </Show>
     );
 }

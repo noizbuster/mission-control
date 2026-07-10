@@ -1,13 +1,13 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
 import { terminalDisplayWidth } from '@mission-control/tui';
+import { describe, expect, it, vi } from 'vitest';
 import type { HistoryPickerVisibleRow } from '../state/history-picker-state.js';
 import {
     computeHistoryContentColumnWidth,
     computeHistoryTimeColumnWidth,
     layoutHistoryPickerRow,
 } from './HistoryPickerPanel.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
 
@@ -30,9 +30,7 @@ describe('computeHistoryTimeColumnWidth', () => {
 
     it('expands to the widest visible time string', () => {
         const wide = 'Jul 9 14:30 (yesterday)';
-        expect(computeHistoryTimeColumnWidth(['14:30 (5m ago)', wide])).toBe(
-            Math.max(14, terminalDisplayWidth(wide)),
-        );
+        expect(computeHistoryTimeColumnWidth(['14:30 (5m ago)', wide])).toBe(Math.max(14, terminalDisplayWidth(wide)));
     });
 });
 
@@ -92,7 +90,8 @@ describe('HistoryPickerPanel closed / zero budget contract', () => {
         expect(source).toContain('variant="panel"');
         expect(source).toContain('No prompt history');
         expect(source).toContain('Up/Down navigate, Enter insert, Esc close');
-        expect(source).toContain('if (!props.pickerState.open) return null');
-        expect(source).toContain('if (props.maxLines <= 0) return null');
+        expect(source).toContain('props.pickerState.open');
+        expect(source).toContain('props.maxLines > 0');
+        expect(source).toContain('<Show when={open()}>');
     });
 });
