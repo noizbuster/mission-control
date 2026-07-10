@@ -226,6 +226,20 @@ describe('default workflow parity — exploratory-research routes read-only, nev
         const reachable = reachableTargets(graph, 'research-explore');
         expect(reachable.has('final-respond')).toBe(true);
     });
+
+    it('research-explore requires boolean explore.complete === true (not key.exists)', () => {
+        const graph = createDefaultWorkflowGraph();
+        const node = findNode(graph, 'research-explore');
+        expect(configString(node, 'outputKey')).toBe('explore.complete');
+        expect(configString(node, 'outputShape')).toBe('boolean');
+        expect(configValue(node, 'outputDefault')).toBeUndefined();
+        const rule = ruleById(graph, 'research-complete');
+        expect(rule.when).toEqual({
+            kind: 'blackboard.value.equals',
+            key: 'explore.complete',
+            value: true,
+        });
+    });
 });
 
 describe('default workflow parity — open-ended-planning routes to planning, never implements', () => {

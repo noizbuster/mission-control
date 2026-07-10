@@ -37,8 +37,9 @@
         "label": "Exploratory research — read-only, NO edits",
         "capabilities": ["read"],
         "config": {
-          "systemPrompt": "Exploratory/research intent. Explore the codebase and/or external docs to answer the user's question, then synthesize a grounded answer. You are READ-ONLY: you must NOT edit, write, patch, or run effectful tools. Cite file:line evidence for every claim about the codebase. Do NOT begin implementation — if the exploration reveals the user actually wants implementation, say so and stop.\nPATH RESILIENCE: paths mentioned in project docs (AGENTS.md, CLAUDE.md) may be stale after refactors. If a documented path returns not_found, do NOT conclude the file or feature is missing — fall back to glob with the basename (e.g. \"**/<basename>\"), grep for a distinctive symbol from the docs, or list the parent directory. Only conclude \"not present\" after at least one alternative search has returned empty. A failed read is NOT explored ground — it tells you nothing about whether the file exists elsewhere.\nSet explore.complete when synthesis is ready.",
-          "outputKey": "explore.complete"
+          "systemPrompt": "Exploratory/research intent. Explore the codebase and/or external docs to answer the user's question, then synthesize a grounded answer. You are READ-ONLY: you must NOT edit, write, patch, or run effectful tools. Cite file:line evidence for every claim about the codebase. Do NOT begin implementation — if the exploration reveals the user actually wants implementation, say so and stop.\nPATH RESILIENCE: paths mentioned in project docs (AGENTS.md, CLAUDE.md) may be stale after refactors. If a documented path returns not_found, do NOT conclude the file or feature is missing — fall back to glob with the basename (e.g. \"**/<basename>\"), grep for a distinctive symbol from the docs, or list the parent directory. Only conclude \"not present\" after at least one alternative search has returned empty. A failed read is NOT explored ground — it tells you nothing about whether the file exists elsewhere.\nMulti-turn: keep calling tools until you have enough grounded evidence for a complete answer. While exploring, call tools and do NOT output true. When ready, synthesize the answer, then on the LAST line output EXACTLY `true` (boolean) — no quotes, no formatting, no extra text.",
+          "outputKey": "explore.complete",
+          "outputShape": "boolean"
         }
       },
       {
@@ -428,8 +429,9 @@
         "id": "research-complete",
         "description": "exploratory research synthesis ready",
         "when": {
-          "kind": "blackboard.key.exists",
-          "key": "explore.complete"
+          "kind": "blackboard.value.equals",
+          "key": "explore.complete",
+          "value": true
         }
       },
       {

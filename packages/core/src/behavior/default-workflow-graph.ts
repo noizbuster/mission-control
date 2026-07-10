@@ -137,8 +137,12 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         'for a distinctive symbol from the docs, or list the parent directory. Only conclude ' +
                         '"not present" after at least one alternative search has returned empty. A failed read ' +
                         'is NOT explored ground — it tells you nothing about whether the file exists elsewhere.\n' +
-                        'Set explore.complete when synthesis is ready.',
+                        'Multi-turn: keep calling tools until you have enough grounded evidence for a complete ' +
+                        'answer. While exploring, call tools and do NOT output true. When ready, synthesize the ' +
+                        'answer, then on the LAST line output EXACTLY `true` (boolean) — no quotes, no formatting, ' +
+                        'no extra text.',
                     outputKey: 'explore.complete',
+                    outputShape: 'boolean',
                 },
             },
             {
@@ -401,7 +405,7 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
             {
                 id: 'research-complete',
                 description: 'exploratory research synthesis ready',
-                when: { kind: 'blackboard.key.exists', key: 'explore.complete' },
+                when: { kind: 'blackboard.value.equals', key: 'explore.complete', value: true },
             },
             {
                 id: 'planner-routed',
