@@ -15,6 +15,7 @@ import type { AuthorableAbgGraph } from './authorable-graph.js';
 import type { CostLedger } from './budget/cost-ledger.js';
 import { createCostLedger } from './budget/cost-ledger.js';
 import type { AbgGraphRunnerInput } from './graph-runner.js';
+import type { LoopSafetyNodeState } from './loop-safety.js';
 import type { AbgNodeRegistry, AbgObservedGraphEvent } from './node-registry.js';
 import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node.js';
 import { projectAbgSignalToEvent } from './signals.js';
@@ -32,6 +33,8 @@ export type CoordinatorState = {
     readonly attemptsByNodeId: Map<string, number>;
     readonly consecutiveFailuresByNodeId: Map<string, number>;
     readonly consecutiveToolFailuresByNodeId: Map<string, number>;
+    /** Per-node identical-turn / identical-failure detectors (infinite-loop safety). */
+    readonly loopSafetyByNodeId: Map<string, LoopSafetyNodeState>;
     readonly maxAttempts: number;
     readonly maxNodeRuns: number;
     readonly graphNodeConcurrency: number;
@@ -94,6 +97,7 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         attemptsByNodeId: new Map(),
         consecutiveFailuresByNodeId: new Map(),
         consecutiveToolFailuresByNodeId: new Map(),
+        loopSafetyByNodeId: new Map(),
         maxAttempts: (graph.defaults?.retryLimit ?? defaultRetryLimit) + 1,
         maxNodeRuns: graph.defaults?.maxNodeRuns ?? input.maxNodeRuns ?? defaultMaxNodeRuns,
         graphNodeConcurrency: input.graphNodeConcurrency ?? defaultGraphNodeConcurrency,

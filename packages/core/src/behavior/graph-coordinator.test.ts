@@ -268,6 +268,146 @@ describe('bounded ABG graph coordinator', () => {
         expect(result.events.some((e) => e.type === 'node.completed' && e.abg?.nodeId === 'final')).toBe(true);
     });
 
+    it('soft-lands when the same tool turn fingerprint repeats', async () => {
+        // Given: node always completes the same tool call
+        // When: identical turn signature hits streak limit (3)
+        // Then: soft-land with node_repeated_tool_pattern and promote explore.complete
+        const registry = createAbgNodeRegistry();
+        let runs = 0;
+        registry.register(
+            'same-tool',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                runs += 1;
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                context.blackboard?.set('llm.loop_active', true);
+                yield createAbgEmitSignal({
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    eventType: 'llm.tool_call.proposed',
+                    timestamp: context.now(),
+                    payload: { toolCallId: `c${runs}`, toolName: 'glob', input: { pattern: '**/*' } },
+                });
+                yield createAbgEmitSignal({
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    eventType: 'tool.completed',
+                    timestamp: context.now(),
+                    payload: { toolCallId: `c${runs}`, toolName: 'glob', output: 'ok' },
+                });
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+        registry.register(
+            'synth',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id, result: { text: 'done' } };
+            },
+        );
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'repeat-tool',
+                entryNodeId: 'research',
+                defaults: { retryLimit: 2, maxNodeRuns: 64 },
+                nodes: [
+                    {
+                        id: 'research',
+                        kind: 'llm',
+                        implementation: 'same-tool',
+                        config: { outputKey: 'explore.complete', outputShape: 'boolean' },
+                    },
+                    { id: 'final', kind: 'llm', implementation: 'synth' },
+                ],
+                edges: [
+                    { source: 'research', target: 'final', condition: 'research-complete', priority: 10 },
+                    { source: 'research', target: 'research', condition: 'llm-loop-active', priority: 5 },
+                ],
+                rules: [
+                    {
+                        id: 'research-complete',
+                        description: 'research done',
+                        when: { kind: 'blackboard.value.equals', key: 'explore.complete', value: true },
+                    },
+                    {
+                        id: 'llm-loop-active',
+                        description: 'llm loop active',
+                        when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true },
+                    },
+                ],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('completed');
+        expect(runs).toBe(3);
+        expect(
+            result.events.some((e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_repeated_tool_pattern'),
+        ).toBe(true);
+        expect(result.events.some((e) => e.type === 'node.completed' && e.abg?.nodeId === 'final')).toBe(true);
+    });
+
+    it('fails the graph when the same tool-failure combination repeats', async () => {
+        // Given: node "succeeds" but only with the same retryable tool failure each turn
+        // When: identical failure signature hits streak limit (3)
+        // Then: graph fails with repeated_failure_pattern (before maxAttempts tool-retry path alone)
+        const registry = createAbgNodeRegistry();
+        let runs = 0;
+        registry.register(
+            'same-tool-fail',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                runs += 1;
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                context.blackboard?.set('llm.loop_active', true);
+                yield createAbgEmitSignal({
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    eventType: 'llm.tool_call.proposed',
+                    timestamp: context.now(),
+                    payload: { toolCallId: `f${runs}`, toolName: 'bash', input: { cmd: 'flaky' } },
+                });
+                yield createAbgEmitSignal({
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    eventType: 'tool.failed',
+                    timestamp: context.now(),
+                    payload: {
+                        toolCallId: `f${runs}`,
+                        toolName: 'bash',
+                        error: { code: 'timeout', message: 'timed out', retryable: true },
+                    },
+                });
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'repeat-tool-fail',
+                entryNodeId: 'flaky',
+                defaults: { retryLimit: 10, maxNodeRuns: 64 },
+                nodes: [{ id: 'flaky', kind: 'llm', implementation: 'same-tool-fail' }],
+                edges: [{ source: 'flaky', target: 'flaky', condition: 'llm-loop-active', priority: 5 }],
+                rules: [
+                    {
+                        id: 'llm-loop-active',
+                        description: 'llm loop active',
+                        when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true },
+                    },
+                ],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('failed');
+        expect(result.terminalError?.code).toBe('repeated_failure_pattern');
+        expect(runs).toBe(3);
+    });
+
     it('allows many productive tool turns under maxNodeRuns without soft-land', async () => {
         // Productive research turns must not be capped by a separate small loop budget.
         const registry = createAbgNodeRegistry();

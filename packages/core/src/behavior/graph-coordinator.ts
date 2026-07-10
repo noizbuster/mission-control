@@ -11,6 +11,13 @@ import { runQueuedNode } from './graph-coordinator-node-runner.js';
 import { scheduleQueuedNodes } from './graph-coordinator-scheduler.js';
 import type { AbgGraphRunnerInput, AbgGraphRunResult, AbgGraphTerminalError } from './graph-runner.js';
 import { graphEvent } from './graph-runner-events.js';
+import {
+    createLoopSafetyNodeState,
+    type LoopSafetyTrip,
+    type ToolActionFingerprint,
+    recordFailureTurn,
+    recordToolTurn,
+} from './loop-safety.js';
 import { createDefaultAbgNodeRegistry } from './node-registry.js';
 import { projectAbgSignalToEvent } from './signals.js';
 
@@ -80,12 +87,39 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                                 terminalErrorFromSignal(result.lastSignal),
                             );
                         }
+                        const failureTrip = applyLoopSafetyFailure(
+                            result.node.id,
+                            state,
+                            result.toolActions ?? [],
+                            nodeFailureSignature(result.lastSignal),
+                        );
+                        if (failureTrip?.kind === 'fail') {
+                            return failGraph(
+                                graph.id,
+                                input,
+                                state.events,
+                                failureTrip.code,
+                                `ABG node ${result.node.id}: ${failureTrip.message}`,
+                                {
+                                    code: failureTrip.code,
+                                    message: failureTrip.message,
+                                    retryable: false,
+                                },
+                            );
+                        }
                     } else if (result.hadProductiveToolUse === true) {
-                        // Productive tool use is progress (observe→act), not a "stuck" signal.
-                        // Only soft-land when the graph hard ceiling is about to fire so a
-                        // completion edge (final-respond) can still run instead of graph_loop_limit.
+                        // Productive tool use is progress unless the *same* tool turn repeats.
                         state.consecutiveToolFailuresByNodeId.set(result.node.id, 0);
-                        softLandToolLoopIfNearMaxNodeRuns(result.node, state, graph.id, input);
+                        const trip = applyLoopSafetyToolTurn(
+                            result.node.id,
+                            state,
+                            result.toolActions ?? [],
+                        );
+                        if (trip?.kind === 'soft_land') {
+                            softLandToolLoop(result.node, state, graph.id, input, trip);
+                        } else {
+                            softLandToolLoopIfNearMaxNodeRuns(result.node, state, graph.id, input);
+                        }
                     }
                     state.consecutiveFailuresByNodeId.set(result.node.id, 0);
                     enqueueSelectedTargets(
@@ -118,6 +152,9 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                             terminalError,
                         );
                     }
+                    // Node-level retries stay on consecutiveFailures / maxAttempts.
+                    // Identical failure-combination detection applies to completed tool-failure
+                    // turns (above), not here — otherwise it races node_retry_exhausted.
                     const consecutiveFailures = (state.consecutiveFailuresByNodeId.get(result.node.id) ?? 0) + 1;
                     state.consecutiveFailuresByNodeId.set(result.node.id, consecutiveFailures);
                     if (consecutiveFailures < state.maxAttempts) {
@@ -298,11 +335,46 @@ function assertNeverQueuedNodeResult(result: never): never {
     throw new Error(`Unhandled queued node result: ${String(result)}`);
 }
 
-/**
- * Soft-land a tool self-loop when only one node-run remains under maxNodeRuns.
- * Productive tool re-entries are unbounded until this graph ceiling; counting them
- * as a separate "loop budget" wrongly kills long research.
- */
+function loopSafetyState(nodeId: string, state: CoordinatorState) {
+    let entry = state.loopSafetyByNodeId.get(nodeId);
+    if (entry === undefined) {
+        entry = createLoopSafetyNodeState();
+        state.loopSafetyByNodeId.set(nodeId, entry);
+    }
+    return entry;
+}
+
+function applyLoopSafetyToolTurn(
+    nodeId: string,
+    state: CoordinatorState,
+    actions: readonly ToolActionFingerprint[],
+): LoopSafetyTrip | undefined {
+    return recordToolTurn(loopSafetyState(nodeId, state), actions);
+}
+
+function applyLoopSafetyFailure(
+    nodeId: string,
+    state: CoordinatorState,
+    actions: readonly ToolActionFingerprint[],
+    fallbackSignature?: string,
+): LoopSafetyTrip | undefined {
+    return recordFailureTurn(loopSafetyState(nodeId, state), actions, undefined, fallbackSignature);
+}
+
+function nodeFailureSignature(signal: AbgSignal | undefined): string | undefined {
+    if (signal === undefined || signal.type !== 'failure') {
+        return undefined;
+    }
+    const error = signal.error;
+    if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string') {
+        return `node:${error.code}`;
+    }
+    if (typeof error === 'string' && error.length > 0) {
+        return `node:${error}`;
+    }
+    return 'node:failure';
+}
+
 function softLandToolLoopIfNearMaxNodeRuns(
     node: AbgNodeSpec,
     state: CoordinatorState,
@@ -312,17 +384,36 @@ function softLandToolLoopIfNearMaxNodeRuns(
     if (state.blackboard.get('llm.loop_active') !== true) {
         return;
     }
-    // Reserve one run for a completion/synthesis successor (or a clean exit).
     if (state.totalNodeRuns < state.maxNodeRuns - 1) {
         return;
     }
+    softLandToolLoop(node, state, graphId, input, {
+        eventCode: 'node_loop_soft_landed',
+        message: `soft-landed at maxNodeRuns ${state.maxNodeRuns}`,
+    });
+}
+
+function softLandToolLoop(
+    node: AbgNodeSpec,
+    state: CoordinatorState,
+    graphId: string,
+    input: AbgGraphRunnerInput,
+    trip: LoopSafetyTrip | { readonly eventCode: string; readonly message: string },
+): void {
     state.blackboard.set('llm.loop_active', false);
     forceCompleteBooleanOutputKey(node, state);
+    const eventCode =
+        'eventCode' in trip
+            ? trip.eventCode
+            : trip.kind === 'soft_land'
+              ? 'node_repeated_tool_pattern'
+              : trip.code;
+    const message = trip.message;
     state.events.push({
         type: 'node.failed',
         timestamp: input.now(),
         sessionId: input.sessionId,
-        message: `ABG node soft-landed at maxNodeRuns: ${node.id} (${state.totalNodeRuns}/${state.maxNodeRuns})`,
+        message: `ABG node soft-landed: ${node.id} — ${message}`,
         durability: 'durable',
         nativeSidecarStatus: 'mock',
         modelProviderSelection: input.modelProviderSelection,
@@ -331,8 +422,8 @@ function softLandToolLoopIfNearMaxNodeRuns(
             nodeId: node.id,
             signalType: 'fallback',
             error: {
-                code: 'node_loop_soft_landed',
-                message: `soft-landed at maxNodeRuns ${state.maxNodeRuns}`,
+                code: eventCode,
+                message,
                 retryable: false,
             },
         },
