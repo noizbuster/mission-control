@@ -19,6 +19,7 @@ export * from './chat-input-event.js';
 export * from './chat-selector-store.js';
 export * from './chat-store.js';
 export * from './chat-tui-types.js';
+export * from './history-picker-format.js';
 export * from './interactive-chat-command-menu.js';
 export * from './interactive-chat-cursor-navigation.js';
 export * from './interactive-chat-file-autocomplete.js';
