@@ -79,7 +79,7 @@ describe('ChatBottomDockBase source topology', () => {
         expect(readChatInputAreaSource()).toContain('useTuiPromptRef');
     });
 
-    it('derives prompt-adjacent menu visibility from slash, workflow, file, and menu-row state', () => {
+    it('derives prompt-adjacent menu visibility from slash, workflow, file, history picker, and menu-row state', () => {
         const source = readChatBottomDockSource();
         const block = sliceBetween(
             source,
@@ -87,6 +87,8 @@ describe('ChatBottomDockBase source topology', () => {
             'export function buildTopStatusBarProps',
         );
 
+        expect(block).toContain('dockSlice.historyPicker.open');
+        expect(block).toContain('<HistoryPickerPanel');
         expect(block).toContain("dockSlice.inputMirror.startsWith('/')");
         expect(block).toContain("dockSlice.inputMirror.startsWith('#')");
         expect(block).toContain('dockSlice.fileAutocomplete.open');

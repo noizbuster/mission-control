@@ -5,6 +5,7 @@ import { Show, type JSX } from 'solid-js';
 import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
 import type { ChatAppActions } from '../state/chat-app-actions.js';
 import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
+import type { HistoryPickerEntry, HistoryPickerState } from '../state/history-picker-state.js';
 import type { SlashCommandMenuState } from '../state/interactive-chat-command-menu.js';
 import type { FileAutocompleteState } from '../state/interactive-chat-file-autocomplete.js';
 import { resolveSeparatorState } from '../state/separator-state.js';
@@ -13,6 +14,7 @@ import type { ChatTextareaHandle } from './ChatInputTextarea.js';
 import type { ChatScrollboxHandle } from './ChatTranscript.js';
 import { type BottomDockMenuPolicy, bottomDockPolicy } from './chat-bottom-dock-policy.js';
 import { FileAutocompletePanel } from './FileAutocompletePanel.js';
+import { HistoryPickerPanel } from './HistoryPickerPanel.js';
 import { QuestionOverlay } from './OverlayPanels.js';
 import type { SeparatorState } from './Separator.js';
 import { SlashMenuPanel } from './SlashMenuPanel.js';
@@ -30,6 +32,8 @@ export type ChatBottomDockSlice = {
     readonly menuState: SlashCommandMenuState;
     readonly workflowNames: readonly string[];
     readonly fileAutocomplete: FileAutocompleteState;
+    readonly historyEntries: readonly HistoryPickerEntry[];
+    readonly historyPicker: HistoryPickerState;
     readonly providerID: string | undefined;
     readonly modelID: string | undefined;
     readonly variantID: string | undefined;
@@ -73,6 +77,8 @@ export function selectChatBottomDockSlice(snapshot: ChatStoreState): ChatBottomD
         menuState: snapshot.menuState,
         workflowNames: snapshot.workflowNames,
         fileAutocomplete: snapshot.fileAutocomplete,
+        historyEntries: snapshot.historyEntries,
+        historyPicker: snapshot.historyPicker,
         providerID: snapshot.currentModelSelection?.providerID,
         modelID: snapshot.currentModelSelection?.modelID,
         variantID: snapshot.currentModelVariantID,
@@ -92,16 +98,31 @@ function renderPromptAdjacentPanels({
     dockSlice,
     menuPolicy,
     promptAdjacentPanel,
-}: PromptAdjacentPanelsInput): JSX.Element | null {
-    const showSlashOrWorkflow = dockSlice.inputMirror.startsWith('/') || dockSlice.inputMirror.startsWith('#');
-    const showFileAutocomplete = !showSlashOrWorkflow && dockSlice.fileAutocomplete.open;
+    columns,
+}: PromptAdjacentPanelsInput & { readonly columns: number }): JSX.Element | null {
+    const historyPickerOpen = dockSlice.historyPicker.open;
+    const showHistoryPicker = historyPickerOpen && menuPolicy.rows > 0;
+    const showSlashOrWorkflow =
+        !historyPickerOpen &&
+        (dockSlice.inputMirror.startsWith('/') || dockSlice.inputMirror.startsWith('#'));
+    const showFileAutocomplete =
+        !historyPickerOpen && !showSlashOrWorkflow && dockSlice.fileAutocomplete.open;
     const showPolicyMenu = menuPolicy.rows > 0 && (showSlashOrWorkflow || showFileAutocomplete);
     const hasPromptAdjacentPanel = promptAdjacentPanel !== undefined && promptAdjacentPanel !== null;
 
-    if (!showPolicyMenu && !hasPromptAdjacentPanel) return null;
+    if (!showHistoryPicker && !showPolicyMenu && !hasPromptAdjacentPanel) return null;
 
     return (
         <box flexDirection="column" flexShrink={0} width="100%">
+            {showHistoryPicker ? (
+                <HistoryPickerPanel
+                    entries={[...dockSlice.historyEntries].reverse()}
+                    pickerState={dockSlice.historyPicker}
+                    maxLines={menuPolicy.rows}
+                    columns={columns}
+                    showFooter={menuPolicy.showPanelFooter}
+                />
+            ) : null}
             {showPolicyMenu && showSlashOrWorkflow ? (
                 <SlashMenuPanel
                     inputBuffer={dockSlice.inputMirror}
@@ -183,6 +204,7 @@ export function ChatBottomDockBase(props: ChatBottomDockBaseProps): JSX.Element 
                 dockSlice: props.dockSlice,
                 menuPolicy: menuPolicy(),
                 promptAdjacentPanel: props.promptAdjacentPanel,
+                columns: dimensions().width,
             })}
             <Show
                 when={props.dockSlice.inputMode === 'question'}

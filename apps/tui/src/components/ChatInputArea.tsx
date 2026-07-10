@@ -181,6 +181,15 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
 
         if (key.name === 'return' && !key.ctrl && !key.meta && !key.shift) {
             key.preventDefault();
+            if (snap.historyPicker.open) {
+                const selected = props.store.confirmHistoryPicker();
+                if (selected !== undefined) {
+                    props.textareaRef.get()?.setText(selected);
+                    props.textareaRef.get()?.gotoBufferEnd();
+                    props.store.setInputMirror(selected);
+                }
+                return;
+            }
             handleSubmit();
             return;
         }
@@ -193,6 +202,11 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
 
         if (key.name === 'escape') {
             key.preventDefault();
+            if (snap.historyPicker.open) {
+                lastEsc = undefined;
+                props.store.cancelHistoryPicker();
+                return;
+            }
             if (snap.generating) {
                 lastEsc = undefined;
                 props.store.sendInterrupt('esc');
@@ -362,6 +376,18 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
             if (fileAutoOpen) {
                 key.preventDefault();
                 props.store.navigateFileAutocomplete(direction);
+                return;
+            }
+
+            if (
+                direction === 'up' &&
+                (props.textareaRef.get()?.cursorOffset ?? 0) === 0 &&
+                !slashMenuOpen &&
+                !workflowMenuOpen &&
+                !fileAutoOpen
+            ) {
+                key.preventDefault();
+                props.store.openHistoryPicker(buffer);
                 return;
             }
         }
