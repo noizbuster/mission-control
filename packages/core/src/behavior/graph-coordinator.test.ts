@@ -163,7 +163,7 @@ describe('bounded ABG graph coordinator', () => {
             graph: {
                 id: 'loop-active-stuck',
                 entryNodeId: 'spinner',
-                defaults: { retryLimit: 2 },
+                defaults: { retryLimit: 2, maxNodeRuns: 64 },
                 nodes: [{ id: 'spinner', kind: 'llm', implementation: 'always-tool-use' }],
                 edges: [{ source: 'spinner', target: 'spinner', condition: 'llm-loop-active', priority: 5 }],
                 rules: [
@@ -180,6 +180,84 @@ describe('bounded ABG graph coordinator', () => {
         expect(result.status).toBe('completed');
         expect(result.events.some((e) => e.type === 'node.failed' && e.abg?.signalType === 'fallback')).toBe(true);
         expect(result.events.some((e) => e.type === 'graph.completed')).toBe(true);
+    });
+
+    it('force-complete promotes boolean outputKey so completion edges still fire', async () => {
+        // Given: research-like node loops on tools until budget exhausts
+        // When: loop budget force-completes
+        // Then: explore.complete becomes true and synthesizer runs
+        const registry = createAbgNodeRegistry();
+        let researchRuns = 0;
+        registry.register(
+            'research-tools',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                researchRuns += 1;
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                context.blackboard?.set('llm.loop_active', true);
+                yield createAbgEmitSignal({
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    eventType: 'tool.completed',
+                    timestamp: context.now(),
+                });
+                yield { type: 'success', graphId: context.graphId, nodeId: node.id };
+            },
+        );
+        registry.register(
+            'synth',
+            async function* run(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
+                yield { type: 'started', graphId: context.graphId, nodeId: node.id };
+                yield {
+                    type: 'success',
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    result: { text: 'synthesis report' },
+                };
+            },
+        );
+
+        const result = await runAbgGraph({
+            ...baseInput,
+            registry,
+            graph: {
+                id: 'research-force-complete',
+                entryNodeId: 'research',
+                defaults: { retryLimit: 2, maxNodeRuns: 64 },
+                nodes: [
+                    {
+                        id: 'research',
+                        kind: 'llm',
+                        implementation: 'research-tools',
+                        config: { outputKey: 'explore.complete', outputShape: 'boolean' },
+                    },
+                    { id: 'final', kind: 'llm', implementation: 'synth' },
+                ],
+                edges: [
+                    { source: 'research', target: 'final', condition: 'research-complete', priority: 10 },
+                    { source: 'research', target: 'research', condition: 'llm-loop-active', priority: 5 },
+                ],
+                rules: [
+                    {
+                        id: 'research-complete',
+                        description: 'research done',
+                        when: { kind: 'blackboard.value.equals', key: 'explore.complete', value: true },
+                    },
+                    {
+                        id: 'llm-loop-active',
+                        description: 'llm loop active',
+                        when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true },
+                    },
+                ],
+                policies: [],
+            },
+        });
+
+        expect(result.status).toBe('completed');
+        expect(researchRuns).toBeGreaterThanOrEqual(24);
+        expect(result.events.some((e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_loop_budget_exhausted')).toBe(
+            true,
+        );
+        expect(result.events.some((e) => e.type === 'node.completed' && e.abg?.nodeId === 'final')).toBe(true);
     });
 
     it('retries a provider_aborted failure up to the cap instead of failing terminally (no abort signal)', async () => {

@@ -84,14 +84,19 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                         state.consecutiveToolFailuresByNodeId.set(result.node.id, 0);
                         const reentries = (state.consecutiveLoopActiveReentriesByNodeId.get(result.node.id) ?? 0) + 1;
                         state.consecutiveLoopActiveReentriesByNodeId.set(result.node.id, reentries);
-                        if (reentries >= state.maxAttempts * 2) {
+                        if (reentries >= state.maxLoopActiveReentries) {
+                            // Force-complete the tool self-loop so the graph can advance. For
+                            // boolean completion gates (explore.complete etc.), set the key true
+                            // so research-complete → final-respond still runs a synthesis turn
+                            // instead of silently completing with no answer (session failure mode).
                             state.blackboard.set('llm.loop_active', false);
+                            forceCompleteBooleanOutputKey(result.node, state);
                             state.consecutiveLoopActiveReentriesByNodeId.set(result.node.id, 0);
                             state.events.push({
                                 type: 'node.failed',
                                 timestamp: input.now(),
                                 sessionId: input.sessionId,
-                                message: `ABG node loop budget exhausted, force-completing: ${result.node.id} (${reentries} re-entries without producing output)`,
+                                message: `ABG node loop budget exhausted, force-completing: ${result.node.id} (${reentries} re-entries without structured completion)`,
                                 durability: 'durable',
                                 nativeSidecarStatus: 'mock',
                                 modelProviderSelection: input.modelProviderSelection,
@@ -319,6 +324,25 @@ function graphFailureEvent(graphId: string, input: AbgGraphRunnerInput, code: st
 
 function assertNeverQueuedNodeResult(result: never): never {
     throw new Error(`Unhandled queued node result: ${String(result)}`);
+}
+
+/**
+ * When the tool self-loop is force-completed, promote a boolean outputKey to true so
+ * completion edges (research-complete → final-respond) can still fire. Without this the
+ * queue empties and the graph "succeeds" with no synthesis turn.
+ */
+function forceCompleteBooleanOutputKey(node: AbgNodeSpec, state: CoordinatorState): void {
+    const outputKey = node.config?.['outputKey'];
+    if (typeof outputKey !== 'string' || outputKey.length === 0) {
+        return;
+    }
+    if (node.config?.['outputShape'] !== 'boolean') {
+        return;
+    }
+    if (state.blackboard.get(outputKey) === true) {
+        return;
+    }
+    state.blackboard.set(outputKey, true);
 }
 
 function readEscalationTarget(node: AbgNodeSpec): string | undefined {

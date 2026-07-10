@@ -21,6 +21,8 @@ import { projectAbgSignalToEvent } from './signals.js';
 
 const defaultRetryLimit = 2;
 const defaultMaxNodeRuns = 48;
+/** Productive tool re-entries allowed before force-complete (independent of retryLimit). */
+export const defaultLoopActiveReentryBudget = 24;
 const defaultGraphNodeConcurrency = 2;
 const defaultProviderToolCallConcurrency = 4;
 const defaultShellConcurrency = 1;
@@ -41,6 +43,8 @@ export type CoordinatorState = {
      */
     readonly consecutiveLoopActiveReentriesByNodeId: Map<string, number>;
     readonly maxAttempts: number;
+    /** Max consecutive productive tool re-entries before force-complete (default 24). */
+    readonly maxLoopActiveReentries: number;
     readonly maxNodeRuns: number;
     readonly graphNodeConcurrency: number;
     readonly providerToolCallConcurrency: number;
@@ -104,6 +108,7 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         consecutiveToolFailuresByNodeId: new Map(),
         consecutiveLoopActiveReentriesByNodeId: new Map(),
         maxAttempts: (graph.defaults?.retryLimit ?? defaultRetryLimit) + 1,
+        maxLoopActiveReentries: defaultLoopActiveReentryBudget,
         maxNodeRuns: graph.defaults?.maxNodeRuns ?? input.maxNodeRuns ?? defaultMaxNodeRuns,
         graphNodeConcurrency: input.graphNodeConcurrency ?? defaultGraphNodeConcurrency,
         providerToolCallConcurrency: input.providerToolCallConcurrency ?? defaultProviderToolCallConcurrency,
