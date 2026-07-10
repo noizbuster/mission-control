@@ -339,20 +339,13 @@ export function ChatInputArea(props: ChatInputAreaProps): JSX.Element {
         if (key.name === 'up' || key.name === 'down') {
             const direction: 'up' | 'down' = key.name;
             const buffer = plainText();
-            const cursorOffset = props.textareaRef.get()?.cursorOffset ?? 0;
-            const atBound = direction === 'up' ? cursorOffset === 0 : cursorOffset === buffer.length;
-            const historyOwnsArrows = snap.historyNavigation !== null;
             const slashMenuOpen = promptMenuInteractionsEnabled() && isSlashCommandMenuOpen(buffer);
             const workflowMenuOpen = promptMenuInteractionsEnabled() && isWorkflowCommandMenuOpen(buffer);
             const fileAutoOpen = promptMenuInteractionsEnabled() && snap.fileAutocomplete.open;
 
-            const recallHistory =
-                historyOwnsArrows || (atBound && !slashMenuOpen && !workflowMenuOpen && !fileAutoOpen);
-            if (recallHistory) {
+            if (snap.historyPicker.open) {
                 key.preventDefault();
-                const recalled = props.store.recallHistory(direction, buffer);
-                props.textareaRef.get()?.setText(recalled);
-                props.textareaRef.get()?.gotoBufferEnd();
+                props.store.navigateHistoryPicker(direction);
                 return;
             }
 

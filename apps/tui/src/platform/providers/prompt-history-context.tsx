@@ -59,7 +59,7 @@ function createTuiPromptHistoryService(
         const parsedEntries = storedEntries.map((entry) => TuiPromptHistoryEntrySchema.parse(entry));
         if (disposed) return;
         setEntries(parsedEntries);
-        chatStore?.setHistoryEntries(parsedEntries.map((entry) => entry.text));
+        chatStore?.setHistoryEntries(parsedEntries);
     }
 
     async function appendPrompt(text: string): Promise<void> {

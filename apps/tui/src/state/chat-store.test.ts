@@ -51,7 +51,13 @@ describe('chat-store — subscribe / getSnapshot', () => {
         expect(snapshot.inputMirror).toBe('');
         expect(snapshot.generating).toBe(false);
         expect(snapshot.overlayMode).toBe('none');
-        expect(snapshot.historyNavigation).toBeNull();
+        expect(snapshot.historyPickerView).toEqual({
+            open: false,
+            selectedIndex: 0,
+            total: 0,
+            draftSnapshot: '',
+        });
+        expect(snapshot.historyEntries).toEqual([]);
     });
 
     it('subscribe registers a listener that fires on publish', () => {
@@ -1528,5 +1534,123 @@ describe('chat-store — mission panel overlay', () => {
         const snapshot = store.getSnapshot();
         expect(snapshot.missionPanel.selectedIndex).toBe(0);
         expect(snapshot.missionPanel.activeTab).toBe('runs');
+    });
+});
+
+describe('chat-store — history picker + timestamped entries', () => {
+    function makeHistoryEntry(id: string, text: string, timestamp: number) {
+        return { id, text, timestamp };
+    }
+
+    it('seeds historyEntries from initialHistoryEntries options', () => {
+        const store = createChatStore({
+            initialHistoryEntries: [
+                makeHistoryEntry('a', 'older', 1),
+                makeHistoryEntry('b', 'newer', 2),
+            ],
+        });
+        expect(store.getSnapshot().historyEntries).toEqual([
+            makeHistoryEntry('a', 'older', 1),
+            makeHistoryEntry('b', 'newer', 2),
+        ]);
+        expect(store.getSnapshot().history.entries).toEqual(['older', 'newer']);
+        expect(store.getSnapshot().historyPickerView.total).toBe(2);
+    });
+
+    it('open → navigate → confirm returns selected text without changing inputMirror', () => {
+        const store = createChatStore({
+            initialHistoryEntries: [
+                makeHistoryEntry('a', 'older', 1),
+                makeHistoryEntry('b', 'newer', 2),
+            ],
+        });
+        store.setInputMirror('draft');
+        store.openHistoryPicker('draft');
+        expect(store.isHistoryPickerOpen()).toBe(true);
+        expect(store.getSnapshot().historyPickerView).toMatchObject({
+            open: true,
+            selectedIndex: 0,
+            total: 2,
+            draftSnapshot: 'draft',
+        });
+        expect(store.confirmHistoryPicker()).toBe('newer');
+        expect(store.isHistoryPickerOpen()).toBe(false);
+        expect(store.getSnapshot().inputMirror).toBe('draft');
+
+        store.openHistoryPicker('draft');
+        store.navigateHistoryPicker('down');
+        expect(store.getSnapshot().historyPicker.selectedIndex).toBe(1);
+        expect(store.confirmHistoryPicker()).toBe('older');
+        expect(store.getSnapshot().inputMirror).toBe('draft');
+    });
+
+    it('cancelHistoryPicker closes without changing inputMirror', () => {
+        const store = createChatStore({
+            initialHistoryEntries: [makeHistoryEntry('a', 'only', 1)],
+        });
+        store.setInputMirror('keep me');
+        store.openHistoryPicker('keep me');
+        store.cancelHistoryPicker();
+        expect(store.isHistoryPickerOpen()).toBe(false);
+        expect(store.getSnapshot().inputMirror).toBe('keep me');
+    });
+
+    it('submitLine appends a timestamped entry and dedupes consecutive identical text', () => {
+        const store = createChatStore();
+        const before = Date.now();
+        store.submitLine('hello');
+        store.submitLine('hello');
+        store.submitLine('world');
+        const entries = store.getSnapshot().historyEntries;
+        expect(entries).toHaveLength(2);
+        expect(entries[0]?.text).toBe('hello');
+        expect(entries[0]?.id).toMatch(/^hist-\d+$/);
+        expect(entries[0]?.timestamp).toBeGreaterThanOrEqual(before);
+        expect(entries[1]?.text).toBe('world');
+        expect(store.getSnapshot().history.entries).toEqual(['hello', 'world']);
+    });
+
+    it('confirm on empty history returns undefined and closes', () => {
+        const store = createChatStore();
+        store.openHistoryPicker('x');
+        expect(store.isHistoryPickerOpen()).toBe(true);
+        expect(store.confirmHistoryPicker()).toBeUndefined();
+        expect(store.isHistoryPickerOpen()).toBe(false);
+    });
+
+    it('navigateHistoryPicker is a no-op when closed', () => {
+        const store = createChatStore({
+            initialHistoryEntries: [makeHistoryEntry('a', 'only', 1)],
+        });
+        const before = store.getSnapshot().historyPicker;
+        store.navigateHistoryPicker('down');
+        expect(store.getSnapshot().historyPicker).toEqual(before);
+    });
+
+    it('setHistoryEntries replaces the list and closes an open picker', () => {
+        const store = createChatStore({
+            initialHistoryEntries: [makeHistoryEntry('a', 'old', 1)],
+        });
+        store.openHistoryPicker('draft');
+        store.setHistoryEntries([
+            makeHistoryEntry('b', 'one', 10),
+            makeHistoryEntry('c', 'two', 20),
+        ]);
+        const snapshot = store.getSnapshot();
+        expect(snapshot.historyEntries.map((entry) => entry.text)).toEqual(['one', 'two']);
+        expect(snapshot.historyPicker.open).toBe(false);
+        expect(snapshot.historyPickerView.total).toBe(2);
+        expect(snapshot.history.entries).toEqual(['one', 'two']);
+    });
+
+    it('openHistoryPicker is a no-op when already open', () => {
+        const store = createChatStore({
+            initialHistoryEntries: [makeHistoryEntry('a', 'only', 1)],
+        });
+        store.openHistoryPicker('first');
+        store.navigateHistoryPicker('down');
+        store.openHistoryPicker('second');
+        expect(store.getSnapshot().historyPicker.draftSnapshot).toBe('first');
+        expect(store.getSnapshot().historyPicker.open).toBe(true);
     });
 });

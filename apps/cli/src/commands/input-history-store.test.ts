@@ -21,7 +21,10 @@ describe('input history store bridge', () => {
         await appendInputHistoryEntry('first prompt');
         await appendInputHistoryEntry('first prompt');
 
-        await expect(loadInputHistoryEntries()).resolves.toEqual(['first prompt']);
+        const loaded = await loadInputHistoryEntries();
+        expect(loaded).toHaveLength(1);
+        expect(loaded[0]?.text).toBe('first prompt');
+        expect(loaded[0]?.timestamp).toBeGreaterThan(0);
         const raw: unknown = JSON.parse(await readFile(join(dataDir, 'input-history.json'), 'utf8'));
         expect(raw).toMatchObject({ entries: [{ text: 'first prompt' }] });
     });
@@ -34,10 +37,13 @@ describe('input history store bridge', () => {
             'utf8',
         );
 
-        await expect(loadInputHistoryEntries()).resolves.toEqual(['legacy prompt']);
+        const legacy = await loadInputHistoryEntries();
+        expect(legacy.map((entry) => entry.text)).toEqual(['legacy prompt']);
+        expect(legacy[0]?.timestamp).toBe(0);
         await appendInputHistoryEntry('new prompt');
 
-        await expect(loadInputHistoryEntries()).resolves.toEqual(['legacy prompt', 'new prompt']);
+        const after = await loadInputHistoryEntries();
+        expect(after.map((entry) => entry.text)).toEqual(['legacy prompt', 'new prompt']);
     });
 
     async function createDataDir(): Promise<string> {

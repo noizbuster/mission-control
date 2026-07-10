@@ -118,7 +118,7 @@ function promptHistoryStore(roots: TempProviderRoots): TuiStores.TuiPromptHistor
 }
 
 describe('TUI prompt history provider', () => {
-    it('hydrates ChatStore recall history from the typed prompt history store', async () => {
+    it('hydrates ChatStore history entries from the typed prompt history store', async () => {
         const roots = makeTempProviderRoots();
         await promptHistoryStore(roots).replaceEntries([
             { id: 'old', text: 'old prompt', timestamp: 1 },
@@ -129,7 +129,12 @@ describe('TUI prompt history provider', () => {
         await rendered.promptHistory.ready;
 
         expect(rendered.promptHistory.texts()).toEqual(['old prompt', 'new prompt']);
-        expect(rendered.chatStore.recallHistory('up', '')).toBe('new prompt');
+        expect(rendered.chatStore.getSnapshot().historyEntries).toEqual([
+            { id: 'old', text: 'old prompt', timestamp: 1 },
+            { id: 'new', text: 'new prompt', timestamp: 2 },
+        ]);
+        rendered.chatStore.openHistoryPicker('');
+        expect(rendered.chatStore.confirmHistoryPicker()).toBe('new prompt');
 
         rendered.dispose();
     });
@@ -157,7 +162,7 @@ describe('TUI prompt history provider', () => {
 
         await expect(promptHistoryStore(rendered.roots).listTexts()).resolves.toEqual(['dedupe me']);
         expect(rendered.promptHistory.texts()).toEqual(['dedupe me']);
-        expect(rendered.chatStore.getSnapshot().history.entries).toEqual(['dedupe me']);
+        expect(rendered.chatStore.getSnapshot().historyEntries.map((entry) => entry.text)).toEqual(['dedupe me']);
 
         rendered.dispose();
     });

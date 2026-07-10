@@ -18,6 +18,15 @@ import {
 } from './auth-provider-keypress.js';
 import type { ChatInputEvent } from './chat-input-event.js';
 import {
+    clampHistoryPickerSelection,
+    closeHistoryPicker,
+    createHistoryPickerState,
+    type HistoryPickerEntry,
+    type HistoryPickerState,
+    navigateHistoryPicker as reduceHistoryPickerNavigation,
+    openHistoryPicker as reduceOpenHistoryPicker,
+} from './history-picker-state.js';
+import {
     createSlashCommandMenuState,
     reduceSlashCommandMenuSelection,
     reduceWorkflowCommandMenuSelection,
@@ -32,12 +41,7 @@ import {
 } from './interactive-chat-file-autocomplete.js';
 import {
     type ChatInputHistory,
-    createChatInputHistory,
     createChatInputHistoryFromEntries,
-    isNavigatingChatInputHistory,
-    navigateChatInputHistoryDown,
-    navigateChatInputHistoryUp,
-    recordSubmittedPrompt,
 } from './interactive-chat-input-history.js';
 import { createVariantChoices, type ModelChoice } from './interactive-chat-model.js';
 import {
@@ -50,6 +54,15 @@ import {
     setModelsOverlaySearchQuery as reduceModelsOverlaySearchQuery,
     selectModelForAssignment as selectModelForAssignmentReducer,
 } from './models-overlay-state.js';
+
+export type { HistoryPickerEntry, HistoryPickerState } from './history-picker-state.js';
+
+export type HistoryPickerSnapshot = {
+    readonly open: boolean;
+    readonly selectedIndex: number;
+    readonly total: number;
+    readonly draftSnapshot: string;
+};
 
 export type ChatStoreOverlayMode =
     | 'none'
@@ -181,6 +194,8 @@ export type ChatStoreState = {
     readonly menuState: SlashCommandMenuState;
     readonly fileAutocomplete: FileAutocompleteState;
     readonly history: ChatInputHistory;
+    readonly historyEntries: readonly HistoryPickerEntry[];
+    readonly historyPicker: HistoryPickerState;
     readonly pasteStore: PasteMarkerStore;
     readonly pasteCounter: number;
     readonly overlayMode: ChatStoreOverlayMode;
@@ -219,17 +234,17 @@ export type ChatStoreState = {
     readonly missionPanel: MissionPanelState;
     readonly contextTokensUsed: number | undefined;
     readonly contextTokensMax: number | undefined;
-    readonly historyNavigation: { readonly position: number; readonly total: number } | null;
+    readonly historyPickerView: HistoryPickerSnapshot;
     readonly transientNotice: { readonly id: number; readonly message: string } | null;
 };
 
 type ChatStoreMutableState = {
-    -readonly [K in keyof Omit<ChatStoreState, 'historyNavigation'>]: Omit<ChatStoreState, 'historyNavigation'>[K];
+    -readonly [K in keyof Omit<ChatStoreState, 'historyPickerView'>]: Omit<ChatStoreState, 'historyPickerView'>[K];
 };
 
 export type ChatStoreOptions = {
     readonly workspaceRoot?: string;
-    readonly initialHistoryEntries?: readonly string[];
+    readonly initialHistoryEntries?: readonly HistoryPickerEntry[];
     readonly initialApprovalLevel?: ApprovalLevel;
     readonly authStore?: ProviderAuthStore;
 };
@@ -304,14 +319,13 @@ export class ChatStore {
     private sessionPickerResolve: ((sessionId: string | undefined) => void) | undefined;
     private emitScheduled = false;
     private transientNoticeCounter = 0;
+    private historyEntryCounter = 0;
 
     constructor(options?: ChatStoreOptions) {
         this.workspaceRoot = options?.workspaceRoot ?? process.cwd();
         this.authStore = options?.authStore;
-        const history =
-            options?.initialHistoryEntries !== undefined
-                ? createChatInputHistoryFromEntries(options.initialHistoryEntries)
-                : createChatInputHistory();
+        const historyEntries = options?.initialHistoryEntries !== undefined ? [...options.initialHistoryEntries] : [];
+        const history = createChatInputHistoryFromEntries(historyEntries.map((entry) => entry.text));
         this.state = {
             outputText: '',
             sessionId: '',
@@ -330,6 +344,8 @@ export class ChatStore {
             menuState: createSlashCommandMenuState(),
             fileAutocomplete: createFileAutocompleteState(),
             history,
+            historyEntries,
+            historyPicker: createHistoryPickerState(),
             pasteStore: new PasteMarkerStore(),
             pasteCounter: 0,
             overlayMode: 'none',
@@ -910,22 +926,96 @@ export class ChatStore {
         this.setModelSelection(newSelection);
     }
 
-    recallHistory(direction: 'up' | 'down', currentBuffer: string): string {
-        const result =
-            direction === 'up'
-                ? navigateChatInputHistoryUp(this.state.history, currentBuffer)
-                : navigateChatInputHistoryDown(this.state.history, currentBuffer);
-        this.state.history = result.history;
-        this.state.inputMirror = result.input;
-        this.state.menuState = createSlashCommandMenuState();
-        this.refreshFileAutocomplete();
+    setHistoryEntries(entries: readonly HistoryPickerEntry[]): void {
+        this.state.historyEntries = [...entries];
+        this.state.history = createChatInputHistoryFromEntries(entries.map((entry) => entry.text));
+        this.state.historyPicker = createHistoryPickerState();
         this.publish();
-        return result.input;
     }
 
-    setHistoryEntries(entries: readonly string[]): void {
-        this.state.history = createChatInputHistoryFromEntries(entries);
+    historyEntriesNewestFirst(): readonly HistoryPickerEntry[] {
+        return reverseHistoryEntries(this.state.historyEntries);
+    }
+
+    isHistoryPickerOpen(): boolean {
+        return this.state.historyPicker.open;
+    }
+
+    openHistoryPicker(currentBuffer: string): void {
+        if (this.state.historyPicker.open) {
+            return;
+        }
+        this.state.historyPicker = reduceOpenHistoryPicker(
+            this.state.historyPicker,
+            this.historyEntriesNewestFirst(),
+            currentBuffer,
+        );
         this.publish();
+    }
+
+    navigateHistoryPicker(direction: 'up' | 'down'): void {
+        if (!this.state.historyPicker.open) {
+            return;
+        }
+        const next = reduceHistoryPickerNavigation(
+            this.state.historyPicker,
+            direction,
+            this.state.historyEntries.length,
+        );
+        if (next === this.state.historyPicker) {
+            return;
+        }
+        this.state.historyPicker = next;
+        this.publish();
+    }
+
+    confirmHistoryPicker(): string | undefined {
+        if (!this.state.historyPicker.open) {
+            return undefined;
+        }
+        const newestFirst = this.historyEntriesNewestFirst();
+        if (newestFirst.length === 0) {
+            this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
+            this.publish();
+            return undefined;
+        }
+        const selectedIndex = Math.min(
+            Math.max(this.state.historyPicker.selectedIndex, 0),
+            newestFirst.length - 1,
+        );
+        const selected = newestFirst[selectedIndex];
+        this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
+        this.publish();
+        return selected?.text;
+    }
+
+    cancelHistoryPicker(): void {
+        if (!this.state.historyPicker.open) {
+            return;
+        }
+        this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
+        this.publish();
+    }
+
+    private appendHistoryEntry(text: string): void {
+        if (text.length === 0) {
+            return;
+        }
+        const last = this.state.historyEntries[this.state.historyEntries.length - 1];
+        if (last?.text === text) {
+            return;
+        }
+        this.historyEntryCounter += 1;
+        const entry: HistoryPickerEntry = {
+            id: `hist-${this.historyEntryCounter}`,
+            text,
+            timestamp: Date.now(),
+        };
+        this.state.historyEntries = [...this.state.historyEntries, entry];
+        this.state.historyPicker = clampHistoryPickerSelection(
+            this.state.historyPicker,
+            this.state.historyEntries.length,
+        );
     }
 
     setFileFrecencyKeys(keys: readonly string[]): void {
@@ -1480,7 +1570,13 @@ export class ChatStore {
 
     submitLine(value: string): void {
         this.enqueueEvent({ type: 'line', value });
-        this.state.history = recordSubmittedPrompt(this.state.history, value);
+        this.appendHistoryEntry(value);
+        this.state.history = createChatInputHistoryFromEntries(
+            this.state.historyEntries.map((entry) => entry.text),
+        );
+        if (this.state.historyPicker.open) {
+            this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
+        }
         if (!value.startsWith('/')) {
             this.state.outputText += `You: ${value}\n`;
         }
@@ -1539,9 +1635,12 @@ export class ChatStore {
     private buildSnapshot(): ChatStoreState {
         return {
             ...this.state,
-            historyNavigation: isNavigatingChatInputHistory(this.state.history)
-                ? { position: this.state.history.cursor + 1, total: this.state.history.entries.length }
-                : null,
+            historyPickerView: {
+                open: this.state.historyPicker.open,
+                selectedIndex: this.state.historyPicker.selectedIndex,
+                total: this.state.historyEntries.length,
+                draftSnapshot: this.state.historyPicker.draftSnapshot,
+            },
         };
     }
 
@@ -1587,6 +1686,13 @@ export function createSessionPickerView(
 
 export function createChatStore(options?: ChatStoreOptions): ChatStore {
     return new ChatStore(options);
+}
+
+function reverseHistoryEntries(entries: readonly HistoryPickerEntry[]): readonly HistoryPickerEntry[] {
+    if (entries.length <= 1) {
+        return entries;
+    }
+    return [...entries].reverse();
 }
 
 function applyAgentOverrideModel(
