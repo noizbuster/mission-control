@@ -6,7 +6,7 @@
     "version": "0.1.0",
     "entryNodeId": "intent-gate",
     "defaults": {
-      "maxNodeRuns": 48
+      "maxNodeRuns": 128
     },
     "nodes": [
       {

@@ -45,7 +45,8 @@
 import type { AbgGraphSpec, AbgNodeModelOptions } from '@mission-control/protocol';
 
 export const DEFAULT_WORKFLOW_GRAPH_ID = 'default';
-export const DEFAULT_WORKFLOW_MAX_NODE_RUNS = 48;
+/** Hard ceiling for the whole graph (including research tool turns + synthesis). */
+export const DEFAULT_WORKFLOW_MAX_NODE_RUNS = 128;
 
 /**
  * The supervisor's bounded retry budget. After this many consecutive delegation failures
@@ -62,7 +63,7 @@ export type DefaultWorkflowGraphOptions = {
      * model only when a graph should override the session provider.
      */
     readonly model?: AbgNodeModelOptions;
-    /** Graph loop bound. Default 48. */
+    /** Graph loop bound. Default 128 (research tool turns + synthesis). */
     readonly maxNodeRuns?: number;
 };
 
