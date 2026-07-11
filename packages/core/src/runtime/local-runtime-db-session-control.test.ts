@@ -100,7 +100,7 @@ describe('canonical runtime DB session-control maintenance', () => {
         const started = new Promise<void>((resolve) => {
             writeStarted = resolve;
         });
-        const blocker = runWithLocalLibsqlWriteLock(opened.runtime.url, async () => {
+        const blocker = runWithLocalLibsqlWriteLock(opened.runtime.writeKey, async () => {
             writeStarted();
             await new Promise<void>((resolve) => {
                 releaseWrite = resolve;

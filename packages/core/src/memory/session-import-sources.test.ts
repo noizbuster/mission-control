@@ -33,7 +33,7 @@ describe('legacy session import source error boundaries', () => {
 
             await expect(
                 importJsonlSource({
-                    writeTarget: { url: runtime.url, client: givenClient },
+                    writeTarget: { writeKey: runtime.writeKey, client: givenClient },
                     sourcePath: givenFixture.jsonlPath,
                     now: () => '2026-07-01T00:00:00.000Z',
                     acc: givenAcc,

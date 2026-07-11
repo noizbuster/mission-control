@@ -11,6 +11,7 @@ import { runtimePersistenceSchemaSql } from './local-libsql-schema-runtime.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const tempDirs: string[] = [];
 
@@ -25,6 +26,30 @@ afterEach(async () => {
 });
 
 describe('local libSQL database runtime', () => {
+    it('opens existing absolute file URL aliases against the same database', async () => {
+        const givenUrl = await tempDbUrl();
+        const givenPath = givenUrl.slice('file:'.length);
+        const givenCanonicalUrl = pathToFileURL(givenPath).href;
+        const givenAliases = [givenUrl, givenCanonicalUrl, givenCanonicalUrl.replace('file:///', 'file://localhost/')];
+
+        const first = await openLocalLibsqlDb({ url: givenAliases[0] ?? givenUrl });
+        await first.client.execute({
+            sql: 'INSERT INTO memory_entries (namespace, key, value, created_at, expires_at) VALUES (?, ?, ?, ?, ?)',
+            args: ['baseline', 'aliases', '{"shared":true}', '2026-07-11T00:00:00.000Z', null],
+        });
+        first.close();
+
+        for (const alias of givenAliases.slice(1)) {
+            const opened = await openLocalLibsqlDb({ url: alias });
+            const thenRows = await opened.client.execute(
+                "SELECT value FROM memory_entries WHERE namespace = 'baseline' AND key = 'aliases'",
+            );
+            opened.close();
+
+            expect(thenRows.rows).toEqual([{ value: '{"shared":true}' }]);
+        }
+    });
+
     it('records explicit future migrations once when migrations are supplied', async () => {
         const givenUrl = await tempDbUrl();
         const givenMigration = {

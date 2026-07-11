@@ -1,5 +1,5 @@
 import type { Client } from '@libsql/client';
-import { runLocalLibsqlWrite } from '../db/local-libsql-db.js';
+import { type LocalLibsqlWriteKey, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
 import {
     createJsonlSessionEventRecord,
     createJsonlSessionLogHeader,
@@ -29,7 +29,7 @@ export type LegacySessionExportResult = {
 
 export async function importLegacySessionCompatibilityWindow(input: {
     readonly client: Client;
-    readonly url: string;
+    readonly writeKey: LocalLibsqlWriteKey;
     readonly dataDir: string;
     readonly omoRoot?: string;
     readonly includeRunSources?: boolean;
@@ -64,7 +64,7 @@ export async function importLegacySessionCompatibilityWindow(input: {
 
 export async function exportLegacySessionJsonl(input: {
     readonly client: Client;
-    readonly url: string;
+    readonly writeKey: LocalLibsqlWriteKey;
     readonly sessionId: string;
     readonly outputDir: string;
     readonly now?: () => string;

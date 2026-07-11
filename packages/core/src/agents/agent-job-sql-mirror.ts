@@ -167,5 +167,5 @@ export class SqlAgentJobMirror implements RuntimeAgentPersistenceMirror {
 }
 
 function isLocalLibsqlWriteTarget(input: Client | LocalLibsqlWriteTarget): input is LocalLibsqlWriteTarget {
-    return 'url' in input && 'client' in input;
+    return 'writeKey' in input && 'client' in input;
 }

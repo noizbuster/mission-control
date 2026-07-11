@@ -77,7 +77,7 @@ async function migrateSource(input: {
     readonly source: LegacyRuntimeSource;
     readonly now: () => string;
 }): Promise<MigrationOutcome> {
-    return runWithLocalLibsqlWriteLock(input.runtime.url, async () => {
+    return runWithLocalLibsqlWriteLock(input.runtime.writeKey, async () => {
         let attached = false;
         let outcome: MigrationOutcome | RuntimeDbMigrationError;
         await input.runtime.client.execute('BEGIN IMMEDIATE TRANSACTION');
@@ -191,7 +191,9 @@ async function rebuildSessionProjections(input: {
 async function rollbackQuietly(client: Client): Promise<void> {
     try {
         await client.execute('ROLLBACK');
-    } catch {}
+    } catch (error: unknown) {
+        if (!(error instanceof Error)) throw error;
+    }
 }
 
 function escapeSqlString(value: string): string {

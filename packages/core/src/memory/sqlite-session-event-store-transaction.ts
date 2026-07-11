@@ -6,7 +6,7 @@ export async function runSqliteSessionWriteTransaction<T>(input: {
     readonly ensureOpen: () => void;
     readonly write: () => Promise<T>;
 }): Promise<T> {
-    return runWithLocalLibsqlWriteLock(input.runtime.url, async () => {
+    return runWithLocalLibsqlWriteLock(input.runtime.writeKey, async () => {
         input.ensureOpen();
         await input.runtime.client.execute('BEGIN IMMEDIATE TRANSACTION');
         try {

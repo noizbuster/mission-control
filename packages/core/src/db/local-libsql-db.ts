@@ -3,24 +3,12 @@ import { createClient } from '@libsql/client';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import { drizzle } from 'drizzle-orm/libsql';
 import { z } from 'zod';
+import { type LocalLibsqlWriteKey, resolveLocalLibsqlIdentity } from './local-libsql-identity.js';
 import { ensureLocalDbSchema } from './local-libsql-schema.js';
 import { createHash } from 'node:crypto';
 
-export const localDbConfigErrorCodes = ['remote_url'] as const;
-export type LocalDbConfigErrorCode = (typeof localDbConfigErrorCodes)[number];
-
-export class LocalDbConfigError extends Error {
-    readonly code: LocalDbConfigErrorCode;
-    readonly scheme: string;
-
-    constructor(code: LocalDbConfigErrorCode, url: string) {
-        const scheme = rejectedUrlScheme(url);
-        super(`Local libSQL databases only accept :memory: or file: URLs; received ${scheme} URL`);
-        this.name = 'LocalDbConfigError';
-        this.code = code;
-        this.scheme = scheme;
-    }
-}
+export type { LocalDbConfigErrorCode, LocalLibsqlWriteKey } from './local-libsql-identity.js';
+export { LocalDbConfigError, localDbConfigErrorCodes } from './local-libsql-identity.js';
 
 export const localDbMigrationErrorCodes = [
     'invalid_migration_id',
@@ -55,20 +43,22 @@ export type LocalDbMigrationLedgerRow = {
 
 export type LocalLibsqlDb = {
     readonly url: string;
+    readonly writeKey: LocalLibsqlWriteKey;
     readonly client: Client;
     readonly db: LibSQLDatabase<Record<string, never>>;
     readonly close: () => void;
 };
 
-export type LocalLibsqlWriteTarget = Pick<LocalLibsqlDb, 'url' | 'client'>;
+export type LocalLibsqlWriteTarget = Pick<LocalLibsqlDb, 'writeKey' | 'client'>;
 
 export type OpenLocalLibsqlDbOptions = {
     readonly url: string;
+    readonly cwd?: string;
     readonly migrations?: readonly LocalDbMigration[];
 };
 
 const migrationIdPattern = /^\d{4}_[a-z0-9_]+$/u;
-const localDbWriteQueues = new Map<string, Promise<void>>();
+const localDbWriteQueues = new Map<LocalLibsqlWriteKey, Promise<void>>();
 
 const migrationLedgerRowSchema = z.object({
     id: z.string(),
@@ -89,10 +79,10 @@ const createSchemaMigrationsSql = `
 `;
 
 export async function openLocalLibsqlDb(options: OpenLocalLibsqlDbOptions): Promise<LocalLibsqlDb> {
-    assertLocalDbUrl(options.url);
-    const client = createClient({ url: options.url });
+    const identity = await resolveLocalLibsqlIdentity(options);
+    const client = createClient({ url: identity.url });
     try {
-        await runWithLocalLibsqlWriteLock(options.url, () =>
+        await runWithLocalLibsqlWriteLock(identity.writeKey, () =>
             options.migrations === undefined
                 ? ensureLocalDbSchema(client)
                 : runLocalDbMigrations(client, options.migrations),
@@ -103,29 +93,33 @@ export async function openLocalLibsqlDb(options: OpenLocalLibsqlDbOptions): Prom
     }
 
     return {
-        url: options.url,
+        url: identity.url,
+        writeKey: identity.writeKey,
         client,
         db: drizzle(client),
         close: () => client.close(),
     };
 }
 
-export async function runWithLocalLibsqlWriteLock<T>(url: string, write: () => Promise<T>): Promise<T> {
-    const previous = localDbWriteQueues.get(url) ?? Promise.resolve();
+export async function runWithLocalLibsqlWriteLock<T>(
+    writeKey: LocalLibsqlWriteKey,
+    write: () => Promise<T>,
+): Promise<T> {
+    const previous = localDbWriteQueues.get(writeKey) ?? Promise.resolve();
     let releaseQueue = (): void => {};
     const current = new Promise<void>((resolve) => {
         releaseQueue = resolve;
     });
     const queued = previous.then(() => current);
-    localDbWriteQueues.set(url, queued);
+    localDbWriteQueues.set(writeKey, queued);
     await previous;
 
     try {
         return await write();
     } finally {
         releaseQueue();
-        if (localDbWriteQueues.get(url) === queued) {
-            localDbWriteQueues.delete(url);
+        if (localDbWriteQueues.get(writeKey) === queued) {
+            localDbWriteQueues.delete(writeKey);
         }
     }
 }
@@ -134,7 +128,7 @@ export async function runLocalLibsqlWrite<T>(
     target: LocalLibsqlWriteTarget,
     write: (client: Client) => Promise<T>,
 ): Promise<T> {
-    return runWithLocalLibsqlWriteLock(target.url, () => write(target.client));
+    return runWithLocalLibsqlWriteLock(target.writeKey, () => write(target.client));
 }
 
 export async function runLocalDbMigrations(client: Client, migrations: readonly LocalDbMigration[]): Promise<void> {
@@ -170,15 +164,6 @@ export async function runLocalDbMigrations(client: Client, migrations: readonly 
     }
 }
 
-function rejectedUrlScheme(url: string): string {
-    const schemeSeparator = url.indexOf(':');
-    if (schemeSeparator <= 0) {
-        return 'unsupported';
-    }
-
-    return url.slice(0, schemeSeparator);
-}
-
 export async function listLocalDbMigrationLedger(client: Client): Promise<readonly LocalDbMigrationLedgerRow[]> {
     await client.execute(createSchemaMigrationsSql);
     const result = await client.execute('SELECT id, checksum, applied_at FROM schema_migrations ORDER BY id');
@@ -191,14 +176,6 @@ export async function listLocalDbMigrationLedger(client: Client): Promise<readon
             appliedAt: parsed.applied_at,
         };
     });
-}
-
-function assertLocalDbUrl(url: string): void {
-    if (url === ':memory:' || url.startsWith('file:')) {
-        return;
-    }
-
-    throw new LocalDbConfigError('remote_url', url);
 }
 
 type PlannedMigration = {
