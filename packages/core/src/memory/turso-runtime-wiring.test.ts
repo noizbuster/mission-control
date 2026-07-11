@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LocalDbConfigError, LocalDbInitializationError, openLocalLibsqlDb } from '../db/local-libsql-db.js';
 import type { PersistentMemoryStore } from './persistent-memory-store.js';
 import { createPersistentStore } from './persistent-store-factory.js';
 import { TursoPersistentStore } from './turso-persistent-store.js';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 const stubStore: PersistentMemoryStore = {
     get: async () => undefined,
@@ -39,6 +39,8 @@ describe('createPersistentStore (runtime wiring)', () => {
         }
         await store.set('ship', 'goals', { target: 'done' });
         expect(await store.get('ship', 'goals')).toEqual({ target: 'done' });
+        expect(existsSync(join(dataDir, 'mission-control.db'))).toBe(true);
+        expect(existsSync(join(dataDir, 'memory.db'))).toBe(false);
         store.close();
     });
 
@@ -56,19 +58,19 @@ describe('createPersistentStore (runtime wiring)', () => {
         expect(store).toBeUndefined();
     });
 
-    it('resolves the database path to file:<dataDir>/memory.db', async () => {
-        // Given an availability probe that succeeds and an opener that captures the URL
-        let capturedUrl: string | undefined;
-        const openStore = async (url: string): Promise<PersistentMemoryStore> => {
-            capturedUrl = url;
+    it('passes the data directory once to the central persistent-store opener', async () => {
+        // Given an availability probe that succeeds and an opener that captures the data directory
+        const openedDataDirs: string[] = [];
+        const openStore = async (dataDir: string): Promise<PersistentMemoryStore> => {
+            openedDataDirs.push(dataDir);
             return stubStore;
         };
         const dataDir = mkdtempSync(join(tmpdir(), 'mctrl-data-'));
         tmpDirs.push(dataDir);
         // When resolving the persistent store
         await createPersistentStore(dataDir, { probeAvailability: async () => true, openStore });
-        // Then the opener received the embedded file URL under the data dir
-        expect(capturedUrl).toBe(pathToFileURL(join(dataDir, 'memory.db')).href);
+        // Then the opener received the data directory exactly once
+        expect(openedDataDirs).toEqual([dataDir]);
     });
 
     it('falls back silently when the availability probe throws', async () => {
@@ -99,5 +101,36 @@ describe('createPersistentStore (runtime wiring)', () => {
         });
         // Then the factory swallows the failure and returns undefined
         expect(store).toBeUndefined();
+    });
+
+    it.each([
+        new LocalDbConfigError('remote_url', 'libsql://remote.example.com/app'),
+        new LocalDbInitializationError('wal_refused', 'journal_mode', 'wal', 'delete'),
+    ])('propagates typed local database failures unchanged', async (typedError) => {
+        // Given
+        const dataDir = mkdtempSync(join(tmpdir(), 'mctrl-turso-typed-failure-'));
+        tmpDirs.push(dataDir);
+
+        // When
+        const opening = createPersistentStore(dataDir, {
+            probeAvailability: async () => true,
+            openStore: async () => Promise.reject(typedError),
+        });
+
+        // Then
+        await expect(opening).rejects.toBe(typedError);
+    });
+
+    it('releases a supplied database lease when a runtime-backed store closes', async () => {
+        // Given
+        const runtime = await openLocalLibsqlDb({ url: ':memory:' });
+        const closeLease = vi.spyOn(runtime, 'close');
+        const store = TursoPersistentStore.fromRuntime(runtime);
+
+        // When
+        store.close();
+
+        // Then
+        expect(closeLease).toHaveBeenCalledOnce();
     });
 });

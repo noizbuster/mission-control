@@ -1,7 +1,11 @@
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type LocalLibsqlDb, openLocalLibsqlDb } from '../db/local-libsql-db.js';
-import { type LocalSessionEventStore, openLocalSessionEventStore } from '../memory/local-session-store.js';
+import {
+    type LocalSessionEventStore,
+    missionControlDbUrl,
+    openLocalSessionEventStore,
+} from '../memory/local-session-store.js';
 import { SessionControlHost, type SessionControlHostPublisher } from './session-control-host.js';
 import {
     acquireSessionControlLease,
@@ -80,7 +84,8 @@ describe('SessionStopService', () => {
             args: [fixture.sessionId],
         });
         expect(session.rows[0]).toMatchObject({ status: 'idle' });
-        expect(JSON.parse(String(session.rows[0]?.['metadata_json']))).toMatchObject({ lifecycleReason: 'aborted' });
+        const metadataJsonColumn = 'metadata_json';
+        expect(JSON.parse(String(session.rows[0]?.[metadataJsonColumn]))).toMatchObject({ lifecycleReason: 'aborted' });
         expect(fixture.host.classify(fixture.sessionId)).toEqual({ kind: 'absent' });
         await fixture.close();
     });
@@ -245,7 +250,7 @@ async function createFixture(sessionId: string): Promise<{
     const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-session-stop-service-'));
     directories.push(dataDir);
     await mkdir(join(dataDir, '.omo'), { recursive: true });
-    const runtime = await openLocalLibsqlDb({ url: `file:${join(dataDir, 'memory.db')}` });
+    const runtime = await openLocalLibsqlDb({ url: missionControlDbUrl(dataDir) });
     const store = await openLocalSessionEventStore({ dataDir, sessionId });
     const publisher: SessionControlHostPublisher = async (input) => {
         const lease = (

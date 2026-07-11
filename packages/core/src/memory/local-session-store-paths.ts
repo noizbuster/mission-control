@@ -3,12 +3,20 @@ import { resolveMissionControlDataDir } from './data-dir.js';
 import { JsonlSessionEventStoreError } from './jsonl-session-event-store.js';
 import { pathToFileURL } from 'node:url';
 
-export function localSessionDbPath(dataDir = resolveMissionControlDataDir()): string {
+export function missionControlDbPath(dataDir = resolveMissionControlDataDir()): string {
     return sessionStoreDatabasePath(dataDir);
 }
 
+export function missionControlDbUrl(dataDir = resolveMissionControlDataDir()): string {
+    return pathToFileURL(missionControlDbPath(dataDir)).href;
+}
+
+export function localSessionDbPath(dataDir = resolveMissionControlDataDir()): string {
+    return missionControlDbPath(dataDir);
+}
+
 export function localSessionDbUrl(dataDir = resolveMissionControlDataDir()): string {
-    return pathToFileURL(localSessionDbPath(dataDir)).href;
+    return missionControlDbUrl(dataDir);
 }
 
 export function parseLocalSessionId(sessionId: string): string {

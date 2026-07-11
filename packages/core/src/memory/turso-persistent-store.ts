@@ -43,8 +43,12 @@ export class TursoPersistentStore implements PersistentMemoryStore {
         this.runtime = runtime;
     }
 
+    static fromRuntime(runtime: LocalLibsqlDb): TursoPersistentStore {
+        return new TursoPersistentStore(runtime);
+    }
+
     static async open(url: string): Promise<TursoPersistentStore> {
-        return new TursoPersistentStore(await openLocalLibsqlDb({ url }));
+        return TursoPersistentStore.fromRuntime(await openLocalLibsqlDb({ url }));
     }
 
     async get(key: string, namespace: string): Promise<unknown | undefined> {

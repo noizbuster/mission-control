@@ -1,7 +1,7 @@
 import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
+import { openMissionControlDb } from '../db/mission-control-db.js';
 import { resolveMissionControlDataDir } from '../memory/data-dir.js';
-import { localSessionDbPath, localSessionDbUrl } from '../memory/local-session-store-paths.js';
+import { missionControlDbPath, missionControlDbUrl } from '../memory/local-session-store-paths.js';
 import { migrateLegacyRuntimeStores, type RuntimeDbMigrationResult } from './runtime-db-migration.js';
 import { runtimeDbMigrationTableDescriptors } from './runtime-db-migration-descriptors.js';
 import {
@@ -14,6 +14,7 @@ import {
     type SessionStoreIdentity,
     type SessionStoreIdentityPath,
 } from './session-store-identity.js';
+import { dirname } from 'node:path';
 
 export { runtimeDbMigrationTableDescriptors };
 
@@ -22,6 +23,10 @@ type ScheduledCallback = () => void | Promise<void>;
 type RuntimeSessionControlMaintenance = {
     readonly stop: () => void;
     readonly drainAndClose: () => Promise<void>;
+};
+
+type RuntimeLocalDbIdentity = SessionStoreIdentityPath & {
+    readonly canonicalDataDir?: string;
 };
 
 export type RuntimeSessionControlMaintenanceOptions = {
@@ -39,15 +44,15 @@ export type OpenCanonicalRuntimeDbOptions = {
 };
 
 export function localRuntimeDbPath(dataDir?: string): string {
-    return localSessionDbPath(dataDir);
+    return missionControlDbPath(dataDir);
 }
 
 export function localRuntimeDbUrl(dataDir?: string): string {
-    return localSessionDbUrl(dataDir);
+    return missionControlDbUrl(dataDir);
 }
 
-export async function openRuntimeLocalDb(identity: SessionStoreIdentityPath): Promise<LocalLibsqlDb> {
-    return openLocalLibsqlDb({ url: identity.databaseFileUrl });
+export async function openRuntimeLocalDb(identity: RuntimeLocalDbIdentity): Promise<LocalLibsqlDb> {
+    return openMissionControlDb({ dataDir: identity.canonicalDataDir ?? dirname(identity.databasePath) });
 }
 
 export async function openCanonicalRuntimeDb(input: OpenCanonicalRuntimeDbOptions = {}): Promise<{

@@ -19,6 +19,8 @@ export {
     type LocalSessionTreeDeleteRecord,
     localSessionDbPath,
     localSessionDbUrl,
+    missionControlDbPath,
+    missionControlDbUrl,
     type OpenLocalSessionEventStoreOptions,
     openLocalSessionEventStore,
     openLocalSessionProjectionStore,

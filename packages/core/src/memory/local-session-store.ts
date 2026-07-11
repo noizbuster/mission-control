@@ -11,5 +11,10 @@ export {
     type OpenLocalSessionEventStoreOptions,
     openLocalSessionEventStore,
 } from './local-session-store-open.js';
-export { localSessionDbPath, localSessionDbUrl } from './local-session-store-paths.js';
+export {
+    localSessionDbPath,
+    localSessionDbUrl,
+    missionControlDbPath,
+    missionControlDbUrl,
+} from './local-session-store-paths.js';
 export { type LocalSessionReplayReadResult, readLocalSessionReplay } from './local-session-store-replay.js';

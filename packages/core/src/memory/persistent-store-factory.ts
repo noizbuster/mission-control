@@ -4,24 +4,25 @@
  * `createPersistentStore` is the single production call site that decides whether the
  * runtime gets a durable libSQL-backed store (`TursoPersistentStore`) or runs without
  * one. It probes the libSQL native binary via `isTursoAvailable()` and, on success,
- * opens an embedded `file:` database at `<dataDir>/memory.db` (no server, no network).
+ * opens the embedded Mission Control database under `dataDir` (no server, no network).
  *
- * libSQL/Turso is NEVER mandatory: when the probe fails, the open fails, or the native
+ * libSQL/Turso is NEVER mandatory: when the probe fails, a generic open fails, or the native
  * binary is unavailable, this resolves `undefined` and the caller continues with its
  * existing in-memory behavior (the per-run `Blackboard` stays the working memory; the
- * JSONL event ledger is never touched). The factory itself never throws.
+ * JSONL event ledger is never touched). Typed local configuration and initialization
+ * failures propagate instead of silently disabling persistence.
  *
  * The optional `probeAvailability` / `openStore` seams default to the real libSQL probe
  * and opener; tests inject them to assert availability, fallback, and path resolution
  * deterministically without touching disk.
  */
 
-import { resolveSessionStoreIdentity } from '../runtime/session-store-identity.js';
+import { LocalDbConfigError, LocalDbInitializationError } from '../db/local-libsql-db.js';
+import { openMissionControlDb } from '../db/mission-control-db.js';
 import type { PersistentMemoryStore } from './persistent-memory-store.js';
 import { isTursoAvailable, TursoPersistentStore } from './turso-persistent-store.js';
 
-/** Opens a libSQL-backed store at a `file:` (or `:memory:`) URL. Overridable for tests. */
-export type PersistentStoreOpener = (url: string) => Promise<PersistentMemoryStore>;
+export type PersistentStoreOpener = (dataDir: string) => Promise<PersistentMemoryStore>;
 
 /** Probes whether the libSQL native binary is usable in this environment. Overridable for tests. */
 export type TursoAvailabilityProbe = () => Promise<boolean>;
@@ -34,16 +35,18 @@ export type CreatePersistentStoreOptions = {
 /**
  * Resolve the runtime's persistent memory store for `dataDir`.
  *
- * Returns a live store backed by `<dataDir>/memory.db` when libSQL is available, otherwise
- * `undefined` (the runtime then runs in-memory-only). Never throws: a failed probe or open
- * is treated as "unavailable" so callers can fall back silently.
+ * Returns a live durable store when libSQL is available, otherwise `undefined` so the runtime
+ * can continue in-memory-only. Typed local configuration and initialization failures propagate.
  */
 export async function createPersistentStore(
     dataDir: string,
     options: CreatePersistentStoreOptions = {},
 ): Promise<PersistentMemoryStore | undefined> {
     const probe = options.probeAvailability ?? isTursoAvailable;
-    const openStore = options.openStore ?? ((url) => TursoPersistentStore.open(url));
+    const openStore =
+        options.openStore ??
+        (async (storeDataDir: string) =>
+            TursoPersistentStore.fromRuntime(await openMissionControlDb({ dataDir: storeDataDir })));
 
     try {
         const available = await probe();
@@ -52,10 +55,10 @@ export async function createPersistentStore(
         return undefined;
     }
 
-    const identity = await resolveSessionStoreIdentity({ dataDir });
     try {
-        return await openStore(identity.databaseFileUrl);
-    } catch {
+        return await openStore(dataDir);
+    } catch (error: unknown) {
+        if (error instanceof LocalDbConfigError || error instanceof LocalDbInitializationError) throw error;
         return undefined;
     }
 }

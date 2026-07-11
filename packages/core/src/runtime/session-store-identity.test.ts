@@ -89,26 +89,26 @@ describe('SessionStoreIdentity', () => {
             {
                 name: 'posix-default',
                 platform: 'linux',
-                inputDatabasePath: '/home/alice/.local/share/mission-control/memory.db',
-                databasePath: '/home/alice/.local/share/mission-control/memory.db',
-                databaseFileUrl: 'file:///home/alice/.local/share/mission-control/memory.db',
-                dbIdentity: '8df978b1b91de5716a7aa2b1421579d3ad84cb4b8fef3002a21c340e44094f3b',
+                inputDatabasePath: '/home/alice/.local/share/mission-control/mission-control.db',
+                databasePath: '/home/alice/.local/share/mission-control/mission-control.db',
+                databaseFileUrl: 'file:///home/alice/.local/share/mission-control/mission-control.db',
+                dbIdentity: '6317fdfef52d195bb6bddd5ce82484ac9abd4d4b567fb85a4ab06d867ea94392',
             },
             {
                 name: 'windows-drive',
                 platform: 'win32',
-                inputDatabasePath: 'c:\\Users\\Alice\\AppData\\Roaming\\mission-control\\memory.db',
-                databasePath: 'C:\\Users\\Alice\\AppData\\Roaming\\mission-control\\memory.db',
-                databaseFileUrl: 'file:///C:/Users/Alice/AppData/Roaming/mission-control/memory.db',
-                dbIdentity: '488afdd858d13406509f2689433ec2304dd6d8b25cda0a0c05a6364eec481bee',
+                inputDatabasePath: 'c:\\Users\\Alice\\AppData\\Roaming\\mission-control\\mission-control.db',
+                databasePath: 'C:\\Users\\Alice\\AppData\\Roaming\\mission-control\\mission-control.db',
+                databaseFileUrl: 'file:///C:/Users/Alice/AppData/Roaming/mission-control/mission-control.db',
+                dbIdentity: 'e096f04ec938133c55f50210fed3db6b750e43dd8a2478ae6de818a24f9b9cda',
             },
             {
                 name: 'windows-unc',
                 platform: 'win32',
-                inputDatabasePath: '\\\\SERVER\\Team Share\\mission-control\\memory.db',
-                databasePath: '\\\\SERVER\\Team Share\\mission-control\\memory.db',
-                databaseFileUrl: 'file://server/Team%20Share/mission-control/memory.db',
-                dbIdentity: '5d85abad1b8a4618d5e8ec55d636f9106cba3e8e4ddef0b89c41d22822b5fca0',
+                inputDatabasePath: '\\\\SERVER\\Team Share\\mission-control\\mission-control.db',
+                databasePath: '\\\\SERVER\\Team Share\\mission-control\\mission-control.db',
+                databaseFileUrl: 'file://server/Team%20Share/mission-control/mission-control.db',
+                dbIdentity: 'e0efcad44653d3d93081f8e8e6a6850cd0ed82e4ca7d00d8a1a1c5b5f3c4878b',
             },
         ]);
 
@@ -122,8 +122,8 @@ describe('SessionStoreIdentity', () => {
     });
 });
 
-describe('canonical memory database opener audit', () => {
-    it('rejects independent production memory.db joins and direct libSQL client openers', async () => {
+describe('canonical Mission Control database opener audit', () => {
+    it('rejects independent production database filename joins and direct libSQL client openers', async () => {
         const sourceRoot = join(process.cwd(), 'packages', 'core', 'src');
         const entries = await readdir(sourceRoot, { recursive: true });
         const sourcePaths = entries
@@ -134,12 +134,18 @@ describe('canonical memory database opener audit', () => {
         for (const sourcePath of sourcePaths) {
             const contents = await readFile(sourcePath, 'utf8');
             const relativePath = sourcePath.slice(sourceRoot.length + 1);
+            if (/\b(?:join|resolve)\([^;\n]*['"]memory\.db['"]/u.test(contents)) {
+                violations.push(`${relativePath}: legacy memory.db path join`);
+            }
+            if (/\bconst\s+[A-Z0-9_]*DB_FILENAME\s*=\s*['"]memory\.db['"]/u.test(contents)) {
+                violations.push(`${relativePath}: legacy memory.db filename`);
+            }
             if (relativePath !== 'runtime/session-store-identity.ts') {
-                if (/\b(?:join|resolve)\([^;\n]*['"]memory\.db['"]/u.test(contents)) {
-                    violations.push(`${relativePath}: independent memory.db path join`);
+                if (/\b(?:join|resolve)\([^;\n]*['"]mission-control\.db['"]/u.test(contents)) {
+                    violations.push(`${relativePath}: independent mission-control.db path join`);
                 }
-                if (/\bconst\s+[A-Z0-9_]*DB_FILENAME\s*=\s*['"]memory\.db['"]/u.test(contents)) {
-                    violations.push(`${relativePath}: independent memory.db filename`);
+                if (/\bconst\s+[A-Z0-9_]*DB_FILENAME\s*=\s*['"]mission-control\.db['"]/u.test(contents)) {
+                    violations.push(`${relativePath}: independent mission-control.db filename`);
                 }
             }
             if (relativePath !== 'db/local-libsql-db.ts' && /\bcreateClient\s*\(\s*\{\s*url\b/u.test(contents)) {
