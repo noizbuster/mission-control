@@ -85,18 +85,60 @@ export class ToolRegistry {
     async invoke(input: ToolInvocationInput): Promise<ToolInvocationSettlement> {
         const registered = this.registrations.get(input.toolName);
         if (registered === undefined) {
-            return failedSettlement(input, protocolError('tool_failed', `unknown tool: ${input.toolName}`));
+            return commitSettlement(
+                input,
+                failedSettlement(input, protocolError('tool_failed', `unknown tool: ${input.toolName}`)),
+            );
         }
         if (registered.advertisement.version !== input.advertisedVersion) {
-            return failedSettlement(input, protocolError('tool_failed', `stale tool call rejected: ${input.toolName}`));
+            return commitSettlement(
+                input,
+                failedSettlement(input, protocolError('tool_failed', `stale tool call rejected: ${input.toolName}`)),
+            );
         }
 
         const parsedArguments = parseArgumentsJson(input);
         if (!parsedArguments.ok) {
-            return failedSettlement(input, parsedArguments.error);
+            return commitSettlement(input, failedSettlement(input, parsedArguments.error));
         }
-        return invokeRegisteredTool(registered, input, parsedArguments.value);
+        return commitSettlement(input, await invokeRegisteredTool(registered, input, parsedArguments.value));
     }
+}
+
+async function commitSettlement(
+    input: ToolInvocationInput,
+    settlement: ToolInvocationSettlement,
+): Promise<ToolInvocationSettlement> {
+    const fence = input.controlEpoch?.callbackFence;
+    if (fence === undefined) {
+        return settlement;
+    }
+    if (input.writeSettlement === undefined) {
+        return failedSettlement(input, protocolError('tool_failed', 'controlled tool settlement writer is required'));
+    }
+    const errorCode = settlement.result.error?.code;
+    const accepted = await fence.settle({
+        handleKind: handleKindForTool(input.toolName),
+        handleId: `${handleKindForTool(input.toolName)}:${input.toolCallId}`,
+        attemptedEventType: settlement.result.status === 'completed' ? 'tool.completed' : 'tool.failed',
+        metadata: {
+            status: settlement.result.status,
+            ...(errorCode !== undefined ? { errorCode } : {}),
+            signalAborted: input.signal?.aborted ?? false,
+        },
+        write: (client) => input.writeSettlement?.(settlement, client) ?? Promise.resolve(),
+    });
+    if (accepted.accepted) {
+        return settlement;
+    }
+    return failedSettlement(input, protocolError('tool_failed', 'tool callback quarantined'));
+}
+
+function handleKindForTool(toolName: string): 'command' | 'shell' | 'subagent' | 'tool' {
+    if (toolName === 'command.run') return 'command';
+    if (toolName === 'shell.session') return 'shell';
+    if (toolName === 'task') return 'subagent';
+    return 'tool';
 }
 
 async function invokeRegisteredTool(
@@ -137,6 +179,7 @@ async function invokeWithTypedFailure(
             toolCallId: input.toolCallId,
             toolName: input.toolName,
             signal: input.signal ?? neverAbortSignal,
+            ...(input.controlEpoch !== undefined ? { controlEpoch: input.controlEpoch } : {}),
         });
     } catch (error: unknown) {
         if (error instanceof ToolExecutionError) {

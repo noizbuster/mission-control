@@ -1,4 +1,9 @@
-import { createDesktopSessionCommandService } from '@mission-control/core';
+import {
+    closeProcessSessionControlHosts,
+    createDesktopSessionCommandService,
+    fenceProcessSessionControlHosts,
+    getProcessSessionControlHost,
+} from '@mission-control/core';
 
 const ACTION_METHODS = new Map([
     ['submitPrompt', 'submitPrompt'],
@@ -25,8 +30,17 @@ const provider = {
     },
 };
 
-for await (const line of readLines(process.stdin)) {
-    void handleLine(line);
+const pending = new Set();
+try {
+    for await (const line of readLines(process.stdin)) {
+        const request = handleLine(line);
+        pending.add(request);
+        void request.finally(() => pending.delete(request));
+    }
+} finally {
+    await fenceProcessSessionControlHosts();
+    await Promise.allSettled(pending);
+    await closeProcessSessionControlHosts();
 }
 
 async function handleLine(line) {
@@ -45,7 +59,7 @@ async function handleLine(line) {
         if (method === undefined) {
             throw new Error(`unsupported desktop test action: ${request.action}`);
         }
-        const receipt = await commandService(request)[method](request.input);
+        const receipt = await (await commandService(request))[method](request.input);
         writeResponse(request.id, receipt);
     } catch (error) {
         writeError(request.id, error);
@@ -69,7 +83,7 @@ async function* readLines(stream) {
     }
 }
 
-function commandService(request) {
+async function commandService(request) {
     const cacheKey = [request.dataDir, request.workspaceRoot].join('\0');
     const cached = serviceCache.get(cacheKey);
     if (cached !== undefined) {
@@ -78,6 +92,7 @@ function commandService(request) {
     const service = createDesktopSessionCommandService({
         dataDir: request.dataDir,
         workspaceRoot: request.workspaceRoot,
+        sessionControlHost: await getProcessSessionControlHost(request.dataDir),
         provider,
     });
     serviceCache.set(cacheKey, service);

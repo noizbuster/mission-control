@@ -1,19 +1,24 @@
-import { openLocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
+import { type InStatement } from '@libsql/client';
+import { z } from 'zod';
+import { runLocalLibsqlWrite } from '../db/local-libsql-db.js';
+import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
+import { openCanonicalRuntimeDb, openRuntimeLocalDb } from '../runtime/local-runtime-db.js';
+import { readCanonicalSessionTree } from '../runtime/session-stop-tree-resolver.js';
+import type { SessionStoreIdentity } from '../runtime/session-store-identity.js';
+import { computeCanonicalSessionTreeToken } from '../runtime/session-tree-token.js';
 import { resolveMissionControlDataDir } from './data-dir.js';
-import { localSessionDbUrl } from './local-session-store-paths.js';
 import { importLegacySessionCompatibilityWindow } from './session-import.js';
 import { openSqliteSessionProjectionStore, type SqliteSessionProjectionStore } from './sqlite-session-projection.js';
-import { mkdir } from 'node:fs/promises';
 
 export async function openLocalSessionProjectionStore(
     input: { readonly dataDir?: string; readonly now?: () => string } = {},
 ): Promise<SqliteSessionProjectionStore> {
     const dataDir = input.dataDir ?? resolveMissionControlDataDir();
-    await ensureLocalSessionDatabase({
+    const identity = await ensureLocalSessionDatabase({
         dataDir,
         ...(input.now !== undefined ? { now: input.now } : {}),
     });
-    return openSqliteSessionProjectionStore({ url: localSessionDbUrl(dataDir) });
+    return openSqliteSessionProjectionStore({ url: identity.databaseFileUrl });
 }
 
 export async function deleteLocalSessionRows(input: {
@@ -22,71 +27,150 @@ export async function deleteLocalSessionRows(input: {
     readonly now?: () => string;
 }): Promise<void> {
     const dataDir = input.dataDir ?? resolveMissionControlDataDir();
-    await ensureLocalSessionDatabase({
+    const identity = await ensureLocalSessionDatabase({
         dataDir,
         ...(input.now !== undefined ? { now: input.now } : {}),
     });
-    const runtime = await openLocalLibsqlDb({ url: localSessionDbUrl(dataDir) });
+    const runtime = await openRuntimeLocalDb(identity);
     try {
         for (const sessionId of input.sessionIds) {
-            await runLocalLibsqlWrite(runtime, (client) =>
-                client.batch(
-                    [
-                        { sql: 'DELETE FROM session_parts WHERE session_id = ?', args: [sessionId] },
-                        { sql: 'DELETE FROM session_messages WHERE session_id = ?', args: [sessionId] },
-                        { sql: 'DELETE FROM session_events WHERE session_id = ?', args: [sessionId] },
-                        { sql: 'DELETE FROM session_event_sequences WHERE session_id = ?', args: [sessionId] },
-                        { sql: 'DELETE FROM session_projection_runs WHERE session_id = ?', args: [sessionId] },
-                        { sql: 'DELETE FROM session_projection_diagnostics WHERE session_id = ?', args: [sessionId] },
-                        { sql: 'DELETE FROM approvals WHERE session_id = ?', args: [sessionId] },
-                        { sql: 'DELETE FROM tool_calls WHERE session_id = ?', args: [sessionId] },
-                        { sql: 'DELETE FROM provider_failures WHERE session_id = ?', args: [sessionId] },
-                        { sql: 'DELETE FROM session_inputs WHERE session_id = ?', args: [sessionId] },
-                        {
-                            sql: 'DELETE FROM session_awaits WHERE session_id = ? OR child_session_id = ?',
-                            args: [sessionId, sessionId],
-                        },
-                        { sql: 'DELETE FROM context_epochs WHERE session_id = ?', args: [sessionId] },
-                        {
-                            sql: 'DELETE FROM session_relations WHERE parent_session_id = ? OR child_session_id = ?',
-                            args: [sessionId, sessionId],
-                        },
-                        { sql: 'UPDATE mission_runs SET session_id = NULL WHERE session_id = ?', args: [sessionId] },
-                        { sql: 'UPDATE runtime_agents SET session_id = NULL WHERE session_id = ?', args: [sessionId] },
-                        {
-                            sql: 'UPDATE async_jobs SET parent_session_id = NULL WHERE parent_session_id = ?',
-                            args: [sessionId],
-                        },
-                        {
-                            sql: 'UPDATE async_jobs SET child_session_id = NULL WHERE child_session_id = ?',
-                            args: [sessionId],
-                        },
-                        { sql: 'DELETE FROM sessions WHERE session_id = ?', args: [sessionId] },
-                    ],
-                    'write',
-                ),
-            );
+            await runLocalLibsqlWrite(runtime, (client) => client.batch(sessionDeleteStatements(sessionId), 'write'));
         }
     } finally {
         runtime.close();
     }
 }
 
+export type LocalSessionTreeDeleteRecord = {
+    readonly sessionId: string;
+    readonly eventCount: number;
+};
+
+export type LocalSessionTreeDeleteErrorCode =
+    | 'session_not_found'
+    | 'unstable_session_tree'
+    | 'session_tree_changed'
+    | 'session_live_locked';
+
+export class LocalSessionTreeDeleteError extends Error {
+    readonly code: LocalSessionTreeDeleteErrorCode;
+
+    constructor(code: LocalSessionTreeDeleteErrorCode) {
+        super(code);
+        this.name = 'LocalSessionTreeDeleteError';
+        this.code = code;
+    }
+}
+
+const eventCountRowSchema = z.object({
+    session_id: z.string(),
+    event_count: z.number().int().nonnegative(),
+});
+
+export async function deleteLocalSessionTreeRows(input: {
+    readonly dataDir?: string;
+    readonly targetSessionId: string;
+    readonly expectedTreeToken?: string;
+    readonly nowWallMs?: number;
+}): Promise<readonly LocalSessionTreeDeleteRecord[]> {
+    const dataDir = input.dataDir ?? resolveMissionControlDataDir();
+    const identity = await ensureLocalSessionDatabase({ dataDir });
+    const runtime = await openRuntimeLocalDb(identity);
+    try {
+        return await runLocalLibsqlWrite(runtime, (client) =>
+            runLocalLibsqlClientTransaction(client, async () => {
+                const tree = await readCanonicalSessionTree(client, input.targetSessionId);
+                if (!tree.ok) throw new LocalSessionTreeDeleteError(tree.errorCode);
+                const target = tree.nodes.find(({ sessionId }) => sessionId === input.targetSessionId);
+                if (target === undefined) throw new LocalSessionTreeDeleteError('session_not_found');
+                const nodes = [{ ...target, depth: 0 }, ...tree.descendants];
+                const token = computeCanonicalSessionTreeToken(nodes);
+                if (input.expectedTreeToken !== undefined && input.expectedTreeToken !== token) {
+                    throw new LocalSessionTreeDeleteError('session_tree_changed');
+                }
+
+                const sessionIds = nodes.map(({ sessionId }) => sessionId);
+                const placeholders = sessionIds.map(() => '?').join(', ');
+                const liveLease = await client.execute({
+                    sql:
+                        `SELECT 1 FROM session_control_leases WHERE db_identity = ? AND session_id IN (${placeholders}) ` +
+                        'AND expires_wall_ms > ? LIMIT 1',
+                    args: [identity.dbIdentity, ...sessionIds, input.nowWallMs ?? Date.now()],
+                });
+                if (liveLease.rows[0] !== undefined) throw new LocalSessionTreeDeleteError('session_live_locked');
+
+                const counts = await client.execute({
+                    sql:
+                        `SELECT session_id, COUNT(*) AS event_count FROM session_events WHERE session_id IN (${placeholders}) ` +
+                        'GROUP BY session_id',
+                    args: sessionIds,
+                });
+                const eventCounts = new Map(
+                    counts.rows.map((row) => {
+                        const parsed = eventCountRowSchema.parse(row);
+                        return [parsed.session_id, parsed.event_count] as const;
+                    }),
+                );
+                for (const sessionId of sessionIds) {
+                    for (const statement of sessionDeleteStatements(sessionId)) await client.execute(statement);
+                }
+                return sessionIds.map((sessionId) => ({ sessionId, eventCount: eventCounts.get(sessionId) ?? 0 }));
+            }),
+        );
+    } finally {
+        runtime.close();
+    }
+}
+
+function sessionDeleteStatements(sessionId: string): InStatement[] {
+    return [
+        { sql: 'DELETE FROM session_parts WHERE session_id = ?', args: [sessionId] },
+        { sql: 'DELETE FROM session_messages WHERE session_id = ?', args: [sessionId] },
+        { sql: 'DELETE FROM session_events WHERE session_id = ?', args: [sessionId] },
+        { sql: 'DELETE FROM session_event_sequences WHERE session_id = ?', args: [sessionId] },
+        { sql: 'DELETE FROM session_projection_runs WHERE session_id = ?', args: [sessionId] },
+        { sql: 'DELETE FROM session_projection_diagnostics WHERE session_id = ?', args: [sessionId] },
+        { sql: 'DELETE FROM approvals WHERE session_id = ?', args: [sessionId] },
+        { sql: 'DELETE FROM tool_calls WHERE session_id = ?', args: [sessionId] },
+        { sql: 'DELETE FROM provider_failures WHERE session_id = ?', args: [sessionId] },
+        { sql: 'DELETE FROM session_inputs WHERE session_id = ?', args: [sessionId] },
+        {
+            sql: 'DELETE FROM session_awaits WHERE session_id = ? OR child_session_id = ?',
+            args: [sessionId, sessionId],
+        },
+        { sql: 'DELETE FROM context_epochs WHERE session_id = ?', args: [sessionId] },
+        {
+            sql: 'DELETE FROM session_relations WHERE parent_session_id = ? OR child_session_id = ?',
+            args: [sessionId, sessionId],
+        },
+        { sql: 'UPDATE mission_runs SET session_id = NULL WHERE session_id = ?', args: [sessionId] },
+        { sql: 'UPDATE runtime_agents SET session_id = NULL WHERE session_id = ?', args: [sessionId] },
+        { sql: 'UPDATE async_jobs SET parent_session_id = NULL WHERE parent_session_id = ?', args: [sessionId] },
+        { sql: 'UPDATE async_jobs SET child_session_id = NULL WHERE child_session_id = ?', args: [sessionId] },
+        { sql: 'DELETE FROM sessions WHERE session_id = ?', args: [sessionId] },
+    ];
+}
+
 export async function ensureLocalSessionDatabase(input: {
     readonly dataDir: string;
     readonly now?: () => string;
-}): Promise<void> {
-    await mkdir(input.dataDir, { recursive: true });
-    const runtime = await openLocalLibsqlDb({ url: localSessionDbUrl(input.dataDir) });
+}): Promise<SessionStoreIdentity> {
+    const { identity, runtime } = await openCanonicalRuntimeDb({
+        dataDir: input.dataDir,
+        legacyRoots: [input.dataDir],
+        ...(input.now !== undefined ? { now: input.now } : {}),
+    });
     try {
         await importLegacySessionCompatibilityWindow({
             ...runtime,
-            dataDir: input.dataDir,
+            dataDir: identity.canonicalDataDir,
+            includeRunSources: false,
             ...(input.now !== undefined ? { now: input.now } : {}),
         });
     } finally {
         runtime.close();
     }
-    const projectionStore = await openSqliteSessionProjectionStore({ url: localSessionDbUrl(input.dataDir) });
+    const projectionStore = await openSqliteSessionProjectionStore({ url: identity.databaseFileUrl });
     projectionStore.close();
+    return identity;
 }

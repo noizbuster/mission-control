@@ -182,6 +182,34 @@ describe('session lifecycle derivation', () => {
         expect(activeReplay.snapshot.status).toBe('running');
         expect(completedReplay.snapshot.status).toBe('idle');
     });
+
+    it('labels a quiescent abort marker as reusable idle(aborted)', () => {
+        expect(deriveSessionLifecycle(input({ abortMarker: { kind: 'operator_aborted' } }))).toEqual({
+            status: 'idle',
+            displayReason: 'aborted',
+        });
+    });
+
+    it.each([
+        {
+            name: 'mission run',
+            override: { missionRuns: [{ runId: 'mission_active', status: 'running' as const }] },
+        },
+        {
+            name: 'pending input',
+            override: { pendingInputs: [{ inputId: 'input_pending' }] },
+        },
+        {
+            name: 'durable job',
+            override: {
+                backgroundJobs: [{ jobId: 'job_active', blocking: false, status: 'queued' as const }],
+            },
+        },
+    ])('keeps an abort marker running while a $name survives', ({ override }) => {
+        expect(deriveSessionLifecycle(input({ abortMarker: { kind: 'operator_aborted' }, ...override }))).toEqual({
+            status: 'running',
+        });
+    });
 });
 
 function input(overrides: Partial<SessionLifecycleDerivationInput> = {}): SessionLifecycleDerivationInput {

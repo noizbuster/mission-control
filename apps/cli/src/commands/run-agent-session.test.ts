@@ -77,7 +77,7 @@ describe('createRunEventRecorder lazy session creation', () => {
         const eventTypes = await readSessionEventTypes(sessionId);
         expect(eventTypes[0]).toBe('session.started');
         expect(eventTypes[1]).toBe('session.metadata.updated');
-        await expect(readdir(join(dataDir, 'sessions'))).resolves.not.toContain(`${sessionId}.jsonl`);
+        await expect(readdir(join(dataDir, 'sessions'))).rejects.toMatchObject({ code: 'ENOENT' });
     });
 
     it('(e) non-lazy jsonl run still opens the SQLite-backed store eagerly at construction', async () => {
@@ -94,7 +94,7 @@ describe('createRunEventRecorder lazy session creation', () => {
 
         const sessionId = recorder.currentSessionId();
         expect(sessionId).toEqual(expect.any(String));
-        await expect(readdir(join(dataDir, 'sessions'))).resolves.not.toContain(`${sessionId}.jsonl`);
+        await expect(readdir(join(dataDir, 'sessions'))).rejects.toMatchObject({ code: 'ENOENT' });
     });
 
     it('(f) explicit --session in TUI mode still opens eagerly', async () => {
@@ -110,7 +110,7 @@ describe('createRunEventRecorder lazy session creation', () => {
             await recorder.close();
         }
 
-        await expect(readdir(join(dataDir, 'sessions'))).resolves.not.toContain(`${explicitId}.jsonl`);
+        await expect(readdir(join(dataDir, 'sessions'))).rejects.toMatchObject({ code: 'ENOENT' });
     });
 
     it('(g) explicit local/local-echo --session prompts resume without duplicate owner prompt id or failed partial append', async () => {
@@ -130,33 +130,21 @@ describe('createRunEventRecorder lazy session creation', () => {
                 'create a short explicit session',
             ]),
         );
-        const beforeSecondPrompt = await readSessionEvents(sessionId);
-
-        let secondError: unknown;
-        let secondOutput = '';
-        try {
-            secondOutput = await runAgent(
-                parseArgs([
-                    '--no-tui',
-                    '--no-native',
-                    '--provider',
-                    'local',
-                    '--model',
-                    'local-echo',
-                    '--session',
-                    sessionId,
-                    'resume the explicit session with a second prompt',
-                ]),
-            );
-        } catch (error: unknown) {
-            secondError = error;
-        }
+        const secondOutput = await runAgent(
+            parseArgs([
+                '--no-tui',
+                '--no-native',
+                '--provider',
+                'local',
+                '--model',
+                'local-echo',
+                '--session',
+                sessionId,
+                'resume the explicit session with a second prompt',
+            ]),
+        );
         const afterSecondPrompt = await readSessionEvents(sessionId);
 
-        if (secondError !== undefined) {
-            expect(afterSecondPrompt).toHaveLength(beforeSecondPrompt.length);
-        }
-        expect(errorMessage(secondError)).toBeUndefined();
         expect(secondOutput).not.toContain('has already been promoted');
         const promotedInputs = afterSecondPrompt
             .filter((event) => event.type === 'prompt.promoted')
@@ -204,11 +192,4 @@ async function readSessionEvents(sessionId: string): Promise<readonly AgentEvent
         throw new Error(`expected SQLite replay for ${sessionId}`);
     }
     return replay.replay.projection.events;
-}
-
-function errorMessage(error: unknown): string | undefined {
-    if (error === undefined) {
-        return undefined;
-    }
-    return error instanceof Error ? error.message : String(error);
 }

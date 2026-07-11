@@ -1,3 +1,4 @@
+import type { Client } from '@libsql/client';
 import type {
     AgentEvent,
     AgentEventEnvelope,
@@ -28,6 +29,8 @@ import {
     type RunCoordinatorTurnContext,
     type SessionRunCoordinatorOptions,
 } from './run-coordinator-types.js';
+import type { SessionControlAttachment, SessionControlStopContext } from './session-control-host.js';
+import { appendFencedSessionStopEvent } from './session-stop-event-writer.js';
 
 export class SessionRunCoordinator {
     private readonly options: SessionRunCoordinatorOptions;
@@ -36,6 +39,9 @@ export class SessionRunCoordinator {
     private readonly ids: RunCoordinatorIdSequence;
     private activeRun: RunCoordinatorActiveRun | undefined;
     private appendQueue: Promise<void> = Promise.resolve();
+    private readonly controlAttachments = new Map<string, Promise<SessionControlAttachment>>();
+    private readonly operatorStops = new Map<string, { readonly requestId: string; readonly operationId: string }>();
+    private readonly fencedRuns = new Set<string>();
 
     constructor(options: SessionRunCoordinatorOptions) {
         this.options = options;
@@ -85,7 +91,15 @@ export class SessionRunCoordinator {
         });
     }
 
+    async close(): Promise<void> {
+        const active = this.activeRun;
+        if (active?.kind === 'running') active.controller.abort();
+        await active?.settled.catch(() => undefined);
+        await Promise.all([...this.controlAttachments.keys()].map((runId) => this.detachControl(runId)));
+    }
+
     private async admit(delivery: 'steer' | 'queue', input: RunCoordinatorPromptInput): Promise<void> {
+        await this.options.sessionControlHost?.acquire(this.options.sessionId);
         await this.ids.observe(input.inputId, input.messageId);
         const inputId = input.inputId ?? (await this.ids.next('input'));
         const messageId = input.messageId ?? (await this.ids.next('message'));
@@ -119,6 +133,7 @@ export class SessionRunCoordinator {
                 );
                 return this.activeRun.settled;
             }
+            await this.detachControl(this.activeRun.runId);
             return this.startResumedDrain(command, this.activeRun.runId, {
                 runId: this.activeRun.runId,
                 ...(this.activeRun.reason !== undefined ? { reason: this.activeRun.reason } : {}),
@@ -142,7 +157,8 @@ export class SessionRunCoordinator {
         blocked?: BlockedRunSnapshot,
     ): Promise<RunCoordinatorResult> {
         const controller = new AbortController();
-        const promise = this.drain(command, runId, controller, blocked);
+        const attachment = this.attachControl(runId, controller);
+        const promise = this.drainAfterAttach(command, runId, controller, attachment, blocked);
         this.activeRun = { kind: 'running', runId, controller, promise, settled: promise };
         void promise.then(
             (result) => {
@@ -171,6 +187,24 @@ export class SessionRunCoordinator {
         return promise;
     }
 
+    private async drainAfterAttach(
+        command: DrainCommand,
+        runId: string,
+        controller: AbortController,
+        attachment: Promise<SessionControlAttachment> | undefined,
+        blocked?: BlockedRunSnapshot,
+    ): Promise<RunCoordinatorResult> {
+        await attachment;
+        try {
+            const result = await this.drain(command, runId, controller, blocked);
+            if (result.status !== 'blocked_on_approval') await this.detachControl(runId);
+            return result;
+        } catch (error: unknown) {
+            await this.detachControl(runId);
+            throw error;
+        }
+    }
+
     private async drain(
         command: DrainCommand,
         runId: string,
@@ -184,8 +218,81 @@ export class SessionRunCoordinator {
             promotionInput: () => this.promotionInput(),
             runProviderTurn: (signal) => this.runProviderTurn(signal),
             appendRunEvent: (...event) => this.appendRunEvent(...event),
+            operatorStop: () => this.operatorStops.get(runId),
+            suppressInterruptedEvent: () => this.fencedRuns.has(runId),
             ...(blocked !== undefined ? { blocked } : {}),
         });
+    }
+
+    private attachControl(runId: string, controller: AbortController): Promise<SessionControlAttachment> | undefined {
+        const host = this.options.sessionControlHost;
+        if (host === undefined) return undefined;
+        const attachment = host.attachEntity({
+            sessionId: this.options.sessionId,
+            kind: 'run',
+            entityId: runId,
+            handles: [
+                {
+                    kind: 'provider',
+                    handleId: `provider:${runId}`,
+                    abort: (context) => this.stopAttachedRun(runId, controller, context),
+                    writeSettlement: (client, context) => this.writeStopSettlement(client, runId, context),
+                },
+            ],
+        });
+        this.controlAttachments.set(runId, attachment);
+        return attachment;
+    }
+
+    private async stopAttachedRun(
+        runId: string,
+        controller: AbortController,
+        context: SessionControlStopContext,
+    ): Promise<void> {
+        if (context.kind === 'operator_stop') {
+            this.operatorStops.set(runId, { requestId: context.requestId, operationId: context.operationId });
+        }
+        this.fencedRuns.add(runId);
+        const active = this.activeRun;
+        if (active?.runId === runId && active.kind === 'blocked_on_approval') {
+            this.activeRun = undefined;
+            await this.detachControl(runId);
+            return;
+        }
+        controller.abort();
+        await active?.settled;
+    }
+
+    private async writeStopSettlement(
+        client: Client,
+        runId: string,
+        context: SessionControlStopContext,
+    ): Promise<void> {
+        if (context.kind !== 'operator_stop') return;
+        await appendFencedSessionStopEvent({
+            client,
+            sessionId: this.options.sessionId,
+            event: {
+                type: 'run.interrupted',
+                timestamp: context.timestamp,
+                sessionId: this.options.sessionId,
+                message: 'run interrupted',
+                run: {
+                    runId,
+                    requestId: context.requestId,
+                    operationId: context.operationId,
+                    reason: 'operator_aborted',
+                },
+            },
+        });
+    }
+
+    private async detachControl(runId: string): Promise<void> {
+        const attachment = this.controlAttachments.get(runId);
+        this.controlAttachments.delete(runId);
+        this.operatorStops.delete(runId);
+        this.fencedRuns.delete(runId);
+        await attachment?.then((value) => value.detach());
     }
 
     private async runProviderTurn(signal: AbortSignal): Promise<RunCoordinatorProviderTurnResult> {

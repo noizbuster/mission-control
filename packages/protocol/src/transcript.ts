@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SessionStopReasonSchema } from './session-stop.js';
 
 export const TRANSCRIPT_DELIVERY_MODES = ['steer', 'queue'] as const;
 export const TRANSCRIPT_VISIBILITIES = ['pending', 'model_visible'] as const;
@@ -12,9 +13,11 @@ export type TranscriptVisibility = z.infer<typeof TranscriptVisibilitySchema>;
 export const TranscriptEventMetadataSchema = z
     .object({
         inputId: z.string().min(1).optional(),
+        requestId: z.string().min(1).optional(),
         messageId: z.string().min(1).optional(),
         parentMessageId: z.string().min(1).optional(),
         delivery: TranscriptDeliveryModeSchema.optional(),
+        reason: z.string().min(1).optional(),
         visibility: TranscriptVisibilitySchema.optional(),
         providerTurnId: z.string().min(1).optional(),
         toolCallId: z.string().min(1).optional(),
@@ -23,3 +26,11 @@ export const TranscriptEventMetadataSchema = z
     })
     .strict();
 export type TranscriptEventMetadata = z.infer<typeof TranscriptEventMetadataSchema>;
+
+export const PromptCancelledEventMetadataSchema = TranscriptEventMetadataSchema.extend({
+    inputId: z.string().min(1),
+    requestId: z.string().min(1),
+    delivery: TranscriptDeliveryModeSchema,
+    reason: SessionStopReasonSchema,
+});
+export type PromptCancelledEventMetadata = z.infer<typeof PromptCancelledEventMetadataSchema>;

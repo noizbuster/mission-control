@@ -70,6 +70,7 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
     const ownedServices =
         input.taskRuntimeServices === undefined ? await resolveMissionControlServices(input.workspaceRoot) : undefined;
     const taskRuntimeServices = input.taskRuntimeServices ?? ownedServices?.getTaskRuntimeServices();
+    const sessionControlHost = taskRuntimeServices?.sessionControlHost ?? ownedServices?.getSessionControlHost();
     const { registry: toolRegistry, mcpConnectionManager } = await createNonInteractiveToolRegistry({
         workspaceRoot: input.workspaceRoot,
         requestPermission: (request) =>
@@ -89,7 +90,8 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
     // tool surface so the graph's tool calls honor the same approval/blocking behavior as the flat
     // loop. The coordinator owns queue/steer/resume around whichever turn runner is installed.
     const runProviderTurn = input.createTurnRunner?.({ toolRegistry });
-    const owner = new SessionRunOwner({
+    let owner: SessionRunOwner | undefined;
+    owner = new SessionRunOwner({
         sessionId: input.sessionId,
         store: input.store,
         provider: input.provider,
@@ -104,6 +106,7 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
             }
             input.observeStoredEvent(event);
         },
+        ...(sessionControlHost !== undefined ? { sessionControlHost } : {}),
     });
 
     emitTaskEvent(input, taskId, 'task.started', `user prompt: ${input.prompt}`);
@@ -116,9 +119,16 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
         });
     } finally {
         try {
-            await mcpConnectionManager.disconnectAll();
+            await owner?.release();
+            if (ownedServices !== undefined) {
+                await sessionControlHost?.close();
+            }
         } finally {
-            await ownedServices?.dispose();
+            try {
+                await mcpConnectionManager.disconnectAll();
+            } finally {
+                await ownedServices?.dispose();
+            }
         }
     }
     if (receipt.status === 'completed') {

@@ -1,5 +1,6 @@
 import type { Client } from '@libsql/client';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
+import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql.js';
 import { deriveSessionProjectionRecordsFromEnvelopes } from './session-projection.js';
 import { replaceStatements } from './sqlite-session-projection-statements.js';
 
@@ -21,4 +22,9 @@ export async function replaceSqliteSessionProjection(input: {
     })) {
         await input.client.execute(statement);
     }
+    await refreshSessionAwaitingFromPendingWaits({
+        client: input.client,
+        sessionId: input.sessionId,
+        now: input.envelopes.at(-1)?.event.timestamp ?? new Date(0).toISOString(),
+    });
 }

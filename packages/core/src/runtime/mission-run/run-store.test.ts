@@ -12,7 +12,7 @@ import {
     runFilePath,
     updateRunStatus,
 } from './run-store.js';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 async function seedRun(root: string, missionId: string, status: Run['status'] = 'pending'): Promise<Run> {
@@ -25,6 +25,40 @@ async function seedRun(root: string, missionId: string, status: Run['status'] = 
 }
 
 describe('run-store', () => {
+    it('exposes the exact cancellable run transition map', () => {
+        expect(ALLOWED_RUN_TRANSITIONS).toEqual({
+            pending: ['running', 'cancelled'],
+            running: ['blocked', 'completed', 'failed', 'cancelled'],
+            blocked: ['running', 'cancelled'],
+            completed: [],
+            failed: [],
+            cancelled: [],
+        });
+    });
+
+    it.each(['pending', 'blocked'] as const)('cancels a %s run with terminal timestamps and reason', async (status) => {
+        const root = seedOmoRoot(makeTempRoot());
+        const run = await seedRun(root, 'mission-cancel', 'pending');
+        if (status === 'blocked') {
+            await updateRunStatus(root, run.id, 'running');
+            await updateRunStatus(root, run.id, 'blocked');
+        }
+
+        const cancelled = await updateRunStatus(
+            root,
+            run.id,
+            'cancelled',
+            { terminalReason: 'operator_aborted' },
+            { now: () => '2026-07-11T12:00:00.000Z' },
+        );
+
+        expect(cancelled).toMatchObject({
+            status: 'cancelled',
+            endedAt: '2026-07-11T12:00:00.000Z',
+            terminalReason: 'operator_aborted',
+        });
+    });
+
     it('roundtrips a Run through create and read', async () => {
         const root = seedOmoRoot(makeTempRoot());
         const run = await seedRun(root, 'mission-1');
@@ -41,15 +75,43 @@ describe('run-store', () => {
         });
     });
 
-    it('throws RunStoreError(run_corrupt) for invalid JSON', async () => {
+    it('fails closed on invalid legacy JSON', async () => {
         const root = seedOmoRoot(makeTempRoot());
         const filePath = runFilePath(root, 'bad');
         mkdirSync(join(filePath, '..'), { recursive: true });
         writeFileSync(filePath, '{ broken');
 
         await expect(readRun(root, 'bad')).rejects.toMatchObject({
-            code: 'run_corrupt',
+            code: 'legacy_run_corrupt',
         });
+        expect(readFileSync(filePath, 'utf8')).toBe('{ broken');
+    });
+
+    it('imports an active JSON-only run before operational status updates and leaves the source untouched', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const filePath = runFilePath(root, 'json-active');
+        mkdirSync(join(filePath, '..'), { recursive: true });
+        const source = JSON.stringify({
+            id: 'json-active',
+            missionId: 'mission-1',
+            status: 'running',
+            startedAt: '2026-07-01T00:00:00.000Z',
+        });
+        writeFileSync(filePath, source, 'utf8');
+
+        const imported = await readRun(root, 'json-active');
+        const cancelled = await updateRunStatus(
+            root,
+            imported.id,
+            'cancelled',
+            { terminalReason: 'operator_aborted' },
+            { now: () => '2026-07-01T01:00:00.000Z' },
+        );
+
+        expect(imported.status).toBe('running');
+        expect(cancelled.status).toBe('cancelled');
+        expect(cancelled.terminalReason).toBe('operator_aborted');
+        expect(readFileSync(filePath, 'utf8')).toBe(source);
     });
 
     it('auto-sets startedAt on first running transition', async () => {
@@ -95,6 +157,24 @@ describe('run-store', () => {
         );
 
         expect(completed.endedAt).toBe('2026-01-01T12:00:00.000Z');
+    });
+
+    it('serializes concurrent terminal transitions without overwriting the winner', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const run = await seedRun(root, 'mission-1', 'pending');
+        await updateRunStatus(root, run.id, 'running');
+
+        const outcomes = await Promise.allSettled([
+            updateRunStatus(root, run.id, 'completed'),
+            updateRunStatus(root, run.id, 'failed'),
+        ]);
+        const fulfilled = outcomes.filter((outcome) => outcome.status === 'fulfilled');
+        const rejected = outcomes.filter((outcome) => outcome.status === 'rejected');
+
+        expect(fulfilled).toHaveLength(1);
+        expect(rejected).toHaveLength(1);
+        expect(rejected[0]).toMatchObject({ reason: { name: 'MissionRunTransitionError' } });
+        expect((await readRun(root, run.id)).status).toBe(fulfilled[0]?.value.status);
     });
 
     it('applies patch fields during status transition', async () => {
@@ -225,8 +305,8 @@ describe('run-store', () => {
 });
 
 describe('ALLOWED_RUN_TRANSITIONS', () => {
-    it('pending only allows running', () => {
-        expect(ALLOWED_RUN_TRANSITIONS.pending).toEqual(['running']);
+    it('pending allows running or cancellation', () => {
+        expect(ALLOWED_RUN_TRANSITIONS.pending).toEqual(['running', 'cancelled']);
     });
 
     it('running allows blocked, completed, failed, cancelled', () => {
@@ -236,8 +316,8 @@ describe('ALLOWED_RUN_TRANSITIONS', () => {
         expect(ALLOWED_RUN_TRANSITIONS.running).toContain('cancelled');
     });
 
-    it('blocked only allows running', () => {
-        expect(ALLOWED_RUN_TRANSITIONS.blocked).toEqual(['running']);
+    it('blocked allows running or cancellation', () => {
+        expect(ALLOWED_RUN_TRANSITIONS.blocked).toEqual(['running', 'cancelled']);
     });
 
     it('terminal states have no outgoing transitions', () => {

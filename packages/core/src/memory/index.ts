@@ -11,8 +11,12 @@ export {
 } from './jsonl-session-records.js';
 export {
     deleteLocalSessionRows,
+    deleteLocalSessionTreeRows,
     type LocalSessionEventStore,
     type LocalSessionReplayReadResult,
+    LocalSessionTreeDeleteError,
+    type LocalSessionTreeDeleteErrorCode,
+    type LocalSessionTreeDeleteRecord,
     localSessionDbPath,
     localSessionDbUrl,
     type OpenLocalSessionEventStoreOptions,

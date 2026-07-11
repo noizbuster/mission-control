@@ -126,7 +126,7 @@ describe('command.run policy red-team gate', () => {
 
         expect(executionSignal.aborted).toBe(true);
         expect(settlement.result.status).toBe('failed');
-        expect(settlement.result.error?.message).toContain('command_failed');
+        expect(settlement.result.error?.message).toContain('command interrupted');
         expect(settlement.events.map((event) => event.type)).toEqual(
             expect.arrayContaining(['command.started', 'command.failed', 'tool.failed']),
         );

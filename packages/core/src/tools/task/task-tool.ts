@@ -27,6 +27,7 @@
 import type { PolicyEffectRule, PolicyEffectRuleSet } from '@mission-control/protocol';
 import { z } from 'zod';
 import { deriveChildPermissions } from '../../permissions/rule-derive.js';
+import type { SessionControlEpoch } from '../../runtime/session-control-cancellation.js';
 import { TASK_TOOL_NAME } from '../task-tool.js';
 import type { ToolRegistration } from '../tool-registry-types.js';
 import { ToolExecutionError } from '../tool-registry-types.js';
@@ -113,6 +114,8 @@ export interface ChildSpawnRequest {
     readonly loadSkills: readonly string[];
     readonly childPermissions: readonly PolicyEffectRule[];
     readonly parentContext?: string;
+    readonly signal?: AbortSignal;
+    readonly controlEpoch?: SessionControlEpoch;
 }
 
 export interface ChildSpawnResult {
@@ -199,6 +202,8 @@ function buildRequest(
     sessionId: string,
     childPermissions: readonly PolicyEffectRule[],
     parentContext?: string,
+    signal?: AbortSignal,
+    controlEpoch?: SessionControlEpoch,
 ): ChildSpawnRequest {
     return {
         sessionId,
@@ -208,6 +213,8 @@ function buildRequest(
         ...(routing.category !== undefined ? { category: routing.category } : {}),
         ...(routing.subagentType !== undefined ? { subagentType: routing.subagentType } : {}),
         ...(parentContext !== undefined ? { parentContext } : {}),
+        ...(signal !== undefined ? { signal } : {}),
+        ...(controlEpoch !== undefined ? { controlEpoch } : {}),
     };
 }
 
@@ -216,6 +223,8 @@ function buildBatchRequest(
     sessionId: string,
     childPermissions: readonly PolicyEffectRule[],
     parentContext: string | undefined,
+    signal: AbortSignal,
+    controlEpoch?: SessionControlEpoch,
 ): ChildSpawnRequest {
     const routing = resolveRoutingFromAgent(item.agent);
     return {
@@ -226,6 +235,8 @@ function buildBatchRequest(
         ...(routing.category !== undefined ? { category: routing.category } : {}),
         ...(routing.subagentType !== undefined ? { subagentType: routing.subagentType } : {}),
         ...(parentContext !== undefined ? { parentContext } : {}),
+        signal,
+        ...(controlEpoch !== undefined ? { controlEpoch } : {}),
     };
 }
 
@@ -289,9 +300,9 @@ export function createFullParityTaskToolRegistration(
         inputSchema: taskToolInputSchema,
         outputSchema: taskToolOutputSchema,
         outputLimit: OUTPUT_LIMIT,
-        execute: async (input) => {
+        execute: async (input, context) => {
             if (input.tasks !== undefined) {
-                return executeBatch(input.tasks, input.context, parentAgent, parentSession, options.runtime);
+                return executeBatch(input.tasks, input.context, parentAgent, parentSession, options.runtime, context);
             }
 
             const routing = resolveRouting(input);
@@ -307,20 +318,36 @@ export function createFullParityTaskToolRegistration(
                 }
                 const result = await options.runtime.resumeChildSession(
                     input.task_id,
-                    buildRequest(input, routing, input.task_id, childPermissions),
+                    buildRequest(
+                        input,
+                        routing,
+                        input.task_id,
+                        childPermissions,
+                        undefined,
+                        context.signal,
+                        context.controlEpoch,
+                    ),
                 );
-                return toToolResult(result);
+                return toToolResult(result, context.signal);
             }
 
             const sessionId = options.runtime.generateSessionId();
-            const request = buildRequest(input, routing, sessionId, childPermissions);
+            const request = buildRequest(
+                input,
+                routing,
+                sessionId,
+                childPermissions,
+                undefined,
+                context.signal,
+                context.controlEpoch,
+            );
 
             if (input.run_in_background === true) {
                 const handle = options.runtime.startBackgroundSession(request);
                 return { sessionId: handle.sessionId, backgroundId: handle.backgroundId, status: 'running' };
             }
 
-            return toToolResult(await options.runtime.runChildSession(request));
+            return toToolResult(await options.runtime.runChildSession(request), context.signal);
         },
         toModelOutput: (output) => {
             if (output.batch !== undefined) {
@@ -357,13 +384,21 @@ async function executeBatch(
     parentAgent: PolicyEffectRuleSet,
     parentSession: PolicyEffectRuleSet,
     runtime: TaskToolRuntime,
+    toolContext: import('../tool-registry-types.js').ToolExecutionContext,
 ): Promise<TaskToolResult> {
     const items = await Promise.all(
         tasks.map(async (item): Promise<BatchResultItem> => {
             const sessionId = runtime.generateSessionId();
             const routing = resolveRoutingFromAgent(item.agent);
             const childPermissions = buildChildPermissions(routing.category, parentAgent, parentSession);
-            const request = buildBatchRequest(item, sessionId, childPermissions, context);
+            const request = buildBatchRequest(
+                item,
+                sessionId,
+                childPermissions,
+                context,
+                toolContext.signal,
+                toolContext.controlEpoch,
+            );
             try {
                 const result = await runtime.runChildSession(request);
                 return {
@@ -390,6 +425,13 @@ async function executeBatch(
     };
 }
 
-function toToolResult(result: ChildSpawnResult): TaskToolResult {
+function toToolResult(result: ChildSpawnResult, signal?: AbortSignal): TaskToolResult {
+    if (result.status === 'failed') {
+        throw new ToolExecutionError({
+            code: signal?.aborted === true ? 'operator_aborted' : 'tool_failed',
+            message: result.output,
+            retryable: false,
+        });
+    }
     return { sessionId: result.sessionId, status: result.status, output: result.output };
 }

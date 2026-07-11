@@ -3,6 +3,8 @@ import { type AgentEventEnvelope, AgentEventEnvelopeSchema } from '@mission-cont
 import { z } from 'zod';
 import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
 import { ensureLocalDbSchema } from '../db/local-libsql-schema.js';
+import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
+import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql.js';
 import { ensureLegacySessionImportTables } from './session-import-sql.js';
 import { deriveSessionProjectionRecordsFromEnvelopes } from './session-projection.js';
 import { replaceStatements } from './sqlite-session-projection-statements.js';
@@ -33,8 +35,8 @@ export async function importJsonlSessionRows(
     });
     await runLocalLibsqlWrite(input, async (client) => {
         await ensureSqliteSessionProjectionTables(client);
-        await client.batch(
-            [
+        await runLocalLibsqlClientTransaction(client, async () => {
+            const statements: InStatement[] = [
                 upsertSessionStatement({
                     sessionId: input.sessionId,
                     status: stoppedAt === undefined ? 'running' : 'stopped',
@@ -58,9 +60,14 @@ export async function importJsonlSessionRows(
                     diagnostics: projection.diagnostics,
                     envelopes: input.envelopes,
                 }),
-            ],
-            'write',
-        );
+            ];
+            for (const statement of statements) await client.execute(statement);
+            await refreshSessionAwaitingFromPendingWaits({
+                client,
+                sessionId: input.sessionId,
+                now: lastActivityAt,
+            });
+        });
     });
 }
 

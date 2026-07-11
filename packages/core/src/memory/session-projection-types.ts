@@ -25,6 +25,11 @@ export type SessionProjectionSessionRecord = {
     readonly lastEventType?: AgentEvent['type'] | undefined;
     readonly updatedAt: string;
     readonly sourcePath: string;
+    readonly abortMarker?: {
+        readonly completedAt: string;
+        readonly operationId: string;
+        readonly requestId: string;
+    };
 };
 
 export type SessionProjectionRunRecord = {

@@ -76,7 +76,7 @@ describe('coding-agent SQLite session store e2e hardening', () => {
         ]);
 
         // When: public CLI paths list the waits, then the parent resumes and exports.
-        const blockedListOutput = await runSessionCommand(parseArgs(['session', 'list']));
+        const blockedListOutput = (await runSessionCommand(parseArgs(['session', 'list']))).stdout;
         await appendNativeEvents(dataDir, parentSessionId, [
             runEvent(parentSessionId, 'run.command.received', 'resume received', {
                 command: 'resume',
@@ -95,7 +95,7 @@ describe('coding-agent SQLite session store e2e hardening', () => {
             }),
             sessionStoppedEvent(parentSessionId, 2),
         ]);
-        const finalShow = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', parentSessionId])));
+        const finalShow = JSON.parse((await runSessionCommand(parseArgs(['session', 'show', parentSessionId]))).stdout);
         const archivePath = join(dataDir, 'exports', 'parent.mctrl-session.json');
         await runSessionCommand(parseArgs(['session', 'export', parentSessionId, archivePath]));
         const archive = parseSessionArchive(await readFile(archivePath, 'utf8'));
@@ -185,9 +185,13 @@ describe('coding-agent SQLite session store e2e hardening', () => {
 
         try {
             // When: CLI/public reads inspect both pending waits before the foreground child resolves.
-            const blockedListOutput = await runSessionCommand(parseArgs(['session', 'list']));
-            const userShow = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', userSessionId])));
-            const subagentShow = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', parentSessionId])));
+            const blockedListOutput = (await runSessionCommand(parseArgs(['session', 'list']))).stdout;
+            const userShow = JSON.parse(
+                (await runSessionCommand(parseArgs(['session', 'show', userSessionId]))).stdout,
+            );
+            const subagentShow = JSON.parse(
+                (await runSessionCommand(parseArgs(['session', 'show', parentSessionId]))).stdout,
+            );
             const statusRows = await readStatusRows(runtime);
             const waitRows = await readWaitRows(runtime);
             const jobRows = await readJobRows(runtime);

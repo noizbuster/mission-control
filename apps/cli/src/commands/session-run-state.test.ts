@@ -57,7 +57,7 @@ describe('session run-state rendering', () => {
         });
 
         // When
-        const showOutput = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', sessionId])));
+        const showOutput = JSON.parse((await runSessionCommand(parseArgs(['session', 'show', sessionId]))).stdout);
         const replayRecords = parseReplayRecords(
             await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl'])),
         );
@@ -107,7 +107,7 @@ describe('session run-state rendering', () => {
         });
 
         // When
-        const showOutput = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', sessionId])));
+        const showOutput = JSON.parse((await runSessionCommand(parseArgs(['session', 'show', sessionId]))).stdout);
         const replayRecords = parseReplayRecords(
             await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl'])),
         );

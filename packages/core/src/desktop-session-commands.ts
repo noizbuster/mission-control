@@ -30,6 +30,7 @@ import { createGraphTurnRunner } from './runtime/graph-coordinator-turn.js';
 import type { RunCoordinatorPromptInput, RunCoordinatorReadMessages } from './runtime/run-coordinator.js';
 import type { RunCoordinatorTurnRunner } from './runtime/run-coordinator-types.js';
 import { type SessionRunOwner, type SessionRunOwnerReceipt, SessionRunOwnerRegistry } from './runtime/run-owner.js';
+import type { SessionControlHost } from './runtime/session-control-host.js';
 import type { CommandExecutionRequest, CommandExecutionResult } from './tools/command-run.js';
 import { registerCommandRunTool } from './tools/command-run.js';
 import { registerFileEditTool } from './tools/file-edit.js';
@@ -64,6 +65,7 @@ export type DesktopSessionCommandServiceOptions = {
     readonly now?: () => string;
     readonly createEventId?: JsonlSessionEventIdFactory;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
+    readonly sessionControlHost?: SessionControlHost;
 };
 
 export type DesktopSessionCommandService = {
@@ -104,6 +106,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
             ...(options.createEventId !== undefined ? { createEventId: options.createEventId } : {}),
             resolveModelProviderSelection: async (store, sessionId, fallback) =>
                 latestModelProviderSelection(await store.getEvents(sessionId)) ?? fallback,
+            ...(options.sessionControlHost !== undefined ? { sessionControlHost: options.sessionControlHost } : {}),
         });
     }
 

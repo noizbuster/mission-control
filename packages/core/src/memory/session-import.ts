@@ -32,6 +32,7 @@ export async function importLegacySessionCompatibilityWindow(input: {
     readonly url: string;
     readonly dataDir: string;
     readonly omoRoot?: string;
+    readonly includeRunSources?: boolean;
     readonly now?: () => string;
 }): Promise<LegacySessionImportResult> {
     await runLocalLibsqlWrite(input, ensureLegacySessionImportTables);
@@ -47,8 +48,10 @@ export async function importLegacySessionCompatibilityWindow(input: {
     for (const sourcePath of await jsonlSourcePaths(input.dataDir)) {
         await importJsonlSource({ writeTarget: input, sourcePath, now, acc });
     }
-    for (const sourcePath of await runSourcePaths(omoRoot)) {
-        await importRunSource({ writeTarget: input, sourcePath, now, acc });
+    if (input.includeRunSources ?? true) {
+        for (const sourcePath of await runSourcePaths(omoRoot)) {
+            await importRunSource({ writeTarget: input, sourcePath, now, acc });
+        }
     }
 
     return {

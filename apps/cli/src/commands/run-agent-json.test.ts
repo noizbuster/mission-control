@@ -231,7 +231,7 @@ describe('runAgent JSON reporter', () => {
 
         // Then
         expect(output).toContain('[REDACTED_CREDENTIAL]');
-        expect(replay).toContain('provider_auth_failed');
+        expect(replay.stdout).toContain('provider_auth_failed');
         expect(storedReplay.projection.envelopes.some((envelope) => envelope.event.type === 'run.failed')).toBe(true);
         expect(JSON.stringify({ output, replay, storedReplay })).not.toContain(secret);
     });
@@ -280,7 +280,7 @@ describe('runAgent JSON reporter', () => {
                         error: {
                             code: 'provider_aborted',
                             message: 'provider aborted',
-                            retryable: true,
+                            retryable: false,
                         },
                     },
                 ]),

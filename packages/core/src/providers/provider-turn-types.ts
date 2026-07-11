@@ -1,3 +1,4 @@
+import type { Client } from '@libsql/client';
 import type {
     AgentEvent,
     AgentEventEnvelope,
@@ -6,6 +7,9 @@ import type {
     ProviderStreamChunk,
     ToolDefinition,
 } from '@mission-control/protocol';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
+
+export type { ProviderStreamChunk };
 
 export interface ProviderAdapter {
     readonly streamTurn: (
@@ -17,6 +21,7 @@ export interface ProviderAdapter {
 export type ProviderAdapterContext = {
     readonly attempt: number;
     readonly signal: AbortSignal;
+    readonly controlEpoch?: SessionControlEpoch;
 };
 
 export type ProviderTurnRequest = {
@@ -30,13 +35,14 @@ export type ProviderTurnRequest = {
     readonly tools?: readonly ToolDefinition[];
 };
 
-export type ProviderTurnEventWriter = (envelope: AgentEventEnvelope) => Promise<void>;
+export type ProviderTurnEventWriter = (envelope: AgentEventEnvelope, client?: Client) => Promise<void>;
 export type ProviderTurnEnvelopeObserver = (envelope: AgentEventEnvelope) => void;
 export type ProviderTurnEventIdFactory = (event: AgentEvent, sequence: number) => string;
 
 export type ProviderTurnRunInput = ProviderTurnRequest & {
     readonly startSequence: number;
     readonly signal?: AbortSignal;
+    readonly controlEpoch?: SessionControlEpoch;
     readonly writeEnvelope?: ProviderTurnEventWriter;
     readonly onEnvelope?: ProviderTurnEnvelopeObserver;
 };

@@ -4,10 +4,12 @@ import { sessionEventStoreSchemaSql } from './local-libsql-schema-events.js';
 import { memoryEntriesSchemaSql } from './local-libsql-schema-memory.js';
 import { sessionProjectionSchemaSql } from './local-libsql-schema-projections.js';
 import { runtimePersistenceSchemaSql } from './local-libsql-schema-runtime.js';
+import { sessionControlSchemaSql } from './local-libsql-schema-session-control.js';
 
 export const localDbSchemaSql = [
     ...memoryEntriesSchemaSql,
     ...runtimePersistenceSchemaSql,
+    ...sessionControlSchemaSql,
     ...sessionEventStoreSchemaSql,
     ...sessionProjectionSchemaSql,
     ...agentJobRelationSchemaSql,

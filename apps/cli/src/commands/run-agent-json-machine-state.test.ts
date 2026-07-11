@@ -99,7 +99,7 @@ describe('runAgent JSON machine state', () => {
                         error: {
                             code: 'provider_aborted',
                             message: 'provider aborted',
-                            retryable: true,
+                            retryable: false,
                         },
                     },
                 ]),
@@ -149,7 +149,7 @@ describe('runAgent JSON machine state', () => {
         const storedProjectionJson = JSON.stringify(storedProjection);
 
         expect(output).toContain('[REDACTED_CREDENTIAL]');
-        expect(replay).toContain('provider_auth_failed');
+        expect(replay.stdout).toContain('provider_auth_failed');
         expect(storedProjectionJson).toContain('provider_auth_failed');
         expect(JSON.stringify({ output, replay, storedProjectionJson })).not.toContain(secret);
     });

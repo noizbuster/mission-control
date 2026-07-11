@@ -1,17 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { JsonlSessionEventStore } from './memory/jsonl-session-event-store.js';
 import { projectSessionAdmission, SessionAdmissionError, SessionAdmissionService } from './session-admission.js';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { cleanupSessionAdmissionTestDirs, openAdmissionContext } from './session-admission-test-support.js';
 
-const tempDirs: string[] = [];
-
-afterEach(async () => {
-    for (const tempDir of tempDirs.splice(0)) {
-        await rm(tempDir, { recursive: true, force: true });
-    }
-});
+afterEach(cleanupSessionAdmissionTestDirs);
 
 describe('SessionAdmissionService', () => {
     it('records admitted prompts durably before model-visible promotion', async () => {
@@ -181,6 +173,50 @@ describe('SessionAdmissionService', () => {
         await restartedStore.close();
     });
 
+    it('does not promote a cancelled queued prompt after restart', async () => {
+        // Given
+        const context = await openAdmissionContext('session_cancelled_restart');
+        await context.service.admitPrompt({
+            inputId: 'input_cancelled',
+            messageId: 'message_cancelled',
+            prompt: 'do not deliver this prompt',
+            delivery: 'queue',
+            resume: false,
+        });
+        await context.store.append({
+            type: 'prompt.cancelled',
+            timestamp: '2026-06-06T10:00:05.000Z',
+            sessionId: context.sessionId,
+            transcript: {
+                inputId: 'input_cancelled',
+                delivery: 'queue',
+                requestId: 'request_stop',
+                reason: 'operator_aborted',
+            },
+        });
+        await context.store.close();
+        const restartedStore = await JsonlSessionEventStore.open({
+            sessionId: context.sessionId,
+            dataDir: context.dataDir,
+        });
+        const restartedService = new SessionAdmissionService({
+            sessionId: context.sessionId,
+            store: restartedStore,
+            now: () => '2026-06-06T10:00:10.000Z',
+        });
+
+        // When
+        const beforeRun = projectSessionAdmission(await restartedStore.getEvents(context.sessionId), context.sessionId);
+        const runResult = await restartedService.requestRun();
+        const events = await restartedStore.getEvents(context.sessionId);
+
+        // Then
+        expect(beforeRun.pendingInputs).toEqual([]);
+        expect(runResult).toEqual({ kind: 'run_requested' });
+        expect(events.filter((event) => event.type === 'prompt.promoted')).toEqual([]);
+        await restartedStore.close();
+    });
+
     it('rejects reusing a promoted input id instead of returning an unpromotable receipt', async () => {
         // Given
         const context = await openAdmissionContext('session_promoted_duplicate');
@@ -211,29 +247,3 @@ describe('SessionAdmissionService', () => {
         await context.store.close();
     });
 });
-
-async function openAdmissionContext(sessionId: string): Promise<{
-    readonly sessionId: string;
-    readonly dataDir: string;
-    readonly store: JsonlSessionEventStore;
-    readonly service: SessionAdmissionService;
-}> {
-    const dataDir = await mkdtemp(join(tmpdir(), 'mission-control-admission-'));
-    tempDirs.push(dataDir);
-    const store = await JsonlSessionEventStore.open({
-        sessionId,
-        dataDir,
-        now: () => '2026-06-06T10:00:00.000Z',
-        createEventId: (_event, sequence) => `event_${sequence}`,
-    });
-    return {
-        sessionId,
-        dataDir,
-        store,
-        service: new SessionAdmissionService({
-            sessionId,
-            store,
-            now: () => '2026-06-06T10:00:00.000Z',
-        }),
-    };
-}

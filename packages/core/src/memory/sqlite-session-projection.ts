@@ -1,5 +1,7 @@
 import type { AgentEventEnvelope } from '@mission-control/protocol';
 import { type LocalLibsqlDb, openLocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
+import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
+import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql.js';
 import { deriveSessionProjectionRecordsFromEnvelopes } from './session-projection.js';
 import type {
     SessionProjectionApprovalRecord,
@@ -99,7 +101,16 @@ class LibsqlSessionProjectionStore implements SqliteSessionProjectionStore {
         readonly diagnostics: readonly SessionProjectionDiagnostic[];
         readonly envelopes: readonly AgentEventEnvelope[];
     }): Promise<void> {
-        await runLocalLibsqlWrite(this.runtime, (client) => client.batch([...replaceStatements(input)], 'write'));
+        await runLocalLibsqlWrite(this.runtime, async (client) => {
+            await runLocalLibsqlClientTransaction(client, async () => {
+                for (const statement of replaceStatements(input)) await client.execute(statement);
+                await refreshSessionAwaitingFromPendingWaits({
+                    client,
+                    sessionId: input.sessionId,
+                    now: input.envelopes.at(-1)?.event.timestamp ?? new Date(0).toISOString(),
+                });
+            });
+        });
     }
 
     async listSessions(): Promise<readonly SessionProjectionSessionRecord[]> {

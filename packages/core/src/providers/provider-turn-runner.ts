@@ -45,6 +45,9 @@ export class ProviderTurnRunner {
 
     async runTurn(input: ProviderTurnRunInput): Promise<ProviderTurnRunResult> {
         const state = createEmitterState(input.startSequence);
+        if (input.controlEpoch?.callbackFence !== undefined && input.writeEnvelope === undefined) {
+            return quarantinedProviderResult(state, 0);
+        }
         const signal = input.signal ?? new AbortController().signal;
         const maxAttempts = this.options.retryLimit + 1;
 
@@ -62,7 +65,9 @@ export class ProviderTurnRunner {
                 if (completedChunk.kind !== 'response_completed') {
                     throw new TypeError(`Unexpected completed provider chunk kind: ${completedChunk.kind}`);
                 }
-                await this.emitEnvelope(input, state, completedChunk, 'durable');
+                if (!(await this.emitEnvelope(input, state, completedChunk, 'durable'))) {
+                    return quarantinedProviderResult(state, attempt);
+                }
                 // result.envelopes is the LIVE mutable ref of the per-turn state, not a frozen copy.
                 // Safe to return directly: createEmitterState builds state fresh per runTurn, and once a
                 // turn returns the state object is never mutated again. The public ProviderTurnRunResult
@@ -81,7 +86,9 @@ export class ProviderTurnRunner {
                 if (failedChunk.kind !== 'response_failed') {
                     throw new TypeError(`Unexpected failed provider chunk kind: ${failedChunk.kind}`);
                 }
-                await this.emitEnvelope(input, state, failedChunk, 'durable');
+                if (!(await this.emitEnvelope(input, state, failedChunk, 'durable'))) {
+                    return quarantinedProviderResult(state, attempt);
+                }
                 return {
                     status: 'failed',
                     error: failedChunk.error,
@@ -97,7 +104,9 @@ export class ProviderTurnRunner {
                 if (failedChunk.kind !== 'response_failed') {
                     throw new TypeError(`Unexpected failed provider chunk kind: ${failedChunk.kind}`);
                 }
-                await this.emitEnvelope(input, state, failedChunk, 'durable');
+                if (!(await this.emitEnvelope(input, state, failedChunk, 'durable'))) {
+                    return quarantinedProviderResult(state, attempt);
+                }
                 return {
                     status: 'failed',
                     error: failedChunk.error,
@@ -131,7 +140,11 @@ export class ProviderTurnRunner {
                 return { kind: 'failed', error: abortedProviderError() };
             }
             iterator = this.provider
-                .streamTurn(input, { attempt, signal: attemptAbort.signal })
+                .streamTurn(input, {
+                    attempt,
+                    signal: attemptAbort.signal,
+                    ...(input.controlEpoch !== undefined ? { controlEpoch: input.controlEpoch } : {}),
+                })
                 [Symbol.asyncIterator]();
             while (true) {
                 const next = await nextProviderChunk({
@@ -141,6 +154,7 @@ export class ProviderTurnRunner {
                     onTimeout: () => {
                         attemptAbort.abort();
                     },
+                    ...(input.controlEpoch !== undefined ? { controlEpoch: input.controlEpoch } : {}),
                 });
                 if (next.done === true) {
                     break;
@@ -182,7 +196,7 @@ export class ProviderTurnRunner {
         state: ProviderEmitterState,
         chunk: ProviderStreamChunk,
         durability: 'durable' | 'ephemeral',
-    ): Promise<void> {
+    ): Promise<boolean> {
         const createdAt = this.now();
         const event = eventForProviderChunk(input, chunk, createdAt);
         const sequence = durability === 'durable' ? state.nextDurableSequence : state.nextEphemeralSequence;
@@ -195,15 +209,53 @@ export class ProviderTurnRunner {
             correlationId: input.requestId,
             event,
         };
-        input.onEnvelope?.(envelope);
-        await input.writeEnvelope?.(envelope);
-        if (durability === 'durable') {
-            state.durableEnvelopes.push(envelope);
-            state.nextDurableSequence += 1;
-            return;
+        const observe = (): void => {
+            input.onEnvelope?.(envelope);
+            if (durability === 'durable') {
+                state.durableEnvelopes.push(envelope);
+                state.nextDurableSequence += 1;
+                return;
+            }
+            state.nextEphemeralSequence += 1;
+        };
+        const publish = async (client?: import('@libsql/client').Client): Promise<void> => {
+            await input.writeEnvelope?.(envelope, client);
+            observe();
+        };
+        const fence = input.controlEpoch?.callbackFence;
+        if (fence === undefined || (chunk.kind !== 'response_completed' && chunk.kind !== 'response_failed')) {
+            await publish();
+            return true;
         }
-        state.nextEphemeralSequence += 1;
+        const writeEnvelope = input.writeEnvelope;
+        if (writeEnvelope === undefined) return false;
+        const errorCode = chunk.kind === 'response_failed' ? chunk.error.code : undefined;
+        const settlement = await fence.settle({
+            handleKind: 'provider',
+            handleId: `provider:${input.requestId}`,
+            attemptedEventType: event.type,
+            metadata: {
+                status: chunk.kind === 'response_completed' ? 'completed' : 'failed',
+                ...(errorCode !== undefined ? { errorCode } : {}),
+                signalAborted: input.signal?.aborted ?? false,
+            },
+            write: (client) => writeEnvelope(envelope, client),
+        });
+        if (settlement.accepted) observe();
+        return settlement.accepted;
     }
+}
+
+function quarantinedProviderResult(
+    state: ProviderEmitterState,
+    attempts: number,
+): Extract<ProviderTurnRunResult, { readonly status: 'failed' }> {
+    return {
+        status: 'failed',
+        error: abortedProviderError(),
+        attempts,
+        envelopes: state.durableEnvelopes,
+    };
 }
 
 type ProviderAttemptResult =

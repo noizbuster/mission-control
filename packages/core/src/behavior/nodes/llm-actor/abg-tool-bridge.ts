@@ -20,6 +20,7 @@
 import type { AgentEvent, ProtocolError, ToolResultStatus } from '@mission-control/protocol';
 import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
+import type { SessionControlEpoch } from '../../../runtime/session-control-cancellation.js';
 import type { ToolRegistry } from '../../../tools/tool-registry.js';
 import type { ToolAdvertisement, ToolInvocationSettlement } from '../../../tools/tool-registry-types.js';
 
@@ -216,6 +217,7 @@ export type AbgToolBridgeOptions = {
      * leaves tools parallel, which non-interactive graph runs rely on for batched tool execution.
      */
     readonly serializeToolExecution?: boolean;
+    readonly controlEpoch?: SessionControlEpoch;
 };
 
 /**
@@ -254,6 +256,16 @@ export function bridgeAdvertisementToAiSdk(
             const argumentsJson = JSON.stringify(args ?? {});
             const signal = execOptions.abortSignal;
             const ledger = options.settlementLedger;
+            const controlled = options.controlEpoch?.callbackFence !== undefined;
+            let committedSettlement: ToolInvocationSettlement | undefined;
+            const publishSettlement = (settlement: ToolInvocationSettlement): void => {
+                if (options.onToolEvent !== undefined) {
+                    for (const event of settlement.events) {
+                        if (!isAdapterOwnedToolLifecycle(event.type)) options.onToolEvent(event);
+                    }
+                }
+                ledger?.record(settlementToLedgerEntry(toolCallId, advertisement.name, settlement));
+            };
             // Serialize tool execution within a batch when a shared lock is present (interactive
             // graph path): acquire BEFORE crossing the policy gate / registry invoke so at most one
             // approval is pending at a time. No lock (non-interactive) → the SDK runs the batch
@@ -289,6 +301,15 @@ export function bridgeAdvertisementToAiSdk(
                     advertisedVersion: advertisement.version,
                     argumentsJson,
                     ...(signal !== undefined ? { signal } : {}),
+                    ...(options.controlEpoch !== undefined ? { controlEpoch: options.controlEpoch } : {}),
+                    ...(controlled && (ledger !== undefined || options.onToolEvent !== undefined)
+                        ? {
+                              writeSettlement: (terminal: ToolInvocationSettlement) => {
+                                  committedSettlement = terminal;
+                                  return Promise.resolve();
+                              },
+                          }
+                        : {}),
                 });
 
                 // Record the authoritative settlement BEFORE returning, so the adapter (which sees
@@ -296,17 +317,10 @@ export function bridgeAdvertisementToAiSdk(
                 // status/output/error. Distinct from the model-facing return below: failures are
                 // surfaced to the model as a readable error string (persona contract), but the
                 // ledger records the structured error so the replay marks the tool failed.
-                ledger?.record(settlementToLedgerEntry(toolCallId, advertisement.name, settlement));
-
-                // Forward the tool's own events (file.diff.applied, command lifecycle, ...) into the
-                // graph stream — parity with the flat run loop's settleToolCalls. The adapter owns the
-                // graph-canonical tool.started/completed/failed, so skip those here to avoid duplicates.
-                if (options.onToolEvent !== undefined) {
-                    for (const event of settlement.events) {
-                        if (!isAdapterOwnedToolLifecycle(event.type)) {
-                            options.onToolEvent(event);
-                        }
-                    }
+                if (controlled) {
+                    if (committedSettlement !== undefined) publishSettlement(committedSettlement);
+                } else {
+                    publishSettlement(settlement);
                 }
 
                 if (settlement.modelOutput !== undefined) {

@@ -1,3 +1,4 @@
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
 import type { CommandExecutionResult } from './command-run-executor.js';
 import type { ResolvedCommandRunToolOptions } from './command-run-schemas.js';
 
@@ -5,6 +6,7 @@ export async function runCommandWithTimeout(
     options: ResolvedCommandRunToolOptions,
     command: readonly string[],
     signal: AbortSignal,
+    controlEpoch?: SessionControlEpoch,
 ): Promise<CommandExecutionResult> {
     const controller = new AbortController();
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -27,6 +29,7 @@ export async function runCommandWithTimeout(
             cwd: options.workspaceRoot,
             signal: controller.signal,
             maxOutputBytes: options.maxOutputBytes,
+            ...(controlEpoch !== undefined ? { controlEpoch } : {}),
         });
         timeout = setTimeout(() => {
             timedOut = true;

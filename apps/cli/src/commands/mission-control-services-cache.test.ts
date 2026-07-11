@@ -98,14 +98,14 @@ describe('MissionControlServices cache', () => {
             const services = await getOrCreateMissionControlServices(workspaceA, { maxConcurrency: 1 });
             services.getJobManager().startJob({
                 sessionId: 'sess-factory-block',
-                execute: (): Promise<{ status: 'completed'; output: string }> =>
-                    new Promise<{ status: 'completed'; output: string }>(() => {}),
+                execute: abortCooperativeBlocker,
             });
-
+            await services.getJobManager().drainPreparations();
             const queued = services.getJobManager().startJob({
                 sessionId: 'sess-factory-next',
                 execute: async () => ({ status: 'completed', output: 'ok' }),
             });
+            await services.getJobManager().drainPreparations();
 
             expect(queued.status).toBe('queued');
             expect(services.snapshot().jobs.byStatus.queued).toBe(1);
@@ -158,3 +158,9 @@ describe('MissionControlServices cache', () => {
         });
     });
 });
+
+function abortCooperativeBlocker(signal: AbortSignal): Promise<{ status: 'completed'; output: string }> {
+    return new Promise((_, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('job aborted')), { once: true });
+    });
+}

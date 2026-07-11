@@ -65,7 +65,7 @@ describe('createVerificationNodeRunner', () => {
         expect(verdict?.findings).toEqual(['curl localhost:3000/health -> 200']);
         expect(verdict?.results).toHaveLength(4);
         expect(phaseEmits).toHaveLength(4);
-        expect((evaluated?.event.payload as { verdict: string }).verdict).toBe('APPROVE');
+        expect((evaluated!.event.payload as { verdict: string }).verdict).toBe('APPROVE');
     });
 
     it('returns REJECT with cumulative findings when one phase fails', async () => {

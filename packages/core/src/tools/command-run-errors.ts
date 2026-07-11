@@ -26,6 +26,17 @@ export function commandRunFailure(
     return new ToolExecutionError(protocolError(`${code}: ${message}`, retryable), events);
 }
 
+export function commandOperatorAborted(message: string, events: readonly AgentEvent[] = []): ToolExecutionError {
+    return new ToolExecutionError(
+        {
+            code: 'operator_aborted',
+            message,
+            retryable: false,
+        },
+        events,
+    );
+}
+
 function protocolError(message: string, retryable: boolean = false): ProtocolError {
     return {
         code: 'tool_failed',

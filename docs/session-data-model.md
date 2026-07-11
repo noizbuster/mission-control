@@ -1,6 +1,8 @@
 # Session Data Model
 
-Mission Control uses one shared local libSQL surface for durable sessions:
+Mission Control uses one shared local libSQL surface for durable sessions. The
+canonical database path and identity are shared by session storage, owner IPC,
+leases, and Ground Control's Mission Control adapter:
 
 - `<MCTRL_DATA_DIR>/memory.db` is the authoritative session event/replay
   database. New coding-agent session appends write `session_events` there, replay
@@ -9,7 +11,9 @@ Mission Control uses one shared local libSQL surface for durable sessions:
   JSONL import/export compatibility uses this database. Runtime coordination SQL
   for session inputs, Mission/Run records, context epochs, runtime agents,
   async jobs, and relation rows uses the same local-only data-dir `memory.db`
-  file.
+  file. `session_events` is authoritative for session, run, approval, and input
+  history. `mission_runs` and `async_jobs` remain authoritative for their own
+  durable work, so lifecycle refresh consults all three authorities.
 
 Remote Turso is out of scope: the local DB opener accepts `:memory:` and `file:`
 URLs only, rejects `libsql://` and other remote schemes, and does not read auth
@@ -25,10 +29,13 @@ SQLite-native session back to JSONL/archive form for rollback or older readers.
 - [Key Indexes](#key-indexes)
 - [Event And Projection Contract](#event-and-projection-contract)
 - [Session State Machine](#session-state-machine)
+- [Stop Events And Lifecycle Authority](#stop-events-and-lifecycle-authority)
 - [Awaiting Semantics](#awaiting-semantics)
+- [Owner IPC, Leases, And Operations](#owner-ipc-leases-and-operations)
 - [Subagent Lineage And Jobs](#subagent-lineage-and-jobs)
 - [Legacy Import And Export](#legacy-import-and-export)
 - [Local Path And Memory Relationship](#local-path-and-memory-relationship)
+- [Hierarchy And Guarded Deletion](#hierarchy-and-guarded-deletion)
 - [Rollback And Operations](#rollback-and-operations)
 
 ## Authoritative Tables
@@ -49,6 +56,7 @@ Core `<MCTRL_DATA_DIR>/memory.db` tables:
 | `tool_calls` | Tool-call projection keyed by `tool_call_id`, including name, status, arguments, result, approval id, timestamps, errors, and applied files. |
 | `provider_failures` | Provider failure projection keyed by a failure id, with unique `(session_id, event_id)` rows for request/provider-turn diagnostics. |
 | `legacy_session_imports` | Idempotent import ledger for JSONL logs and `.omo/runs/*.json` files. Records source path, source kind, checksum, imported event count, import timestamp, and diagnostics. |
+| `runtime_db_migration_ledger` | Immutable compatibility-migration ledger with migration id, legacy identity, source file URLs, manifest hash, copied-table/run manifests, and completion time. |
 
 Shared local `memory.db` runtime tables:
 
@@ -62,6 +70,10 @@ Shared local `memory.db` runtime tables:
 | `context_epochs` | Pull-based system-context epoch records by session, epoch, and source. |
 | `runtime_agents` | Durable mirror of visible runtime agent references when a `SqlAgentJobMirror` is injected. |
 | `async_jobs` | Durable mirror of background and foreground child-agent jobs when a `SqlAgentJobMirror` is injected. |
+| `session_relations` | Relation rows used only as a constrained fallback when an explicit session parent is absent. |
+| `session_control_leases` | DB-identity-scoped owner lease for a live session, including owner id, epoch, nonce hash, and wall-clock expiry. |
+| `session_control_operations` | Immutable stop operation receipt, captured and settled handle ids, barrier state, deadline, and retention fields. |
+| `session_control_late_settlements` | Redacted audit rows for callbacks rejected after an operation or owner lease is stale. |
 
 Session projection tables:
 
@@ -111,14 +123,23 @@ awaiting-state rendering, child lookup, and import diagnostics:
 | `legacy_session_imports_source_checksum_unique` | `(source_path, checksum)` | Idempotent legacy import. |
 | `legacy_session_imports_source_idx` | `source_path` | Import audit by source file. |
 | `session_projection_runs_by_sequence` | `(session_id, sequence)` | Run-event projection ordering. |
+| `session_control_leases` | Primary key `(db_identity, session_id)` | Exact-session owner lookup and epoch fencing. |
+| `session_control_operations` | Primary key `(db_identity, session_id, operation_id)` | Receipt replay, timeout tombstones, and stale callback fencing. |
 
 ## Event And Projection Contract
 
-`session_events` is the durable replay contract. New authoritative writes append
-validated `AgentEventEnvelope` payloads into that table, allocate the next
-per-session `seq` through `session_event_sequences`, and update the `sessions`
-summary row in the same deterministic append path. Event rows are never edited
-to change history.
+`session_events` is the durable replay contract for session, run, approval, and
+input history. New writes append validated `AgentEventEnvelope` payloads into
+that table, allocate the next per-session `seq` through
+`session_event_sequences`, and update the `sessions` summary row in the same
+deterministic append path. Event rows are never edited to change history.
+
+The event ledger is not the only lifecycle authority. `mission_runs` remains
+the source of truth for nonterminal Mission work, and live jobs plus the durable
+`async_jobs` mirror remain the source of truth for job work. Lifecycle refresh
+reaches `idle` only after event-derived waits and inputs, mission work, and job
+work are all quiescent. A replay can rebuild event-derived projections, but it
+does not invent mission or job authority.
 
 Projection tables are read models derived from event envelopes or runtime
 state. They may be deleted and rebuilt for a session from `session_events` and
@@ -136,9 +157,9 @@ The public session lifecycle values are:
 
 ```text
 idle -> running -> awaiting -> running
-idle -> running -> stopped
+idle -> running -> idle (aborted)
+awaiting -> idle (aborted)
 idle -> running -> failed
-awaiting -> stopped
 awaiting -> failed
 ```
 
@@ -149,13 +170,32 @@ State meanings:
 | `idle` | No active run and no pending wait blocks progress. |
 | `running` | A run or foreground operation is active and can progress. |
 | `awaiting` | The session cannot progress until a pending wait resolves. The wait reason and source live in `session_awaits`, with display columns mirrored on `sessions`. |
-| `stopped` | A terminal stop event has been recorded. |
+| `idle (aborted)` | A reusable `idle` session whose latest successful stop marker is `session.abort.completed`. The detail clears when a later `run.started` is recorded. |
+| `stopped` | A pre-existing terminal lifecycle value. A session stop does not create this state. |
 | `failed` | A terminal failure has been recorded. |
 
 Terminal state wins over active waits. Otherwise, lifecycle derivation chooses
 the highest-priority pending wait, then falls back to active runs, then `idle`.
 The full `approval` / `user_input` / `subagent` priority order is production-wired
 through the public data-dir session-list/read path.
+
+## Stop Events And Lifecycle Authority
+
+A successful stop preserves a reusable session. `prompt.cancelled` prevents a
+cancelled prompt from promotion after restart. Pending approval, await, input,
+mission-run, and job rows become `cancelled` through their own authorities. An
+active or blocked run emits exactly one `run.interrupted` from its finalizer with
+`reason = operator_aborted`. A no-run cleanup does not create a synthetic run
+event.
+
+The successful stop marker is the nonterminal
+`session.abort.completed(operationId, requestId, reason = operator_aborted)`
+event. It produces `idle (aborted)` only after all authority checks are quiet.
+The marker has no terminal-session meaning and is replaced by the next
+`run.started`. Tools retain the binary `completed` or `failed` status contract;
+an operator-stopped tool is `failed` with `errorCode = operator_aborted`.
+Provider abort information remains in the durable audit event stream but does
+not create a provider-outage row in `provider_failures`.
 
 ## Awaiting Semantics
 
@@ -171,11 +211,30 @@ typed reason/source metadata:
 `session_awaits` stores active waits in the public `memory.db` projection.
 `sessions.primary_wait_id` selects the display wait with priority `approval`,
 then `user_input`, then `subagent`. Resolving or cancelling the last pending wait
-recomputes the session lifecycle to `running`, `idle`, `stopped`, or `failed`.
+recomputes the session lifecycle to `running`, `idle`, `idle (aborted)`, or
+`failed`.
 
 Detached background jobs do not make the parent `awaiting/subagent`. They stay
 visible in `async_jobs` and can be listed from the parent session, but the parent
 can continue.
+
+## Owner IPC, Leases, And Operations
+
+Only the live owner may perform an exact-session stop. POSIX uses a user-owned
+Unix socket and Windows uses the named-pipe sidecar path. The versioned NDJSON
+protocol has `session.acquire`, `session.stop`, and `session.release` requests.
+It carries `timeoutMs`, not a caller clock. The owner computes its own monotonic
+deadline, retains an acquired operation across a client disconnect, returns a
+cached receipt for retries, and releases only explicitly, on lease loss, or at
+the deadline.
+
+Leases are keyed by canonical database identity and session id. They renew on a
+local monotonic five-second schedule and expire after fifteen seconds of wall
+time. Owner id and epoch fence every durable mutation. A renewal failure fences
+the owner before later callbacks can write state. Timeout first records the
+operation receipt, then releases the barrier; rejected late callbacks enter the
+redacted settlement audit rather than changing a newer run. Tokens are opaque,
+bound to the exact operation and owner epoch, and are never logged.
 
 ## Subagent Lineage And Jobs
 
@@ -195,32 +254,26 @@ the wait `resolved` and updates the job terminal state. Detached jobs only write
 
 ## Legacy Import And Export
 
-The local DB opener applies the current schema directly with `CREATE TABLE IF NOT EXISTS`
-statements. Legacy compatibility import is additive and idempotent:
+The runtime migration is additive, deterministic, and fail-closed. It discovers
+only each declared legacy root's direct `memory.db` and direct
+`.omo/runs/*.json` files. It does not scan unrelated directories. Each source is
+canonicalized, JSON runs are schema-validated and checksummed in UTF-8 byte
+order, and the destination is updated in one immediate transaction. The source
+database and run files remain unchanged.
 
-1. `ensureLocalSessionDatabase` opens `<data-dir>/memory.db`, ensures the
-   current schema, and then runs the legacy compatibility importer.
-2. JSONL logs under `<data-dir>/sessions/*.jsonl` are parsed as validated event
-   envelopes and inserted into `session_events`.
-3. `.omo/runs/*.json` records are parsed through the mission-run protocol schema
-   and upserted into `mission_runs`.
-4. `legacy_session_imports` records the source path, source kind, checksum,
-   imported event count, timestamp, and any diagnostics.
+The migration copies the declared authoritative tables in a fixed order and
+compares complete rows. Equal rows are skipped, while a conflicting key, event,
+or manifest rolls back the destination transaction. The
+`runtime_db_migration_ledger` records `runtime-db-unification-v1` identity and
+manifest data. An identical rerun is a no-op; the same ledger id with different
+source data is an error. After a successful ledger commit, operational stop and
+cancellation paths use SQL rows rather than the legacy run JSON fallback.
 
-The importer uses `(source_path, checksum)` to skip already imported files. It
-uses `INSERT OR IGNORE` for legacy event rows so duplicate event ids do not
-corrupt the event stream. Corrupt files produce diagnostics in
-`legacy_session_imports`; they do not delete source files.
-
-Export reads ordered envelopes from `session_events`, reconstructs replayable
-JSONL/archive output, and marks `sessions.exported_at`. Export is explicit:
-SQLite-native writes do not create sidecar JSONL files unless the operator asks
-for rollback/read compatibility output.
-
-Future explicit local DB migrations are still supported by `runLocalDbMigrations`
-and record applied ids in `schema_migrations` when that runner is used. The
-development-time file-to-DB transition described here does not preserve
-historical migration scripts for the current schema shape.
+JSONL import and export remain a separate compatibility path. JSONL envelopes
+are validated before insertion, and `legacy_session_imports` records their
+source and checksum. Export reads ordered `session_events` and writes JSONL or
+an archive only when requested. Neither migration nor export deletes or rewrites
+legacy source files.
 
 ## Local Path And Memory Relationship
 
@@ -231,8 +284,13 @@ ${MCTRL_DATA_DIR}/memory.db
 ```
 
 When `MCTRL_DATA_DIR` is unset, the platform Mission Control data directory is
-used. The local opener builds a `file:` URL for that path and creates the data
-directory when needed.
+used. The canonical identity algorithm creates the data directory when absent,
+uses `realpath.native` on the data directory or existing database path, creates
+the POSIX data directory with mode `0700`, appends `memory.db` when needed,
+uppercases a Windows drive letter, lowercases a UNC host, converts the
+absolute path to a file URL, and hashes the UTF-8 URL `href` with SHA-256. The
+lowercase hexadecimal digest is `dbIdentity`. Ground Control uses the same
+algorithm and shared path vectors.
 
 `memory_entries`, session event/replay tables, blocking input delivery, and
 agent/job mirror tables intentionally share `memory.db`. `:memory:` remains
@@ -240,6 +298,26 @@ available for tests and ephemeral stores.
 
 Legacy JSONL logs, if present, remain at `<data-dir>/sessions/<session-id>.jsonl`
 and are treated as import/export compatibility artifacts.
+
+## Hierarchy And Guarded Deletion
+
+The canonical session tree uses `sessions.parent_session_id` first. Only when
+that field is null may exactly one `parent_child` or `subagent` relation supply a
+parent. `root_session_id` is observability metadata, not a tree edge. An orphan,
+self edge, parent conflict, cycle, or oversized component is unstable and cannot
+be stopped or deleted through the guarded flow.
+
+`mc session stop` visits the default tree recursively, or the target only with
+`--only`. `--child-only` leaves the selected parent active and recursively
+visits only descendants. Stop acquires barriers before discovery, converges the
+tree with bounded rescans, and stops deepest descendants first. Terminal rows
+are no-ops but remain traversable.
+
+`mc session delete <id> --expected-tree-token <sha256>` recomputes the canonical
+subtree and its token in the same transaction as the non-force delete. A changed
+tree or any unexpired matching lease rejects the operation. Deletion affects the
+whole canonical subtree, including session rows, projections, and compatibility
+artifacts, so callers must present the recursive impact before confirmation.
 
 ## Rollback And Operations
 

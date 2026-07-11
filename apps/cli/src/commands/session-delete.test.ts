@@ -5,10 +5,11 @@ import {
     metadataEvent,
     pathExists,
     sessionLogPath,
+    setCanonicalSessionParent,
     taskCompletedEvent,
     useTempDataDir,
 } from './session-delete-test-support.js';
-import { writeSessionEvents } from './session-test-support.js';
+import { readStoredSessionProjection, writeSessionEvents } from './session-test-support.js';
 import { rm } from 'node:fs/promises';
 
 describe('session delete', () => {
@@ -28,7 +29,7 @@ describe('session delete', () => {
 
         const output = await runSessionCommand(parseArgs(['session', 'delete', sessionId]));
 
-        expect(output.trim()).toBe(`Deleted session ${sessionId} (1 events)`);
+        expect(output.stdout).toBe(`Deleted session ${sessionId} (1 events)`);
         expect(await pathExists(sessionLogPath(dataDir, sessionId))).toBe(false);
         await rm(dataDir, { recursive: true, force: true });
     });
@@ -53,10 +54,15 @@ describe('session delete', () => {
             sessionId: grandchildId,
             events: [metadataEvent(grandchildId, childId), taskCompletedEvent(grandchildId, 'grandchild run')],
         });
+        await readStoredSessionProjection({ dataDir, sessionId: parentId });
+        await readStoredSessionProjection({ dataDir, sessionId: childId });
+        await readStoredSessionProjection({ dataDir, sessionId: grandchildId });
+        await setCanonicalSessionParent(dataDir, childId, parentId);
+        await setCanonicalSessionParent(dataDir, grandchildId, childId);
 
         const output = await runSessionCommand(parseArgs(['session', 'delete', parentId]));
 
-        const deleted = output.trim().split('\n');
+        const deleted = output.stdout.split('\n');
         expect(deleted).toContain(`Deleted session ${parentId} (1 events)`);
         expect(deleted).toContain(`Deleted session ${childId} (2 events)`);
         expect(deleted).toContain(`Deleted session ${grandchildId} (2 events)`);
@@ -86,10 +92,13 @@ describe('session delete', () => {
             sessionId: unrelatedId,
             events: [taskCompletedEvent(unrelatedId, 'unrelated run')],
         });
+        await readStoredSessionProjection({ dataDir, sessionId: parentId });
+        await readStoredSessionProjection({ dataDir, sessionId: childId });
+        await setCanonicalSessionParent(dataDir, childId, parentId);
 
         const output = await runSessionCommand(parseArgs(['session', 'delete', childId]));
 
-        expect(output.trim()).toBe(`Deleted session ${childId} (2 events)`);
+        expect(output.stdout).toBe(`Deleted session ${childId} (2 events)`);
         expect(await pathExists(sessionLogPath(dataDir, childId))).toBe(false);
         expect(await pathExists(sessionLogPath(dataDir, parentId))).toBe(true);
         expect(await pathExists(sessionLogPath(dataDir, unrelatedId))).toBe(true);

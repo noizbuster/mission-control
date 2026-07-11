@@ -9,6 +9,7 @@
 import { primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export * from './session-agent-schema.js';
+export * from './session-control-schema.js';
 export * from './session-core-schema.js';
 export * from './session-projection-schema.js';
 export * from './session-schema-literals.js';

@@ -31,8 +31,7 @@ export async function runModelsCommand(args: CliArgs, options: ModelsCommandOpti
         }
 
         const modelIDs = apiModelIDs ?? catalogModelIDs;
-        const extras =
-            apiModelIDs !== undefined ? catalogModelIDs.filter((id) => !apiModelIDs.includes(id)) : [];
+        const extras = apiModelIDs !== undefined ? catalogModelIDs.filter((id) => !apiModelIDs.includes(id)) : [];
         for (const id of [...modelIDs, ...extras]) {
             lines.push(`  ${provider.id}/${id}${extras.includes(id) ? ' (catalog only)' : ''}${statusSuffix}`);
         }

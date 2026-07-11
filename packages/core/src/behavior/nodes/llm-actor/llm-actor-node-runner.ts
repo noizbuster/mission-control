@@ -234,6 +234,7 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
                   // Interactive path: serialize a tool BATCH so the approval broker sees one approval
                   // at a time (non-interactive omits this → parallel batch execution).
                   ...(context.serializeToolExecution === true ? { serializeToolExecution: true } : {}),
+                  ...(context.controlEpoch !== undefined ? { controlEpoch: context.controlEpoch } : {}),
               });
 
     // Keep the model's input BOUNDED across a long run: compact the older conversation into a

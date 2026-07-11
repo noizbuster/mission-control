@@ -31,10 +31,15 @@ describe('session commands', () => {
         const replayOutput = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
         const replayEvents = eventRecords(parseReplayRecords(replayOutput));
 
-        expect(listOutput.trim().split('\n')).toEqual(
+        expect(
+            [listOutput, showOutput, replayOutput].every(
+                ({ stdout, stderr }) => !stdout.endsWith('\n') && stderr === '',
+            ),
+        ).toBe(true);
+        expect(listOutput.stdout.trim().split('\n')).toEqual(
             expect.arrayContaining([expect.stringMatching(new RegExp(`^${sessionId}\\t`))]),
         );
-        expect(JSON.parse(showOutput)).toMatchObject({
+        expect(JSON.parse(showOutput.stdout)).toMatchObject({
             sessionId,
             eventCount: replayEvents.length,
             statusText: 'stopped',
@@ -72,10 +77,10 @@ describe('session commands', () => {
         const listOutput = await runSessionCommand(parseArgs(['session', 'list']));
 
         // Then
-        expect(listOutput).toContain(firstSessionId);
-        expect(listOutput).toContain(secondSessionId);
-        expect(listOutput).toContain('events=1');
-        expect(listOutput).not.toContain('lock=');
+        expect(listOutput.stdout).toContain(firstSessionId);
+        expect(listOutput.stdout).toContain(secondSessionId);
+        expect(listOutput.stdout).toContain('events=1');
+        expect(listOutput.stdout).not.toContain('lock=');
         await rm(dataDir, { recursive: true, force: true });
     });
 

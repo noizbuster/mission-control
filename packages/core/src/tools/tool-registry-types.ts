@@ -1,5 +1,7 @@
+import type { Client } from '@libsql/client';
 import type { AgentEvent, ProtocolError, ToolDefinition, ToolResult } from '@mission-control/protocol';
 import { z } from 'zod';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
 
 export const ToolRegistrationMetadataSchema = z
     .object({
@@ -55,6 +57,7 @@ export type ToolExecutionContext = {
     readonly toolCallId: string;
     readonly toolName: string;
     readonly signal: AbortSignal;
+    readonly controlEpoch?: SessionControlEpoch;
 };
 
 export type ToolAdvertisement = {
@@ -73,6 +76,8 @@ export type ToolInvocationInput = {
     readonly advertisedVersion: string;
     readonly argumentsJson: string;
     readonly signal?: AbortSignal;
+    readonly controlEpoch?: SessionControlEpoch;
+    readonly writeSettlement?: (settlement: ToolInvocationSettlement, client: Client) => Promise<void>;
 };
 
 export type ToolModelOutput = {

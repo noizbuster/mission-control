@@ -209,10 +209,10 @@ describe('ConcreteTaskToolRuntime awaiting/subagent mirror', () => {
                 backgroundJobs: await mirror.loadBackgroundJobsForParent('parent-session'),
             });
             expect(backgroundHandle.backgroundId).toMatch(/^job_/);
-            expect(afterBackground.status).toBe('idle');
+            expect(afterBackground.status).toBe('running');
             expect(publicAfterBackground).toMatchObject({
                 sessionId: 'parent-session',
-                status: 'idle',
+                status: 'running',
             });
             expect(publicAfterBackground?.awaiting).toBeUndefined();
         } finally {

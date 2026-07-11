@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SessionStopReasonSchema } from './session-stop.js';
 import { ProtocolErrorCodeSchema } from './tool-result-primitives.js';
 import { TRANSCRIPT_DELIVERY_MODES } from './transcript.js';
 
@@ -18,19 +19,31 @@ export type RunCoordinatorCommand = z.infer<typeof RunCoordinatorCommandSchema>;
 export const RunCoordinatorStateSchema = z.enum(RUN_COORDINATOR_STATES);
 export type RunCoordinatorState = z.infer<typeof RunCoordinatorStateSchema>;
 
-export const RunCoordinatorEventMetadataSchema = z.object({
-    command: RunCoordinatorCommandSchema.optional(),
-    state: RunCoordinatorStateSchema.optional(),
-    runId: z.string().min(1).optional(),
-    inputId: z.string().min(1).optional(),
-    messageId: z.string().min(1).optional(),
-    parentMessageId: z.string().min(1).optional(),
-    delivery: z.enum(TRANSCRIPT_DELIVERY_MODES).optional(),
-    providerTurnId: z.string().min(1).optional(),
-    toolCallId: z.string().min(1).optional(),
-    graphId: z.string().min(1).optional(),
-    nodeId: z.string().min(1).optional(),
-    reason: z.string().min(1).optional(),
-    errorCode: ProtocolErrorCodeSchema.optional(),
-});
+export const RunCoordinatorEventMetadataSchema = z
+    .object({
+        command: RunCoordinatorCommandSchema.optional(),
+        state: RunCoordinatorStateSchema.optional(),
+        runId: z.string().min(1).optional(),
+        requestId: z.string().min(1).optional(),
+        operationId: z.string().min(1).optional(),
+        inputId: z.string().min(1).optional(),
+        messageId: z.string().min(1).optional(),
+        parentMessageId: z.string().min(1).optional(),
+        delivery: z.enum(TRANSCRIPT_DELIVERY_MODES).optional(),
+        providerTurnId: z.string().min(1).optional(),
+        toolCallId: z.string().min(1).optional(),
+        graphId: z.string().min(1).optional(),
+        nodeId: z.string().min(1).optional(),
+        reason: z.string().min(1).optional(),
+        errorCode: ProtocolErrorCodeSchema.optional(),
+    })
+    .strict();
 export type RunCoordinatorEventMetadata = z.infer<typeof RunCoordinatorEventMetadataSchema>;
+
+export const OperatorAbortedRunEventMetadataSchema = RunCoordinatorEventMetadataSchema.extend({
+    state: z.literal('interrupted'),
+    requestId: z.string().min(1),
+    operationId: z.string().min(1),
+    reason: SessionStopReasonSchema,
+}).strict();
+export type OperatorAbortedRunEventMetadata = z.infer<typeof OperatorAbortedRunEventMetadataSchema>;

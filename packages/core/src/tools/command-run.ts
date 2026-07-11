@@ -4,7 +4,7 @@ import type {
     PermissionDecision,
     PermissionRequest,
 } from '@mission-control/protocol';
-import { commandRunFailure } from './command-run-errors.js';
+import { commandOperatorAborted, commandRunFailure } from './command-run-errors.js';
 import { executeCommand } from './command-run-executor.js';
 import { interruptedBeforeSpawnResult, runCommandWithTimeout } from './command-run-interruption.js';
 import { buildPermissionPatterns, defaultCommandRunPolicyProfile, isAllowlistedCommand } from './command-run-policy.js';
@@ -90,14 +90,18 @@ async function runCommandTool(
             await requireApproval(options, context.toolCallId, command);
         }
         if (context.signal.aborted) {
-            return commandRunOutput(
+            const output = commandRunOutput(
                 command,
                 options.workspaceRoot,
                 interruptedBeforeSpawnResult(),
                 options.maxOutputBytes,
             );
+            throw commandOperatorAborted(`command interrupted before spawn: ${command.join(' ')}`, [
+                started,
+                commandEvent('command.failed', context.toolCallId, metadataForOutput(output, 'failed')),
+            ]);
         }
-        const result = await runCommand(options, command, context.signal);
+        const result = await runCommand(options, command, context.signal, context.controlEpoch);
         const output = commandRunOutput(command, options.workspaceRoot, result, options.maxOutputBytes);
         if (output.timedOut) {
             throw commandRunFailure('command_timed_out', `command timed out: ${command.join(' ')}`, [
@@ -106,6 +110,12 @@ async function runCommandTool(
             ]);
         }
         if (output.status === 'failed') {
+            if (context.signal.aborted) {
+                throw commandOperatorAborted(`command interrupted: ${command.join(' ')}`, [
+                    started,
+                    commandEvent('command.failed', context.toolCallId, metadataForOutput(output, 'failed')),
+                ]);
+            }
             throw commandRunFailure('command_failed', commandFailedMessage(output, options.maxModelOutputChars), [
                 started,
                 commandEvent('command.failed', context.toolCallId, metadataForOutput(output, 'failed')),
@@ -117,9 +127,14 @@ async function runCommandTool(
     }
 }
 
-async function runCommand(options: ResolvedCommandRunToolOptions, command: readonly string[], signal: AbortSignal) {
+async function runCommand(
+    options: ResolvedCommandRunToolOptions,
+    command: readonly string[],
+    signal: AbortSignal,
+    controlEpoch?: import('../runtime/session-control-cancellation.js').SessionControlEpoch,
+) {
     try {
-        return await runCommandWithTimeout(options, command, signal);
+        return await runCommandWithTimeout(options, command, signal, controlEpoch);
     } catch (error: unknown) {
         throw commandRunFailure('command_spawn_failed', error instanceof Error ? error.message : String(error));
     }

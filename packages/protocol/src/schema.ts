@@ -7,21 +7,23 @@ import { EventIdSchema, EventSequenceSchema } from './event-primitives.js';
 import { PermissionDecisionSchema, PermissionReplySchema, PermissionRequestSchema } from './permission-profile.js';
 import { ModelProviderSelectionSchema } from './provider-auth.js';
 import { ProviderStreamChunkSchema, ToolResultSchema } from './provider-events.js';
-import { RunCoordinatorEventMetadataSchema } from './run-coordinator.js';
+import { OperatorAbortedRunEventMetadataSchema, RunCoordinatorEventMetadataSchema } from './run-coordinator.js';
 import {
     refineSessionAwaitingContract,
     SessionAwaitingDetailsSchema,
     SessionStatusSchema,
 } from './session-lifecycle.js';
+import { SessionAbortCompletedMetadataSchema } from './session-stop.js';
 import { SESSION_TREE_EVENT_TYPES, SessionTreeEventMetadataSchema } from './session-tree.js';
 import { NativeSidecarStatusSchema } from './sidecar.js';
-import { TranscriptEventMetadataSchema } from './transcript.js';
+import { PromptCancelledEventMetadataSchema, TranscriptEventMetadataSchema } from './transcript.js';
 
 export * from './schema-exports.js';
 
 export const AGENT_EVENT_TYPES = [
     'session.started',
     'session.stopped',
+    'session.abort.completed',
     ...SESSION_TREE_EVENT_TYPES,
     'task.started',
     'task.progress',
@@ -36,6 +38,7 @@ export const AGENT_EVENT_TYPES = [
     'approval.resumed',
     'prompt.admitted',
     'prompt.promoted',
+    'prompt.cancelled',
     'run.command.received',
     'run.started',
     'run.completed',
@@ -102,29 +105,67 @@ export type PermissionStatus = z.infer<typeof PermissionStatusSchema>;
 export const EventDurabilitySchema = z.enum(EVENT_DURABILITIES);
 export type EventDurability = z.infer<typeof EventDurabilitySchema>;
 
-export const AgentEventSchema = z.object({
-    type: AgentEventTypeSchema,
-    timestamp: z.string().datetime(),
-    durability: EventDurabilitySchema.optional(),
-    sessionId: z.string().optional(),
-    taskId: z.string().optional(),
-    message: z.string().optional(),
-    progress: z.number().min(0).max(1).optional(),
-    nativeSidecarStatus: NativeSidecarStatusSchema.optional(),
-    permissionRequest: PermissionRequestSchema.optional(),
-    permissionDecision: PermissionDecisionSchema.optional(),
-    permissionReply: PermissionReplySchema.optional(),
-    approvalRecord: ApprovalRecordSchema.optional(),
-    modelProviderSelection: ModelProviderSelectionSchema.optional(),
-    providerStreamChunk: z.lazy(() => ProviderStreamChunkSchema).optional(),
-    toolResult: ToolResultSchema.optional(),
-    diffFiles: z.array(DiffFileSchema).optional(),
-    command: CommandRunEventMetadataSchema.optional(),
-    run: RunCoordinatorEventMetadataSchema.optional(),
-    sessionTree: SessionTreeEventMetadataSchema.optional(),
-    transcript: TranscriptEventMetadataSchema.optional(),
-    abg: AbgEventMetadataSchema.optional(),
-});
+export const AgentEventSchema = z
+    .object({
+        type: AgentEventTypeSchema,
+        timestamp: z.string().datetime(),
+        durability: EventDurabilitySchema.optional(),
+        sessionId: z.string().optional(),
+        taskId: z.string().optional(),
+        message: z.string().optional(),
+        progress: z.number().min(0).max(1).optional(),
+        nativeSidecarStatus: NativeSidecarStatusSchema.optional(),
+        permissionRequest: PermissionRequestSchema.optional(),
+        permissionDecision: PermissionDecisionSchema.optional(),
+        permissionReply: PermissionReplySchema.optional(),
+        approvalRecord: ApprovalRecordSchema.optional(),
+        modelProviderSelection: ModelProviderSelectionSchema.optional(),
+        providerStreamChunk: z.lazy(() => ProviderStreamChunkSchema).optional(),
+        toolResult: ToolResultSchema.optional(),
+        diffFiles: z.array(DiffFileSchema).optional(),
+        command: CommandRunEventMetadataSchema.optional(),
+        run: RunCoordinatorEventMetadataSchema.optional(),
+        sessionStop: SessionAbortCompletedMetadataSchema.optional(),
+        sessionTree: SessionTreeEventMetadataSchema.optional(),
+        transcript: TranscriptEventMetadataSchema.optional(),
+        abg: AbgEventMetadataSchema.optional(),
+    })
+    .superRefine((event, context) => {
+        if (
+            event.type === 'prompt.cancelled' &&
+            !PromptCancelledEventMetadataSchema.safeParse(event.transcript).success
+        ) {
+            context.addIssue({
+                code: 'custom',
+                message: 'prompt.cancelled requires inputId, delivery, requestId, and operator_aborted reason',
+                path: ['transcript'],
+            });
+        }
+
+        if (
+            event.type === 'session.abort.completed' &&
+            !SessionAbortCompletedMetadataSchema.safeParse(event.sessionStop).success
+        ) {
+            context.addIssue({
+                code: 'custom',
+                message: 'session.abort.completed requires operation, request, reason, and affected counts',
+                path: ['sessionStop'],
+            });
+        }
+
+        const hasStructuredStopMetadata = event.run?.reason === 'operator_aborted';
+        if (
+            event.type === 'run.interrupted' &&
+            hasStructuredStopMetadata &&
+            !OperatorAbortedRunEventMetadataSchema.safeParse(event.run).success
+        ) {
+            context.addIssue({
+                code: 'custom',
+                message: 'operator-aborted run interruption requires state, reason, requestId, and operationId',
+                path: ['run'],
+            });
+        }
+    });
 export type AgentEvent = z.infer<typeof AgentEventSchema>;
 
 export const AgentEventEnvelopeSchema = z.object({

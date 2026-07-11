@@ -10,6 +10,7 @@ import type { ProviderAdapter } from '../providers/provider-turn-types.js';
 import type { AdmitPromptInput, SessionAdmissionEventStore } from '../session-admission-types.js';
 import type { ToolInvocationSettlement, ToolRegistry } from '../tools/tool-registry.js';
 import type { RunCoordinatorProviderTurnResult } from './run-coordinator-lifecycle.js';
+import type { SessionControlHost } from './session-control-host.js';
 
 export type RunCoordinatorStore = SessionAdmissionEventStore & {
     readonly appendEnvelopeWithStoreSequence?: (envelope: AgentEventEnvelope) => Promise<void>;
@@ -73,6 +74,7 @@ export type SessionRunCoordinatorOptions = {
     readonly onProviderEnvelope?: RunCoordinatorEnvelopeObserver;
     readonly onToolCall?: RunCoordinatorToolCallObserver;
     readonly onToolSettlement?: RunCoordinatorToolSettlementObserver;
+    readonly sessionControlHost?: SessionControlHost;
     /**
      * Engine selector. Omit (default) to drive the flat provider tool loop. Inject a runner
      * (e.g. `createGraphTurnRunner`) to drive the ABG coding-agent graph instead. The flat path

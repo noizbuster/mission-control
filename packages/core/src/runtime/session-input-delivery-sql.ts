@@ -1,15 +1,13 @@
 import type { Delivery } from '@mission-control/protocol';
 import { z } from 'zod';
-import { runLocalLibsqlWrite } from '../db/local-libsql-db.js';
+import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
 import {
     ensurePublicSessionRow,
-    loadSessionActiveRuns,
-    loadSessionTerminalEvent,
     persistSessionAwaiting,
     refreshSessionAwaitingFromPendingWaits,
 } from '../memory/session-awaiting-sql.js';
-import { deriveSessionLifecycle, type SessionPendingWait } from '../memory/session-status-derivation.js';
-import { openRuntimeLocalDb } from './local-runtime-db.js';
+import { deriveSessionLifecycleFromSql } from '../memory/session-lifecycle-sql-authorities.js';
+import { openCanonicalRuntimeDb } from './local-runtime-db.js';
 import type { SessionInputRecord } from './session-input-delivery.js';
 
 const inputStatusSchema = z.enum(['pending', 'admitted', 'promoted', 'cancelled']);
@@ -25,15 +23,6 @@ const inputRowSchema = z.object({
 
 const countRowSchema = z.object({ count: z.number() });
 const seqRowSchema = z.object({ next_seq: z.number() });
-const waitRowSchema = z.object({
-    wait_id: z.string(),
-    reason: z.enum(['approval', 'user_input', 'subagent']),
-    source_id: z.string(),
-    approval_id: z.string().nullable(),
-    job_id: z.string().nullable(),
-    child_session_id: z.string().nullable(),
-});
-
 export type SqlSessionInputDeliveryRecord = SessionInputRecord & {
     readonly status: SqlSessionInputStatus;
 };
@@ -43,10 +32,11 @@ export type SqlSessionInputDeliveryOptions = {
 };
 
 export class SqlSessionInputDelivery {
-    private constructor(private readonly runtime: Awaited<ReturnType<typeof openRuntimeLocalDb>>) {}
+    private constructor(private readonly runtime: LocalLibsqlDb) {}
 
     static async open(root: string): Promise<SqlSessionInputDelivery> {
-        return new SqlSessionInputDelivery(await openRuntimeLocalDb(root));
+        const { runtime } = await openCanonicalRuntimeDb({ dataDir: root, legacyRoots: [root] });
+        return new SqlSessionInputDelivery(runtime);
     }
 
     async admitInput(
@@ -115,12 +105,7 @@ export class SqlSessionInputDelivery {
     }
 
     async deriveLifecycle(sessionId: string) {
-        return deriveSessionLifecycle({
-            terminalEvent: await loadSessionTerminalEvent({ client: this.runtime.client, sessionId }),
-            activeRuns: await loadSessionActiveRuns({ client: this.runtime.client, sessionId }),
-            pendingWaits: await this.pendingWaits(sessionId),
-            backgroundJobs: [],
-        });
+        return deriveSessionLifecycleFromSql({ client: this.runtime.client, sessionId });
     }
 
     close(): void {
@@ -212,16 +197,6 @@ export class SqlSessionInputDelivery {
             now,
         });
     }
-
-    private async pendingWaits(sessionId: string): Promise<readonly SessionPendingWait[]> {
-        const result = await this.runtime.client.execute({
-            sql:
-                'SELECT wait_id, reason, source_id, approval_id, job_id, child_session_id ' +
-                'FROM session_awaits WHERE session_id = ? AND status = ? ORDER BY created_at, wait_id',
-            args: [sessionId, 'pending'],
-        });
-        return result.rows.map(rowToPendingWait);
-    }
 }
 
 function rowToInputRecord(row: unknown): SqlSessionInputDeliveryRecord {
@@ -235,41 +210,6 @@ function rowToInputRecord(row: unknown): SqlSessionInputDeliveryRecord {
     };
 }
 
-function rowToPendingWait(row: unknown): SessionPendingWait {
-    const parsed = waitRowSchema.parse(row);
-    switch (parsed.reason) {
-        case 'approval':
-            return {
-                waitId: parsed.wait_id,
-                reason: parsed.reason,
-                source: { kind: 'approval', approvalId: parsed.approval_id ?? parsed.source_id },
-            };
-        case 'user_input':
-            return {
-                waitId: parsed.wait_id,
-                reason: parsed.reason,
-                source: { kind: 'operator', inputId: parsed.source_id },
-            };
-        case 'subagent':
-            return {
-                waitId: parsed.wait_id,
-                reason: parsed.reason,
-                source: {
-                    kind: 'subagent',
-                    jobId: parsed.job_id ?? parsed.source_id,
-                    mode: 'sync',
-                    ...(parsed.child_session_id !== null ? { childSessionId: parsed.child_session_id } : {}),
-                },
-            };
-        default:
-            return assertNever(parsed.reason);
-    }
-}
-
 function waitIdForInput(inputId: string): string {
     return `input_wait_${inputId}`;
-}
-
-function assertNever(value: never): never {
-    throw new Error(`unhandled variant: ${String(value)}`);
 }

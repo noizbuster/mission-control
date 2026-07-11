@@ -1,4 +1,5 @@
 import { truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
 import type { ChainOperator } from './bash-run-command-guard.js';
 import { type ChildProcess, spawn } from 'node:child_process';
 
@@ -10,6 +11,7 @@ export type CommandExecutionRequest = {
     readonly cwd: string;
     readonly signal: AbortSignal;
     readonly maxOutputBytes: number;
+    readonly controlEpoch?: SessionControlEpoch;
     readonly env?: NodeJS.ProcessEnv;
 };
 
@@ -27,6 +29,9 @@ export type CommandExecutionResult = {
 };
 
 export function executeCommand(request: CommandExecutionRequest): Promise<CommandExecutionResult> {
+    if (request.signal.aborted) {
+        return Promise.resolve(preAbortedExecutionResult());
+    }
     const startedAt = Date.now();
     return new Promise((resolve, reject) => {
         const child = spawn(request.command, request.args, {
@@ -39,14 +44,31 @@ export function executeCommand(request: CommandExecutionRequest): Promise<Comman
         const stderr = createOutputCollector(request.maxOutputBytes);
         let timedOut = false;
         let killTimer: NodeJS.Timeout | undefined;
+        let settled = false;
+
+        const cleanup = () => {
+            request.signal.removeEventListener('abort', onAbort);
+            if (killTimer !== undefined) clearTimeout(killTimer);
+        };
+        const onAbort = () => {
+            if (settled) return;
+            timedOut = true;
+            child.kill('SIGTERM');
+            killTimer = setTimeout(() => child.kill('SIGKILL'), 1000);
+        };
 
         child.stdout?.on('data', (chunk: Buffer) => stdout.push(chunk));
         child.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk));
-        child.on('error', reject);
+        child.on('error', (error) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            reject(error);
+        });
         child.on('close', (exitCode, signal) => {
-            if (killTimer !== undefined) {
-                clearTimeout(killTimer);
-            }
+            if (settled) return;
+            settled = true;
+            cleanup();
             resolve({
                 exitCode,
                 signal,
@@ -60,15 +82,8 @@ export function executeCommand(request: CommandExecutionRequest): Promise<Comman
                 durationMs: Date.now() - startedAt,
             });
         });
-        request.signal.addEventListener(
-            'abort',
-            () => {
-                timedOut = true;
-                child.kill('SIGTERM');
-                killTimer = setTimeout(() => child.kill('SIGKILL'), 1000);
-            },
-            { once: true },
-        );
+        request.signal.addEventListener('abort', onAbort, { once: true });
+        if (request.signal.aborted) onAbort();
     });
 }
 
@@ -94,11 +109,14 @@ export function executeCommandPipeline(requests: readonly CommandExecutionReques
         }
         return executeCommand(single);
     }
+    if (requests.some((request) => request.signal.aborted)) {
+        return Promise.resolve(preAbortedExecutionResult());
+    }
     const startedAt = Date.now();
     const maxBytes = requests[0]?.maxOutputBytes ?? 64 * 1024;
-    const signal = requests[0]?.signal ?? new AbortController().signal;
     return new Promise((resolve, reject) => {
         const children: ChildProcess[] = [];
+        const signals = [...new Set(requests.map((request) => request.signal))];
         const stdout = createOutputCollector(maxBytes);
         const stderr = createOutputCollector(maxBytes);
         let timedOut = false;
@@ -106,15 +124,37 @@ export function executeCommandPipeline(requests: readonly CommandExecutionReques
         let finalExitCode: number | null = null;
         let finalSignal: string | null = null;
         let settled = 0;
+        let finished = false;
 
         const cleanup = () => {
-            if (killTimer !== undefined) {
-                clearTimeout(killTimer);
+            for (const signal of signals) signal.removeEventListener('abort', onAbort);
+            if (killTimer !== undefined) clearTimeout(killTimer);
+        };
+        const onAbort = () => {
+            if (finished || timedOut) return;
+            timedOut = true;
+            for (const child of children) {
+                if (!child.killed) child.kill('SIGTERM');
             }
+            killTimer = setTimeout(() => {
+                for (const child of children) {
+                    if (!child.killed) child.kill('SIGKILL');
+                }
+            }, 1000);
+        };
+        const fail = (error: Error) => {
+            if (finished) return;
+            finished = true;
+            cleanup();
+            for (const child of children) {
+                if (!child.killed) child.kill('SIGKILL');
+            }
+            reject(error);
         };
 
         const tryResolve = () => {
-            if (settled === children.length) {
+            if (!finished && settled === children.length) {
+                finished = true;
                 cleanup();
                 resolve({
                     exitCode: finalExitCode,
@@ -164,15 +204,7 @@ export function executeCommandPipeline(requests: readonly CommandExecutionReques
                     child.stdout?.on('data', (chunk: Buffer) => stdout.push(chunk));
                 }
                 child.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk));
-                child.on('error', (error) => {
-                    cleanup();
-                    for (const c of children) {
-                        if (!c.killed) {
-                            c.kill('SIGKILL');
-                        }
-                    }
-                    reject(error);
-                });
+                child.on('error', fail);
                 child.on('close', (exitCode, exitSignal) => {
                     if (isLast) {
                         finalExitCode = exitCode;
@@ -187,35 +219,12 @@ export function executeCommandPipeline(requests: readonly CommandExecutionReques
                 });
             }
         } catch (error) {
-            cleanup();
-            for (const c of children) {
-                if (!c.killed) {
-                    c.kill('SIGKILL');
-                }
-            }
-            reject(error);
+            fail(error instanceof Error ? error : new Error(String(error)));
             return;
         }
 
-        signal.addEventListener(
-            'abort',
-            () => {
-                timedOut = true;
-                for (const c of children) {
-                    if (!c.killed) {
-                        c.kill('SIGTERM');
-                    }
-                }
-                killTimer = setTimeout(() => {
-                    for (const c of children) {
-                        if (!c.killed) {
-                            c.kill('SIGKILL');
-                        }
-                    }
-                }, 1000);
-            },
-            { once: true },
-        );
+        for (const signal of signals) signal.addEventListener('abort', onAbort, { once: true });
+        if (signals.some((signal) => signal.aborted)) onAbort();
     });
 }
 
@@ -336,4 +345,15 @@ function nonInteractiveEnv(): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = { ...process.env, CI: '1', NO_COLOR: '1', TERM: 'dumb' };
     delete env[forceColorEnvKey];
     return env;
+}
+
+function preAbortedExecutionResult(): CommandExecutionResult {
+    return {
+        exitCode: null,
+        signal: null,
+        timedOut: false,
+        stdout: '',
+        stderr: '',
+        durationMs: 0,
+    };
 }

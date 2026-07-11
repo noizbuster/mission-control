@@ -206,6 +206,22 @@ describe('AsyncJobManager', () => {
 
             expect(handle.status).toBe('cancelled');
         });
+
+        it('operator-aborts and settles a running job without a control epoch', async () => {
+            const manager = new AsyncJobManager(1);
+            const control = makeControllableExecute();
+            const handle = manager.startJob({ sessionId: 's-drain', execute: control.execute });
+            const signal = control.capturedSignal();
+            if (signal === undefined) throw new Error('execute was not called');
+            const awaited = manager.awaitJob(handle.jobId);
+
+            manager.cancelJob(handle.jobId, 'operator_aborted');
+
+            expect(signal.aborted).toBe(true);
+            const settled = await awaited;
+            expect(settled.status).toBe('cancelled');
+            expect(settled.cancellationReason).toBe('operator_aborted');
+        });
     });
 
     describe('(c) awaitJob', () => {

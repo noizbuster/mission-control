@@ -100,6 +100,7 @@ describe('noninteractive workflow Mission/Run persistence', () => {
         workspaceDir = await createWorkflowWorkspace();
         configDir = await mkdtemp(join(tmpdir(), 'mctrl-wf-persist-cfg-'));
         vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
+        vi.stubEnv('MCTRL_DATA_DIR', join(workspaceDir, 'data'));
     });
 
     afterEach(async () => {

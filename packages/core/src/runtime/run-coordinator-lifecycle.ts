@@ -71,13 +71,26 @@ export async function finalizeProviderTurnResult(input: {
     readonly runId: string;
     readonly turns: number;
     readonly appendRunEvent: AppendRunCoordinatorEvent;
+    readonly operatorStop?: { readonly requestId: string; readonly operationId: string };
+    readonly suppressInterruptedEvent?: boolean;
 }): Promise<RunCoordinatorResult | undefined> {
     const { result, command, runId, turns, appendRunEvent } = input;
     switch (result.status) {
         case 'completed':
             return undefined;
         case 'interrupted':
-            await appendRunEvent('run.interrupted', command, 'interrupted', 'run interrupted', { runId });
+            if (input.suppressInterruptedEvent !== true) {
+                await appendRunEvent('run.interrupted', command, 'interrupted', 'run interrupted', {
+                    runId,
+                    ...(input.operatorStop !== undefined
+                        ? {
+                              requestId: input.operatorStop.requestId,
+                              operationId: input.operatorStop.operationId,
+                              reason: 'operator_aborted' as const,
+                          }
+                        : {}),
+                });
+            }
             return { status: 'interrupted', runId, turns };
         case 'failed':
             await appendRunEvent('run.failed', command, 'failed', result.reason, {

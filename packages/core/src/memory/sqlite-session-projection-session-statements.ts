@@ -34,6 +34,13 @@ export function insertSessionStatement(record: SessionProjectionSessionRecord): 
                 eventCount: record.eventCount,
                 lastEventId: record.lastEventId ?? null,
                 lastEventType: record.lastEventType ?? null,
+                ...(record.abortMarker !== undefined
+                    ? {
+                          abortMarkerAt: record.abortMarker.completedAt,
+                          abortOperationId: record.abortMarker.operationId,
+                          abortRequestId: record.abortMarker.requestId,
+                      }
+                    : {}),
             }),
         ],
     };

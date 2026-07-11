@@ -302,6 +302,9 @@ async function createInteractiveRunOwner(
             renderInteractiveToolSettlement(options.output, settlement);
             overlayWiring?.onToolSettlement?.(settlement);
         },
+        ...(options.taskRuntimeServices?.sessionControlHost !== undefined
+            ? { sessionControlHost: options.taskRuntimeServices.sessionControlHost }
+            : {}),
     });
 
     return { owner, mcpConnectionManager, overlayWiring };
@@ -356,7 +359,7 @@ function settleReceipt(
             return;
         case 'failed':
             options.output.write(`Error: ${redactCredentialText(receipt.reason ?? 'run failed')}\n`);
-            emitTaskEvent(options, 'task.failed', receipt.reason ?? 'run failed');
+            emitTaskEvent(options, 'task.failed', redactCredentialText(receipt.reason ?? 'run failed'));
             return;
         case 'idle':
         case 'running':

@@ -2,11 +2,13 @@ import { projectSessionReplay } from '../session-replay.js';
 import type { CodingReplayStep, SessionReplayProjection } from '../session-replay-types.js';
 import { JsonlSessionEventStoreError } from './jsonl-errors.js';
 import { parseJsonlSessionLog } from './jsonl-session-records.js';
+import { isProviderAbortedFailure } from './session-projection-provider-failure.js';
 import type {
     SessionProjectionDiagnostic,
     SessionProjectionProviderFailureRecord,
     SessionProjectionRecord,
     SessionProjectionRunRecord,
+    SessionProjectionSessionRecord,
 } from './session-projection-types.js';
 
 export type SessionProjectionResult = {
@@ -70,9 +72,12 @@ function recordsForProjection(
     filePath: string,
 ): readonly SessionProjectionRecord[] {
     const sequenceByEventId = new Map(projection.envelopes.map((envelope) => [envelope.eventId, envelope.sequence]));
+    const eventByEventId = new Map(projection.envelopes.map((envelope) => [envelope.eventId, envelope.event]));
     return [
         sessionRecord(projection, filePath),
-        ...projection.codingSteps.flatMap((step) => recordsForStep(projection.sessionId, step, sequenceByEventId)),
+        ...projection.codingSteps.flatMap((step) =>
+            recordsForStep(projection.sessionId, step, sequenceByEventId, eventByEventId),
+        ),
         ...projection.approvals.map((approval) => ({
             kind: 'approval' as const,
             sessionId: projection.sessionId,
@@ -109,6 +114,7 @@ function eventSequence(eventId: string, sequenceByEventId: ReadonlyMap<string, n
 
 function sessionRecord(projection: SessionReplayProjection, filePath: string): SessionProjectionRecord {
     const lastEnvelope = projection.envelopes.at(-1);
+    const abortMarker = activeAbortMarker(projection);
     return {
         kind: 'session',
         sessionId: projection.sessionId,
@@ -122,13 +128,34 @@ function sessionRecord(projection: SessionReplayProjection, filePath: string): S
         ...(lastEnvelope !== undefined ? { lastEventType: lastEnvelope.event.type } : {}),
         updatedAt: lastEnvelope?.createdAt ?? projection.snapshot.startedAt,
         sourcePath: filePath,
+        ...(abortMarker !== undefined ? { abortMarker } : {}),
     };
+}
+
+function activeAbortMarker(
+    projection: SessionReplayProjection,
+): SessionProjectionSessionRecord['abortMarker'] | undefined {
+    let marker: SessionProjectionSessionRecord['abortMarker'] | undefined;
+    for (const envelope of projection.envelopes) {
+        if (envelope.event.type === 'run.started') {
+            marker = undefined;
+        }
+        if (envelope.event.type === 'session.abort.completed' && envelope.event.sessionStop !== undefined) {
+            marker = {
+                completedAt: envelope.event.timestamp,
+                operationId: envelope.event.sessionStop.operationId,
+                requestId: envelope.event.sessionStop.requestId,
+            };
+        }
+    }
+    return marker;
 }
 
 function recordsForStep(
     sessionId: string,
     step: CodingReplayStep,
     sequenceByEventId: ReadonlyMap<string, number>,
+    eventByEventId: ReadonlyMap<string, Parameters<typeof projectSessionReplay>[0]['envelopes'][number]['event']>,
 ): readonly (SessionProjectionRunRecord | SessionProjectionProviderFailureRecord)[] {
     switch (step.kind) {
         case 'run.state':
@@ -150,6 +177,9 @@ function recordsForStep(
                 },
             ];
         case 'provider.failure':
+            if (isProviderAbortedFailure(step, eventByEventId.get(step.eventId))) {
+                return [];
+            }
             return [
                 {
                     kind: 'provider_failure',

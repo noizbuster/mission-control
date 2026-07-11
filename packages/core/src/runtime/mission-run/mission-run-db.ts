@@ -1,14 +1,17 @@
+import type { Client } from '@libsql/client';
 import { type Mission, MissionSchema, type Run, RunSchema } from '@mission-control/protocol';
 import { z } from 'zod';
-import { runLocalLibsqlWrite } from '../../db/local-libsql-db.js';
-import { openRuntimeLocalDb } from '../local-runtime-db.js';
+import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../../db/local-libsql-db.js';
+import { runLocalLibsqlClientTransaction } from '../../db/local-libsql-transaction.js';
+import { refreshSessionAwaitingFromPendingWaits } from '../../memory/session-awaiting-sql.js';
+import { openCanonicalRuntimeDb } from '../local-runtime-db.js';
 
 const missionRowSchema = z.object({ payload_json: z.string() });
 const runRowSchema = z.object({ passthrough_json: z.string() });
 
 export async function writeMissionToDb(root: string, mission: Mission): Promise<void> {
     const validated = MissionSchema.parse(mission);
-    const runtime = await openRuntimeLocalDb(root);
+    const runtime = await openMissionRunRuntime(root);
     try {
         await runLocalLibsqlWrite(runtime, (client) =>
             client.execute({
@@ -33,7 +36,7 @@ export async function writeMissionToDb(root: string, mission: Mission): Promise<
 }
 
 export async function readMissionFromDb(root: string, missionId: string): Promise<Mission | undefined> {
-    const runtime = await openRuntimeLocalDb(root);
+    const runtime = await openMissionRunRuntime(root);
     try {
         const result = await runtime.client.execute({
             sql: 'SELECT payload_json FROM missions WHERE mission_id = ?',
@@ -50,7 +53,7 @@ export async function readMissionFromDb(root: string, missionId: string): Promis
 }
 
 export async function listMissionsFromDb(root: string): Promise<readonly Mission[]> {
-    const runtime = await openRuntimeLocalDb(root);
+    const runtime = await openMissionRunRuntime(root);
     try {
         const result = await runtime.client.execute(
             'SELECT payload_json FROM missions ORDER BY updated_at, mission_id',
@@ -63,61 +66,52 @@ export async function listMissionsFromDb(root: string): Promise<readonly Mission
 
 export async function writeRunToDb(root: string, run: Run): Promise<void> {
     const validated = RunSchema.parse(run);
-    const runtime = await openRuntimeLocalDb(root);
+    const runtime = await openMissionRunRuntime(root);
     const timestamp = new Date().toISOString();
     try {
-        await runLocalLibsqlWrite(runtime, (client) =>
-            client.execute({
-                sql:
-                    'INSERT INTO mission_runs (run_id, mission_id, parent_run_id, session_id, child_agent_kind, ' +
-                    'child_agent_id, child_session_ids_json, retry_state_json, status, prompt, created_at, updated_at, ' +
-                    'started_at, ended_at, completed_at, failed_at, cancelled_at, passthrough_json) ' +
-                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
-                    'ON CONFLICT(run_id) DO UPDATE SET mission_id = excluded.mission_id, parent_run_id = excluded.parent_run_id, ' +
-                    'session_id = excluded.session_id, child_agent_kind = excluded.child_agent_kind, child_agent_id = excluded.child_agent_id, ' +
-                    'child_session_ids_json = excluded.child_session_ids_json, retry_state_json = excluded.retry_state_json, ' +
-                    'status = excluded.status, prompt = excluded.prompt, updated_at = excluded.updated_at, started_at = excluded.started_at, ' +
-                    'ended_at = excluded.ended_at, completed_at = excluded.completed_at, failed_at = excluded.failed_at, ' +
-                    'cancelled_at = excluded.cancelled_at, passthrough_json = excluded.passthrough_json',
-                args: [
-                    validated.id,
-                    validated.missionId,
-                    validated.parentRunId ?? null,
-                    validated.sessionId ?? null,
-                    validated.childKind ?? null,
-                    validated.childAgentId ?? null,
-                    JSON.stringify(validated.childSessionIds ?? []),
-                    JSON.stringify(validated.taskRetryState ?? {}),
-                    validated.status,
-                    validated.prompt ?? null,
-                    validated.startedAt ?? timestamp,
-                    timestamp,
-                    validated.startedAt ?? null,
-                    validated.endedAt ?? null,
-                    validated.status === 'completed' ? (validated.endedAt ?? timestamp) : null,
-                    validated.status === 'failed' ? (validated.endedAt ?? timestamp) : null,
-                    validated.status === 'cancelled' ? (validated.endedAt ?? timestamp) : null,
-                    JSON.stringify(validated),
-                ],
-            }),
-        );
+        await runLocalLibsqlWrite(runtime, async (client) => {
+            await runLocalLibsqlClientTransaction(client, async () => {
+                await writeRunRow(client, validated, timestamp);
+                await refreshRunSessions(client, [validated.sessionId], timestamp);
+            });
+        });
     } finally {
         runtime.close();
     }
 }
 
-export async function readRunFromDb(root: string, runId: string): Promise<Run | undefined> {
-    const runtime = await openRuntimeLocalDb(root);
+export async function mutateRunInDb(root: string, runId: string, mutate: (run: Run) => Run): Promise<Run | undefined> {
+    const runtime = await openMissionRunRuntime(root);
     try {
-        const result = await runtime.client.execute({
-            sql: 'SELECT passthrough_json FROM mission_runs WHERE run_id = ?',
-            args: [runId],
+        return await runLocalLibsqlWrite(runtime, async (client) => {
+            return runLocalLibsqlClientTransaction(client, async () => {
+                const timestamp = new Date().toISOString();
+                return mutateRunWithClient(client, runId, mutate, timestamp);
+            });
         });
-        const row = result.rows[0];
-        if (row === undefined) {
-            return undefined;
-        }
-        return RunSchema.parse(JSON.parse(runRowSchema.parse(row).passthrough_json));
+    } finally {
+        runtime.close();
+    }
+}
+
+export async function mutateRunWithClient(
+    client: Client,
+    runId: string,
+    mutate: (run: Run) => Run,
+    timestamp: string,
+): Promise<Run | undefined> {
+    const existing = await selectRun(client, runId);
+    if (existing === undefined) return undefined;
+    const updated = RunSchema.parse(mutate(existing));
+    await writeRunRow(client, updated, timestamp);
+    await refreshRunSessions(client, [existing.sessionId, updated.sessionId], timestamp);
+    return updated;
+}
+
+export async function readRunFromDb(root: string, runId: string): Promise<Run | undefined> {
+    const runtime = await openMissionRunRuntime(root);
+    try {
+        return await selectRun(runtime.client, runId);
     } finally {
         runtime.close();
     }
@@ -127,7 +121,7 @@ export async function listRunsFromDb(
     root: string,
     filter: { readonly missionId?: string; readonly parentId?: string } = {},
 ): Promise<readonly Run[]> {
-    const runtime = await openRuntimeLocalDb(root);
+    const runtime = await openMissionRunRuntime(root);
     try {
         const conditions: string[] = [];
         const args: string[] = [];
@@ -147,5 +141,64 @@ export async function listRunsFromDb(
         return result.rows.map((row) => RunSchema.parse(JSON.parse(runRowSchema.parse(row).passthrough_json)));
     } finally {
         runtime.close();
+    }
+}
+
+async function openMissionRunRuntime(root: string): Promise<LocalLibsqlDb> {
+    return (await openCanonicalRuntimeDb({ legacyRoots: [root] })).runtime;
+}
+
+async function selectRun(client: Client, runId: string): Promise<Run | undefined> {
+    const result = await client.execute({
+        sql: 'SELECT passthrough_json FROM mission_runs WHERE run_id = ?',
+        args: [runId],
+    });
+    const row = result.rows[0];
+    return row === undefined ? undefined : RunSchema.parse(JSON.parse(runRowSchema.parse(row).passthrough_json));
+}
+
+async function writeRunRow(client: Client, run: Run, timestamp: string): Promise<void> {
+    await client.execute({
+        sql:
+            'INSERT INTO mission_runs (run_id, mission_id, parent_run_id, session_id, child_agent_kind, ' +
+            'child_agent_id, child_session_ids_json, retry_state_json, status, prompt, created_at, updated_at, ' +
+            'started_at, ended_at, completed_at, failed_at, cancelled_at, passthrough_json) ' +
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
+            'ON CONFLICT(run_id) DO UPDATE SET mission_id = excluded.mission_id, parent_run_id = excluded.parent_run_id, ' +
+            'session_id = excluded.session_id, child_agent_kind = excluded.child_agent_kind, child_agent_id = excluded.child_agent_id, ' +
+            'child_session_ids_json = excluded.child_session_ids_json, retry_state_json = excluded.retry_state_json, ' +
+            'status = excluded.status, prompt = excluded.prompt, updated_at = excluded.updated_at, started_at = excluded.started_at, ' +
+            'ended_at = excluded.ended_at, completed_at = excluded.completed_at, failed_at = excluded.failed_at, ' +
+            'cancelled_at = excluded.cancelled_at, passthrough_json = excluded.passthrough_json',
+        args: [
+            run.id,
+            run.missionId,
+            run.parentRunId ?? null,
+            run.sessionId ?? null,
+            run.childKind ?? null,
+            run.childAgentId ?? null,
+            JSON.stringify(run.childSessionIds ?? []),
+            JSON.stringify(run.taskRetryState ?? {}),
+            run.status,
+            run.prompt ?? null,
+            run.startedAt ?? timestamp,
+            timestamp,
+            run.startedAt ?? null,
+            run.endedAt ?? null,
+            run.status === 'completed' ? (run.endedAt ?? timestamp) : null,
+            run.status === 'failed' ? (run.endedAt ?? timestamp) : null,
+            run.status === 'cancelled' ? (run.endedAt ?? timestamp) : null,
+            JSON.stringify(run),
+        ],
+    });
+}
+
+async function refreshRunSessions(
+    client: Client,
+    sessionIds: readonly (string | undefined)[],
+    now: string,
+): Promise<void> {
+    for (const sessionId of new Set(sessionIds.filter((value): value is string => value !== undefined))) {
+        await refreshSessionAwaitingFromPendingWaits({ client, sessionId, now });
     }
 }

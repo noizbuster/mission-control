@@ -1,46 +1,16 @@
-import { type Client, createClient } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { deriveSessionLifecycle } from '../memory/session-status-derivation.js';
-import { SqlAgentJobMirror } from './agent-job-sql-mirror.js';
+import {
+    agentJobTestNow,
+    cleanupAgentJobMirrorTests,
+    insertAgentJobTestSession,
+    withAgentJobMirror,
+} from './agent-job-sql-mirror-test-support.js';
 import { AsyncJobManager } from './async-job-manager.js';
 import { RuntimeAgentRegistry } from './runtime-registry.js';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 
-const tempDirs: string[] = [];
-const testNow = '2026-07-06T00:00:00.000Z';
-
-afterEach(() => {
-    for (const dir of tempDirs.splice(0)) {
-        rmSync(dir, { recursive: true, force: true });
-    }
-});
-
-function makeTempDbUrl(): string {
-    const dir = mkdtempSync(join(tmpdir(), 'mctrl-agent-job-db-'));
-    tempDirs.push(dir);
-    return `file:${join(dir, 'session.sqlite')}`;
-}
-
-async function withMirror<T>(run: (mirror: SqlAgentJobMirror) => Promise<T>): Promise<T> {
-    const client = createClient({ url: makeTempDbUrl() });
-    try {
-        const mirror = await SqlAgentJobMirror.create(client);
-        return await run(mirror);
-    } finally {
-        client.close();
-    }
-}
-
-async function insertSession(client: Client, sessionId: string): Promise<void> {
-    await client.execute({
-        sql:
-            'INSERT INTO sessions ' +
-            '(session_id, status, created_at, updated_at, last_activity_at) VALUES (?, ?, ?, ?, ?)',
-        args: [sessionId, 'running', testNow, testNow, testNow],
-    });
-}
+const testNow = agentJobTestNow;
+const withMirror = withAgentJobMirror;
+afterEach(cleanupAgentJobMirrorTests);
 
 describe('SqlAgentJobMirror', () => {
     it('reopens runtime agent refs with lifecycle transitions intact', async () => {
@@ -107,7 +77,7 @@ describe('SqlAgentJobMirror', () => {
     it('fails closed when reopened agent or job rows contain unknown statuses', async () => {
         // Given
         await withMirror(async (mirror) => {
-            await insertSession(mirror.client, 'bad-session');
+            await insertAgentJobTestSession(mirror, 'bad-session');
             await mirror.client.execute({
                 sql:
                     'INSERT INTO runtime_agents ' +
@@ -133,8 +103,8 @@ describe('SqlAgentJobMirror', () => {
     it('allows raw client cleanup to null deleted session references', async () => {
         // Given
         await withMirror(async (mirror) => {
-            await insertSession(mirror.client, 'parent-delete');
-            await insertSession(mirror.client, 'child-delete');
+            await insertAgentJobTestSession(mirror, 'parent-delete');
+            await insertAgentJobTestSession(mirror, 'child-delete');
             await mirror.client.batch([
                 {
                     sql:
@@ -193,58 +163,6 @@ describe('SqlAgentJobMirror', () => {
             );
             expect(agentRows.rows).toEqual([{ session_id: null }]);
             expect(jobRows.rows).toEqual([{ parent_session_id: null, child_session_id: null }]);
-        });
-    });
-
-    it('marks only synchronous child work as awaiting/subagent', async () => {
-        // Given
-        await withMirror(async (mirror) => {
-            // When: detached background child is mirrored first.
-            mirror.recordJob({
-                jobId: 'job-detached',
-                sessionId: 'child-bg',
-                parentSessionId: 'parent-session',
-                agentId: 'agent-bg',
-                blocking: false,
-                status: 'running',
-                startedAt: '2026-07-06T00:00:00.000Z',
-            });
-            await mirror.startSubagentWait({
-                parentSessionId: 'parent-session',
-                childSessionId: 'child-fg',
-                agentId: 'agent-fg',
-                mode: 'sync',
-            });
-            await mirror.flush();
-
-            // Then
-            const lifecycle = deriveSessionLifecycle({
-                terminalEvent: { kind: 'none' },
-                activeRuns: [],
-                pendingWaits: await mirror.loadPendingWaits('parent-session'),
-                backgroundJobs: await mirror.loadBackgroundJobsForParent('parent-session'),
-            });
-            expect(lifecycle).toEqual({
-                status: 'awaiting',
-                awaitingReason: 'subagent',
-                displayReason: 'awaiting subagent',
-                primaryWaitId: 'child-fg',
-            });
-
-            await mirror.resolveSubagentWait({
-                parentSessionId: 'parent-session',
-                childSessionId: 'child-fg',
-                status: 'completed',
-                output: 'foreground result',
-            });
-            await mirror.flush();
-            const afterResolve = deriveSessionLifecycle({
-                terminalEvent: { kind: 'none' },
-                activeRuns: [],
-                pendingWaits: await mirror.loadPendingWaits('parent-session'),
-                backgroundJobs: await mirror.loadBackgroundJobsForParent('parent-session'),
-            });
-            expect(afterResolve.status).toBe('idle');
         });
     });
 

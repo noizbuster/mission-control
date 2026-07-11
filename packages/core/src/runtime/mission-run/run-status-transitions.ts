@@ -1,9 +1,9 @@
 import type { RunStatus } from '@mission-control/protocol';
 
 export const ALLOWED_RUN_TRANSITIONS: Readonly<Record<RunStatus, readonly RunStatus[]>> = {
-    pending: ['running'],
+    pending: ['running', 'cancelled'],
     running: ['blocked', 'completed', 'failed', 'cancelled'],
-    blocked: ['running'],
+    blocked: ['running', 'cancelled'],
     completed: [],
     failed: [],
     cancelled: [],

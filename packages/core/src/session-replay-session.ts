@@ -13,11 +13,15 @@ export function deriveReplaySession(sessionId: string, events: readonly AgentEve
     let latestPendingApproval: ApprovalRecord | undefined;
     let sawRunLifecycle = false;
     let hasActiveRun = false;
+    let abortMarkerActive = false;
+    const activeRunIds = new Set<string>();
     for (const event of events) {
         if (event.approvalRecord?.state === 'pending') {
             latestPendingApproval = event.approvalRecord;
+        } else if (event.approvalRecord !== undefined) {
+            latestPendingApproval = undefined;
         }
-        if (clearsAwaiting(event)) {
+        if (clearsAwaiting(event, awaiting)) {
             awaiting = undefined;
         }
         if (event.type === 'run.started') {
@@ -40,10 +44,32 @@ export function deriveReplaySession(sessionId: string, events: readonly AgentEve
         if (event.type === 'session.stopped') {
             stoppedAt = event.timestamp;
         }
+        if (event.type === 'session.abort.completed') {
+            abortMarkerActive = true;
+        }
+        if (event.type === 'run.started') {
+            abortMarkerActive = false;
+            if (event.run?.runId !== undefined) {
+                activeRunIds.add(event.run.runId);
+            }
+        }
+        if (isRunSettlement(event) && event.run?.runId !== undefined) {
+            activeRunIds.delete(event.run.runId);
+        }
     }
+    const status =
+        stoppedAt !== undefined
+            ? 'stopped'
+            : awaiting !== undefined
+              ? 'awaiting'
+              : abortMarkerActive
+                ? activeRunIds.size === 0
+                    ? 'idle'
+                    : 'running'
+                : replaySessionStatus({ stoppedAt, awaiting, sawRunLifecycle, hasActiveRun });
     return {
         id: sessionId,
-        status: replaySessionStatus({ stoppedAt, awaiting, sawRunLifecycle, hasActiveRun }),
+        status,
         startedAt: sessionStarted?.timestamp ?? new Date(0).toISOString(),
         ...(stoppedAt === undefined && awaiting !== undefined ? { awaiting } : {}),
         ...(stoppedAt !== undefined ? { stoppedAt } : {}),
@@ -98,7 +124,7 @@ function userInputAwaitingDetails(run: RunCoordinatorEventMetadata | undefined):
     };
 }
 
-function clearsAwaiting(event: AgentEvent): boolean {
+function clearsAwaiting(event: AgentEvent, awaiting: SessionAwaitingDetails | undefined): boolean {
     switch (event.type) {
         case 'approval.updated':
         case 'approval.resumed':
@@ -107,6 +133,20 @@ function clearsAwaiting(event: AgentEvent): boolean {
         case 'run.failed':
         case 'run.interrupted':
         case 'session.stopped':
+            return true;
+        case 'prompt.cancelled':
+            return awaiting?.reason === 'user_input' && awaiting.source.inputId === event.transcript?.inputId;
+        default:
+            return false;
+    }
+}
+
+function isRunSettlement(event: AgentEvent): boolean {
+    switch (event.type) {
+        case 'run.completed':
+        case 'run.failed':
+        case 'run.interrupted':
+        case 'run.idle':
             return true;
         default:
             return false;

@@ -13,6 +13,7 @@ export function projectRunCoordinatorAdmission(
 ): RunCoordinatorAdmissionProjection {
     const admitted = new Map<string, PromptInputState>();
     const promotedIds = new Set<string>();
+    const cancelledIds = new Set<string>();
 
     for (const event of events) {
         if (event.sessionId !== sessionId) {
@@ -25,9 +26,14 @@ export function projectRunCoordinatorAdmission(
         if (event.type === 'prompt.promoted' && event.transcript?.inputId !== undefined) {
             promotedIds.add(event.transcript.inputId);
         }
+        if (event.type === 'prompt.cancelled' && event.transcript?.inputId !== undefined) {
+            cancelledIds.add(event.transcript.inputId);
+        }
     }
 
-    const pendingInputs = [...admitted.values()].filter((input) => !promotedIds.has(input.inputId));
+    const pendingInputs = [...admitted.values()].filter(
+        (input) => !promotedIds.has(input.inputId) && !cancelledIds.has(input.inputId),
+    );
     return {
         pendingInputs,
         steeringInputs: pendingInputs.filter((input) => input.delivery === 'steer'),

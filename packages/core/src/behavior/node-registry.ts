@@ -63,6 +63,7 @@ export type AbgNodeRunContext = {
      * normal control flow).
      */
     readonly abortSignal?: AbortSignal;
+    readonly controlEpoch?: import('../runtime/session-control-cancellation.js').SessionControlEpoch;
     /**
      * Per-run cost ledger (ABG §11.4). When present, `LLMActor` prices each turn's usage
      * against the configured `PricingTable` and emits `policy.budget.accumulated` /

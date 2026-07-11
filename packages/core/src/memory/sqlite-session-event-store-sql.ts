@@ -137,8 +137,18 @@ export async function updateSqliteSessionAfterAppend(
             createdAt: input.activityAt,
         });
     }
-    if (clearsWait || input.event.type === 'session.stopped') {
+    if (isCancelledApproval(input.event)) {
+        await cancelApprovalWaits({ client: input.client, sessionId: input.sessionId, cancelledAt: input.activityAt });
+    } else if (clearsPendingApprovalWait(input.event) || input.event.type === 'session.stopped') {
         await resolveApprovalWaits({ client: input.client, sessionId: input.sessionId, resolvedAt: input.activityAt });
+    }
+    if (input.event.type === 'prompt.cancelled' && input.event.transcript?.inputId !== undefined) {
+        await cancelInputWait({
+            client: input.client,
+            sessionId: input.sessionId,
+            inputId: input.event.transcript.inputId,
+            cancelledAt: input.activityAt,
+        });
     }
 }
 
@@ -178,6 +188,10 @@ function clearsPendingApprovalWait(event: AgentEvent): boolean {
         default:
             return false;
     }
+}
+
+function isCancelledApproval(event: AgentEvent): boolean {
+    return event.type === 'approval.updated' && event.approvalRecord?.state === 'cancelled';
 }
 
 function approvalWaitId(event: AgentEvent): string | null {
@@ -224,5 +238,23 @@ async function resolveApprovalWaits(input: SessionSqlInput & { readonly resolved
     await input.client.execute({
         sql: 'UPDATE session_awaits SET status = ?, resolved_at = ? WHERE session_id = ? AND reason = ? AND status = ?',
         args: ['resolved', input.resolvedAt, input.sessionId, 'approval', 'pending'],
+    });
+}
+
+async function cancelApprovalWaits(input: SessionSqlInput & { readonly cancelledAt: string }) {
+    await input.client.execute({
+        sql: 'UPDATE session_awaits SET status = ?, resolved_at = NULL, cancelled_at = ? WHERE session_id = ? AND reason = ? AND status = ?',
+        args: ['cancelled', input.cancelledAt, input.sessionId, 'approval', 'pending'],
+    });
+}
+
+async function cancelInputWait(input: SessionSqlInput & { readonly inputId: string; readonly cancelledAt: string }) {
+    await input.client.execute({
+        sql: `
+            UPDATE session_awaits
+            SET status = ?, resolved_at = NULL, cancelled_at = ?
+            WHERE session_id = ? AND source_kind = ? AND source_id = ? AND status = ?
+        `,
+        args: ['cancelled', input.cancelledAt, input.sessionId, 'operator', input.inputId, 'pending'],
     });
 }

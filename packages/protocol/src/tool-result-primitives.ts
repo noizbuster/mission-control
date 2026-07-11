@@ -7,6 +7,7 @@ export const PROTOCOL_ERROR_CODES = [
     'provider_rate_limited',
     'provider_timeout',
     'provider_aborted',
+    'operator_aborted',
     'provider_context_overflow',
     'tool_failed',
     'schema_invalid',

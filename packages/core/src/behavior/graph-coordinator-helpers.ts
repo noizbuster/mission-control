@@ -132,6 +132,7 @@ export function runContext(
         ...(state.budgetLedger !== undefined ? { budgetLedger: state.budgetLedger } : {}),
         ...(input.toolRegistry !== undefined ? { toolRegistry: input.toolRegistry } : {}),
         ...(input.abortSignal !== undefined ? { abortSignal: input.abortSignal } : {}),
+        ...(input.controlEpoch !== undefined ? { controlEpoch: input.controlEpoch } : {}),
         ...(input.graphInput?.events !== undefined ? { observedEvents: input.graphInput.events } : {}),
         ...(input.graphInput?.input !== undefined ? { input: input.graphInput.input } : {}),
         // Lets a node forward a tool's own events (file.diff.applied, ...) into the graph stream —
@@ -161,6 +162,7 @@ export function runContext(
         readonly budgetLedger?: CostLedger;
         readonly toolRegistry?: ToolRegistry;
         readonly abortSignal?: AbortSignal;
+        readonly controlEpoch?: import('../runtime/session-control-cancellation.js').SessionControlEpoch;
         readonly observedEvents?: readonly AbgObservedGraphEvent[];
         readonly input?: Readonly<Record<string, unknown>>;
         readonly emitEvent: (event: AgentEvent) => void;

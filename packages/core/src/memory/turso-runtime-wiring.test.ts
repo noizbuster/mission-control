@@ -5,6 +5,7 @@ import { TursoPersistentStore } from './turso-persistent-store.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const stubStore: PersistentMemoryStore = {
     get: async () => undefined,
@@ -62,16 +63,19 @@ describe('createPersistentStore (runtime wiring)', () => {
             capturedUrl = url;
             return stubStore;
         };
-        const dataDir = join(tmpdir(), 'mctrl-data');
+        const dataDir = mkdtempSync(join(tmpdir(), 'mctrl-data-'));
+        tmpDirs.push(dataDir);
         // When resolving the persistent store
         await createPersistentStore(dataDir, { probeAvailability: async () => true, openStore });
         // Then the opener received the embedded file URL under the data dir
-        expect(capturedUrl).toBe(`file:${join(dataDir, 'memory.db')}`);
+        expect(capturedUrl).toBe(pathToFileURL(join(dataDir, 'memory.db')).href);
     });
 
     it('falls back silently when the availability probe throws', async () => {
         // Given a probe that throws
-        const store = await createPersistentStore('/ignored', {
+        const dataDir = mkdtempSync(join(tmpdir(), 'mctrl-turso-open-failure-'));
+        tmpDirs.push(dataDir);
+        const store = await createPersistentStore(dataDir, {
             probeAvailability: async () => {
                 throw new Error('probe failed');
             },
@@ -85,7 +89,9 @@ describe('createPersistentStore (runtime wiring)', () => {
 
     it('falls back silently when opening the store throws', async () => {
         // Given a successful probe but an opener that throws
-        const store = await createPersistentStore('/ignored', {
+        const dataDir = mkdtempSync(join(tmpdir(), 'mctrl-turso-open-failure-'));
+        tmpDirs.push(dataDir);
+        const store = await createPersistentStore(dataDir, {
             probeAvailability: async () => true,
             openStore: async () => {
                 throw new Error('open failed');

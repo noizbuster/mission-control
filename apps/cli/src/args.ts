@@ -1,4 +1,4 @@
-import type { ModelProviderSelection } from '@mission-control/protocol';
+import type { ModelProviderSelection, SessionStopScope } from '@mission-control/protocol';
 import { parseAuthArgs } from './auth-args.js';
 import { type McpKeyValueArg, type McpScope, parseMcpArgs } from './mcp-args.js';
 import { parseGraphArgs, parseRunArgs } from './run-args.js';
@@ -18,6 +18,7 @@ export type CliCommand =
     | 'session-export'
     | 'session-import'
     | 'session-delete'
+    | 'session-stop'
     | 'mcp-add'
     | 'mcp-list'
     | 'mcp-remove'
@@ -67,6 +68,9 @@ export type CliArgs = {
      */
     readonly engine?: 'graph';
     readonly filePath?: string;
+    readonly expectedTreeToken?: string;
+    readonly sessionStopScope?: SessionStopScope;
+    readonly sessionStopTimeoutMs?: number;
     readonly modelProviderSelection?: ModelProviderSelection;
     readonly authProviderID?: string;
     readonly authModelID?: string;

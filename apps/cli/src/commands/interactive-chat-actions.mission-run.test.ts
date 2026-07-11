@@ -8,7 +8,7 @@ import {
     WorkflowRegistry,
 } from '@mission-control/core';
 import type { ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CodingActionContext } from './interactive-chat-actions.js';
 import { runChatAction } from './interactive-chat-actions.js';
 import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
@@ -20,6 +20,7 @@ const currentSelection: ModelProviderSelection = { providerID: 'local', modelID:
 const tempRoots: string[] = [];
 
 afterEach(async () => {
+    vi.unstubAllEnvs();
     await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -217,6 +218,7 @@ async function makeStartedRuntime(): Promise<AgentRuntime> {
 async function makeWorkspace(): Promise<string> {
     const root = await mkdtemp(join(tmpdir(), 'wf-mission-run-'));
     await mkdir(join(root, '.omo'), { recursive: true });
+    vi.stubEnv('MCTRL_DATA_DIR', join(root, 'data'));
     tempRoots.push(root);
     return root;
 }

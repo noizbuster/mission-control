@@ -415,6 +415,49 @@ export {
     isInternalSchemeInput,
     parseInternalSchemeUrl,
 } from './scheme.js';
+export {
+    SESSION_OWNER_CONTROL_ERROR_CODES,
+    SESSION_OWNER_CONTROL_PROTOCOL_VERSION,
+    SESSION_OWNER_CONTROL_TOKEN_KIND,
+    SessionOwnerControlAcquireRequestSchema,
+    SessionOwnerControlAcquireResultSchema,
+    type SessionOwnerControlErrorCode,
+    SessionOwnerControlErrorCodeSchema,
+    SessionOwnerControlErrorResponseSchema,
+    SessionOwnerControlReleaseRequestSchema,
+    SessionOwnerControlReleaseResultSchema,
+    type SessionOwnerControlRequest,
+    SessionOwnerControlRequestSchema,
+    type SessionOwnerControlResponse,
+    SessionOwnerControlResponseSchema,
+    SessionOwnerControlStopRequestSchema,
+    SessionOwnerControlSuccessResponseSchema,
+    type SessionOwnerControlToken,
+    SessionOwnerControlTokenSchema,
+    type SessionStopReceiptContract,
+    SessionStopReceiptSchema,
+} from './session-owner-control.js';
+export {
+    SESSION_STOP_BARRIER_KINDS,
+    SESSION_STOP_ERROR_CODES,
+    SESSION_STOP_OUTCOMES,
+    SESSION_STOP_REASONS,
+    SESSION_STOP_SCOPES,
+    type SessionAbortAffectedCounts,
+    SessionAbortAffectedCountsSchema,
+    type SessionAbortCompletedMetadata,
+    SessionAbortCompletedMetadataSchema,
+    type SessionStopBarrierKind,
+    SessionStopBarrierKindSchema,
+    type SessionStopErrorCode,
+    SessionStopErrorCodeSchema,
+    type SessionStopOutcome,
+    SessionStopOutcomeSchema,
+    type SessionStopReason,
+    SessionStopReasonSchema,
+    type SessionStopScope,
+    SessionStopScopeSchema,
+} from './session-stop.js';
 export * from './session-tree.js';
 export {
     type SshHostConfig,
@@ -423,6 +466,8 @@ export {
     SshHostsConfigSchema,
 } from './ssh-config.js';
 export {
+    type PromptCancelledEventMetadata,
+    PromptCancelledEventMetadataSchema,
     TRANSCRIPT_DELIVERY_MODES,
     TRANSCRIPT_VISIBILITIES,
     type TranscriptDeliveryMode,

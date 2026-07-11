@@ -1,7 +1,8 @@
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import { JsonRenderer, PlainRenderer, TuiRenderer } from './renderers.js';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 const TS = '2026-07-05T00:00:00.000Z';
 
@@ -199,5 +200,7 @@ function dumpEvidence(
     lines.push('');
     lines.push('== getOutput() rendered (printable) ==');
     lines.push(output);
-    writeFileSync('.omo/evidence/task-7-opencode-style-block-output.txt', `${lines.join('\n')}\n`);
+    const evidencePath = '.omo/evidence/task-7-opencode-style-block-output.txt';
+    mkdirSync(dirname(evidencePath), { recursive: true });
+    writeFileSync(evidencePath, `${lines.join('\n')}\n`);
 }

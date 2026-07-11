@@ -67,7 +67,8 @@ try {
         provider,
     });
 
-    const blockedReplayOutput = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
+    const blockedReplayOutput = (await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl'])))
+        .stdout;
     const blockedReplayDiagnostics = diagnosticRecords(blockedReplayOutput);
     if (blockedReplayDiagnostics.length > 0) {
         throw new Error(`blocked replay diagnostics present: ${JSON.stringify(blockedReplayDiagnostics)}`);
@@ -96,7 +97,7 @@ try {
         provider,
     });
 
-    const replayOutput = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
+    const replayOutput = (await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']))).stdout;
     const replayDiagnostics = diagnosticRecords(replayOutput);
     if (replayDiagnostics.length > 0) {
         throw new Error(`replay diagnostics present: ${JSON.stringify(replayDiagnostics)}`);

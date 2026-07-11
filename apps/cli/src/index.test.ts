@@ -1,9 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { createHelpText, getVersion } from './index.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createHelpText, getVersion, runCli, writeCliCommandResult } from './index.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 describe('CLI entrypoint', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        process.exitCode = undefined;
+    });
+
     it('entrypoint exposes shebang and version/help output', () => {
         const source = readFileSync(join(process.cwd(), 'apps/cli/src/index.tsx'), 'utf8');
         const help = createHelpText();
@@ -41,7 +46,9 @@ describe('CLI entrypoint', () => {
         expect(help).toContain('mc session export session_demo /tmp/session_demo.mctrl-session.json');
         expect(help).toContain('mc session import /tmp/session_demo.mctrl-session.json');
         expect(help).toContain('mc session replay session_demo --jsonl');
+        expect(help).toContain('mc session stop session_demo [--only | --child-only] [--timeout 15s]');
         expect(help).toContain('mc session delete session_demo');
+        expect(help).toContain('mc session delete session_demo --expected-tree-token <sha256>');
         expect(help).toContain('--version');
         expect(help).toContain('--help');
         expect(help).toContain('mc --no-tui --provider local --model local-echo');
@@ -58,5 +65,35 @@ describe('CLI entrypoint', () => {
         expect(help).toContain('local/local-echo#fast');
         expect(help).toContain('$<skill> [args]');
         expect(help).toContain('$ skill invocations load real SKILL.md skills inside Mission Control');
+    });
+
+    it('adds exactly one line feed to a newline-free command result', () => {
+        // Given
+        const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        // When
+        writeCliCommandResult({ stdout: 'one line', stderr: '', exitCode: 1 });
+
+        // Then
+        expect(stdout).toHaveBeenCalledExactlyOnceWith('one line\n');
+        expect(stderr).not.toHaveBeenCalled();
+        expect(process.exitCode).toBe(1);
+    });
+
+    it('writes invalid stop flags only to usage stderr with exit 2', async () => {
+        // Given
+        const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        // When
+        await runCli(['session', 'stop', 'session_root', '--only', '--child-only']);
+
+        // Then
+        expect(stdout).not.toHaveBeenCalled();
+        expect(stderr).toHaveBeenCalledExactlyOnceWith(
+            'Usage: mc session stop <session-id> [--only | --child-only] [--timeout <duration>]\n',
+        );
+        expect(process.exitCode).toBe(2);
     });
 });

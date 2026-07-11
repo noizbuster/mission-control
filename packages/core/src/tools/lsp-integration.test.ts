@@ -27,11 +27,12 @@ import { decodeLspFrame, encodeLspMessage, StdioLspClient } from './lsp-stdio-cl
 import type { LspDiagnostic } from './lsp-tool.js';
 import type { ChildProcess } from 'node:child_process';
 import { spawn, spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const SERVER_AVAILABLE = detectServer();
+const SERVER_AVAILABLE = detectServer() && existsSync(join(process.cwd(), 'node_modules/typescript/lib/tsserver.js'));
 const workspaces: string[] = [];
 
 const TEST_TIMEOUT_MS = 30_000;

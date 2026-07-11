@@ -80,6 +80,8 @@ export function createChildGraphSpawnFn(
             systemPrompt: context.systemPrompt,
             now: () => new Date().toISOString(),
             sessionId: context.sessionId,
+            signal: context.signal,
+            ...(context.controlEpoch !== undefined ? { controlEpoch: context.controlEpoch } : {}),
             ...(deps.summaryLimit !== undefined ? { summaryLimit: deps.summaryLimit } : {}),
             ...(context.hostCallbacks !== undefined ? { hostCallbacks: context.hostCallbacks } : {}),
         });

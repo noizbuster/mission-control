@@ -21,9 +21,12 @@ import {
     type TaskRetryState,
     type WorkflowSpec,
 } from '@mission-control/protocol';
+import type { SessionControlAttachment, SessionControlHost } from '../session-control-host.js';
 import { readMission, updateMission } from './mission-store.js';
 import { createRun, type RunPatch, updateRunStatus } from './run-store.js';
 import { randomUUID } from 'node:crypto';
+
+const missionRunAttachments = new Map<string, SessionControlAttachment>();
 
 /**
  * Optional inputs for completing a Run. `cost` replaces the Run's accumulated
@@ -69,7 +72,12 @@ export function materializeMission(workflowSpec: WorkflowSpec): Mission {
  * the initiating `prompt` (so `/retry` can re-invoke it), and transitions the
  * parent Mission to `active`.
  */
-export async function startRun(root: string, missionId: string, prompt: string): Promise<Run> {
+export async function startRun(
+    root: string,
+    missionId: string,
+    prompt: string,
+    options: { readonly sessionControlHost?: SessionControlHost } = {},
+): Promise<Run> {
     const mission = await readMission(root, missionId);
     const sessionId = randomUUID();
 
@@ -80,13 +88,22 @@ export async function startRun(root: string, missionId: string, prompt: string):
         sessionId,
         prompt,
     });
-    await createRun(root, pendingRun);
-
-    const runningRun = await updateRunStatus(root, pendingRun.id, 'running');
-
-    await updateMission(root, mission.id, { status: 'active' });
-
-    return runningRun;
+    const attachment = await options.sessionControlHost?.attachEntity({
+        sessionId,
+        kind: 'mission_run',
+        entityId: pendingRun.id,
+        handles: [],
+    });
+    try {
+        await createRun(root, pendingRun);
+        const runningRun = await updateRunStatus(root, pendingRun.id, 'running');
+        await updateMission(root, mission.id, { status: 'active' });
+        if (attachment !== undefined) missionRunAttachments.set(pendingRun.id, attachment);
+        return runningRun;
+    } catch (error: unknown) {
+        await attachment?.detach();
+        throw error;
+    }
 }
 
 /**
@@ -101,7 +118,11 @@ export async function completeRun(root: string, runId: string, result: RunComple
         ...(result.childSessionIds !== undefined ? { childSessionIds: result.childSessionIds } : {}),
         ...(result.taskRetryState !== undefined ? { taskRetryState: result.taskRetryState } : {}),
     };
-    return updateRunStatus(root, runId, 'completed', patch);
+    try {
+        return await updateRunStatus(root, runId, 'completed', patch);
+    } finally {
+        await detachMissionRun(runId);
+    }
 }
 
 /**
@@ -122,7 +143,21 @@ export async function failRun(
         ...(result.childSessionIds !== undefined ? { childSessionIds: result.childSessionIds } : {}),
         ...(result.taskRetryState !== undefined ? { taskRetryState: result.taskRetryState } : {}),
     };
-    return updateRunStatus(root, runId, 'failed', patch);
+    try {
+        return await updateRunStatus(root, runId, 'failed', patch);
+    } finally {
+        await detachMissionRun(runId);
+    }
+}
+
+async function detachMissionRun(runId: string): Promise<void> {
+    const attachment = missionRunAttachments.get(runId);
+    missionRunAttachments.delete(runId);
+    await attachment?.detach();
+}
+
+export async function releaseMissionRunControlAttachment(runId: string): Promise<void> {
+    await detachMissionRun(runId);
 }
 
 function deriveCapabilities(workflowSpec: WorkflowSpec): MissionCapabilities {

@@ -14,7 +14,7 @@ export async function replayedTypes(sessionId: string): Promise<readonly string[
 
 export async function replayedEvents(sessionId: string): Promise<readonly AgentEvent[]> {
     const output = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
-    return output
+    return output.stdout
         .split(/\r?\n/)
         .filter((line) => line.trim().length > 0)
         .flatMap((line) => replayEventFromUnknown(JSON.parse(line)));

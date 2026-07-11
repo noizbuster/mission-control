@@ -111,6 +111,10 @@ export class MissionControlServices {
         return this.sqlServices;
     }
 
+    getSessionControlHost() {
+        return this.sqlServices.sessionControlHost;
+    }
+
     getOmoRoot(): string {
         return this.omoRoot;
     }
@@ -181,7 +185,7 @@ export class MissionControlServices {
         this.disposed = true;
         for (const job of this.sqlServices.jobManager.listJobs()) {
             if (job.status === 'queued' || job.status === 'running') {
-                this.sqlServices.jobManager.cancelJob(job.jobId);
+                this.sqlServices.jobManager.cancelJob(job.jobId, 'operator_aborted');
             }
         }
         for (const ref of this.sqlServices.runtimeRegistry.listVisibleTo(MAIN_AGENT_ID)) {

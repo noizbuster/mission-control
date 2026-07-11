@@ -4,6 +4,7 @@ import {
     createDeterministicProvider,
     missionControlDataDirEnvKey,
     type ProviderAdapter,
+    ProviderTurnError,
     readLocalSessionReplay,
 } from '@mission-control/core';
 import type { ProviderStreamChunk } from '@mission-control/protocol';
@@ -67,8 +68,8 @@ describe('interactive coding-agent redaction', () => {
         // Then
         expect(output).toContain('[REDACTED_CREDENTIAL]');
         expect(output).not.toContain(secret);
-        expect(replay).toContain('[REDACTED_CREDENTIAL]');
-        expect(replay).not.toContain(secret);
+        expect(replay.stdout).toContain('[REDACTED_CREDENTIAL]');
+        expect(replay.stdout).not.toContain(secret);
     });
 
     // Exercises the graph path: it asserts the pre-approval tool-arg PREVIEW is rendered and redacted
@@ -162,7 +163,7 @@ describe('interactive coding-agent redaction', () => {
         // Then
         const chat = chatOutput.getOutput();
         expect(chat).toContain('Error:');
-        expect(storedReplay.projection.envelopes.some((envelope) => envelope.event.type === 'run.failed')).toBe(true);
+        expect(storedReplay.projection.envelopes.some((envelope) => envelope.event.type === 'task.failed')).toBe(true);
         expect(JSON.stringify({ chat, replay, storedReplay })).toContain('[REDACTED_CREDENTIAL]');
         expect(JSON.stringify({ chat, replay, storedReplay })).not.toContain(secret);
     });
@@ -208,7 +209,13 @@ function rejectingProviderStream(message: string): AsyncIterable<ProviderStreamC
         [Symbol.asyncIterator]() {
             return {
                 next(): Promise<IteratorResult<ProviderStreamChunk>> {
-                    return Promise.reject(new Error(message));
+                    return Promise.reject(
+                        new ProviderTurnError({
+                            code: 'provider_auth_failed',
+                            message,
+                            retryable: false,
+                        }),
+                    );
                 },
             };
         },

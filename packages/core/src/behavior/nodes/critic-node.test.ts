@@ -39,8 +39,8 @@ describe('runCriticNode', () => {
         }
         const { success, evaluated } = collect(signals);
         expect(success?.type).toBe('success');
-        expect((success?.result as { passed: boolean }).passed).toBe(true);
-        expect((evaluated?.event.payload as { passed: boolean }).passed).toBe(true);
+        expect((success!.result as { passed: boolean }).passed).toBe(true);
+        expect((evaluated!.event.payload as { passed: boolean }).passed).toBe(true);
         expect(blackboard.get('critic.passed')).toBe(true);
     });
 

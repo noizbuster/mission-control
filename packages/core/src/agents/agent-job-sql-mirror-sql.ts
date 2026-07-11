@@ -108,3 +108,14 @@ export const createAgentJobIndexesSql = [
     'CREATE INDEX IF NOT EXISTS session_awaits_child_session_idx ON session_awaits (child_session_id)',
     'CREATE INDEX IF NOT EXISTS session_awaits_source_idx ON session_awaits (source_kind, source_id)',
 ] as const;
+
+export async function initializeAgentJobSchema(client: Client): Promise<void> {
+    await client.execute(createPublicSessionsSql);
+    await client.execute(createRuntimeAgentsSql);
+    await client.execute(createAsyncJobsSql);
+    await client.execute(createSessionAwaitsSql);
+    await client.execute(createSessionRelationsSql);
+    for (const statement of createAgentJobIndexesSql) await client.execute(statement);
+}
+
+import type { Client } from '@libsql/client';

@@ -1,4 +1,5 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
 import { ProviderTurnError } from './provider-turn-types.js';
 
 export type ProviderChunkIterator = AsyncIterator<ProviderStreamChunk>;
@@ -10,6 +11,7 @@ export type NextProviderChunkInput = {
     readonly signal: AbortSignal;
     readonly timeoutMs: number;
     readonly onTimeout?: () => Promise<void> | void;
+    readonly controlEpoch?: SessionControlEpoch;
 };
 
 export function nextProviderChunk(input: NextProviderChunkInput): Promise<IteratorResult<ProviderStreamChunk>> {

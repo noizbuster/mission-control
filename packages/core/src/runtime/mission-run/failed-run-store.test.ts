@@ -30,28 +30,22 @@ function writeLegacyRun(root: string, runId: string, contents: string): void {
 }
 
 describe('findMostRecentFailedRun', () => {
-    it('returns undefined when legacy failed run JSON is corrupt', async () => {
+    it('fails closed when legacy failed run JSON is corrupt', async () => {
         // Given
         const root = makeTempRoot();
         writeLegacyRun(root, 'invalid-json', '{ broken');
 
         // When
-        const result = await findMostRecentFailedRun(root);
-
-        // Then
-        expect(result).toBeUndefined();
+        await expect(findMostRecentFailedRun(root)).rejects.toMatchObject({ code: 'legacy_run_corrupt' });
     });
 
-    it('returns undefined when legacy failed run schema is invalid', async () => {
+    it('fails closed when legacy failed run schema is invalid', async () => {
         // Given
         const root = makeTempRoot();
         writeLegacyRun(root, 'invalid-schema', JSON.stringify({ id: 'invalid-schema', status: 'failed' }));
 
         // When
-        const result = await findMostRecentFailedRun(root);
-
-        // Then
-        expect(result).toBeUndefined();
+        await expect(findMostRecentFailedRun(root)).rejects.toMatchObject({ code: 'legacy_run_corrupt' });
     });
 
     it('rethrows unexpected parser errors when scanning legacy failed runs', async () => {

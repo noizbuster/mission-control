@@ -1,15 +1,14 @@
+import { sessionStoreDatabasePath } from '../runtime/session-store-identity.js';
 import { resolveMissionControlDataDir } from './data-dir.js';
 import { JsonlSessionEventStoreError } from './jsonl-session-event-store.js';
-import { join } from 'node:path';
-
-const LOCAL_SESSION_DB_FILENAME = 'memory.db';
+import { pathToFileURL } from 'node:url';
 
 export function localSessionDbPath(dataDir = resolveMissionControlDataDir()): string {
-    return join(dataDir, LOCAL_SESSION_DB_FILENAME);
+    return sessionStoreDatabasePath(dataDir);
 }
 
 export function localSessionDbUrl(dataDir = resolveMissionControlDataDir()): string {
-    return `file:${localSessionDbPath(dataDir)}`;
+    return pathToFileURL(localSessionDbPath(dataDir)).href;
 }
 
 export function parseLocalSessionId(sessionId: string): string {

@@ -1,4 +1,21 @@
 import type { CliArgs } from './args.js';
+import { parseCliSessionId } from './commands/session-id.js';
+
+export const SESSION_STOP_USAGE = 'Usage: mc session stop <session-id> [--only | --child-only] [--timeout <duration>]';
+export const SESSION_DELETE_USAGE = 'Usage: mc session delete <session-id> [--expected-tree-token <sha256>]';
+
+const STOP_TIMEOUT_PATTERN = /^(0|[1-9]\d*)(ms|s|m)$/;
+const EXPECTED_TREE_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
+const DEFAULT_SESSION_STOP_TIMEOUT_MS = 15_000;
+const MIN_SESSION_STOP_TIMEOUT_MS = 100;
+const MAX_SESSION_STOP_TIMEOUT_MS = 300_000;
+
+export class SessionCliUsageError extends Error {
+    constructor(usage: string) {
+        super(usage);
+        this.name = 'SessionCliUsageError';
+    }
+}
 
 export function parseSessionArgs(argv: readonly string[]): CliArgs {
     const command = argv[0];
@@ -64,17 +81,83 @@ export function parseSessionArgs(argv: readonly string[]): CliArgs {
             if (sessionId === undefined) {
                 throw new Error('session delete requires a session id');
             }
-            if (argv[2] !== undefined) {
+            if (argv[2] !== undefined && argv[2] !== '--expected-tree-token') {
                 throw new Error(`Unsupported session delete argument: ${argv[2]}`);
+            }
+            const expectedTreeToken = argv[3];
+            if (
+                argv[2] === '--expected-tree-token' &&
+                (expectedTreeToken === undefined ||
+                    !EXPECTED_TREE_TOKEN_PATTERN.test(expectedTreeToken) ||
+                    argv[4] !== undefined)
+            ) {
+                throw new SessionCliUsageError(SESSION_DELETE_USAGE);
             }
             return {
                 ...createSessionArgs('session-delete'),
                 sessionId,
+                ...(expectedTreeToken !== undefined ? { expectedTreeToken } : {}),
             };
         }
+        case 'stop':
+            return parseSessionStopArgs(argv);
         default:
             throw new Error(`Unsupported session command: ${command ?? ''}`);
     }
+}
+
+function parseSessionStopArgs(argv: readonly string[]): CliArgs {
+    const sessionId = argv[1];
+    if (sessionId === undefined || parseCliSessionId(sessionId) === undefined) {
+        throw new SessionCliUsageError(SESSION_STOP_USAGE);
+    }
+    let scope: 'tree' | 'only' | 'children' = 'tree';
+    let scopeSelected = false;
+    let timeoutMs = DEFAULT_SESSION_STOP_TIMEOUT_MS;
+    let timeoutSelected = false;
+    for (let index = 2; index < argv.length; index += 1) {
+        const argument = argv[index];
+        if (argument === '--only' || argument === '--child-only') {
+            if (scopeSelected) throw new SessionCliUsageError(SESSION_STOP_USAGE);
+            scope = argument === '--only' ? 'only' : 'children';
+            scopeSelected = true;
+            continue;
+        }
+        if (argument === '--timeout') {
+            if (timeoutSelected) throw new SessionCliUsageError(SESSION_STOP_USAGE);
+            const duration = argv[index + 1];
+            timeoutMs = parseSessionStopTimeout(duration);
+            timeoutSelected = true;
+            index += 1;
+            continue;
+        }
+        throw new SessionCliUsageError(SESSION_STOP_USAGE);
+    }
+    return {
+        ...createSessionArgs('session-stop'),
+        sessionId,
+        sessionStopScope: scope,
+        sessionStopTimeoutMs: timeoutMs,
+    };
+}
+
+function parseSessionStopTimeout(duration: string | undefined): number {
+    const match = duration?.match(STOP_TIMEOUT_PATTERN);
+    const magnitudeText = match?.[1];
+    const unit = match?.[2];
+    if (magnitudeText === undefined || unit === undefined) throw new SessionCliUsageError(SESSION_STOP_USAGE);
+    const magnitude = Number(magnitudeText);
+    const multiplier = unit === 'ms' ? 1 : unit === 's' ? 1_000 : 60_000;
+    const timeoutMs = magnitude * multiplier;
+    if (
+        !Number.isSafeInteger(magnitude) ||
+        !Number.isSafeInteger(timeoutMs) ||
+        timeoutMs < MIN_SESSION_STOP_TIMEOUT_MS ||
+        timeoutMs > MAX_SESSION_STOP_TIMEOUT_MS
+    ) {
+        throw new SessionCliUsageError(SESSION_STOP_USAGE);
+    }
+    return timeoutMs;
 }
 
 function createSessionArgs(command: CliArgs['command']): CliArgs {

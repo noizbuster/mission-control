@@ -14,11 +14,13 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::shell_cancellation::ShellCancellationRegistry;
 use anyhow::{Result, anyhow};
 use brush_builtins::{BuiltinSet, default_builtins};
 use brush_core::{
     ExecutionParameters, ProfileLoadBehavior, RcLoadBehavior, Shell as BrushShell, ShellValue,
-    ShellVariable, SourceInfo, openfiles::{OpenFile, OpenFiles},
+    ShellVariable, SourceInfo,
+    openfiles::{OpenFile, OpenFiles},
 };
 use tokio::sync::Mutex;
 
@@ -34,12 +36,14 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct ShellSessionStore {
     sessions: Mutex<HashMap<String, Arc<Mutex<BrushShell>>>>,
+    cancellations: ShellCancellationRegistry,
 }
 
 impl ShellSessionStore {
     pub fn new() -> Self {
         Self {
             sessions: Mutex::new(HashMap::new()),
+            cancellations: ShellCancellationRegistry::new(),
         }
     }
 
@@ -55,11 +59,29 @@ impl ShellSessionStore {
         env: Option<&HashMap<String, String>>,
         timeout: Duration,
     ) -> Result<ShellRunOutcome> {
-        let shell = self.get_or_create(session_id, env).await?;
-        if let Some(cwd) = cwd {
-            self.apply_cwd(&shell, cwd).await?;
+        let cancellation = self.cancellations.register(session_id).await?;
+        let result = async {
+            let shell = self.get_or_create(session_id, env).await?;
+            if let Some(cwd) = cwd {
+                self.apply_cwd(&shell, cwd).await?;
+            }
+            tokio::select! {
+                result = run_captured(&shell, command, timeout) => result,
+                () = cancellation.notified() => Ok(ShellRunOutcome {
+                    exit_code: None,
+                    output: String::new(),
+                    timed_out: false,
+                    interrupted: true,
+                }),
+            }
         }
-        run_captured(&shell, command, timeout).await
+        .await;
+        self.cancellations.finish(session_id).await;
+        result
+    }
+
+    pub async fn cancel(&self, session_id: &str) -> bool {
+        self.cancellations.cancel(session_id).await
     }
 
     async fn get_or_create(
@@ -117,6 +139,7 @@ pub struct ShellRunOutcome {
     pub exit_code: Option<i32>,
     pub output: String,
     pub timed_out: bool,
+    pub interrupted: bool,
 }
 
 async fn create_brush_shell(env: Option<&HashMap<String, String>>) -> Result<BrushShell> {
@@ -187,8 +210,14 @@ async fn run_captured(
     let mut params: ExecutionParameters = shell.default_exec_params();
     let null_in = openfiles_null()?;
     params.set_fd(OpenFiles::STDIN_FD, null_in);
-    params.set_fd(OpenFiles::STDOUT_FD, OpenFile::File(pipe_writer_to_file(writer)?));
-    params.set_fd(OpenFiles::STDERR_FD, OpenFile::File(pipe_writer_to_file(writer_err)?));
+    params.set_fd(
+        OpenFiles::STDOUT_FD,
+        OpenFile::File(pipe_writer_to_file(writer)?),
+    );
+    params.set_fd(
+        OpenFiles::STDERR_FD,
+        OpenFile::File(pipe_writer_to_file(writer_err)?),
+    );
 
     let drain = tokio::task::spawn_blocking(move || drain_pipe(reader));
 
@@ -208,12 +237,14 @@ async fn run_captured(
             exit_code: Some(u8::from(exec_result.exit_code) as i32),
             output,
             timed_out: false,
+            interrupted: false,
         }),
         Ok(Err(e)) => Err(anyhow!("shell execution failed: {e}")),
         Err(_) => Ok(ShellRunOutcome {
             exit_code: None,
             output,
             timed_out: true,
+            interrupted: false,
         }),
     }
 }
@@ -242,6 +273,7 @@ fn drain_pipe(reader: os_pipe::PipeReader) -> Result<Vec<u8>> {
     Ok(buf)
 }
 
+#[cfg(unix)]
 fn pipe_writer_to_file(pipe: os_pipe::PipeWriter) -> Result<std::fs::File> {
     use std::os::fd::FromRawFd;
     use std::os::unix::io::IntoRawFd;
@@ -251,6 +283,15 @@ fn pipe_writer_to_file(pipe: os_pipe::PipeWriter) -> Result<std::fs::File> {
     // closed because exactly one owner exists on each side of the transfer.
     let fd = pipe.into_raw_fd();
     Ok(unsafe { std::fs::File::from_raw_fd(fd) })
+}
+
+#[cfg(windows)]
+fn pipe_writer_to_file(pipe: os_pipe::PipeWriter) -> Result<std::fs::File> {
+    use std::os::windows::io::{FromRawHandle, IntoRawHandle};
+    // SAFETY: `into_raw_handle` transfers the pipe HANDLE to the File, leaving
+    // exactly one owner responsible for closing it.
+    let handle = pipe.into_raw_handle();
+    Ok(unsafe { std::fs::File::from_raw_handle(handle) })
 }
 
 #[cfg(test)]

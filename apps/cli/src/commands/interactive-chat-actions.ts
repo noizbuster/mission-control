@@ -504,7 +504,12 @@ async function runWorkflowAction(
     // Only persist when a fresh turn starts; a queued prompt runs behind an existing turn.
     const runHandle =
         coding.activeTurn === undefined
-            ? await tryCreateWorkflowRun(coding.workspaceRoot, spec, action.prompt)
+            ? await tryCreateWorkflowRun(
+                  coding.workspaceRoot,
+                  spec,
+                  action.prompt,
+                  coding.taskRuntimeServices?.sessionControlHost,
+              )
             : undefined;
 
     if (runHandle === undefined) {
@@ -553,6 +558,7 @@ async function tryCreateWorkflowRun(
     workspaceRoot: string | undefined,
     spec: WorkflowSpec,
     prompt: string,
+    sessionControlHost?: NonNullable<PromptTurnContext['taskRuntimeServices']>['sessionControlHost'],
 ): Promise<WorkflowRunHandle | undefined> {
     if (workspaceRoot === undefined) return undefined;
     let omoRoot: string;
@@ -564,7 +570,9 @@ async function tryCreateWorkflowRun(
     await ensureOmoDirs(omoRoot);
     const mission = materializeMission(spec);
     await createMission(omoRoot, mission);
-    const run = await startRun(omoRoot, mission.id, prompt);
+    const run = await startRun(omoRoot, mission.id, prompt, {
+        ...(sessionControlHost !== undefined ? { sessionControlHost } : {}),
+    });
     return { omoRoot, missionId: mission.id, runId: run.id };
 }
 

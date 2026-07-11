@@ -1,8 +1,11 @@
 import {
+    closeProcessSessionControlHosts,
     createDesktopSessionCommandService,
     createProviderAuthStore,
     createProviderAuthStoreCredentialResolver,
     createProviderRouter,
+    fenceProcessSessionControlHosts,
+    getProcessSessionControlHost,
 } from '@mission-control/core';
 import { listSessions, readSessionEvents, readSessionSnapshot } from './desktop-session-queries.mjs';
 
@@ -34,14 +37,27 @@ try {
 
 async function runOneShotBridge() {
     const context = createBridgeContext();
-    const request = parseRequest(JSON.parse(await readStdin()));
-    process.stdout.write(JSON.stringify(await executeRequest(request, context)));
+    try {
+        const request = parseRequest(JSON.parse(await readStdin()));
+        process.stdout.write(JSON.stringify(await executeRequest(request, context)));
+    } finally {
+        await closeProcessSessionControlHosts();
+    }
 }
 
 async function runStreamBridge() {
     const context = createBridgeContext();
-    for await (const line of readLines(process.stdin)) {
-        void handleStreamLine(line, context);
+    const pending = new Set();
+    try {
+        for await (const line of readLines(process.stdin)) {
+            const request = handleStreamLine(line, context);
+            pending.add(request);
+            void request.finally(() => pending.delete(request));
+        }
+    } finally {
+        await fenceProcessSessionControlHosts();
+        await Promise.allSettled(pending);
+        await closeProcessSessionControlHosts();
     }
 }
 
@@ -84,7 +100,7 @@ async function executeRequest(request, context) {
         });
         return savedCredentialSummary(context.authStore, readString(request.input, 'providerID'));
     }
-    const service = commandService(request, context);
+    const service = await commandService(request, context);
     return service[request.method](request.input);
 }
 
@@ -98,7 +114,7 @@ function createBridgeContext() {
     };
 }
 
-function commandService(request, context) {
+async function commandService(request, context) {
     const cacheKey = [request.dataDir, request.workspaceRoot].join('\0');
     const cached = context.services.get(cacheKey);
     if (cached !== undefined) {
@@ -108,6 +124,7 @@ function commandService(request, context) {
         dataDir: request.dataDir,
         workspaceRoot: request.workspaceRoot,
         provider: context.provider,
+        sessionControlHost: await getProcessSessionControlHost(request.dataDir),
     });
     context.services.set(cacheKey, service);
     return service;

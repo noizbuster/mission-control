@@ -11,6 +11,7 @@
  */
 import type { AbgNodeModelOptions, AbgSignal, AgentEvent } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
+import type { SessionControlEpoch } from '../../runtime/session-control-cancellation.js';
 import type { AskUserQuestionRequest } from '../../tools/ask-user-schemas.js';
 import { ASK_USER_BLOCKED_ANSWER, createAskUserToolRegistration } from '../../tools/ask-user-tool.js';
 import type { TaskOutput } from '../../tools/task-tool.js';
@@ -56,6 +57,7 @@ export type SpawnChildInput = {
     readonly parentToolRegistry: ToolRegistry;
     readonly now: () => string;
     readonly signal?: AbortSignal;
+    readonly controlEpoch?: SessionControlEpoch;
     /** Unique session id for the child run (caller-supplied for determinism/testability). */
     readonly sessionId: string;
     readonly summaryLimit?: number;
@@ -104,6 +106,7 @@ export async function spawnChildCodingAgent(input: SpawnChildInput): Promise<Tas
         toolRegistry: childToolRegistry,
         initialMessages: [{ role: 'user', content: input.prompt }],
         ...(input.signal !== undefined ? { abortSignal: input.signal } : {}),
+        ...(input.controlEpoch !== undefined ? { controlEpoch: input.controlEpoch } : {}),
         ...(input.hostCallbacks?.onSignal !== undefined ? { onSignal: input.hostCallbacks.onSignal } : {}),
     });
 

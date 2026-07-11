@@ -1,28 +1,21 @@
 import type { Client } from '@libsql/client';
 import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
-import {
-    ensurePublicSessionRow,
-    persistSessionAwaiting,
-    refreshSessionAwaitingFromPendingWaits,
-} from '../memory/session-awaiting-sql.js';
+import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
 import type { SessionBackgroundJob, SessionPendingWait } from '../memory/session-status-derivation.js';
 import {
     activeJobStatuses,
     backgroundJobFrom,
     cancelRecoveredJob,
-    resolvedSubagentJob,
     selectJobColumns,
 } from './agent-job-sql-mirror-handles.js';
-import { upsertJobRow, upsertRuntimeAgentRow } from './agent-job-sql-mirror-persist.js';
-import { parseAgentRef, parseJob, parsePendingWait } from './agent-job-sql-mirror-rows.js';
 import {
-    createAgentJobIndexesSql,
-    createAsyncJobsSql,
-    createPublicSessionsSql,
-    createRuntimeAgentsSql,
-    createSessionAwaitsSql,
-    createSessionRelationsSql,
-} from './agent-job-sql-mirror-sql.js';
+    recordJobWithLifecycle,
+    resolveSubagentWaitWithJob,
+    startSubagentWaitWithJob,
+} from './agent-job-sql-mirror-lifecycle.js';
+import { upsertRuntimeAgentRow } from './agent-job-sql-mirror-persist.js';
+import { parseAgentRef, parseJob, parsePendingWait } from './agent-job-sql-mirror-rows.js';
+import { initializeAgentJobSchema } from './agent-job-sql-mirror-sql.js';
 import type {
     AgentJobRecoveryReport,
     ResolveSubagentWaitInput,
@@ -63,8 +56,9 @@ export class SqlAgentJobMirror implements RuntimeAgentPersistenceMirror {
         );
     }
 
-    recordJob(handle: BackgroundJobHandle): void {
-        this.enqueue(() => this.write((client) => upsertJobRow({ client, handle })));
+    recordJob(handle: BackgroundJobHandle, client?: Client): void | Promise<void> {
+        if (client !== undefined) return recordJobWithLifecycle(client, handle);
+        this.enqueue(() => this.writeTransaction((client) => recordJobWithLifecycle(client, handle)));
     }
 
     async flush(): Promise<void> {
@@ -115,45 +109,16 @@ export class SqlAgentJobMirror implements RuntimeAgentPersistenceMirror {
     async startSubagentWait(input: StartSubagentWaitInput): Promise<void> {
         if (input.mode === 'detached') return;
         const now = new Date().toISOString();
-        await this.write(async (client) => {
-            await this.insertSubagentWait(client, input, now);
-            await persistSessionAwaiting({
-                client,
-                sessionId: input.parentSessionId,
-                reason: 'subagent',
-                waitId: input.childSessionId,
-                now,
-            });
-        });
-        this.recordJob({
-            jobId: input.childSessionId,
-            sessionId: input.childSessionId,
-            parentSessionId: input.parentSessionId,
-            ...(input.agentId !== undefined ? { agentId: input.agentId } : {}),
-            blocking: true,
-            status: 'running',
-            startedAt: now,
-        });
+        await this.writeTransaction((client) => startSubagentWaitWithJob(client, input, now));
     }
 
-    async resolveSubagentWait(input: ResolveSubagentWaitInput): Promise<void> {
+    async resolveSubagentWait(input: ResolveSubagentWaitInput, client?: Client): Promise<void> {
         const now = new Date().toISOString();
-        await this.write(async (client) => {
-            await ensurePublicSessionRow({ client, sessionId: input.parentSessionId, now });
-            await ensurePublicSessionRow({ client, sessionId: input.childSessionId, now });
-            await client.execute({
-                sql:
-                    'UPDATE session_awaits SET status = ?, resolved_at = ? ' +
-                    'WHERE session_id = ? AND child_session_id = ? AND status = ?',
-                args: ['resolved', now, input.parentSessionId, input.childSessionId, 'pending'],
-            });
-            await refreshSessionAwaitingFromPendingWaits({
-                client,
-                sessionId: input.parentSessionId,
-                now,
-            });
-        });
-        this.recordJob(resolvedSubagentJob(input, now));
+        if (client !== undefined) {
+            await resolveSubagentWaitWithJob(client, input, now);
+            return;
+        }
+        await this.writeTransaction((client) => resolveSubagentWaitWithJob(client, input, now));
     }
 
     async loadPendingWaits(parentSessionId: string): Promise<readonly SessionPendingWait[]> {
@@ -189,64 +154,16 @@ export class SqlAgentJobMirror implements RuntimeAgentPersistenceMirror {
         });
     }
 
-    private async insertSubagentWait(client: Client, input: StartSubagentWaitInput, now: string): Promise<void> {
-        await ensurePublicSessionRow({ client, sessionId: input.parentSessionId, now });
-        await ensurePublicSessionRow({ client, sessionId: input.childSessionId, now });
-        await client.execute({
-            sql:
-                'INSERT OR REPLACE INTO session_awaits ' +
-                '(wait_id, session_id, reason, source_kind, source_id, job_id, child_session_id, status, created_at, metadata_json) ' +
-                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            args: [
-                input.childSessionId,
-                input.parentSessionId,
-                'subagent',
-                'child_session',
-                input.childSessionId,
-                input.childSessionId,
-                input.childSessionId,
-                'pending',
-                now,
-                JSON.stringify({ mode: input.mode }),
-            ],
-        });
-        await client.execute({
-            sql:
-                'INSERT INTO session_relations ' +
-                '(relation_id, parent_session_id, child_session_id, kind, created_at, metadata_json) ' +
-                'VALUES (?, ?, ?, ?, ?, ?) ' +
-                'ON CONFLICT(parent_session_id, child_session_id, kind) DO UPDATE SET created_at = excluded.created_at, ' +
-                'metadata_json = excluded.metadata_json',
-            args: [
-                relationId(input.parentSessionId, input.childSessionId, 'subagent'),
-                input.parentSessionId,
-                input.childSessionId,
-                'subagent',
-                now,
-                JSON.stringify({ agentId: input.agentId ?? null, mode: input.mode }),
-            ],
-        });
-    }
-
     private async write<T>(operation: (client: Client) => Promise<T>): Promise<T> {
         if (this.writeTarget === undefined) {
             return operation(this.client);
         }
         return runLocalLibsqlWrite(this.writeTarget, operation);
     }
-}
 
-function relationId(parentSessionId: string, childSessionId: string, kind: string): string {
-    return `${parentSessionId}:${childSessionId}:${kind}`;
-}
-
-async function initializeAgentJobSchema(client: Client): Promise<void> {
-    await client.execute(createPublicSessionsSql);
-    await client.execute(createRuntimeAgentsSql);
-    await client.execute(createAsyncJobsSql);
-    await client.execute(createSessionAwaitsSql);
-    await client.execute(createSessionRelationsSql);
-    for (const statement of createAgentJobIndexesSql) await client.execute(statement);
+    private async writeTransaction<T>(operation: (client: Client) => Promise<T>): Promise<T> {
+        return this.write((client) => runLocalLibsqlClientTransaction(client, () => operation(client)));
+    }
 }
 
 function isLocalLibsqlWriteTarget(input: Client | LocalLibsqlWriteTarget): input is LocalLibsqlWriteTarget {

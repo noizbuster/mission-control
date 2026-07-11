@@ -2,8 +2,7 @@
  * Run store — SQL-backed CRUD for Run state objects with status-transition enforcement.
  *
  * New writes go to the shared local libSQL database at `<data-dir>/memory.db`.
- * During the compatibility window, missing SQL rows fall back to legacy
- * `.omo/runs/{runId}.json` files and import them into SQL after schema validation.
+ * Exact legacy roots are migrated and ledgered before SQL operations begin.
  * The allowed-transition state machine is enforced inside `updateRunStatus`;
  * direct field mutation is intentionally not exposed.
  *
@@ -14,20 +13,19 @@
  *   terminal states (completed | failed | cancelled) have no outgoing edges.
  */
 
+import type { Client } from '@libsql/client';
 import { type Run, type RunCost, RunSchema, type RunStatus, type TaskRetryState } from '@mission-control/protocol';
 import { OmoPersistenceError, omoFilePath } from '../../persistence/paths.js';
 import { findMostRecentFailedRunRecord } from './failed-run-store.js';
-import { listRunsFromDb, readRunFromDb, writeRunToDb } from './mission-run-db.js';
+import { listRunsFromDb, mutateRunInDb, mutateRunWithClient, readRunFromDb, writeRunToDb } from './mission-run-db.js';
 import {
     ALLOWED_RUN_TRANSITIONS,
     assertRunTransition,
     MissionRunTransitionError,
     TERMINAL_RUN_STATUSES,
 } from './run-status-transitions.js';
-import { readdir, readFile } from 'node:fs/promises';
 
 const RUNS_DIR = 'runs';
-const JSON_EXTENSION = '.json';
 
 export { ALLOWED_RUN_TRANSITIONS, assertRunTransition, MissionRunTransitionError, TERMINAL_RUN_STATUSES };
 
@@ -70,49 +68,16 @@ export async function createRun(root: string, run: Run): Promise<Run> {
 
 /**
  * Read and validate a Run by id. Throws `RunStoreError`
- * ({ code: 'run_missing' }) on ENOENT, ({ code: 'run_corrupt' }) on JSON/schema
- * validation failure.
+ * ({ code: 'run_missing' }) when no canonical row exists. Legacy migration
+ * failures propagate without falling back to the JSON source.
  */
 export async function readRun(root: string, runId: string): Promise<Run> {
     const dbRun = await readRunFromDb(root, runId);
     if (dbRun !== undefined) {
         return dbRun;
     }
-    const legacyRun = await readRunJson(root, runId);
-    await writeRunToDb(root, legacyRun);
-    return legacyRun;
-}
-
-async function readRunJson(root: string, runId: string): Promise<Run> {
     const filePath = runFilePath(root, runId);
-    let contents: string;
-    try {
-        contents = await readFile(filePath, 'utf8');
-    } catch (error: unknown) {
-        if (isErrorCode(error, 'ENOENT')) {
-            throw new RunStoreError(`Run ${runId} not found at ${filePath}`, 'run_missing', filePath, error);
-        }
-        throw new RunStoreError(`Failed to read run ${runId} at ${filePath}`, 'run_read_failed', filePath, error);
-    }
-
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(contents);
-    } catch (error: unknown) {
-        throw new RunStoreError(`Run ${runId} at ${filePath} is not valid JSON`, 'run_corrupt', filePath, error);
-    }
-
-    const result = RunSchema.safeParse(parsed);
-    if (!result.success) {
-        const firstIssue = result.error.issues[0]?.message ?? 'unknown schema issue';
-        throw new RunStoreError(
-            `Run ${runId} at ${filePath} failed validation: ${firstIssue}`,
-            'run_corrupt',
-            filePath,
-            result.error,
-        );
-    }
-    return result.data;
+    throw new RunStoreError(`Run ${runId} not found after runtime-store migration`, 'run_missing', filePath);
 }
 
 /**
@@ -129,10 +94,87 @@ export async function updateRunStatus(
     options: { readonly now?: () => string } = {},
 ): Promise<Run> {
     const now = options.now?.() ?? new Date().toISOString();
-    const existing = await readRun(root, runId);
-    assertRunTransition(existing.status, status);
+    return mutateStoredRun(root, runId, (existing) => transitionedRun(existing, status, patch, now));
+}
 
-    const next: Run = {
+export async function updateRunStatusWithClient(
+    client: Client,
+    runId: string,
+    status: RunStatus,
+    patch: RunPatch = {},
+    options: { readonly now?: () => string } = {},
+): Promise<Run | undefined> {
+    const now = options.now?.() ?? new Date().toISOString();
+    return mutateRunWithClient(client, runId, (existing) => transitionedRun(existing, status, patch, now), now);
+}
+
+/**
+ * List all Runs belonging to `missionId`. Returns an empty array when no rows exist.
+ *
+ * When `filter.parentId` is provided, only child Runs whose `parentRunId`
+ * matches are returned. Without a filter, all Runs for the mission (including
+ * children) are returned.
+ */
+export async function listRunsForMission(
+    root: string,
+    missionId: string,
+    filter: { readonly parentId?: string } = {},
+): Promise<readonly Run[]> {
+    return listRunsFromDb(root, {
+        missionId,
+        ...(filter.parentId !== undefined ? { parentId: filter.parentId } : {}),
+    });
+}
+
+/**
+ * Find the most recently-ended `failed` Run. Used by `/retry` to re-invoke the last failed
+ * workflow run from the canonical SQL store.
+ * Runs without `endedAt` sort before those with it. Returns `undefined` when there are no
+ * failed rows.
+ */
+export async function findMostRecentFailedRun(root: string): Promise<Run | undefined> {
+    return findMostRecentFailedRunRecord(root);
+}
+
+export async function appendChildSession(root: string, runId: string, childSessionId: string): Promise<Run> {
+    return mutateStoredRun(root, runId, (existing) => {
+        const existingChildren = existing.childSessionIds ?? [];
+        if (existingChildren.includes(childSessionId)) return existing;
+        return RunSchema.parse({
+            ...existing,
+            childSessionIds: [...existingChildren, childSessionId],
+        });
+    });
+}
+
+export async function recordTaskRetry(root: string, runId: string, taskKey: string, sessionId: string): Promise<Run> {
+    return mutateStoredRun(root, runId, (existing) => {
+        const current = existing.taskRetryState ?? {};
+        const priorEntry = current[taskKey];
+        const nextEntry: TaskRetryState = {
+            retryCount: (priorEntry?.retryCount ?? 0) + 1,
+            lastSessionId: sessionId,
+        };
+        return RunSchema.parse({
+            ...existing,
+            taskRetryState: { ...current, [taskKey]: nextEntry },
+        });
+    });
+}
+
+async function mutateStoredRun(root: string, runId: string, mutate: (run: Run) => Run): Promise<Run> {
+    const updated = await mutateRunInDb(root, runId, mutate);
+    if (updated !== undefined) return updated;
+    throw new RunStoreError(
+        `Run ${runId} not found after runtime-store migration`,
+        'run_missing',
+        runFilePath(root, runId),
+    );
+}
+
+function transitionedRun(existing: Run, status: RunStatus, patch: RunPatch, now: string): Run {
+    assertRunTransition(existing.status, status);
+    return RunSchema.parse({
         ...existing,
         ...(patch.cost !== undefined ? { cost: patch.cost } : {}),
         ...(patch.model !== undefined ? { model: patch.model } : {}),
@@ -145,111 +187,5 @@ export async function updateRunStatus(
         status,
         ...(status === 'running' && existing.startedAt === undefined ? { startedAt: now } : {}),
         ...(TERMINAL_RUN_STATUSES.has(status) ? { endedAt: now } : {}),
-    };
-
-    const validated = RunSchema.parse(next);
-    await writeRunToDb(root, validated);
-    return validated;
-}
-
-/**
- * List all Runs belonging to `missionId`. Returns an empty array when the runs
- * directory does not exist yet. Throws on corrupt individual files.
- *
- * When `filter.parentId` is provided, only child Runs whose `parentRunId`
- * matches are returned. Without a filter, all Runs for the mission (including
- * children) are returned.
- */
-export async function listRunsForMission(
-    root: string,
-    missionId: string,
-    filter: { readonly parentId?: string } = {},
-): Promise<readonly Run[]> {
-    const runs = [
-        ...(await listRunsFromDb(root, {
-            missionId,
-            ...(filter.parentId !== undefined ? { parentId: filter.parentId } : {}),
-        })),
-    ];
-    const seenIds = new Set(runs.map((run) => run.id));
-    const dir = omoFilePath(root, RUNS_DIR);
-    let entries: readonly string[];
-    try {
-        entries = await readdir(dir);
-    } catch (error: unknown) {
-        if (isErrorCode(error, 'ENOENT')) {
-            return runs;
-        }
-        throw error;
-    }
-
-    for (const entry of entries) {
-        if (!entry.endsWith(JSON_EXTENSION)) {
-            continue;
-        }
-        const runId = entry.slice(0, -JSON_EXTENSION.length);
-        if (seenIds.has(runId)) {
-            continue;
-        }
-        const run = await readRunJson(root, runId);
-        if (run.missionId !== missionId) {
-            continue;
-        }
-        if (filter.parentId !== undefined && run.parentRunId !== filter.parentId) {
-            continue;
-        }
-        await writeRunToDb(root, run);
-        runs.push(run);
-        seenIds.add(run.id);
-    }
-    return runs;
-}
-
-/**
- * Find the most recently-ended `failed` Run. Used by `/retry` to re-invoke the last failed
- * workflow run. Scans every run file; returns the failed run with the latest `endedAt`.
- * Runs without `endedAt` sort before those with it. Returns `undefined` when there are no
- * failed runs (or no runs directory).
- */
-export async function findMostRecentFailedRun(root: string): Promise<Run | undefined> {
-    return findMostRecentFailedRunRecord(root);
-}
-
-export async function appendChildSession(root: string, runId: string, childSessionId: string): Promise<Run> {
-    const existing = await readRun(root, runId);
-    const existingChildren = existing.childSessionIds ?? [];
-    if (existingChildren.includes(childSessionId)) {
-        return existing;
-    }
-    const validated = RunSchema.parse({
-        ...existing,
-        childSessionIds: [...existingChildren, childSessionId],
     });
-    await writeRunToDb(root, validated);
-    return validated;
-}
-
-export async function recordTaskRetry(root: string, runId: string, taskKey: string, sessionId: string): Promise<Run> {
-    const existing = await readRun(root, runId);
-    const current = existing.taskRetryState ?? {};
-    const priorEntry = current[taskKey];
-    const nextEntry: TaskRetryState = {
-        retryCount: (priorEntry?.retryCount ?? 0) + 1,
-        lastSessionId: sessionId,
-    };
-    const validated = RunSchema.parse({
-        ...existing,
-        taskRetryState: { ...current, [taskKey]: nextEntry },
-    });
-    await writeRunToDb(root, validated);
-    return validated;
-}
-
-function isErrorCode(error: unknown, code: string): boolean {
-    return (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { readonly code?: unknown }).code === code
-    );
 }

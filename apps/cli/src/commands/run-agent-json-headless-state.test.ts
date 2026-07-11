@@ -83,7 +83,7 @@ describe('runAgent JSON headless final state', () => {
                     error: {
                         code: 'provider_aborted',
                         message: 'provider aborted',
-                        retryable: true,
+                        retryable: false,
                     },
                 },
             ]),

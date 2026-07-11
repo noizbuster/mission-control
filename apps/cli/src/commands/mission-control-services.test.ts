@@ -201,17 +201,19 @@ describe('MissionControlServices', () => {
 
         it('cancels queued jobs that never reached a concurrency slot', async () => {
             const services = await MissionControlServices.create(workspaceA, { maxConcurrency: 1 });
-            const blocker = new Promise<{ status: 'completed'; output: string }>(() => {
-                // Never resolves; only the cancellation path ends it.
-            });
             const running = services.getJobManager().startJob({
                 sessionId: 'session-block',
-                execute: () => blocker,
+                execute: (signal) =>
+                    new Promise((_, reject) => {
+                        signal.addEventListener('abort', () => reject(new Error('job aborted')), { once: true });
+                    }),
             });
+            await services.getJobManager().drainPreparations();
             const queued = services.getJobManager().startJob({
                 sessionId: 'session-queue',
                 execute: () => Promise.resolve({ status: 'completed', output: 'ok' }),
             });
+            await services.getJobManager().drainPreparations();
             // running occupies the single slot; queued waits.
             expect(services.snapshot().jobs.byStatus.queued).toBe(1);
             await services.dispose();

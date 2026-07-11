@@ -9,6 +9,7 @@ import type {
     SessionProjectionSessionRecord,
     SessionProjectionToolRecord,
 } from './session-projection-types.js';
+import { inputProjectionStatements } from './sqlite-session-projection-input-statements.js';
 import {
     messageProjectionStatements,
     toolArgumentsById,
@@ -22,6 +23,7 @@ import {
     insertToolStatement,
 } from './sqlite-session-projection-record-statements.js';
 import { insertAwaitingStatement, insertSessionStatement } from './sqlite-session-projection-session-statements.js';
+import { cancelledWaitProjectionStatements } from './sqlite-session-projection-wait-statements.js';
 
 export function replaceStatements(input: {
     readonly sessionId: string;
@@ -37,6 +39,8 @@ export function replaceStatements(input: {
             const statement = insertAwaitingStatement(record);
             return statement === undefined ? [] : [statement];
         }),
+        ...inputProjectionStatements(input.envelopes),
+        ...cancelledWaitProjectionStatements(input.envelopes),
         ...records.runs.map(insertRunStatement),
         ...records.approvals.map(insertApprovalStatement),
         ...records.tools.map(insertToolStatement(toolNamesById(input.envelopes), toolArgumentsById(input.envelopes))),

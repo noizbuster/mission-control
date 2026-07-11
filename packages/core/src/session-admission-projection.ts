@@ -17,6 +17,7 @@ export class SessionAdmissionProjectionError extends Error {
 export function projectSessionAdmission(events: readonly AgentEvent[], sessionId: string): SessionAdmissionProjection {
     const admitted = new Map<string, PromptInputState>();
     const promotedIds = new Set<string>();
+    const cancelledIds = new Set<string>();
     const modelVisibleMessages: ModelVisibleTranscriptMessage[] = [];
 
     for (const event of events) {
@@ -34,9 +35,14 @@ export function projectSessionAdmission(events: readonly AgentEvent[], sessionId
                 modelVisibleMessages.push(message);
             }
         }
+        if (event.type === 'prompt.cancelled') {
+            cancelledIds.add(event.transcript.inputId);
+        }
     }
 
-    const pendingInputs = [...admitted.values()].filter((input) => !promotedIds.has(input.inputId));
+    const pendingInputs = [...admitted.values()].filter(
+        (input) => !promotedIds.has(input.inputId) && !cancelledIds.has(input.inputId),
+    );
     return {
         sessionId,
         admittedInputs: [...admitted.values()],

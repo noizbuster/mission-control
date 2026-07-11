@@ -1196,6 +1196,7 @@ dependencies = [
  "similar",
  "tempfile",
  "tokio",
+ "windows-sys",
 ]
 
 [[package]]

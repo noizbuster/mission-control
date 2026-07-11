@@ -37,15 +37,29 @@ export type SessionBackgroundJob = {
     readonly childSessionId?: string;
 };
 
+export type SessionMissionRun = {
+    readonly runId: string;
+    readonly status: 'pending' | 'running' | 'blocked';
+};
+
+export type SessionPendingInput = {
+    readonly inputId: string;
+};
+
+export type SessionAbortMarker = { readonly kind: 'none' } | { readonly kind: 'operator_aborted' };
+
 export type SessionLifecycleDerivationInput = {
     readonly terminalEvent: SessionTerminalEvent;
     readonly activeRuns: readonly SessionActiveRun[];
     readonly pendingWaits: readonly SessionPendingWait[];
     readonly backgroundJobs: readonly SessionBackgroundJob[];
+    readonly missionRuns?: readonly SessionMissionRun[];
+    readonly pendingInputs?: readonly SessionPendingInput[];
+    readonly abortMarker?: SessionAbortMarker;
 };
 
 export type SessionLifecycleDerivation =
-    | { readonly status: 'idle' }
+    | { readonly status: 'idle'; readonly displayReason?: 'aborted' }
     | { readonly status: 'running' }
     | {
           readonly status: 'awaiting';
@@ -80,7 +94,17 @@ export function deriveSessionLifecycle(input: SessionLifecycleDerivationInput): 
         };
     }
 
-    return input.activeRuns.length > 0 ? { status: 'running' } : { status: 'idle' };
+    if (
+        input.activeRuns.length > 0 ||
+        (input.missionRuns?.length ?? 0) > 0 ||
+        (input.pendingInputs?.length ?? 0) > 0 ||
+        input.backgroundJobs.some((job) => isActiveJobStatus(job.status))
+    ) {
+        return { status: 'running' };
+    }
+    return input.abortMarker?.kind === 'operator_aborted'
+        ? { status: 'idle', displayReason: 'aborted' }
+        : { status: 'idle' };
 }
 
 function primaryPendingWait(

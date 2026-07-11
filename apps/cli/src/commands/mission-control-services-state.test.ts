@@ -57,11 +57,13 @@ describe('MissionControlServices aggregate state', () => {
         });
         await services.getJobManager().awaitJob(failed.jobId);
 
-        const blocker = (): Promise<{ status: 'completed'; output: string }> =>
-            new Promise<{ status: 'completed'; output: string }>(() => {});
+        const blocker = (signal: AbortSignal): Promise<{ status: 'completed'; output: string }> =>
+            new Promise((_, reject) => {
+                signal.addEventListener('abort', () => reject(new Error('job aborted')), { once: true });
+            });
         services.getJobManager().startJob({ sessionId: 'sess-mix-run-1', execute: blocker });
         services.getJobManager().startJob({ sessionId: 'sess-mix-run-2', execute: blocker });
-
+        await services.getJobManager().drainPreparations();
         services.getJobManager().startJob({
             sessionId: 'sess-mix-queued',
             execute: async () => ({ status: 'completed', output: 'q' }),
@@ -70,6 +72,7 @@ describe('MissionControlServices aggregate state', () => {
             sessionId: 'sess-mix-cancel',
             execute: async () => ({ status: 'completed', output: 'c' }),
         });
+        await services.getJobManager().drainPreparations();
         services.getJobManager().cancelJob(toCancel.jobId);
 
         const snapshot = services.snapshot();

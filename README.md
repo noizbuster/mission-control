@@ -307,14 +307,32 @@ The coding-agent MVP now includes durable chat sessions, provider streaming, app
 
 For release-adjacent local verification, `pnpm smoke:coding-agent-built-dist` runs the built-dist coding-agent smoke against a temporary trusted workspace and temporary auth/data paths, prints the captured command output plus the temp session database path, and fails if either the blocked replay preview or the resumed replay emits diagnostics. This is intentionally a built-dist coding-agent smoke, not a tarball artifact smoke; Todo 18 owns the tarball artifact smoke.
 
+### Session Stop Contract
+
+`mc session stop <session-id>` stops current work without making the session terminal. The default scope is the selected session plus its canonical descendants. `--only` limits the operation to the selected session. `--child-only` recursively stops descendants while leaving the selected session running. The two scope flags are mutually exclusive. A terminal selected session is a no-op but remains traversable, so active descendants can still be reached.
+
+The stop command uses owner IPC for a live session. The default timeout is `15000ms`; accepted values are integer `ms`, `s`, or `m` durations from `100ms` through `300000ms`. Each command prints one aggregate stdout line, never per-session records. Exit `0` means every requested change completed or was a no-op, exit `1` means a runtime or partial failure, and exit `2` means invalid arguments. The tested summaries are:
+
+| Case | stdout | Exit |
+| --- | --- | --- |
+| Full success or no-op | `Stopped C/T session(s) (I already idle, A already terminal).` | `0` |
+| Child-only scope without descendants | `No sessions to stop.` | `0` |
+| Partial or runtime failure after targeting | `Stopped C/T session(s); F failed.` | `1` |
+| Missing root | `Failed to stop sessions: session_not_found.` | `1` |
+| Unstable selected hierarchy | `Failed to stop sessions: unstable_session_tree.` | `1` |
+| Unexpected internal error | `Failed to stop sessions: internal_error.` | `1` |
+
+Invalid scope flags or durations write the exact usage line to stderr and exit `2`. The stop surface has no JSON result mode. `T` is the aggregate `C + I + A + F`; `session(s)` is literal.
+
 Session storage:
 
 - `MCTRL_DATA_DIR` overrides the Mission Control data directory.
 - Without `MCTRL_DATA_DIR`, the local session database uses the platform application-data directory.
-- New authoritative session event/replay writes use the local libSQL database at `<data-dir>/memory.db`, shared with persistent memory storage through the current schema initializer.
-- Future explicit local DB migrations can still use the migration runner and its `schema_migrations` ledger; this development-time file-to-DB transition does not preserve historical scripts for the current schema shape.
-- Runtime coordination SQL for session input delivery, Mission/Run records, context epochs, runtime agents, async jobs, and relation rows uses the same local `<data-dir>/memory.db` path as the public session projection; legacy JSON files remain compatibility import sources.
-- The append-only event ledger is `session_events`; projection tables derive session lists, transcript messages, approvals, tool calls, provider failures, and awaiting state from those events and runtime mirrors. Production `approval`, `user_input`, and foreground `subagent` waits surface through the public `memory.db` session-list/read path.
+- New authoritative session event/replay writes use the local libSQL database at `<data-dir>/memory.db`, shared with persistent memory storage through the current schema initializer. The path is canonicalized before it is hashed into the database identity used by leases and owner IPC.
+- The compatibility migration reads only declared legacy roots, records an immutable manifest in `runtime_db_migration_ledger`, and fails closed on corrupt input or a conflicting rerun. It leaves legacy databases and run JSON source files unchanged.
+- Runtime coordination SQL for session input delivery, Mission/Run records, context epochs, runtime agents, async jobs, and relation rows uses the same local `<data-dir>/memory.db` path as the public session projection.
+- Production `approval`, `user_input`, and foreground `subagent` waits surface through the public `memory.db` session-list/read path.
+- `session_events` owns session, run, approval, and input history plus event-derived projections. `mission_runs` owns mission work, and live jobs plus their `async_jobs` mirror own job work. A session reaches idle only when all three authorities are quiescent.
 - Legacy JSONL logs can still live at `sessions/<session-id>.jsonl` and are import/export compatibility artifacts. Import never deletes or rewrites them.
 - JSONL compatibility logs contain durable event envelopes with stable event ids, sequence numbers, causation/correlation ids, and replay cursors.
 - The SQLite/libSQL session data model, table responsibilities, indexes, legacy import operation, and export behavior are documented in [`docs/session-data-model.md`](docs/session-data-model.md).
@@ -409,7 +427,7 @@ Session export, import, compaction, deletion, and stats:
 - `mc session list` lists sessions with lifecycle status, event counts, message counts, and trust status.
 - `mc session show <id>` shows the session snapshot, approvals, tool outcomes, coding steps, and diagnostics.
 - `mc session replay <id> --jsonl` replays durable events and coding steps as JSON Lines.
-- `mc session delete <id>` deletes a session and all of its descendant subagent/child sessions. Each session's SQLite rows, compatibility JSONL log if present, and projection rows are removed.
+- `mc session delete <id>` deletes a session and its canonical descendant subtree. Each session's SQLite rows, compatibility JSONL log if present, and projection rows are removed. A guarded delete accepts `--expected-tree-token <sha256>` and rejects a changed subtree or any live lease. Ground Control uses guarded, non-force deletion only after confirmation.
 - `/compact` in interactive chat summarizes older session history into a durable compaction boundary event, reducing replay context while preserving the session tree.
 
 Desktop scope:
@@ -503,6 +521,12 @@ release TODO:
 - Add release provenance before public release.
 - Add cross-compile coverage for every artifact name.
 - Add signing and notarization.
+
+### Paired Session-Stop Release Gate
+
+Mission Control session stop and Ground Control's Mission Control `K` flow ship as one synchronized pair. Ground Control invokes `mc` first and uses `mctrl` only when `mc` is unavailable. The pair does not inspect version, help text, or installed capabilities to select a behavior.
+
+Local Linux verification is complete: the isolated cross-repository runner passed all five current scenarios, including child-only stop, a partial timeout, stale-settlement fencing, and guarded owner-death cleanup. That is local implementation evidence, not a hosted release result. The post-authorization release gate remains pending: it requires immutable 40-hex Mission Control and Ground Control revisions, separate checkouts, and the same runner on Linux, macOS, and Windows. No hosted execution is claimed until those jobs have receipts.
 
 ## Native Fallback
 
@@ -607,7 +631,7 @@ ABG reflection in this boilerplate is intentionally bounded: names, package boun
 
 ABG runtime TODOs:
 
-- Full cancellation propagation through task handles.
+- Additional cancellation surfaces outside the documented session-stop contract.
 - Compensation policy.
 - Scheduler/executor separation beyond the current bounded coordinator.
 - Context packing and memory injection.
@@ -626,7 +650,7 @@ ABG runtime TODOs:
 
 ## Next Stage TODO
 
-- Add cancellation propagation and resume semantics to the runtime.
+- Extend stop and resume behavior only with a new tested contract.
 - Expand feature-flagged sidecar v2 beyond task status/failure/cancellation only after command/file parity tests.
 - Add release provenance, cross-compile coverage, and signing/notarization for npm, GitHub Releases, and Tauri artifacts.
 - Keep CI free of live provider credentials; live provider smoke tests stay opt-in.

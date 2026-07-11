@@ -36,6 +36,8 @@ export async function drainCoordinatorRun(input: {
         message: string,
         run: RunCoordinatorEventMetadata,
     ) => Promise<void>;
+    readonly operatorStop: () => { readonly requestId: string; readonly operationId: string } | undefined;
+    readonly suppressInterruptedEvent: () => boolean;
 }): Promise<RunCoordinatorResult> {
     await input.appendRunEvent(
         'run.command.received',
@@ -64,16 +66,33 @@ export async function drainCoordinatorRun(input: {
         }
         const result = await input.runProviderTurn(input.signal);
         turns += 1;
+        const operatorStop = input.operatorStop();
         const finalized = await finalizeProviderTurnResult({
             result,
             command: input.command,
             runId: input.runId,
             turns,
             appendRunEvent: (...event) => input.appendRunEvent(...event),
+            ...(operatorStop !== undefined ? { operatorStop } : {}),
+            ...(input.suppressInterruptedEvent() ? { suppressInterruptedEvent: true } : {}),
         });
         if (finalized !== undefined) {
             return finalized;
         }
+    }
+
+    if (input.signal.aborted) {
+        const operatorStop = input.operatorStop();
+        const interrupted = await finalizeProviderTurnResult({
+            result: { status: 'interrupted' },
+            command: input.command,
+            runId: input.runId,
+            turns,
+            appendRunEvent: (...event) => input.appendRunEvent(...event),
+            ...(operatorStop !== undefined ? { operatorStop } : {}),
+            ...(input.suppressInterruptedEvent() ? { suppressInterruptedEvent: true } : {}),
+        });
+        if (interrupted !== undefined) return interrupted;
     }
 
     const status = turns === 0 ? 'idle' : 'completed';

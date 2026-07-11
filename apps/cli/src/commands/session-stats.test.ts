@@ -33,16 +33,16 @@ describe('session stats commands', () => {
         );
 
         const listOutput = await runSessionCommand(parseArgs(['session', 'list']));
-        const showOutput = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', sessionId])));
+        const showOutput = JSON.parse((await runSessionCommand(parseArgs(['session', 'show', sessionId]))).stdout);
 
-        expect(listOutput).toContain(`cwd=${workspaceRoot}`);
-        expect(listOutput).toContain('name=Stats demo');
-        expect(listOutput).toContain('created=2026-06-13T10:00:00.000Z');
-        expect(listOutput).toContain('updated=2026-06-13T10:00:03.000Z');
-        expect(listOutput).toContain('messages=4');
-        expect(listOutput).toContain('active=entry_branch');
-        expect(listOutput).toContain('trust=trusted');
-        expect(listOutput).toContain('parent=session_parent');
+        expect(listOutput.stdout).toContain(`cwd=${workspaceRoot}`);
+        expect(listOutput.stdout).toContain('name=Stats demo');
+        expect(listOutput.stdout).toContain('created=2026-06-13T10:00:00.000Z');
+        expect(listOutput.stdout).toContain('updated=2026-06-13T10:00:03.000Z');
+        expect(listOutput.stdout).toContain('messages=4');
+        expect(listOutput.stdout).toContain('active=entry_branch');
+        expect(listOutput.stdout).toContain('trust=trusted');
+        expect(listOutput.stdout).toContain('parent=session_parent');
         expect(showOutput).toMatchObject({
             sessionId,
             cwd: workspaceRoot,
@@ -77,9 +77,9 @@ describe('session stats commands', () => {
         );
 
         const listOutput = await runSessionCommand(parseArgs(['session', 'list']));
-        const showOutput = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', sessionId])));
+        const showOutput = JSON.parse((await runSessionCommand(parseArgs(['session', 'show', sessionId]))).stdout);
 
-        expect(listOutput).toContain('trust=trusted');
+        expect(listOutput.stdout).toContain('trust=trusted');
         expect(showOutput.trustStatus).toBe('trusted');
         await rm(workspaceRoot, { recursive: true, force: true });
         await rm(dataDir, { recursive: true, force: true });

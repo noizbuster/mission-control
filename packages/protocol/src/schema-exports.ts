@@ -73,6 +73,8 @@ export {
     ProviderOAuthCredentialSchema,
 } from './provider-auth.js';
 export {
+    type OperatorAbortedRunEventMetadata,
+    OperatorAbortedRunEventMetadataSchema,
     RUN_COORDINATOR_COMMANDS,
     RUN_COORDINATOR_STATES,
     type RunCoordinatorCommand,
@@ -94,6 +96,27 @@ export {
     type SessionStatus,
     SessionStatusSchema,
 } from './session-lifecycle.js';
+export {
+    SESSION_STOP_BARRIER_KINDS,
+    SESSION_STOP_ERROR_CODES,
+    SESSION_STOP_OUTCOMES,
+    SESSION_STOP_REASONS,
+    SESSION_STOP_SCOPES,
+    type SessionAbortAffectedCounts,
+    SessionAbortAffectedCountsSchema,
+    type SessionAbortCompletedMetadata,
+    SessionAbortCompletedMetadataSchema,
+    type SessionStopBarrierKind,
+    SessionStopBarrierKindSchema,
+    type SessionStopErrorCode,
+    SessionStopErrorCodeSchema,
+    type SessionStopOutcome,
+    SessionStopOutcomeSchema,
+    type SessionStopReason,
+    SessionStopReasonSchema,
+    type SessionStopScope,
+    SessionStopScopeSchema,
+} from './session-stop.js';
 export {
     NATIVE_SIDECAR_STATUSES,
     type NativeSidecarStatus,

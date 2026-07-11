@@ -7,6 +7,7 @@ import {
     readLocalSessionReplay,
 } from '@mission-control/core';
 import { type AgentEvent, AgentEventSchema, type ProviderStreamChunk } from '@mission-control/protocol';
+import type { CliCommandResult } from '../cli-command-result.js';
 
 export type ReplayRecord =
     | { readonly kind: 'event'; readonly event: AgentEvent }
@@ -20,8 +21,9 @@ type ReplayRecordCandidate = {
     readonly diagnostic?: unknown;
 };
 
-export function parseReplayRecords(output: string): readonly ReplayRecord[] {
-    return output
+export function parseReplayRecords(output: string | CliCommandResult): readonly ReplayRecord[] {
+    const text = typeof output === 'string' ? output : output.stdout;
+    return text
         .trim()
         .split('\n')
         .filter((line) => line.trim().length > 0)

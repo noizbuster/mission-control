@@ -31,10 +31,10 @@ describe('SQLite-native session commands', () => {
         const replayEvents = eventRecords(parseReplayRecords(replayOutput));
         const archive = JSON.parse(await readFile(archivePath, 'utf8'));
 
-        expect(listOutput.trim().split('\n')).toEqual(
+        expect(listOutput.stdout.trim().split('\n')).toEqual(
             expect.arrayContaining([expect.stringMatching(new RegExp(`^${sessionId}\\t`))]),
         );
-        expect(JSON.parse(showOutput)).toMatchObject({
+        expect(JSON.parse(showOutput.stdout)).toMatchObject({
             sessionId,
             eventCount: replayEvents.length,
             statusText: 'stopped',
@@ -49,7 +49,7 @@ describe('SQLite-native session commands', () => {
             'task.completed',
             'session.stopped',
         ]);
-        expect(exportOutput).toContain(`Exported session ${sessionId}`);
+        expect(exportOutput.stdout).toContain(`Exported session ${sessionId}`);
         expect(archive.manifest.sessionId).toBe(sessionId);
         expect(archive.eventsJsonl).toContain('"kind":"mission-control.session-event"');
         await expect(access(localSessionDbPath(dataDir))).resolves.toBeUndefined();

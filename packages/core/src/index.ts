@@ -300,6 +300,153 @@ export {
 } from './runtime/run-owner.js';
 export type { AgentScheduler } from './runtime/scheduler.js';
 export { MockAgentScheduler } from './runtime/scheduler.js';
+export type {
+    SessionControlCallbackFence,
+    SessionControlCallbackHandleKind,
+    SessionControlCancellation,
+    SessionControlEpoch,
+} from './runtime/session-control-cancellation.js';
+export {
+    type SessionControlAccessToken,
+    type SessionControlAttachedHandle,
+    type SessionControlAttachment,
+    type SessionControlEntityKind,
+    type SessionControlEntitySnapshot,
+    SessionControlFencedError,
+    SessionControlHost,
+    type SessionControlHostPublisher,
+    type SessionControlStopContext,
+} from './runtime/session-control-host.js';
+export {
+    acquireSessionControlLease,
+    expireSessionControlLease,
+    readSessionControlLease,
+    renewSessionControlLease,
+    runWithSessionControlLeaseFence,
+    SESSION_CONTROL_LEASE_TTL_MS,
+    type SessionControlLease,
+    type SessionControlLeaseAcquisition,
+    SessionControlLeaseError,
+    type SessionControlLeaseErrorCode,
+} from './runtime/session-control-lease.js';
+export {
+    SESSION_CONTROL_RENEW_INTERVAL_MS,
+    type SessionControlLeaseRenewer,
+    startSessionControlLeaseRenewer,
+} from './runtime/session-control-lease-renewer.js';
+export {
+    completeSessionControlOperation,
+    createSessionControlCallbackFence,
+    createSessionControlOperation,
+    gcSessionControlOperations,
+    readSessionControlOperation,
+    recoverExpiredSessionControlOperations,
+    redactLateSettlementMetadata,
+    SESSION_CONTROL_DEAD_LEASE_RETENTION_MS,
+    SESSION_CONTROL_GC_INTERVAL_MS,
+    SESSION_CONTROL_LATE_SETTLEMENT_RETENTION_MS,
+    SESSION_CONTROL_SETTLED_RETENTION_MS,
+    type SessionControlLateSettlementMetadata,
+    type SessionControlOperation,
+    type SessionControlOperationStatus,
+    type SessionControlOperationTimer,
+    settleSessionControlOperationHandle,
+    startSessionControlOperationDeadline,
+    startSessionControlOperationGc,
+    timeoutSessionControlOperation,
+} from './runtime/session-control-operation.js';
+export {
+    type PosixSessionControlOwner,
+    publishPosixSessionControlOwner,
+    resolveAuthenticatedPosixSessionControlOwner,
+    SessionControlOwnerError,
+} from './runtime/session-control-owner-posix.js';
+export {
+    closeProcessSessionControlHosts,
+    fenceProcessSessionControlHosts,
+    getProcessSessionControlHost,
+} from './runtime/session-control-process-host.js';
+export {
+    type AuthenticatedSessionControlServer,
+    authenticateSessionControlEndpoint,
+    createAuthenticatedSessionControlServer,
+    generateSessionControlNonce,
+    matchesSessionControlNonce,
+    sessionControlNonceHash,
+} from './runtime/session-control-registry-auth.js';
+export {
+    publishSessionControlRegistry,
+    readSessionControlRegistry,
+    type SessionControlRegistry,
+    serializeSessionControlRegistry,
+} from './runtime/session-control-registry-file.js';
+export {
+    type PosixSessionControlPaths,
+    type ResolvePosixSessionControlPathsInput,
+    resolvePosixSessionControlPaths,
+    SessionControlRegistryError,
+    type SessionControlRegistryErrorCode,
+    sessionControlRegistryFileName,
+    sessionControlSocketName,
+} from './runtime/session-control-registry-paths.js';
+export {
+    createPosixSessionOwnerControlClient,
+    createSessionOwnerControlClient,
+    type SessionOwnerControlClient,
+    SessionOwnerControlClientError,
+    stopExactSessionOverOwnerControl,
+} from './runtime/session-owner-control-client.js';
+export {
+    encodeSessionOwnerControlFrame,
+    parseSessionOwnerControlFrame,
+    SESSION_OWNER_CONTROL_MAX_FRAME_BYTES,
+    SessionOwnerControlFrameError,
+} from './runtime/session-owner-control-framing.js';
+export {
+    type ExactSessionStopAcquisition,
+    type ExactSessionStopInput,
+    type SessionStopReceipt,
+    SessionStopService,
+} from './runtime/session-stop-service.js';
+export {
+    SESSION_STOP_TREE_MAX_RESCANS,
+    SESSION_STOP_TREE_MAX_SESSIONS,
+    SESSION_STOP_TREE_MAX_TIMEOUT_MS,
+    SESSION_STOP_TREE_RETRY_DELAY_MS,
+    type SessionStopTreeResult,
+    type SessionStopTreeSessionResult,
+    type StopSessionTreeInput,
+    stopSessionTree,
+} from './runtime/session-stop-tree.js';
+export {
+    SESSION_STOP_TREE_SHARED_FIXTURES,
+    type SessionStopTreeSharedFixture,
+} from './runtime/session-stop-tree-fixtures.js';
+export {
+    type StopLocalSessionTreeInput,
+    stopLocalSessionTree,
+} from './runtime/session-stop-tree-local.js';
+export {
+    type CanonicalSessionTreeDescendant,
+    type CanonicalSessionTreeNode,
+    type CanonicalSessionTreeResult,
+    readCanonicalSessionTree,
+    resolveCanonicalSessionTree,
+} from './runtime/session-stop-tree-resolver.js';
+export {
+    resolveSessionStoreIdentity,
+    SESSION_STORE_IDENTITY_GOLDEN_VECTORS,
+    type SessionStoreIdentity,
+    SessionStoreIdentityError,
+    type SessionStoreIdentityErrorCode,
+    type SessionStoreIdentityGoldenVector,
+    sessionStoreDatabasePath,
+} from './runtime/session-store-identity.js';
+export {
+    type CanonicalSessionTreeTokenNode,
+    computeCanonicalSessionTreeToken,
+    encodeCanonicalSessionTree,
+} from './runtime/session-tree-token.js';
 export {
     type AdmitPromptInput,
     type ModelVisibleTranscriptMessage,

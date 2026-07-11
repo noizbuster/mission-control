@@ -33,6 +33,8 @@ export {
     ProviderExecutionCapabilitySchema,
 } from './provider-auth.js';
 export {
+    type OperatorAbortedRunEventMetadata,
+    OperatorAbortedRunEventMetadataSchema,
     RUN_COORDINATOR_COMMANDS,
     RUN_COORDINATOR_STATES,
     type RunCoordinatorCommand,

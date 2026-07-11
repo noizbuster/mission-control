@@ -16,11 +16,9 @@
  * deterministically without touching disk.
  */
 
+import { resolveSessionStoreIdentity } from '../runtime/session-store-identity.js';
 import type { PersistentMemoryStore } from './persistent-memory-store.js';
 import { isTursoAvailable, TursoPersistentStore } from './turso-persistent-store.js';
-import { join } from 'node:path';
-
-const MEMORY_DB_FILENAME = 'memory.db';
 
 /** Opens a libSQL-backed store at a `file:` (or `:memory:`) URL. Overridable for tests. */
 export type PersistentStoreOpener = (url: string) => Promise<PersistentMemoryStore>;
@@ -54,9 +52,9 @@ export async function createPersistentStore(
         return undefined;
     }
 
-    const dbUrl = `file:${join(dataDir, MEMORY_DB_FILENAME)}`;
+    const identity = await resolveSessionStoreIdentity({ dataDir });
     try {
-        return await openStore(dbUrl);
+        return await openStore(identity.databaseFileUrl);
     } catch {
         return undefined;
     }

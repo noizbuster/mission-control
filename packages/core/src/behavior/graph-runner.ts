@@ -9,6 +9,7 @@ import type {
 import type { ModelMessage } from 'ai';
 import type { ProjectInstructionResource } from '../context/project-context-messages.js';
 import type { SystemPromptEnvironment } from '../context/system-prompt.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import type { AgentModelLookup } from './agent-model-resolver.js';
 import type { PricingTable } from './budget/cost-ledger.js';
@@ -37,6 +38,7 @@ export type AbgGraphRunnerInput = {
      * so cancellable nodes honor it.
      */
     readonly abortSignal?: AbortSignal;
+    readonly controlEpoch?: SessionControlEpoch;
     /**
      * Seed conversation for the Blackboard message list (typically the user turn). The
      * Observe→Decide→Act loop appends to this across re-entries.

@@ -113,7 +113,7 @@ export function abgSignalsFromStreamPart(
         case 'tool-output-denied':
             return [emit(ctx, 'tool.denied', { toolCallId: part.toolCallId, toolName: part.toolName })];
         case 'error':
-            return [emit(ctx, 'llm.error', { error: errorToString(part.error) })];
+            return [emit(ctx, 'llm.error', { error: redactCredentialText(errorToString(part.error)) })];
         default:
             // start-step / finish-step / finish / text-start / text-end / tool-input-* etc.
             // are intentionally quiet in Phase 0; turn boundaries are emitted by the node.

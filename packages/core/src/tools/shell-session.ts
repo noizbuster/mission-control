@@ -8,6 +8,7 @@ import type {
 import { z } from 'zod';
 import { redactCredentialText } from '../providers/credential-resolver.js';
 import { truncateToValidUtf8Boundary } from '../providers/stream-decoder.js';
+import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
 import {
     assertTrustedWorkspace,
     buildTrustedBashEnv,
@@ -15,7 +16,7 @@ import {
     defaultBashRunTimeoutMs,
     resolveBashCwd,
 } from './bash-run-policy.js';
-import { commandRunFailure } from './command-run-errors.js';
+import { commandOperatorAborted, commandRunFailure } from './command-run-errors.js';
 import { permissionRequest, requestToolPermission } from './tool-permissions.js';
 import { type ToolAdvertisement, type ToolRegistration, ToolRegistry } from './tool-registry.js';
 import type { ToolExecutionContext } from './tool-registry-types.js';
@@ -69,6 +70,8 @@ export interface ShellSessionTransportRequest {
     readonly cwd?: string;
     readonly env?: Readonly<Record<string, string>>;
     readonly timeoutMs?: number;
+    readonly signal: AbortSignal;
+    readonly controlEpoch?: SessionControlEpoch;
 }
 
 export type ShellSessionToolOptions = {
@@ -180,7 +183,7 @@ async function runShellSessionTool(
     try {
         await requireShellSessionApproval(options, context.toolCallId, input.commandLine);
         if (context.signal.aborted) {
-            return shellSessionOutput(
+            const output = shellSessionOutput(
                 sessionId,
                 input.commandLine,
                 cwd,
@@ -188,8 +191,20 @@ async function runShellSessionTool(
                 options.maxOutputBytes,
                 redactionSecrets,
             );
+            throw commandOperatorAborted(`shell.session interrupted before spawn: ${input.commandLine}`, [
+                started,
+                commandEvent('command.failed', context.toolCallId, metadataForOutput(output, 'failed')),
+            ]);
         }
-        const result = await runShellSessionCommand(options, sessionId, input.commandLine, cwd, env, context.signal);
+        const result = await runShellSessionCommand(
+            options,
+            sessionId,
+            input.commandLine,
+            cwd,
+            env,
+            context.signal,
+            context.controlEpoch,
+        );
         const output = shellSessionOutput(
             sessionId,
             input.commandLine,
@@ -202,6 +217,18 @@ async function runShellSessionTool(
             throw commandRunFailure('command_timed_out', `shell.session timed out: ${input.commandLine}`, [
                 started,
                 commandEvent('command.timed_out', context.toolCallId, metadataForOutput(output, 'timed_out')),
+            ]);
+        }
+        if (output.status === 'failed') {
+            if (context.signal.aborted) {
+                throw commandOperatorAborted(`shell.session interrupted: ${input.commandLine}`, [
+                    started,
+                    commandEvent('command.failed', context.toolCallId, metadataForOutput(output, 'failed')),
+                ]);
+            }
+            throw commandRunFailure('command_failed', `shell.session failed: ${input.commandLine}`, [
+                started,
+                commandEvent('command.failed', context.toolCallId, metadataForOutput(output, 'failed')),
             ]);
         }
         return output;
@@ -225,6 +252,7 @@ async function runShellSessionCommand(
     cwd: string,
     env: NodeJS.ProcessEnv,
     signal: AbortSignal,
+    controlEpoch?: SessionControlEpoch,
 ): Promise<RawRunResult> {
     const controller = new AbortController();
     let timedOut = false;
@@ -267,6 +295,8 @@ async function runShellSessionCommand(
                 cwd,
                 ...(Object.keys(transportEnv).length > 0 ? { env: transportEnv } : {}),
                 timeoutMs: options.timeoutMs,
+                signal: controller.signal,
+                ...(controlEpoch !== undefined ? { controlEpoch } : {}),
             })
             .then((frames): RawRunResult => assembleFrames(frames, Date.now() - startedAt));
         const outcome = await Promise.race([transportPromise, timeoutPromise]);

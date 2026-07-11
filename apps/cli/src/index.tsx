@@ -1,5 +1,6 @@
 #!/usr/bin/env -S node --experimental-ffi
 import { parseArgs } from './args.js';
+import type { CliCommandResult } from './cli-command-result.js';
 import { runAuthCommand } from './commands/auth.js';
 import { runMcpCommand } from './commands/mcp.js';
 import { disposeAllMissionControlServices } from './commands/mission-control-services.js';
@@ -7,6 +8,7 @@ import { runModelsCommand } from './commands/models.js';
 import { runAgent } from './commands/run-agent.js';
 import { runAgentsCommand } from './commands/run-agents-cli.js';
 import { runSessionCommand } from './commands/session.js';
+import { SessionCliUsageError } from './session-args.js';
 import { pathToFileURL } from 'node:url';
 
 export function getVersion(): string {
@@ -85,7 +87,9 @@ export function createHelpText(): string {
         '  mc session export session_demo /tmp/session_demo.mctrl-session.json',
         '  mc session import /tmp/session_demo.mctrl-session.json',
         '  mc session replay session_demo --jsonl',
+        '  mc session stop session_demo [--only | --child-only] [--timeout 15s]',
         '  mc session delete session_demo',
+        '  mc session delete session_demo --expected-tree-token <sha256>',
         '  mc auth login --provider local --api-key <key>',
         '  mc auth login --provider anthropic --api-key <key>',
         '  mc auth login --provider openai --method oauth-headless',
@@ -111,7 +115,7 @@ export function createHelpText(): string {
     ].join('\n');
 }
 
-export async function main(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
+export async function main(argv: readonly string[] = process.argv.slice(2)): Promise<CliCommandResult | undefined> {
     const args = parseArgs(argv);
     if (args.showVersion) {
         process.stdout.write(`${getVersion()}\n`);
@@ -137,8 +141,8 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
         case 'session-import':
         case 'session-replay':
         case 'session-delete':
-            process.stdout.write(await runSessionCommand(args));
-            return;
+        case 'session-stop':
+            return runSessionCommand(args);
         case 'mcp-add':
         case 'mcp-list':
         case 'mcp-remove':
@@ -158,17 +162,28 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
 
 export async function runCli(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
     try {
-        await main(argv);
+        const result = await main(argv);
+        if (result !== undefined) writeCliCommandResult(result);
     } catch (error: unknown) {
-        if (error instanceof Error) {
+        if (error instanceof SessionCliUsageError) {
             process.stderr.write(`${error.message}\n`);
+            process.exitCode = 2;
+        } else if (error instanceof Error) {
+            process.stderr.write(`${error.message}\n`);
+            process.exitCode = 1;
         } else {
             process.stderr.write(`${String(error)}\n`);
+            process.exitCode = 1;
         }
-        process.exitCode = 1;
     } finally {
         await disposeAllMissionControlServices().catch(() => {});
     }
+}
+
+export function writeCliCommandResult(result: CliCommandResult): void {
+    if (result.stdout.length > 0) process.stdout.write(`${result.stdout}\n`);
+    if (result.stderr.length > 0) process.stderr.write(`${result.stderr}\n`);
+    process.exitCode = result.exitCode;
 }
 
 function isCliEntrypoint(): boolean {

@@ -1,29 +1,28 @@
-import { deleteLocalSessionRows, resolveMissionControlDataDir } from '@mission-control/core';
-import { type CliSessionCatalogEntry, listSessionCatalogEntries } from './session-catalog.js';
+import {
+    deleteLocalSessionTreeRows,
+    LocalSessionTreeDeleteError,
+    resolveMissionControlDataDir,
+} from '@mission-control/core';
 import { CliSessionCommandError } from './session-command-error.js';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-export async function deleteSessionTree(input: { readonly sessionId: string }): Promise<string> {
-    const targetId = input.sessionId;
-    const entries = await listSessionCatalogEntries();
-    const target = entries.find((entry) => entry.sessionId === targetId);
-    if (target === undefined) {
-        throw new CliSessionCommandError({
-            code: 'session_not_found',
-            message: `Session not found: ${targetId}`,
-            sessionId: targetId,
+export async function deleteSessionTree(input: {
+    readonly sessionId: string;
+    readonly expectedTreeToken?: string;
+}): Promise<string> {
+    let deleted: Awaited<ReturnType<typeof deleteLocalSessionTreeRows>>;
+    try {
+        deleted = await deleteLocalSessionTreeRows({
+            targetSessionId: input.sessionId,
+            ...(input.expectedTreeToken !== undefined ? { expectedTreeToken: input.expectedTreeToken } : {}),
         });
+    } catch (error: unknown) {
+        if (error instanceof LocalSessionTreeDeleteError) throw cliDeleteError(error.code, input.sessionId);
+        throw error;
     }
-
-    const childrenByParent = buildChildrenByParent(entries);
-    const ordered = collectDescendants(target, childrenByParent);
-
-    await deleteLocalSessionRows({ sessionIds: ordered.map((entry) => entry.sessionId) });
-    await Promise.all(ordered.map((entry) => rm(sessionLogPath(entry.sessionId), { force: true })));
-
-    const lines = ordered.map((entry) => `Deleted session ${entry.sessionId} (${entry.eventCount} events)`);
-    return `${lines.join('\n')}\n`;
+    await Promise.all(deleted.map(({ sessionId }) => rm(sessionLogPath(sessionId), { force: true })));
+    return deleted.map(({ sessionId, eventCount }) => `Deleted session ${sessionId} (${eventCount} events)`).join('\n');
 }
 
 function sessionLogsDir(): string {
@@ -34,43 +33,21 @@ function sessionLogPath(sessionId: string): string {
     return join(sessionLogsDir(), `${sessionId}.jsonl`);
 }
 
-function buildChildrenByParent(
-    entries: readonly CliSessionCatalogEntry[],
-): ReadonlyMap<string, readonly CliSessionCatalogEntry[]> {
-    const map = new Map<string, CliSessionCatalogEntry[]>();
-    for (const entry of entries) {
-        if (entry.parentSessionId === undefined) {
-            continue;
-        }
-        const siblings = map.get(entry.parentSessionId);
-        if (siblings === undefined) {
-            map.set(entry.parentSessionId, [entry]);
-        } else {
-            siblings.push(entry);
-        }
+function cliDeleteError(code: LocalSessionTreeDeleteError['code'], sessionId: string): CliSessionCommandError {
+    switch (code) {
+        case 'session_not_found':
+            return new CliSessionCommandError({ code, message: `Session not found: ${sessionId}`, sessionId });
+        case 'unstable_session_tree':
+            return new CliSessionCommandError({ code, message: `Unstable session tree: ${sessionId}`, sessionId });
+        case 'session_tree_changed':
+            return new CliSessionCommandError({ code, message: `Session tree changed: ${sessionId}`, sessionId });
+        case 'session_live_locked':
+            return new CliSessionCommandError({ code, message: `Session is live locked: ${sessionId}`, sessionId });
+        default:
+            return unreachableDeleteError(code);
     }
-    return map;
 }
 
-function collectDescendants(
-    target: CliSessionCatalogEntry,
-    childrenByParent: ReadonlyMap<string, readonly CliSessionCatalogEntry[]>,
-): readonly CliSessionCatalogEntry[] {
-    const ordered: CliSessionCatalogEntry[] = [];
-    const visited = new Set<string>([target.sessionId]);
-    const queue: CliSessionCatalogEntry[] = [target];
-    while (queue.length > 0) {
-        const current = queue.shift();
-        if (current === undefined) {
-            break;
-        }
-        ordered.push(current);
-        for (const child of childrenByParent.get(current.sessionId) ?? []) {
-            if (!visited.has(child.sessionId)) {
-                visited.add(child.sessionId);
-                queue.push(child);
-            }
-        }
-    }
-    return ordered;
+function unreachableDeleteError(code: never): never {
+    throw new TypeError(`unsupported session delete error: ${String(code)}`);
 }

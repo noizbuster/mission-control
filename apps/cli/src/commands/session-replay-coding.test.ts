@@ -38,7 +38,7 @@ describe('session replay coding projection', () => {
         // When
         const replayOutput = await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']));
         const replayRecords = parseReplayRecords(replayOutput);
-        const showOutput = JSON.parse(await runSessionCommand(parseArgs(['session', 'show', sessionId])));
+        const showOutput = JSON.parse((await runSessionCommand(parseArgs(['session', 'show', sessionId]))).stdout);
 
         // Then
         const runEventTypes = runEvents.map((event) => event.type);

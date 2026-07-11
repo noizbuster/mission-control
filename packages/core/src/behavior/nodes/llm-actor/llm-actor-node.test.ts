@@ -321,15 +321,17 @@ describe('ai-sdk-adapter', () => {
         expect(eventTypes(deniedOut)).toEqual(['tool.denied']);
     });
 
-    it('maps the error part via errorToString (review fix #8)', () => {
+    it('redacts credentials from SDK error parts before emitting llm.error', () => {
+        const secret = ['sk', 'sdk_error_part_123'].join('-');
         const out = abgSignalsFromStreamPart(
-            { type: 'error', error: new Error('boom') } as TextStreamPart<ToolSet>,
+            { type: 'error', error: new Error(`provider exploded ${secret}`) } as TextStreamPart<ToolSet>,
             ctx,
         );
         expect(eventTypes(out)).toEqual(['llm.error']);
         const event = out[0];
         if (event?.type !== 'emit') throw new Error('expected emit');
-        expect((event.event.payload as { error: string }).error).toBe('boom');
+        expect((event.event.payload as { error: string }).error).toBe('provider exploded [REDACTED_CREDENTIAL]');
+        expect(JSON.stringify(event)).not.toContain(secret);
     });
 
     it('recovers a failed settlement from the ledger so tool-result maps to tool.failed (not completed)', () => {

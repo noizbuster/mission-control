@@ -1,45 +1,64 @@
 import { type CodingReplayStep, type ReplayDiagnostic, readLocalSessionReplay } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
+import { type CliCommandResult, successfulCliCommand } from '../cli-command-result.js';
 import { formatSessionStatusWithSource } from '../ui/session-status-format.js';
 import { exportSessionArchiveFile, importSessionArchiveFile } from './session-archive.js';
 import { formatSessionCatalogEntry, listSessionCatalogEntries, readSessionCatalogEntry } from './session-catalog.js';
 import { CliSessionCommandError } from './session-command-error.js';
 import { deleteSessionTree } from './session-delete-command.js';
 import { parseCliSessionId } from './session-id.js';
+import { runSessionStopCommand } from './session-stop-command.js';
 
 export type { CliSessionCommandErrorCode } from './session-command-error.js';
 export { CliSessionCommandError };
 
-export async function runSessionCommand(args: CliArgs): Promise<string> {
+export async function runSessionCommand(args: CliArgs): Promise<CliCommandResult> {
     switch (args.command) {
         case 'session-list':
-            return `${(await listSessionCatalogEntries()).map(formatSessionCatalogEntry).join('\n')}\n`;
+            return successfulCliCommand((await listSessionCatalogEntries()).map(formatSessionCatalogEntry).join('\n'));
         case 'session-show':
-            return `${JSON.stringify(await showSession(requireSessionId(args)), null, 2)}\n`;
+            return successfulCliCommand(JSON.stringify(await showSession(requireSessionId(args)), null, 2));
         case 'session-replay':
             if (args.replayInteractive === true) {
                 await runReplayInteractiveSession(requireSessionId(args));
-                return '';
+                return successfulCliCommand('');
             }
-            return `${(await replaySession(requireSessionId(args))).map((record) => JSON.stringify(record)).join('\n')}\n`;
+            return successfulCliCommand(
+                (await replaySession(requireSessionId(args))).map((record) => JSON.stringify(record)).join('\n'),
+            );
         case 'session-export':
-            return exportSessionArchiveFile({
-                sessionId: requireSessionId(args),
-                filePath: requireFilePath(args),
-            });
+            return successfulCliCommand(
+                stripTrailingLineFeed(
+                    await exportSessionArchiveFile({
+                        sessionId: requireSessionId(args),
+                        filePath: requireFilePath(args),
+                    }),
+                ),
+            );
         case 'session-import':
-            return importSessionArchiveFile({ filePath: requireFilePath(args) });
+            return successfulCliCommand(
+                stripTrailingLineFeed(await importSessionArchiveFile({ filePath: requireFilePath(args) })),
+            );
         case 'session-delete':
-            return deleteSessionTree({
-                sessionId: requireSessionId(args),
-            });
+            return successfulCliCommand(
+                await deleteSessionTree({
+                    sessionId: requireSessionId(args),
+                    ...(args.expectedTreeToken !== undefined ? { expectedTreeToken: args.expectedTreeToken } : {}),
+                }),
+            );
+        case 'session-stop':
+            return runSessionStopCommand(args);
         default:
             throw new CliSessionCommandError({
                 code: 'unsupported_session_command',
                 message: `Unsupported session command: ${args.command}`,
             });
     }
+}
+
+function stripTrailingLineFeed(value: string): string {
+    return value.endsWith('\n') ? value.slice(0, -1) : value;
 }
 
 async function showSession(sessionId: string) {

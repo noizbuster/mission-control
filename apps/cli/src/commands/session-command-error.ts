@@ -2,6 +2,8 @@ export type CliSessionCommandErrorCode =
     | 'invalid_session_id'
     | 'session_not_found'
     | 'session_live_locked'
+    | 'session_tree_changed'
+    | 'unstable_session_tree'
     | 'unsupported_session_command';
 
 export class CliSessionCommandError extends Error {

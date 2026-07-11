@@ -15,6 +15,7 @@ import type {
     RunCoordinatorTurnRunner,
 } from './run-coordinator-types.js';
 import { promptInput } from './run-owner-prompt-input.js';
+import type { SessionControlHost } from './session-control-host.js';
 
 export type SessionRunOwnerReceipt = {
     readonly sessionId: string;
@@ -53,6 +54,7 @@ export type SessionRunOwnerOptions = {
      * owns queue/steer/resume around graph runs. The flat path is byte-identical when omitted.
      */
     readonly runProviderTurn?: RunCoordinatorTurnRunner;
+    readonly sessionControlHost?: SessionControlHost;
 } & RunOwnerObserverOptions;
 
 export type SessionRunOwnerRegistryOptions = {
@@ -78,6 +80,7 @@ export type SessionRunOwnerRegistryOptions = {
      * tool loop; inject a turn runner (e.g. `createGraphTurnRunner`) to drive the ABG graph.
      */
     readonly runProviderTurn?: RunCoordinatorTurnRunner;
+    readonly sessionControlHost?: SessionControlHost;
     /**
      * Per-owner engine factory (preferred over `runProviderTurn`): called for each owner with its
      * resolved `sessionId`/`modelProviderSelection`/`toolRegistry` so a turn runner can capture
@@ -132,6 +135,7 @@ export class SessionRunOwner {
             ...(options.onProviderEnvelope !== undefined ? { onProviderEnvelope: options.onProviderEnvelope } : {}),
             ...(options.onToolCall !== undefined ? { onToolCall: options.onToolCall } : {}),
             ...(options.onToolSettlement !== undefined ? { onToolSettlement: options.onToolSettlement } : {}),
+            ...(options.sessionControlHost !== undefined ? { sessionControlHost: options.sessionControlHost } : {}),
         });
     }
 
@@ -158,12 +162,16 @@ export class SessionRunOwner {
         return this.receipt(await this.coordinator.interrupt(reason));
     }
 
+    release(): Promise<void> {
+        return this.coordinator.close();
+    }
+
     status(): SessionRunOwnerReceipt {
         return this.receipt(this.coordinator.status());
     }
 
     close(): Promise<void> {
-        return Promise.resolve(this.store.close());
+        return this.release().then(() => this.store.close());
     }
 
     private receipt(result: RunCoordinatorResult): SessionRunOwnerReceipt {
@@ -299,6 +307,9 @@ export class SessionRunOwnerRegistry {
                 : {}),
             ...(this.options.onToolCall !== undefined ? { onToolCall: this.options.onToolCall } : {}),
             ...(this.options.onToolSettlement !== undefined ? { onToolSettlement: this.options.onToolSettlement } : {}),
+            ...(this.options.sessionControlHost !== undefined
+                ? { sessionControlHost: this.options.sessionControlHost }
+                : {}),
         });
         return { owner, store, refCount: 0 };
     }

@@ -1,10 +1,9 @@
 import type { Client } from '@libsql/client';
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
+import { openRuntimeLocalDb } from '../runtime/local-runtime-db.js';
 import { type JsonlSessionReplayPrefixProjection, projectSessionReplay } from '../session-replay.js';
 import type { ReplayDiagnostic } from '../session-replay-types.js';
 import { resolveMissionControlDataDir } from './data-dir.js';
 import { ensureLocalSessionDatabase } from './local-session-store-database.js';
-import { localSessionDbUrl } from './local-session-store-paths.js';
 import { readExportEnvelopes } from './session-import-event-sql.js';
 import { listLegacySessionImportLedger } from './session-import-sql.js';
 
@@ -23,11 +22,11 @@ export async function readLocalSessionReplay(input: {
     readonly now?: () => string;
 }): Promise<LocalSessionReplayReadResult> {
     const dataDir = input.dataDir ?? resolveMissionControlDataDir();
-    await ensureLocalSessionDatabase({
+    const identity = await ensureLocalSessionDatabase({
         dataDir,
         ...(input.now !== undefined ? { now: input.now } : {}),
     });
-    const runtime = await openLocalLibsqlDb({ url: localSessionDbUrl(dataDir) });
+    const runtime = await openRuntimeLocalDb(identity);
     try {
         if (await hasSqliteSession(runtime.client, input.sessionId)) {
             const envelopes = await readExportEnvelopes({ client: runtime.client, sessionId: input.sessionId });

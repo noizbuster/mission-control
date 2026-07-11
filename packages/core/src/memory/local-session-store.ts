@@ -1,4 +1,11 @@
-export { deleteLocalSessionRows, openLocalSessionProjectionStore } from './local-session-store-database.js';
+export {
+    deleteLocalSessionRows,
+    deleteLocalSessionTreeRows,
+    LocalSessionTreeDeleteError,
+    type LocalSessionTreeDeleteErrorCode,
+    type LocalSessionTreeDeleteRecord,
+    openLocalSessionProjectionStore,
+} from './local-session-store-database.js';
 export {
     type LocalSessionEventStore,
     type OpenLocalSessionEventStoreOptions,

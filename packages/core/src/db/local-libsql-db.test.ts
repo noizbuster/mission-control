@@ -83,6 +83,7 @@ describe('local libSQL database runtime', () => {
                 'provider_failures',
                 'runtime_agents',
                 'session_awaits',
+                'session_control_leases',
                 'session_event_sequences',
                 'session_events',
                 'session_inputs',
