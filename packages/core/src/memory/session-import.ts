@@ -1,5 +1,4 @@
-import type { Client } from '@libsql/client';
-import { type LocalLibsqlWriteKey, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
+import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
 import {
     createJsonlSessionEventRecord,
     createJsonlSessionLogHeader,
@@ -27,14 +26,14 @@ export type LegacySessionExportResult = {
     readonly exportedEventCount: number;
 };
 
-export async function importLegacySessionCompatibilityWindow(input: {
-    readonly client: Client;
-    readonly writeKey: LocalLibsqlWriteKey;
-    readonly dataDir: string;
-    readonly omoRoot?: string;
-    readonly includeRunSources?: boolean;
-    readonly now?: () => string;
-}): Promise<LegacySessionImportResult> {
+export async function importLegacySessionCompatibilityWindow(
+    input: LocalLibsqlWriteTarget & {
+        readonly dataDir: string;
+        readonly omoRoot?: string;
+        readonly includeRunSources?: boolean;
+        readonly now?: () => string;
+    },
+): Promise<LegacySessionImportResult> {
     await runLocalLibsqlWrite(input, ensureLegacySessionImportTables);
     const acc: ImportAccumulator = {
         importedEventCount: 0,
@@ -62,13 +61,13 @@ export async function importLegacySessionCompatibilityWindow(input: {
     };
 }
 
-export async function exportLegacySessionJsonl(input: {
-    readonly client: Client;
-    readonly writeKey: LocalLibsqlWriteKey;
-    readonly sessionId: string;
-    readonly outputDir: string;
-    readonly now?: () => string;
-}): Promise<LegacySessionExportResult> {
+export async function exportLegacySessionJsonl(
+    input: LocalLibsqlWriteTarget & {
+        readonly sessionId: string;
+        readonly outputDir: string;
+        readonly now?: () => string;
+    },
+): Promise<LegacySessionExportResult> {
     const now = input.now ?? (() => new Date().toISOString());
     const envelopes = await readExportEnvelopes({ client: input.client, sessionId: input.sessionId });
     await mkdir(input.outputDir, { recursive: true });

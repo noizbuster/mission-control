@@ -1,6 +1,10 @@
 import type { Client } from '@libsql/client';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
-import type { LocalLibsqlWriteKey } from './local-libsql-identity.js';
+import {
+    bindLocalLibsqlWriteLane,
+    createLocalLibsqlWriteLane,
+    type LocalLibsqlWriteLane,
+} from './local-libsql-write-lane.js';
 
 export type LocalLibsqlRegistryResource = {
     readonly client: Client;
@@ -19,21 +23,16 @@ export type AcquireLocalLibsqlFileLeaseOptions = {
     readonly initialize: (client: Client) => Promise<void>;
 };
 
-type WriteLane = {
-    tail: Promise<void>;
-};
-
 type LocalLibsqlRegistryEntry = {
     readonly key: string;
     readonly initialization: Promise<LocalLibsqlRegistryResource>;
     readonly setupPromises: Map<string, Promise<LocalLibsqlRegistryResource>>;
-    readonly writeLane: WriteLane;
+    readonly writeLane: LocalLibsqlWriteLane;
     references: number;
     closeToken: symbol | undefined;
 };
 
 const fileEntries = new Map<string, LocalLibsqlRegistryEntry>();
-const isolatedWriteLanes = new Map<LocalLibsqlWriteKey, WriteLane>();
 
 export async function acquireLocalLibsqlFileLease(
     options: AcquireLocalLibsqlFileLeaseOptions,
@@ -60,49 +59,17 @@ export async function acquireLocalLibsqlFileLease(
     };
 }
 
-export function closeIsolatedLocalLibsqlAfterWrites(writeKey: LocalLibsqlWriteKey, close: () => void): void {
-    const writeLane = isolatedWriteLanes.get(writeKey);
-    if (writeLane === undefined) {
-        close();
-        return;
-    }
-    scheduleIsolatedClose(writeLane, close);
-}
-
-export async function runWithLocalLibsqlRegistryWriteLock<T>(
-    writeKey: LocalLibsqlWriteKey,
-    write: () => Promise<T>,
-): Promise<T> {
-    const entry = typeof writeKey === 'string' ? fileEntries.get(writeKey) : undefined;
-    const writeLane = entry?.writeLane ?? existingOrNewIsolatedWriteLane(writeKey);
-    const previous = writeLane.tail;
-    let releaseQueue = (): void => undefined;
-    const current = new Promise<void>((resolve) => {
-        releaseQueue = resolve;
-    });
-    const queued = previous.then(() => current);
-    writeLane.tail = queued;
-    await previous;
-
-    try {
-        return await write();
-    } finally {
-        releaseQueue();
-        if (entry === undefined && isolatedWriteLanes.get(writeKey)?.tail === queued) {
-            isolatedWriteLanes.delete(writeKey);
-        }
-    }
-}
-
 function existingOrNewEntry(options: AcquireLocalLibsqlFileLeaseOptions): LocalLibsqlRegistryEntry {
     const existing = fileEntries.get(options.key);
     if (existing !== undefined) return existing;
 
     let entry: LocalLibsqlRegistryEntry | undefined;
+    const writeLane = createLocalLibsqlWriteLane();
     const initialization = Promise.resolve().then(async () => {
         let client: Client | undefined;
         try {
             client = options.createClient();
+            bindLocalLibsqlWriteLane({ writeKey: options.key, client }, writeLane);
             await options.initialize(client);
             return { client, db: options.createDatabase(client) };
         } catch (error: unknown) {
@@ -111,8 +78,6 @@ function existingOrNewEntry(options: AcquireLocalLibsqlFileLeaseOptions): LocalL
             throw error;
         }
     });
-    const writeLane = isolatedWriteLanes.get(options.key) ?? { tail: Promise.resolve() };
-    isolatedWriteLanes.delete(options.key);
     entry = {
         key: options.key,
         initialization,
@@ -143,14 +108,6 @@ function setupForLease(
     return pending;
 }
 
-function existingOrNewIsolatedWriteLane(writeKey: LocalLibsqlWriteKey): WriteLane {
-    const existing = isolatedWriteLanes.get(writeKey);
-    if (existing !== undefined) return existing;
-    const created = { tail: Promise.resolve() };
-    isolatedWriteLanes.set(writeKey, created);
-    return created;
-}
-
 function releaseFileLease(entry: LocalLibsqlRegistryEntry): void {
     entry.references--;
     if (entry.references > 0) return;
@@ -172,16 +129,5 @@ function scheduleFinalClose(entry: LocalLibsqlRegistryEntry): void {
             fileEntries.delete(entry.key);
             resource.client.close();
         });
-    });
-}
-
-function scheduleIsolatedClose(writeLane: WriteLane, close: () => void): void {
-    const scheduledTail = writeLane.tail;
-    void scheduledTail.then(() => {
-        if (writeLane.tail !== scheduledTail) {
-            scheduleIsolatedClose(writeLane, close);
-            return;
-        }
-        close();
     });
 }

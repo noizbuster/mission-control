@@ -1,8 +1,6 @@
-import { createClient } from '@libsql/client';
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { type LocalLibsqlWriteKey, openLocalLibsqlDb, runWithLocalLibsqlWriteLock } from '../db/local-libsql-db.js';
-import { resolveLocalLibsqlIdentity } from '../db/local-libsql-identity.js';
+import { type LocalLibsqlWriteTarget, openLocalLibsqlDb, runWithLocalLibsqlWriteLock } from '../db/local-libsql-db.js';
 import { envelope, sessionStoppedEvent } from '../session-replay-coding-test-support.js';
 import { exportLegacySessionJsonl, importLegacySessionCompatibilityWindow } from './session-import.js';
 import { SESSION_IMPORT_TEST_SESSION_ID, writeLegacyFixture } from './session-import-test-support.js';
@@ -31,12 +29,10 @@ describe('local libSQL write serialization', () => {
         await appendStore.append(sessionStartedEvent('projection_serialized'));
         await appendStore.close();
         const store = await openSqliteSessionProjectionStore({ url });
-        const client = createClient({ url });
-        const identity = await resolveLocalLibsqlIdentity({ url });
+        const runtime = await openLocalLibsqlDb({ url });
         const releaseLane = deferred();
         const holdingWrite = holdWriteLaneWithSessionStatus({
-            writeKey: identity.writeKey,
-            client,
+            target: runtime,
             release: releaseLane.promise,
             sessionId: 'projection_serialized',
         });
@@ -58,12 +54,12 @@ describe('local libSQL write serialization', () => {
         await holdingWrite.done;
 
         // Then: replacement ran after the held write and restored the derived stopped status.
-        const rows = await client.execute({
+        const rows = await runtime.client.execute({
             sql: 'SELECT status, last_event_seq FROM sessions WHERE session_id = ?',
             args: ['projection_serialized'],
         });
         expect(rows.rows).toEqual([{ status: 'stopped', last_event_seq: 1 }]);
-        client.close();
+        runtime.close();
         store.close();
     });
 
@@ -72,11 +68,9 @@ describe('local libSQL write serialization', () => {
         const root = await tempDir('import');
         const fixture = await writeLegacyFixture({ tmpRoot: root, name: 'legacy-import' });
         const runtime = await openMigratedDb(await tempDbUrl('legacy-import'));
-        const client = createClient({ url: runtime.url });
         const releaseLane = deferred();
         const holdingWrite = holdWriteLaneWithSessionStatus({
-            writeKey: runtime.writeKey,
-            client,
+            target: runtime,
             release: releaseLane.promise,
             sessionId: SESSION_IMPORT_TEST_SESSION_ID,
         });
@@ -95,12 +89,11 @@ describe('local libSQL write serialization', () => {
         await holdingWrite.done;
 
         // Then: imported session state won the queue order instead of racing before the held write.
-        const rows = await client.execute({
+        const rows = await runtime.client.execute({
             sql: 'SELECT status, last_event_seq FROM sessions WHERE session_id = ?',
             args: [SESSION_IMPORT_TEST_SESSION_ID],
         });
         expect(rows.rows).toEqual([{ status: 'stopped', last_event_seq: 1 }]);
-        client.close();
         runtime.close();
     });
 
@@ -109,7 +102,6 @@ describe('local libSQL write serialization', () => {
         const root = await tempDir('export');
         const fixture = await writeLegacyFixture({ tmpRoot: root, name: 'legacy-export' });
         const runtime = await openMigratedDb(await tempDbUrl('legacy-export'));
-        const client = createClient({ url: runtime.url });
         await importLegacySessionCompatibilityWindow({
             ...runtime,
             dataDir: fixture.dataDir,
@@ -118,8 +110,7 @@ describe('local libSQL write serialization', () => {
         });
         const releaseLane = deferred();
         const holdingWrite = holdWriteLaneWithExportMarker({
-            writeKey: runtime.writeKey,
-            client,
+            target: runtime,
             release: releaseLane.promise,
             sessionId: SESSION_IMPORT_TEST_SESSION_ID,
         });
@@ -138,12 +129,11 @@ describe('local libSQL write serialization', () => {
         await holdingWrite.done;
 
         // Then: the export marker ran after the held write.
-        const rows = await client.execute({
+        const rows = await runtime.client.execute({
             sql: 'SELECT exported_at FROM sessions WHERE session_id = ?',
             args: [SESSION_IMPORT_TEST_SESSION_ID],
         });
         expect(rows.rows).toEqual([{ exported_at: '2026-07-01T00:02:00.000Z' }]);
-        client.close();
         runtime.close();
     });
 });
@@ -184,14 +174,13 @@ async function openMigratedDb(url: string) {
 }
 
 function holdWriteLaneWithSessionStatus(input: {
-    readonly writeKey: LocalLibsqlWriteKey;
-    readonly client: ReturnType<typeof createClient>;
+    readonly target: LocalLibsqlWriteTarget;
     readonly release: Promise<void>;
     readonly sessionId: string;
 }): HeldWrite {
-    return holdWriteLane(input.writeKey, async () => {
+    return holdWriteLane(input.target, async () => {
         await input.release;
-        await input.client.execute({
+        await input.target.client.execute({
             sql: `
                 INSERT INTO sessions (session_id, status, created_at, updated_at, last_activity_at, last_event_seq)
                 VALUES (?, 'idle', ?, ?, ?, 999)
@@ -207,23 +196,22 @@ function holdWriteLaneWithSessionStatus(input: {
 }
 
 function holdWriteLaneWithExportMarker(input: {
-    readonly writeKey: LocalLibsqlWriteKey;
-    readonly client: ReturnType<typeof createClient>;
+    readonly target: LocalLibsqlWriteTarget;
     readonly release: Promise<void>;
     readonly sessionId: string;
 }): HeldWrite {
-    return holdWriteLane(input.writeKey, async () => {
+    return holdWriteLane(input.target, async () => {
         await input.release;
-        await input.client.execute({
+        await input.target.client.execute({
             sql: 'UPDATE sessions SET exported_at = ? WHERE session_id = ?',
             args: ['held-write-marker', input.sessionId],
         });
     });
 }
 
-function holdWriteLane(writeKey: LocalLibsqlWriteKey, write: () => Promise<void>): HeldWrite {
+function holdWriteLane(target: LocalLibsqlWriteTarget, write: () => Promise<void>): HeldWrite {
     const started = deferred();
-    const done = runWithLocalLibsqlWriteLock(writeKey, async () => {
+    const done = runWithLocalLibsqlWriteLock(target, async () => {
         started.resolve();
         await write();
     });

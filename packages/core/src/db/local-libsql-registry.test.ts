@@ -137,7 +137,7 @@ describe('local libSQL process registry', () => {
         const lease = await openLocalLibsqlDb({ url: await makeDatabaseUrl('held-write') });
         const started = deferred();
         const release = deferred();
-        const writing = runWithLocalLibsqlWriteLock(lease.writeKey, async () => {
+        const writing = runWithLocalLibsqlWriteLock(lease, async () => {
             started.resolve();
             await release.promise;
         });
@@ -164,7 +164,7 @@ describe('local libSQL process registry', () => {
         const first = await openLocalLibsqlDb({ url });
         const started = deferred();
         const release = deferred();
-        const writing = runWithLocalLibsqlWriteLock(first.writeKey, async () => {
+        const writing = runWithLocalLibsqlWriteLock(first, async () => {
             started.resolve();
             await release.promise;
         });
@@ -260,7 +260,7 @@ describe('local libSQL process registry', () => {
         const lease = await openLocalLibsqlDb({ url: ':memory:' });
         const started = deferred();
         const release = deferred();
-        const writing = runWithLocalLibsqlWriteLock(lease.writeKey, async () => {
+        const writing = runWithLocalLibsqlWriteLock(lease, async () => {
             started.resolve();
             await release.promise;
         });

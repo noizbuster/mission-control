@@ -4,16 +4,23 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import { drizzle } from 'drizzle-orm/libsql';
 import { z } from 'zod';
 import { type LocalLibsqlWriteKey, resolveLocalLibsqlIdentity } from './local-libsql-identity.js';
-import {
-    acquireLocalLibsqlFileLease,
-    closeIsolatedLocalLibsqlAfterWrites,
-    runWithLocalLibsqlRegistryWriteLock,
-} from './local-libsql-registry.js';
+import { acquireLocalLibsqlFileLease } from './local-libsql-registry.js';
 import { ensureLocalDbSchema } from './local-libsql-schema.js';
+import {
+    bindLocalLibsqlWriteLane,
+    closeLocalLibsqlAfterWrites,
+    createLocalLibsqlWriteLane,
+    LocalDbWriteError,
+    type LocalDbWriteErrorCode,
+    localDbWriteErrorCodes,
+    runInLocalLibsqlWriteLane,
+} from './local-libsql-write-lane.js';
 import { createHash } from 'node:crypto';
 
 export type { LocalDbConfigErrorCode, LocalLibsqlWriteKey } from './local-libsql-identity.js';
 export { LocalDbConfigError, localDbConfigErrorCodes } from './local-libsql-identity.js';
+export type { LocalDbWriteErrorCode };
+export { LocalDbWriteError, localDbWriteErrorCodes };
 
 export const localDbMigrationErrorCodes = [
     'invalid_migration_id',
@@ -91,12 +98,14 @@ export async function openLocalLibsqlDb(options: OpenLocalLibsqlDbOptions): Prom
         setupKey: initializationKeyFor(options.migrations),
         createClient: () => createClient({ url: identity.url }),
         createDatabase: (client) => drizzle(client),
-        initialize: (client) =>
-            runWithLocalLibsqlWriteLock(identity.writeKey, () =>
+        initialize: (client) => {
+            const target = { writeKey: identity.writeKey, client } satisfies LocalLibsqlWriteTarget;
+            return runWithLocalLibsqlWriteLock(target, () =>
                 options.migrations === undefined
                     ? ensureLocalDbSchema(client)
                     : runLocalDbMigrations(client, options.migrations),
-            ),
+            );
+        },
     });
     return { url: identity.url, writeKey: identity.writeKey, ...lease };
 }
@@ -106,8 +115,11 @@ async function openIsolatedMemoryDb(
     migrations: readonly LocalDbMigration[] | undefined,
 ): Promise<LocalLibsqlDb> {
     const client = createClient({ url: ':memory:' });
+    const target = { writeKey, client } satisfies LocalLibsqlWriteTarget;
+    const writeLane = createLocalLibsqlWriteLane();
+    bindLocalLibsqlWriteLane(target, writeLane);
     try {
-        await runWithLocalLibsqlWriteLock(writeKey, () =>
+        await runWithLocalLibsqlWriteLock(target, () =>
             migrations === undefined ? ensureLocalDbSchema(client) : runLocalDbMigrations(client, migrations),
         );
     } catch (error: unknown) {
@@ -131,7 +143,7 @@ async function openIsolatedMemoryDb(
         close: () => {
             if (closed) return;
             closed = true;
-            closeIsolatedLocalLibsqlAfterWrites(writeKey, () => client.close());
+            closeLocalLibsqlAfterWrites(writeLane, () => client.close());
         },
     };
 }
@@ -141,18 +153,15 @@ function initializationKeyFor(migrations: readonly LocalDbMigration[] | undefine
     return `migrations:${createHash('sha256').update(JSON.stringify(migrations)).digest('hex')}`;
 }
 
-export async function runWithLocalLibsqlWriteLock<T>(
-    writeKey: LocalLibsqlWriteKey,
-    write: () => Promise<T>,
-): Promise<T> {
-    return runWithLocalLibsqlRegistryWriteLock(writeKey, write);
+export function runWithLocalLibsqlWriteLock<T>(target: LocalLibsqlWriteTarget, write: () => Promise<T>): Promise<T> {
+    return runInLocalLibsqlWriteLane(target, write);
 }
 
-export async function runLocalLibsqlWrite<T>(
+export function runLocalLibsqlWrite<T>(
     target: LocalLibsqlWriteTarget,
     write: (client: Client) => Promise<T>,
 ): Promise<T> {
-    return runWithLocalLibsqlWriteLock(target.writeKey, () => write(target.client));
+    return runWithLocalLibsqlWriteLock(target, () => write(target.client));
 }
 
 export async function runLocalDbMigrations(client: Client, migrations: readonly LocalDbMigration[]): Promise<void> {

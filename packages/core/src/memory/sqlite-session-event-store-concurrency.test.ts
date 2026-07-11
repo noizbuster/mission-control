@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { runWithLocalLibsqlWriteLock } from '../db/local-libsql-db.js';
-import { resolveLocalLibsqlIdentity } from '../db/local-libsql-identity.js';
+import { openLocalLibsqlDb, runWithLocalLibsqlWriteLock } from '../db/local-libsql-db.js';
 import { SqliteSessionEventStore, SqliteSessionEventStoreError } from './sqlite-session-event-store.js';
 import {
     cleanupSqliteSessionEventStoreTestDirs,
@@ -76,7 +75,7 @@ describe('SqliteSessionEventStore concurrency and validation', () => {
         // Given: an append is admitted while another writer holds the database lane.
         const sessionId = 'session_sqlite_close_drain';
         const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('close-drain');
-        const identity = await resolveLocalLibsqlIdentity({ url: sqliteUrl });
+        const blocker = await openLocalLibsqlDb({ url: sqliteUrl });
         const store = await SqliteSessionEventStore.open({
             url: sqliteUrl,
             sessionId,
@@ -90,7 +89,7 @@ describe('SqliteSessionEventStore concurrency and validation', () => {
         const writeRelease = new Promise<void>((resolve) => {
             releaseWrite = resolve;
         });
-        const holdingWrite = runWithLocalLibsqlWriteLock(identity.writeKey, async () => {
+        const holdingWrite = runWithLocalLibsqlWriteLock(blocker, async () => {
             markWriteStarted();
             await writeRelease;
         });
@@ -108,6 +107,7 @@ describe('SqliteSessionEventStore concurrency and validation', () => {
         expect(closeSettled).toBe(false);
         releaseWrite();
         await Promise.all([holdingWrite, appending, closing]);
+        blocker.close();
         const reopened = await SqliteSessionEventStore.open({ url: sqliteUrl, sessionId });
         try {
             expect(await reopened.getEvents(sessionId)).toEqual([sessionStartedEvent(sessionId)]);

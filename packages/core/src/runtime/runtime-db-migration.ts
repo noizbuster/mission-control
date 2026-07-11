@@ -77,7 +77,7 @@ async function migrateSource(input: {
     readonly source: LegacyRuntimeSource;
     readonly now: () => string;
 }): Promise<MigrationOutcome> {
-    return runWithLocalLibsqlWriteLock(input.runtime.writeKey, async () => {
+    return runWithLocalLibsqlWriteLock(input.runtime, async () => {
         let attached = false;
         let outcome: MigrationOutcome | RuntimeDbMigrationError;
         await input.runtime.client.execute('BEGIN IMMEDIATE TRANSACTION');
