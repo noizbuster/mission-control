@@ -203,4 +203,58 @@ describe('createSqlTaskRuntimeServices', () => {
             await reopened.close();
         }
     });
+
+    it('drains active jobs and mirror writes before service close releases the database', async () => {
+        // Given: one active job has started but its terminal mirror write cannot exist yet.
+        const dataDir = await makeWorkspaceRoot();
+        const services = await createSqlTaskRuntimeServices(dataDir, { maxConcurrency: 1 });
+        let markJobStarted = (): void => undefined;
+        let releaseJob = (): void => undefined;
+        const jobStarted = new Promise<void>((resolve) => {
+            markJobStarted = resolve;
+        });
+        const jobRelease = new Promise<void>((resolve) => {
+            releaseJob = resolve;
+        });
+        services.jobManager.startJob({
+            sessionId: 'child-close-drain',
+            parentSessionId: 'parent-close-drain',
+            agentId: 'deep',
+            blocking: false,
+            execute: async () => {
+                markJobStarted();
+                await jobRelease;
+                return { status: 'completed', output: 'close drained output' };
+            },
+        });
+        await jobStarted;
+
+        // When: service close begins before the active job completes.
+        let closeSettled = false;
+        const closing = services.close().then(() => {
+            closeSettled = true;
+        });
+        await Promise.resolve();
+
+        // Then: close waits, then persists the terminal mirror row before releasing its lease.
+        expect(closeSettled).toBe(false);
+        releaseJob();
+        await closing;
+        const client = createClient({ url: localRuntimeDbUrl(dataDir) });
+        try {
+            const jobs = await client.execute(
+                "SELECT status, result_json FROM async_jobs WHERE child_session_id = 'child-close-drain' ORDER BY rowid",
+            );
+            expect(jobs.rows).toEqual(
+                expect.arrayContaining([
+                    {
+                        status: 'completed',
+                        result_json: '{"status":"completed","output":"close drained output"}',
+                    },
+                ]),
+            );
+        } finally {
+            client.close();
+        }
+    });
 });

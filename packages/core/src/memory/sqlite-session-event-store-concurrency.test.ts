@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { runWithLocalLibsqlWriteLock } from '../db/local-libsql-db.js';
+import { resolveLocalLibsqlIdentity } from '../db/local-libsql-identity.js';
 import { SqliteSessionEventStore, SqliteSessionEventStoreError } from './sqlite-session-event-store.js';
 import {
     cleanupSqliteSessionEventStoreTestDirs,
@@ -67,6 +69,50 @@ describe('SqliteSessionEventStore concurrency and validation', () => {
         } finally {
             await first.close();
             await second.close();
+        }
+    });
+
+    it('waits for an admitted append to drain before close releases the store', async () => {
+        // Given: an append is admitted while another writer holds the database lane.
+        const sessionId = 'session_sqlite_close_drain';
+        const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('close-drain');
+        const identity = await resolveLocalLibsqlIdentity({ url: sqliteUrl });
+        const store = await SqliteSessionEventStore.open({
+            url: sqliteUrl,
+            sessionId,
+            createEventId: (_event, sequence) => `event_${sequence}`,
+        });
+        let markWriteStarted = (): void => undefined;
+        let releaseWrite = (): void => undefined;
+        const writeStarted = new Promise<void>((resolve) => {
+            markWriteStarted = resolve;
+        });
+        const writeRelease = new Promise<void>((resolve) => {
+            releaseWrite = resolve;
+        });
+        const holdingWrite = runWithLocalLibsqlWriteLock(identity.writeKey, async () => {
+            markWriteStarted();
+            await writeRelease;
+        });
+        await writeStarted;
+
+        // When: close begins after an append has joined the store queue.
+        const appending = store.append(sessionStartedEvent(sessionId));
+        let closeSettled = false;
+        const closing = store.close().then(() => {
+            closeSettled = true;
+        });
+        await Promise.resolve();
+
+        // Then: close remains pending until the held write and admitted append finish.
+        expect(closeSettled).toBe(false);
+        releaseWrite();
+        await Promise.all([holdingWrite, appending, closing]);
+        const reopened = await SqliteSessionEventStore.open({ url: sqliteUrl, sessionId });
+        try {
+            expect(await reopened.getEvents(sessionId)).toEqual([sessionStartedEvent(sessionId)]);
+        } finally {
+            await reopened.close();
         }
     });
 

@@ -4,6 +4,11 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import { drizzle } from 'drizzle-orm/libsql';
 import { z } from 'zod';
 import { type LocalLibsqlWriteKey, resolveLocalLibsqlIdentity } from './local-libsql-identity.js';
+import {
+    acquireLocalLibsqlFileLease,
+    closeIsolatedLocalLibsqlAfterWrites,
+    runWithLocalLibsqlRegistryWriteLock,
+} from './local-libsql-registry.js';
 import { ensureLocalDbSchema } from './local-libsql-schema.js';
 import { createHash } from 'node:crypto';
 
@@ -58,7 +63,6 @@ export type OpenLocalLibsqlDbOptions = {
 };
 
 const migrationIdPattern = /^\d{4}_[a-z0-9_]+$/u;
-const localDbWriteQueues = new Map<LocalLibsqlWriteKey, Promise<void>>();
 
 const migrationLedgerRowSchema = z.object({
     id: z.string(),
@@ -80,48 +84,68 @@ const createSchemaMigrationsSql = `
 
 export async function openLocalLibsqlDb(options: OpenLocalLibsqlDbOptions): Promise<LocalLibsqlDb> {
     const identity = await resolveLocalLibsqlIdentity(options);
-    const client = createClient({ url: identity.url });
+    if (identity.url === ':memory:') return openIsolatedMemoryDb(identity.writeKey, options.migrations);
+
+    const lease = await acquireLocalLibsqlFileLease({
+        key: identity.url,
+        setupKey: initializationKeyFor(options.migrations),
+        createClient: () => createClient({ url: identity.url }),
+        createDatabase: (client) => drizzle(client),
+        initialize: (client) =>
+            runWithLocalLibsqlWriteLock(identity.writeKey, () =>
+                options.migrations === undefined
+                    ? ensureLocalDbSchema(client)
+                    : runLocalDbMigrations(client, options.migrations),
+            ),
+    });
+    return { url: identity.url, writeKey: identity.writeKey, ...lease };
+}
+
+async function openIsolatedMemoryDb(
+    writeKey: LocalLibsqlWriteKey,
+    migrations: readonly LocalDbMigration[] | undefined,
+): Promise<LocalLibsqlDb> {
+    const client = createClient({ url: ':memory:' });
     try {
-        await runWithLocalLibsqlWriteLock(identity.writeKey, () =>
-            options.migrations === undefined
-                ? ensureLocalDbSchema(client)
-                : runLocalDbMigrations(client, options.migrations),
+        await runWithLocalLibsqlWriteLock(writeKey, () =>
+            migrations === undefined ? ensureLocalDbSchema(client) : runLocalDbMigrations(client, migrations),
         );
     } catch (error: unknown) {
         client.close();
         throw error;
     }
 
+    let db: LibSQLDatabase<Record<string, never>>;
+    try {
+        db = drizzle(client);
+    } catch (error: unknown) {
+        client.close();
+        throw error;
+    }
+    let closed = false;
     return {
-        url: identity.url,
-        writeKey: identity.writeKey,
+        url: ':memory:',
+        writeKey,
         client,
-        db: drizzle(client),
-        close: () => client.close(),
+        db,
+        close: () => {
+            if (closed) return;
+            closed = true;
+            closeIsolatedLocalLibsqlAfterWrites(writeKey, () => client.close());
+        },
     };
+}
+
+function initializationKeyFor(migrations: readonly LocalDbMigration[] | undefined): string {
+    if (migrations === undefined) return 'schema';
+    return `migrations:${createHash('sha256').update(JSON.stringify(migrations)).digest('hex')}`;
 }
 
 export async function runWithLocalLibsqlWriteLock<T>(
     writeKey: LocalLibsqlWriteKey,
     write: () => Promise<T>,
 ): Promise<T> {
-    const previous = localDbWriteQueues.get(writeKey) ?? Promise.resolve();
-    let releaseQueue = (): void => {};
-    const current = new Promise<void>((resolve) => {
-        releaseQueue = resolve;
-    });
-    const queued = previous.then(() => current);
-    localDbWriteQueues.set(writeKey, queued);
-    await previous;
-
-    try {
-        return await write();
-    } finally {
-        releaseQueue();
-        if (localDbWriteQueues.get(writeKey) === queued) {
-            localDbWriteQueues.delete(writeKey);
-        }
-    }
+    return runWithLocalLibsqlRegistryWriteLock(writeKey, write);
 }
 
 export async function runLocalLibsqlWrite<T>(

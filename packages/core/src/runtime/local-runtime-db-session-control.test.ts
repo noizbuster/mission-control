@@ -80,7 +80,7 @@ describe('canonical runtime DB session-control maintenance', () => {
         expect(cancelled).toBe(true);
     });
 
-    it('closes the public client immediately while in-flight maintenance drains its owned client', async () => {
+    it('keeps the shared client alive while in-flight maintenance drains its lease', async () => {
         const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-runtime-control-close-race-'));
         tempDirectories.push(dataDir);
         let scheduled: (() => void | Promise<void>) | undefined;
@@ -110,7 +110,7 @@ describe('canonical runtime DB session-control maintenance', () => {
         const tick = scheduled?.();
 
         opened.runtime.close();
-        await expect(opened.runtime.client.execute('SELECT 1')).rejects.toThrow();
+        await expect(opened.runtime.client.execute('SELECT 1')).resolves.toBeDefined();
         const reopen = openCanonicalRuntimeDb({ dataDir, sessionControlMaintenance: false });
         releaseWrite();
         await blocker;
