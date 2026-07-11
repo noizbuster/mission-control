@@ -11,11 +11,16 @@ const moduleMocks = vi.hoisted(() => ({
     createClient: vi.fn(),
     drizzle: vi.fn(),
     ensureLocalDbSchema: vi.fn(),
+    initializeLocalLibsqlFilePragmas: vi.fn(),
 }));
 
 vi.mock('@libsql/client', () => ({ createClient: moduleMocks.createClient }));
 vi.mock('drizzle-orm/libsql', () => ({ drizzle: moduleMocks.drizzle }));
 vi.mock('./local-libsql-schema.js', () => ({ ensureLocalDbSchema: moduleMocks.ensureLocalDbSchema }));
+vi.mock('./local-libsql-pragmas.js', () => ({
+    LOCAL_DB_BUSY_TIMEOUT_MS: 5000,
+    initializeLocalLibsqlFilePragmas: moduleMocks.initializeLocalLibsqlFilePragmas,
+}));
 
 type MockClient = {
     readonly close: ReturnType<typeof vi.fn>;
@@ -34,6 +39,7 @@ beforeEach(() => {
     });
     moduleMocks.drizzle.mockImplementation(() => ({ marker: Symbol('drizzle') }));
     moduleMocks.ensureLocalDbSchema.mockResolvedValue(undefined);
+    moduleMocks.initializeLocalLibsqlFilePragmas.mockResolvedValue(undefined);
 });
 
 afterEach(async () => {

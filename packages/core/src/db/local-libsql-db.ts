@@ -4,6 +4,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import { drizzle } from 'drizzle-orm/libsql';
 import { z } from 'zod';
 import { type LocalLibsqlWriteKey, resolveLocalLibsqlIdentity } from './local-libsql-identity.js';
+import { initializeLocalLibsqlFilePragmas, LOCAL_DB_BUSY_TIMEOUT_MS } from './local-libsql-pragmas.js';
 import { acquireLocalLibsqlFileLease } from './local-libsql-registry.js';
 import { ensureLocalDbSchema } from './local-libsql-schema.js';
 import {
@@ -19,6 +20,8 @@ import { createHash } from 'node:crypto';
 
 export type { LocalDbConfigErrorCode, LocalLibsqlWriteKey } from './local-libsql-identity.js';
 export { LocalDbConfigError, localDbConfigErrorCodes } from './local-libsql-identity.js';
+export type { LocalDbInitializationErrorCode } from './local-libsql-pragmas.js';
+export { LocalDbInitializationError, localDbInitializationErrorCodes } from './local-libsql-pragmas.js';
 export type { LocalDbWriteErrorCode };
 export { LocalDbWriteError, localDbWriteErrorCodes };
 
@@ -96,15 +99,16 @@ export async function openLocalLibsqlDb(options: OpenLocalLibsqlDbOptions): Prom
     const lease = await acquireLocalLibsqlFileLease({
         key: identity.url,
         setupKey: initializationKeyFor(options.migrations),
-        createClient: () => createClient({ url: identity.url }),
+        createClient: () => createClient({ url: identity.url, timeout: LOCAL_DB_BUSY_TIMEOUT_MS }),
         createDatabase: (client) => drizzle(client),
         initialize: (client) => {
             const target = { writeKey: identity.writeKey, client } satisfies LocalLibsqlWriteTarget;
-            return runWithLocalLibsqlWriteLock(target, () =>
-                options.migrations === undefined
+            return runWithLocalLibsqlWriteLock(target, async () => {
+                await initializeLocalLibsqlFilePragmas(client);
+                await (options.migrations === undefined
                     ? ensureLocalDbSchema(client)
-                    : runLocalDbMigrations(client, options.migrations),
-            );
+                    : runLocalDbMigrations(client, options.migrations));
+            });
         },
     });
     return { url: identity.url, writeKey: identity.writeKey, ...lease };

@@ -209,6 +209,7 @@ export async function seedCompleteLegacyDatabase(legacyRoot: string): Promise<Ru
             ],
             'write',
         );
+        await runtime.client.execute('PRAGMA wal_checkpoint(TRUNCATE)');
     } finally {
         runtime.close();
     }
