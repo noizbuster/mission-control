@@ -17,7 +17,6 @@ Product names:
 Design references:
 
 - `ABG.md`: root design reference.
-- `docs/ABG.md`: mirror of root `ABG.md`.
 - `docs/ABG.ko.md`: Korean ABG document.
 - `README.md`: scaffold architecture, distribution story, and extension points.
 

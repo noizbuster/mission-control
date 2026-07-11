@@ -1,21 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = process.cwd();
 
 describe('ABG root prerequisite', () => {
-    it('root ABG.md exists and matches docs/ABG.md', () => {
+    it('uses root ABG.md as the sole English design reference', () => {
         const rootAbg = readFileSync(join(root, 'ABG.md'), 'utf8');
-        const docsAbg = readFileSync(join(root, 'docs/ABG.md'), 'utf8');
 
-        expect(rootAbg).toBe(docsAbg);
+        expect(rootAbg.trim().length).toBeGreaterThan(0);
+        expect(existsSync(join(root, 'docs/ABG.md'))).toBe(false);
     });
 
     it('does not claim deferred visual graph editing is available in current ABG docs', () => {
         const docs = [
             readFileSync(join(root, 'ABG.md'), 'utf8'),
-            readFileSync(join(root, 'docs/ABG.md'), 'utf8'),
             readFileSync(join(root, 'docs/ABG.ko.md'), 'utf8'),
         ] as const;
 
