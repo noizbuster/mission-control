@@ -1,3 +1,4 @@
+import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../../packages/core/dist/db/local-libsql-db.js';
 import {
     openLocalSessionEventStore,
     type SessionControlAttachment,
@@ -20,7 +21,6 @@ import {
     writeInterruptedRun,
 } from './session-stop-owner-support.ts';
 import { createInterface } from 'node:readline';
-import { DatabaseSync } from 'node:sqlite';
 import { pathToFileURL } from 'node:url';
 
 export * from './session-stop-owner-support.ts';
@@ -30,15 +30,14 @@ class OwnerFixtureRuntime {
     private readonly handles = new Map<string, DeferredHandle>();
     private readonly generations = new Map<string, number>();
     private readonly dataDir: string;
-    private readonly database: DatabaseSync;
+    private readonly runtime: LocalLibsqlDb;
 
-    constructor(dataDir: string, database: DatabaseSync) {
+    constructor(dataDir: string, runtime: LocalLibsqlDb) {
         this.dataDir = dataDir;
-        this.database = database;
+        this.runtime = runtime;
     }
 
     host: SessionControlHost | undefined;
-    closeRuntime: (() => void) | undefined;
 
     async seed(scenario: OwnerFixtureScenario): Promise<void> {
         switch (scenario) {
@@ -83,8 +82,7 @@ class OwnerFixtureRuntime {
         for (const handle of this.handles.values()) handle.resolve();
         await Promise.all(this.attachments.map((attachment) => attachment.detach()));
         await this.host?.close();
-        this.closeRuntime?.();
-        this.database.close();
+        this.runtime.close();
     }
 
     private async createActiveSession(sessionId: string, parentId: string | null, cooperative: boolean): Promise<void> {
@@ -146,11 +144,16 @@ class OwnerFixtureRuntime {
     private async createQueuedSession(sessionId: string, parentId: string): Promise<void> {
         await this.append(sessionId, [sessionStarted(sessionId)]);
         await this.setParent(sessionId, parentId);
-        this.database
-            .prepare(
-                'INSERT INTO async_jobs (job_id,parent_session_id,status,queued_at,metadata_json) VALUES (?,?,?,?,?)',
-            )
-            .run(`job-${sessionId}`, sessionId, 'queued', new Date().toISOString(), '{}');
+        await runLocalLibsqlWrite(this.runtime, (client) =>
+            client
+                .execute({
+                    sql:
+                        'INSERT INTO async_jobs ' +
+                        '(job_id,parent_session_id,status,queued_at,metadata_json) VALUES (?,?,?,?,?)',
+                    args: [`job-${sessionId}`, sessionId, 'queued', new Date().toISOString(), '{}'],
+                })
+                .then(() => undefined),
+        );
         const host = this.requireHost();
         this.attachments.push(
             await host.attachEntity({ sessionId, kind: 'job', entityId: `job-${sessionId}`, handles: [] }),
@@ -167,9 +170,14 @@ class OwnerFixtureRuntime {
     }
 
     private async setParent(sessionId: string, parentId: string | null): Promise<void> {
-        this.database
-            .prepare('UPDATE sessions SET parent_session_id = ?, title = ?, workspace_path = ? WHERE session_id = ?')
-            .run(parentId, sessionId, this.dataDir, sessionId);
+        await runLocalLibsqlWrite(this.runtime, (client) =>
+            client
+                .execute({
+                    sql: 'UPDATE sessions SET parent_session_id = ?, title = ?, workspace_path = ? WHERE session_id = ?',
+                    args: [parentId, sessionId, this.dataDir, sessionId],
+                })
+                .then(() => undefined),
+        );
     }
 
     private requireHost(): SessionControlHost {
@@ -180,17 +188,15 @@ class OwnerFixtureRuntime {
 
 async function main(): Promise<void> {
     const { dataDir, scenario } = parseOwnerFixtureArgs(process.argv.slice(2));
-    const dbPath = `${dataDir}/memory.db`;
-    const database = new DatabaseSync(dbPath);
-    const runtime = new OwnerFixtureRuntime(dataDir, database);
-    const opened = await openCanonicalRuntimeDb({ dataDir, legacyRoots: [dataDir] });
+    const dbPath = `${dataDir}/mission-control.db`;
+    const opened = await openCanonicalRuntimeDb({ dataDir });
+    const runtime = new OwnerFixtureRuntime(dataDir, opened.runtime);
     runtime.host = new SessionControlHost({
         runtime: opened.runtime,
         dbIdentity: opened.identity.dbIdentity,
         dataDir,
         fenceGraceMs: 5_000,
     });
-    runtime.closeRuntime = opened.runtime.close;
     await runtime.seed(scenario);
     writeNdjson(createOwnerFixtureReady(scenario, dbPath));
     if (scenario === 'owner-death') return process.stdout.write('', () => process.exit(0));

@@ -6,17 +6,26 @@ import {
     OWNER_FIXTURE_STATE_TABLE,
     parseOwnerFixtureCommand,
 } from './fixtures/session-stop-owner.js';
+import { readFileSync } from 'node:fs';
 
 describe('session stop owner fixture protocol', () => {
+    it('uses only the product runtime client for canonical database writes', () => {
+        const source = readFileSync(new URL('./fixtures/session-stop-owner.ts', import.meta.url), 'utf8');
+
+        expect(source).not.toContain('node:sqlite');
+        expect(source).not.toContain('DatabaseSync');
+        expect(source).toContain('runLocalLibsqlWrite');
+    });
+
     it('locks the three cross-process session identities', () => {
         expect(OWNER_FIXTURE_SESSION_IDS).toEqual(['mc-stop-root', 'mc-stop-child', 'mc-stop-grandchild']);
     });
 
     it('emits the exact ready and ack NDJSON values', () => {
-        expect(createOwnerFixtureReady('tree', '/tmp/mc-owner/memory.db')).toEqual({
+        expect(createOwnerFixtureReady('tree', '/tmp/mc-owner/mission-control.db')).toEqual({
             type: 'ready',
             scenario: 'tree',
-            dbPath: '/tmp/mc-owner/memory.db',
+            dbPath: '/tmp/mc-owner/mission-control.db',
             sessionIds: OWNER_FIXTURE_SESSION_IDS,
         });
         expect(createOwnerFixtureAck('shutdown')).toEqual({
