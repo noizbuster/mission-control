@@ -167,7 +167,7 @@ async function tempDir(name: string): Promise<string> {
 }
 
 async function tempDbUrl(name: string): Promise<string> {
-    return `file:${join(await tempDir(name), 'memory.db')}`;
+    return `file:${join(await tempDir(name), 'mission-control.db')}`;
 }
 
 async function openMigratedDb(url: string) {
