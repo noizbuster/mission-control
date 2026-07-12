@@ -1,25 +1,19 @@
 /** @jsxImportSource @opentui/solid */
 
-import { type Renderable, TextAttributes } from '@opentui/core';
-import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/solid';
-import {
-    batch,
-    createContext,
-    createEffect,
-    createSignal,
-    For,
-    type JSX,
-    onCleanup,
-    type ParentProps,
-    Show,
-    useContext,
-} from 'solid-js';
+import { useRenderer, useTerminalDimensions } from '@opentui/solid';
+import { batch, createContext, createEffect, createSignal, For, onCleanup, Show, useContext, type JSX, type ParentProps } from 'solid-js';
+import { TextAttributes, type Renderable } from '@opentui/core';
+import { useKeyboard } from '@opentui/solid';
 import { createStore } from 'solid-js/store';
+import {
+    APPROVAL_LEVEL_PICKER_ENTRIES,
+    APPROVAL_OPTIONS,
+    type ChatStore,
+} from '../../state/chat-store.js';
+import { useSolidStoreSelector } from '../../platform/use-solid-store-selector.js';
 import { useModeStack } from '../../platform/keymap/mode-stack.js';
 import { useTuiClipboard, useTuiToast } from '../../platform/providers/clipboard-toast-context.js';
 import { useTuiTheme } from '../../platform/providers/route-dialog-theme-context.js';
-import { useSolidStoreSelector } from '../../platform/use-solid-store-selector.js';
-import { APPROVAL_LEVEL_PICKER_ENTRIES, APPROVAL_OPTIONS, type ChatStore } from '../../state/chat-store.js';
 
 /**
  * Dialog shell: fullscreen dimmed backdrop + centered panel.
@@ -44,7 +38,8 @@ export function Dialog(
         if (props.size === 'large') return 88;
         return 60;
     };
-    const horizontalPadding = (): number => Math.max(0, Math.floor((dimensions().width - panelWidth()) / 2));
+    const horizontalPadding = (): number =>
+        Math.max(0, Math.floor((dimensions().width - panelWidth()) / 2));
 
     return (
         // biome-ignore lint/a11y/noStaticElementInteractions: opentui <box> has no role concept; click-outside-to-close is a dialog UX pattern
@@ -187,7 +182,11 @@ export function DialogProvider(props: ParentProps): JSX.Element {
         return false;
     }
 
-    return <DialogContextCtx.Provider value={value}>{props.children}</DialogContextCtx.Provider>;
+    return (
+        <DialogContextCtx.Provider value={value}>
+            {props.children}
+        </DialogContextCtx.Provider>
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -251,7 +250,11 @@ function DialogFrame(props: ParentProps): JSX.Element {
 
 type ListRow = { readonly label: string; readonly description?: string };
 
-function useListNavigation(count: () => number, onSelect: (index: number) => void, onCancel: () => void) {
+function useListNavigation(
+    count: () => number,
+    onSelect: (index: number) => void,
+    onCancel: () => void,
+) {
     const [selected, setSelected] = createSignal(0);
 
     useKeyboard((key) => {
@@ -298,13 +301,19 @@ function ListView(props: {
                             <text fg={props.selected() === index() ? '#ffff00' : '#666666'}>
                                 {props.selected() === index() ? '\u276f ' : '  '}
                             </text>
-                            <text fg={props.selected() === index() ? '#ffffff' : '#aaaaaa'}>{row.label}</text>
+                            <text fg={props.selected() === index() ? '#ffffff' : '#aaaaaa'}>
+                                {row.label}
+                            </text>
                         </box>
-                        {row.description !== undefined ? <text fg="#666666">{`    ${row.description}`}</text> : null}
+                        {row.description !== undefined ? (
+                            <text fg="#666666">{`    ${row.description}`}</text>
+                        ) : null}
                     </box>
                 )}
             </For>
-            {props.footer !== undefined ? <text fg="#888888">{props.footer}</text> : null}
+            {props.footer !== undefined ? (
+                <text fg="#888888">{props.footer}</text>
+            ) : null}
         </box>
     );
 }
@@ -337,15 +346,11 @@ function RenameDialogBox(props: { store: ChatStore }): JSX.Element {
 
     return (
         <box paddingLeft={2} paddingRight={2} gap={1}>
-            <text attributes={TextAttributes.BOLD} fg="#ffffff">
-                {' Rename Session '}
-            </text>
+            <text attributes={TextAttributes.BOLD} fg="#ffffff">{' Rename Session '}</text>
             <box flexDirection="row">
                 <text fg="#00ffff">{'>'}</text>
                 <text fg="#ffffff">{buffer()}</text>
-                <text bg="#ffffff" fg="#000000">
-                    {'\u2588'}
-                </text>
+                <text bg="#ffffff" fg="#000000">{'\u2588'}</text>
             </box>
             <text fg="#888888">{'\u23ce'} submit · esc cancel</text>
         </box>
@@ -401,9 +406,7 @@ function ApprovalDialogBox(props: { store: ChatStore }): JSX.Element {
 
     return (
         <box paddingLeft={2} paddingRight={2} gap={1}>
-            <text attributes={TextAttributes.BOLD} fg="#ffffff">
-                {' Approval Required '}
-            </text>
+            <text attributes={TextAttributes.BOLD} fg="#ffffff">{' Approval Required '}</text>
             <text fg="#aaaaaa">{`${toolName()} — ${action()}`}</text>
             <For each={rows}>
                 {(row, index) => (
@@ -414,13 +417,13 @@ function ApprovalDialogBox(props: { store: ChatStore }): JSX.Element {
                             </text>
                             <text fg={selected() === index() ? '#ffffff' : '#aaaaaa'}>{row.label}</text>
                         </box>
-                        {row.description !== undefined ? <text fg="#666666">{`    ${row.description}`}</text> : null}
+                        {row.description !== undefined ? (
+                            <text fg="#666666">{`    ${row.description}`}</text>
+                        ) : null}
                     </box>
                 )}
             </For>
-            <text fg="#888888">
-                {'\u2191/\u2193'} navigate · {'\u23ce'} select · esc deny
-            </text>
+            <text fg="#888888">{'\u2191/\u2193'} navigate · {'\u23ce'} select · esc deny</text>
         </box>
     );
 }
