@@ -84,15 +84,7 @@ function createTuiToastService(): TuiToastService {
     function show(input: TuiToastInput): void {
         const duration = input.duration ?? defaultToastDurationMs;
         nextToastId += 1;
-        setCurrent(
-            Object.freeze({
-                id: nextToastId,
-                message: input.message,
-                variant: input.variant,
-                duration,
-                ...(input.title !== undefined ? { title: input.title } : {}),
-            }),
-        );
+        setCurrent(Object.freeze({ id: nextToastId, message: input.message, variant: input.variant, duration, ...input.title !== undefined ? { title: input.title } : {} }));
         clearTimer();
         dismissTimer = setTimeout(clear, duration);
     }
