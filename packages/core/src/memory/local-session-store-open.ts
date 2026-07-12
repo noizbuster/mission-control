@@ -1,7 +1,7 @@
 import type { AgentEventEnvelope } from '@mission-control/protocol';
 import { resolveMissionControlDataDir } from './data-dir.js';
 import type { JsonlSessionEventIdFactory } from './jsonl-session-event-store.js';
-import { ensureLocalSessionDatabase } from './local-session-store-database.js';
+import { openEnsuredLocalSessionDatabase } from './local-session-store-database.js';
 import { parseLocalSessionId } from './local-session-store-paths.js';
 import type { MemoryStore } from './memory-store.js';
 import { SqliteSessionEventStore } from './sqlite-session-event-store.js';
@@ -26,18 +26,15 @@ export async function openLocalSessionEventStore(
     const dataDir = options.dataDir ?? resolveMissionControlDataDir();
     const sessionId = parseLocalSessionId(options.sessionId);
     const now = options.now ?? (() => new Date().toISOString());
-    let store: SqliteSessionEventStore | undefined;
+    const { runtime } = await openEnsuredLocalSessionDatabase({ dataDir, now });
     try {
-        const identity = await ensureLocalSessionDatabase({ dataDir, now });
-        store = await SqliteSessionEventStore.open({
-            url: identity.databaseFileUrl,
+        return SqliteSessionEventStore.fromRuntime(runtime, {
             sessionId,
             now,
             ...(options.createEventId !== undefined ? { createEventId: options.createEventId } : {}),
         });
-        return store;
     } catch (error: unknown) {
-        await store?.close();
+        runtime.close();
         throw error;
     }
 }

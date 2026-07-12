@@ -11,16 +11,16 @@ import {
 } from '../session-replay-coding-test-support.js';
 import { JsonlSessionEventStore } from './jsonl-session-event-store.js';
 import { replayParityEvents, replayParitySummary } from './session-replay-parity-fixtures.js';
-import { SqliteSessionEventStore } from './sqlite-session-event-store.js';
 import {
     cleanupSqliteSessionEventStoreTestDirs,
     createSqliteSessionEventStoreTestDbUrl,
     createSqliteSessionEventStoreTestDir,
     detailedProjectionEvents,
+    openSqliteSessionEventStoreForTests,
     sessionStartedEvent,
     taskCompletedEvent,
 } from './sqlite-session-event-store-test-support.js';
-import { openSqliteSessionProjectionStore } from './sqlite-session-projection.js';
+import { openSqliteSessionProjectionStoreForTests } from './sqlite-session-projection-test-support.js';
 
 afterEach(async () => {
     await cleanupSqliteSessionEventStoreTestDirs();
@@ -38,7 +38,7 @@ describe('SqliteSessionEventStore', () => {
             now: () => '2026-06-21T10:00:00.000Z',
             createEventId: (_event, sequence) => `event_${sequence}`,
         });
-        const sqlite = await SqliteSessionEventStore.open({
+        const sqlite = await openSqliteSessionEventStoreForTests({
             url: sqliteUrl,
             sessionId,
             now: () => '2026-06-21T10:00:00.000Z',
@@ -74,7 +74,7 @@ describe('SqliteSessionEventStore', () => {
         // Given: a SQLite store has appended two durable events to a file database.
         const sessionId = 'session_sqlite_reopen';
         const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('reopen');
-        const first = await SqliteSessionEventStore.open({
+        const first = await openSqliteSessionEventStoreForTests({
             url: sqliteUrl,
             sessionId,
             createEventId: (_event, sequence) => `event_${sequence}`,
@@ -86,7 +86,7 @@ describe('SqliteSessionEventStore', () => {
         await first.close();
 
         // When: a fresh store instance reopens the same database.
-        const reopened = await SqliteSessionEventStore.open({ url: sqliteUrl, sessionId });
+        const reopened = await openSqliteSessionEventStoreForTests({ url: sqliteUrl, sessionId });
         const events = await reopened.getEvents(sessionId);
         const snapshot = await reopened.getSnapshot(sessionId);
         await reopened.close();
@@ -104,7 +104,7 @@ describe('SqliteSessionEventStore', () => {
         // Given: the production SQLite event store receives a coding-agent event sequence.
         const sessionId = 'session_sqlite_append_projection';
         const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('projection');
-        const store = await SqliteSessionEventStore.open({
+        const store = await openSqliteSessionEventStoreForTests({
             url: sqliteUrl,
             sessionId,
             createEventId: (_event, sequence) => `event_${sequence}`,
@@ -154,12 +154,12 @@ describe('SqliteSessionEventStore', () => {
         const sessionId = 'session_append_user_input_wait';
         const root = await createSqliteSessionEventStoreTestDir('runtime-user-input');
         const sqliteUrl = localRuntimeDbUrl(root);
-        const delivery = await SqlSessionInputDelivery.open(root);
+        const delivery = await SqlSessionInputDelivery.open({ dataDir: root });
         await delivery.admitInput(sessionId, { inputId: 'operator_prompt', prompt: 'Approve?' }, 'queue', {
             blocking: true,
         });
         delivery.close();
-        const store = await SqliteSessionEventStore.open({
+        const store = await openSqliteSessionEventStoreForTests({
             url: sqliteUrl,
             sessionId,
             createEventId: (_event, sequence) => `event_${sequence}`,
@@ -172,7 +172,7 @@ describe('SqliteSessionEventStore', () => {
             await store.close();
         }
 
-        const publicStore = await openSqliteSessionProjectionStore({ url: sqliteUrl });
+        const publicStore = await openSqliteSessionProjectionStoreForTests(sqliteUrl);
         const client = createClient({ url: sqliteUrl });
         const waits = await client.execute(
             'SELECT wait_id, reason, source_kind, source_id, status FROM session_awaits WHERE session_id = ? ORDER BY wait_id',
@@ -215,7 +215,7 @@ describe('SqliteSessionEventStore', () => {
             mode: 'sync',
         });
         await mirror.flush();
-        const store = await SqliteSessionEventStore.open({
+        const store = await openSqliteSessionEventStoreForTests({
             url: sqliteUrl,
             sessionId,
             createEventId: (_event, sequence) => `event_${sequence}`,
@@ -228,7 +228,7 @@ describe('SqliteSessionEventStore', () => {
             await store.close();
         }
 
-        const publicStore = await openSqliteSessionProjectionStore({ url: sqliteUrl });
+        const publicStore = await openSqliteSessionProjectionStoreForTests(sqliteUrl);
         const waits = await client.execute(
             'SELECT wait_id, reason, source_kind, source_id, status FROM session_awaits WHERE session_id = ? ORDER BY wait_id',
             [sessionId],
@@ -264,7 +264,7 @@ describe('SqliteSessionEventStore', () => {
         // Given: a durable session that starts a run.
         const sessionId = 'session_status_idle_after_run';
         const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('status-idle');
-        const store = await SqliteSessionEventStore.open({
+        const store = await openSqliteSessionEventStoreForTests({
             url: sqliteUrl,
             sessionId,
             createEventId: (_event, sequence) => `event_${sequence}`,
@@ -295,9 +295,7 @@ describe('SqliteSessionEventStore', () => {
                 'SELECT status, awaiting_reason, primary_wait_id FROM sessions WHERE session_id = ?',
                 [sessionId],
             );
-            expect(afterCompleted.rows).toEqual([
-                { status: 'idle', awaiting_reason: null, primary_wait_id: null },
-            ]);
+            expect(afterCompleted.rows).toEqual([{ status: 'idle', awaiting_reason: null, primary_wait_id: null }]);
 
             // When: later terminal run outcomes land on a fresh run.
             await store.append(
@@ -346,7 +344,7 @@ describe('SqliteSessionEventStore', () => {
         // Given: a session with an active run that blocks on approval.
         const sessionId = 'session_status_mid_run';
         const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('status-mid-run');
-        const store = await SqliteSessionEventStore.open({
+        const store = await openSqliteSessionEventStoreForTests({
             url: sqliteUrl,
             sessionId,
             createEventId: (_event, sequence) => `event_${sequence}`,
@@ -383,9 +381,10 @@ describe('SqliteSessionEventStore', () => {
 
             // When: approval resolves and the tool finishes mid-run.
             await store.append(approvalEvent(sessionId, 'approval.updated', 'approved'));
-            const afterApproval = await client.execute('SELECT status, awaiting_reason FROM sessions WHERE session_id = ?', [
-                sessionId,
-            ]);
+            const afterApproval = await client.execute(
+                'SELECT status, awaiting_reason FROM sessions WHERE session_id = ?',
+                [sessionId],
+            );
             expect(afterApproval.rows).toEqual([{ status: 'running', awaiting_reason: null }]);
 
             await store.append(toolCompletedEvent(sessionId));

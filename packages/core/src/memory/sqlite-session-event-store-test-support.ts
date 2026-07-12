@@ -1,5 +1,6 @@
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
 import { AgentEventEnvelopeSchema } from '@mission-control/protocol';
+import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
 import {
     approvalEvent,
     sessionStoppedEvent as codingSessionStoppedEvent,
@@ -10,6 +11,7 @@ import {
     runEvent,
     toolFailedEvent,
 } from '../session-replay-coding-test-support.js';
+import { SqliteSessionEventStore, type SqliteSessionEventStoreRuntimeOptions } from './sqlite-session-event-store.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -29,6 +31,13 @@ export async function createSqliteSessionEventStoreTestDir(name: string): Promis
 export async function createSqliteSessionEventStoreTestDbUrl(name: string): Promise<string> {
     const tempDir = await createSqliteSessionEventStoreTestDir(name);
     return `file:${join(tempDir, 'session-events.db')}`;
+}
+
+export async function openSqliteSessionEventStoreForTests(
+    input: SqliteSessionEventStoreRuntimeOptions & { readonly url: string },
+): Promise<SqliteSessionEventStore> {
+    const runtime = await openLocalLibsqlDb({ url: input.url });
+    return SqliteSessionEventStore.fromRuntime(runtime, input);
 }
 
 export function sessionStartedEvent(sessionId: string): AgentEvent {

@@ -264,54 +264,63 @@ export class SessionRunOwnerRegistry {
             ...(this.options.now !== undefined ? { now: this.options.now } : {}),
             ...(this.options.createEventId !== undefined ? { createEventId: this.options.createEventId } : {}),
         });
-        const modelProviderSelection =
-            input.modelProviderSelection ??
-            (await this.options.resolveModelProviderSelection?.(
+        try {
+            const modelProviderSelection =
+                input.modelProviderSelection ??
+                (await this.options.resolveModelProviderSelection?.(
+                    store,
+                    input.sessionId,
+                    this.options.modelProviderSelection,
+                )) ??
+                this.options.modelProviderSelection;
+            // Prefer the per-owner `createTurnRunner` factory (captures sessionId/modelProviderSelection/
+            // toolRegistry) so a registry driving the graph can build a runner with owner-specific context;
+            // fall back to the legacy single `runProviderTurn`. At least one MUST be provided — the
+            // coordinator throws if no turn runner is injected (the flat provider loop was removed).
+            const turnRunner =
+                this.options.createTurnRunner !== undefined
+                    ? await this.options.createTurnRunner({
+                          sessionId: input.sessionId,
+                          modelProviderSelection,
+                          ...(this.options.toolRegistry !== undefined
+                              ? { toolRegistry: this.options.toolRegistry }
+                              : {}),
+                      })
+                    : this.options.runProviderTurn;
+            const owner = new SessionRunOwner({
+                sessionId: input.sessionId,
                 store,
-                input.sessionId,
-                this.options.modelProviderSelection,
-            )) ??
-            this.options.modelProviderSelection;
-        // Prefer the per-owner `createTurnRunner` factory (captures sessionId/modelProviderSelection/
-        // toolRegistry) so a registry driving the graph can build a runner with owner-specific context;
-        // fall back to the legacy single `runProviderTurn`. At least one MUST be provided — the
-        // coordinator throws if no turn runner is injected (the flat provider loop was removed).
-        const turnRunner =
-            this.options.createTurnRunner !== undefined
-                ? await this.options.createTurnRunner({
-                      sessionId: input.sessionId,
-                      modelProviderSelection,
-                      ...(this.options.toolRegistry !== undefined ? { toolRegistry: this.options.toolRegistry } : {}),
-                  })
-                : this.options.runProviderTurn;
-        const owner = new SessionRunOwner({
-            sessionId: input.sessionId,
-            store,
-            provider: this.options.provider,
-            modelProviderSelection,
-            ...(this.options.now !== undefined ? { now: this.options.now } : {}),
-            ...(this.options.timeoutMs !== undefined ? { timeoutMs: this.options.timeoutMs } : {}),
-            ...(this.options.retryLimit !== undefined ? { retryLimit: this.options.retryLimit } : {}),
-            ...(this.options.toolCallLoopLimit !== undefined
-                ? { toolCallLoopLimit: this.options.toolCallLoopLimit }
-                : {}),
-            ...(this.options.haltOnFailedToolSettlement !== undefined ? { haltOnFailedToolSettlement: true } : {}),
-            ...(this.options.projectContext !== undefined ? { projectContext: this.options.projectContext } : {}),
-            ...(this.options.toolRegistry !== undefined ? { toolRegistry: this.options.toolRegistry } : {}),
-            ...(this.options.createId !== undefined ? { createId: this.options.createId } : {}),
-            ...(input.readMessages !== undefined ? { readMessages: input.readMessages } : {}),
-            ...(turnRunner !== undefined ? { runProviderTurn: turnRunner } : {}),
-            ...(this.options.onDurableEvent !== undefined ? { onDurableEvent: this.options.onDurableEvent } : {}),
-            ...(this.options.onProviderEnvelope !== undefined
-                ? { onProviderEnvelope: this.options.onProviderEnvelope }
-                : {}),
-            ...(this.options.onToolCall !== undefined ? { onToolCall: this.options.onToolCall } : {}),
-            ...(this.options.onToolSettlement !== undefined ? { onToolSettlement: this.options.onToolSettlement } : {}),
-            ...(this.options.sessionControlHost !== undefined
-                ? { sessionControlHost: this.options.sessionControlHost }
-                : {}),
-        });
-        return { owner, store, refCount: 0 };
+                provider: this.options.provider,
+                modelProviderSelection,
+                ...(this.options.now !== undefined ? { now: this.options.now } : {}),
+                ...(this.options.timeoutMs !== undefined ? { timeoutMs: this.options.timeoutMs } : {}),
+                ...(this.options.retryLimit !== undefined ? { retryLimit: this.options.retryLimit } : {}),
+                ...(this.options.toolCallLoopLimit !== undefined
+                    ? { toolCallLoopLimit: this.options.toolCallLoopLimit }
+                    : {}),
+                ...(this.options.haltOnFailedToolSettlement !== undefined ? { haltOnFailedToolSettlement: true } : {}),
+                ...(this.options.projectContext !== undefined ? { projectContext: this.options.projectContext } : {}),
+                ...(this.options.toolRegistry !== undefined ? { toolRegistry: this.options.toolRegistry } : {}),
+                ...(this.options.createId !== undefined ? { createId: this.options.createId } : {}),
+                ...(input.readMessages !== undefined ? { readMessages: input.readMessages } : {}),
+                ...(turnRunner !== undefined ? { runProviderTurn: turnRunner } : {}),
+                ...(this.options.onDurableEvent !== undefined ? { onDurableEvent: this.options.onDurableEvent } : {}),
+                ...(this.options.onProviderEnvelope !== undefined
+                    ? { onProviderEnvelope: this.options.onProviderEnvelope }
+                    : {}),
+                ...(this.options.onToolCall !== undefined ? { onToolCall: this.options.onToolCall } : {}),
+                ...(this.options.onToolSettlement !== undefined
+                    ? { onToolSettlement: this.options.onToolSettlement }
+                    : {}),
+                ...(this.options.sessionControlHost !== undefined
+                    ? { sessionControlHost: this.options.sessionControlHost }
+                    : {}),
+            });
+            return { owner, store, refCount: 0 };
+        } catch (error: unknown) {
+            await store.close();
+            throw error;
+        }
     }
 
     private async release(sessionId: string, record: OwnerEntryRecord, entry: OwnerEntry): Promise<void> {

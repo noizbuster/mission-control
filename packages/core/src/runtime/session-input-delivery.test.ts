@@ -47,15 +47,16 @@ describe('SessionInputDelivery', () => {
 describe('SqlSessionInputDelivery', () => {
     it('persists admitted and promoted queued input across reopen', async () => {
         // Given
-        const root = await makeTempRoot();
-        const first = await SqlSessionInputDelivery.open(root);
+        const omoRoot = await makeTempRoot();
+        const dataDir = await makeTempRoot();
+        const first = await SqlSessionInputDelivery.open({ dataDir });
         await first.admitInput('session_a', { inputId: 'queue_1', prompt: 'first queued' }, 'queue');
         await first.admitInput('session_a', { inputId: 'queue_2', prompt: 'second queued' }, 'queue');
         await first.promoteNextQueued('session_a');
         first.close();
 
         // When
-        const reopened = await SqlSessionInputDelivery.open(root);
+        const reopened = await SqlSessionInputDelivery.open({ dataDir });
         const pendingBeforePromotion = await reopened.pendingQueuedCount('session_a');
         const promoted = await reopened.promoteNextQueued('session_a');
         const rows = await reopened.listInputs('session_a');
@@ -68,21 +69,22 @@ describe('SqlSessionInputDelivery', () => {
             ['queue_1', 'promoted'],
             ['queue_2', 'promoted'],
         ]);
-        expect(existsSync(localSessionDbPath(root))).toBe(true);
-        expect(existsSync(join(root, '.omo', 'mission-control.db'))).toBe(false);
+        expect(existsSync(localSessionDbPath(dataDir))).toBe(true);
+        expect(existsSync(localSessionDbPath(omoRoot))).toBe(false);
+        expect(existsSync(join(omoRoot, '.omo', 'mission-control.db'))).toBe(false);
     });
 
     it('derives awaiting user_input from a pending blocking input wait after reopen', async () => {
         // Given
         const root = await makeTempRoot();
-        const first = await SqlSessionInputDelivery.open(root);
+        const first = await SqlSessionInputDelivery.open({ dataDir: root });
         await first.admitInput('session_blocked', { inputId: 'approval_prompt', prompt: 'Approve plan?' }, 'queue', {
             blocking: true,
         });
         first.close();
 
         // When
-        const reopened = await SqlSessionInputDelivery.open(root);
+        const reopened = await SqlSessionInputDelivery.open({ dataDir: root });
         const lifecycle = await reopened.deriveLifecycle('session_blocked');
         reopened.close();
 
@@ -98,17 +100,17 @@ describe('SqlSessionInputDelivery', () => {
     it('persists awaiting user_input into the public session status row', async () => {
         // Given
         const root = await makeTempRoot();
-        const delivery = await SqlSessionInputDelivery.open(root);
+        const delivery = await SqlSessionInputDelivery.open({ dataDir: root });
 
         // When
         await delivery.admitInput('session_public_wait', { inputId: 'operator_prompt', prompt: 'Approve?' }, 'queue', {
             blocking: true,
         });
         delivery.close();
-        const publicStore = await openSqliteSessionProjectionStore({ url: localRuntimeDbUrl(root) });
+        const publicStore = await openSqliteSessionProjectionStore({ dataDir: root });
         const waitingSession = await publicStore.getSession('session_public_wait');
 
-        const resumedDelivery = await SqlSessionInputDelivery.open(root);
+        const resumedDelivery = await SqlSessionInputDelivery.open({ dataDir: root });
         await resumedDelivery.promoteNextQueued('session_public_wait');
         resumedDelivery.close();
         const resumedSession = await publicStore.getSession('session_public_wait');
@@ -134,7 +136,7 @@ describe('SqlSessionInputDelivery', () => {
     it('recomputes a resumed user_input wait back to running when the session has an active run', async () => {
         // Given
         const root = await makeTempRoot();
-        const delivery = await SqlSessionInputDelivery.open(root);
+        const delivery = await SqlSessionInputDelivery.open({ dataDir: root });
         await delivery.admitInput('session_running_wait', { inputId: 'operator_prompt', prompt: 'Approve?' }, 'queue', {
             blocking: true,
         });
@@ -157,11 +159,11 @@ describe('SqlSessionInputDelivery', () => {
         client.close();
 
         // When
-        const resumedDelivery = await SqlSessionInputDelivery.open(root);
+        const resumedDelivery = await SqlSessionInputDelivery.open({ dataDir: root });
         await resumedDelivery.promoteNextQueued('session_running_wait');
         const lifecycle = await resumedDelivery.deriveLifecycle('session_running_wait');
         resumedDelivery.close();
-        const publicStore = await openSqliteSessionProjectionStore({ url: localRuntimeDbUrl(root) });
+        const publicStore = await openSqliteSessionProjectionStore({ dataDir: root });
         const resumedSession = await publicStore.getSession('session_running_wait');
         publicStore.close();
 
@@ -177,7 +179,7 @@ describe('SqlSessionInputDelivery', () => {
     it('preserves terminal session status when the final user_input wait resolves', async () => {
         // Given
         const root = await makeTempRoot();
-        const delivery = await SqlSessionInputDelivery.open(root);
+        const delivery = await SqlSessionInputDelivery.open({ dataDir: root });
         await delivery.admitInput('session_stopped_wait', { inputId: 'operator_prompt', prompt: 'Approve?' }, 'queue', {
             blocking: true,
         });
@@ -190,10 +192,10 @@ describe('SqlSessionInputDelivery', () => {
         client.close();
 
         // When
-        const resumedDelivery = await SqlSessionInputDelivery.open(root);
+        const resumedDelivery = await SqlSessionInputDelivery.open({ dataDir: root });
         await resumedDelivery.promoteNextQueued('session_stopped_wait');
         resumedDelivery.close();
-        const publicStore = await openSqliteSessionProjectionStore({ url: localRuntimeDbUrl(root) });
+        const publicStore = await openSqliteSessionProjectionStore({ dataDir: root });
         const resumedSession = await publicStore.getSession('session_stopped_wait');
         publicStore.close();
 
@@ -208,7 +210,7 @@ describe('SqlSessionInputDelivery', () => {
     it('rejects duplicate input ids without corrupting pending input state', async () => {
         // Given
         const root = await makeTempRoot();
-        const delivery = await SqlSessionInputDelivery.open(root);
+        const delivery = await SqlSessionInputDelivery.open({ dataDir: root });
         await delivery.admitInput('session_a', { inputId: 'same_input', prompt: 'one' }, 'queue');
 
         await expect(

@@ -23,7 +23,8 @@ import {
     cleanupSqliteSessionEventStoreTestDirs,
     createSqliteSessionEventStoreTestDbUrl,
 } from './sqlite-session-event-store-test-support.js';
-import { openSqliteSessionProjectionStore, projectSessionEventsToSqlite } from './sqlite-session-projection.js';
+import { projectSessionEventsToSqlite } from './sqlite-session-projection.js';
+import { openSqliteSessionProjectionStoreForTests } from './sqlite-session-projection-test-support.js';
 
 describe('session stop SQLite projection', () => {
     afterEach(cleanupSqliteSessionEventStoreTestDirs);
@@ -96,7 +97,7 @@ describe('session stop SQLite projection', () => {
 
     it('rebuilds idle(aborted) without claiming mission or job state came from replay', async () => {
         const url = await createSqliteSessionEventStoreTestDbUrl('projection-rebuild');
-        const store = await openSqliteSessionProjectionStore({ url });
+        const store = await openSqliteSessionProjectionStoreForTests(url);
         const marker = abortCompleted(0);
         const markerEnvelope = AgentEventEnvelopeSchema.parse({
             eventId: 'event_marker',

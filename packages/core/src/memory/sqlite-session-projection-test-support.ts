@@ -1,4 +1,5 @@
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
+import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
 import {
     approvalEvent,
     diffAppliedEvent,
@@ -10,6 +11,7 @@ import {
     sessionStoppedEvent,
     toolFailedEvent,
 } from '../session-replay-coding-test-support.js';
+import { createSqliteSessionProjectionStore, type SqliteSessionProjectionStore } from './sqlite-session-projection.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,6 +29,10 @@ export async function tempDbUrl(name: string): Promise<string> {
     const dir = await mkdtemp(join(tmpdir(), `mctrl-sqlite-projection-${name}-`));
     tempDirs.push(dir);
     return `file:${join(dir, 'sessions.db')}`;
+}
+
+export async function openSqliteSessionProjectionStoreForTests(url: string): Promise<SqliteSessionProjectionStore> {
+    return createSqliteSessionProjectionStore(await openLocalLibsqlDb({ url }));
 }
 
 export function completeProjectionEvents(sessionId: string): readonly AgentEventEnvelope[] {

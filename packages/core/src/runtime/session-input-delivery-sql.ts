@@ -1,13 +1,13 @@
 import type { Delivery } from '@mission-control/protocol';
 import { z } from 'zod';
 import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
+import { openMissionControlDb } from '../db/mission-control-db.js';
 import {
     ensurePublicSessionRow,
     persistSessionAwaiting,
     refreshSessionAwaitingFromPendingWaits,
 } from '../memory/session-awaiting-sql.js';
 import { deriveSessionLifecycleFromSql } from '../memory/session-lifecycle-sql-authorities.js';
-import { openCanonicalRuntimeDb } from './local-runtime-db.js';
 import type { SessionInputRecord } from './session-input-delivery.js';
 
 const inputStatusSchema = z.enum(['pending', 'admitted', 'promoted', 'cancelled']);
@@ -34,8 +34,12 @@ export type SqlSessionInputDeliveryOptions = {
 export class SqlSessionInputDelivery {
     private constructor(private readonly runtime: LocalLibsqlDb) {}
 
-    static async open(root: string): Promise<SqlSessionInputDelivery> {
-        const { runtime } = await openCanonicalRuntimeDb({ dataDir: root, legacyRoots: [root] });
+    static async open(input: { readonly dataDir: string }): Promise<SqlSessionInputDelivery> {
+        const runtime = await openMissionControlDb({ dataDir: input.dataDir });
+        return SqlSessionInputDelivery.fromRuntime(runtime);
+    }
+
+    static fromRuntime(runtime: LocalLibsqlDb): SqlSessionInputDelivery {
         return new SqlSessionInputDelivery(runtime);
     }
 

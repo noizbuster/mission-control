@@ -6,7 +6,8 @@ import {
     cleanupSqliteSessionEventStoreTestDirs,
     createSqliteSessionEventStoreTestDbUrl,
 } from './sqlite-session-event-store-test-support.js';
-import { openSqliteSessionProjectionStore, projectSessionEventsToSqlite } from './sqlite-session-projection.js';
+import { projectSessionEventsToSqlite } from './sqlite-session-projection.js';
+import { openSqliteSessionProjectionStoreForTests } from './sqlite-session-projection-test-support.js';
 
 afterEach(cleanupSqliteSessionEventStoreTestDirs);
 
@@ -44,7 +45,7 @@ describe('session lifecycle transaction integrity', () => {
             BEFORE UPDATE OF metadata_json ON sessions
             BEGIN SELECT RAISE(ABORT, 'reject lifecycle refresh'); END
         `);
-        const store = await openSqliteSessionProjectionStore({ url });
+        const store = await openSqliteSessionProjectionStoreForTests(url);
         const event = abortCompletedEvent();
         const envelope = AgentEventEnvelopeSchema.parse({
             eventId: 'event_abort',

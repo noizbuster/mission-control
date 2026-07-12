@@ -4,6 +4,7 @@ import { missionControlDataDirEnvKey } from '../memory/data-dir.js';
 import { openLocalSessionEventStore } from '../memory/local-session-store-open.js';
 import { localRuntimeDbUrl } from '../runtime/local-runtime-db.js';
 import { createSqlTaskRuntimeServices } from './sql-task-runtime-services.js';
+import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -132,8 +133,9 @@ describe('createSqlTaskRuntimeServices', () => {
     });
 
     it('reopens durable runtime_agents async_jobs and session_relations rows from production managers', async () => {
-        const workspaceRoot = await makeWorkspaceRoot();
-        const services = await createSqlTaskRuntimeServices(workspaceRoot, { maxConcurrency: 1 });
+        const omoRoot = await makeWorkspaceRoot();
+        const dataDir = await makeWorkspaceRoot();
+        const services = await createSqlTaskRuntimeServices(dataDir, { maxConcurrency: 1 });
         services.runtimeRegistry.adopt({
             id: 'child-session',
             displayName: 'deep',
@@ -159,7 +161,7 @@ describe('createSqlTaskRuntimeServices', () => {
         await services.flush();
         await services.close();
 
-        const client = createClient({ url: localRuntimeDbUrl(workspaceRoot) });
+        const client = createClient({ url: localRuntimeDbUrl(dataDir) });
         try {
             const runtimeAgents = await client.execute(
                 "SELECT agent_id, session_id, status FROM runtime_agents WHERE agent_id = 'child-session'",
@@ -194,7 +196,9 @@ describe('createSqlTaskRuntimeServices', () => {
             client.close();
         }
 
-        const reopened = await createSqlTaskRuntimeServices(workspaceRoot);
+        expect(existsSync(join(dataDir, 'mission-control.db'))).toBe(true);
+        expect(existsSync(join(omoRoot, 'mission-control.db'))).toBe(false);
+        const reopened = await createSqlTaskRuntimeServices(dataDir);
         try {
             expect(reopened.runtimeRegistry.lookup('child-session')?.sessionId).toBe('child-session');
             const jobs = await reopened.mirror.loadJobs();

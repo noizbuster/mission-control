@@ -14,8 +14,7 @@ const eventRowSchema = z.object({ type: z.string(), payload_json: z.string() });
 const errorJsonSchema = z.object({ code: z.string() });
 
 export async function openStore(url: string): Promise<SqliteSessionEventStore> {
-    return SqliteSessionEventStore.open({
-        url,
+    return SqliteSessionEventStore.fromRuntime(await openLocalLibsqlDb({ url }), {
         sessionId: SESSION_ID,
         now: () => '2026-07-11T10:00:10.000Z',
         createEventId: (_event, sequence) => `event_${sequence}`,

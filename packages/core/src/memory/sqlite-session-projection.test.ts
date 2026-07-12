@@ -1,14 +1,11 @@
 import { createClient } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-    openSqliteSessionProjectionStore,
-    projectSessionEventsToSqlite,
-    type SqliteSessionProjectionStore,
-} from './sqlite-session-projection.js';
+import { projectSessionEventsToSqlite, type SqliteSessionProjectionStore } from './sqlite-session-projection.js';
 import {
     CREATED_AT,
     cleanupSqliteSessionProjectionTestDirs,
     completeProjectionEvents,
+    openSqliteSessionProjectionStoreForTests,
     SESSION_ID,
     tempDbUrl,
 } from './sqlite-session-projection-test-support.js';
@@ -21,7 +18,7 @@ describe('sqlite session projection', () => {
     it('persists SQLite projection records across reopen', async () => {
         // Given: a SQLite session projection store receives a durable event stream.
         const url = await tempDbUrl('reopen');
-        const store = await openSqliteSessionProjectionStore({ url });
+        const store = await openSqliteSessionProjectionStoreForTests(url);
 
         // When: events are projected, the DB is closed, and the store is reopened.
         await projectSessionEventsToSqlite({
@@ -31,7 +28,7 @@ describe('sqlite session projection', () => {
             envelopes: completeProjectionEvents(SESSION_ID),
         });
         store.close();
-        const reopened = await openSqliteSessionProjectionStore({ url });
+        const reopened = await openSqliteSessionProjectionStoreForTests(url);
 
         // Then: callers see direct projection query semantics without replaying JSONL.
         await expectQueryCoverage(reopened, SESSION_ID);
@@ -41,7 +38,7 @@ describe('sqlite session projection', () => {
     it('writes sessions, messages, tools, approvals, and provider failures rows from events', async () => {
         // Given: a projected session with assistant messages, a tool call, approval, and provider failure.
         const url = await tempDbUrl('projection-rows');
-        const store = await openSqliteSessionProjectionStore({ url });
+        const store = await openSqliteSessionProjectionStoreForTests(url);
 
         // When: the post-append projection path runs.
         await projectSessionEventsToSqlite({
@@ -113,7 +110,7 @@ describe('sqlite session projection', () => {
     it('updates session projections without deleting append-only session rows', async () => {
         // Given: an append-only event ledger row exists and deletes from sessions are forbidden.
         const url = await tempDbUrl('append-only-safe');
-        const store = await openSqliteSessionProjectionStore({ url });
+        const store = await openSqliteSessionProjectionStoreForTests(url);
         const client = createClient({ url });
         await client.execute({
             sql: `

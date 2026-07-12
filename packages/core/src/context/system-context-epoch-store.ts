@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
-import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db.js';
+import { openMissionControlDb } from '../db/mission-control-db.js';
 
 export type ContextEpochRecordInput = {
     readonly sessionId: string;
@@ -36,8 +36,12 @@ const epochRowSchema = z.object({
 export class SqlContextEpochStore {
     private constructor(private readonly runtime: LocalLibsqlDb) {}
 
-    static async open(root: string): Promise<SqlContextEpochStore> {
-        const { runtime } = await openCanonicalRuntimeDb({ dataDir: root, legacyRoots: [root] });
+    static async open(input: { readonly dataDir: string }): Promise<SqlContextEpochStore> {
+        const runtime = await openMissionControlDb({ dataDir: input.dataDir });
+        return SqlContextEpochStore.fromRuntime(runtime);
+    }
+
+    static fromRuntime(runtime: LocalLibsqlDb): SqlContextEpochStore {
         return new SqlContextEpochStore(runtime);
     }
 

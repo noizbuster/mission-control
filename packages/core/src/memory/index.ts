@@ -78,8 +78,10 @@ export {
     SqliteSessionEventStore,
     SqliteSessionEventStoreError,
     type SqliteSessionEventStoreOpenOptions,
+    type SqliteSessionEventStoreRuntimeOptions,
 } from './sqlite-session-event-store.js';
 export {
+    createSqliteSessionProjectionStore,
     openSqliteSessionProjectionStore,
     projectSessionEventsToSqlite,
     type SqliteSessionProjectionStore,

@@ -2,11 +2,12 @@ import { createClient } from '@libsql/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { envelope } from '../session-replay-coding-test-support.js';
 import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql.js';
-import { openSqliteSessionProjectionStore, projectSessionEventsToSqlite } from './sqlite-session-projection.js';
+import { projectSessionEventsToSqlite } from './sqlite-session-projection.js';
 import {
     CREATED_AT,
     cleanupSqliteSessionProjectionTestDirs,
     completeProjectionEvents,
+    openSqliteSessionProjectionStoreForTests,
     SESSION_ID,
     sessionStartedEvent,
     tempDbUrl,
@@ -20,7 +21,7 @@ describe('sqlite session projection boundary cases', () => {
     it('round trips awaiting reason and source through public session projection reads', async () => {
         // Given: a SQLite-native session summary with approval wait metadata.
         const url = await tempDbUrl('awaiting');
-        const store = await openSqliteSessionProjectionStore({ url });
+        const store = await openSqliteSessionProjectionStoreForTests(url);
 
         // When: the public projection store writes and reads the awaiting summary.
         await store.replaceSessionProjection({
@@ -95,7 +96,7 @@ describe('sqlite session projection boundary cases', () => {
     it('clears stale pending awaits when an authoritative projection replacement is no longer awaiting', async () => {
         // Given: a projected session is currently awaiting approval.
         const url = await tempDbUrl('awaiting-replacement');
-        const store = await openSqliteSessionProjectionStore({ url });
+        const store = await openSqliteSessionProjectionStoreForTests(url);
         await store.replaceSessionProjection({
             sessionId: SESSION_ID,
             records: [
@@ -160,7 +161,7 @@ describe('sqlite session projection boundary cases', () => {
     it('fails closed with a diagnostic for malformed event payloads', async () => {
         // Given: a stale projection already exists for a session.
         const url = await tempDbUrl('malformed');
-        const store = await openSqliteSessionProjectionStore({ url });
+        const store = await openSqliteSessionProjectionStoreForTests(url);
         await projectSessionEventsToSqlite({
             store,
             sessionId: SESSION_ID,

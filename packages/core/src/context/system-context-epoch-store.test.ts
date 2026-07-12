@@ -20,8 +20,9 @@ afterEach(async () => {
 
 describe('SqlContextEpochStore', () => {
     it('persists context epoch rows and reads them after reopen', async () => {
-        const root = await makeTempRoot();
-        const first = await SqlContextEpochStore.open(root);
+        const omoRoot = await makeTempRoot();
+        const dataDir = await makeTempRoot();
+        const first = await SqlContextEpochStore.open({ dataDir });
         await first.recordEpoch({
             sessionId: 'session_context',
             epoch: 0,
@@ -36,7 +37,7 @@ describe('SqlContextEpochStore', () => {
         });
         first.close();
 
-        const reopened = await SqlContextEpochStore.open(root);
+        const reopened = await SqlContextEpochStore.open({ dataDir });
         const rows = await reopened.listEpochs('session_context');
         reopened.close();
 
@@ -44,7 +45,8 @@ describe('SqlContextEpochStore', () => {
             [0, 'test/source', 'Baseline source text', undefined],
             [1, 'test/source', undefined, 'Updated source text'],
         ]);
-        expect(existsSync(localSessionDbPath(root))).toBe(true);
-        expect(existsSync(join(root, '.omo', 'mission-control.db'))).toBe(false);
+        expect(existsSync(localSessionDbPath(dataDir))).toBe(true);
+        expect(existsSync(localSessionDbPath(omoRoot))).toBe(false);
+        expect(existsSync(join(omoRoot, '.omo', 'mission-control.db'))).toBe(false);
     });
 });

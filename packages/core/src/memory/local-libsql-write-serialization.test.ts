@@ -4,8 +4,9 @@ import { type LocalLibsqlWriteTarget, openLocalLibsqlDb, runWithLocalLibsqlWrite
 import { envelope, sessionStoppedEvent } from '../session-replay-coding-test-support.js';
 import { exportLegacySessionJsonl, importLegacySessionCompatibilityWindow } from './session-import.js';
 import { SESSION_IMPORT_TEST_SESSION_ID, writeLegacyFixture } from './session-import-test-support.js';
-import { SqliteSessionEventStore } from './sqlite-session-event-store.js';
-import { openSqliteSessionProjectionStore, projectSessionEventsToSqlite } from './sqlite-session-projection.js';
+import { openSqliteSessionEventStoreForTests } from './sqlite-session-event-store-test-support.js';
+import { projectSessionEventsToSqlite } from './sqlite-session-projection.js';
+import { openSqliteSessionProjectionStoreForTests } from './sqlite-session-projection-test-support.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -21,14 +22,14 @@ describe('local libSQL write serialization', () => {
     it('serializes projection replacement behind the same write lane used by appends', async () => {
         // Given: an append path and projection store target the same local libSQL URL.
         const url = await tempDbUrl('projection');
-        const appendStore = await SqliteSessionEventStore.open({
+        const appendStore = await openSqliteSessionEventStoreForTests({
             url,
             sessionId: 'projection_serialized',
             createEventId: () => 'event_append_started',
         });
         await appendStore.append(sessionStartedEvent('projection_serialized'));
         await appendStore.close();
-        const store = await openSqliteSessionProjectionStore({ url });
+        const store = await openSqliteSessionProjectionStoreForTests(url);
         const runtime = await openLocalLibsqlDb({ url });
         const releaseLane = deferred();
         const holdingWrite = holdWriteLaneWithSessionStatus({

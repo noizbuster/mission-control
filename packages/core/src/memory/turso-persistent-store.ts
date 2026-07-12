@@ -31,11 +31,6 @@ type MemoryRow = {
     readonly expiresAt: string | null;
 };
 
-/**
- * Open (or create) a local libSQL-backed store at `url`. Accepts `:memory:` for an
- * ephemeral in-memory DB or `file:./path.db` for an embedded file. Remote Turso URLs are
- * intentionally rejected; `close()` releases the underlying client.
- */
 export class TursoPersistentStore implements PersistentMemoryStore {
     private readonly runtime: LocalLibsqlDb;
 
@@ -47,8 +42,8 @@ export class TursoPersistentStore implements PersistentMemoryStore {
         return new TursoPersistentStore(runtime);
     }
 
-    static async open(url: string): Promise<TursoPersistentStore> {
-        return TursoPersistentStore.fromRuntime(await openLocalLibsqlDb({ url }));
+    static async openMemory(): Promise<TursoPersistentStore> {
+        return TursoPersistentStore.fromRuntime(await openLocalLibsqlDb({ url: ':memory:' }));
     }
 
     async get(key: string, namespace: string): Promise<unknown | undefined> {
@@ -136,7 +131,7 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
 /** Dynamic check: is the libSQL client usable in this environment (embedded probe)? */
 export async function isTursoAvailable(): Promise<boolean> {
     try {
-        const probe = await TursoPersistentStore.open(':memory:');
+        const probe = await TursoPersistentStore.openMemory();
         probe.close();
         return true;
     } catch {

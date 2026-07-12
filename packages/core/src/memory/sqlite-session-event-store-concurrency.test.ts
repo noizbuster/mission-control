@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { openLocalLibsqlDb, runWithLocalLibsqlWriteLock } from '../db/local-libsql-db.js';
-import { SqliteSessionEventStore, SqliteSessionEventStoreError } from './sqlite-session-event-store.js';
+import { SqliteSessionEventStoreError } from './sqlite-session-event-store.js';
 import {
     cleanupSqliteSessionEventStoreTestDirs,
     createSqliteSessionEventStoreTestDbUrl,
     envelope,
     eventWithoutSession,
+    openSqliteSessionEventStoreForTests,
     sessionStartedEvent,
     taskCompletedEvent,
 } from './sqlite-session-event-store-test-support.js';
@@ -19,7 +20,7 @@ describe('SqliteSessionEventStore concurrency and validation', () => {
         // Given: two appends are queued on one SQLite store.
         const sessionId = 'session_sqlite_queued_append';
         const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('queued');
-        const store = await SqliteSessionEventStore.open({
+        const store = await openSqliteSessionEventStoreForTests({
             url: sqliteUrl,
             sessionId,
             createEventId: (_event, sequence) => `event_${sequence}`,
@@ -44,12 +45,12 @@ describe('SqliteSessionEventStore concurrency and validation', () => {
         const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('concurrent');
         const firstSessionId = 'session_sqlite_concurrent_first';
         const secondSessionId = 'session_sqlite_concurrent_second';
-        const first = await SqliteSessionEventStore.open({
+        const first = await openSqliteSessionEventStoreForTests({
             url: sqliteUrl,
             sessionId: firstSessionId,
             createEventId: (_event, sequence) => `first_${sequence}`,
         });
-        const second = await SqliteSessionEventStore.open({
+        const second = await openSqliteSessionEventStoreForTests({
             url: sqliteUrl,
             sessionId: secondSessionId,
             createEventId: (_event, sequence) => `second_${sequence}`,
@@ -76,7 +77,7 @@ describe('SqliteSessionEventStore concurrency and validation', () => {
         const sessionId = 'session_sqlite_close_drain';
         const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('close-drain');
         const blocker = await openLocalLibsqlDb({ url: sqliteUrl });
-        const store = await SqliteSessionEventStore.open({
+        const store = await openSqliteSessionEventStoreForTests({
             url: sqliteUrl,
             sessionId,
             createEventId: (_event, sequence) => `event_${sequence}`,
@@ -108,7 +109,7 @@ describe('SqliteSessionEventStore concurrency and validation', () => {
         releaseWrite();
         await Promise.all([holdingWrite, appending, closing]);
         blocker.close();
-        const reopened = await SqliteSessionEventStore.open({ url: sqliteUrl, sessionId });
+        const reopened = await openSqliteSessionEventStoreForTests({ url: sqliteUrl, sessionId });
         try {
             expect(await reopened.getEvents(sessionId)).toEqual([sessionStartedEvent(sessionId)]);
         } finally {
@@ -120,7 +121,7 @@ describe('SqliteSessionEventStore concurrency and validation', () => {
         // Given: a SQLite store with one committed event.
         const sessionId = 'session_sqlite_validation';
         const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('validation');
-        const store = await SqliteSessionEventStore.open({
+        const store = await openSqliteSessionEventStoreForTests({
             url: sqliteUrl,
             sessionId,
             createEventId: (_event, sequence) => `event_${sequence}`,

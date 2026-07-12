@@ -5,6 +5,7 @@ import { SqliteSessionEventStore } from '../memory/sqlite-session-event-store.js
 import {
     cleanupSqliteSessionEventStoreTestDirs,
     createSqliteSessionEventStoreTestDbUrl,
+    openSqliteSessionEventStoreForTests,
 } from '../memory/sqlite-session-event-store-test-support.js';
 import { SqlAgentJobMirror } from './agent-job-sql-mirror.js';
 
@@ -104,7 +105,7 @@ function abortCompletedEvent(sessionId: string) {
 }
 
 async function openStore(url: string, sessionId: string): Promise<SqliteSessionEventStore> {
-    return SqliteSessionEventStore.open({
+    return openSqliteSessionEventStoreForTests({
         url,
         sessionId,
         now: () => timestamp,

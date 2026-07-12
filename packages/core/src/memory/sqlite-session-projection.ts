@@ -1,6 +1,7 @@
 import type { AgentEventEnvelope } from '@mission-control/protocol';
-import { type LocalLibsqlDb, openLocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
+import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
 import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
+import { openMissionControlDb } from '../db/mission-control-db.js';
 import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql.js';
 import { deriveSessionProjectionRecordsFromEnvelopes } from './session-projection.js';
 import type {
@@ -48,9 +49,15 @@ export type SqliteSessionProjectionStore = {
 };
 
 export async function openSqliteSessionProjectionStore(input: {
-    readonly url: string;
+    readonly dataDir?: string;
 }): Promise<SqliteSessionProjectionStore> {
-    const runtime = await openLocalLibsqlDb({ url: input.url });
+    const runtime = await openMissionControlDb({
+        ...(input.dataDir !== undefined ? { dataDir: input.dataDir } : {}),
+    });
+    return createSqliteSessionProjectionStore(runtime);
+}
+
+export function createSqliteSessionProjectionStore(runtime: LocalLibsqlDb): SqliteSessionProjectionStore {
     return new LibsqlSessionProjectionStore(runtime);
 }
 

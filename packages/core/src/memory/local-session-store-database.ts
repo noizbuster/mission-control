@@ -2,23 +2,28 @@ import { type InStatement } from '@libsql/client';
 import { z } from 'zod';
 import { runLocalLibsqlWrite } from '../db/local-libsql-db.js';
 import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
-import { openCanonicalRuntimeDb, openRuntimeLocalDb } from '../runtime/local-runtime-db.js';
+import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db.js';
 import { readCanonicalSessionTree } from '../runtime/session-stop-tree-resolver.js';
 import type { SessionStoreIdentity } from '../runtime/session-store-identity.js';
 import { computeCanonicalSessionTreeToken } from '../runtime/session-tree-token.js';
 import { resolveMissionControlDataDir } from './data-dir.js';
 import { importLegacySessionCompatibilityWindow } from './session-import.js';
-import { openSqliteSessionProjectionStore, type SqliteSessionProjectionStore } from './sqlite-session-projection.js';
+import { createSqliteSessionProjectionStore, type SqliteSessionProjectionStore } from './sqlite-session-projection.js';
+
+export type EnsuredLocalSessionDatabase = {
+    readonly identity: SessionStoreIdentity;
+    readonly runtime: Awaited<ReturnType<typeof openCanonicalRuntimeDb>>['runtime'];
+};
 
 export async function openLocalSessionProjectionStore(
     input: { readonly dataDir?: string; readonly now?: () => string } = {},
 ): Promise<SqliteSessionProjectionStore> {
     const dataDir = input.dataDir ?? resolveMissionControlDataDir();
-    const identity = await ensureLocalSessionDatabase({
+    const opened = await openEnsuredLocalSessionDatabase({
         dataDir,
         ...(input.now !== undefined ? { now: input.now } : {}),
     });
-    return openSqliteSessionProjectionStore({ url: identity.databaseFileUrl });
+    return createSqliteSessionProjectionStore(opened.runtime);
 }
 
 export async function deleteLocalSessionRows(input: {
@@ -27,11 +32,10 @@ export async function deleteLocalSessionRows(input: {
     readonly now?: () => string;
 }): Promise<void> {
     const dataDir = input.dataDir ?? resolveMissionControlDataDir();
-    const identity = await ensureLocalSessionDatabase({
+    const { runtime } = await openEnsuredLocalSessionDatabase({
         dataDir,
         ...(input.now !== undefined ? { now: input.now } : {}),
     });
-    const runtime = await openRuntimeLocalDb(identity);
     try {
         for (const sessionId of input.sessionIds) {
             await runLocalLibsqlWrite(runtime, (client) => client.batch(sessionDeleteStatements(sessionId), 'write'));
@@ -74,8 +78,7 @@ export async function deleteLocalSessionTreeRows(input: {
     readonly nowWallMs?: number;
 }): Promise<readonly LocalSessionTreeDeleteRecord[]> {
     const dataDir = input.dataDir ?? resolveMissionControlDataDir();
-    const identity = await ensureLocalSessionDatabase({ dataDir });
-    const runtime = await openRuntimeLocalDb(identity);
+    const { identity, runtime } = await openEnsuredLocalSessionDatabase({ dataDir });
     try {
         return await runLocalLibsqlWrite(runtime, (client) =>
             runLocalLibsqlClientTransaction(client, async () => {
@@ -155,22 +158,26 @@ export async function ensureLocalSessionDatabase(input: {
     readonly dataDir: string;
     readonly now?: () => string;
 }): Promise<SessionStoreIdentity> {
-    const { identity, runtime } = await openCanonicalRuntimeDb({
-        dataDir: input.dataDir,
-        legacyRoots: [input.dataDir],
-        ...(input.now !== undefined ? { now: input.now } : {}),
-    });
+    const { identity, runtime } = await openEnsuredLocalSessionDatabase(input);
+    runtime.close();
+    return identity;
+}
+
+export async function openEnsuredLocalSessionDatabase(input: {
+    readonly dataDir: string;
+    readonly now?: () => string;
+}): Promise<EnsuredLocalSessionDatabase> {
+    const opened = await openCanonicalRuntimeDb({ dataDir: input.dataDir });
     try {
         await importLegacySessionCompatibilityWindow({
-            ...runtime,
-            dataDir: identity.canonicalDataDir,
+            ...opened.runtime,
+            dataDir: opened.identity.canonicalDataDir,
             includeRunSources: false,
             ...(input.now !== undefined ? { now: input.now } : {}),
         });
-    } finally {
-        runtime.close();
+        return opened;
+    } catch (error: unknown) {
+        opened.runtime.close();
+        throw error;
     }
-    const projectionStore = await openSqliteSessionProjectionStore({ url: identity.databaseFileUrl });
-    projectionStore.close();
-    return identity;
 }

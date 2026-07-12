@@ -173,7 +173,7 @@ describe('coding-agent SQLite session store e2e hardening', () => {
         await appendNativeEvents(dataDir, userSessionId, [sessionStartedEvent(userSessionId)]);
         await appendNativeEvents(dataDir, parentSessionId, [sessionStartedEvent(parentSessionId)]);
 
-        const delivery = await SqlSessionInputDelivery.open(dataDir);
+        const delivery = await SqlSessionInputDelivery.open({ dataDir });
         await delivery.admitInput(userSessionId, { inputId: 'operator_prompt', prompt: 'Approve plan?' }, 'queue', {
             blocking: true,
         });

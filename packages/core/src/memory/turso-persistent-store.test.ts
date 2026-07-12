@@ -5,7 +5,7 @@ describe('TursoPersistentStore', () => {
     let store: TursoPersistentStore;
 
     beforeEach(async () => {
-        store = await TursoPersistentStore.open(':memory:');
+        store = await TursoPersistentStore.openMemory();
     });
 
     afterEach(() => {
@@ -182,9 +182,7 @@ describe('TursoPersistentStore', () => {
         expect(available).toBe(true);
     });
 
-    it('rejects remote Turso URLs because this store is local-only', async () => {
-        const opening = TursoPersistentStore.open('libsql://remote.example.com/app');
-
-        await expect(opening).rejects.toMatchObject({ code: 'remote_url' });
+    it('does not expose a generic URL opener on the product store', () => {
+        expect(TursoPersistentStore).not.toHaveProperty('open');
     });
 });

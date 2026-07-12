@@ -1,6 +1,7 @@
 import { MissionSchema, RunSchema } from '@mission-control/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import { openLocalLibsqlDb } from '../../db/local-libsql-db.js';
+import { openMissionControlDb } from '../../db/mission-control-db.js';
 import { localSessionDbPath, localSessionDbUrl } from '../../memory/local-session-store-paths.js';
 import { TursoPersistentStore } from '../../memory/turso-persistent-store.js';
 import { completeRun, failRun, materializeMission, startRun } from './mission-run-service.js';
@@ -186,7 +187,7 @@ describe('mission-run lifecycle', () => {
         const reloadedMission = await readMission(root, mission.id);
         const reloadedRun = await readRun(root, runningRun.id);
         const runs = await listRunsForMission(root, mission.id);
-        const memoryStore = await TursoPersistentStore.open(localSessionDbUrl(root.dataDir));
+        const memoryStore = TursoPersistentStore.fromRuntime(await openMissionControlDb({ dataDir: root.dataDir }));
         await memoryStore.set('ship', 'goals', { status: 'shared-db' });
         memoryStore.close();
         const sharedDb = await openLocalLibsqlDb({ url: localSessionDbUrl(root.dataDir) });

@@ -7,7 +7,8 @@ import {
     type AgentSnapshot,
 } from '@mission-control/protocol';
 import type { AbgTimelineEntry } from '../behavior/timeline.js';
-import { type LocalLibsqlDb, openLocalLibsqlDb } from '../db/local-libsql-db.js';
+import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
+import { openMissionControlDb } from '../db/mission-control-db.js';
 import { projectSessionReplay, type SessionReplayProjection } from '../session-replay.js';
 import type { JsonlSessionEventIdFactory } from './jsonl-session-event-store.js';
 import { defaultSession, deriveSession } from './jsonl-session-projection.js';
@@ -24,11 +25,13 @@ import { randomUUID } from 'node:crypto';
 export { SqliteSessionEventStoreError };
 
 export type SqliteSessionEventStoreOpenOptions = {
-    readonly url: string;
+    readonly dataDir?: string;
     readonly sessionId: string;
     readonly now?: () => string;
     readonly createEventId?: JsonlSessionEventIdFactory;
 };
+
+export type SqliteSessionEventStoreRuntimeOptions = Omit<SqliteSessionEventStoreOpenOptions, 'dataDir'>;
 
 export class SqliteSessionEventStore implements MemoryStore {
     readonly sessionId: string;
@@ -51,8 +54,18 @@ export class SqliteSessionEventStore implements MemoryStore {
     }
 
     static async open(options: SqliteSessionEventStoreOpenOptions): Promise<SqliteSessionEventStore> {
+        const runtime = await openMissionControlDb({
+            ...(options.dataDir !== undefined ? { dataDir: options.dataDir } : {}),
+        });
+        return SqliteSessionEventStore.fromRuntime(runtime, options);
+    }
+
+    static fromRuntime(
+        runtime: LocalLibsqlDb,
+        options: SqliteSessionEventStoreRuntimeOptions,
+    ): SqliteSessionEventStore {
         return new SqliteSessionEventStore({
-            runtime: await openLocalLibsqlDb({ url: options.url }),
+            runtime,
             sessionId: options.sessionId,
             now: options.now ?? (() => new Date().toISOString()),
             createEventId: options.createEventId ?? (() => randomUUID()),

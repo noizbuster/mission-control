@@ -15,7 +15,7 @@ describe('mission-run session lifecycle refresh', () => {
         const root = seedOmoRoot(makeTempRoot());
         const sessionId = 'session_mission_survivor';
         const store = await SqliteSessionEventStore.open({
-            url: localRuntimeDbUrl(root.dataDir),
+            dataDir: root.dataDir,
             sessionId,
             now: () => '2026-07-11T12:00:00.000Z',
             createEventId: (_event, sequence) => `event_${sequence}`,
