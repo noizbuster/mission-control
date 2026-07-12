@@ -2,8 +2,6 @@ import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
 import { openMissionControlDb } from '../db/mission-control-db.js';
 import { resolveMissionControlDataDir } from '../memory/data-dir.js';
 import { missionControlDbPath, missionControlDbUrl } from '../memory/local-session-store-paths.js';
-import { migrateLegacyRuntimeStores, type RuntimeDbMigrationResult } from './runtime-db-migration.js';
-import { runtimeDbMigrationTableDescriptors } from './runtime-db-migration-descriptors.js';
 import {
     recoverExpiredSessionControlOperations,
     type SessionControlOperationTimer,
@@ -15,8 +13,6 @@ import {
     type SessionStoreIdentityPath,
 } from './session-store-identity.js';
 import { dirname } from 'node:path';
-
-export { runtimeDbMigrationTableDescriptors };
 
 type ScheduledCallback = () => void | Promise<void>;
 
@@ -38,8 +34,6 @@ export type RuntimeSessionControlMaintenanceOptions = {
 
 export type OpenCanonicalRuntimeDbOptions = {
     readonly dataDir?: string;
-    readonly legacyRoots?: readonly string[];
-    readonly now?: () => string;
     readonly sessionControlMaintenance?: RuntimeSessionControlMaintenanceOptions | false;
 };
 
@@ -58,19 +52,12 @@ export async function openRuntimeLocalDb(identity: RuntimeLocalDbIdentity): Prom
 export async function openCanonicalRuntimeDb(input: OpenCanonicalRuntimeDbOptions = {}): Promise<{
     readonly identity: SessionStoreIdentity;
     readonly runtime: LocalLibsqlDb;
-    readonly migration: RuntimeDbMigrationResult;
 }> {
     const identity = await resolveSessionStoreIdentity({ dataDir: input.dataDir ?? resolveMissionControlDataDir() });
     const runtime = await openRuntimeLocalDb(identity);
     try {
-        const migration = await migrateLegacyRuntimeStores({
-            runtime,
-            identity,
-            legacyRoots: input.legacyRoots ?? [],
-            ...(input.now !== undefined ? { now: input.now } : {}),
-        });
         const maintenance = await startRuntimeSessionControlMaintenance(identity, input.sessionControlMaintenance);
-        return { identity, runtime: runtimeWithMaintenance(runtime, maintenance), migration };
+        return { identity, runtime: runtimeWithMaintenance(runtime, maintenance) };
     } catch (error: unknown) {
         runtime.close();
         throw error;

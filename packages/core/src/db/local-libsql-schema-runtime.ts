@@ -127,16 +127,4 @@ export const runtimePersistenceSchemaSql = [
             ON context_epochs (session_id, epoch, source_id);
         `,
     'CREATE INDEX IF NOT EXISTS context_epochs_session_epoch_idx ON context_epochs (session_id, epoch);',
-    `
-            CREATE TABLE IF NOT EXISTS runtime_db_migration_ledger (
-                migration_id TEXT PRIMARY KEY,
-                legacy_db_identity TEXT NOT NULL,
-                source_root_file_url TEXT NOT NULL,
-                source_db_file_url TEXT,
-                source_manifest_sha256 TEXT NOT NULL,
-                copied_tables_json TEXT NOT NULL,
-                legacy_runs_json TEXT NOT NULL,
-                completed_at TEXT NOT NULL
-            );
-        `,
 ] as const;

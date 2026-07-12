@@ -258,6 +258,7 @@ export {
 export type { AgentExecutionContext, AgentTask, AgentTaskResult } from './runtime/execution-context.js';
 export type { AgentExecutor } from './runtime/executor.js';
 export { createGraphTurnRunner, type GraphTurnRunnerWiring } from './runtime/graph-coordinator-turn.js';
+export { openCanonicalRuntimeDb } from './runtime/local-runtime-db.js';
 export {
     completeRun,
     failRun,

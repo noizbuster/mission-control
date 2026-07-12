@@ -15,6 +15,20 @@ afterEach(async () => {
 });
 
 describe('canonical runtime DB session-control maintenance', () => {
+    it('opens the unified database without runtime migration state', async () => {
+        const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-runtime-direct-open-'));
+        tempDirectories.push(dataDir);
+
+        const opened = await openCanonicalRuntimeDb({ dataDir, sessionControlMaintenance: false });
+        const tables = await opened.runtime.client.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+        );
+
+        expect(opened).not.toHaveProperty('migration');
+        expect(tables.rows).not.toContainEqual(expect.objectContaining({ name: expect.stringMatching(/migration/u) }));
+        opened.runtime.close();
+    });
+
     it('recovers expired operations on startup and composes hourly GC with runtime cleanup', async () => {
         // Given
         const dataDir = await mkdtemp(join(tmpdir(), 'mctrl-runtime-control-maintenance-'));
