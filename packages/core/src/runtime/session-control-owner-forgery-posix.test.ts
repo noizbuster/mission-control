@@ -31,7 +31,7 @@ describe.runIf(process.platform !== 'win32')('POSIX owner registry forgery resis
     it('rejects a forged nonce, forged owner, and old epoch without leaking the nonce', async () => {
         const runtimeDir = await createDirectory('mctrl-control-forgery-runtime-');
         const dataDir = await createDirectory('mctrl-control-forgery-db-');
-        const runtime = await openLocalLibsqlDb({ url: `file:${join(dataDir, 'memory.db')}` });
+        const runtime = await openLocalLibsqlDb({ url: `file:${join(dataDir, 'mission-control.db')}` });
         const owner = await publishPosixSessionControlOwner({
             runtime,
             dbIdentity: DB_IDENTITY,

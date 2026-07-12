@@ -40,6 +40,6 @@ export async function fenceProcessSessionControlHosts(): Promise<void> {
 }
 
 async function createProcessHost(dataDir: string): Promise<ProcessHostResource> {
-    const { identity, runtime } = await openCanonicalRuntimeDb({ dataDir, legacyRoots: [dataDir] });
+    const { identity, runtime } = await openCanonicalRuntimeDb({ dataDir });
     return { host: new SessionControlHost({ runtime, dbIdentity: identity.dbIdentity, dataDir }), runtime };
 }

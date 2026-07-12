@@ -17,7 +17,6 @@ export async function stopLocalSessionTree(input: StopLocalSessionTreeInput): Pr
     const dataDir = input.dataDir ?? resolveMissionControlDataDir();
     const { identity, runtime } = await openCanonicalRuntimeDb({
         dataDir,
-        legacyRoots: [dataDir],
         sessionControlMaintenance: false,
     });
     try {
