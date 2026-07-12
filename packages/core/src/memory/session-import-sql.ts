@@ -59,7 +59,6 @@ export async function hasLegacyImport(input: {
 export async function listLegacySessionImportLedger(
     client: Client,
 ): Promise<readonly LegacySessionImportLedgerEntry[]> {
-    await ensureLegacySessionImportTables(client);
     const result = await client.execute(
         'SELECT import_id, source_path, source_kind, checksum, imported_event_count, imported_at, diagnostics_json FROM legacy_session_imports ORDER BY source_path',
     );

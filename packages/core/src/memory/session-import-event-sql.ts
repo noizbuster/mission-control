@@ -5,7 +5,6 @@ import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-li
 import { ensureLocalDbSchema } from '../db/local-libsql-schema.js';
 import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
 import { refreshSessionAwaitingFromPendingWaits } from './session-awaiting-sql.js';
-import { ensureLegacySessionImportTables } from './session-import-sql.js';
 import { deriveSessionProjectionRecordsFromEnvelopes } from './session-projection.js';
 import { replaceStatements } from './sqlite-session-projection-statements.js';
 
@@ -79,7 +78,6 @@ export async function readExportEnvelopes(input: {
     readonly client: Client;
     readonly sessionId: string;
 }): Promise<readonly AgentEventEnvelope[]> {
-    await ensureLegacySessionImportTables(input.client);
     const result = await input.client.execute({
         sql: 'SELECT event_id, seq, timestamp, payload_json FROM session_events WHERE session_id = ? ORDER BY seq',
         args: [input.sessionId],

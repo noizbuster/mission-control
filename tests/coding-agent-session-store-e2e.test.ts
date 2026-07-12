@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../apps/cli/src/args.js';
 import { runSessionCommand } from '../apps/cli/src/commands/session.js';
+import { SqlAgentJobMirror } from '../packages/core/src/agents/agent-job-sql-mirror.js';
 import { openLocalLibsqlDb } from '../packages/core/src/db/local-libsql-db.js';
 import {
     exportLegacySessionJsonl,
     localSessionDbPath,
     parseSessionArchive,
     readLocalSessionReplay,
-    SqlAgentJobMirror,
 } from '../packages/core/src/index.js';
 import { SqlSessionInputDelivery } from '../packages/core/src/runtime/session-input-delivery.js';
 import {

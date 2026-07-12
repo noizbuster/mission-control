@@ -98,7 +98,7 @@ describe('ConcreteTaskToolRuntime awaiting/subagent mirror', () => {
         const publicStore = await openSqliteSessionProjectionStoreForTests(url);
         const client = createClient({ url });
         try {
-            const mirror = await SqlAgentJobMirror.create(client);
+            const mirror = await SqlAgentJobMirror.createForTests(client);
             await mirror.startSubagentWait({
                 parentSessionId: 'parent-running-session',
                 childSessionId: 'child-running-session',
@@ -145,7 +145,7 @@ describe('ConcreteTaskToolRuntime awaiting/subagent mirror', () => {
         const publicStore = await openSqliteSessionProjectionStoreForTests(url);
         const client = createClient({ url });
         try {
-            const mirror = await SqlAgentJobMirror.create(client);
+            const mirror = await SqlAgentJobMirror.createForTests(client);
             const runtimeRegistry = new RuntimeAgentRegistry({ mirror });
             const services: TaskToolRuntimeServices = {
                 jobManager: new AsyncJobManager(4, { mirror }),

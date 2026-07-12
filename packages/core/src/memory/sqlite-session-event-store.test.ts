@@ -208,7 +208,7 @@ describe('SqliteSessionEventStore', () => {
         const childSessionId = 'child_append_subagent_wait';
         const sqliteUrl = await createSqliteSessionEventStoreTestDbUrl('runtime-subagent');
         const client = createClient({ url: sqliteUrl });
-        const mirror = await SqlAgentJobMirror.create(client);
+        const mirror = await SqlAgentJobMirror.createForTests(client);
         await mirror.startSubagentWait({
             parentSessionId: sessionId,
             childSessionId,

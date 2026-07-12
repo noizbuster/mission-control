@@ -35,13 +35,14 @@ export class SqlAgentJobMirror implements RuntimeAgentPersistenceMirror {
         private readonly writeTarget: LocalLibsqlWriteTarget | undefined,
     ) {}
 
-    static async create(input: Client | LocalLibsqlWriteTarget): Promise<SqlAgentJobMirror> {
-        if (isLocalLibsqlWriteTarget(input)) {
-            await initializeAgentJobSchema(input.client);
-            return new SqlAgentJobMirror(input.client, input);
-        }
-        await initializeAgentJobSchema(input);
-        return new SqlAgentJobMirror(input, undefined);
+    static async create(input: LocalLibsqlWriteTarget): Promise<SqlAgentJobMirror> {
+        await runLocalLibsqlWrite(input, initializeAgentJobSchema);
+        return new SqlAgentJobMirror(input.client, input);
+    }
+
+    static async createForTests(client: Client): Promise<SqlAgentJobMirror> {
+        await initializeAgentJobSchema(client);
+        return new SqlAgentJobMirror(client, undefined);
     }
 
     recordRuntimeAgent(ref: AgentRef): void {
@@ -164,8 +165,4 @@ export class SqlAgentJobMirror implements RuntimeAgentPersistenceMirror {
     private async writeTransaction<T>(operation: (client: Client) => Promise<T>): Promise<T> {
         return this.write((client) => runLocalLibsqlClientTransaction(client, () => operation(client)));
     }
-}
-
-function isLocalLibsqlWriteTarget(input: Client | LocalLibsqlWriteTarget): input is LocalLibsqlWriteTarget {
-    return 'writeKey' in input && 'client' in input;
 }

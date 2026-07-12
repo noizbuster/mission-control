@@ -18,7 +18,7 @@
  */
 import { and, eq, isNotNull, lte } from 'drizzle-orm';
 import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
-import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
+import { openLocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
 import { memoryEntries } from '../db/schema.js';
 import { deserializeValue, entryMatchesQuery, isExpired, serializeValue } from './persistent-memory-helpers.js';
 import type { MemoryEntry, MemoryQuery, PersistentMemoryStore } from './persistent-memory-store.js';
@@ -55,10 +55,19 @@ export class TursoPersistentStore implements PersistentMemoryStore {
         if (row === undefined) {
             return undefined;
         }
-        if (isExpired({ expiresAt: row.expiresAt ?? undefined }, Date.now())) {
-            await this.runtime.db
-                .delete(memoryEntries)
-                .where(and(eq(memoryEntries.namespace, namespace), eq(memoryEntries.key, key)));
+        const expiredAt = row.expiresAt;
+        if (expiredAt !== null && isExpired({ expiresAt: expiredAt }, Date.now())) {
+            await runLocalLibsqlWrite(this.runtime, async () => {
+                await this.runtime.db
+                    .delete(memoryEntries)
+                    .where(
+                        and(
+                            eq(memoryEntries.namespace, namespace),
+                            eq(memoryEntries.key, key),
+                            eq(memoryEntries.expiresAt, expiredAt),
+                        ),
+                    );
+            });
             return undefined;
         }
         return deserializeValue(row.value);
@@ -70,23 +79,25 @@ export class TursoPersistentStore implements PersistentMemoryStore {
         // null (not undefined) so the column receives SQL NULL and the object literal stays
         // compatible with exactOptionalPropertyTypes.
         const expiresAt = ttlMs !== undefined ? new Date(now + ttlMs).toISOString() : null;
-        await this.runtime.db
-            .insert(memoryEntries)
-            .values({
-                namespace,
-                key,
-                value: serializeValue(value),
-                createdAt,
-                expiresAt,
-            })
-            .onConflictDoUpdate({
-                target: [memoryEntries.namespace, memoryEntries.key],
-                set: {
+        await runLocalLibsqlWrite(this.runtime, async () => {
+            await this.runtime.db
+                .insert(memoryEntries)
+                .values({
+                    namespace,
+                    key,
                     value: serializeValue(value),
                     createdAt,
                     expiresAt,
-                },
-            });
+                })
+                .onConflictDoUpdate({
+                    target: [memoryEntries.namespace, memoryEntries.key],
+                    set: {
+                        value: serializeValue(value),
+                        createdAt,
+                        expiresAt,
+                    },
+                });
+        });
     }
 
     async list(namespace: string): Promise<readonly MemoryEntry[]> {
@@ -106,10 +117,12 @@ export class TursoPersistentStore implements PersistentMemoryStore {
     }
 
     async prune(now: string): Promise<number> {
-        const deleted = await this.runtime.db
-            .delete(memoryEntries)
-            .where(and(isNotNull(memoryEntries.expiresAt), lte(memoryEntries.expiresAt, now)))
-            .returning();
+        const deleted = await runLocalLibsqlWrite(this.runtime, () =>
+            this.runtime.db
+                .delete(memoryEntries)
+                .where(and(isNotNull(memoryEntries.expiresAt), lte(memoryEntries.expiresAt, now)))
+                .returning(),
+        );
         return deleted.length;
     }
 

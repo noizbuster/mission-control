@@ -6,11 +6,10 @@
  */
 
 export type { AgentDefinition } from '@mission-control/protocol';
-export {
-    type AgentJobRecoveryReport,
-    type ResolveSubagentWaitInput,
-    SqlAgentJobMirror,
-    type StartSubagentWaitInput,
+export type {
+    AgentJobRecoveryReport,
+    ResolveSubagentWaitInput,
+    StartSubagentWaitInput,
 } from './agent-job-sql-mirror.js';
 export type { AgentDiscoveryDiagnostic, DiscoverAgentsOptions, DiscoverAgentsResult } from './agent-loader.js';
 export { discoverAgents } from './agent-loader.js';
