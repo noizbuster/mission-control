@@ -1,6 +1,7 @@
 import type { Client } from '@libsql/client';
 import { z } from 'zod';
 import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
+import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
 import type { SessionControlLease } from './session-control-lease.js';
 
 const leaseRowSchema = z.object({
@@ -19,17 +20,7 @@ export async function runSessionControlLeaseImmediate<T>(
     runtime: LocalLibsqlWriteTarget,
     action: (client: Client) => Promise<T>,
 ): Promise<T> {
-    return runLocalLibsqlWrite(runtime, async (client) => {
-        await client.execute('BEGIN IMMEDIATE TRANSACTION');
-        try {
-            const result = await action(client);
-            await client.execute('COMMIT');
-            return result;
-        } catch (error: unknown) {
-            await rollbackQuietly(client);
-            throw error;
-        }
-    });
+    return runLocalLibsqlWrite(runtime, (client) => runLocalLibsqlClientTransaction(client, () => action(client)));
 }
 
 export async function selectSessionControlLease(
@@ -110,10 +101,4 @@ function leaseFromRow(row: unknown): SessionControlLease {
         heartbeatWallMs: parsed.heartbeat_wall_ms,
         expiresWallMs: parsed.expires_wall_ms,
     };
-}
-
-async function rollbackQuietly(client: Client): Promise<void> {
-    try {
-        await client.execute('ROLLBACK');
-    } catch {}
 }
