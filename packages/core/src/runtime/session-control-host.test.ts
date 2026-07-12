@@ -181,5 +181,5 @@ function createHost(
 async function createRuntime(): Promise<LocalLibsqlDb> {
     const directory = await mkdtemp(join(tmpdir(), 'mctrl-session-control-host-'));
     directories.push(directory);
-    return openLocalLibsqlDb({ url: `file:${join(directory, 'memory.db')}` });
+    return openLocalLibsqlDb({ url: `file:${join(directory, 'mission-control.db')}` });
 }
