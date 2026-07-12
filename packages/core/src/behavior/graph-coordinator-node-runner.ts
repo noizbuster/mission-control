@@ -283,7 +283,11 @@ async function runNode(
     };
 }
 
-function rememberProposedInput(eventType: string, payload: unknown, proposedInputByCallId: Map<string, string>): void {
+function rememberProposedInput(
+    eventType: string,
+    payload: unknown,
+    proposedInputByCallId: Map<string, string>,
+): void {
     if (eventType !== 'llm.tool_call.proposed' || typeof payload !== 'object' || payload === null) {
         return;
     }
