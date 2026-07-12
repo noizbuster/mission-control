@@ -1,12 +1,12 @@
 import { extractLastAssistantText } from '@mission-control/tui/chat';
 import type { CliRenderer, ScrollBoxRenderable } from '@opentui/core';
 import { onCleanup, onMount } from 'solid-js';
-import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
 import type { OpenTuiKeymap } from '../platform/keymap/keymap-instance.js';
 import type { TuiClipboardService } from '../platform/providers/clipboard-toast-context.js';
 import type { TuiLocalPreferencesService } from '../platform/providers/local-preferences-context.js';
 import type { TuiPromptStashService } from '../platform/providers/prompt-services-context.js';
 import type { ChatStore } from '../state/chat-store.js';
+import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
 import { parseModelPreferenceKeys, recentModelPreferenceSelections } from './app-helpers.js';
 
 /**

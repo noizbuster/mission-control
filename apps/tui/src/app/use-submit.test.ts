@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { asTextareaRef, createRecordingTextarea } from '../components/chat-test-support.js';
 import { createChatStore } from '../state/chat-store.js';
+import { asTextareaRef, createRecordingTextarea } from '../components/chat-test-support.js';
 import { useSubmit } from './use-submit.js';
 
 vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
