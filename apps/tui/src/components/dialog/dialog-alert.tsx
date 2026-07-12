@@ -62,6 +62,9 @@ export function DialogAlert(props: DialogAlertProps): JSX.Element {
 
 DialogAlert.show = (dialog: DialogContext, title: string, message: string): Promise<void> => {
     return new Promise<void>((resolve) => {
-        dialog.replace(<DialogAlert title={title} message={message} onConfirm={() => resolve()} />, () => resolve());
+        dialog.replace(
+            <DialogAlert title={title} message={message} onConfirm={() => resolve()} />,
+            () => resolve(),
+        );
     });
 };
