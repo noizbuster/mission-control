@@ -99,6 +99,19 @@ function readProjectConfig(path: string): ProjectConfig {
     return parsed;
 }
 
+function readTargetCommand(config: ProjectConfig, target: string): string | undefined {
+    const targetConfig = config.targets?.[target];
+    if (!isRecord(targetConfig)) {
+        return undefined;
+    }
+    const options = Reflect.get(targetConfig, 'options');
+    if (!isRecord(options)) {
+        return undefined;
+    }
+    const command = Reflect.get(options, 'command');
+    return typeof command === 'string' ? command : undefined;
+}
+
 function isRootManifest(value: unknown): value is RootManifest {
     if (!isRecord(value)) {
         return false;
@@ -195,6 +208,14 @@ describe('Nx workspace', () => {
         expect(config.targetDefaults?.['typecheck']).toMatchObject({ cache: true });
         // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
         expect(config.targetDefaults?.['lint']).toMatchObject({ cache: true });
+    });
+
+    it('lints every maintained workspace root without traversing reference checkouts', () => {
+        const config = readProjectConfig('project.json');
+
+        expect(readTargetCommand(config, 'lint')).toBe(
+            'biome lint apps docs examples native packages scripts tests package.json project.json nx.json tsconfig.base.json vitest.config.ts biome.jsonc biome.usd.jsonc skills-lock.json',
+        );
     });
 
     it('defines Nx projects for every workspace boundary', () => {

@@ -21,7 +21,7 @@
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "biome check ."
+        "command": "biome lint apps docs examples native packages scripts tests package.json project.json nx.json tsconfig.base.json vitest.config.ts biome.jsonc biome.usd.jsonc skills-lock.json"
       }
     },
     "test": {
