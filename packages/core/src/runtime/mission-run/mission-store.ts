@@ -2,9 +2,8 @@
  * Mission store — SQL-backed CRUD for Mission state objects.
  *
  * New writes go to the shared local libSQL database at `<data-dir>/mission-control.db`.
- * During the compatibility window, missing SQL rows fall back to legacy
- * `.omo/missions/{missionId}.json` files and import them into SQL after schema
- * validation.
+ * Missing SQL rows may fall back to `.omo/missions/{missionId}.json` compatibility
+ * records owned by this store. Database startup never probes an older SQL file.
  */
 
 import { type Mission, type MissionCapabilities, MissionSchema, type MissionStatus } from '@mission-control/protocol';

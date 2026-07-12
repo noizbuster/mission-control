@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 describe('createSqlTaskRuntimeServices', () => {
-    it('defaults runtime_agents async_jobs and session_relations to MCTRL_DATA_DIR memory.db', async () => {
+    it('defaults runtime_agents async_jobs and session_relations to MCTRL_DATA_DIR mission-control.db', async () => {
         const dataDir = await makeWorkspaceRoot();
         const previousDataDir = process.env[missionControlDataDirEnvKey];
         process.env[missionControlDataDirEnvKey] = dataDir;
@@ -34,7 +34,7 @@ describe('createSqlTaskRuntimeServices', () => {
                 timestamp: '2026-07-06T00:00:00.000Z',
                 sessionId: 'public-default-data-dir-session',
                 taskId: 'task_public_default_data_dir',
-                message: 'public session event in shared data-dir memory.db',
+                message: 'public session event in shared data-dir mission-control.db',
                 nativeSidecarStatus: 'mock',
                 modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
             });

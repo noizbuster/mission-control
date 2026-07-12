@@ -163,8 +163,8 @@ describe('coding-agent SQLite session store e2e hardening', () => {
         }
     });
 
-    it('projects production user input and foreground subagent waits through public memory db reads', async () => {
-        // Given: real session rows plus production wait adapters sharing one data-dir memory.db.
+    it('projects production user input and foreground subagent waits through public Mission Control DB reads', async () => {
+        // Given: real session rows plus production wait adapters sharing one data-dir mission-control.db.
         const dataDir = await tempDataDir(tempDirs);
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
         const userSessionId = 'session_e2e_user_input';

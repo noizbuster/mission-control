@@ -22,9 +22,11 @@ import {
     runFilePath,
     updateRunStatus,
 } from './run-store.js';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+const retiredDatabaseFilename = ['memory', 'db'].join('.');
 
 describe('materializeMission', () => {
     it('creates a valid draft Mission from a WorkflowSpec', () => {
@@ -90,38 +92,42 @@ describe('Mission/Run SQL location', () => {
 
         expect(existsSync(localSessionDbPath(dataDir))).toBe(true);
         expect(existsSync(localSessionDbPath(defaultDataDir))).toBe(false);
-        expect(existsSync(join(omoRoot, 'memory.db'))).toBe(false);
-        expect(existsSync(join(omoRoot, '.omo', 'memory.db'))).toBe(false);
+        expect(existsSync(join(omoRoot, retiredDatabaseFilename))).toBe(false);
+        expect(existsSync(join(omoRoot, '.omo', retiredDatabaseFilename))).toBe(false);
         expect(existsSync(localSessionDbPath(omoRoot))).toBe(false);
     });
 
-    it('ignores a workspace-only legacy SQL database', async () => {
+    it('does not probe a pre-existing workspace SQL file', async () => {
         const tempRoot = makeTempRoot();
         const omoRoot = join(tempRoot, 'workspace');
         const dataDir = join(tempRoot, 'product-data');
         mkdirSync(omoRoot, { recursive: true });
         seedOmoRoot(omoRoot);
-        const legacyMission = materializeMission(makeTestWorkflowSpec());
-        const legacyDb = await openLocalLibsqlDb({ url: pathToFileURL(join(omoRoot, 'memory.db')).href });
-        await legacyDb.client.execute({
+        const retiredDatabasePath = join(omoRoot, retiredDatabaseFilename);
+        const retiredMission = materializeMission(makeTestWorkflowSpec());
+        const retiredDb = await openLocalLibsqlDb({ url: pathToFileURL(retiredDatabasePath).href });
+        await retiredDb.client.execute({
             sql:
                 'INSERT INTO missions (mission_id, status, workflow_name, created_at, updated_at, payload_json) ' +
                 'VALUES (?, ?, ?, ?, ?, ?)',
             args: [
-                legacyMission.id,
-                legacyMission.status,
-                legacyMission.workflowName ?? null,
-                legacyMission.createdAt,
-                legacyMission.updatedAt,
-                JSON.stringify(legacyMission),
+                retiredMission.id,
+                retiredMission.status,
+                retiredMission.workflowName ?? null,
+                retiredMission.createdAt,
+                retiredMission.updatedAt,
+                JSON.stringify(retiredMission),
             ],
         });
-        legacyDb.close();
+        await retiredDb.client.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+        retiredDb.close();
+        const retiredDatabaseBytes = readFileSync(retiredDatabasePath);
 
         const missions = await listMissions({ omoRoot, dataDir });
 
         expect(missions).toEqual([]);
         expect(existsSync(localSessionDbPath(dataDir))).toBe(true);
+        expect(readFileSync(retiredDatabasePath)).toEqual(retiredDatabaseBytes);
     });
 });
 
@@ -177,7 +183,7 @@ describe('mission-run lifecycle', () => {
         expect(reloaded.prompt).toBe('fix the @-autocomplete bug');
     });
 
-    it('persists mission and run records in the shared local memory DB across reopen', async () => {
+    it('persists mission and run records in the shared local Mission Control DB across reopen', async () => {
         const root = seedOmoRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);

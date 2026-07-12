@@ -171,7 +171,7 @@ Spawning child agents:
 - Recursion is bounded. `DEFAULT_MAX_RECURSION_DEPTH=2` means a root agent (depth 0) may spawn a child (depth 1), and that child may spawn one grandchild (depth 2 is the blocked boundary). `HARD_RECURSION_CAP=10` bounds even `recursion: -1` unlimited configurations.
 - Approval tiers rank tools `read` (0), `write` (1), `exec` (2). The active `ApprovalMode` (`always-ask`, `write`, `yolo`) controls how many tiers auto-approve. Per-tool user policies (`prompt`/`deny`/`allow`) override the mode. Child `task()` sessions are forced to `yolo` mode, so the parent's `task()` approval is the authorization boundary for the whole child run.
 
-Adopted child agents run under an idle-to-parked-to-revived lifecycle (default 7 minute idle TTL) and a concurrency-bounded async job manager. The live managers still coordinate in memory, while the SQL task runtime mirrors visible runtime agent refs, async job handles, foreground subagent waits, and child-session relation rows into the shared local `memory.db` session store.
+Adopted child agents run under an idle-to-parked-to-revived lifecycle (default 7 minute idle TTL) and a concurrency-bounded async job manager. The live managers still coordinate in memory, while the SQL task runtime mirrors visible runtime agent refs, async job handles, foreground subagent waits, and child-session relation rows into the shared local `mission-control.db` session store.
 
 ## Model Provider Selection
 
@@ -328,14 +328,18 @@ Session storage:
 
 - `MCTRL_DATA_DIR` overrides the Mission Control data directory.
 - Without `MCTRL_DATA_DIR`, the local session database uses the platform application-data directory.
-- New authoritative session event/replay writes use the local libSQL database at `<data-dir>/memory.db`, shared with persistent memory storage through the current schema initializer. The path is canonicalized before it is hashed into the database identity used by leases and owner IPC.
-- The compatibility migration reads only declared legacy roots, records an immutable manifest in `runtime_db_migration_ledger`, and fails closed on corrupt input or a conflicting rerun. It leaves legacy databases and run JSON source files unchanged.
-- Runtime coordination SQL for session input delivery, Mission/Run records, context epochs, runtime agents, async jobs, and relation rows uses the same local `<data-dir>/memory.db` path as the public session projection.
-- Production `approval`, `user_input`, and foreground `subagent` waits surface through the public `memory.db` session-list/read path.
+- New authoritative session event/replay writes use the local libSQL database at `<data-dir>/mission-control.db`, shared with persistent memory storage through the current schema initializer. The path is canonicalized before it is hashed into the database identity used by leases and owner IPC.
+- Each canonical database file has one leased libSQL client and Drizzle handle per process. Separate processes own separate clients for the same file.
+- Every in-process mutation, including schema initialization, enters the explicit file-scoped write lane; Drizzle does not provide this serialization.
+- File-backed opens require `journal_mode=WAL`, `synchronous=NORMAL`, and a 5000 ms cross-process busy timeout before use.
+- Runtime startup opens only the unified database; it does not probe or automatically import prior SQL stores. JSONL and `.omo` JSON records remain explicit compatibility formats handled by their owning stores.
+- The product opener opens `<data-dir>/mission-control.db` directly. An unavailable optional libSQL native binary may fall back to in-memory working memory, but an accepted path that raises `LocalDbConfigError` or `LocalDbInitializationError`, including WAL refusal, is fatal instead of silently falling back.
+- Runtime coordination SQL for session input delivery, Mission/Run records, context epochs, runtime agents, async jobs, and relation rows uses the same local `<data-dir>/mission-control.db` path as the public session projection.
+- Production `approval`, `user_input`, and foreground `subagent` waits surface through the public `mission-control.db` session-list/read path.
 - `session_events` owns session, run, approval, and input history plus event-derived projections. `mission_runs` owns mission work, and live jobs plus their `async_jobs` mirror own job work. A session reaches idle only when all three authorities are quiescent.
 - Legacy JSONL logs can still live at `sessions/<session-id>.jsonl` and are import/export compatibility artifacts. Import never deletes or rewrites them.
 - JSONL compatibility logs contain durable event envelopes with stable event ids, sequence numbers, causation/correlation ids, and replay cursors.
-- The SQLite/libSQL session data model, table responsibilities, indexes, legacy import operation, and export behavior are documented in [`docs/session-data-model.md`](docs/session-data-model.md).
+- The SQLite/libSQL session data model, table responsibilities, indexes, and explicit session import/export behavior are documented in [`docs/session-data-model.md`](docs/session-data-model.md).
 - Remote Turso is out of scope for session storage: there are no remote URLs, auth tokens, replica configuration, or network sync steps.
 - Use --json for transient JSON Lines rendering and --jsonl for JSON Lines rendering plus replayable session persistence.
 - Launching the interactive TUI without an explicit `--session <id>` creates no session artifacts until the first prompt turn; non-interactive `--jsonl` runs and an explicit `--session <id>` still create a SQLite session eagerly.

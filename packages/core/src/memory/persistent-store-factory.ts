@@ -8,8 +8,8 @@
  *
  * libSQL/Turso is NEVER mandatory: when the probe fails, a generic open fails, or the native
  * binary is unavailable, this resolves `undefined` and the caller continues with its
- * existing in-memory behavior (the per-run `Blackboard` stays the working memory; the
- * JSONL event ledger is never touched). Typed local configuration and initialization
+ * existing in-memory behavior (the per-run `Blackboard` stays the working memory; durable
+ * session-event storage and JSONL compatibility files are untouched). Typed local configuration and initialization
  * failures propagate instead of silently disabling persistence.
  *
  * The optional `probeAvailability` / `openStore` seams default to the real libSQL probe

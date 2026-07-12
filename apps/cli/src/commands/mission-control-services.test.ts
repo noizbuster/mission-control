@@ -72,7 +72,7 @@ describe('MissionControlServices', () => {
             expect(services.getDefaultIdleTtlMs()).toBe(1_000);
         });
 
-        it('writes runtime mirror rows to the shared Mission Control data-dir memory.db', async () => {
+        it('writes runtime mirror rows to the shared Mission Control data-dir mission-control.db', async () => {
             const services = await MissionControlServices.create(workspaceA);
             services.getRuntimeRegistry().adopt({
                 id: 'agent-data-dir',
@@ -83,8 +83,8 @@ describe('MissionControlServices', () => {
             });
             await services.dispose();
 
-            expect(existsSync(join(dataDir, 'memory.db'))).toBe(true);
-            expect(existsSync(join(workspaceA, 'memory.db'))).toBe(false);
+            expect(existsSync(join(dataDir, 'mission-control.db'))).toBe(true);
+            expect(existsSync(join(workspaceA, 'mission-control.db'))).toBe(false);
         });
     });
 

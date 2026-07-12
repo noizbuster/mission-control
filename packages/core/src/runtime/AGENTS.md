@@ -15,7 +15,7 @@
 | Session input delivery | `session-input-delivery.ts` | `SessionInputDelivery` — FIFO steer/queue admission (`admitInput`, `promoteSteers`, `promoteNextQueued`, `pendingSteerCount`/`pendingQueuedCount`). |
 | Graph turn runner | `graph-coordinator-turn.ts` | `createGraphTurnRunner` — adapts `runAbgGraph` as a `RunCoordinatorTurnRunner`; seeds Blackboard from admitted conversation. |
 | Bounded scheduler | `graph-coordinator-scheduler.ts` | Graph, provider-tool, and shell concurrency gates. |
-| Mission/Run store | `mission-run/mission-store.ts`, `mission-run/run-store.ts` | JSON-per-record CRUD under `.omo/{missions,runs}/`. `mission-store.ts` (`createMission`/`readMission`/`updateMission`/`listMissions`), `run-store.ts` (`createRun`/`readRun`/`updateRunStatus`/`listRunsForMission`, `ALLOWED_RUN_TRANSITIONS`, `TERMINAL_RUN_STATUSES`, `assertRunTransition`). |
+| Mission/Run store | `mission-run/mission-store.ts`, `mission-run/run-store.ts` | Authoritative SQL CRUD in `mission-control.db`, with store-owned `.omo/{missions,runs}/*.json` compatibility reads. `mission-store.ts` (`createMission`/`readMission`/`updateMission`/`listMissions`), `run-store.ts` (`createRun`/`readRun`/`updateRunStatus`/`listRunsForMission`, `ALLOWED_RUN_TRANSITIONS`, `TERMINAL_RUN_STATUSES`, `assertRunTransition`). |
 | Mission/Run service | `mission-run/mission-run-service.ts` | `materializeMission` (turns a `WorkflowSpec` into a `Mission`), `startRun` (two-phase `pending` then `running`), `completeRun`, `failRun`. Timestamps auto-managed; `RunPatch` excludes them. |
 | Continuation runtime | `continuation/continuation-runtime.ts` | `ContinuationRuntime` (`runWithContinuation`, `shouldContinue`, `advance`, `signalDone`, `persistState`/`loadState`, `ContinuationOutcome`). Bounds session-spanning graph resume via `maxIterations` plus DONE signal; state persists in the boulder work `continuation_runtime` passthrough field. Distinct from graph-level `maxNodeRuns`. |
 
@@ -26,7 +26,7 @@
 - Tool registries are built by the CLI layer (`createInteractiveToolRegistry`/`createNonInteractiveToolRegistry`) and passed in — the runtime does NOT own tool registration.
 - The graph turn runner seeds `initialMessages` from admitted conversation + threads approval decisions.
 - `RunCoordinatorV2` is the workflow-path drain-lane; the original `run-coordinator.ts`/`run-coordinator-lifecycle.ts` stay for interactive coding-agent runs. Both coexist by design.
-- Mission/Run records are single JSON files per record under `.omo/{missions,runs}/`, not append-only JSONL event logs. Run status transitions must go through `assertRunTransition` / `updateRunStatus` (pending → running → {blocked,completed,failed,cancelled}; blocked → running).
+- Mission/Run records are authoritative SQL rows in `mission-control.db`; `.omo/{missions,runs}/*.json` is a separate compatibility format read only by its owning store. Run status transitions must go through `assertRunTransition` / `updateRunStatus` (pending → running → {blocked,completed,failed,cancelled}; blocked → running).
 - `materializeMission` is a pure factory (no I/O). The caller persists via `createMission`; `startRun` reads the persisted mission by id.
 - `ContinuationRuntime` bounds cross-session resume; `maxNodeRuns` bounds a single graph execution. Do not conflate the two.
 

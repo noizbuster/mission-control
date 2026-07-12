@@ -5,9 +5,9 @@
  * `@libsql/client` + `drizzle-orm`, so it is a drop-in production backend. It is the
  * intended replacement for the dead `better-sqlite3` adapter (`SqlitePersistentStore`):
  * libSQL ships prebuilt binaries (no node-gyp), speaks the same SQL dialect, and accepts
- * an embedded local `file:` URL (no server, no network) or `:memory:` (for tests). The JSONL
- * event ledger stays untouched — this is only the queryable key/value view whose
- * namespaces map to Blackboard slots.
+ * an embedded local `file:` URL (no server, no network) or `:memory:` (for tests). Durable
+ * session-event storage and JSONL compatibility stay untouched; this is only the queryable
+ * key/value view whose namespaces map to Blackboard slots.
  *
  * The serialization / TTL / query-matching LOGIC is REUSED verbatim from the pure helpers
  * in `sqlite-persistent-store.ts` so this adapter behaves identically to

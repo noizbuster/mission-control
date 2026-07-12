@@ -68,8 +68,8 @@ describe('runOwnerPrompt task services wiring', () => {
             await store.close();
         }
 
-        expect(existsSync(join(dataDir, 'memory.db'))).toBe(true);
-        expect(existsSync(join(workspaceRoot, 'memory.db'))).toBe(false);
+        expect(existsSync(join(dataDir, 'mission-control.db'))).toBe(true);
+        expect(existsSync(join(workspaceRoot, 'mission-control.db'))).toBe(false);
     });
 
     it('degrades without task runtime services when .omo is missing', async () => {

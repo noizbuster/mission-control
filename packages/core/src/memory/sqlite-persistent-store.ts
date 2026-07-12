@@ -2,8 +2,8 @@
  * SQLite-backed persistent working-memory store (ABG §10.4/§12, Phase 8 deferred item).
  *
  * Implements the SAME `PersistentMemoryStore` interface as `InMemoryPersistentStore` over
- * `better-sqlite3`, so it is a drop-in production backend (the JSONL event ledger is
- * untouched — this is the queryable key/value view whose namespaces map to Blackboard slots).
+ * `better-sqlite3`, so it is a drop-in production backend (durable session-event storage and
+ * JSONL compatibility are untouched; this is the queryable key/value working-memory view).
  *
  * NATIVE-BINDING GATE: `better-sqlite3` ships a native `.node` binding that must be compiled
  * (or a prebuilt fetched) for the host node ABI. The adapter is loaded via a DYNAMIC import
@@ -27,8 +27,8 @@ export { deserializeValue, entryMatchesQuery, isExpired, serializeValue };
 /**
  * Minimal structural types for the `better-sqlite3` surface this adapter uses. `better-sqlite3`
  * is an OPERATOR-SUPPLIED runtime dependency (a native module): it is intentionally NOT a
- * manifest dependency of `@mission-control/core` (a dependency guard gates that — the JSONL
- * ledger remains the source of truth, ABG §12). The dynamic `import('better-sqlite3')` in
+ * manifest dependency of `@mission-control/core` (a dependency guard gates that; durable
+ * session events remain in `mission-control.db`, ABG §12). The dynamic `import('better-sqlite3')` in
  * `SqlitePersistentStore.open` resolves it from the operator's deployment; if it is absent,
  * `isSqliteAvailable()` reports false and consumers use `InMemoryPersistentStore`. The
  * ambient type declaration lives in `better-sqlite3.d.ts`.

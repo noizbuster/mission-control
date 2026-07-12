@@ -1,8 +1,8 @@
 /**
  * ABG Blackboard — the structured runtime working-memory store (ABG §10.4, §5.7).
  *
- * Distinct from the JSONL event log: the event log is an append-only audit trail;
- * the Blackboard is the *mutable* scratch state a run reads and writes as it goes —
+ * Distinct from durable append-only session events in `mission-control.db`: the Blackboard
+ * is the *mutable* scratch state a run reads and writes as it goes —
  * the running LLM message list, plus arbitrary key/value entries (goals, observations,
  * artifacts, hypotheses, pending questions) that `MemoryNode` and rule-gated re-entry
  * edges (`blackboard.key.exists` / `blackboard.value.equals`) read.

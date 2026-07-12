@@ -2,7 +2,8 @@
  * Run store — SQL-backed CRUD for Run state objects with status-transition enforcement.
  *
  * New writes go to the shared local libSQL database at `<data-dir>/mission-control.db`.
- * Missing SQL rows can be imported from `.omo/runs/{runId}.json` by this store.
+ * Missing SQL rows may fall back to `.omo/runs/{runId}.json` compatibility records
+ * owned by this store. Database startup never probes an older SQL file.
  * The allowed-transition state machine is enforced inside `updateRunStatus`;
  * direct field mutation is intentionally not exposed.
  *

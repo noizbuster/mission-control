@@ -215,9 +215,14 @@ describe('README stage-01 contract', () => {
             'OpenAI Responses adapter is implemented behind stored provider credentials',
             'MCTRL_DATA_DIR',
             'sessions/<session-id>.jsonl',
-            'New authoritative session event/replay writes use the local libSQL database at `<data-dir>/memory.db`',
-            'Runtime coordination SQL for session input delivery, Mission/Run records, context epochs, runtime agents, async jobs, and relation rows uses the same local `<data-dir>/memory.db` path as the public session projection',
-            'Production `approval`, `user_input`, and foreground `subagent` waits surface through the public `memory.db` session-list/read path',
+            'New authoritative session event/replay writes use the local libSQL database at `<data-dir>/mission-control.db`',
+            'Each canonical database file has one leased libSQL client and Drizzle handle per process',
+            'Every in-process mutation, including schema initialization, enters the explicit file-scoped write lane',
+            '`journal_mode=WAL`, `synchronous=NORMAL`, and a 5000 ms cross-process busy timeout',
+            'The product opener opens `<data-dir>/mission-control.db` directly',
+            '`LocalDbConfigError` or `LocalDbInitializationError`, including WAL refusal, is fatal',
+            'Runtime coordination SQL for session input delivery, Mission/Run records, context epochs, runtime agents, async jobs, and relation rows uses the same local `<data-dir>/mission-control.db` path as the public session projection',
+            'Production `approval`, `user_input`, and foreground `subagent` waits surface through the public `mission-control.db` session-list/read path',
             '[`docs/session-data-model.md`](docs/session-data-model.md)',
             'Remote Turso is out of scope for session storage',
             'Use --json for transient JSON Lines rendering and --jsonl for JSON Lines rendering plus replayable session persistence',
@@ -270,7 +275,7 @@ describe('README stage-01 contract', () => {
 
         const forbiddenSessionStoreClaims = [
             'The append-only event ledger is `session_events`; projection tables derive session lists, transcript messages, approvals, tool calls, provider failures, awaiting state, subagent lineage, and async jobs from those events and runtime mirrors.',
-            'New authoritative session writes use the local libSQL database at `<data-dir>/memory.db`, shared with persistent memory storage through the `schema_migrations` ledger.',
+            'New authoritative session writes use the local libSQL database at `<data-dir>/mission-control.db`, shared with persistent memory storage through the `schema_migrations` ledger.',
             '`user_input` and `subagent` wait adapters exist on the runtime ' +
                 'DB ' +
                 'path, but are not yet ' +
@@ -288,13 +293,19 @@ describe('README stage-01 contract', () => {
     it('documents the current local session DB awaiting projection without stale blocker claims', () => {
         const content = readDoc('docs/session-data-model.md');
         const requiredTerms = [
-            '`<MCTRL_DATA_DIR>/memory.db` is the authoritative session event/replay',
+            '`<MCTRL_DATA_DIR>/mission-control.db` is the authoritative session event/replay',
             '`user_input` and foreground `subagent` waits are mirrored there',
             'Runtime coordination SQL',
-            'async jobs, and relation rows uses the same local-only data-dir `memory.db`',
+            'async jobs, and relation rows uses the same local-only data-dir `mission-control.db`',
             'The full `approval` / `user_input` / `subagent` priority order is production-wired',
-            '`session_awaits` stores active waits in the public `memory.db` projection',
-            'agent/job mirror tables intentionally share `memory.db`',
+            '`session_awaits` stores active waits in the public `mission-control.db` projection',
+            'agent/job mirror tables intentionally share `mission-control.db`',
+            'every canonical database file has one',
+            'Every in-process mutation, including schema initialization, enters the explicit',
+            'Cross-process contention is bounded by a 5000 ms busy timeout',
+            '`journal_mode=WAL`, `synchronous=NORMAL`',
+            '`LocalDbConfigError` and `LocalDbInitializationError` are',
+            'Runtime startup does not probe an older SQL filename and has no legacy',
             "Foreground subagent waits and persisted async job rows insert `session_relations` rows with `kind = 'subagent'`",
             'Remote Turso is out of scope',
         ] as const;
@@ -308,9 +319,9 @@ describe('README stage-01 contract', () => {
             'so migrations for memory, sessions, run state, input delivery, and subagent jobs share one `schema_migrations` ledger',
             'The same file also stores persistent memory rows',
             'does not yet ' + 'populate relation rows',
-            'not yet ' + 'unified into the data-dir `memory.db` public session-list surface',
+            'not yet ' + 'unified into the data-dir `mission-control.db` public session-list surface',
             'Production `user_input` and foreground `subagent` wait adapters currently write the runtime ' + 'DB',
-            '`memory.db` remains follow-up ' + 'work',
+            '`mission-control.db` remains follow-up ' + 'work',
         ] as const;
 
         for (const term of forbiddenTerms) {

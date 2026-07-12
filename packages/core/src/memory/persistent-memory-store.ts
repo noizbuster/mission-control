@@ -1,15 +1,15 @@
 /**
  * Persistent working-memory store (ABG §10.4, Phase 8).
  *
- * Distinct from the event-ledger `MemoryStore` (the immutable JSONL trail): this is the
- * queryable key/value working memory whose namespaces map to Blackboard slots
- * (`goals`, `observations`, `artifacts`, `decisions`). The ledger stays the source of truth;
- * this store holds the derived, queryable view that survives across runs.
+ * Distinct from durable session-event storage in `mission-control.db`: this is the queryable
+ * key/value working memory whose namespaces map to Blackboard slots (`goals`, `observations`,
+ * `artifacts`, `decisions`). `session_events` owns durable session history; this store owns
+ * reusable working-memory values that survive across runs.
  *
  * Phase 8 keystone: the operations contract (`get`/`set`/`list`/`query`/`prune` with TTL).
  * `InMemoryPersistentStore` is the testable default; a SQLite-backed adapter
  * (`better-sqlite3`) implements the same interface for production persistence — swapping it in
- * changes nothing upstream (the JSONL ledger is untouched, ABG §12).
+ * changes nothing upstream (session-event storage and JSONL compatibility are untouched, ABG §12).
  */
 export type MemoryNamespace = 'goals' | 'observations' | 'artifacts' | 'decisions' | (string & {});
 

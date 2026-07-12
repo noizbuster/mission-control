@@ -23,6 +23,7 @@
 ## Invariants
 
 - Event streams are append-only. Derive projections from events instead of mutating hidden state.
+- Local storage opens `mission-control.db` directly with one leased client per canonical file/process, an explicit in-process write lane, WAL/NORMAL, and a 5000 ms busy timeout. Runtime startup has no legacy SQL migration path.
 - Values crossing app/package/sidecar boundaries must be parsed with `@mission-control/protocol` schemas.
 - Default permissions stay conservative; `createDefaultPermissionDecision` denies.
 - Mock/fallback sidecar behavior is part of the scaffold contract. Do not remove it while native execution remains partial.

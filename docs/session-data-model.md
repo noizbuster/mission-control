@@ -4,13 +4,13 @@ Mission Control uses one shared local libSQL surface for durable sessions. The
 canonical database path and identity are shared by session storage, owner IPC,
 leases, and Ground Control's Mission Control adapter:
 
-- `<MCTRL_DATA_DIR>/memory.db` is the authoritative session event/replay
+- `<MCTRL_DATA_DIR>/mission-control.db` is the authoritative session event/replay
   database. New coding-agent session appends write `session_events` there, replay
   and session-list projections are derived from those events, production
   `user_input` and foreground `subagent` waits are mirrored there, and legacy
   JSONL import/export compatibility uses this database. Runtime coordination SQL
   for session inputs, Mission/Run records, context epochs, runtime agents,
-  async jobs, and relation rows uses the same local-only data-dir `memory.db`
+  async jobs, and relation rows uses the same local-only data-dir `mission-control.db`
   file. `session_events` is authoritative for session, run, approval, and input
   history. `mission_runs` and `async_jobs` remain authoritative for their own
   durable work, so lifecycle refresh consults all three authorities.
@@ -19,13 +19,14 @@ Remote Turso is out of scope: the local DB opener accepts `:memory:` and `file:`
 URLs only, rejects `libsql://` and other remote schemes, and does not read auth
 tokens or configure sync.
 
-Legacy JSONL session logs are still supported as an import/export compatibility
-window. They are not deleted during import, and explicit export can write a
-SQLite-native session back to JSONL/archive form for rollback or older readers.
+Legacy JSONL session logs remain explicit import/export compatibility inputs.
+They are not deleted during import, and explicit export can write a
+SQLite-native session back to JSONL/archive form.
 
 ## Contents
 
 - [Authoritative Tables](#authoritative-tables)
+- [Local Database Runtime Contract](#local-database-runtime-contract)
 - [Key Indexes](#key-indexes)
 - [Event And Projection Contract](#event-and-projection-contract)
 - [Session State Machine](#session-state-machine)
@@ -33,36 +34,35 @@ SQLite-native session back to JSONL/archive form for rollback or older readers.
 - [Awaiting Semantics](#awaiting-semantics)
 - [Owner IPC, Leases, And Operations](#owner-ipc-leases-and-operations)
 - [Subagent Lineage And Jobs](#subagent-lineage-and-jobs)
-- [Legacy Import And Export](#legacy-import-and-export)
+- [Explicit Session Import And Export](#explicit-session-import-and-export)
 - [Local Path And Memory Relationship](#local-path-and-memory-relationship)
 - [Hierarchy And Guarded Deletion](#hierarchy-and-guarded-deletion)
-- [Rollback And Operations](#rollback-and-operations)
+- [Backup And Operations](#backup-and-operations)
 
 ## Authoritative Tables
 
-Core `<MCTRL_DATA_DIR>/memory.db` tables:
+Core `<MCTRL_DATA_DIR>/mission-control.db` tables:
 
 | Table | Responsibility |
 | --- | --- |
-| `memory_entries` | Existing persistent working-memory key/value table. It shares `memory.db` and is not a session replay table. |
+| `memory_entries` | Existing persistent working-memory key/value table. It shares `mission-control.db` and is not a session replay table. |
 | `sessions` | Current session projection and listing row. Stores lifecycle status, optional `awaiting_reason`, `primary_wait_id`, parent/root ids, workspace/provider/model/title metadata, token/cost summaries, last event sequence, activity timestamps, legacy JSONL path, import/export timestamps, and `metadata_json`. |
 | `session_event_sequences` | Per-session sequence allocator. The event store updates `next_seq` transactionally with append writes so replay order is stable per session. |
 | `session_events` | Append-only durable event ledger. Each row contains `session_id`, `seq`, globally unique `event_id`, event `type`, timestamp, optional run/turn/causation/correlation ids, and the validated protocol envelope in `payload_json`. |
 | `session_messages` | Transcript read projection by message. Used by CLI and desktop inspection without replaying all events. |
 | `session_parts` | Normalized message parts such as text, tool call, tool result, reasoning, file, and data parts. |
 | `session_awaits` | Wait projection rows for approval-blocked runs, blocking `user_input`, foreground `subagent` waits, and imported legacy awaiting metadata. |
-| `mission_runs` | Legacy `.omo/runs/*.json` compatibility import target and new Mission/Run SQL write target in `memory.db`. |
+| `mission_runs` | Mission/Run SQL write target in `mission-control.db`; `.omo/runs/*.json` remains a separate compatibility format. |
 | `approvals` | Approval projection keyed by `approval_id`, including subject, status, request/decision timestamps, and decision metadata. |
 | `tool_calls` | Tool-call projection keyed by `tool_call_id`, including name, status, arguments, result, approval id, timestamps, errors, and applied files. |
 | `provider_failures` | Provider failure projection keyed by a failure id, with unique `(session_id, event_id)` rows for request/provider-turn diagnostics. |
 | `legacy_session_imports` | Idempotent import ledger for JSONL logs and `.omo/runs/*.json` files. Records source path, source kind, checksum, imported event count, import timestamp, and diagnostics. |
-| `runtime_db_migration_ledger` | Immutable compatibility-migration ledger with migration id, legacy identity, source file URLs, manifest hash, copied-table/run manifests, and completion time. |
 
-Shared local `memory.db` runtime tables:
+Shared local `mission-control.db` runtime tables:
 
 | Table | Responsibility |
 | --- | --- |
-| `sessions` | Runtime coordination session row shared with the public session-list projection in data-dir `memory.db`. |
+| `sessions` | Runtime coordination session row shared with the public session-list projection in data-dir `mission-control.db`. |
 | `session_inputs` | Durable input delivery rows for `steer` and `queue` prompts. Tracks admitted/promoted sequence numbers and cancellation. |
 | `session_awaits` | Runtime wait rows for blocking input delivery and foreground child-agent waits. |
 | `missions` | Materialized workflow mission records mirrored into SQL. The original mission payload is preserved as JSON. |
@@ -74,6 +74,26 @@ Shared local `memory.db` runtime tables:
 | `session_control_leases` | DB-identity-scoped owner lease for a live session, including owner id, epoch, nonce hash, and wall-clock expiry. |
 | `session_control_operations` | Immutable stop operation receipt, captured and settled handle ids, barrier state, deadline, and retention fields. |
 | `session_control_late_settlements` | Redacted audit rows for callbacks rejected after an operation or owner lease is stale. |
+
+## Local Database Runtime Contract
+
+The product opener resolves and opens `<MCTRL_DATA_DIR>/mission-control.db`
+directly. Runtime startup does not probe an older SQL filename and has no legacy
+SQL migration path. Within one process, every canonical database file has one
+leased libSQL client and one Drizzle handle. Another process owns its own client
+for the same file.
+
+Every in-process mutation, including schema initialization, enters the explicit
+file-scoped write lane. Drizzle is a query layer and does not provide this
+serialization. Cross-process contention is bounded by a 5000 ms busy timeout.
+Before a file-backed client is published, the opener establishes and verifies
+`journal_mode=WAL`, `synchronous=NORMAL`, and that busy timeout.
+
+The persistent working-memory adapter may remain unavailable when its optional
+libSQL native binary cannot be loaded. Once a local file configuration reaches
+the opener, however, `LocalDbConfigError` and `LocalDbInitializationError` are
+fatal typed errors. An invalid local target or refused WAL/NORMAL/timeout
+contract never silently falls back.
 
 Session projection tables:
 
@@ -208,7 +228,7 @@ typed reason/source metadata:
 | `user_input` | The session explicitly needs operator input, clarification, plan approval, or a blocking queued input promotion. | `source_kind = 'operator'` or `run`, `source_id`, optional `run_id`. |
 | `subagent` | The parent is synchronously blocked on a foreground child session or foreground subagent job. | `job_id`, `child_session_id`, optional `run_id`. |
 
-`session_awaits` stores active waits in the public `memory.db` projection.
+`session_awaits` stores active waits in the public `mission-control.db` projection.
 `sessions.primary_wait_id` selects the display wait with priority `approval`,
 then `user_input`, then `subagent`. Resolving or cancelling the last pending wait
 recomputes the session lifecycle to `running`, `idle`, `idle (aborted)`, or
@@ -252,48 +272,36 @@ when the SQL mirror is wired into the task runtime. Resolving the child marks
 the wait `resolved` and updates the job terminal state. Detached jobs only write
 `async_jobs`; they do not create a blocking wait.
 
-## Legacy Import And Export
+## Explicit Session Import And Export
 
-The runtime migration is additive, deterministic, and fail-closed. It discovers
-only each declared legacy root's direct `memory.db` and direct
-`.omo/runs/*.json` files. It does not scan unrelated directories. Each source is
-canonicalized, JSON runs are schema-validated and checksummed in UTF-8 byte
-order, and the destination is updated in one immediate transaction. The source
-database and run files remain unchanged.
-
-The migration copies the declared authoritative tables in a fixed order and
-compares complete rows. Equal rows are skipped, while a conflicting key, event,
-or manifest rolls back the destination transaction. The
-`runtime_db_migration_ledger` records `runtime-db-unification-v1` identity and
-manifest data. An identical rerun is a no-op; the same ledger id with different
-source data is an error. After a successful ledger commit, operational stop and
-cancellation paths use SQL rows rather than the legacy run JSON fallback.
-
-JSONL import and export remain a separate compatibility path. JSONL envelopes
+Runtime startup opens the unified database directly and does not probe or
+automatically import prior SQL stores. JSONL import and export remain an
+explicit compatibility path. JSONL envelopes
 are validated before insertion, and `legacy_session_imports` records their
 source and checksum. Export reads ordered `session_events` and writes JSONL or
-an archive only when requested. Neither migration nor export deletes or rewrites
-legacy source files.
+an archive only when requested. Export does not delete or rewrite source files.
+Mission and Run JSON records under `.omo/` remain supported by their owning
+persistence stores and are not inspected by database startup.
 
 ## Local Path And Memory Relationship
 
 The local session DB path is:
 
 ```text
-${MCTRL_DATA_DIR}/memory.db
+${MCTRL_DATA_DIR}/mission-control.db
 ```
 
 When `MCTRL_DATA_DIR` is unset, the platform Mission Control data directory is
 used. The canonical identity algorithm creates the data directory when absent,
 uses `realpath.native` on the data directory or existing database path, creates
-the POSIX data directory with mode `0700`, appends `memory.db` when needed,
+the POSIX data directory with mode `0700`, appends `mission-control.db` when needed,
 uppercases a Windows drive letter, lowercases a UNC host, converts the
 absolute path to a file URL, and hashes the UTF-8 URL `href` with SHA-256. The
 lowercase hexadecimal digest is `dbIdentity`. Ground Control uses the same
 algorithm and shared path vectors.
 
 `memory_entries`, session event/replay tables, blocking input delivery, and
-agent/job mirror tables intentionally share `memory.db`. `:memory:` remains
+agent/job mirror tables intentionally share `mission-control.db`. `:memory:` remains
 available for tests and ephemeral stores.
 
 Legacy JSONL logs, if present, remain at `<data-dir>/sessions/<session-id>.jsonl`
@@ -319,16 +327,14 @@ tree or any unexpired matching lease rejects the operation. Deletion affects the
 whole canonical subtree, including session rows, projections, and compatibility
 artifacts, so callers must present the recursive impact before confirmation.
 
-## Rollback And Operations
+## Backup And Operations
 
-Operational rollback is data-preserving:
+Backup and export operations are data-preserving:
 
 - Keep the original JSONL and run JSON files. Import never rewrites or deletes
   them.
 - Use `mctrl session export <id> <path>` to produce a checksummed replay archive
-  from SQLite-native rows for older readers or rollback inspection.
-- Use `legacy_session_imports` to audit which legacy files were imported, which
-  checksum was used, and what diagnostics were recorded.
+  from SQLite-native rows.
 - Remote database URLs, auth tokens, embedded replica sync, and network sync
   behavior are intentionally absent because remote Turso is out of scope.
 

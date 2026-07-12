@@ -3,7 +3,7 @@
  *
  * `better-sqlite3` is an OPERATOR-SUPPLIED runtime dependency — a native module that is
  * intentionally NOT a manifest dependency of `@mission-control/core` (a dependency guard
- * gates that; the JSONL ledger remains the source of truth, ABG §12). This ambient
+ * gates that; durable session events remain in `mission-control.db`, ABG §12). This ambient
  * declaration gives the `SqlitePersistentStore` adapter a typecheck-resolvable surface for
  * the methods it uses (exec / prepare / run / get / all / close) WITHOUT installing the
  * package. At runtime, `SqlitePersistentStore.open` dynamically imports the real module from
