@@ -15,6 +15,7 @@ import {
 } from './desktop-approval-transcript.js';
 import {
     type DesktopApprovalDecisionInput,
+    type DesktopApprovalStore,
     ensurePendingToolApprovalForCurrentBlockedRun,
     ensureRuntimeOwnedPermissionRequestForBlockedToolCall,
     settleDesktopApproval,
@@ -115,7 +116,14 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
         return this.withOwner(input.sessionId, { modelProviderSelection: selection }, async (owner, store) => {
             await ensureSessionStarted(store, input.sessionId, selection, this.now);
             const result = await owner.submit(promptInput(input));
-            await backfillCurrentBlockedDesktopApproval(store, input.sessionId, selection, this.now, result);
+            await backfillCurrentBlockedDesktopApproval(
+                store,
+                input.sessionId,
+                this.options.workspaceRoot,
+                selection,
+                this.now,
+                result,
+            );
             return result.status;
         });
     }
@@ -133,7 +141,14 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
         return this.withOwner(input.sessionId, { modelProviderSelection: selection }, async (owner, store) => {
             await ensureSessionStarted(store, input.sessionId, selection, this.now);
             const result = await owner.steer(promptInput(input));
-            await backfillCurrentBlockedDesktopApproval(store, input.sessionId, selection, this.now, result);
+            await backfillCurrentBlockedDesktopApproval(
+                store,
+                input.sessionId,
+                this.options.workspaceRoot,
+                selection,
+                this.now,
+                result,
+            );
             return result.status;
         });
     }
@@ -145,6 +160,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
             await backfillCurrentBlockedDesktopApproval(
                 store,
                 input.sessionId,
+                this.options.workspaceRoot,
                 owner.modelProviderSelection,
                 this.now,
                 result,
@@ -180,7 +196,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
                 activeStore = store;
                 const selection = owner.modelProviderSelection;
                 const status = await settleDesktopApproval(input, {
-                    store,
+                    store: requireDesktopApprovalStore(store),
                     sessionId: input.sessionId,
                     workspaceRoot: this.options.workspaceRoot,
                     modelProviderSelection: selection,
@@ -201,7 +217,14 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
                     return status;
                 }
                 const result = await owner.resume();
-                await backfillCurrentBlockedDesktopApproval(store, input.sessionId, selection, this.now, result);
+                await backfillCurrentBlockedDesktopApproval(
+                    store,
+                    input.sessionId,
+                    this.options.workspaceRoot,
+                    selection,
+                    this.now,
+                    result,
+                );
                 return result.status;
             },
         );
@@ -377,6 +400,7 @@ function createDefaultDesktopProvider(): ProviderAdapter {
 async function backfillCurrentBlockedDesktopApproval(
     store: LocalSessionEventStore,
     sessionId: string,
+    workspaceRoot: string,
     modelProviderSelection: ModelProviderSelection,
     now: () => string,
     result: { readonly status: DesktopCommandReceipt['status']; readonly toolCallId?: string },
@@ -384,18 +408,34 @@ async function backfillCurrentBlockedDesktopApproval(
     if (result.status !== 'blocked_on_approval' || result.toolCallId === undefined) {
         return;
     }
+    const approvalStore = requireDesktopApprovalStore(store);
     await ensureRuntimeOwnedPermissionRequestForBlockedToolCall({
-        store,
+        store: approvalStore,
         sessionId,
         modelProviderSelection,
         now,
         blockedToolCallId: result.toolCallId,
     });
     await ensurePendingToolApprovalForCurrentBlockedRun({
-        store,
+        store: approvalStore,
         sessionId,
         modelProviderSelection,
         now,
         blockedToolCallId: result.toolCallId,
+        workspaceRoot,
     });
+}
+
+function requireDesktopApprovalStore(store: LocalSessionEventStore): DesktopApprovalStore {
+    const reserveDesktopApprovalEffect = store.reserveDesktopApprovalEffect;
+    const claimDesktopApprovalEffect = store.claimDesktopApprovalEffect;
+    if (reserveDesktopApprovalEffect === undefined || claimDesktopApprovalEffect === undefined) {
+        throw new TypeError('desktop approval requires a durable SQLite session store');
+    }
+    return {
+        append: (event) => store.append(event),
+        getEvents: (sessionId) => store.getEvents(sessionId),
+        reserveDesktopApprovalEffect: (effect) => reserveDesktopApprovalEffect.call(store, effect),
+        claimDesktopApprovalEffect: (effect) => claimDesktopApprovalEffect.call(store, effect),
+    };
 }

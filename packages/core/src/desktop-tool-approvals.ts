@@ -7,6 +7,7 @@ import type {
     PermissionRequest,
 } from '@mission-control/protocol';
 import type { ApprovalTerminalState } from './approval-gate.js';
+import { type DesktopApprovalEffect, desktopApprovalEffect } from './desktop-approval-effect.js';
 import { withDesktopApprovalSettlementLock } from './desktop-approval-settlement-lock.js';
 import {
     approvalEvent,
@@ -20,12 +21,11 @@ import {
     toolFailed,
 } from './desktop-tool-approval-events.js';
 import {
+    blockedToolAuthority,
     hasRuntimeOwnedCancelledApproval,
     hasRuntimeOwnedPermissionRequest,
-    latestBlockedToolCallId,
     pendingApprovalRecord,
     permissionRequestedEvent,
-    toolCallById,
 } from './desktop-tool-approval-provenance.js';
 import {
     type CommandExecutionRequest,
@@ -40,6 +40,8 @@ import { ToolRegistry } from './tools/tool-registry.js';
 export type DesktopApprovalStore = {
     readonly append: (event: AgentEvent) => Promise<void>;
     readonly getEvents: (sessionId: string) => Promise<readonly AgentEvent[]>;
+    readonly reserveDesktopApprovalEffect: (effect: DesktopApprovalEffect) => Promise<boolean>;
+    readonly claimDesktopApprovalEffect: (effect: DesktopApprovalEffect) => Promise<boolean>;
 };
 
 export type DesktopApprovalDecisionInput = {
@@ -66,6 +68,7 @@ export async function ensurePendingToolApprovalForCurrentBlockedRun(input: {
     readonly modelProviderSelection: ModelProviderSelection;
     readonly now: () => string;
     readonly blockedToolCallId: string;
+    readonly workspaceRoot: string;
 }): Promise<void> {
     const approvalId = approvalIdForToolCall(input.blockedToolCallId);
     await withDesktopApprovalSettlementLock(input.store, { sessionId: input.sessionId, approvalId }, async () => {
@@ -79,28 +82,36 @@ async function ensurePendingToolApprovalForCurrentBlockedRunUnlocked(input: {
     readonly modelProviderSelection: ModelProviderSelection;
     readonly now: () => string;
     readonly blockedToolCallId: string;
+    readonly workspaceRoot: string;
 }): Promise<void> {
     const events = await input.store.getEvents(input.sessionId);
-    const currentBlockedToolCallId = latestBlockedToolCallId(events);
-    if (currentBlockedToolCallId === undefined || currentBlockedToolCallId !== input.blockedToolCallId) {
+    const authority = blockedToolAuthority(events);
+    if (authority === undefined || authority.toolCall.toolCallId !== input.blockedToolCallId) {
         return;
     }
-    const approvalId = approvalIdForToolCall(currentBlockedToolCallId);
+    const approvalId = approvalIdForToolCall(authority.toolCall.toolCallId);
     const latestApproval = latestApprovalRecord(events, approvalId);
-    if (latestApproval?.state === 'pending') {
-        return;
-    }
     if (latestApproval !== undefined && latestApproval.state !== 'cancelled') {
-        return;
+        if (latestApproval.state !== 'pending') return;
     }
-    const toolCall = toolCallById(events, currentBlockedToolCallId);
-    if (toolCall === undefined) {
-        return;
-    }
+    const toolCall = authority.toolCall;
     if (!hasRuntimeOwnedPermissionRequest(events, toolCall)) {
         return;
     }
     if (latestApproval?.state === 'cancelled' && !hasRuntimeOwnedCancelledApproval(events, toolCall)) {
+        return;
+    }
+    const effect = desktopApprovalEffect({
+        sessionId: input.sessionId,
+        approvalId,
+        runId: authority.runId,
+        toolCall,
+        workspaceRoot: input.workspaceRoot,
+    });
+    if (!(await input.store.reserveDesktopApprovalEffect(effect))) {
+        return;
+    }
+    if (latestApproval?.state === 'pending') {
         return;
     }
     await input.store.append(
@@ -136,14 +147,11 @@ async function ensureRuntimeOwnedPermissionRequestForBlockedToolCallUnlocked(inp
     readonly blockedToolCallId: string;
 }): Promise<void> {
     const events = await input.store.getEvents(input.sessionId);
-    const currentBlockedToolCallId = latestBlockedToolCallId(events);
-    if (currentBlockedToolCallId === undefined || currentBlockedToolCallId !== input.blockedToolCallId) {
+    const authority = blockedToolAuthority(events);
+    if (authority === undefined || authority.toolCall.toolCallId !== input.blockedToolCallId) {
         return;
     }
-    const toolCall = toolCallById(events, currentBlockedToolCallId);
-    if (toolCall === undefined) {
-        return;
-    }
+    const toolCall = authority.toolCall;
     if (hasRuntimeOwnedPermissionRequest(events, toolCall)) {
         return;
     }
@@ -169,7 +177,20 @@ async function settleDesktopApprovalUnlocked(
         return 'idle';
     }
     const pending = pendingApproval.record;
-    if (hasTerminalRunAfterApproval(events, pending.approvalId)) {
+    if (hasTerminalRunAfterApproval(events, pending.approvalId, pendingApproval.runId)) {
+        return 'idle';
+    }
+    const effect = desktopApprovalEffect({
+        sessionId: input.sessionId,
+        approvalId: pending.approvalId,
+        runId: pendingApproval.runId,
+        toolCall: pendingApproval.toolCall,
+        workspaceRoot: options.workspaceRoot,
+    });
+    if (!(await options.store.reserveDesktopApprovalEffect(effect))) {
+        return 'idle';
+    }
+    if (!(await options.store.claimDesktopApprovalEffect(effect))) {
         return 'idle';
     }
     const modelProviderSelection = options.modelProviderSelection ?? defaultModelProviderSelection;

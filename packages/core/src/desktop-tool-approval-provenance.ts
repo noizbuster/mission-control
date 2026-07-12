@@ -1,20 +1,12 @@
 import type { AgentEvent, ApprovalRecord, ModelProviderSelection, ToolCall } from '@mission-control/protocol';
+
+export { currentBlockedToolAuthority as blockedToolAuthority } from './desktop-tool-approval-authority.js';
+
 import {
     matchesApprovalRecord,
     matchesPermissionRequest,
     requestIdForToolCall,
-    toolCallsFromEvents,
 } from './desktop-tool-approval-events.js';
-
-export function latestBlockedToolCallId(events: readonly AgentEvent[]): string | undefined {
-    const latestRunEvent = [...events]
-        .reverse()
-        .find((event) => event.run?.state !== undefined && isRunStateEvent(event.type));
-    if (latestRunEvent?.type !== 'run.blocked' || latestRunEvent.run?.state !== 'blocked_on_approval') {
-        return undefined;
-    }
-    return latestRunEvent.run.toolCallId;
-}
 
 export function hasRuntimeOwnedPermissionRequest(events: readonly AgentEvent[], toolCall: ToolCall): boolean {
     return events.some((event) => matchesPermissionRequest(event, toolCall));
@@ -58,10 +50,6 @@ export function hasRuntimeOwnedCancelledApproval(events: readonly AgentEvent[], 
                 event.run?.state === 'blocked_on_approval' &&
                 event.run.toolCallId === toolCall.toolCallId,
         );
-}
-
-export function toolCallById(events: readonly AgentEvent[], toolCallId: string): ToolCall | undefined {
-    return [...toolCallsFromEvents(events)].reverse().find((toolCall) => toolCall.toolCallId === toolCallId);
 }
 
 export function pendingApprovalRecord(toolCall: ToolCall, requestedAt: string): ApprovalRecord {
@@ -112,18 +100,4 @@ function lastIndexWhere<T>(values: readonly T[], predicate: (value: T) => boolea
         }
     }
     return -1;
-}
-
-function isRunStateEvent(type: AgentEvent['type']): boolean {
-    switch (type) {
-        case 'run.started':
-        case 'run.completed':
-        case 'run.interrupted':
-        case 'run.failed':
-        case 'run.blocked':
-        case 'run.idle':
-            return true;
-        default:
-            return false;
-    }
 }

@@ -34,6 +34,7 @@ describe('desktop tool approval provenance', () => {
             modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
             now: () => '2026-06-09T00:00:00.000Z',
             blockedToolCallId: toolCall.toolCallId,
+            workspaceRoot: '/workspace',
         });
 
         expect(countEvents(store.events, 'approval.requested')).toBe(1);
@@ -56,6 +57,7 @@ describe('desktop tool approval provenance', () => {
             modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
             now: () => '2026-06-09T00:00:00.000Z',
             blockedToolCallId: toolCall.toolCallId,
+            workspaceRoot: '/workspace',
         });
 
         expect(countEvents(store.events, 'approval.requested')).toBe(2);
@@ -78,6 +80,7 @@ describe('desktop tool approval provenance', () => {
             modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
             now: () => '2026-06-09T00:00:00.000Z',
             blockedToolCallId: toolCall.toolCallId,
+            workspaceRoot: '/workspace',
         });
 
         expect(countEvents(store.events, 'approval.requested')).toBe(0);
@@ -107,6 +110,7 @@ describe('desktop tool approval provenance', () => {
             modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
             now: () => '2026-06-09T00:00:00.000Z',
             blockedToolCallId: toolCall.toolCallId,
+            workspaceRoot: '/workspace',
         });
 
         expect(countEvents(store.events, 'approval.requested')).toBe(1);
@@ -129,6 +133,7 @@ describe('desktop tool approval provenance', () => {
             modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
             now: () => '2026-06-09T00:00:00.000Z',
             blockedToolCallId: toolCall.toolCallId,
+            workspaceRoot: '/workspace',
         });
 
         expect(countEvents(store.events, 'approval.requested')).toBe(1);
@@ -151,6 +156,7 @@ describe('desktop tool approval provenance', () => {
             modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
             now: () => '2026-06-09T00:00:00.000Z',
             blockedToolCallId: toolCall.toolCallId,
+            workspaceRoot: '/workspace',
         });
 
         expect(countEvents(store.events, 'approval.requested')).toBe(1);
@@ -172,6 +178,7 @@ describe('desktop tool approval provenance', () => {
             modelProviderSelection: { providerID: 'local', modelID: 'local-echo' } as const,
             now: () => '2026-06-09T00:00:00.000Z',
             blockedToolCallId: toolCall.toolCallId,
+            workspaceRoot: '/workspace',
         };
 
         await Promise.all([
@@ -196,6 +203,7 @@ describe('desktop tool approval provenance', () => {
             modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
             now: () => '2026-06-09T00:00:00.000Z',
             blockedToolCallId: toolCall.toolCallId,
+            workspaceRoot: '/workspace',
         });
 
         expect(countEvents(store.events, 'approval.requested')).toBe(0);
@@ -219,6 +227,7 @@ describe('desktop tool approval provenance', () => {
             modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
             now: () => '2026-06-09T00:00:00.000Z',
             blockedToolCallId: currentToolCall.toolCallId,
+            workspaceRoot: '/workspace',
         });
 
         expect(countEvents(store.events, 'approval.requested')).toBe(1);

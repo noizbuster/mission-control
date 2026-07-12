@@ -1,5 +1,6 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type { AgentEvent, ApprovalRecord, ToolCall } from '@mission-control/protocol';
+import { type DesktopApprovalEffect, sameDesktopApprovalEffect } from './desktop-approval-effect.js';
 import { fixedNow } from './desktop-session-commands-test-support.js';
 import type { DesktopApprovalSettlementOptions, DesktopApprovalStore } from './desktop-tool-approvals.js';
 
@@ -9,12 +10,29 @@ export type MemoryApprovalStore = DesktopApprovalStore & {
 
 export function createMemoryApprovalStore(initialEvents: readonly AgentEvent[]): MemoryApprovalStore {
     const events: AgentEvent[] = [...initialEvents];
+    const effects = new Map<string, { readonly effect: DesktopApprovalEffect; settled: boolean }>();
     return {
         events,
         append: async (event) => {
             events.push(event);
         },
         getEvents: async () => [...events],
+        reserveDesktopApprovalEffect: async (effect) => {
+            const existing = effects.get(effect.approvalId);
+            if (existing !== undefined) return !existing.settled && sameDesktopApprovalEffect(existing.effect, effect);
+            effects.set(effect.approvalId, { effect, settled: false });
+            return true;
+        },
+        claimDesktopApprovalEffect: async (effect) => {
+            const existing = effects.get(effect.approvalId);
+            if (existing === undefined) {
+                effects.set(effect.approvalId, { effect, settled: true });
+                return true;
+            }
+            if (existing.settled || !sameDesktopApprovalEffect(existing.effect, effect)) return false;
+            existing.settled = true;
+            return true;
+        },
     };
 }
 
@@ -199,6 +217,18 @@ export function runFailedEvent(sessionId: string): AgentEvent {
         nativeSidecarStatus: 'mock',
         modelProviderSelection: defaultModelProviderSelection,
         run: { command: 'run', state: 'failed', runId: 'run_failed_after_approval_request', reason: 'provider failed' },
+    };
+}
+
+export function runCompletedEvent(sessionId: string, runId: string): AgentEvent {
+    return {
+        type: 'run.completed',
+        timestamp: fixedNow(),
+        sessionId,
+        message: 'run completed before a delayed blocked event',
+        nativeSidecarStatus: 'mock',
+        modelProviderSelection: defaultModelProviderSelection,
+        run: { command: 'run', state: 'completed', runId },
     };
 }
 

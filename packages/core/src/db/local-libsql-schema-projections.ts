@@ -58,6 +58,21 @@ export const sessionProjectionSchemaSql = [
             );
         `,
     `
+            CREATE TABLE IF NOT EXISTS desktop_approval_effects (
+                session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+                approval_id TEXT NOT NULL,
+                run_id TEXT NOT NULL,
+                tool_call_id TEXT NOT NULL,
+                tool_name TEXT NOT NULL,
+                arguments_json TEXT NOT NULL,
+                workspace_root TEXT NOT NULL,
+                state TEXT NOT NULL,
+                requested_at TEXT NOT NULL,
+                settled_at TEXT,
+                PRIMARY KEY (session_id, approval_id)
+            );
+        `,
+    `
             CREATE TABLE IF NOT EXISTS provider_failures (
                 failure_id TEXT PRIMARY KEY NOT NULL,
                 session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
@@ -116,6 +131,7 @@ export const sessionProjectionSchemaSql = [
     'CREATE INDEX IF NOT EXISTS tool_calls_session_status_idx ON tool_calls (session_id, status);',
     'CREATE INDEX IF NOT EXISTS tool_calls_run_idx ON tool_calls (run_id);',
     'CREATE INDEX IF NOT EXISTS tool_calls_approval_idx ON tool_calls (approval_id);',
+    'CREATE INDEX IF NOT EXISTS desktop_approval_effects_state_idx ON desktop_approval_effects (state);',
     'CREATE INDEX IF NOT EXISTS provider_failures_request_idx ON provider_failures (session_id, request_id);',
     'CREATE INDEX IF NOT EXISTS legacy_session_imports_source_idx ON legacy_session_imports (source_path);',
     'CREATE INDEX IF NOT EXISTS session_projection_runs_by_sequence ON session_projection_runs (session_id, sequence);',

@@ -1,8 +1,10 @@
 import type { AgentEvent, ApprovalRecord, ModelProviderSelection, ToolCall } from '@mission-control/protocol';
+import { currentBlockedToolAuthority, findToolCallBefore } from './desktop-tool-approval-authority.js';
 
 export type PendingApprovalContext = {
     readonly record: ApprovalRecord;
     readonly toolCall: ToolCall;
+    readonly runId: string;
 };
 
 export function approvalEvent(input: {
@@ -61,83 +63,40 @@ export function toolFailed(sessionId: string, toolCallId: string, message: strin
     };
 }
 
-export function toolCallsFromEvents(events: readonly AgentEvent[]): readonly ToolCall[] {
-    return events.flatMap((event) => {
-        const fromFlat = toolCallsFromFlatProviderChunk(event);
-        return fromFlat.length > 0 ? fromFlat : toolCallsFromGraphEmit(event);
-    });
-}
-
-function toolCallsFromFlatProviderChunk(event: AgentEvent): readonly ToolCall[] {
-    const chunk = event.providerStreamChunk;
-    return chunk?.kind === 'tool_call_completed' ? [chunk.toolCall] : [];
-}
-
-/**
- * Graph-engine parity for `toolCallsFromFlatProviderChunk`. The flat path records a tool call as
- * `providerStreamChunk.toolCall` on `model.call.completed`; the ABG graph records the same proposal
- * as an `abg.emit.type === 'llm.tool_call.proposed'` payload on a `log` event, with the parsed
- * `input` object that we JSON-stringify back into `argumentsJson`. Narrowed `in`/`typeof` (no casts).
- */
-function toolCallsFromGraphEmit(event: AgentEvent): readonly ToolCall[] {
-    const emit = event.abg?.emit;
-    if (emit === undefined || emit.type !== 'llm.tool_call.proposed') {
-        return [];
-    }
-    const payload = emit.payload;
-    if (typeof payload !== 'object' || payload === null) {
-        return [];
-    }
-    if (!('toolCallId' in payload) || typeof payload.toolCallId !== 'string') {
-        return [];
-    }
-    if (!('toolName' in payload) || typeof payload.toolName !== 'string') {
-        return [];
-    }
-    const toolCallId = payload.toolCallId;
-    const toolName = payload.toolName;
-    const input = 'input' in payload ? payload.input : undefined;
-    return [
-        {
-            toolCallId,
-            toolName,
-            argumentsJson: JSON.stringify(input ?? {}),
-        },
-    ];
-}
-
 export function pendingApprovalContextForCurrentRun(
     events: readonly AgentEvent[],
     approvalId: string,
 ): PendingApprovalContext | undefined {
-    const latestApprovalEvent = [...events].reverse().find((event) => event.approvalRecord?.approvalId === approvalId);
+    const latestApprovalIndex = lastIndexWhere(events, (event) => event.approvalRecord?.approvalId === approvalId);
+    const latestApprovalEvent = events[latestApprovalIndex];
     const record = latestApprovalEvent?.approvalRecord;
     if (latestApprovalEvent?.type !== 'approval.requested' || record?.state !== 'pending') {
         return undefined;
     }
-    const currentBlockedToolCallId = latestBlockedToolCallId(events);
-    if (currentBlockedToolCallId === undefined) {
+    const authority = currentBlockedToolAuthority(events);
+    if (authority === undefined) {
         return undefined;
     }
-    const toolCall = toolCallById(events, currentBlockedToolCallId);
-    if (toolCall === undefined) {
+    const approvedProposal = findToolCallBefore(events, latestApprovalIndex, authority.toolCall.toolCallId);
+    if (approvedProposal === undefined || !sameToolCall(approvedProposal.toolCall, authority.toolCall)) {
         return undefined;
     }
-    if (!matchesApprovalRecord(record, toolCall, 'pending')) {
+    if (!matchesApprovalRecord(record, authority.toolCall, 'pending')) {
         return undefined;
     }
-    if (!events.some((event) => matchesPermissionRequest(event, toolCall))) {
+    if (!events.some((event) => matchesPermissionRequest(event, authority.toolCall))) {
         return undefined;
     }
     if (
         !events.some(
             (event) =>
-                event.type === 'approval.requested' && matchesApprovalRecord(event.approvalRecord, toolCall, 'pending'),
+                event.type === 'approval.requested' &&
+                matchesApprovalRecord(event.approvalRecord, authority.toolCall, 'pending'),
         )
     ) {
         return undefined;
     }
-    return { record, toolCall };
+    return { record, toolCall: authority.toolCall, runId: authority.runId };
 }
 
 export function matchesPermissionRequest(event: AgentEvent, toolCall: ToolCall): boolean {
@@ -175,14 +134,14 @@ export function approvalIdFromEvent(event: AgentEvent): readonly string[] {
     return event.approvalRecord === undefined ? [] : [event.approvalRecord.approvalId];
 }
 
-export function hasTerminalRunAfterApproval(events: readonly AgentEvent[], approvalId: string): boolean {
+export function hasTerminalRunAfterApproval(events: readonly AgentEvent[], approvalId: string, runId: string): boolean {
     let sawRequestedApproval = false;
     for (const event of events) {
         if (event.approvalRecord?.approvalId === approvalId && event.approvalRecord.state === 'pending') {
             sawRequestedApproval = true;
             continue;
         }
-        if (sawRequestedApproval && isTerminalRunEvent(event.type)) {
+        if (sawRequestedApproval && event.run?.runId === runId && isTerminalRunEvent(event.type)) {
             return true;
         }
     }
@@ -197,18 +156,20 @@ export function requestIdForToolCall(toolCallId: string): string {
     return `permission_${toolCallId}`;
 }
 
-function toolCallById(events: readonly AgentEvent[], toolCallId: string): ToolCall | undefined {
-    return [...toolCallsFromEvents(events)].reverse().find((toolCall) => toolCall.toolCallId === toolCallId);
+function sameToolCall(left: ToolCall, right: ToolCall): boolean {
+    return (
+        left.toolCallId === right.toolCallId &&
+        left.toolName === right.toolName &&
+        left.argumentsJson === right.argumentsJson
+    );
 }
 
-function latestBlockedToolCallId(events: readonly AgentEvent[]): string | undefined {
-    const latestRunEvent = [...events]
-        .reverse()
-        .find((event) => event.run?.state !== undefined && isRunStateEvent(event.type));
-    if (latestRunEvent?.type !== 'run.blocked' || latestRunEvent.run?.state !== 'blocked_on_approval') {
-        return undefined;
+function lastIndexWhere<T>(values: readonly T[], predicate: (value: T) => boolean): number {
+    for (let index = values.length - 1; index >= 0; index -= 1) {
+        const value = values[index];
+        if (value !== undefined && predicate(value)) return index;
     }
-    return latestRunEvent.run.toolCallId;
+    return -1;
 }
 
 function isTerminalRunEvent(type: AgentEvent['type']): boolean {
@@ -216,20 +177,6 @@ function isTerminalRunEvent(type: AgentEvent['type']): boolean {
         case 'run.completed':
         case 'run.failed':
         case 'run.interrupted':
-            return true;
-        default:
-            return false;
-    }
-}
-
-function isRunStateEvent(type: AgentEvent['type']): boolean {
-    switch (type) {
-        case 'run.started':
-        case 'run.completed':
-        case 'run.interrupted':
-        case 'run.failed':
-        case 'run.blocked':
-        case 'run.idle':
             return true;
         default:
             return false;

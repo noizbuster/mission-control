@@ -9,11 +9,16 @@ import {
 import type { AbgTimelineEntry } from '../behavior/timeline.js';
 import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
 import { openMissionControlDb } from '../db/mission-control-db.js';
+import type { DesktopApprovalEffect } from '../desktop-approval-effect.js';
 import { projectSessionReplay, type SessionReplayProjection } from '../session-replay.js';
 import type { JsonlSessionEventIdFactory } from './jsonl-session-event-store.js';
 import { defaultSession, deriveSession } from './jsonl-session-projection.js';
 import type { MemoryStore, SessionCompactionRecordInput } from './memory-store.js';
 import { createSessionCompactionEvent } from './session-compaction-event.js';
+import {
+    claimSqliteDesktopApprovalEffect,
+    reserveSqliteDesktopApprovalEffect,
+} from './sqlite-session-approval-effects.js';
 import { appendParsedSqliteEnvelope, ensureWritableEvent } from './sqlite-session-event-store-append.js';
 import { SqliteSessionEventStoreError } from './sqlite-session-event-store-errors.js';
 import { readSqliteSessionEnvelopes } from './sqlite-session-event-store-read.js';
@@ -144,6 +149,20 @@ export class SqliteSessionEventStore implements MemoryStore {
         return event;
     }
 
+    async reserveDesktopApprovalEffect(effect: DesktopApprovalEffect): Promise<boolean> {
+        return this.enqueueAppend(async () => {
+            await this.ensureSessionRowsInOpenTransaction(this.now());
+            return reserveSqliteDesktopApprovalEffect(this.runtime.client, effect, this.now());
+        });
+    }
+
+    async claimDesktopApprovalEffect(effect: DesktopApprovalEffect): Promise<boolean> {
+        return this.enqueueAppend(async () => {
+            await this.ensureSessionRowsInOpenTransaction(this.now());
+            return claimSqliteDesktopApprovalEffect(this.runtime.client, effect, this.now());
+        });
+    }
+
     async close(): Promise<void> {
         if (this.closed) {
             return;
@@ -153,9 +172,12 @@ export class SqliteSessionEventStore implements MemoryStore {
         this.runtime.close();
     }
 
-    private enqueueAppend(write: () => Promise<void>): Promise<void> {
+    private enqueueAppend<Result>(write: () => Promise<Result>): Promise<Result> {
         const queued = this.appendQueue.then(() => this.withWriteTransaction(write));
-        this.appendQueue = queued.catch(() => undefined);
+        this.appendQueue = queued.then(
+            () => undefined,
+            () => undefined,
+        );
         return queued;
     }
 
