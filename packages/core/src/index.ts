@@ -264,6 +264,11 @@ export {
     startRun,
 } from './runtime/mission-run/mission-run-service.js';
 export {
+    type MissionRunStoreLocation,
+    type NormalizedMissionRunStoreLocation,
+    normalizeMissionRunStoreLocation,
+} from './runtime/mission-run/mission-run-store-location.js';
+export {
     createMission,
     listMissions,
     readMission,

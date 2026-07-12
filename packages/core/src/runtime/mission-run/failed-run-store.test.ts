@@ -1,6 +1,6 @@
 import { RunSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { missionControlDataDirEnvKey } from '../../memory/data-dir.js';
+import type { NormalizedMissionRunStoreLocation } from './mission-run-store-location.js';
 import { findMostRecentFailedRun } from './run-store.js';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,11 +16,10 @@ afterEach(() => {
     vi.unstubAllEnvs();
 });
 
-function makeTempRoot(): string {
+function makeTempLocation(): NormalizedMissionRunStoreLocation {
     const root = mkdtempSync(join(tmpdir(), 'failed-run-store-test-'));
     tempRoots.push(root);
-    vi.stubEnv(missionControlDataDirEnvKey, root);
-    return root;
+    return { omoRoot: join(root, 'project'), dataDir: join(root, 'data') };
 }
 
 function writeLegacyRun(root: string, runId: string, contents: string): void {
@@ -32,27 +31,27 @@ function writeLegacyRun(root: string, runId: string, contents: string): void {
 describe('findMostRecentFailedRun', () => {
     it('fails closed when legacy failed run JSON is corrupt', async () => {
         // Given
-        const root = makeTempRoot();
-        writeLegacyRun(root, 'invalid-json', '{ broken');
+        const location = makeTempLocation();
+        writeLegacyRun(location.omoRoot, 'invalid-json', '{ broken');
 
         // When
-        await expect(findMostRecentFailedRun(root)).rejects.toMatchObject({ code: 'legacy_run_corrupt' });
+        await expect(findMostRecentFailedRun(location)).rejects.toMatchObject({ code: 'legacy_run_corrupt' });
     });
 
     it('fails closed when legacy failed run schema is invalid', async () => {
         // Given
-        const root = makeTempRoot();
-        writeLegacyRun(root, 'invalid-schema', JSON.stringify({ id: 'invalid-schema', status: 'failed' }));
+        const location = makeTempLocation();
+        writeLegacyRun(location.omoRoot, 'invalid-schema', JSON.stringify({ id: 'invalid-schema', status: 'failed' }));
 
         // When
-        await expect(findMostRecentFailedRun(root)).rejects.toMatchObject({ code: 'legacy_run_corrupt' });
+        await expect(findMostRecentFailedRun(location)).rejects.toMatchObject({ code: 'legacy_run_corrupt' });
     });
 
     it('rethrows unexpected parser errors when scanning legacy failed runs', async () => {
         // Given
-        const root = makeTempRoot();
+        const location = makeTempLocation();
         writeLegacyRun(
-            root,
+            location.omoRoot,
             'unexpected-parser-error',
             JSON.stringify({
                 id: 'unexpected-parser-error',
@@ -67,6 +66,6 @@ describe('findMostRecentFailedRun', () => {
         });
 
         // When / Then
-        await expect(findMostRecentFailedRun(root)).rejects.toBe(parserError);
+        await expect(findMostRecentFailedRun(location)).rejects.toBe(parserError);
     });
 });

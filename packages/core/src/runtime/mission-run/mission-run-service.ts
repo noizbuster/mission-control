@@ -22,6 +22,7 @@ import {
     type WorkflowSpec,
 } from '@mission-control/protocol';
 import type { SessionControlAttachment, SessionControlHost } from '../session-control-host.js';
+import { type MissionRunStoreLocation, normalizeMissionRunStoreLocation } from './mission-run-store-location.js';
 import { readMission, updateMission } from './mission-store.js';
 import { createRun, type RunPatch, updateRunStatus } from './run-store.js';
 import { randomUUID } from 'node:crypto';
@@ -73,12 +74,13 @@ export function materializeMission(workflowSpec: WorkflowSpec): Mission {
  * parent Mission to `active`.
  */
 export async function startRun(
-    root: string,
+    location: MissionRunStoreLocation,
     missionId: string,
     prompt: string,
     options: { readonly sessionControlHost?: SessionControlHost } = {},
 ): Promise<Run> {
-    const mission = await readMission(root, missionId);
+    const normalized = normalizeMissionRunStoreLocation(location);
+    const mission = await readMission(normalized, missionId);
     const sessionId = randomUUID();
 
     const pendingRun = RunSchema.parse({
@@ -95,9 +97,9 @@ export async function startRun(
         handles: [],
     });
     try {
-        await createRun(root, pendingRun);
-        const runningRun = await updateRunStatus(root, pendingRun.id, 'running');
-        await updateMission(root, mission.id, { status: 'active' });
+        await createRun(normalized, pendingRun);
+        const runningRun = await updateRunStatus(normalized, pendingRun.id, 'running');
+        await updateMission(normalized, mission.id, { status: 'active' });
         if (attachment !== undefined) missionRunAttachments.set(pendingRun.id, attachment);
         return runningRun;
     } catch (error: unknown) {
@@ -110,7 +112,12 @@ export async function startRun(
  * Transition a Run from `running` to `completed`, recording cost and terminal
  * reason. Throws `MissionRunTransitionError` if the Run is not currently running.
  */
-export async function completeRun(root: string, runId: string, result: RunCompletionInput = {}): Promise<Run> {
+export async function completeRun(
+    location: MissionRunStoreLocation,
+    runId: string,
+    result: RunCompletionInput = {},
+): Promise<Run> {
+    const normalized = normalizeMissionRunStoreLocation(location);
     const patch: RunPatch = {
         ...(result.cost !== undefined ? { cost: result.cost } : {}),
         ...(result.terminalReason !== undefined ? { terminalReason: result.terminalReason } : {}),
@@ -119,7 +126,7 @@ export async function completeRun(root: string, runId: string, result: RunComple
         ...(result.taskRetryState !== undefined ? { taskRetryState: result.taskRetryState } : {}),
     };
     try {
-        return await updateRunStatus(root, runId, 'completed', patch);
+        return await updateRunStatus(normalized, runId, 'completed', patch);
     } finally {
         await detachMissionRun(runId);
     }
@@ -131,11 +138,12 @@ export async function completeRun(root: string, runId: string, result: RunComple
  * currently running.
  */
 export async function failRun(
-    root: string,
+    location: MissionRunStoreLocation,
     runId: string,
     reason: string,
     result: Omit<RunCompletionInput, 'terminalReason'> = {},
 ): Promise<Run> {
+    const normalized = normalizeMissionRunStoreLocation(location);
     const patch: RunPatch = {
         terminalReason: reason,
         ...(result.cost !== undefined ? { cost: result.cost } : {}),
@@ -144,7 +152,7 @@ export async function failRun(
         ...(result.taskRetryState !== undefined ? { taskRetryState: result.taskRetryState } : {}),
     };
     try {
-        return await updateRunStatus(root, runId, 'failed', patch);
+        return await updateRunStatus(normalized, runId, 'failed', patch);
     } finally {
         await detachMissionRun(runId);
     }

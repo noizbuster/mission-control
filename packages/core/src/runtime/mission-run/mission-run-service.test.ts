@@ -1,16 +1,17 @@
 import { MissionSchema, RunSchema } from '@mission-control/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { openLocalLibsqlDb } from '../../db/local-libsql-db.js';
 import { localSessionDbPath, localSessionDbUrl } from '../../memory/local-session-store-paths.js';
 import { TursoPersistentStore } from '../../memory/turso-persistent-store.js';
 import { completeRun, failRun, materializeMission, startRun } from './mission-run-service.js';
+import { normalizeMissionRunStoreLocation } from './mission-run-store-location.js';
 import {
     makeCategorizedWorkflowSpec,
     makeTempRoot,
     makeTestWorkflowSpec,
     seedOmoRoot,
 } from './mission-run-test-support.js';
-import { createMission, missionFilePath, readMission } from './mission-store.js';
+import { createMission, listMissions, missionFilePath, readMission } from './mission-store.js';
 import {
     createRun,
     findMostRecentFailedRun,
@@ -20,8 +21,9 @@ import {
     runFilePath,
     updateRunStatus,
 } from './run-store.js';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 describe('materializeMission', () => {
     it('creates a valid draft Mission from a WorkflowSpec', () => {
@@ -59,6 +61,66 @@ describe('materializeMission', () => {
         const mission2 = materializeMission(spec);
 
         expect(mission1.id).not.toBe(mission2.id);
+    });
+});
+
+describe('Mission/Run SQL location', () => {
+    it('treats a string as the project root and resolves only the SQL data dir', () => {
+        const tempRoot = makeTempRoot();
+        const dataDir = join(tempRoot, 'environment-data');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+
+        const location = normalizeMissionRunStoreLocation(join(tempRoot, 'project'));
+
+        expect(location).toEqual({ omoRoot: join(tempRoot, 'project'), dataDir });
+    });
+
+    it('writes only to an explicit data dir when the project root is separate', async () => {
+        const tempRoot = makeTempRoot();
+        const omoRoot = join(tempRoot, 'workspace');
+        const dataDir = join(tempRoot, 'product-data');
+        const defaultDataDir = join(tempRoot, 'environment-data');
+        mkdirSync(omoRoot, { recursive: true });
+        seedOmoRoot(omoRoot);
+        vi.stubEnv('MCTRL_DATA_DIR', defaultDataDir);
+        const mission = materializeMission(makeTestWorkflowSpec());
+
+        await createMission({ omoRoot, dataDir }, mission);
+
+        expect(existsSync(localSessionDbPath(dataDir))).toBe(true);
+        expect(existsSync(localSessionDbPath(defaultDataDir))).toBe(false);
+        expect(existsSync(join(omoRoot, 'memory.db'))).toBe(false);
+        expect(existsSync(join(omoRoot, '.omo', 'memory.db'))).toBe(false);
+        expect(existsSync(localSessionDbPath(omoRoot))).toBe(false);
+    });
+
+    it('ignores a workspace-only legacy SQL database', async () => {
+        const tempRoot = makeTempRoot();
+        const omoRoot = join(tempRoot, 'workspace');
+        const dataDir = join(tempRoot, 'product-data');
+        mkdirSync(omoRoot, { recursive: true });
+        seedOmoRoot(omoRoot);
+        const legacyMission = materializeMission(makeTestWorkflowSpec());
+        const legacyDb = await openLocalLibsqlDb({ url: pathToFileURL(join(omoRoot, 'memory.db')).href });
+        await legacyDb.client.execute({
+            sql:
+                'INSERT INTO missions (mission_id, status, workflow_name, created_at, updated_at, payload_json) ' +
+                'VALUES (?, ?, ?, ?, ?, ?)',
+            args: [
+                legacyMission.id,
+                legacyMission.status,
+                legacyMission.workflowName ?? null,
+                legacyMission.createdAt,
+                legacyMission.updatedAt,
+                JSON.stringify(legacyMission),
+            ],
+        });
+        legacyDb.close();
+
+        const missions = await listMissions({ omoRoot, dataDir });
+
+        expect(missions).toEqual([]);
+        expect(existsSync(localSessionDbPath(dataDir))).toBe(true);
     });
 });
 
@@ -124,10 +186,10 @@ describe('mission-run lifecycle', () => {
         const reloadedMission = await readMission(root, mission.id);
         const reloadedRun = await readRun(root, runningRun.id);
         const runs = await listRunsForMission(root, mission.id);
-        const memoryStore = await TursoPersistentStore.open(localSessionDbUrl(root));
+        const memoryStore = await TursoPersistentStore.open(localSessionDbUrl(root.dataDir));
         await memoryStore.set('ship', 'goals', { status: 'shared-db' });
         memoryStore.close();
-        const sharedDb = await openLocalLibsqlDb({ url: localSessionDbUrl(root) });
+        const sharedDb = await openLocalLibsqlDb({ url: localSessionDbUrl(root.dataDir) });
         const memoryRows = await sharedDb.client.execute({
             sql: 'SELECT value FROM memory_entries WHERE namespace = ? AND key = ?',
             args: ['goals', 'ship'],
@@ -142,10 +204,10 @@ describe('mission-run lifecycle', () => {
         });
         sharedDb.close();
 
-        expect(existsSync(localSessionDbPath(root))).toBe(true);
-        expect(existsSync(join(root, '.omo', 'mission-control.db'))).toBe(false);
-        expect(existsSync(missionFilePath(root, mission.id))).toBe(false);
-        expect(existsSync(runFilePath(root, runningRun.id))).toBe(false);
+        expect(existsSync(localSessionDbPath(root.dataDir))).toBe(true);
+        expect(existsSync(join(root.omoRoot, '.omo', 'mission-control.db'))).toBe(false);
+        expect(existsSync(missionFilePath(root.omoRoot, mission.id))).toBe(false);
+        expect(existsSync(runFilePath(root.omoRoot, runningRun.id))).toBe(false);
         expect(memoryRows.rows).toEqual([{ value: '{"status":"shared-db"}' }]);
         expect(missionRows.rows).toEqual([{ mission_id: mission.id }]);
         expect(runRows.rows).toEqual([{ run_id: runningRun.id }]);

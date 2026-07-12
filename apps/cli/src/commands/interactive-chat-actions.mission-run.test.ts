@@ -18,9 +18,11 @@ import { join } from 'node:path';
 const currentSelection: ModelProviderSelection = { providerID: 'local', modelID: 'local-echo' };
 
 const tempRoots: string[] = [];
+const workspaceDataDirs = new Map<string, string>();
 
 afterEach(async () => {
     vi.unstubAllEnvs();
+    workspaceDataDirs.clear();
     await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -41,12 +43,13 @@ describe('workflow Mission/Run persistence', () => {
             makeCodingContext({ workspaceRoot: workspace, provider, workflowRegistry: registry }),
         );
 
-        const missions = await listMissions(workspace);
+        const location = locationForWorkspace(workspace);
+        const missions = await listMissions(location);
         expect(missions).toHaveLength(1);
         expect(missions[0]?.status).toBe('active');
         expect(missions[0]?.workflowName).toBe('planner');
 
-        const runs = await listRunsForMission(workspace, missions[0]!.id);
+        const runs = await listRunsForMission(location, missions[0]!.id);
         expect(runs).toHaveLength(1);
         expect(runs[0]?.status).toBe('completed');
     });
@@ -69,9 +72,10 @@ describe('workflow Mission/Run persistence', () => {
             makeCodingContext({ workspaceRoot: workspace, provider, workflowRegistry: registry }),
         );
 
-        const missions = await listMissions(workspace);
+        const location = locationForWorkspace(workspace);
+        const missions = await listMissions(location);
         expect(missions).toHaveLength(1);
-        const runs = await listRunsForMission(workspace, missions[0]!.id);
+        const runs = await listRunsForMission(location, missions[0]!.id);
         expect(runs).toHaveLength(1);
         expect(runs[0]?.status).toBe('failed');
     });
@@ -94,7 +98,7 @@ describe('workflow Mission/Run persistence', () => {
             }),
         );
 
-        const missions = await listMissions(workspace);
+        const missions = await listMissions(locationForWorkspace(workspace));
         expect(missions).toHaveLength(0);
     });
 
@@ -113,7 +117,7 @@ describe('workflow Mission/Run persistence', () => {
             makeCodingContext({ workspaceRoot: workspace, provider }),
         );
 
-        const missions = await listMissions(workspace);
+        const missions = await listMissions(locationForWorkspace(workspace));
         expect(missions).toHaveLength(0);
     });
 
@@ -166,7 +170,8 @@ describe('workflow Mission/Run persistence', () => {
             makeCodingContext({ workspaceRoot: workspace, provider: provider2, workflowRegistry: registry }),
         );
 
-        const missions = await listMissions(workspace);
+        const location = locationForWorkspace(workspace);
+        const missions = await listMissions(location);
         expect(missions).toHaveLength(2);
         const missionIds = missions.map((m) => m.id);
         expect(new Set(missionIds).size).toBe(2);
@@ -176,8 +181,8 @@ describe('workflow Mission/Run persistence', () => {
         if (firstMission === undefined || secondMission === undefined) {
             throw new Error('expected two missions');
         }
-        const runs1 = await listRunsForMission(workspace, firstMission.id);
-        const runs2 = await listRunsForMission(workspace, secondMission.id);
+        const runs1 = await listRunsForMission(location, firstMission.id);
+        const runs2 = await listRunsForMission(location, secondMission.id);
         expect(runs1).toHaveLength(1);
         expect(runs2).toHaveLength(1);
         const firstRunId = runs1[0]?.id;
@@ -204,7 +209,7 @@ describe('workflow Mission/Run persistence', () => {
         );
 
         expect(output.getOutput()).toContain('Unknown workflow: ghost-workflow');
-        const missions = await listMissions(workspace);
+        const missions = await listMissions(locationForWorkspace(workspace));
         expect(missions).toHaveLength(0);
     });
 });
@@ -218,9 +223,17 @@ async function makeStartedRuntime(): Promise<AgentRuntime> {
 async function makeWorkspace(): Promise<string> {
     const root = await mkdtemp(join(tmpdir(), 'wf-mission-run-'));
     await mkdir(join(root, '.omo'), { recursive: true });
-    vi.stubEnv('MCTRL_DATA_DIR', join(root, 'data'));
+    const dataDir = join(root, 'data');
+    vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+    workspaceDataDirs.set(root, dataDir);
     tempRoots.push(root);
     return root;
+}
+
+function locationForWorkspace(workspace: string): { readonly omoRoot: string; readonly dataDir: string } {
+    const dataDir = workspaceDataDirs.get(workspace);
+    if (dataDir === undefined) throw new Error(`missing data dir for ${workspace}`);
+    return { omoRoot: workspace, dataDir };
 }
 
 function makeWorkflowSpec(name: string): WorkflowSpec {

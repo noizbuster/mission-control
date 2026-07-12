@@ -14,6 +14,8 @@ import {
     listRunsForMission,
     loadSkillBody,
     materializeMission,
+    type NormalizedMissionRunStoreLocation,
+    normalizeMissionRunStoreLocation,
     readMission,
     resolveOmoRoot,
     resolveUserConfigDir,
@@ -543,7 +545,7 @@ async function runWorkflowAction(
 }
 
 type WorkflowRunHandle = {
-    readonly omoRoot: string;
+    readonly location: NormalizedMissionRunStoreLocation;
     readonly missionId: string;
     readonly runId: string;
 };
@@ -568,12 +570,13 @@ async function tryCreateWorkflowRun(
         return undefined;
     }
     await ensureOmoDirs(omoRoot);
+    const location = normalizeMissionRunStoreLocation({ omoRoot });
     const mission = materializeMission(spec);
-    await createMission(omoRoot, mission);
-    const run = await startRun(omoRoot, mission.id, prompt, {
+    await createMission(location, mission);
+    const run = await startRun(location, mission.id, prompt, {
         ...(sessionControlHost !== undefined ? { sessionControlHost } : {}),
     });
-    return { omoRoot, missionId: mission.id, runId: run.id };
+    return { location, missionId: mission.id, runId: run.id };
 }
 
 function createRunOutcomeTracker(): {
@@ -601,9 +604,9 @@ function createRunOutcomeTracker(): {
  */
 async function settleWorkflowRun(handle: WorkflowRunHandle, outcome: WorkflowRunOutcome): Promise<void> {
     if (outcome === 'completed') {
-        await completeRun(handle.omoRoot, handle.runId).catch(() => undefined);
+        await completeRun(handle.location, handle.runId).catch(() => undefined);
     } else if (outcome === 'failed') {
-        await failRun(handle.omoRoot, handle.runId, 'workflow turn failed').catch(() => undefined);
+        await failRun(handle.location, handle.runId, 'workflow turn failed').catch(() => undefined);
     }
 }
 
@@ -742,7 +745,8 @@ async function runRetryAction(
         chatOutput.write('Retry unavailable: no .omo root for this workspace.\n');
         return actionResult(modelProviderSelection);
     }
-    const failed = await findMostRecentFailedRun(omoRoot);
+    const location = normalizeMissionRunStoreLocation({ omoRoot });
+    const failed = await findMostRecentFailedRun(location);
     if (failed === undefined) {
         chatOutput.write('No failed run to retry. Type a prompt or use #<workflow> {prompt} to start a new run.\n');
         return actionResult(modelProviderSelection);
@@ -753,7 +757,7 @@ async function runRetryAction(
         );
         return actionResult(modelProviderSelection);
     }
-    const mission = await readMission(omoRoot, failed.missionId).catch(() => undefined);
+    const mission = await readMission(location, failed.missionId).catch(() => undefined);
     const workflowName = mission?.workflowName;
     if (workflowName === undefined) {
         chatOutput.write(`Last failed run (${failed.id.slice(0, 8)}) has no linked workflow. Re-invoke it manually.\n`);
@@ -977,10 +981,11 @@ export async function loadMissionPanelRows(workspaceRoot: string | undefined): P
     } catch {
         return [];
     }
-    const missions = [...(await listMissions(omoRoot))].sort(compareMissionPanelMissions);
+    const location = normalizeMissionRunStoreLocation({ omoRoot });
+    const missions = [...(await listMissions(location))].sort(compareMissionPanelMissions);
     const rows: MissionPanelRow[] = [];
     for (const mission of missions) {
-        const runs = [...(await listRunsForMission(omoRoot, mission.id))].sort(compareMissionPanelRuns);
+        const runs = [...(await listRunsForMission(location, mission.id))].sort(compareMissionPanelRuns);
         if (runs.length === 0) {
             rows.push({
                 id: mission.id,

@@ -1,8 +1,7 @@
 import type { Run } from '@mission-control/protocol';
-import { listRunsFromDb } from './mission-run-db.js';
 
-export async function findMostRecentFailedRunRecord(root: string): Promise<Run | undefined> {
-    return latestFailedRun(await listRunsFromDb(root));
+export function findMostRecentFailedRunRecord(runs: readonly Run[]): Run | undefined {
+    return latestFailedRun(runs);
 }
 
 function latestFailedRun(runs: readonly Run[]): Run | undefined {

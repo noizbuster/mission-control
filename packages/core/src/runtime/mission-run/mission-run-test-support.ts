@@ -1,6 +1,7 @@
 import { type WorkflowSpec, WorkflowSpecSchema } from '@mission-control/protocol';
 import { afterEach, vi } from 'vitest';
 import { missionControlDataDirEnvKey } from '../../memory/data-dir.js';
+import type { NormalizedMissionRunStoreLocation } from './mission-run-store-location.js';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -21,9 +22,18 @@ export function makeTempRoot(): string {
     return root;
 }
 
-export function seedOmoRoot(root: string): string {
+export function seedOmoRoot(root: string): NormalizedMissionRunStoreLocation {
+    const dataDir = join(root, 'data');
     mkdirSync(join(root, '.omo'), { recursive: true });
-    return root;
+    mkdirSync(dataDir, { recursive: true });
+    return { omoRoot: root, dataDir };
+}
+
+export function makeMissionRunTestLocation(): NormalizedMissionRunStoreLocation {
+    const root = makeTempRoot();
+    const projectRoot = join(root, 'project');
+    mkdirSync(join(projectRoot, '.omo'), { recursive: true });
+    return { omoRoot: projectRoot, dataDir: join(root, 'data') };
 }
 
 export function makeTestWorkflowSpec(): WorkflowSpec {

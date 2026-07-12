@@ -10,9 +10,11 @@
  */
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { listMissions, listRunsForMission } from '@mission-control/core';
+import { WorkflowSpecSchema } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runAgent } from './run-agent.js';
+import { beginNoninteractiveWorkflowRun } from './run-agent-workflow.js';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -95,12 +97,14 @@ function first<T>(items: readonly T[]): T {
 describe('noninteractive workflow Mission/Run persistence', () => {
     let workspaceDir: string;
     let configDir: string;
+    let dataDir: string;
 
     beforeEach(async () => {
         workspaceDir = await createWorkflowWorkspace();
         configDir = await mkdtemp(join(tmpdir(), 'mctrl-wf-persist-cfg-'));
+        dataDir = join(workspaceDir, 'data');
         vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
-        vi.stubEnv('MCTRL_DATA_DIR', join(workspaceDir, 'data'));
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
     });
 
     afterEach(async () => {
@@ -131,18 +135,27 @@ describe('noninteractive workflow Mission/Run persistence', () => {
         // T8 streaming gate: plain mode returns '' (blocks streamed to stdout).
         expect(output).toBe('');
 
-        const missions = await listMissions(workspaceDir);
+        const location = { omoRoot: workspaceDir, dataDir };
+        const missions = await listMissions(location);
         expect(missions).toHaveLength(1);
         const mission = first(missions);
         expect(mission.workflowName).toBe('persist-demo');
         expect(mission.status).toBe('active');
 
-        const runs = await listRunsForMission(workspaceDir, mission.id);
+        const runs = await listRunsForMission(location, mission.id);
         expect(runs).toHaveLength(1);
         const run = first(runs);
         expect(run.status).toBe('completed');
         expect(run.missionId).toBe(mission.id);
         expect(run.sessionId).toBeDefined();
+    });
+
+    it('carries one normalized project and data location in the workflow handle', async () => {
+        const handle = await beginNoninteractiveWorkflowRun(workspaceDir, WorkflowSpecSchema.parse(PLANNER_WORKFLOW));
+
+        expect(handle).toMatchObject({
+            location: { omoRoot: workspaceDir, dataDir },
+        });
     });
 
     it('records a failed Run when the provider fails', async () => {
@@ -164,11 +177,12 @@ describe('noninteractive workflow Mission/Run persistence', () => {
             },
         );
 
-        const missions = await listMissions(workspaceDir);
+        const location = { omoRoot: workspaceDir, dataDir };
+        const missions = await listMissions(location);
         expect(missions).toHaveLength(1);
         const mission = first(missions);
 
-        const runs = await listRunsForMission(workspaceDir, mission.id);
+        const runs = await listRunsForMission(location, mission.id);
         expect(runs).toHaveLength(1);
         const run = first(runs);
         expect(run.status).toBe('failed');
@@ -193,10 +207,11 @@ describe('noninteractive workflow Mission/Run persistence', () => {
             },
         );
 
-        const missions = await listMissions(workspaceDir);
+        const location = { omoRoot: workspaceDir, dataDir };
+        const missions = await listMissions(location);
         expect(missions).toHaveLength(1);
         const mission = first(missions);
-        const runs = await listRunsForMission(workspaceDir, mission.id);
+        const runs = await listRunsForMission(location, mission.id);
         expect(first(runs).status).toBe('completed');
     });
 
@@ -218,7 +233,7 @@ describe('noninteractive workflow Mission/Run persistence', () => {
             },
         );
 
-        const missions = await listMissions(workspaceDir);
+        const missions = await listMissions({ omoRoot: workspaceDir, dataDir });
         expect(missions).toHaveLength(0);
     });
 
@@ -248,7 +263,7 @@ describe('noninteractive workflow Mission/Run persistence', () => {
 
             // T8 streaming gate: plain mode returns '' (blocks streamed to stdout).
             expect(output).toBe('');
-            const missions = await listMissions(noOmoDir);
+            const missions = await listMissions({ omoRoot: noOmoDir, dataDir });
             expect(missions).toHaveLength(0);
         } finally {
             await rm(noOmoDir, { recursive: true, force: true });

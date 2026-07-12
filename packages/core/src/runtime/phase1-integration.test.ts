@@ -92,6 +92,7 @@ describe('Phase 1 integration: workflow lifecycle', () => {
     });
 
     it('exercises all 7 foundations in a single end-to-end scenario', async () => {
+        const missionRunLocation = { omoRoot: tmpRoot, dataDir: join(tmpRoot, 'data') };
         // Step 1 — Define a workflow via protocol schemas (Task 1.1).
         const workflowSpec = WorkflowSpecSchema.parse({
             name: 'demo-workflow',
@@ -129,10 +130,10 @@ describe('Phase 1 integration: workflow lifecycle', () => {
 
         // Step 4 — Materialize the workflow as a Mission and start a Run (Task 1.4).
         const mission = materializeMission(workflowSpec);
-        await createMission(tmpRoot, mission);
-        const run = await startRun(tmpRoot, mission.id, 'run the demo workflow');
+        await createMission(missionRunLocation, mission);
+        const run = await startRun(missionRunLocation, mission.id, 'run the demo workflow');
         expect(run.status).toBe('running');
-        expect((await readMission(tmpRoot, mission.id)).status).toBe('active');
+        expect((await readMission(missionRunLocation, mission.id)).status).toBe('active');
         const sessionId = run.sessionId;
         if (sessionId === undefined) throw new Error('run has no session id');
 
@@ -207,7 +208,9 @@ describe('Phase 1 integration: workflow lifecycle', () => {
         expect(requests[0]?.childPermissions.some((r) => r.action === 'subagent' && r.effect === 'deny')).toBe(true);
 
         // Final — Complete the run and verify the full lifecycle settled.
-        const completedRun = await completeRun(tmpRoot, run.id, { terminalReason: 'all foundations exercised' });
+        const completedRun = await completeRun(missionRunLocation, run.id, {
+            terminalReason: 'all foundations exercised',
+        });
         expect(completedRun.status).toBe('completed');
         expect(completedRun.terminalReason).toBe('all foundations exercised');
         expect(completedRun.endedAt).toBeDefined();

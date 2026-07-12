@@ -5,6 +5,8 @@ import {
     ensureOmoDirs,
     failRun,
     materializeMission,
+    type NormalizedMissionRunStoreLocation,
+    normalizeMissionRunStoreLocation,
     PluginManager,
     registerBuiltinWorkflows,
     resolveOmoRoot,
@@ -28,7 +30,7 @@ export type WorkflowInvocationInput = {
 };
 
 export type NoninteractiveWorkflowRunHandle = {
-    readonly omoRoot: string;
+    readonly location: NormalizedMissionRunStoreLocation;
     readonly runId: string;
 };
 
@@ -142,10 +144,11 @@ export async function beginNoninteractiveWorkflowRun(
         return undefined;
     }
     await ensureOmoDirs(omoRoot);
+    const location = normalizeMissionRunStoreLocation({ omoRoot });
     const mission = materializeMission(workflowSpec);
-    await createMission(omoRoot, mission);
-    const run = await startRun(omoRoot, mission.id, '');
-    return { omoRoot, runId: run.id };
+    await createMission(location, mission);
+    const run = await startRun(location, mission.id, '');
+    return { location, runId: run.id };
 }
 
 export async function settleNoninteractiveWorkflowRun(
@@ -157,9 +160,9 @@ export async function settleNoninteractiveWorkflowRun(
     }
     try {
         if (outcome.failed) {
-            await failRun(handle.omoRoot, handle.runId, outcome.reason ?? 'run failed');
+            await failRun(handle.location, handle.runId, outcome.reason ?? 'run failed');
         } else {
-            await completeRun(handle.omoRoot, handle.runId);
+            await completeRun(handle.location, handle.runId);
         }
     } catch (error: unknown) {
         if (error instanceof Error) {

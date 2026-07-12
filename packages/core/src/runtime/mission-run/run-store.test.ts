@@ -1,5 +1,6 @@
 import { type Run, RunSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
+import type { MissionRunStoreLocation } from './mission-run-store-location.js';
 import { makeTempRoot, seedOmoRoot } from './mission-run-test-support.js';
 import {
     ALLOWED_RUN_TRANSITIONS,
@@ -12,16 +13,20 @@ import {
     runFilePath,
     updateRunStatus,
 } from './run-store.js';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-async function seedRun(root: string, missionId: string, status: Run['status'] = 'pending'): Promise<Run> {
+async function seedRun(
+    location: MissionRunStoreLocation,
+    missionId: string,
+    status: Run['status'] = 'pending',
+): Promise<Run> {
     const run = RunSchema.parse({
         id: crypto.randomUUID(),
         missionId,
         status,
     });
-    return createRun(root, run);
+    return createRun(location, run);
 }
 
 describe('run-store', () => {
@@ -77,7 +82,7 @@ describe('run-store', () => {
 
     it('fails closed on invalid legacy JSON', async () => {
         const root = seedOmoRoot(makeTempRoot());
-        const filePath = runFilePath(root, 'bad');
+        const filePath = runFilePath(root.omoRoot, 'bad');
         mkdirSync(join(filePath, '..'), { recursive: true });
         writeFileSync(filePath, '{ broken');
 
@@ -87,9 +92,57 @@ describe('run-store', () => {
         expect(readFileSync(filePath, 'utf8')).toBe('{ broken');
     });
 
+    it('fails closed on invalid UTF-8 in compatible Run JSON', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const filePath = runFilePath(root.omoRoot, 'invalid-utf8');
+        mkdirSync(join(filePath, '..'), { recursive: true });
+        writeFileSync(filePath, Buffer.from([0xff]));
+
+        await expect(readRun(root, 'invalid-utf8')).rejects.toMatchObject({ code: 'legacy_run_read_failed' });
+    });
+
+    it('rejects traversal in compatible Run ids', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+
+        await expect(readRun(root, '../outside')).rejects.toMatchObject({ code: 'invalid_run_id' });
+    });
+
+    it.skipIf(process.platform === 'win32')('rejects symlinked compatible Run records', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const filePath = runFilePath(root.omoRoot, 'symlinked-run');
+        const externalPath = join(root.omoRoot, 'external-run.json');
+        mkdirSync(join(filePath, '..'), { recursive: true });
+        writeFileSync(externalPath, JSON.stringify({ id: 'symlinked-run', missionId: 'mission-1' }));
+        symlinkSync(externalPath, filePath);
+
+        await expect(readRun(root, 'symlinked-run')).rejects.toMatchObject({ code: 'legacy_run_unsafe_source' });
+    });
+
+    it.skipIf(process.platform === 'win32')('rejects a symlinked compatible Runs directory', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const externalRuns = join(root.omoRoot, 'external-runs');
+        mkdirSync(externalRuns, { recursive: true });
+        writeFileSync(
+            join(externalRuns, 'outside-run.json'),
+            JSON.stringify({ id: 'outside-run', missionId: 'mission-1' }),
+        );
+        symlinkSync(externalRuns, join(root.omoRoot, '.omo', 'runs'));
+
+        await expect(readRun(root, 'outside-run')).rejects.toMatchObject({ code: 'legacy_run_unsafe_source' });
+    });
+
+    it('rejects a compatible Run whose payload id differs from its filename', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const filePath = runFilePath(root.omoRoot, 'requested-run');
+        mkdirSync(join(filePath, '..'), { recursive: true });
+        writeFileSync(filePath, JSON.stringify({ id: 'different-run', missionId: 'mission-1' }));
+
+        await expect(readRun(root, 'requested-run')).rejects.toMatchObject({ code: 'legacy_run_corrupt' });
+    });
+
     it('imports an active JSON-only run before operational status updates and leaves the source untouched', async () => {
         const root = seedOmoRoot(makeTempRoot());
-        const filePath = runFilePath(root, 'json-active');
+        const filePath = runFilePath(root.omoRoot, 'json-active');
         mkdirSync(join(filePath, '..'), { recursive: true });
         const source = JSON.stringify({
             id: 'json-active',

@@ -3,15 +3,15 @@ import { type Mission, MissionSchema, type Run, RunSchema } from '@mission-contr
 import { z } from 'zod';
 import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../../db/local-libsql-db.js';
 import { runLocalLibsqlClientTransaction } from '../../db/local-libsql-transaction.js';
+import { openMissionControlDb } from '../../db/mission-control-db.js';
 import { refreshSessionAwaitingFromPendingWaits } from '../../memory/session-awaiting-sql.js';
-import { openCanonicalRuntimeDb } from '../local-runtime-db.js';
 
 const missionRowSchema = z.object({ payload_json: z.string() });
 const runRowSchema = z.object({ passthrough_json: z.string() });
 
-export async function writeMissionToDb(root: string, mission: Mission): Promise<void> {
+export async function writeMissionToDb(dataDir: string, mission: Mission): Promise<void> {
     const validated = MissionSchema.parse(mission);
-    const runtime = await openMissionRunRuntime(root);
+    const runtime = await openMissionRunRuntime(dataDir);
     try {
         await runLocalLibsqlWrite(runtime, (client) =>
             client.execute({
@@ -35,8 +35,8 @@ export async function writeMissionToDb(root: string, mission: Mission): Promise<
     }
 }
 
-export async function readMissionFromDb(root: string, missionId: string): Promise<Mission | undefined> {
-    const runtime = await openMissionRunRuntime(root);
+export async function readMissionFromDb(dataDir: string, missionId: string): Promise<Mission | undefined> {
+    const runtime = await openMissionRunRuntime(dataDir);
     try {
         const result = await runtime.client.execute({
             sql: 'SELECT payload_json FROM missions WHERE mission_id = ?',
@@ -52,8 +52,8 @@ export async function readMissionFromDb(root: string, missionId: string): Promis
     }
 }
 
-export async function listMissionsFromDb(root: string): Promise<readonly Mission[]> {
-    const runtime = await openMissionRunRuntime(root);
+export async function listMissionsFromDb(dataDir: string): Promise<readonly Mission[]> {
+    const runtime = await openMissionRunRuntime(dataDir);
     try {
         const result = await runtime.client.execute(
             'SELECT payload_json FROM missions ORDER BY updated_at, mission_id',
@@ -64,9 +64,9 @@ export async function listMissionsFromDb(root: string): Promise<readonly Mission
     }
 }
 
-export async function writeRunToDb(root: string, run: Run): Promise<void> {
+export async function writeRunToDb(dataDir: string, run: Run): Promise<void> {
     const validated = RunSchema.parse(run);
-    const runtime = await openMissionRunRuntime(root);
+    const runtime = await openMissionRunRuntime(dataDir);
     const timestamp = new Date().toISOString();
     try {
         await runLocalLibsqlWrite(runtime, async (client) => {
@@ -80,8 +80,12 @@ export async function writeRunToDb(root: string, run: Run): Promise<void> {
     }
 }
 
-export async function mutateRunInDb(root: string, runId: string, mutate: (run: Run) => Run): Promise<Run | undefined> {
-    const runtime = await openMissionRunRuntime(root);
+export async function mutateRunInDb(
+    dataDir: string,
+    runId: string,
+    mutate: (run: Run) => Run,
+): Promise<Run | undefined> {
+    const runtime = await openMissionRunRuntime(dataDir);
     try {
         return await runLocalLibsqlWrite(runtime, async (client) => {
             return runLocalLibsqlClientTransaction(client, async () => {
@@ -108,8 +112,8 @@ export async function mutateRunWithClient(
     return updated;
 }
 
-export async function readRunFromDb(root: string, runId: string): Promise<Run | undefined> {
-    const runtime = await openMissionRunRuntime(root);
+export async function readRunFromDb(dataDir: string, runId: string): Promise<Run | undefined> {
+    const runtime = await openMissionRunRuntime(dataDir);
     try {
         return await selectRun(runtime.client, runId);
     } finally {
@@ -118,10 +122,10 @@ export async function readRunFromDb(root: string, runId: string): Promise<Run | 
 }
 
 export async function listRunsFromDb(
-    root: string,
+    dataDir: string,
     filter: { readonly missionId?: string; readonly parentId?: string } = {},
 ): Promise<readonly Run[]> {
-    const runtime = await openMissionRunRuntime(root);
+    const runtime = await openMissionRunRuntime(dataDir);
     try {
         const conditions: string[] = [];
         const args: string[] = [];
@@ -144,8 +148,8 @@ export async function listRunsFromDb(
     }
 }
 
-async function openMissionRunRuntime(root: string): Promise<LocalLibsqlDb> {
-    return (await openCanonicalRuntimeDb({ legacyRoots: [root] })).runtime;
+async function openMissionRunRuntime(dataDir: string): Promise<LocalLibsqlDb> {
+    return openMissionControlDb({ dataDir });
 }
 
 async function selectRun(client: Client, runId: string): Promise<Run | undefined> {

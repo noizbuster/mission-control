@@ -19,9 +19,11 @@ import { join } from 'node:path';
 
 const currentSelection: ModelProviderSelection = { providerID: 'local', modelID: 'local-echo' };
 const tempRoots: string[] = [];
+const workspaceDataDirs = new Map<string, string>();
 
 afterEach(async () => {
     vi.unstubAllEnvs();
+    workspaceDataDirs.clear();
     await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -102,7 +104,10 @@ describe('loadMissionPanelRows', () => {
     it('surfaces a Mission with no Runs as a single row', async () => {
         const workspace = await makeWorkspace();
         const omoRoot = await resolveOmoRoot(workspace);
-        await createMission(omoRoot, materializeMission(makeWorkflowSpec('runner')));
+        await createMission(
+            { omoRoot, dataDir: locationForWorkspace(workspace).dataDir },
+            materializeMission(makeWorkflowSpec('runner')),
+        );
 
         const rows = await loadMissionPanelRows(workspace);
 
@@ -128,10 +133,11 @@ describe('loadMissionPanelRows', () => {
     it('produces one row per Run under a single Mission with unique row ids', async () => {
         const workspace = await makeWorkspace();
         const omoRoot = await resolveOmoRoot(workspace);
+        const location = { omoRoot, dataDir: locationForWorkspace(workspace).dataDir };
         const mission = materializeMission(makeWorkflowSpec('planner'));
-        await createMission(omoRoot, mission);
-        await startRun(omoRoot, mission.id, 'first');
-        await startRun(omoRoot, mission.id, 'second');
+        await createMission(location, mission);
+        await startRun(location, mission.id, 'first');
+        await startRun(location, mission.id, 'second');
 
         const rows = await loadMissionPanelRows(workspace);
 
@@ -146,11 +152,12 @@ describe('loadMissionPanelRows', () => {
     it('produces rows for multiple Missions in deterministic projection order', async () => {
         const workspace = await makeWorkspace();
         const omoRoot = await resolveOmoRoot(workspace);
+        const location = { omoRoot, dataDir: locationForWorkspace(workspace).dataDir };
         const missionWithoutRun = makeMissionRecord('mission-runner', 'runner', '2026-01-02T00:00:00.000Z');
         const missionWithRun = makeMissionRecord('mission-planner', 'planner', '2026-01-01T00:00:00.000Z');
-        await createMission(omoRoot, missionWithRun);
-        await createMission(omoRoot, missionWithoutRun);
-        await createRun(omoRoot, makeRunRecord('run-plan', missionWithRun.id, 'plan', '2026-01-01T00:00:00.000Z'));
+        await createMission(location, missionWithRun);
+        await createMission(location, missionWithoutRun);
+        await createRun(location, makeRunRecord('run-plan', missionWithRun.id, 'plan', '2026-01-01T00:00:00.000Z'));
 
         const rows = await loadMissionPanelRows(workspace);
 
@@ -162,10 +169,11 @@ describe('loadMissionPanelRows', () => {
     it('produces Run rows in deterministic projection order', async () => {
         const workspace = await makeWorkspace();
         const omoRoot = await resolveOmoRoot(workspace);
+        const location = { omoRoot, dataDir: locationForWorkspace(workspace).dataDir };
         const mission = makeMissionRecord('mission-planner', 'planner', '2026-01-01T00:00:00.000Z');
-        await createMission(omoRoot, mission);
-        await createRun(omoRoot, makeRunRecord('run-second', mission.id, 'second', '2026-01-02T00:00:00.000Z'));
-        await createRun(omoRoot, makeRunRecord('run-first', mission.id, 'first', '2026-01-01T00:00:00.000Z'));
+        await createMission(location, mission);
+        await createRun(location, makeRunRecord('run-second', mission.id, 'second', '2026-01-02T00:00:00.000Z'));
+        await createRun(location, makeRunRecord('run-first', mission.id, 'first', '2026-01-01T00:00:00.000Z'));
 
         const rows = await loadMissionPanelRows(workspace);
 
@@ -306,7 +314,9 @@ async function makeStartedRuntime(): Promise<AgentRuntime> {
 async function makeWorkspace(): Promise<string> {
     const root = await mkdtemp(join(tmpdir(), 'mission-panel-'));
     await mkdir(join(root, '.omo'), { recursive: true });
-    vi.stubEnv('MCTRL_DATA_DIR', join(root, 'data'));
+    const dataDir = join(root, 'data');
+    vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+    workspaceDataDirs.set(root, dataDir);
     tempRoots.push(root);
     return root;
 }
@@ -314,9 +324,16 @@ async function makeWorkspace(): Promise<string> {
 async function seedRunRecord(workspace: string, workflowName: string): Promise<void> {
     const omoRoot = await resolveOmoRoot(workspace);
     await ensureOmoDirs(omoRoot);
+    const location = { omoRoot, dataDir: locationForWorkspace(workspace).dataDir };
     const mission = materializeMission(makeWorkflowSpec(workflowName));
-    await createMission(omoRoot, mission);
-    await startRun(omoRoot, mission.id, 'test prompt');
+    await createMission(location, mission);
+    await startRun(location, mission.id, 'test prompt');
+}
+
+function locationForWorkspace(workspace: string): { readonly omoRoot: string; readonly dataDir: string } {
+    const dataDir = workspaceDataDirs.get(workspace);
+    if (dataDir === undefined) throw new Error(`missing data dir for ${workspace}`);
+    return { omoRoot: workspace, dataDir };
 }
 
 function makeWorkflowSpec(name: string): WorkflowSpec {
