@@ -67,9 +67,7 @@ describe('ChatBottomDockBase source topology', () => {
         expect(block.indexOf('renderPromptAdjacentPanels')).toBeLessThan(
             block.indexOf("props.dockSlice.inputMode === 'question'"),
         );
-        expect(block.indexOf("props.dockSlice.inputMode === 'question'")).toBeLessThan(
-            block.indexOf('<BottomStatusBar'),
-        );
+        expect(block.indexOf("props.dockSlice.inputMode === 'question'")).toBeLessThan(block.indexOf('<BottomStatusBar'));
         expect(block).toContain('<QuestionOverlay store={props.store} />');
         expect(block).toContain('<ChatInputArea');
         expect(block).toContain('textareaRef={props.textareaRef}');

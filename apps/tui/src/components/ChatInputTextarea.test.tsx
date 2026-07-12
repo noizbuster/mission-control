@@ -38,7 +38,9 @@ describe('ChatInputTextarea', () => {
         it('uses a Solid callback ref to update the production handle shape', () => {
             const source = readTextareaSource();
 
-            expect(source).toContain('ref={(renderable: TextareaRenderable) => props.textareaRef.set(renderable)}');
+            expect(source).toContain(
+                'ref={(renderable: TextareaRenderable) => props.textareaRef.set(renderable)}',
+            );
             expect(source).not.toContain('.current');
         });
     });
@@ -46,7 +48,10 @@ describe('ChatInputTextarea', () => {
     describe('disabled key guard', () => {
         it('prevents default and returns before forwarding when disabled', () => {
             const source = readTextareaSource();
-            const disabledBlock = source.slice(source.indexOf('const handleKeyDown'), source.indexOf('return ('));
+            const disabledBlock = source.slice(
+                source.indexOf('const handleKeyDown'),
+                source.indexOf('return ('),
+            );
 
             expect(disabledBlock).toContain('if (props.disabled)');
             expect(disabledBlock).toContain('key.preventDefault();');
