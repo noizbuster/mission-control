@@ -219,6 +219,26 @@ describe('SqlSessionInputDelivery', () => {
         expect(await delivery.pendingQueuedCount('session_a')).toBe(1);
         delivery.close();
     });
+
+    it('promotes one queued input to only one concurrent consumer', async () => {
+        // Given
+        const root = await makeTempRoot();
+        const delivery = await SqlSessionInputDelivery.open({ dataDir: root });
+        await delivery.admitInput('session_concurrent_queue', { inputId: 'queue_1', prompt: 'only once' }, 'queue');
+
+        // When
+        const results = await Promise.all([
+            delivery.promoteNextQueued('session_concurrent_queue'),
+            delivery.promoteNextQueued('session_concurrent_queue'),
+        ]);
+        const rows = await delivery.listInputs('session_concurrent_queue');
+        delivery.close();
+
+        // Then
+        expect(results.flatMap((record) => (record === undefined ? [] : [record.inputId]))).toEqual(['queue_1']);
+        expect(results.filter((record) => record === undefined)).toHaveLength(1);
+        expect(projectInputStatuses(rows)).toEqual([['queue_1', 'promoted']]);
+    });
 });
 
 function projectInputStatuses(rows: readonly SqlSessionInputDeliveryRecord[]): readonly (readonly [string, string])[] {

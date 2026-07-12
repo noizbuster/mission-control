@@ -1,6 +1,7 @@
 import type { Delivery } from '@mission-control/protocol';
 import { z } from 'zod';
 import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
+import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
 import { openMissionControlDb } from '../db/mission-control-db.js';
 import {
     ensurePublicSessionRow,
@@ -73,21 +74,32 @@ export class SqlSessionInputDelivery {
     }
 
     async promoteSteers(sessionId: string): Promise<readonly SqlSessionInputDeliveryRecord[]> {
-        const records = await this.listAdmitted(sessionId, 'steer');
-        for (const record of records) {
-            await this.markPromoted(record.inputId, sessionId);
-        }
-        return records.map((record) => ({ ...record, status: 'promoted' }));
+        return runLocalLibsqlWrite(this.runtime, (client) =>
+            runLocalLibsqlClientTransaction(client, async () => {
+                const records = await this.listAdmitted(sessionId, 'steer');
+                const promoted: SqlSessionInputDeliveryRecord[] = [];
+                for (const record of records) {
+                    if (await this.markPromotedInOpenTransaction(record.inputId, sessionId)) {
+                        promoted.push({ ...record, status: 'promoted' });
+                    }
+                }
+                return promoted;
+            }),
+        );
     }
 
     async promoteNextQueued(sessionId: string): Promise<SqlSessionInputDeliveryRecord | undefined> {
-        const records = await this.listAdmitted(sessionId, 'queue');
-        const next = records[0];
-        if (next === undefined) {
-            return undefined;
-        }
-        await this.markPromoted(next.inputId, sessionId);
-        return { ...next, status: 'promoted' };
+        return runLocalLibsqlWrite(this.runtime, (client) =>
+            runLocalLibsqlClientTransaction(client, async () => {
+                const records = await this.listAdmitted(sessionId, 'queue');
+                const next = records[0];
+                if (next === undefined) {
+                    return undefined;
+                }
+                const promoted = await this.markPromotedInOpenTransaction(next.inputId, sessionId);
+                return promoted ? { ...next, status: 'promoted' } : undefined;
+            }),
+        );
     }
 
     async pendingSteerCount(sessionId: string): Promise<number> {
@@ -142,29 +154,26 @@ export class SqlSessionInputDelivery {
         return result.rows.map(rowToInputRecord);
     }
 
-    private async markPromoted(inputId: string, sessionId: string): Promise<void> {
-        await runLocalLibsqlWrite(this.runtime, async () => {
-            const now = new Date().toISOString();
-            const promotedSeq = await this.nextPromotedSeq(sessionId);
-            await this.runtime.client.batch(
-                [
-                    {
-                        sql:
-                            'UPDATE session_inputs SET status = ?, promoted_seq = ?, promoted_at = ? ' +
-                            'WHERE input_id = ? AND session_id = ?',
-                        args: ['promoted', promotedSeq, now, inputId, sessionId],
-                    },
-                    {
-                        sql:
-                            'UPDATE session_awaits SET status = ?, resolved_at = ? ' +
-                            'WHERE wait_id = ? AND session_id = ? AND status = ?',
-                        args: ['resolved', now, waitIdForInput(inputId), sessionId, 'pending'],
-                    },
-                ],
-                'write',
-            );
-            await refreshSessionAwaitingFromPendingWaits({ client: this.runtime.client, sessionId, now });
+    private async markPromotedInOpenTransaction(inputId: string, sessionId: string): Promise<boolean> {
+        const now = new Date().toISOString();
+        const promotedSeq = await this.nextPromotedSeq(sessionId);
+        const result = await this.runtime.client.execute({
+            sql:
+                'UPDATE session_inputs SET status = ?, promoted_seq = ?, promoted_at = ? ' +
+                'WHERE input_id = ? AND session_id = ? AND status = ?',
+            args: ['promoted', promotedSeq, now, inputId, sessionId, 'admitted'],
         });
+        if (result.rowsAffected !== 1) {
+            return false;
+        }
+        await this.runtime.client.execute({
+            sql:
+                'UPDATE session_awaits SET status = ?, resolved_at = ? ' +
+                'WHERE wait_id = ? AND session_id = ? AND status = ?',
+            args: ['resolved', now, waitIdForInput(inputId), sessionId, 'pending'],
+        });
+        await refreshSessionAwaitingFromPendingWaits({ client: this.runtime.client, sessionId, now });
+        return true;
     }
 
     private async nextPromotedSeq(sessionId: string): Promise<number> {
