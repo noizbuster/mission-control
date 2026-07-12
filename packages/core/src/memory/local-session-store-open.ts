@@ -1,4 +1,5 @@
 import type { AgentEventEnvelope } from '@mission-control/protocol';
+import type { DesktopApprovalEffect } from '../desktop-approval-effect.js';
 import { resolveMissionControlDataDir } from './data-dir.js';
 import type { JsonlSessionEventIdFactory } from './jsonl-session-event-store.js';
 import { openEnsuredLocalSessionDatabase } from './local-session-store-database.js';
@@ -10,6 +11,8 @@ export type LocalSessionEventStore = MemoryStore & {
     readonly sessionId: string;
     appendEnvelope(envelope: AgentEventEnvelope): Promise<void>;
     appendEnvelopeWithStoreSequence(envelope: AgentEventEnvelope): Promise<void>;
+    reserveDesktopApprovalEffect?(effect: DesktopApprovalEffect): Promise<boolean>;
+    claimDesktopApprovalEffect?(effect: DesktopApprovalEffect): Promise<boolean>;
     close(): Promise<void> | void;
 };
 
@@ -22,7 +25,7 @@ export type OpenLocalSessionEventStoreOptions = {
 
 export async function openLocalSessionEventStore(
     options: OpenLocalSessionEventStoreOptions,
-): Promise<LocalSessionEventStore> {
+): Promise<SqliteSessionEventStore> {
     const dataDir = options.dataDir ?? resolveMissionControlDataDir();
     const sessionId = parseLocalSessionId(options.sessionId);
     const now = options.now ?? (() => new Date().toISOString());
