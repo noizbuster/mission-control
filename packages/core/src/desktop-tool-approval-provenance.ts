@@ -8,13 +8,22 @@ import {
     requestIdForToolCall,
 } from './desktop-tool-approval-events.js';
 
-export function hasRuntimeOwnedPermissionRequest(events: readonly AgentEvent[], toolCall: ToolCall): boolean {
-    return events.some((event) => matchesPermissionRequest(event, toolCall));
+export function hasRuntimeOwnedPermissionRequest(
+    events: readonly AgentEvent[],
+    toolCall: ToolCall,
+    inclusiveStartIndex = 0,
+): boolean {
+    return events.slice(inclusiveStartIndex).some((event) => matchesPermissionRequest(event, toolCall));
 }
 
-export function hasRuntimeOwnedCancelledApproval(events: readonly AgentEvent[], toolCall: ToolCall): boolean {
+export function hasRuntimeOwnedCancelledApproval(
+    events: readonly AgentEvent[],
+    toolCall: ToolCall,
+    inclusiveStartIndex = 0,
+): boolean {
+    const scopedEvents = events.slice(inclusiveStartIndex);
     const cancellationIndex = lastIndexWhere(
-        events,
+        scopedEvents,
         (event) =>
             event.type === 'approval.blocked' && matchesApprovalRecord(event.approvalRecord, toolCall, 'cancelled'),
     );
@@ -22,7 +31,7 @@ export function hasRuntimeOwnedCancelledApproval(events: readonly AgentEvent[], 
         return false;
     }
     const requestedIndex = lastIndexWhere(
-        events.slice(0, cancellationIndex),
+        scopedEvents.slice(0, cancellationIndex),
         (event) =>
             event.type === 'approval.requested' && matchesApprovalRecord(event.approvalRecord, toolCall, 'pending'),
     );
@@ -30,19 +39,19 @@ export function hasRuntimeOwnedCancelledApproval(events: readonly AgentEvent[], 
         return false;
     }
     if (
-        events
+        scopedEvents
             .slice(requestedIndex + 1, cancellationIndex)
             .some((event) => event.type === 'approval.updated' && matchesApprovalRecord(event.approvalRecord, toolCall))
     ) {
         return false;
     }
-    const permissionIndex = lastIndexWhere(events.slice(0, requestedIndex), (event) =>
+    const permissionIndex = lastIndexWhere(scopedEvents.slice(0, requestedIndex), (event) =>
         matchesPermissionRequest(event, toolCall),
     );
     if (permissionIndex < 0) {
         return false;
     }
-    return events
+    return scopedEvents
         .slice(cancellationIndex + 1)
         .some(
             (event) =>

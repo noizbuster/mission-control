@@ -94,11 +94,18 @@ async function ensurePendingToolApprovalForCurrentBlockedRunUnlocked(input: {
     if (latestApproval !== undefined && latestApproval.state !== 'cancelled') {
         if (latestApproval.state !== 'pending') return;
     }
+    const pendingApproval =
+        latestApproval?.state === 'pending' ? pendingApprovalContextForCurrentRun(events, approvalId) : undefined;
+    if (latestApproval?.state === 'pending' && pendingApproval === undefined) return;
     const toolCall = authority.toolCall;
-    if (!hasRuntimeOwnedPermissionRequest(events, toolCall)) {
+    const currentRunStartIndex = authority.runStartEventIndex + 1;
+    if (!hasRuntimeOwnedPermissionRequest(events, toolCall, currentRunStartIndex)) {
         return;
     }
-    if (latestApproval?.state === 'cancelled' && !hasRuntimeOwnedCancelledApproval(events, toolCall)) {
+    if (
+        latestApproval?.state === 'cancelled' &&
+        !hasRuntimeOwnedCancelledApproval(events, toolCall, currentRunStartIndex)
+    ) {
         return;
     }
     const effect = desktopApprovalEffect({
@@ -111,7 +118,7 @@ async function ensurePendingToolApprovalForCurrentBlockedRunUnlocked(input: {
     if (!(await input.store.reserveDesktopApprovalEffect(effect))) {
         return;
     }
-    if (latestApproval?.state === 'pending') {
+    if (pendingApproval !== undefined) {
         return;
     }
     await input.store.append(
@@ -152,7 +159,7 @@ async function ensureRuntimeOwnedPermissionRequestForBlockedToolCallUnlocked(inp
         return;
     }
     const toolCall = authority.toolCall;
-    if (hasRuntimeOwnedPermissionRequest(events, toolCall)) {
+    if (hasRuntimeOwnedPermissionRequest(events, toolCall, authority.runStartEventIndex + 1)) {
         return;
     }
     await input.store.append(

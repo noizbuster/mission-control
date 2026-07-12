@@ -213,14 +213,31 @@ describe('desktop tool approval security', () => {
             providerToolCallEvent(sessionId, toolCall),
             runBlockedEvent(sessionId, toolCall.toolCallId, secondRunId),
         ]);
+        let effectReservations = 0;
+        const backfillStore = {
+            ...store,
+            reserveDesktopApprovalEffect: async (effect: Parameters<typeof store.reserveDesktopApprovalEffect>[0]) => {
+                effectReservations += 1;
+                return store.reserveDesktopApprovalEffect(effect);
+            },
+        };
 
         try {
+            await ensurePendingToolApprovalForCurrentBlockedRun({
+                store: backfillStore,
+                sessionId,
+                modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+                now: () => '2026-06-09T00:00:00.000Z',
+                blockedToolCallId: toolCall.toolCallId,
+                workspaceRoot,
+            });
             const status = await settleDesktopApproval(
                 approvalDecision(sessionId, `approval_permission_${toolCall.toolCallId}`, 'stale cross-run approval'),
                 approvalOptions({ store, sessionId, workspaceRoot }),
             );
 
             expect(status).toBe('idle');
+            expect(effectReservations).toBe(0);
             expect(countEvents(store.events, 'approval.updated')).toBe(0);
             await expect(readFile(join(workspaceRoot, '.cross-run.txt'), 'utf8')).rejects.toThrow();
         } finally {
