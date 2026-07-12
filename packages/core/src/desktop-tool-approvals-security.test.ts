@@ -14,6 +14,7 @@ import {
     providerToolCallEvent,
     runBlockedEvent,
     runCompletedEvent,
+    runStartedEvent,
 } from './desktop-tool-approval-test-support.js';
 import {
     ensurePendingToolApprovalForCurrentBlockedRun,
@@ -190,6 +191,38 @@ describe('desktop tool approval security', () => {
 
             expect(status).toBe('idle');
             await expect(readFile(join(workspaceRoot, '.substituted.txt'), 'utf8')).rejects.toThrow();
+        } finally {
+            await rm(workspaceRoot, { recursive: true, force: true });
+        }
+    });
+
+    it('rejects identical approval provenance inherited from an earlier run', async () => {
+        const workspaceRoot = await mkdtemp(join(tmpdir(), 'mctrl-desktop-cross-run-approval-'));
+        const sessionId = 'session_cross_run_approval';
+        const toolCall = filePatchToolCall('call_reused_across_runs', '.cross-run.txt', 'must not write');
+        const firstRunId = 'run_first_reused_tool_call';
+        const secondRunId = 'run_second_reused_tool_call';
+        const store = createMemoryApprovalStore([
+            runStartedEvent(sessionId, firstRunId),
+            providerToolCallEvent(sessionId, toolCall),
+            permissionRequestedEvent(sessionId, toolCall),
+            approvalRequestedEvent(sessionId, toolCall),
+            runBlockedEvent(sessionId, toolCall.toolCallId, firstRunId),
+            runCompletedEvent(sessionId, firstRunId),
+            runStartedEvent(sessionId, secondRunId),
+            providerToolCallEvent(sessionId, toolCall),
+            runBlockedEvent(sessionId, toolCall.toolCallId, secondRunId),
+        ]);
+
+        try {
+            const status = await settleDesktopApproval(
+                approvalDecision(sessionId, `approval_permission_${toolCall.toolCallId}`, 'stale cross-run approval'),
+                approvalOptions({ store, sessionId, workspaceRoot }),
+            );
+
+            expect(status).toBe('idle');
+            expect(countEvents(store.events, 'approval.updated')).toBe(0);
+            await expect(readFile(join(workspaceRoot, '.cross-run.txt'), 'utf8')).rejects.toThrow();
         } finally {
             await rm(workspaceRoot, { recursive: true, force: true });
         }

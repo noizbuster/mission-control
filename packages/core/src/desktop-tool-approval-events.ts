@@ -77,18 +77,25 @@ export function pendingApprovalContextForCurrentRun(
     if (authority === undefined) {
         return undefined;
     }
-    const approvedProposal = findToolCallBefore(events, latestApprovalIndex, authority.toolCall.toolCallId);
+    if (latestApprovalIndex <= authority.runStartEventIndex) return undefined;
+    const approvedProposal = findToolCallBefore(
+        events,
+        latestApprovalIndex,
+        authority.toolCall.toolCallId,
+        authority.runStartEventIndex + 1,
+    );
     if (approvedProposal === undefined || !sameToolCall(approvedProposal.toolCall, authority.toolCall)) {
         return undefined;
     }
     if (!matchesApprovalRecord(record, authority.toolCall, 'pending')) {
         return undefined;
     }
-    if (!events.some((event) => matchesPermissionRequest(event, authority.toolCall))) {
+    const currentRunEvents = events.slice(authority.runStartEventIndex + 1, authority.blockedEventIndex);
+    if (!currentRunEvents.some((event) => matchesPermissionRequest(event, authority.toolCall))) {
         return undefined;
     }
     if (
-        !events.some(
+        !currentRunEvents.some(
             (event) =>
                 event.type === 'approval.requested' &&
                 matchesApprovalRecord(event.approvalRecord, authority.toolCall, 'pending'),

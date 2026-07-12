@@ -3,6 +3,7 @@ import type { AgentEvent, ToolCall } from '@mission-control/protocol';
 export type BlockedToolAuthority = {
     readonly runId: string;
     readonly toolCall: ToolCall;
+    readonly runStartEventIndex: number;
     readonly toolCallEventIndex: number;
     readonly blockedEventIndex: number;
 };
@@ -29,16 +30,19 @@ export function currentBlockedToolAuthority(events: readonly AgentEvent[]): Bloc
         return undefined;
     }
 
-    const proposed = findToolCallBefore(events, blockedEventIndex, blockedToolCallId);
-    return proposed === undefined ? undefined : { runId, ...proposed, blockedEventIndex };
+    const proposed = findToolCallBefore(events, blockedEventIndex, blockedToolCallId, runStartIndex + 1);
+    return proposed === undefined
+        ? undefined
+        : { runId, runStartEventIndex: runStartIndex, ...proposed, blockedEventIndex };
 }
 
 export function findToolCallBefore(
     events: readonly AgentEvent[],
     exclusiveEndIndex: number,
     toolCallId: string,
+    inclusiveStartIndex = 0,
 ): { readonly toolCall: ToolCall; readonly toolCallEventIndex: number } | undefined {
-    for (let index = exclusiveEndIndex - 1; index >= 0; index -= 1) {
+    for (let index = exclusiveEndIndex - 1; index >= inclusiveStartIndex; index -= 1) {
         const event = events[index];
         if (event === undefined) continue;
         const toolCall = toolCallsFromEvent(event).find((candidate) => candidate.toolCallId === toolCallId);

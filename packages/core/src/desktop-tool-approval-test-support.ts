@@ -190,7 +190,19 @@ export function approvalUpdatedEvent(
     };
 }
 
-export function runBlockedEvent(sessionId: string, toolCallId: string): AgentEvent {
+export function runStartedEvent(sessionId: string, runId: string): AgentEvent {
+    return {
+        type: 'run.started',
+        timestamp: fixedNow(),
+        sessionId,
+        message: 'run started',
+        nativeSidecarStatus: 'mock',
+        modelProviderSelection: defaultModelProviderSelection,
+        run: { command: 'run', state: 'running', runId },
+    };
+}
+
+export function runBlockedEvent(sessionId: string, toolCallId: string, runId = `run_${toolCallId}`): AgentEvent {
     return {
         type: 'run.blocked',
         timestamp: fixedNow(),
@@ -201,7 +213,7 @@ export function runBlockedEvent(sessionId: string, toolCallId: string): AgentEve
         run: {
             command: 'run',
             state: 'blocked_on_approval',
-            runId: `run_${toolCallId}`,
+            runId,
             reason: 'waiting for approval',
             toolCallId,
         },
