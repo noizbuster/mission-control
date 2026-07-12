@@ -75,7 +75,7 @@ const keybind = (defaultValue: BindingValue, description: string): Definition =>
  *  - `leader === "ctrl+x"`.
  *  - `command_list === "alt+x"` (palette is NOT Ctrl+P; Ctrl+P is model_cycle).
  *  - No `input_clear` entry; no `input_*` value binds bare `ctrl+c`.
- *  - mctrl-documented chords preserved: ctrl+p/t/o/e/r/v/g/z.
+     *  - mctrl-documented chords preserved: ctrl+p/t/o/e/r/v/g/z.
  */
 export const Definitions = {
     leader: keybind(LeaderDefault, 'Leader key for keybind combinations'),

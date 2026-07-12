@@ -7,8 +7,7 @@ function makeToast(): Toast & {
     messages: Array<{ readonly message: string; readonly variant: 'info' | 'success' | 'warning' | 'error' }>;
     errors: unknown[];
 } {
-    const messages: Array<{ readonly message: string; readonly variant: 'info' | 'success' | 'warning' | 'error' }> =
-        [];
+    const messages: Array<{ readonly message: string; readonly variant: 'info' | 'success' | 'warning' | 'error' }> = [];
     const errors: unknown[] = [];
     return {
         messages,
