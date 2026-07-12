@@ -11,10 +11,7 @@ const testFilePattern = /\.(test|spec)\.(ts|tsx)$/u;
 
 const ROOT_BOX_NEEDLE = 'width={dimensions().width}';
 
-const MODAL_MODES = [
-    'agents-dashboard',
-    'mission-panel',
-] as const;
+const MODAL_MODES = ['agents-dashboard', 'mission-panel'] as const;
 
 const FULLSCREEN_MODES = ['abg', 'diff-viewer', 'models-overlay'] as const;
 
@@ -44,7 +41,6 @@ const PROVIDER_HOOK_NEEDLES = [
 function readSource(relativePath: string): string {
     return readFileSync(resolve(root, relativePath), 'utf8');
 }
-
 
 function collectAppModuleFiles(): readonly string[] {
     const absoluteDir = resolve(root, chatAppDir);

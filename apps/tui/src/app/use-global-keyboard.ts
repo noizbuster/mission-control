@@ -1,5 +1,7 @@
 import { useKeyboard } from '@opentui/solid';
 import type { Setter } from 'solid-js';
+import { ABG_OVERLAY_TABS } from '../components/AbgOverlay.js';
+import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
 import {
     buildDiffViewerModel,
     moveLine,
@@ -10,8 +12,6 @@ import {
 } from '../platform/keymap/diff-viewer.js';
 import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
 import type { ChatStore } from '../state/chat-store.js';
-import { ABG_OVERLAY_TABS } from '../components/AbgOverlay.js';
-import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
 
 /**
  * Shared deps for the App global keyboard sink (Ctrl+C + overlay-only keys).

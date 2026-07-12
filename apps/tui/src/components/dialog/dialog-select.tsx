@@ -2,10 +2,10 @@
 
 import { type MouseEvent, TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/solid';
-import { createMemo, createSignal, For, Show, type JSX, onMount } from 'solid-js';
+import { createMemo, createSignal, For, type JSX, onMount, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { useDialog, type DialogContext } from './dialog.js';
 import { SELECTED_BG } from '../overlay-theme.js';
+import { type DialogContext, useDialog } from './dialog.js';
 
 export type DialogSelectOption<T = unknown> = {
     readonly title: string;
@@ -125,7 +125,9 @@ export function DialogSelect<T>(props: DialogSelectProps<T>): JSX.Element {
         if (opt === undefined) return;
         if (opt.disabled) return;
         if (props.multiple === true) {
-            const selected = Array.from(store.selectedIndices).map((i) => props.options[i]).filter((o): o is DialogSelectOption<T> => o !== undefined);
+            const selected = Array.from(store.selectedIndices)
+                .map((i) => props.options[i])
+                .filter((o): o is DialogSelectOption<T> => o !== undefined);
             props.onSelect?.(selected[0] ?? opt);
             return;
         }
@@ -261,9 +263,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>): JSX.Element {
                             {...(isSelected() ? { backgroundColor: SELECTED_BG } : {})}
                         >
                             <box flexDirection="row">
-                                <text fg={isSelected() ? '#ffff00' : '#888888'}>
-                                    {isSelected() ? '\u276f ' : '  '}
-                                </text>
+                                <text fg={isSelected() ? '#ffff00' : '#888888'}>{isSelected() ? '\u276f ' : '  '}</text>
                                 {props.multiple === true ? (
                                     <text {...(isSelected() ? { fg: '#ffffff' } : {})}>
                                         {isChecked() ? '[x] ' : '[ ] '}
@@ -287,11 +287,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>): JSX.Element {
             <Show when={visibleActions().length > 0}>
                 <box flexDirection="row" gap={2} paddingBottom={1}>
                     <For each={visibleActions()}>
-                        {(action) => (
-                            <text fg="#888888">
-                                {`${action.key} ${action.title}`}
-                            </text>
-                        )}
+                        {(action) => <text fg="#888888">{`${action.key} ${action.title}`}</text>}
                     </For>
                 </box>
             </Show>

@@ -14,9 +14,9 @@ import { graphEvent } from './graph-runner-events.js';
 import {
     createLoopSafetyNodeState,
     type LoopSafetyTrip,
-    type ToolActionFingerprint,
     recordFailureTurn,
     recordToolTurn,
+    type ToolActionFingerprint,
 } from './loop-safety.js';
 import { createDefaultAbgNodeRegistry } from './node-registry.js';
 import { projectAbgSignalToEvent } from './signals.js';
@@ -110,11 +110,7 @@ export async function runBoundedAbgGraph(input: AbgGraphRunnerInput): Promise<Ab
                     } else if (result.hadProductiveToolUse === true) {
                         // Productive tool use is progress unless the *same* tool turn repeats.
                         state.consecutiveToolFailuresByNodeId.set(result.node.id, 0);
-                        const trip = applyLoopSafetyToolTurn(
-                            result.node.id,
-                            state,
-                            result.toolActions ?? [],
-                        );
+                        const trip = applyLoopSafetyToolTurn(result.node.id, state, result.toolActions ?? []);
                         if (trip?.kind === 'soft_land') {
                             softLandToolLoop(result.node, state, graph.id, input, trip);
                         } else {

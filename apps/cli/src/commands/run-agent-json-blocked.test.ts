@@ -84,6 +84,48 @@ describe('runAgent JSON blocked lifecycle', () => {
         });
     });
 
+    it('uses the coding-agent graph override for a noninteractive plain prompt', async () => {
+        const dataDir = await tempRoot('mctrl-json-coding-agent-data-');
+        const workspaceRoot = await tempRoot('mctrl-json-coding-agent-workspace-');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+
+        const output = await runAgent(
+            parseArgs(['run', 'apply a blocked patch', '--jsonl', '--session', 'session_json_coding_agent']),
+            {
+                workspaceRoot,
+                provider: createDeterministicProvider([
+                    {
+                        kind: 'tool_call_completed',
+                        toolCallId: 'coding_agent_patch_call',
+                        toolName: 'file.patch',
+                        argumentsJson: JSON.stringify({
+                            patch: addFilePatch('.coding-agent-blocked.txt', 'blocked'),
+                        }),
+                    },
+                    { kind: 'response_completed', content: 'approval required' },
+                ]),
+                plainPromptGraph: 'coding-agent',
+            },
+        );
+        const events = parseJsonEvents(output);
+
+        expect(events).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    type: 'graph.started',
+                    abg: expect.objectContaining({ graphId: 'coding-agent' }),
+                }),
+                expect.objectContaining({
+                    type: 'run.blocked',
+                    run: expect.objectContaining({
+                        state: 'blocked_on_approval',
+                        toolCallId: 'coding_agent_patch_call',
+                    }),
+                }),
+            ]),
+        );
+    });
+
     async function tempRoot(prefix: string): Promise<string> {
         const path = await mkdtemp(join(tmpdir(), prefix));
         tempRoots.push(path);

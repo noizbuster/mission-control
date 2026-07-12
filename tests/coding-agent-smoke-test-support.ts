@@ -1,8 +1,9 @@
 import { expect } from 'vitest';
+import { ensurePendingToolApprovalForCurrentBlockedRun } from '../packages/core/src/desktop-tool-approvals.js';
 import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
-    JsonlSessionEventStore,
+    openLocalSessionEventStore,
     ProjectTrustStore,
     type ProviderTurnRequest,
     settleDesktopApproval,
@@ -70,12 +71,13 @@ export async function approvePendingSmokePatch(
         },
         {
             openStore: async ({ dataDir: openDataDir, sessionId: openSessionId, now, createEventId }) =>
-                JsonlSessionEventStore.open({
+                openLocalSessionEventStore({
                     dataDir: openDataDir,
                     sessionId: openSessionId,
                     now,
                     createEventId,
                 }),
+            ensurePendingApproval: ensurePendingToolApprovalForCurrentBlockedRun,
             settleApproval: async (input, options) => settleDesktopApproval(input, options),
         },
     );

@@ -2,11 +2,11 @@
 
 import { TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/solid';
-import { createEffect, createSignal, onMount, Show, type JSX } from 'solid-js';
-import { useSpinnerFrame } from '../spinner.js';
+import { createEffect, createSignal, type JSX, onMount, Show } from 'solid-js';
 import { useTuiTheme } from '../../platform/providers/route-dialog-theme-context.js';
-import { type DialogContext, useDialog } from './dialog.js';
 import { printableCharFromKey } from '../overlay-key-input.js';
+import { useSpinnerFrame } from '../spinner.js';
+import { type DialogContext, useDialog } from './dialog.js';
 
 export type DialogPromptProps = {
     readonly title: string;
@@ -74,7 +74,9 @@ export function DialogPrompt(props: DialogPromptProps): JSX.Element {
                     <Show when={buffer().length === 0 && props.placeholder !== undefined}>
                         <text fg="#666666">{props.placeholder}</text>
                     </Show>
-                    <text bg="#ffffff" fg="#000000">{'\u2588'}</text>
+                    <text bg="#ffffff" fg="#000000">
+                        {'\u2588'}
+                    </text>
                 </box>
                 <Show when={props.busy}>
                     <box flexDirection="row" gap={1}>

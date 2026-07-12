@@ -136,6 +136,42 @@ export function approvalRequestedEvent(sessionId: string, toolCall: ToolCall): A
     };
 }
 
+export function approvalBlockedCancelledEvent(sessionId: string, toolCall: ToolCall): AgentEvent {
+    return {
+        type: 'approval.blocked',
+        timestamp: fixedNow(),
+        sessionId,
+        message: `approval blocked: ${toolCall.toolName}`,
+        nativeSidecarStatus: 'mock',
+        modelProviderSelection: defaultModelProviderSelection,
+        approvalRecord: {
+            ...approvalRecord(toolCall),
+            state: 'cancelled',
+            decidedAt: fixedNow(),
+        },
+    };
+}
+
+export function approvalUpdatedEvent(
+    sessionId: string,
+    toolCall: ToolCall,
+    state: 'approved' | 'denied' | 'cancelled',
+): AgentEvent {
+    return {
+        type: 'approval.updated',
+        timestamp: fixedNow(),
+        sessionId,
+        message: `approval updated: ${toolCall.toolName}`,
+        nativeSidecarStatus: 'mock',
+        modelProviderSelection: defaultModelProviderSelection,
+        approvalRecord: {
+            ...approvalRecord(toolCall),
+            state,
+            decidedAt: fixedNow(),
+        },
+    };
+}
+
 export function runBlockedEvent(sessionId: string, toolCallId: string): AgentEvent {
     return {
         type: 'run.blocked',

@@ -30,6 +30,10 @@ export function scriptedCodingSmokeProvider(requests: ProviderTurnRequest[] = []
                 return;
             }
             if (requests.length === 2) {
+                yield completedChunk(request, 1, 'initial tools applied');
+                return;
+            }
+            if (requests.length === 3) {
                 yield toolCallChunk(request, 1, 'smoke_patch_call', 'file.patch', {
                     patch: addFilePatch('.smoke-approved.txt', 'approved'),
                 });

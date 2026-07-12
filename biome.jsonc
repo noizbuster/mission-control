@@ -15,7 +15,8 @@
       "!**/.omc",
       "!**/build",
       "!**/coverage",
-      "!temp/ref-repos"
+      "!temp/ref-repos",
+      "!!ref"
     ]
   },
   "assist": {

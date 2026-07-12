@@ -1544,10 +1544,7 @@ describe('chat-store — history picker + timestamped entries', () => {
 
     it('seeds historyEntries from initialHistoryEntries options', () => {
         const store = createChatStore({
-            initialHistoryEntries: [
-                makeHistoryEntry('a', 'older', 1),
-                makeHistoryEntry('b', 'newer', 2),
-            ],
+            initialHistoryEntries: [makeHistoryEntry('a', 'older', 1), makeHistoryEntry('b', 'newer', 2)],
         });
         expect(store.getSnapshot().historyEntries).toEqual([
             makeHistoryEntry('a', 'older', 1),
@@ -1558,10 +1555,7 @@ describe('chat-store — history picker + timestamped entries', () => {
 
     it('open → navigate → confirm returns selected text without changing inputMirror', () => {
         const store = createChatStore({
-            initialHistoryEntries: [
-                makeHistoryEntry('a', 'older', 1),
-                makeHistoryEntry('b', 'newer', 2),
-            ],
+            initialHistoryEntries: [makeHistoryEntry('a', 'older', 1), makeHistoryEntry('b', 'newer', 2)],
         });
         store.setInputMirror('draft');
         store.openHistoryPicker('draft');
@@ -1631,10 +1625,7 @@ describe('chat-store — history picker + timestamped entries', () => {
             initialHistoryEntries: [makeHistoryEntry('a', 'old', 1)],
         });
         store.openHistoryPicker('draft');
-        store.setHistoryEntries([
-            makeHistoryEntry('b', 'one', 10),
-            makeHistoryEntry('c', 'two', 20),
-        ]);
+        store.setHistoryEntries([makeHistoryEntry('b', 'one', 10), makeHistoryEntry('c', 'two', 20)]);
         const snapshot = store.getSnapshot();
         expect(snapshot.historyEntries.map((entry) => entry.text)).toEqual(['one', 'two']);
         expect(snapshot.historyPicker.open).toBe(false);

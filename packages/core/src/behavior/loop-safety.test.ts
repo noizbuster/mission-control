@@ -5,8 +5,8 @@ import {
     failureSignatureFromActions,
     recordFailureTurn,
     recordToolTurn,
-    turnSignatureFromActions,
     type ToolActionFingerprint,
+    turnSignatureFromActions,
 } from './loop-safety.js';
 
 function action(

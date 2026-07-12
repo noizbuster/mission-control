@@ -11,6 +11,7 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const rootUrl = new URL('../', import.meta.url);
+const smokeCompletionTimeoutMs = 15_000;
 
 const cliArgsModule: Pick<typeof import('../apps/cli/src/args.js'), 'parseArgs'> = await import(
     new URL('./apps/cli/dist/args.js', rootUrl).href
@@ -23,13 +24,19 @@ const cliSessionModule: Pick<typeof import('../apps/cli/src/commands/session.js'
 );
 const coreModule: Pick<
     typeof import('../packages/core/src/index.js'),
-    'JsonlSessionEventStore' | 'ProjectTrustStore' | 'missionControlDataDirEnvKey' | 'settleDesktopApproval'
+    'openLocalSessionEventStore' | 'ProjectTrustStore' | 'missionControlDataDirEnvKey' | 'settleDesktopApproval'
 > = await import(new URL('./packages/core/dist/index.js', rootUrl).href);
+const coreApprovalModule: Pick<
+    typeof import('../packages/core/src/desktop-tool-approvals.js'),
+    'ensurePendingToolApprovalForCurrentBlockedRun'
+> = await import(new URL('./packages/core/dist/desktop-tool-approvals.js', rootUrl).href);
 
 const { parseArgs } = cliArgsModule;
 const { runAgent } = cliRunModule;
 const { runSessionCommand } = cliSessionModule;
-const { JsonlSessionEventStore, ProjectTrustStore, missionControlDataDirEnvKey, settleDesktopApproval } = coreModule;
+const { openLocalSessionEventStore, ProjectTrustStore, missionControlDataDirEnvKey, settleDesktopApproval } =
+    coreModule;
+const { ensurePendingToolApprovalForCurrentBlockedRun } = coreApprovalModule;
 
 const tempRoots: string[] = [];
 
@@ -39,7 +46,7 @@ try {
     const authFilePath = join(dataDir, 'auth.json');
     const nestedRoot = join(workspaceRoot, 'nested');
     const sessionId = 'session_built_dist_smoke_coding_agent';
-    const sessionJsonlPath = join(dataDir, 'sessions', `${sessionId}.jsonl`);
+    const sessionDatabasePath = join(dataDir, 'mission-control.db');
 
     process.env[missionControlDataDirEnvKey] = dataDir;
     await mkdir(join(workspaceRoot, 'src'), { recursive: true });
@@ -50,22 +57,50 @@ try {
 
     const provider = scriptedCodingSmokeProvider();
     const chatOutput = bufferedOutput();
+    const initialRunCompleted = createDeferred();
     const firstOutput = await runAgent(parseArgs(['--session', sessionId, '--model', 'local/local-echo']), {
         authStore: emptyAuthStore(authFilePath),
-        chatInput: scriptedInput([
-            { type: 'line', value: 'inspect, edit, write, verify, then queue one blocked approval' },
-            { type: 'line', value: 'always' },
-            { type: 'line', value: 'always' },
-            { type: 'line', value: 'once' },
-            { type: 'line', value: 'deny' },
-            { type: 'interrupt' },
-            { type: 'interrupt' },
-        ]),
+        chatInput: scriptedInput(
+            [
+                { type: 'line', value: 'inspect, edit, write, and verify' },
+                { type: 'line', value: 'always' },
+                { type: 'line', value: 'always' },
+                { type: 'line', value: 'once' },
+                { type: 'interrupt' },
+                { type: 'interrupt' },
+            ],
+            { beforeIndex: 4, until: withTimeout(initialRunCompleted.promise, 'initial run completion') },
+        ),
         chatOutput: chatOutput.output,
         workspaceRoot,
         commandExecutor: (request) => fakeBashExecutor(request, nestedRoot),
         provider,
+        plainPromptGraph: 'coding-agent',
+        onRuntimeEvent: (event) => {
+            if (event.type === 'run.completed') {
+                initialRunCompleted.resolve();
+            }
+        },
     });
+
+    const blockedOutput = await runAgent(
+        parseArgs([
+            'run',
+            'queue one blocked patch approval',
+            '--jsonl',
+            '--session',
+            sessionId,
+            '--model',
+            'local/local-echo',
+        ]),
+        {
+            authStore: emptyAuthStore(authFilePath),
+            workspaceRoot,
+            commandExecutor: (request) => fakeBashExecutor(request, nestedRoot),
+            provider,
+            plainPromptGraph: 'coding-agent',
+        },
+    );
 
     const blockedReplayOutput = (await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl'])))
         .stdout;
@@ -78,23 +113,34 @@ try {
         { dataDir, sessionId, workspaceRoot, toolCallId: 'smoke_patch_call' },
         {
             openStore: async ({ dataDir: openDataDir, sessionId: openSessionId, now, createEventId }) =>
-                JsonlSessionEventStore.open({
+                openLocalSessionEventStore({
                     dataDir: openDataDir,
                     sessionId: openSessionId,
                     now,
                     createEventId,
                 }),
+            ensurePendingApproval: ensurePendingToolApprovalForCurrentBlockedRun,
             settleApproval: async (input, options) => settleDesktopApproval(input, options),
         },
     );
 
+    const resumedRunCompleted = createDeferred();
     const resumedOutput = await runAgent(parseArgs(['--session', sessionId, '--model', 'local/local-echo']), {
         authStore: emptyAuthStore(authFilePath),
-        chatInput: scriptedInput([{ type: 'line', value: '/continue' }, { type: 'interrupt' }, { type: 'interrupt' }]),
+        chatInput: scriptedInput([{ type: 'line', value: '/continue' }, { type: 'interrupt' }, { type: 'interrupt' }], {
+            beforeIndex: 1,
+            until: withTimeout(resumedRunCompleted.promise, 'resumed run completion'),
+        }),
         chatOutput: bufferedOutput().output,
         workspaceRoot,
         commandExecutor: (request) => fakeBashExecutor(request, nestedRoot),
         provider,
+        plainPromptGraph: 'coding-agent',
+        onRuntimeEvent: (event) => {
+            if (event.type === 'run.completed' && event.run?.command === 'resume') {
+                resumedRunCompleted.resolve();
+            }
+        },
     });
 
     const replayOutput = (await runSessionCommand(parseArgs(['session', 'replay', sessionId, '--jsonl']))).stdout;
@@ -102,8 +148,21 @@ try {
     if (replayDiagnostics.length > 0) {
         throw new Error(`replay diagnostics present: ${JSON.stringify(replayDiagnostics)}`);
     }
-    if (firstOutput.includes('Task failed') || firstOutput.includes('run failed')) {
+    if (
+        firstOutput.includes('Task failed') ||
+        firstOutput.includes('run failed') ||
+        blockedOutput.includes('task.failed')
+    ) {
         throw new Error('blocked approval was rendered as a task failure');
+    }
+    if (!resumedOutput.includes('Assistant: smoke resumed after approval')) {
+        throw new Error('resumed approval did not reach the final provider continuation');
+    }
+    if (replayOutput.includes('"type":"task.failed"')) {
+        throw new Error('resumed replay contains task.failed');
+    }
+    if (!hasResumedProviderContinuation(replayOutput)) {
+        throw new Error('resumed provider message was not classified as a continuation');
     }
 
     process.stdout.write(
@@ -114,13 +173,14 @@ try {
                 dataDir,
                 workspaceRoot,
                 authFilePath,
-                sessionJsonlPath,
+                sessionDatabasePath,
                 blockedReplayDiagnostics,
                 replayDiagnostics,
                 editedFile: await readFile(join(workspaceRoot, 'src', 'message.txt'), 'utf8'),
                 createdFile: await readFile(join(workspaceRoot, 'nested', 'generated.txt'), 'utf8'),
                 approvedFile: await readFile(join(workspaceRoot, '.smoke-approved.txt'), 'utf8'),
                 firstOutput,
+                blockedOutput,
                 resumedOutput,
                 blockedReplayPreview: tailLines(blockedReplayOutput),
                 replayPreview: tailLines(replayOutput),
@@ -148,16 +208,47 @@ function emptyAuthStore(authFilePath: string) {
     };
 }
 
-function scriptedInput(events: readonly ChatInputEvent[]) {
+function scriptedInput(
+    events: readonly ChatInputEvent[],
+    wait?: { readonly beforeIndex: number; readonly until: Promise<void> },
+) {
     let index = 0;
     return {
         read: async () => {
+            if (wait !== undefined && index === wait.beforeIndex) {
+                await wait.until;
+            }
             const event = events[index] ?? { type: 'interrupt' as const };
             index += 1;
             return event;
         },
         close: () => undefined,
     };
+}
+
+function createDeferred(): { readonly promise: Promise<void>; readonly resolve: () => void } {
+    let resolve: (() => void) | undefined;
+    const promise = new Promise<void>((promiseResolve) => {
+        resolve = promiseResolve;
+    });
+    if (resolve === undefined) {
+        throw new Error('deferred initialization failed');
+    }
+    return { promise, resolve };
+}
+
+function withTimeout(promise: Promise<void>, label: string): Promise<void> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+            reject(new Error(`${label} exceeded ${smokeCompletionTimeoutMs}ms`));
+        }, smokeCompletionTimeoutMs);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+        if (timeout !== undefined) {
+            clearTimeout(timeout);
+        }
+    });
 }
 
 function bufferedOutput() {
@@ -204,6 +295,24 @@ function diagnosticRecords(output: string): readonly unknown[] {
         .flatMap((line) => {
             const value = JSON.parse(line) as { readonly kind?: string; readonly diagnostic?: unknown };
             return value.kind === 'diagnostic' ? [value.diagnostic] : [];
+        });
+}
+
+function hasResumedProviderContinuation(output: string): boolean {
+    return output
+        .split(/\r?\n/)
+        .filter((line) => line.length > 0)
+        .some((line) => {
+            const value = JSON.parse(line) as {
+                readonly kind?: string;
+                readonly step?: { readonly kind?: string; readonly message?: string; readonly continuation?: boolean };
+            };
+            return (
+                value.kind === 'coding.step' &&
+                value.step?.kind === 'provider.message' &&
+                value.step.message === 'smoke resumed after approval' &&
+                value.step.continuation === true
+            );
         });
 }
 

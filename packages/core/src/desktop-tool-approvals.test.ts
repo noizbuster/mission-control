@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+    approvalBlockedCancelledEvent,
     approvalDecision,
     approvalOptions,
     approvalRequestedEvent,
+    approvalUpdatedEvent,
     countEvents,
     createMemoryApprovalStore,
     filePatchToolCall,
@@ -35,6 +37,149 @@ describe('desktop tool approval provenance', () => {
         });
 
         expect(countEvents(store.events, 'approval.requested')).toBe(1);
+    });
+
+    it('reopens a runtime-cancelled approval when its current run is resumably blocked', async () => {
+        const sessionId = 'session_cancelled_blocked_approval';
+        const toolCall = filePatchToolCall('call_cancelled_blocked', '.safe.txt', 'safe');
+        const store = createMemoryApprovalStore([
+            providerToolCallEvent(sessionId, toolCall),
+            permissionRequestedEvent(sessionId, toolCall),
+            approvalRequestedEvent(sessionId, toolCall),
+            approvalBlockedCancelledEvent(sessionId, toolCall),
+            runBlockedEvent(sessionId, toolCall.toolCallId),
+        ]);
+
+        await ensurePendingToolApprovalForCurrentBlockedRun({
+            store,
+            sessionId,
+            modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+            now: () => '2026-06-09T00:00:00.000Z',
+            blockedToolCallId: toolCall.toolCallId,
+        });
+
+        expect(countEvents(store.events, 'approval.requested')).toBe(2);
+        expect(store.events.at(-1)?.approvalRecord?.state).toBe('pending');
+    });
+
+    it('does not reopen a forged cancelled approval without a prior runtime pending request', async () => {
+        const sessionId = 'session_forged_cancelled_approval';
+        const toolCall = filePatchToolCall('call_forged_cancelled', '.forged.txt', 'forged');
+        const store = createMemoryApprovalStore([
+            providerToolCallEvent(sessionId, toolCall),
+            permissionRequestedEvent(sessionId, toolCall),
+            approvalBlockedCancelledEvent(sessionId, toolCall),
+            runBlockedEvent(sessionId, toolCall.toolCallId),
+        ]);
+
+        await ensurePendingToolApprovalForCurrentBlockedRun({
+            store,
+            sessionId,
+            modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+            now: () => '2026-06-09T00:00:00.000Z',
+            blockedToolCallId: toolCall.toolCallId,
+        });
+
+        expect(countEvents(store.events, 'approval.requested')).toBe(0);
+    });
+
+    it('does not reopen a cancelled approval whose permission action mismatches the tool proposal', async () => {
+        const sessionId = 'session_mismatched_permission_action';
+        const toolCall = filePatchToolCall('call_mismatched_action', '.safe.txt', 'safe');
+        const permission = permissionRequestedEvent(sessionId, toolCall);
+        if (permission.permissionRequest === undefined) {
+            throw new Error('permission test fixture must include a request');
+        }
+        const store = createMemoryApprovalStore([
+            providerToolCallEvent(sessionId, toolCall),
+            {
+                ...permission,
+                permissionRequest: { ...permission.permissionRequest, action: 'file.write' },
+            },
+            approvalRequestedEvent(sessionId, toolCall),
+            approvalBlockedCancelledEvent(sessionId, toolCall),
+            runBlockedEvent(sessionId, toolCall.toolCallId),
+        ]);
+
+        await ensurePendingToolApprovalForCurrentBlockedRun({
+            store,
+            sessionId,
+            modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+            now: () => '2026-06-09T00:00:00.000Z',
+            blockedToolCallId: toolCall.toolCallId,
+        });
+
+        expect(countEvents(store.events, 'approval.requested')).toBe(1);
+    });
+
+    it.each(['approved', 'denied'] as const)('does not reopen a terminal %s approval', async (state) => {
+        const sessionId = `session_terminal_${state}_approval`;
+        const toolCall = filePatchToolCall(`call_terminal_${state}`, '.safe.txt', 'safe');
+        const store = createMemoryApprovalStore([
+            providerToolCallEvent(sessionId, toolCall),
+            permissionRequestedEvent(sessionId, toolCall),
+            approvalRequestedEvent(sessionId, toolCall),
+            approvalUpdatedEvent(sessionId, toolCall, state),
+            runBlockedEvent(sessionId, toolCall.toolCallId),
+        ]);
+
+        await ensurePendingToolApprovalForCurrentBlockedRun({
+            store,
+            sessionId,
+            modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+            now: () => '2026-06-09T00:00:00.000Z',
+            blockedToolCallId: toolCall.toolCallId,
+        });
+
+        expect(countEvents(store.events, 'approval.requested')).toBe(1);
+    });
+
+    it('does not reopen an operator-cancelled approval.updated record', async () => {
+        const sessionId = 'session_operator_cancelled_approval';
+        const toolCall = filePatchToolCall('call_operator_cancelled', '.safe.txt', 'safe');
+        const store = createMemoryApprovalStore([
+            providerToolCallEvent(sessionId, toolCall),
+            permissionRequestedEvent(sessionId, toolCall),
+            approvalRequestedEvent(sessionId, toolCall),
+            approvalUpdatedEvent(sessionId, toolCall, 'cancelled'),
+            runBlockedEvent(sessionId, toolCall.toolCallId),
+        ]);
+
+        await ensurePendingToolApprovalForCurrentBlockedRun({
+            store,
+            sessionId,
+            modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+            now: () => '2026-06-09T00:00:00.000Z',
+            blockedToolCallId: toolCall.toolCallId,
+        });
+
+        expect(countEvents(store.events, 'approval.requested')).toBe(1);
+    });
+
+    it('serializes concurrent approval backfill so only one pending record is appended', async () => {
+        const sessionId = 'session_concurrent_cancelled_approval';
+        const toolCall = filePatchToolCall('call_concurrent_cancelled', '.safe.txt', 'safe');
+        const store = createMemoryApprovalStore([
+            providerToolCallEvent(sessionId, toolCall),
+            permissionRequestedEvent(sessionId, toolCall),
+            approvalRequestedEvent(sessionId, toolCall),
+            approvalBlockedCancelledEvent(sessionId, toolCall),
+            runBlockedEvent(sessionId, toolCall.toolCallId),
+        ]);
+        const input = {
+            store,
+            sessionId,
+            modelProviderSelection: { providerID: 'local', modelID: 'local-echo' } as const,
+            now: () => '2026-06-09T00:00:00.000Z',
+            blockedToolCallId: toolCall.toolCallId,
+        };
+
+        await Promise.all([
+            ensurePendingToolApprovalForCurrentBlockedRun(input),
+            ensurePendingToolApprovalForCurrentBlockedRun(input),
+        ]);
+
+        expect(countEvents(store.events, 'approval.requested')).toBe(2);
     });
 
     it('does not mint approval.requested from stale tool history without runtime approval provenance', async () => {

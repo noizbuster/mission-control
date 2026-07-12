@@ -1,5 +1,10 @@
 import type { AgentEvent, ApprovalRecord, ModelProviderSelection, ToolCall } from '@mission-control/protocol';
-import { requestIdForToolCall, toolCallsFromEvents } from './desktop-tool-approval-events.js';
+import {
+    matchesApprovalRecord,
+    matchesPermissionRequest,
+    requestIdForToolCall,
+    toolCallsFromEvents,
+} from './desktop-tool-approval-events.js';
 
 export function latestBlockedToolCallId(events: readonly AgentEvent[]): string | undefined {
     const latestRunEvent = [...events]
@@ -11,13 +16,48 @@ export function latestBlockedToolCallId(events: readonly AgentEvent[]): string |
     return latestRunEvent.run.toolCallId;
 }
 
-export function hasRuntimeOwnedPermissionRequest(events: readonly AgentEvent[], requestId: string): boolean {
-    return events.some(
+export function hasRuntimeOwnedPermissionRequest(events: readonly AgentEvent[], toolCall: ToolCall): boolean {
+    return events.some((event) => matchesPermissionRequest(event, toolCall));
+}
+
+export function hasRuntimeOwnedCancelledApproval(events: readonly AgentEvent[], toolCall: ToolCall): boolean {
+    const cancellationIndex = lastIndexWhere(
+        events,
         (event) =>
-            event.type === 'permission.requested' &&
-            event.permissionRequest?.id === requestId &&
-            event.permissionDecision?.requestId === requestId,
+            event.type === 'approval.blocked' && matchesApprovalRecord(event.approvalRecord, toolCall, 'cancelled'),
     );
+    if (cancellationIndex < 0) {
+        return false;
+    }
+    const requestedIndex = lastIndexWhere(
+        events.slice(0, cancellationIndex),
+        (event) =>
+            event.type === 'approval.requested' && matchesApprovalRecord(event.approvalRecord, toolCall, 'pending'),
+    );
+    if (requestedIndex < 0) {
+        return false;
+    }
+    if (
+        events
+            .slice(requestedIndex + 1, cancellationIndex)
+            .some((event) => event.type === 'approval.updated' && matchesApprovalRecord(event.approvalRecord, toolCall))
+    ) {
+        return false;
+    }
+    const permissionIndex = lastIndexWhere(events.slice(0, requestedIndex), (event) =>
+        matchesPermissionRequest(event, toolCall),
+    );
+    if (permissionIndex < 0) {
+        return false;
+    }
+    return events
+        .slice(cancellationIndex + 1)
+        .some(
+            (event) =>
+                event.type === 'run.blocked' &&
+                event.run?.state === 'blocked_on_approval' &&
+                event.run.toolCallId === toolCall.toolCallId,
+        );
 }
 
 export function toolCallById(events: readonly AgentEvent[], toolCallId: string): ToolCall | undefined {
@@ -62,6 +102,16 @@ export function permissionRequestedEvent(
             reason,
         },
     };
+}
+
+function lastIndexWhere<T>(values: readonly T[], predicate: (value: T) => boolean): number {
+    for (let index = values.length - 1; index >= 0; index -= 1) {
+        const value = values[index];
+        if (value !== undefined && predicate(value)) {
+            return index;
+        }
+    }
+    return -1;
 }
 
 function isRunStateEvent(type: AgentEvent['type']): boolean {

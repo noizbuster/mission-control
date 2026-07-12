@@ -416,6 +416,75 @@ describe('session replay coding projections', () => {
         ]);
     });
 
+    it('marks a graph message after blocked approval settlement and resume as a continuation', () => {
+        const sessionId = 'session_replay_graph_blocked_resume';
+        const replay = projectSessionReplay({
+            sessionId,
+            envelopes: [
+                envelope(graphToolCallProposedEvent(sessionId, 'call_1', 'file.patch'), 0, 'event_graph_tool_call'),
+                envelope(
+                    {
+                        ...graphToolFailedEvent(sessionId, 'call_1', {
+                            code: 'tool_failed',
+                            message: 'approval_required: file.patch',
+                            retryable: false,
+                        }),
+                        toolResult: {
+                            toolCallId: 'call_1',
+                            status: 'failed',
+                            error: {
+                                code: 'tool_failed',
+                                message: 'approval_required: file.patch',
+                                retryable: false,
+                            },
+                        },
+                    },
+                    1,
+                    'event_graph_tool_blocked',
+                ),
+                envelope(
+                    runEvent(sessionId, 'run.blocked', 'waiting for approval', {
+                        command: 'run',
+                        state: 'blocked_on_approval',
+                        runId: 'run_1',
+                        toolCallId: 'call_1',
+                    }),
+                    2,
+                    'event_run_blocked',
+                ),
+                envelope(
+                    {
+                        ...graphToolCompletedEvent(sessionId, 'call_1', 'approved patch'),
+                        toolResult: { toolCallId: 'call_1', status: 'completed', output: 'approved patch' },
+                    },
+                    3,
+                    'event_graph_tool_settled',
+                ),
+                envelope(
+                    runEvent(sessionId, 'run.started', 'resuming approved tool', {
+                        command: 'resume',
+                        state: 'running',
+                        runId: 'run_1',
+                    }),
+                    4,
+                    'event_run_resumed',
+                ),
+                envelope(graphLlmTurnCompletedEvent(sessionId, 'approved tool complete'), 5, 'event_graph_resumed'),
+                envelope(sessionStoppedEvent(sessionId), 6, 'event_session_stopped'),
+            ],
+        });
+
+        expect(replay.codingSteps).toContainEqual(
+            expect.objectContaining({
+                kind: 'provider.message',
+                eventId: 'event_graph_resumed',
+                message: 'approved tool complete',
+                continuation: true,
+            }),
+        );
+        expect(replay.diagnostics).toEqual([]);
+    });
+
     it('maps a failed graph tool and an llm error to a tool failure and a provider failure', () => {
         const sessionId = 'session_replay_graph_failures';
         const replay = projectSessionReplay({

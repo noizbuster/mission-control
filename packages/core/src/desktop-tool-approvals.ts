@@ -16,11 +16,11 @@ import {
     latestApprovalRecord,
     type PendingApprovalContext,
     pendingApprovalContextForCurrentRun,
-    requestIdForToolCall,
     sessionEvent,
     toolFailed,
 } from './desktop-tool-approval-events.js';
 import {
+    hasRuntimeOwnedCancelledApproval,
     hasRuntimeOwnedPermissionRequest,
     latestBlockedToolCallId,
     pendingApprovalRecord,
@@ -67,21 +67,40 @@ export async function ensurePendingToolApprovalForCurrentBlockedRun(input: {
     readonly now: () => string;
     readonly blockedToolCallId: string;
 }): Promise<void> {
+    const approvalId = approvalIdForToolCall(input.blockedToolCallId);
+    await withDesktopApprovalSettlementLock(input.store, { sessionId: input.sessionId, approvalId }, async () => {
+        await ensurePendingToolApprovalForCurrentBlockedRunUnlocked(input);
+    });
+}
+
+async function ensurePendingToolApprovalForCurrentBlockedRunUnlocked(input: {
+    readonly store: DesktopApprovalStore;
+    readonly sessionId: string;
+    readonly modelProviderSelection: ModelProviderSelection;
+    readonly now: () => string;
+    readonly blockedToolCallId: string;
+}): Promise<void> {
     const events = await input.store.getEvents(input.sessionId);
     const currentBlockedToolCallId = latestBlockedToolCallId(events);
     if (currentBlockedToolCallId === undefined || currentBlockedToolCallId !== input.blockedToolCallId) {
         return;
     }
     const approvalId = approvalIdForToolCall(currentBlockedToolCallId);
-    if (latestApprovalRecord(events, approvalId) !== undefined) {
+    const latestApproval = latestApprovalRecord(events, approvalId);
+    if (latestApproval?.state === 'pending') {
         return;
     }
-    const requestId = requestIdForToolCall(currentBlockedToolCallId);
-    if (!hasRuntimeOwnedPermissionRequest(events, requestId)) {
+    if (latestApproval !== undefined && latestApproval.state !== 'cancelled') {
         return;
     }
     const toolCall = toolCallById(events, currentBlockedToolCallId);
     if (toolCall === undefined) {
+        return;
+    }
+    if (!hasRuntimeOwnedPermissionRequest(events, toolCall)) {
+        return;
+    }
+    if (latestApproval?.state === 'cancelled' && !hasRuntimeOwnedCancelledApproval(events, toolCall)) {
         return;
     }
     await input.store.append(
@@ -103,17 +122,29 @@ export async function ensureRuntimeOwnedPermissionRequestForBlockedToolCall(inpu
     readonly now: () => string;
     readonly blockedToolCallId: string;
 }): Promise<void> {
+    const approvalId = approvalIdForToolCall(input.blockedToolCallId);
+    await withDesktopApprovalSettlementLock(input.store, { sessionId: input.sessionId, approvalId }, async () => {
+        await ensureRuntimeOwnedPermissionRequestForBlockedToolCallUnlocked(input);
+    });
+}
+
+async function ensureRuntimeOwnedPermissionRequestForBlockedToolCallUnlocked(input: {
+    readonly store: DesktopApprovalStore;
+    readonly sessionId: string;
+    readonly modelProviderSelection: ModelProviderSelection;
+    readonly now: () => string;
+    readonly blockedToolCallId: string;
+}): Promise<void> {
     const events = await input.store.getEvents(input.sessionId);
     const currentBlockedToolCallId = latestBlockedToolCallId(events);
     if (currentBlockedToolCallId === undefined || currentBlockedToolCallId !== input.blockedToolCallId) {
         return;
     }
-    const requestId = requestIdForToolCall(currentBlockedToolCallId);
-    if (hasRuntimeOwnedPermissionRequest(events, requestId)) {
-        return;
-    }
     const toolCall = toolCallById(events, currentBlockedToolCallId);
     if (toolCall === undefined) {
+        return;
+    }
+    if (hasRuntimeOwnedPermissionRequest(events, toolCall)) {
         return;
     }
     await input.store.append(
@@ -225,7 +256,7 @@ async function invokeApprovedTool(
 
 function permissionResolver(record: ApprovalRecord): (request: PermissionRequest) => PermissionDecision {
     return (request) => {
-        if (request.id === record.requestId) {
+        if (record.subject.kind === 'tool' && request.id === record.requestId && request.action === record.subject.id) {
             return {
                 requestId: request.id,
                 status: 'allow',

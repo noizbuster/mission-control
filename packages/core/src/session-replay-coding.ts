@@ -357,6 +357,10 @@ function continuationMessageSequences(envelopes: readonly AgentEventEnvelope[]):
             graphPrevTurnHadToolCall = false;
             graphCurrentTurnHasToolCall = false;
         }
+        if (envelope.event.type === 'run.blocked' && envelope.event.run?.state === 'blocked_on_approval') {
+            graphPrevTurnHadToolCall ||= graphCurrentTurnHasToolCall;
+            graphCurrentTurnHasToolCall = false;
+        }
         const providerTurnId = envelope.event.transcript?.providerTurnId;
         const chunk = envelope.event.providerStreamChunk;
         const graphEmitType = envelope.event.abg?.emit?.type;

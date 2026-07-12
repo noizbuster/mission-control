@@ -1,16 +1,16 @@
 /** @jsxImportSource @opentui/solid */
 
-import { basename } from 'node:path';
 import { useTerminalDimensions } from '@opentui/solid';
 import type { JSX } from 'solid-js';
-import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
-import type { WelcomeData } from '../state/welcome-data-types.js';
 import { AbgMinimap } from '../components/AbgMinimap.js';
 import { bottomDockPolicy } from '../components/chat-bottom-dock-policy.js';
 import type { StatusBarProps } from '../components/StatusBar.js';
 import { Toast } from '../components/Toast.js';
 import { WelcomeScreen } from '../components/WelcomeScreen.js';
+import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
+import type { WelcomeData } from '../state/welcome-data-types.js';
 import { AgentSpinner } from './AgentSpinner.js';
+import { basename } from 'node:path';
 
 export type UpperRegionProps = {
     readonly showWelcome: boolean;

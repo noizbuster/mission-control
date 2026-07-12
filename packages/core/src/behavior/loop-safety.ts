@@ -109,7 +109,9 @@ export function turnSignatureFromActions(actions: readonly ToolActionFingerprint
         return undefined;
     }
     // Prefer settled outcomes; fall back to proposed if settlement emits are missing.
-    const settled = actions.filter((a) => a.outcome === 'completed' || a.outcome === 'failed' || a.outcome === 'denied');
+    const settled = actions.filter(
+        (a) => a.outcome === 'completed' || a.outcome === 'failed' || a.outcome === 'denied',
+    );
     const source = settled.length > 0 ? settled : actions;
     const parts = source
         .map((a) => {
@@ -125,9 +127,7 @@ export function failureSignatureFromActions(actions: readonly ToolActionFingerpr
     if (failures.length === 0) {
         return undefined;
     }
-    const parts = failures
-        .map((a) => `${a.toolName}:${a.errorCode ?? 'failed'}:${a.inputDigest}`)
-        .sort();
+    const parts = failures.map((a) => `${a.toolName}:${a.errorCode ?? 'failed'}:${a.inputDigest}`).sort();
     return parts.join('|');
 }
 

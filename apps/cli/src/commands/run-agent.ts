@@ -129,6 +129,8 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         workspaceRoot,
         graph,
     });
+    const promptGraph =
+        options.plainPromptGraph === 'coding-agent' && workflowSpec === undefined ? undefined : workflowGraph;
     const workflowRun = await beginNoninteractiveWorkflowRun(workspaceRoot, workflowSpec);
     try {
         await renderer.start(runtime);
@@ -175,7 +177,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     resolveSdkModel,
                     createTurnRunner: ({ toolRegistry }) =>
                         createGraphTurnRunner({
-                            graph: workflowGraph ?? buildCodingAgentGraphForSelection(selectedModelProvider),
+                            graph: promptGraph ?? buildCodingAgentGraphForSelection(selectedModelProvider),
                             sessionId,
                             now: () => new Date().toISOString(),
                             modelProviderSelection: selectedModelProvider,
@@ -202,7 +204,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
                     selection: selectedModelProvider,
                     prompt: effectivePrompt,
                     workspaceRoot,
-                    ...(workflowGraph !== undefined ? { graph: workflowGraph } : {}),
+                    ...(promptGraph !== undefined ? { graph: promptGraph } : {}),
                     ...(options.resolveSdkModel !== undefined ? { resolveSdkModel: options.resolveSdkModel } : {}),
                     authStore,
                     ...(options.provider !== undefined ? { provider: options.provider } : {}),

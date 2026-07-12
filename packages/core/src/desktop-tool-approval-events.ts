@@ -110,29 +110,61 @@ export function pendingApprovalContextForCurrentRun(
     events: readonly AgentEvent[],
     approvalId: string,
 ): PendingApprovalContext | undefined {
-    const record = latestApprovalRecord(events, approvalId);
-    if (record?.state !== 'pending') {
+    const latestApprovalEvent = [...events].reverse().find((event) => event.approvalRecord?.approvalId === approvalId);
+    const record = latestApprovalEvent?.approvalRecord;
+    if (latestApprovalEvent?.type !== 'approval.requested' || record?.state !== 'pending') {
         return undefined;
     }
     const currentBlockedToolCallId = latestBlockedToolCallId(events);
     if (currentBlockedToolCallId === undefined) {
         return undefined;
     }
-    const toolCallId = toolCallIdForRequestId(record.requestId);
-    if (toolCallId === undefined || toolCallId !== currentBlockedToolCallId) {
-        return undefined;
-    }
-    if (!hasRuntimeOwnedPermissionRequest(events, record.requestId)) {
-        return undefined;
-    }
-    if (!hasRuntimeOwnedApprovalRequest(events, record.approvalId, record.requestId)) {
-        return undefined;
-    }
-    const toolCall = toolCallById(events, toolCallId);
+    const toolCall = toolCallById(events, currentBlockedToolCallId);
     if (toolCall === undefined) {
         return undefined;
     }
+    if (!matchesApprovalRecord(record, toolCall, 'pending')) {
+        return undefined;
+    }
+    if (!events.some((event) => matchesPermissionRequest(event, toolCall))) {
+        return undefined;
+    }
+    if (
+        !events.some(
+            (event) =>
+                event.type === 'approval.requested' && matchesApprovalRecord(event.approvalRecord, toolCall, 'pending'),
+        )
+    ) {
+        return undefined;
+    }
     return { record, toolCall };
+}
+
+export function matchesPermissionRequest(event: AgentEvent, toolCall: ToolCall): boolean {
+    const requestId = requestIdForToolCall(toolCall.toolCallId);
+    return (
+        event.type === 'permission.requested' &&
+        event.permissionRequest?.id === requestId &&
+        event.permissionRequest.action === toolCall.toolName &&
+        event.permissionDecision?.requestId === requestId &&
+        event.permissionDecision.status === 'requires_approval'
+    );
+}
+
+export function matchesApprovalRecord(
+    record: ApprovalRecord | undefined,
+    toolCall: ToolCall,
+    state?: ApprovalRecord['state'],
+): boolean {
+    const requestId = requestIdForToolCall(toolCall.toolCallId);
+    return (
+        record?.approvalId === `approval_${requestId}` &&
+        record.requestId === requestId &&
+        record.policyDecision === 'requires_approval' &&
+        (state === undefined || record.state === state) &&
+        record.subject.kind === 'tool' &&
+        record.subject.id === toolCall.toolName
+    );
 }
 
 export function latestApprovalRecord(events: readonly AgentEvent[], approvalId: string): ApprovalRecord | undefined {
@@ -177,29 +209,6 @@ function latestBlockedToolCallId(events: readonly AgentEvent[]): string | undefi
         return undefined;
     }
     return latestRunEvent.run.toolCallId;
-}
-
-function hasRuntimeOwnedPermissionRequest(events: readonly AgentEvent[], requestId: string): boolean {
-    return events.some(
-        (event) =>
-            event.type === 'permission.requested' &&
-            event.permissionRequest?.id === requestId &&
-            event.permissionDecision?.requestId === requestId,
-    );
-}
-
-function hasRuntimeOwnedApprovalRequest(events: readonly AgentEvent[], approvalId: string, requestId: string): boolean {
-    return events.some((event) => {
-        return (
-            event.type === 'approval.requested' &&
-            event.approvalRecord?.approvalId === approvalId &&
-            event.approvalRecord.requestId === requestId
-        );
-    });
-}
-
-function toolCallIdForRequestId(requestId: string): string | undefined {
-    return requestId.startsWith('permission_') ? requestId.slice('permission_'.length) : undefined;
 }
 
 function isTerminalRunEvent(type: AgentEvent['type']): boolean {

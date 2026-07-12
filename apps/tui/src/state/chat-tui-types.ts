@@ -5,12 +5,7 @@ import type { AbgOverlayController } from './abg-overlay-controller.js';
 import type { ApprovalLevel } from './approval-level.js';
 import type { ChatAppActions } from './chat-app-actions.js';
 import type { ChatInputEvent } from './chat-input-event.js';
-import type {
-    DashboardAgentEntry,
-    HistoryPickerEntry,
-    MissionPanelRow,
-    SessionPickerEntry,
-} from './chat-store.js';
+import type { DashboardAgentEntry, HistoryPickerEntry, MissionPanelRow, SessionPickerEntry } from './chat-store.js';
 import type { ModelChoice } from './interactive-chat-model.js';
 import type { MissionControlServicesLike } from './mission-services-types.js';
 import type { ModelsOverlayRoleRow } from './models-overlay-state.js';

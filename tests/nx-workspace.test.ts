@@ -226,7 +226,6 @@ describe('Nx workspace', () => {
     it('keeps root Vitest TUI subpath aliases on Solid viewport naming', () => {
         const config = readFileSync(join(root, 'vitest.config.ts'), 'utf8');
 
-
         expect(config).not.toContain('@mission-control/tui/terminal-viewport-react');
         expect(config).not.toContain('platform/terminal-viewport-react.ts');
     });

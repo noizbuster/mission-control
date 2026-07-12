@@ -1,9 +1,9 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ChatBlock } from '@mission-control/tui/chat';
-import type { TuiRuntimeProviderValue } from '../platform/providers/runtime-context.js';
-import { parseModelSelection } from '../state/interactive-chat-model.js';
-import type { ChatStoreState } from '../state/chat-store.js';
 import type { StatusBarProps } from '../components/StatusBar.js';
+import type { TuiRuntimeProviderValue } from '../platform/providers/runtime-context.js';
+import type { ChatStoreState } from '../state/chat-store.js';
+import { parseModelSelection } from '../state/interactive-chat-model.js';
 
 /**
  * Reuse previous block references when content (kind + element-wise lines) is unchanged.

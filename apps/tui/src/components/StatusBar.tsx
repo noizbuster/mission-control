@@ -224,8 +224,7 @@ export function TopStatusBar(props: StatusBarProps): JSX.Element {
     return (
         <box backgroundColor={STATUS_LINE_BG} flexDirection="row" flexShrink={0} width="100%">
             <text selectable>
-                <span style={{ dim: true }}>{row().provider}</span>{' '}
-                <span style={{ bold: true }}>{row().model}</span>
+                <span style={{ dim: true }}>{row().provider}</span> <span style={{ bold: true }}>{row().model}</span>
                 {row().variantLabel !== undefined ? ` - ${row().variantLabel}` : null}
             </text>
             <text selectable> </text>

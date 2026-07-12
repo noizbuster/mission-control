@@ -184,9 +184,9 @@ describe('bounded ABG graph coordinator', () => {
 
         expect(result.status).toBe('completed');
         expect(runs).toBe(7);
-        expect(result.events.some((e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_loop_soft_landed')).toBe(
-            true,
-        );
+        expect(
+            result.events.some((e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_loop_soft_landed'),
+        ).toBe(true);
         expect(result.events.some((e) => e.type === 'graph.completed')).toBe(true);
     });
 
@@ -262,9 +262,9 @@ describe('bounded ABG graph coordinator', () => {
 
         expect(result.status).toBe('completed');
         expect(researchRuns).toBe(7);
-        expect(result.events.some((e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_loop_soft_landed')).toBe(
-            true,
-        );
+        expect(
+            result.events.some((e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_loop_soft_landed'),
+        ).toBe(true);
         expect(result.events.some((e) => e.type === 'node.completed' && e.abg?.nodeId === 'final')).toBe(true);
     });
 

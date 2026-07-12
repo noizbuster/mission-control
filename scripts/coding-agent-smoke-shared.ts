@@ -5,7 +5,7 @@ export const codingAgentSmokeSelection = { providerID: 'local', modelID: 'local-
 export type SmokeApprovalStore = {
     readonly append: (event: AgentEvent) => Promise<void>;
     readonly getEvents: (sessionId: string) => Promise<readonly AgentEvent[]>;
-    readonly close: () => Promise<void>;
+    readonly close: () => Promise<void> | void;
 };
 
 export type SmokeApprovalDependencies = {
@@ -15,6 +15,13 @@ export type SmokeApprovalDependencies = {
         readonly now: () => string;
         readonly createEventId: (_event: AgentEvent, sequence: number) => string;
     }) => Promise<SmokeApprovalStore>;
+    readonly ensurePendingApproval: (input: {
+        readonly store: SmokeApprovalStore;
+        readonly sessionId: string;
+        readonly modelProviderSelection: typeof codingAgentSmokeSelection;
+        readonly now: () => string;
+        readonly blockedToolCallId: string;
+    }) => Promise<void>;
     readonly settleApproval: (
         input: {
             readonly sessionId: string;

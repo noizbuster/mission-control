@@ -25,13 +25,7 @@ describe('formatHistoryContentPreview', () => {
     });
 
     it('windows to first two, ellipsis, last two when more than four lines', () => {
-        expect(formatHistoryContentPreview('l0\nl1\nl2\nl3\nl4')).toEqual([
-            'l0',
-            'l1',
-            ELLIPSIS,
-            'l3',
-            'l4',
-        ]);
+        expect(formatHistoryContentPreview('l0\nl1\nl2\nl3\nl4')).toEqual(['l0', 'l1', ELLIPSIS, 'l3', 'l4']);
     });
 });
 

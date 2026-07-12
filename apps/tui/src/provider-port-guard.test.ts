@@ -38,7 +38,15 @@ const stateProviderImportTerms = [
     'from "../providers/',
 ] as const;
 const runtimeBridgeForbiddenTerms = ['AgentRuntime', 'AgentRuntimeOptions', 'ProviderAdapter', 'ToolRegistry'] as const;
-const clipboardFallbackTerms = ['child_process', 'execSync', 'execFileSync', 'spawnSync', 'pbcopy', 'xclip', 'wl-copy'] as const;
+const clipboardFallbackTerms = [
+    'child_process',
+    'execSync',
+    'execFileSync',
+    'spawnSync',
+    'pbcopy',
+    'xclip',
+    'wl-copy',
+] as const;
 
 const blockCommentPattern = /\/\*[\s\S]*?\*\//gu;
 const lineCommentPattern = /\/\/.*$/gmu;
@@ -212,8 +220,9 @@ describe('TUI provider-port guardrails', () => {
     it('no TUI product source imports child-process clipboard fallbacks', () => {
         const findings = scanFilesForTerms(clipboardGuardFiles(), clipboardFallbackTerms);
 
-        expect(findings, `TUI source must remain free of native clipboard/shell fallbacks\n${formatFindings(findings)}`).toEqual(
-            [],
-        );
+        expect(
+            findings,
+            `TUI source must remain free of native clipboard/shell fallbacks\n${formatFindings(findings)}`,
+        ).toEqual([]);
     });
 });

@@ -75,19 +75,15 @@ const EXPECTED_PRESENT = ['commands/run-agent', 'interactive-chat'];
 
 function runTraced(args) {
     return new Promise((resolvePromise, reject) => {
-        const child = spawn(
-            process.execPath,
-            ['--experimental-ffi', '--import', PRELOAD, CLI_DIST, ...args],
-            {
-                cwd: REPO_ROOT,
-                env: {
-                    ...process.env,
-                    MCTRL_DATA_DIR: resolve(REPO_ROOT, '.omo/evidence/tmp-nottui-trace'),
-                    MCTRL_FORCE_NO_TTY: '1',
-                },
-                stdio: ['ignore', 'pipe', 'pipe'],
+        const child = spawn(process.execPath, ['--experimental-ffi', '--import', PRELOAD, CLI_DIST, ...args], {
+            cwd: REPO_ROOT,
+            env: {
+                ...process.env,
+                MCTRL_DATA_DIR: resolve(REPO_ROOT, '.omo/evidence/tmp-nottui-trace'),
+                MCTRL_FORCE_NO_TTY: '1',
             },
-        );
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
         let stdout = '';
         let stderr = '';
         child.stdout.on('data', (chunk) => {
