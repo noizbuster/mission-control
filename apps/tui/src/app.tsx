@@ -4,23 +4,6 @@ import { type ChatBlock, parseMessageBlocks } from '@mission-control/tui/chat';
 import { useKeymap } from '@opentui/keymap/solid';
 import { useRenderer, useTerminalDimensions } from '@opentui/solid';
 import { type Accessor, createMemo, createSignal, type JSX, Show } from 'solid-js';
-import { deriveStatusBarProps, preserveBlockReferences, promptPanelRepaintKey } from './app/app-helpers.js';
-import { FullscreenOverlays } from './app/FullscreenOverlays.js';
-import { ModalOverlays } from './app/ModalOverlays.js';
-import { UpperRegion } from './app/UpperRegion.js';
-import { useGlobalKeyboard } from './app/use-global-keyboard.js';
-import { useKeymapLayers } from './app/use-keymap-layers.js';
-import { useRenderableHandles } from './app/use-renderable-handles.js';
-import { useRepaintEffects } from './app/use-repaint-effects.js';
-import { useSelectionMouseUp } from './app/use-selection-mouseup.js';
-import { useSubmit } from './app/use-submit.js';
-import { useTransientToast } from './app/use-transient-toast.js';
-import { ChatBottomDock } from './components/ChatBottomDock.js';
-import { ChatTranscript } from './components/ChatTranscript.js';
-import { bottomDockPolicy } from './components/chat-bottom-dock-policy.js';
-import { DialogOverlay, DialogProvider } from './components/dialog/dialog.js';
-import { DialogHost } from './components/dialog/dialog-host.js';
-import { KeymapChrome } from './platform/keymap/keymap-chrome.js';
 import {
     useChatSession,
     useTuiClipboard,
@@ -30,10 +13,31 @@ import {
 } from './platform/providers/index.js';
 import { useSolidStoreSelector } from './platform/use-solid-store-selector.js';
 import type { ChatStore } from './state/chat-store.js';
+import { ChatTranscript } from './components/ChatTranscript.js';
+import {
+    deriveStatusBarProps,
+    preserveBlockReferences,
+    promptPanelRepaintKey,
+} from './app/app-helpers.js';
+import { FullscreenOverlays } from './app/FullscreenOverlays.js';
+import { ModalOverlays } from './app/ModalOverlays.js';
+import { UpperRegion } from './app/UpperRegion.js';
+import { KeymapChrome } from './platform/keymap/keymap-chrome.js';
+import { useGlobalKeyboard } from './app/use-global-keyboard.js';
+import { useKeymapLayers } from './app/use-keymap-layers.js';
+import { useRenderableHandles } from './app/use-renderable-handles.js';
+import { useRepaintEffects } from './app/use-repaint-effects.js';
+import { useSelectionMouseUp } from './app/use-selection-mouseup.js';
+import { useSubmit } from './app/use-submit.js';
+import { useTransientToast } from './app/use-transient-toast.js';
+import { DialogHost } from './components/dialog/dialog-host.js';
+import { DialogOverlay, DialogProvider } from './components/dialog/dialog.js';
+import { ChatBottomDock } from './components/ChatBottomDock.js';
+import { bottomDockPolicy } from './components/chat-bottom-dock-policy.js';
 
 export {
-    deriveStatusBarProps,
     type PromptPanelRepaintKeyInput,
+    deriveStatusBarProps,
     parseModelPreferenceKeys,
     preserveBlockReferences,
     promptPanelRepaintKey,
@@ -140,7 +144,8 @@ function AppMain(props: AppProps): JSX.Element {
     });
 
     const showAgentIndicator = () => !overlayActive();
-    const showAbgMinimap = () => snapshot().abgMinimapVisible && !overlayActive() && abgOverlayController !== undefined;
+    const showAbgMinimap = () =>
+        snapshot().abgMinimapVisible && !overlayActive() && abgOverlayController !== undefined;
     const isFullscreenOverlay = () => {
         const mode = snapshot().overlayMode;
         return mode === 'abg' || mode === 'diff-viewer' || mode === 'models-overlay';
