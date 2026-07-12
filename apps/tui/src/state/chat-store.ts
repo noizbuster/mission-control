@@ -971,7 +971,10 @@ export class ChatStore {
             this.publish();
             return undefined;
         }
-        const selectedIndex = Math.min(Math.max(this.state.historyPicker.selectedIndex, 0), newestFirst.length - 1);
+        const selectedIndex = Math.min(
+            Math.max(this.state.historyPicker.selectedIndex, 0),
+            newestFirst.length - 1,
+        );
         const selected = newestFirst[selectedIndex];
         this.state.historyPicker = closeHistoryPicker(this.state.historyPicker);
         this.publish();
