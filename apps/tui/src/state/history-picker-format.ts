@@ -6,7 +6,20 @@
 const EM_DASH = '—';
 const ELLIPSIS = '…';
 
-const ENGLISH_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+const ENGLISH_MONTHS = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+] as const;
 
 function pad2(value: number): string {
     return value < 10 ? `0${value}` : String(value);
