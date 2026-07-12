@@ -19,13 +19,8 @@
  */
 
 import { z } from 'zod';
-import {
-    type BoulderState,
-    type BoulderWork,
-    type RunnerStopMarker,
-    readBoulder,
-    writeBoulder,
-} from '../../persistence/boulder-store.js';
+import { type BoulderWork, type RunnerStopMarker, readBoulder } from '../../persistence/boulder-store.js';
+import { mutateBoulderWork } from '../../persistence/boulder-work-mutation.js';
 import { randomUUID } from 'node:crypto';
 
 const CONTINUATION_STATE_KEY = 'continuation_runtime';
@@ -113,27 +108,8 @@ export class ContinuationRuntime {
     }
 
     async persistState(state: ContinuationState): Promise<void> {
-        const boulder = await readBoulder(this.options.boulderRoot);
-        if (boulder === null) {
-            throw new ContinuationRuntimeError(
-                `Cannot persist continuation state: boulder.json missing at ${this.options.boulderRoot}`,
-                'boulder_missing',
-            );
-        }
-        const work = boulder.works[this.options.workId];
-        if (work === undefined) {
-            throw new ContinuationRuntimeError(
-                `Cannot persist continuation state: work ${this.options.workId} not found`,
-                'work_missing',
-            );
-        }
         const validated = PersistedContinuationStateSchema.parse(state);
-        const updatedWork = { ...work, [CONTINUATION_STATE_KEY]: validated };
-        const updatedBoulder = {
-            ...boulder,
-            works: { ...boulder.works, [this.options.workId]: updatedWork },
-        };
-        await writeBoulder(this.options.boulderRoot, updatedBoulder);
+        await this.mutateWork((work) => ({ ...work, [CONTINUATION_STATE_KEY]: validated }));
     }
 
     async loadState(): Promise<ContinuationState | null> {
@@ -142,9 +118,23 @@ export class ContinuationRuntime {
         const work = boulder.works[this.options.workId];
         if (work === undefined) return null;
         const raw = readWorkExtension(work);
-        if (raw === undefined) return null;
+        if (raw === undefined) {
+            if (work.runner_stop === undefined) return null;
+            return {
+                ...this.initialState(work.started_at),
+                stoppedAt: work.runner_stop.stopped_at,
+                stoppedReason: work.runner_stop.stopped_reason,
+            };
+        }
         const parsed = PersistedContinuationStateSchema.safeParse(raw);
-        if (!parsed.success) return null;
+        if (!parsed.success) {
+            if (work.runner_stop === undefined) return null;
+            return {
+                ...this.initialState(work.started_at),
+                stoppedAt: work.runner_stop.stopped_at,
+                stoppedReason: work.runner_stop.stopped_reason,
+            };
+        }
         return {
             iteration: parsed.data.iteration,
             loopActive: parsed.data.loopActive,
@@ -157,12 +147,11 @@ export class ContinuationRuntime {
     }
 
     async markStopped(reason: string, now: string = new Date().toISOString()): Promise<void> {
-        const work = await this.requireWork();
         const stopMarker: RunnerStopMarker = {
             stopped_at: now,
             stopped_reason: reason,
         };
-        await this.writeWork({ ...work, runner_stop: stopMarker });
+        await this.mutateWork((work) => ({ ...work, runner_stop: stopMarker }));
     }
 
     async clearStopped(): Promise<void> {
@@ -171,55 +160,55 @@ export class ContinuationRuntime {
         const work = boulder.works[this.options.workId];
         if (work === undefined) return;
         if (work.runner_stop === undefined) return;
-        const workWithoutStop = { ...work };
-        delete workWithoutStop.runner_stop;
-        await this.writeWork(workWithoutStop);
+        await this.mutateWork((latestWork) => {
+            const workWithoutStop = { ...latestWork };
+            delete workWithoutStop.runner_stop;
+            return workWithoutStop;
+        });
     }
 
-    private async requireWork(): Promise<BoulderWork> {
-        const boulder = await readBoulder(this.options.boulderRoot);
-        if (boulder === null) {
-            throw new ContinuationRuntimeError(
-                `Cannot operate on work: boulder.json missing at ${this.options.boulderRoot}`,
-                'boulder_missing',
-            );
+    private async mutateWork(mutation: (work: BoulderWork) => BoulderWork): Promise<void> {
+        try {
+            await mutateBoulderWork(this.options.boulderRoot, this.options.workId, mutation);
+        } catch (error: unknown) {
+            if (error instanceof Error && 'code' in error) {
+                const code = error.code;
+                if (code === 'boulder_missing' || code === 'boulder_work_missing') {
+                    if (code === 'boulder_missing') {
+                        throw new ContinuationRuntimeError(
+                            `Cannot operate on work: boulder.json missing at ${this.options.boulderRoot}`,
+                            code,
+                        );
+                    }
+                    throw new ContinuationRuntimeError(
+                        `Cannot operate on work: work ${this.options.workId} not found`,
+                        'work_missing',
+                    );
+                }
+            }
+            throw error;
         }
-        const work = boulder.works[this.options.workId];
-        if (work === undefined) {
-            throw new ContinuationRuntimeError(
-                `Cannot operate on work: work ${this.options.workId} not found`,
-                'work_missing',
-            );
-        }
-        return work;
-    }
-
-    private async writeWork(work: BoulderWork): Promise<void> {
-        const boulder = await readBoulder(this.options.boulderRoot);
-        if (boulder === null) {
-            throw new ContinuationRuntimeError(
-                `Cannot write work: boulder.json missing at ${this.options.boulderRoot}`,
-                'boulder_missing',
-            );
-        }
-        const updatedBoulder: BoulderState = {
-            ...boulder,
-            works: { ...boulder.works, [this.options.workId]: work },
-        };
-        await writeBoulder(this.options.boulderRoot, updatedBoulder);
     }
 
     async runWithContinuation(sessionId: string, runGraphFn: RunGraphFn): Promise<ContinuationOutcome> {
         const loaded = await this.loadState();
         const prior = loaded ?? this.initialState();
 
+        if (prior.stoppedAt !== undefined) {
+            return { status: 'done', iterations: prior.iteration, reason: 'stopped' };
+        }
+
         const result = await runGraphFn(sessionId);
+
+        const latest = await this.loadState();
 
         const observed: ContinuationState = {
             ...prior,
             loopActive: result.loopActive,
             doneSignal: result.done,
             lastSessionId: sessionId,
+            stoppedAt: latest?.stoppedAt,
+            stoppedReason: latest?.stoppedReason,
         };
 
         if (observed.doneSignal) {
