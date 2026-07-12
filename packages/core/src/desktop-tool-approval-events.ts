@@ -77,7 +77,7 @@ export function pendingApprovalContextForCurrentRun(
     if (authority === undefined) {
         return undefined;
     }
-    if (latestApprovalIndex <= authority.runStartEventIndex) return undefined;
+    if (latestApprovalIndex <= authority.toolCallEventIndex) return undefined;
     const approvedProposal = findToolCallBefore(
         events,
         latestApprovalIndex,
@@ -90,12 +90,12 @@ export function pendingApprovalContextForCurrentRun(
     if (!matchesApprovalRecord(record, authority.toolCall, 'pending')) {
         return undefined;
     }
-    const currentRunEvents = events.slice(authority.runStartEventIndex + 1, authority.blockedEventIndex);
-    if (!currentRunEvents.some((event) => matchesPermissionRequest(event, authority.toolCall))) {
+    const currentProposalEvents = events.slice(authority.toolCallEventIndex + 1);
+    if (!currentProposalEvents.some((event) => matchesPermissionRequest(event, authority.toolCall))) {
         return undefined;
     }
     if (
-        !currentRunEvents.some(
+        !currentProposalEvents.some(
             (event) =>
                 event.type === 'approval.requested' &&
                 matchesApprovalRecord(event.approvalRecord, authority.toolCall, 'pending'),
