@@ -2,14 +2,14 @@
 
 import { TextAttributes } from '@opentui/core';
 import { type JSX, Show } from 'solid-js';
-import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from '../components/AbgOverlay.js';
-import { ModelsOverlay } from '../components/ModelsOverlay.js';
-import { OverlayFrame } from '../components/OverlayFrame.js';
-import type { StatusBarProps } from '../components/StatusBar.js';
 import { buildDiffViewerModel, DiffViewerOverlay } from '../platform/keymap/diff-viewer.js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
 import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
+import { ABG_OVERLAY_TABS, AbgOverlay, type AbgOverlayTab } from '../components/AbgOverlay.js';
+import { ModelsOverlay } from '../components/ModelsOverlay.js';
+import { OverlayFrame } from '../components/OverlayFrame.js';
+import type { StatusBarProps } from '../components/StatusBar.js';
 
 export type FullscreenOverlaysProps = {
     readonly store: ChatStore;

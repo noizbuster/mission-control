@@ -1,17 +1,17 @@
 /** @jsxImportSource @opentui/solid */
 
 import type { JSX } from 'solid-js';
-import { ChatBottomDock } from '../components/ChatBottomDock.js';
-import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
-import type { ChatScrollboxHandle } from '../components/ChatTranscript.js';
-import type { BottomDockPolicy } from '../components/chat-bottom-dock-policy.js';
-import type { StatusBarProps } from '../components/StatusBar.js';
 import type { TerminalViewport } from '../platform/terminal-viewport.js';
 import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
 import type { ChatAppActions } from '../state/chat-app-actions.js';
 import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
 import type { MissionControlServicesLike } from '../state/mission-services-types.js';
 import type { WelcomeData } from '../state/welcome-data-types.js';
+import { ChatBottomDock } from '../components/ChatBottomDock.js';
+import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
+import type { ChatScrollboxHandle } from '../components/ChatTranscript.js';
+import type { BottomDockPolicy } from '../components/chat-bottom-dock-policy.js';
+import type { StatusBarProps } from '../components/StatusBar.js';
 import { ModalOverlays } from './ModalOverlays.js';
 import { UpperRegion } from './UpperRegion.js';
 
