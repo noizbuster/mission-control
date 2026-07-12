@@ -316,7 +316,8 @@ export function buildProjectDescriptor(
 export function WelcomeScreen(props: WelcomeScreenProps): JSX.Element {
     const widthBudget = () => welcomeWidthBudget(props.viewportColumns);
     const modelLine = () => formatModelLine(props.data);
-    const projectDescriptor = () => buildProjectDescriptor(props.projectLabel, props.gitBranch, props.isWorktree);
+    const projectDescriptor = () =>
+        buildProjectDescriptor(props.projectLabel, props.gitBranch, props.isWorktree);
     const lspGlyphs = () => formatLspGlyphs(props.data.lspServers);
     const rowPlan = () => {
         const descriptor = projectDescriptor();
@@ -343,9 +344,17 @@ export function WelcomeScreen(props: WelcomeScreenProps): JSX.Element {
                 <box flexDirection="column" flexGrow={1} paddingLeft={2} paddingRight={2} paddingBottom={1}>
                     <WelcomeHeader version={props.data.version} />
                     <SectionHeader title="ENVIRONMENT" contentWidth={widthBudget().contentWidth} />
-                    <TwoColumnRow label={modelLine().label} value={modelLine().value} widthBudget={widthBudget()} />
+                    <TwoColumnRow
+                        label={modelLine().label}
+                        value={modelLine().value}
+                        widthBudget={widthBudget()}
+                    />
                     {projectDescriptor() !== undefined ? (
-                        <TwoColumnRow label="project" value={projectDescriptor() ?? ''} widthBudget={widthBudget()} />
+                        <TwoColumnRow
+                            label="project"
+                            value={projectDescriptor() ?? ''}
+                            widthBudget={widthBudget()}
+                        />
                     ) : null}
 
                     <SectionHeader title="MCP SERVERS" contentWidth={widthBudget().contentWidth} />
@@ -355,7 +364,13 @@ export function WelcomeScreen(props: WelcomeScreenProps): JSX.Element {
                         <For each={props.data.mcpServers}>
                             {(server) => {
                                 const row = formatMcpServerRow(server);
-                                return <TwoColumnRow label={row.label} value={row.value} widthBudget={widthBudget()} />;
+                                return (
+                                    <TwoColumnRow
+                                        label={row.label}
+                                        value={row.value}
+                                        widthBudget={widthBudget()}
+                                    />
+                                );
                             }}
                         </For>
                     )}
@@ -370,7 +385,13 @@ export function WelcomeScreen(props: WelcomeScreenProps): JSX.Element {
                         <For each={props.data.projectSkills}>
                             {(skill) => {
                                 const row = formatSkillRow(skill, widthBudget().skillValueWidth);
-                                return <TwoColumnRow label={row.label} value={row.value} widthBudget={widthBudget()} />;
+                                return (
+                                    <TwoColumnRow
+                                        label={row.label}
+                                        value={row.value}
+                                        widthBudget={widthBudget()}
+                                    />
+                                );
                             }}
                         </For>
                     )}

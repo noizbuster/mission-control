@@ -214,7 +214,9 @@ export function ChatTranscript(props: ChatTranscriptProps): JSX.Element {
                             block={block}
                             toolOutputExpanded={props.toolOutputExpanded}
                             viewportColumns={dimensions().width}
-                            {...(props.generating && index() === props.blocks.length - 1 ? { isStreaming: true } : {})}
+                            {...(props.generating && index() === props.blocks.length - 1
+                                ? { isStreaming: true }
+                                : {})}
                         />
                     )}
                 </For>
