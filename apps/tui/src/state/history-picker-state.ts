@@ -105,7 +105,10 @@ export function closeHistoryPicker(state: HistoryPickerState): HistoryPickerStat
  * Clamp `selectedIndex` into `[0, entryCount-1]` (or 0 when empty).
  * Use when the entry list shrinks under an open picker.
  */
-export function clampHistoryPickerSelection(state: HistoryPickerState, entryCount: number): HistoryPickerState {
+export function clampHistoryPickerSelection(
+    state: HistoryPickerState,
+    entryCount: number,
+): HistoryPickerState {
     const selectedIndex = entryCount <= 0 ? 0 : clampIndex(state.selectedIndex, entryCount);
     if (selectedIndex === state.selectedIndex) {
         return state;

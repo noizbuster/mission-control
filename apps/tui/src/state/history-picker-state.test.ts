@@ -4,9 +4,9 @@ import {
     closeHistoryPicker,
     createHistoryPickerState,
     createHistoryPickerView,
-    type HistoryPickerEntry,
     navigateHistoryPicker,
     openHistoryPicker,
+    type HistoryPickerEntry,
 } from './history-picker-state.js';
 
 const NOW_MS = new Date(2026, 6, 10, 12, 0, 0, 0).getTime();
@@ -16,7 +16,9 @@ function entry(id: string, text: string, timestamp: number = NOW_MS - 60_000): H
 }
 
 function singleLineEntries(count: number): readonly HistoryPickerEntry[] {
-    return Array.from({ length: count }, (_, index) => entry(`e${index}`, `line-${index}`, NOW_MS - index * 60_000));
+    return Array.from({ length: count }, (_, index) =>
+        entry(`e${index}`, `line-${index}`, NOW_MS - index * 60_000),
+    );
 }
 
 describe('createHistoryPickerState', () => {
@@ -175,7 +177,11 @@ describe('createHistoryPickerView', () => {
     });
 
     it('includes selected multi-line entry and neighbors within line budget', () => {
-        const entries = [entry('a', 'one'), entry('b', 'two\nlines'), entry('c', 'three')];
+        const entries = [
+            entry('a', 'one'),
+            entry('b', 'two\nlines'),
+            entry('c', 'three'),
+        ];
         let state = openHistoryPicker(createHistoryPickerState(), entries, '');
         state = navigateHistoryPicker(state, 'down', 3);
         expect(state.selectedIndex).toBe(1);
