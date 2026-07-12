@@ -5,7 +5,19 @@ export const codingAgentSmokeSelection = { providerID: 'local', modelID: 'local-
 export type SmokeApprovalStore = {
     readonly append: (event: AgentEvent) => Promise<void>;
     readonly getEvents: (sessionId: string) => Promise<readonly AgentEvent[]>;
+    readonly reserveDesktopApprovalEffect: (effect: SmokeApprovalEffect) => Promise<boolean>;
+    readonly claimDesktopApprovalEffect: (effect: SmokeApprovalEffect) => Promise<boolean>;
     readonly close: () => Promise<void> | void;
+};
+
+type SmokeApprovalEffect = {
+    readonly sessionId: string;
+    readonly approvalId: string;
+    readonly runId: string;
+    readonly toolCallId: string;
+    readonly toolName: string;
+    readonly argumentsJson: string;
+    readonly workspaceRoot: string;
 };
 
 export type SmokeApprovalDependencies = {
@@ -21,6 +33,7 @@ export type SmokeApprovalDependencies = {
         readonly modelProviderSelection: typeof codingAgentSmokeSelection;
         readonly now: () => string;
         readonly blockedToolCallId: string;
+        readonly workspaceRoot: string;
     }) => Promise<void>;
     readonly settleApproval: (
         input: {

@@ -28,6 +28,7 @@ export async function approvePendingSmokePatch(
             modelProviderSelection: codingAgentSmokeSelection,
             now: fixedCodingAgentSmokeNow,
             blockedToolCallId: input.toolCallId,
+            workspaceRoot: input.workspaceRoot,
         });
         const status = await dependencies.settleApproval(
             {
