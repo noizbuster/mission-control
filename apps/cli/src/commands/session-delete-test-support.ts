@@ -1,10 +1,9 @@
-import { missionControlDataDirEnvKey } from '@mission-control/core';
+import { missionControlDataDirEnvKey, openCanonicalRuntimeDb, runLocalLibsqlWrite } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { vi } from 'vitest';
 import { access, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 
 export async function useTempDataDir(): Promise<string> {
     const dataDir = await mkdtemp(join(tmpdir(), 'mission-control-cli-session-delete-'));
@@ -49,24 +48,35 @@ export async function setCanonicalSessionParent(
     sessionId: string,
     parentSessionId: string,
 ): Promise<void> {
-    const database = new DatabaseSync(join(dataDir, 'memory.db'));
+    const { runtime } = await openCanonicalRuntimeDb({ dataDir, sessionControlMaintenance: false });
     try {
-        database
-            .prepare('UPDATE sessions SET parent_session_id = ? WHERE session_id = ?')
-            .run(parentSessionId, sessionId);
-        database
-            .prepare(
-                'INSERT OR REPLACE INTO session_relations ' +
-                    '(relation_id, parent_session_id, child_session_id, kind, created_at) VALUES (?, ?, ?, ?, ?)',
-            )
-            .run(
-                `delete-test:${parentSessionId}:${sessionId}`,
-                parentSessionId,
-                sessionId,
-                'parent_child',
-                new Date(0).toISOString(),
-            );
+        await runLocalLibsqlWrite(runtime, (client) =>
+            client
+                .batch(
+                    [
+                        {
+                            sql: 'UPDATE sessions SET parent_session_id = ? WHERE session_id = ?',
+                            args: [parentSessionId, sessionId],
+                        },
+                        {
+                            sql:
+                                'INSERT OR REPLACE INTO session_relations ' +
+                                '(relation_id, parent_session_id, child_session_id, kind, created_at) ' +
+                                'VALUES (?, ?, ?, ?, ?)',
+                            args: [
+                                `delete-test:${parentSessionId}:${sessionId}`,
+                                parentSessionId,
+                                sessionId,
+                                'parent_child',
+                                new Date(0).toISOString(),
+                            ],
+                        },
+                    ],
+                    'write',
+                )
+                .then(() => undefined),
+        );
     } finally {
-        database.close();
+        runtime.close();
     }
 }

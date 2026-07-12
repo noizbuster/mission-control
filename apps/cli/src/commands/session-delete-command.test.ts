@@ -15,12 +15,20 @@ import {
     useTempDataDir,
 } from './session-delete-test-support.js';
 import { readStoredSessionProjection, writeSessionEvents } from './session-test-support.js';
+import { readFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 
 describe('guarded session delete command', () => {
     afterEach(async () => {
         await closeProcessSessionControlHosts();
         vi.unstubAllEnvs();
+    });
+
+    it('routes canonical parent test setup through the product write lane', () => {
+        const source = readFileSync(new URL('./session-delete-test-support.ts', import.meta.url), 'utf8');
+
+        expect(source).toContain('runLocalLibsqlWrite(runtime');
+        expect(source).not.toContain('await runtime.client.batch(');
     });
 
     it('parses only a lowercase SHA-256 expected tree token and retains tokenless delete', () => {

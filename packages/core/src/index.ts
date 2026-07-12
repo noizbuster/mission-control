@@ -107,6 +107,7 @@ export {
     type SystemPromptToolSnippet,
     type SystemPromptWorkflow,
 } from './context/system-prompt.js';
+export { runLocalLibsqlWrite } from './db/local-libsql-db.js';
 export {
     hasPendingDesktopApprovals,
     prepareSessionCompaction,
