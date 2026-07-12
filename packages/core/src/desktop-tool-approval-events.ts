@@ -90,17 +90,8 @@ export function pendingApprovalContextForCurrentRun(
     if (!matchesApprovalRecord(record, authority.toolCall, 'pending')) {
         return undefined;
     }
-    const currentProposalEvents = events.slice(authority.toolCallEventIndex + 1);
-    if (!currentProposalEvents.some((event) => matchesPermissionRequest(event, authority.toolCall))) {
-        return undefined;
-    }
-    if (
-        !currentProposalEvents.some(
-            (event) =>
-                event.type === 'approval.requested' &&
-                matchesApprovalRecord(event.approvalRecord, authority.toolCall, 'pending'),
-        )
-    ) {
+    const currentRunEvents = events.slice(authority.runStartEventIndex + 1);
+    if (!currentRunEvents.some((event) => matchesPermissionRequest(event, authority.toolCall))) {
         return undefined;
     }
     return { record, toolCall: authority.toolCall, runId: authority.runId };
