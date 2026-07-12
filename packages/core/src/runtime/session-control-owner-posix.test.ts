@@ -28,7 +28,7 @@ async function createDirectory(prefix: string): Promise<string> {
 
 async function createRuntime(): Promise<LocalLibsqlDb> {
     const directory = await createDirectory('mctrl-control-owner-db-');
-    return openLocalLibsqlDb({ url: `file:${join(directory, 'mission-control.db')}` });
+    return openLocalLibsqlDb({ url: `file:${join(directory, 'memory.db')}` });
 }
 
 afterEach(async () => {

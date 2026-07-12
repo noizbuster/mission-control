@@ -29,6 +29,7 @@ export async function createSqlTaskRuntimeServices(
     const canonicalDataDir = dataDir ?? resolveMissionControlDataDir();
     const { identity, runtime } = await openCanonicalRuntimeDb({
         dataDir: canonicalDataDir,
+        legacyRoots: [canonicalDataDir],
     });
     try {
         const mirror = await SqlAgentJobMirror.create(runtime);

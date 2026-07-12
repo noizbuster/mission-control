@@ -14,7 +14,7 @@ const tempDirectories: string[] = [];
 export async function createOperationTestRuntime(): Promise<LocalLibsqlDb> {
     const directory = await mkdtemp(join(tmpdir(), 'mctrl-control-operation-'));
     tempDirectories.push(directory);
-    const { runtime } = await openCanonicalRuntimeDb({ dataDir: directory });
+    const { runtime } = await openCanonicalRuntimeDb({ dataDir: directory, legacyRoots: [directory] });
     return runtime;
 }
 

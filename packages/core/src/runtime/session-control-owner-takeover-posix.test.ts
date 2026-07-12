@@ -40,7 +40,7 @@ describe.runIf(process.platform !== 'win32')('POSIX stale owner takeover fencing
     it('rejects a resumed old epoch after endpoint timeout and process-start mismatch', async () => {
         const runtimeDir = await createDirectory('mctrl-control-takeover-runtime-');
         const dataDir = await createDirectory('mctrl-control-takeover-db-');
-        const runtime = await openLocalLibsqlDb({ url: `file:${join(dataDir, 'mission-control.db')}` });
+        const runtime = await openLocalLibsqlDb({ url: `file:${join(dataDir, 'memory.db')}` });
         const nonce = generateSessionControlNonce();
         const oldLease = (
             await acquireSessionControlLease({

@@ -18,7 +18,7 @@ const tempDirs: string[] = [];
 async function tempDbUrl(): Promise<string> {
     const dir = await mkdtemp(join(tmpdir(), 'mctrl-local-db-'));
     tempDirs.push(dir);
-    return `file:${join(dir, 'mission-control.db')}`;
+    return `file:${join(dir, 'memory.db')}`;
 }
 
 afterEach(async () => {

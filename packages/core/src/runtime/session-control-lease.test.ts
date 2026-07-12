@@ -20,7 +20,7 @@ const tempDirs: string[] = [];
 async function createRuntime(): Promise<LocalLibsqlDb> {
     const directory = await mkdtemp(join(tmpdir(), 'mctrl-control-lease-'));
     tempDirs.push(directory);
-    return openLocalLibsqlDb({ url: `file:${join(directory, 'mission-control.db')}` });
+    return openLocalLibsqlDb({ url: `file:${join(directory, 'memory.db')}` });
 }
 
 function acquisition(runtime: LocalLibsqlDb, ownerId: string, nowWallMs: number) {
