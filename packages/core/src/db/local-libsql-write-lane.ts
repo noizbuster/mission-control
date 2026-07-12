@@ -3,7 +3,7 @@ import type { LocalLibsqlWriteTarget } from './local-libsql-db.js';
 import type { LocalLibsqlWriteKey } from './local-libsql-identity.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-export const localDbWriteErrorCodes = ['write_lane_reentrant'] as const;
+export const localDbWriteErrorCodes = ['write_lane_reentrant', 'client_quarantined'] as const;
 export type LocalDbWriteErrorCode = (typeof localDbWriteErrorCodes)[number];
 
 export class LocalDbWriteError extends Error {
@@ -17,6 +17,7 @@ export class LocalDbWriteError extends Error {
 export type LocalLibsqlWriteLane = {
     tail: Promise<void>;
     pending: number;
+    quarantineError: LocalDbWriteError | undefined;
 };
 
 type BoundLocalLibsqlWriteLane = {
@@ -28,7 +29,7 @@ const lanesByClient = new WeakMap<Client, BoundLocalLibsqlWriteLane>();
 const heldWriteKeys = new AsyncLocalStorage<Set<LocalLibsqlWriteKey>>();
 
 export function createLocalLibsqlWriteLane(): LocalLibsqlWriteLane {
-    return { tail: Promise.resolve(), pending: 0 };
+    return { tail: Promise.resolve(), pending: 0, quarantineError: undefined };
 }
 
 export function bindLocalLibsqlWriteLane(target: LocalLibsqlWriteTarget, lane: LocalLibsqlWriteLane): void {
@@ -37,11 +38,19 @@ export function bindLocalLibsqlWriteLane(target: LocalLibsqlWriteTarget, lane: L
 
 export function runInLocalLibsqlWriteLane<T>(target: LocalLibsqlWriteTarget, write: () => Promise<T>): Promise<T> {
     const binding = bindingFor(target);
+    if (binding.lane.quarantineError !== undefined) return Promise.reject(binding.lane.quarantineError);
     const held = heldWriteKeys.getStore();
     if (held?.has(binding.writeKey) === true) {
         return Promise.reject(new LocalDbWriteError('write_lane_reentrant'));
     }
     return enqueueLocalLibsqlWrite(binding, write, held);
+}
+
+export function quarantineLocalLibsqlWriteLane(client: Client): LocalDbWriteError {
+    const error = new LocalDbWriteError('client_quarantined');
+    const binding = lanesByClient.get(client);
+    if (binding !== undefined) binding.lane.quarantineError = error;
+    return error;
 }
 
 export function closeLocalLibsqlAfterWrites(lane: LocalLibsqlWriteLane, close: () => void): void {
@@ -76,8 +85,9 @@ async function enqueueLocalLibsqlWrite<T>(
     await previous;
 
     const nextHeld = new Set(held);
-    nextHeld.add(binding.writeKey);
     try {
+        if (lane.quarantineError !== undefined) throw lane.quarantineError;
+        nextHeld.add(binding.writeKey);
         return await heldWriteKeys.run(nextHeld, write);
     } finally {
         nextHeld.delete(binding.writeKey);
