@@ -21,7 +21,7 @@ import {
     SidecarTaskFailedResponseSchema,
     SidecarWireResponseSchema,
     validateSidecarStreamFrames,
-} from './schema.js';
+} from './schema';
 
 describe('sidecar protocol versions', () => {
     it('keeps v1 handshake compatibility limited to task.run', () => {

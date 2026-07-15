@@ -53,8 +53,8 @@ export {
     AbgToolOutcomeSnapshotSchema,
     type AbgToolOutcomeStatus,
     AbgToolOutcomeStatusSchema,
-} from './abg.js';
-export { type AbgOverlayPrefs, AbgOverlayPrefsSchema } from './abg-overlay-prefs.js';
+} from './abg';
+export { type AbgOverlayPrefs, AbgOverlayPrefsSchema } from './abg-overlay-prefs';
 export {
     AGENT_SOURCES,
     AGENT_THINKING_LEVELS,
@@ -69,7 +69,7 @@ export {
     AgentThinkingLevelSchema,
     type AgentTier,
     AgentTierSchema,
-} from './agent.js';
+} from './agent';
 export {
     APPROVAL_LIFECYCLE_STATES,
     APPROVAL_POLICY_DECISIONS,
@@ -81,27 +81,27 @@ export {
     ApprovalRecordSchema,
     type ApprovalSubject,
     ApprovalSubjectSchema,
-} from './approval.js';
+} from './approval';
 export {
     type Category,
     type CategoryCatalog,
     CategoryCatalogSchema,
     CategorySchema,
-} from './category.js';
+} from './category';
 export {
     BUILTIN_DAP_ADAPTERS,
     type DapAdapter,
     type DapAdapterRegistry,
     DapAdapterRegistrySchema,
     DapAdapterSchema,
-} from './dap.js';
+} from './dap';
 export {
     DELIVERY_MODES,
     type Delivery,
     DeliverySchema,
     type SessionInputDelivery,
     SessionInputDeliverySchema,
-} from './delivery.js';
+} from './delivery';
 export {
     DIFF_CHANGE_KINDS,
     DIFF_LINE_KINDS,
@@ -115,7 +115,7 @@ export {
     type DiffLineKind,
     DiffLineKindSchema,
     DiffLineSchema,
-} from './diff-events.js';
+} from './diff-events';
 export {
     type BrowserConfig,
     BrowserConfigSchema,
@@ -131,7 +131,7 @@ export {
     type MissionControlConfig,
     MissionControlConfigSchema,
     type RemoteMcpConfigEntry,
-} from './mcp-config.js';
+} from './mcp-config';
 export {
     type GenerateImageInput,
     type GenerateImageInputImage,
@@ -153,7 +153,7 @@ export {
     type TtsOutput,
     ttsInputSchema,
     ttsOutputSchema,
-} from './media-tool.js';
+} from './media-tool';
 export {
     BUILTIN_MEMORY_BACKENDS,
     MEMORY_BACKENDS,
@@ -165,8 +165,8 @@ export {
     type MemoryBackendId,
     MemoryBackendIdSchema,
     MemoryBackendSchema,
-} from './memory.js';
-export * from './misc-exports.js';
+} from './memory';
+export * from './misc-exports';
 export {
     MISSION_STATUSES,
     type Mission,
@@ -186,13 +186,13 @@ export {
     RunStatusSchema,
     type TaskRetryState,
     TaskRetryStateSchema,
-} from './mission-run.js';
+} from './mission-run';
 export {
     type Mode,
     type ModeDeclaration,
     ModeDeclarationSchema,
     ModeSchema,
-} from './mode.js';
+} from './mode';
 export {
     POLICY_EFFECTS,
     type PolicyEffect,
@@ -201,7 +201,7 @@ export {
     type PolicyEffectRuleSet,
     PolicyEffectRuleSetSchema,
     PolicyEffectSchema,
-} from './permission-rule.js';
+} from './permission-rule';
 export {
     PLUGIN_DISCOVERY_DIAGNOSTIC_SEVERITIES,
     type PluginContextSource,
@@ -222,7 +222,7 @@ export {
     PluginSubAgentSchema,
     type PluginToolDefinition,
     PluginToolDefinitionSchema,
-} from './plugin.js';
+} from './plugin';
 export {
     type BudgetConfig,
     BudgetConfigSchema,
@@ -230,11 +230,11 @@ export {
     PricingEntrySchema,
     type PricingTable,
     PricingTableSchema,
-} from './pricing.js';
+} from './pricing';
 export {
     MODEL_ROLE_IDS,
     type ModelRole,
     type ModelRoleAssignments,
     ModelRoleAssignmentsSchema,
     ModelRoleSchema,
-} from './provider-auth.js';
+} from './provider-auth';

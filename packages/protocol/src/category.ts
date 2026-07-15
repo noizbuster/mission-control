@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { type AbgNodeModelOptions, AbgNodeModelOptionsSchema } from './abg.js';
-import { type PermissionKind, PermissionKindSchema } from './permission-profile.js';
+import { type AbgNodeModelOptions, AbgNodeModelOptionsSchema } from './abg';
+import { type PermissionKind, PermissionKindSchema } from './permission-profile';
 
 /**
  * A task() category preset: the capability/model/tool surface a category of sub-agent runs with.

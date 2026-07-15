@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { type PolicyEffectRule, PolicyEffectRuleSchema } from './permission-rule.js';
+import { type PolicyEffectRule, PolicyEffectRuleSchema } from './permission-rule';
 
 /**
  * A declarative mode overlay applied to a workflow at materialization time (Task 3.8).

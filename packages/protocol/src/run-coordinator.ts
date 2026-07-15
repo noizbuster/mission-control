@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { SessionStopReasonSchema } from './session-stop.js';
-import { ProtocolErrorCodeSchema } from './tool-result-primitives.js';
-import { TRANSCRIPT_DELIVERY_MODES } from './transcript.js';
+import { SessionStopReasonSchema } from './session-stop';
+import { ProtocolErrorCodeSchema } from './tool-result-primitives';
+import { TRANSCRIPT_DELIVERY_MODES } from './transcript';
 
 export const RUN_COORDINATOR_COMMANDS = ['wake', 'run', 'resume', 'interrupt', 'steer', 'queue'] as const;
 export const RUN_COORDINATOR_STATES = [

@@ -19,8 +19,8 @@ import {
     AbgNodeModelOptionsSchema,
     type AbgPolicySpec,
     AbgPolicySpecSchema,
-} from './abg.js';
-import { type ModeDeclaration, ModeDeclarationSchema } from './mode.js';
+} from './abg';
+import { type ModeDeclaration, ModeDeclarationSchema } from './mode';
 
 export const MISSION_STATUSES = ['draft', 'active', 'archived'] as const;
 export const MissionStatusSchema = z.enum(MISSION_STATUSES);

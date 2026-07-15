@@ -5,7 +5,7 @@ export type {
     AgentEventType,
     EventDurability,
     ReplayCursor,
-} from './schema.js';
+} from './schema';
 export {
     AGENT_EVENT_TYPES,
     AgentEventEnvelopeSchema,
@@ -15,4 +15,4 @@ export {
     EVENT_DURABILITIES,
     EventDurabilitySchema,
     ReplayCursorSchema,
-} from './schema.js';
+} from './schema';

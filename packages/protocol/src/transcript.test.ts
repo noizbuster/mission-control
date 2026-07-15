@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AgentEventSchema, TranscriptEventMetadataSchema } from './index.js';
+import { AgentEventSchema, TranscriptEventMetadataSchema } from './index';
 
 describe('transcript event metadata', () => {
     it('parses prompt admission metadata with explicit transcript links', () => {

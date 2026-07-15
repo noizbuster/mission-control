@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { type AbgGraphSpec, AbgGraphSpecSchema } from './abg.js';
-import { type Category, CategorySchema } from './category.js';
-import { type Mode, ModeSchema } from './mode.js';
+import { type AbgGraphSpec, AbgGraphSpecSchema } from './abg';
+import { type Category, CategorySchema } from './category';
+import { type Mode, ModeSchema } from './mode';
 
 /**
  * A named, deployable workflow: an ABG graph spec wrapped with discovery metadata plus optional

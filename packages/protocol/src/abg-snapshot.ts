@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { AbgGraphStatusSchema, AbgNodeStatusSchema } from './abg-constants.js';
-import { AbgSignalSchema, AbgSignalTypeSchema } from './abg-signal.js';
-import { ApprovalRecordSchema } from './approval.js';
+import { AbgGraphStatusSchema, AbgNodeStatusSchema } from './abg-constants';
+import { AbgSignalSchema, AbgSignalTypeSchema } from './abg-signal';
+import { ApprovalRecordSchema } from './approval';
 
 export const ABG_TOOL_OUTCOME_STATUSES = ['started', 'completed', 'failed'] as const;
 export const AbgToolOutcomeStatusSchema = z.enum(ABG_TOOL_OUTCOME_STATUSES);

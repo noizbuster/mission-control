@@ -5,7 +5,7 @@ import { z } from 'zod';
  *
  * `'steer'` coalesces a new input into the active run at the next safe provider-turn boundary;
  * `'queue'` opens a FIFO future run that executes after the active run drains. This is the same
- * vocabulary as {@linkcode import('./transcript.js').TRANSCRIPT_DELIVERY_MODES} (transcript event
+ * vocabulary as {@linkcode import('./transcript').TRANSCRIPT_DELIVERY_MODES} (transcript event
  * metadata) but belongs to the session-input admission layer, so the constant is duplicated by
  * design — the two layers may diverge if a future delivery mode applies to only one.
  */

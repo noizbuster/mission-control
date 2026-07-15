@@ -13,7 +13,7 @@ import {
     SessionStopOutcomeSchema,
     SessionStopScopeSchema,
     ToolResultSchema,
-} from './index.js';
+} from './index';
 import {
     abortCompletedEvent,
     activeStopEventFixture,
@@ -22,7 +22,7 @@ import {
     operatorAbortedRunEvent,
     persistedLegacyEventLog,
     promptCancelledEvent,
-} from './session-stop-contract-test-support.js';
+} from './session-stop-contract-test-support';
 
 describe('durable session stop protocol', () => {
     it('parses prompt cancellation with durable input identity and operator reason', () => {

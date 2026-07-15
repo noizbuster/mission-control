@@ -8,7 +8,7 @@ import {
     ToolCallSchema,
     ToolCallSettlementSchema,
     ToolResultSchema,
-} from './provider-events.js';
+} from './provider-events';
 
 describe('provider event protocol schemas', () => {
     it('parses provider requests without accepting raw credential payloads', () => {

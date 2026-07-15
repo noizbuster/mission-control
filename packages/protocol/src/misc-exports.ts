@@ -4,7 +4,7 @@ export {
     CommandEventStatusSchema,
     type CommandRunEventMetadata,
     CommandRunEventMetadataSchema,
-} from './command-events.js';
+} from './command-events';
 export {
     PERMISSION_KINDS,
     PERMISSION_REPLY_VALUES,
@@ -21,7 +21,7 @@ export {
     PermissionRuleSchema,
     type PermissionScope,
     PermissionScopeSchema,
-} from './permission-profile.js';
+} from './permission-profile';
 export {
     PROVIDER_ADAPTER_FAMILIES,
     PROVIDER_CAPABILITY_STATUSES,
@@ -31,7 +31,7 @@ export {
     ProviderCapabilityStatusSchema,
     type ProviderExecutionCapability,
     ProviderExecutionCapabilitySchema,
-} from './provider-auth.js';
+} from './provider-auth';
 export {
     type OperatorAbortedRunEventMetadata,
     OperatorAbortedRunEventMetadataSchema,
@@ -43,4 +43,4 @@ export {
     RunCoordinatorEventMetadataSchema,
     type RunCoordinatorState,
     RunCoordinatorStateSchema,
-} from './run-coordinator.js';
+} from './run-coordinator';

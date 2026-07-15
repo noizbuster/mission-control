@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "vite build && tsc -p tsconfig.json --emitDeclarationOnly",
     "test": "sh -c 'cd ../.. && while [ \"${1:-}\" = \"--\" ]; do shift; done; vitest run --reporter verbose \"$@\"' --",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

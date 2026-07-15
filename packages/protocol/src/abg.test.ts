@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { AbgGraphSnapshotSchema, AbgGraphSpecSchema, AbgNodeModelOptionsSchema, AbgSignalSchema } from './abg.js';
-import { AgentEventSchema } from './schema.js';
+import { AbgGraphSnapshotSchema, AbgGraphSpecSchema, AbgNodeModelOptionsSchema, AbgSignalSchema } from './abg';
+import { AgentEventSchema } from './schema';
 
 describe('ABG protocol schemas', () => {
     it('parses ABG protocol graph specs with node model variants', () => {

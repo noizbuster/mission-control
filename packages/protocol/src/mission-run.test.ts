@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MissionSchema, RUN_STATUSES, type Run, RunSchema } from './mission-run.js';
+import { MissionSchema, RUN_STATUSES, type Run, RunSchema } from './mission-run';
 
 const minimalGraph = {
     id: 'graph-1',

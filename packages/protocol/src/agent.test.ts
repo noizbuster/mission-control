@@ -9,7 +9,7 @@ import {
     AgentSourceSchema,
     AgentThinkingLevelSchema,
     AgentTierSchema,
-} from './agent.js';
+} from './agent';
 
 const minimalValid: AgentDefinition = {
     name: 'researcher',

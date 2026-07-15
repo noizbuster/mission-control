@@ -3,7 +3,7 @@ import {
     SessionOwnerControlAcquireRequestSchema,
     SessionOwnerControlTokenSchema,
     SessionStopReceiptSchema,
-} from './session-owner-control.js';
+} from './session-owner-control';
 
 describe('session owner control protocol', () => {
     it('accepts timeout duration only and rejects transmitted process clocks', () => {

@@ -17,7 +17,7 @@ import {
     TuiPromptHistoryEntrySchema,
     TuiPromptStashEntrySchema,
     TuiThemePreferenceSchema,
-} from './tui-provider-data.js';
+} from './tui-provider-data';
 
 describe('TUI provider data schemas', () => {
     it('validates typed KV namespaces and rejects mismatched schema-key values', () => {

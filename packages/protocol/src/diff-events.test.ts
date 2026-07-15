@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DiffFileSchema, DiffHunkSchema } from './diff-events.js';
-import { AgentEventSchema } from './schema.js';
+import { DiffFileSchema, DiffHunkSchema } from './diff-events';
+import { AgentEventSchema } from './schema';
 
 describe('diff event protocol schemas', () => {
     it('parses file diffs and rejects malformed diff hunks', () => {

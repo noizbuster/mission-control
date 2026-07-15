@@ -1,24 +1,24 @@
 import { z } from 'zod';
-import { AbgEventMetadataSchema } from './abg.js';
-import { APPROVAL_POLICY_DECISIONS, ApprovalPolicyDecisionSchema, ApprovalRecordSchema } from './approval.js';
-import { CommandRunEventMetadataSchema } from './command-events.js';
-import { DiffFileSchema } from './diff-events.js';
-import { EventIdSchema, EventSequenceSchema } from './event-primitives.js';
-import { PermissionDecisionSchema, PermissionReplySchema, PermissionRequestSchema } from './permission-profile.js';
-import { ModelProviderSelectionSchema } from './provider-auth.js';
-import { ProviderStreamChunkSchema, ToolResultSchema } from './provider-events.js';
-import { OperatorAbortedRunEventMetadataSchema, RunCoordinatorEventMetadataSchema } from './run-coordinator.js';
+import { AbgEventMetadataSchema } from './abg';
+import { APPROVAL_POLICY_DECISIONS, ApprovalPolicyDecisionSchema, ApprovalRecordSchema } from './approval';
+import { CommandRunEventMetadataSchema } from './command-events';
+import { DiffFileSchema } from './diff-events';
+import { EventIdSchema, EventSequenceSchema } from './event-primitives';
+import { PermissionDecisionSchema, PermissionReplySchema, PermissionRequestSchema } from './permission-profile';
+import { ModelProviderSelectionSchema } from './provider-auth';
+import { ProviderStreamChunkSchema, ToolResultSchema } from './provider-events';
+import { OperatorAbortedRunEventMetadataSchema, RunCoordinatorEventMetadataSchema } from './run-coordinator';
 import {
     refineSessionAwaitingContract,
     SessionAwaitingDetailsSchema,
     SessionStatusSchema,
-} from './session-lifecycle.js';
-import { SessionAbortCompletedMetadataSchema } from './session-stop.js';
-import { SESSION_TREE_EVENT_TYPES, SessionTreeEventMetadataSchema } from './session-tree.js';
-import { NativeSidecarStatusSchema } from './sidecar.js';
-import { PromptCancelledEventMetadataSchema, TranscriptEventMetadataSchema } from './transcript.js';
+} from './session-lifecycle';
+import { SessionAbortCompletedMetadataSchema } from './session-stop';
+import { SESSION_TREE_EVENT_TYPES, SessionTreeEventMetadataSchema } from './session-tree';
+import { NativeSidecarStatusSchema } from './sidecar';
+import { PromptCancelledEventMetadataSchema, TranscriptEventMetadataSchema } from './transcript';
 
-export * from './schema-exports.js';
+export * from './schema-exports';
 
 export const AGENT_EVENT_TYPES = [
     'session.started',

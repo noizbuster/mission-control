@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AgentEventSchema, RunCoordinatorEventMetadataSchema } from './schema.js';
+import { AgentEventSchema, RunCoordinatorEventMetadataSchema } from './schema';
 
 describe('run coordinator protocol metadata', () => {
     it('parses explicit run commands and state transitions on agent events', () => {

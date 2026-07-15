@@ -10,7 +10,7 @@ import {
     PermissionRuleDecisionSchema,
     PermissionRuleSchema,
     PermissionStatusSchema,
-} from './schema.js';
+} from './schema';
 
 describe('permission protocol schemas', () => {
     it('validates permission request, decision, and status', () => {

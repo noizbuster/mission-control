@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { AgentEventSchema, AgentEventTypeSchema } from './schema.js';
-import { SessionArchiveManifestSchema } from './session-tree.js';
+import { AgentEventSchema, AgentEventTypeSchema } from './schema';
+import { SessionArchiveManifestSchema } from './session-tree';
 
 describe('session tree protocol schemas', () => {
     it('parses session tree event metadata on durable agent events', () => {

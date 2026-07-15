@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ProtocolErrorSchema, RedactionMetadataSchema, ToolResultStatusSchema } from './tool-result-primitives.js';
+import { ProtocolErrorSchema, RedactionMetadataSchema, ToolResultStatusSchema } from './tool-result-primitives';
 
 export const EventIdSchema = z.string().min(1);
 export type EventId = z.infer<typeof EventIdSchema>;

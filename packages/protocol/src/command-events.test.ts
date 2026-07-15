@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CommandRunEventMetadataSchema } from './command-events.js';
-import { AgentEventSchema } from './schema.js';
+import { CommandRunEventMetadataSchema } from './command-events';
+import { AgentEventSchema } from './schema';
 
 describe('command event protocol schemas', () => {
     it('parses replayable command timeout events with truncation metadata', () => {

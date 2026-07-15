@@ -19,7 +19,7 @@ export {
     SessionOwnerControlTokenSchema,
     type SessionStopReceiptContract,
     SessionStopReceiptSchema,
-} from './session-owner-control.js';
+} from './session-owner-control';
 export {
     SESSION_STOP_BARRIER_KINDS,
     SESSION_STOP_ERROR_CODES,
@@ -40,14 +40,14 @@ export {
     SessionStopReasonSchema,
     type SessionStopScope,
     SessionStopScopeSchema,
-} from './session-stop.js';
-export * from './session-tree.js';
+} from './session-stop';
+export * from './session-tree';
 export {
     type SshHostConfig,
     SshHostConfigSchema,
     type SshHostsConfig,
     SshHostsConfigSchema,
-} from './ssh-config.js';
+} from './ssh-config';
 export {
     type PromptCancelledEventMetadata,
     PromptCancelledEventMetadataSchema,
@@ -59,7 +59,7 @@ export {
     TranscriptEventMetadataSchema,
     type TranscriptVisibility,
     TranscriptVisibilitySchema,
-} from './transcript.js';
+} from './transcript';
 export {
     TUI_KV_VALUE_SCHEMA_KEYS,
     TUI_PLUGIN_CAPABILITIES,
@@ -105,7 +105,7 @@ export {
     TuiUiToggleSchema,
     type TuiVariantCyclingHint,
     TuiVariantCyclingHintSchema,
-} from './tui-provider-data.js';
+} from './tui-provider-data';
 export {
     WORKFLOW_DISCOVERY_DIAGNOSTIC_SEVERITIES,
     type WorkflowDiscoveryDiagnostic,
@@ -114,4 +114,4 @@ export {
     WorkflowDiscoveryDiagnosticSeveritySchema,
     type WorkflowSpec,
     WorkflowSpecSchema,
-} from './workflow.js';
+} from './workflow';

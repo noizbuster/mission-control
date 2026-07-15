@@ -1,7 +1,7 @@
-export type { AgentMessage, ProviderToolCallTranscript, TextAgentMessage, ToolAgentMessage } from './schema.js';
+export type { AgentMessage, ProviderToolCallTranscript, TextAgentMessage, ToolAgentMessage } from './schema';
 export {
     AgentMessageSchema,
     ProviderToolCallTranscriptSchema,
     TextAgentMessageSchema,
     ToolAgentMessageSchema,
-} from './schema.js';
+} from './schema';

@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { AbgNodeKindSchema, AbgNodeStatusSchema } from './abg-constants.js';
-import { AbgEmbeddedEventSchema, AbgSignalTypeSchema } from './abg-signal.js';
-import { ApprovalPolicyDecisionSchema } from './approval.js';
+import { AbgNodeKindSchema, AbgNodeStatusSchema } from './abg-constants';
+import { AbgEmbeddedEventSchema, AbgSignalTypeSchema } from './abg-signal';
+import { ApprovalPolicyDecisionSchema } from './approval';
 
 export {
     ABG_TOOL_OUTCOME_STATUSES,
@@ -15,7 +15,7 @@ export {
     AbgToolOutcomeSnapshotSchema,
     type AbgToolOutcomeStatus,
     AbgToolOutcomeStatusSchema,
-} from './abg-snapshot.js';
+} from './abg-snapshot';
 
 const AuthorablePolicyDecisionSchema = z.preprocess(
     (value) => (value === 'requires-approval' ? 'requires_approval' : value),
@@ -252,7 +252,7 @@ export {
     AbgNodeKindSchema,
     type AbgNodeStatus,
     AbgNodeStatusSchema,
-} from './abg-constants.js';
+} from './abg-constants';
 export {
     ABG_SIGNAL_TYPES,
     type AbgEmbeddedEvent,
@@ -261,4 +261,4 @@ export {
     AbgSignalSchema,
     type AbgSignalType,
     AbgSignalTypeSchema,
-} from './abg-signal.js';
+} from './abg-signal';

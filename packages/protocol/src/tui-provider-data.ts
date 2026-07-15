@@ -155,4 +155,4 @@ export {
     TuiPluginRouteDescriptorSchema,
     type TuiPluginSlotDescriptor,
     TuiPluginSlotDescriptorSchema,
-} from './tui-plugin-data.js';
+} from './tui-plugin-data';

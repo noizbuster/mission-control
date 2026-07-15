@@ -4,14 +4,14 @@ import {
     ModelRoleAssignmentsSchema,
     ModelRoleSchema,
     ProviderExecutionCapabilitySchema,
-} from './provider-auth.js';
+} from './provider-auth';
 import {
     ModelProviderSelectionSchema,
     ProviderAuthFileSchema,
     ProviderCatalogEntrySchema,
     ProviderCredentialSchema,
     ProviderCredentialSummarySchema,
-} from './schema.js';
+} from './schema';
 
 describe('provider auth and catalog schemas', () => {
     it('parses provider model selection and catalog entries', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { AbgGraphSnapshotSchema, AbgGraphSpecSchema, AbgPolicyDecisionSchema } from './abg.js';
-import { AgentEventSchema } from './schema.js';
+import { AbgGraphSnapshotSchema, AbgGraphSpecSchema, AbgPolicyDecisionSchema } from './abg';
+import { AgentEventSchema } from './schema';
 
 describe('ABG runtime metadata protocol schemas', () => {
     it('parses coordinator policy decisions, loop limits, and attempt metadata', () => {

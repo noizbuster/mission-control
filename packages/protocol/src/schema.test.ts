@@ -12,7 +12,7 @@ import {
     SidecarHandshakeResponseSchema,
     SidecarTaskInputSchema,
     SidecarTaskOutputSchema,
-} from './schema.js';
+} from './schema';
 
 describe('protocol schemas', () => {
     it('exports schemas and types for required protocol events', () => {

@@ -4,8 +4,8 @@ import {
     EventIdSchema,
     EventSequenceSchema,
     ProviderToolCallTranscriptSchema,
-} from './event-primitives.js';
-import { ProtocolErrorSchema, RedactionMetadataSchema, ToolResultStatusSchema } from './tool-result-primitives.js';
+} from './event-primitives';
+import { ProtocolErrorSchema, RedactionMetadataSchema, ToolResultStatusSchema } from './tool-result-primitives';
 
 export {
     PROTOCOL_ERROR_CODES,
@@ -21,7 +21,7 @@ export {
     TOOL_RESULT_STATUSES,
     type ToolResultStatus,
     ToolResultStatusSchema,
-} from './tool-result-primitives.js';
+} from './tool-result-primitives';
 
 export const PROVIDER_STREAM_CHUNK_KINDS = [
     'response_started',

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SessionStopReasonSchema } from './session-stop.js';
+import { SessionStopReasonSchema } from './session-stop';
 
 export const TRANSCRIPT_DELIVERY_MODES = ['steer', 'queue'] as const;
 export const TRANSCRIPT_VISIBILITIES = ['pending', 'model_visible'] as const;

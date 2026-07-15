@@ -5,7 +5,7 @@ import {
     McpConfigSchema,
     McpProjectConfigSchema,
     MissionControlConfigSchema,
-} from './mcp-config.js';
+} from './mcp-config';
 
 const ref = (name: string): string => `\${${name}}`;
 

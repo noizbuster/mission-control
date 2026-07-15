@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILTIN_DAP_ADAPTERS, DapAdapterRegistrySchema, DapAdapterSchema } from './dap.js';
+import { BUILTIN_DAP_ADAPTERS, DapAdapterRegistrySchema, DapAdapterSchema } from './dap';
 
 describe('DapAdapterSchema', () => {
     it('parses a valid adapter entry', () => {

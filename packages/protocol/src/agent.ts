@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PolicyEffectRuleSchema } from './permission-rule.js';
+import { PolicyEffectRuleSchema } from './permission-rule';
 
 /**
  * Where an {@linkcode AgentDefinition} was discovered. Mirrors the skill/workflow three-scope

@@ -10,7 +10,7 @@
       "outputs": ["{projectRoot}/dist"],
       "options": {
         "cwd": "packages/protocol",
-        "command": "tsc -p tsconfig.json"
+        "command": "vite build && tsc -p tsconfig.json --emitDeclarationOnly"
       }
     },
     "typecheck": {

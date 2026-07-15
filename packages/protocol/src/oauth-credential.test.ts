@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ProviderAuthFileSchema, ProviderCredentialSchema, ProviderCredentialSummarySchema } from './schema.js';
+import { ProviderAuthFileSchema, ProviderCredentialSchema, ProviderCredentialSummarySchema } from './schema';
 
 describe('OAuth provider credential schemas', () => {
     it('parses OAuth credentials and summaries without requiring API-key fields', () => {

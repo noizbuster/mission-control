@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * Policy-gate effect rules for workflow-level permission algebra.
  *
- * These are DISTINCT from {@linkcode import('./permission-profile.js').PermissionRuleSchema} (the
+ * These are DISTINCT from {@linkcode import('./permission-profile').PermissionRuleSchema} (the
  * workspace permission store shape `{permission, pattern, decision, workspaceRoot?}`). Policy-gate
  * rules use an action/resource/effect vocabulary that maps to the ABG policy-gate node and the
  * rule evaluator in `packages/core/src/permissions/`. The two schemas coexist intentionally; do

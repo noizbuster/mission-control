@@ -9,7 +9,7 @@ export {
     ApprovalRecordSchema,
     type ApprovalSubject,
     ApprovalSubjectSchema,
-} from './approval.js';
+} from './approval';
 export {
     type AgentMessage,
     AgentMessageSchema,
@@ -23,7 +23,7 @@ export {
     TextAgentMessageSchema,
     type ToolAgentMessage,
     ToolAgentMessageSchema,
-} from './event-primitives.js';
+} from './event-primitives';
 export {
     PERMISSION_KINDS,
     PERMISSION_REPLY_VALUES,
@@ -44,7 +44,7 @@ export {
     PermissionRuleSchema,
     type PermissionScope,
     PermissionScopeSchema,
-} from './permission-profile.js';
+} from './permission-profile';
 export {
     MODEL_CATALOG_STATUSES,
     type ModelCatalogEntry,
@@ -71,7 +71,7 @@ export {
     ProviderFieldsCredentialSchema,
     type ProviderOAuthCredential,
     ProviderOAuthCredentialSchema,
-} from './provider-auth.js';
+} from './provider-auth';
 export {
     type OperatorAbortedRunEventMetadata,
     OperatorAbortedRunEventMetadataSchema,
@@ -83,7 +83,7 @@ export {
     RunCoordinatorEventMetadataSchema,
     type RunCoordinatorState,
     RunCoordinatorStateSchema,
-} from './run-coordinator.js';
+} from './run-coordinator';
 export {
     SESSION_AWAITING_REASONS,
     SESSION_STATUSES,
@@ -95,7 +95,7 @@ export {
     SessionAwaitingSourceSchema,
     type SessionStatus,
     SessionStatusSchema,
-} from './session-lifecycle.js';
+} from './session-lifecycle';
 export {
     SESSION_STOP_BARRIER_KINDS,
     SESSION_STOP_ERROR_CODES,
@@ -116,7 +116,7 @@ export {
     SessionStopReasonSchema,
     type SessionStopScope,
     SessionStopScopeSchema,
-} from './session-stop.js';
+} from './session-stop';
 export {
     NATIVE_SIDECAR_STATUSES,
     type NativeSidecarStatus,
@@ -173,4 +173,4 @@ export {
     type SidecarWireResponse,
     SidecarWireResponseSchema,
     validateSidecarStreamFrames,
-} from './sidecar.js';
+} from './sidecar';

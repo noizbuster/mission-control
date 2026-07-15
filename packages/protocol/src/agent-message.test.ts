@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AgentMessageSchema, ProviderRequestSchema } from './index.js';
+import { AgentMessageSchema, ProviderRequestSchema } from './index';
 
 describe('agent message protocol schema', () => {
     it('keeps existing user assistant and system message roles parseable', () => {

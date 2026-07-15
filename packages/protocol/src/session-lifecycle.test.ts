@@ -6,7 +6,7 @@ import {
     SessionAwaitingReasonSchema,
     SessionAwaitingSourceSchema,
     SessionStatusSchema,
-} from './schema.js';
+} from './schema';
 
 describe('session lifecycle protocol schemas', () => {
     it('parses awaiting as a public session lifecycle status', () => {

@@ -4,7 +4,7 @@ import {
     SessionStopBarrierKindSchema,
     SessionStopErrorCodeSchema,
     SessionStopOutcomeSchema,
-} from './session-stop.js';
+} from './session-stop';
 
 export const SESSION_OWNER_CONTROL_PROTOCOL_VERSION = 1 as const;
 export const SESSION_OWNER_CONTROL_TOKEN_KIND = 'exact_session_stop' as const;

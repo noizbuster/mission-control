@@ -34,7 +34,7 @@ export {
     ToolResultSchema,
     type ToolResultStatus,
     ToolResultStatusSchema,
-} from './provider-events.js';
+} from './provider-events';
 export {
     AGENT_EVENT_TYPES,
     type AgentEvent,
@@ -163,7 +163,7 @@ export {
     type ToolAgentMessage,
     ToolAgentMessageSchema,
     validateSidecarStreamFrames,
-} from './schema.js';
+} from './schema';
 export {
     INTERNAL_SCHEME_CONTENT_TYPES,
     INTERNAL_SCHEME_NAMES,
@@ -176,4 +176,4 @@ export {
     type InternalSchemeUrl,
     isInternalSchemeInput,
     parseInternalSchemeUrl,
-} from './scheme.js';
+} from './scheme';
