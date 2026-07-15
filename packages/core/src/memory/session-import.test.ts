@@ -1,3 +1,4 @@
+import { RunSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseJsonlSessionLog } from './jsonl-session-records.js';
 import {
@@ -5,6 +6,7 @@ import {
     importLegacySessionCompatibilityWindow,
     listLegacySessionImportLedger,
 } from './session-import.js';
+import { importMissionRunRow } from './session-import-run-sql.js';
 import {
     countRows,
     openMigratedTestDb,
@@ -96,6 +98,43 @@ describe('legacy session import compatibility window', () => {
         }
     });
 
+    it('does not let direct legacy SQL imports mint owner authority or overwrite existing status', async () => {
+        const givenFixture = await writeLegacyFixture({ tmpRoot: TMP_ROOT, name: 'canonical-run-owner' });
+        const runtime = await openMigratedTestDb();
+        const canonical = RunSchema.parse({
+            id: 'run_legacy',
+            missionId: 'mission-canonical',
+            status: 'blocked',
+            sessionId: SESSION_IMPORT_TEST_SESSION_ID,
+            sessionRunId: 'owner_canonical',
+        });
+
+        try {
+            await importMissionRunRow({
+                client: runtime.client,
+                run: canonical,
+                importedAt: '2026-06-30T00:00:00.000Z',
+            });
+
+            const whenResult = await importLegacySessionCompatibilityWindow({
+                ...runtime,
+                dataDir: givenFixture.dataDir,
+                omoRoot: givenFixture.omoRoot,
+                now: () => '2026-07-01T00:00:00.000Z',
+            });
+            const row = await readMissionRunDbRow(runtime.client, canonical.id);
+            const persisted = RunSchema.parse(JSON.parse(String(row['passthrough_json'])));
+
+            expect(whenResult.importedRunCount).toBe(0);
+            expect(persisted).toMatchObject({
+                status: 'blocked',
+            });
+            expect(persisted.sessionRunId).toBeUndefined();
+        } finally {
+            runtime.close();
+        }
+    });
+
     it('records diagnostics for corrupt JSONL and malformed run JSON without throwing away other imports', async () => {
         const givenFixture = await writeLegacyFixture({ tmpRoot: TMP_ROOT, name: 'malformed-input' });
         await writeFile(givenFixture.jsonlPath, '{not json}\n', 'utf8');
@@ -154,6 +193,36 @@ describe('legacy session import compatibility window', () => {
             expect(whenOutput.exportedEventCount).toBe(2);
             expect(parsed.envelopes.map((envelope) => envelope.eventId)).toEqual(['event_started', 'event_stopped']);
             expect(parsed.envelopes.map((envelope) => envelope.sequence)).toEqual([0, 1]);
+        } finally {
+            runtime.close();
+        }
+    });
+
+    it('redacts token-like credentials while importing legacy envelopes', async () => {
+        // Given
+        const secret = ['sk', 'legacy', 'importsecret123'].join('-');
+        const givenFixture = await writeLegacyFixture({ tmpRoot: TMP_ROOT, name: 'redacted-import' });
+        const source = (await readFile(givenFixture.jsonlPath, 'utf8')).replace(
+            'legacy text is imported as data only: $(echo no-exec)',
+            `legacy event ${secret}`,
+        );
+        await writeFile(givenFixture.jsonlPath, source, 'utf8');
+        const runtime = await openMigratedTestDb();
+
+        try {
+            // When
+            await importLegacySessionCompatibilityWindow({
+                ...runtime,
+                dataDir: givenFixture.dataDir,
+                omoRoot: givenFixture.omoRoot,
+                now: () => '2026-07-01T00:00:00.000Z',
+            });
+            const rows = await runtime.client.execute('SELECT payload_json FROM session_events ORDER BY seq');
+            const observable = JSON.stringify(rows.rows);
+
+            // Then
+            expect(observable).toContain('[REDACTED_CREDENTIAL]');
+            expect(observable).not.toContain(secret);
         } finally {
             runtime.close();
         }

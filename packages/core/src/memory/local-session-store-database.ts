@@ -2,6 +2,7 @@ import { type InStatement } from '@libsql/client';
 import { z } from 'zod';
 import { runLocalLibsqlWrite } from '../db/local-libsql-db.js';
 import { runLocalLibsqlClientTransaction } from '../db/local-libsql-transaction.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
 import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db.js';
 import { readCanonicalSessionTree } from '../runtime/session-stop-tree-resolver.js';
 import type { SessionStoreIdentity } from '../runtime/session-store-identity.js';
@@ -135,6 +136,8 @@ function sessionDeleteStatements(sessionId: string): InStatement[] {
         { sql: 'DELETE FROM session_projection_diagnostics WHERE session_id = ?', args: [sessionId] },
         { sql: 'DELETE FROM approvals WHERE session_id = ?', args: [sessionId] },
         { sql: 'DELETE FROM tool_calls WHERE session_id = ?', args: [sessionId] },
+        { sql: 'DELETE FROM desktop_tool_proposals WHERE session_id = ?', args: [sessionId] },
+        { sql: 'DELETE FROM desktop_approval_effects WHERE session_id = ?', args: [sessionId] },
         { sql: 'DELETE FROM provider_failures WHERE session_id = ?', args: [sessionId] },
         { sql: 'DELETE FROM session_inputs WHERE session_id = ?', args: [sessionId] },
         {
@@ -157,6 +160,7 @@ function sessionDeleteStatements(sessionId: string): InStatement[] {
 export async function ensureLocalSessionDatabase(input: {
     readonly dataDir: string;
     readonly now?: () => string;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 }): Promise<SessionStoreIdentity> {
     const { identity, runtime } = await openEnsuredLocalSessionDatabase(input);
     runtime.close();
@@ -166,6 +170,7 @@ export async function ensureLocalSessionDatabase(input: {
 export async function openEnsuredLocalSessionDatabase(input: {
     readonly dataDir: string;
     readonly now?: () => string;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 }): Promise<EnsuredLocalSessionDatabase> {
     const opened = await openCanonicalRuntimeDb({ dataDir: input.dataDir });
     try {
@@ -174,6 +179,9 @@ export async function openEnsuredLocalSessionDatabase(input: {
             dataDir: opened.identity.canonicalDataDir,
             includeRunSources: false,
             ...(input.now !== undefined ? { now: input.now } : {}),
+            ...(input.observabilityRedactor !== undefined
+                ? { observabilityRedactor: input.observabilityRedactor }
+                : {}),
         });
         return opened;
     } catch (error: unknown) {

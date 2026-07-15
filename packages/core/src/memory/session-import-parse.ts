@@ -1,15 +1,22 @@
 import { type Run, RunSchema } from '@mission-control/protocol';
+import { runWithoutSessionOwnerAuthority } from '../runtime/mission-run/run-session-owner-authority.js';
 import { JsonlSessionEventStoreError } from './jsonl-errors.js';
 import type { FoundLegacySource } from './session-import-files.js';
 import type { LegacySessionImportDiagnostic } from './session-import-sql.js';
 
 export function parseLegacyRun(
     contents: string,
-): { readonly kind: 'ok'; readonly run: Run } | { readonly kind: 'invalid'; readonly message: string } {
+):
+    | { readonly kind: 'ok'; readonly run: Run; readonly hadSessionOwnerAuthority: boolean }
+    | { readonly kind: 'invalid'; readonly message: string } {
     try {
         const parsed = RunSchema.safeParse(JSON.parse(contents));
         if (parsed.success) {
-            return { kind: 'ok', run: parsed.data };
+            return {
+                kind: 'ok',
+                run: runWithoutSessionOwnerAuthority(parsed.data),
+                hadSessionOwnerAuthority: parsed.data.sessionRunId !== undefined,
+            };
         }
         return { kind: 'invalid', message: parsed.error.issues.at(0)?.message ?? 'invalid run record' };
     } catch (error: unknown) {

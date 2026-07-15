@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { createObservabilityRedactor } from '../providers/observability-redactor.js';
+import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db.js';
 import {
     openLocalSessionEventStore,
     openLocalSessionProjectionStore,
@@ -91,5 +93,73 @@ describe('local session store SQLite-native sessions', () => {
             'event_native_over_legacy_0',
         ]);
         expect(result.kind === 'found' ? result.replay.diagnostics : []).toEqual([]);
+    });
+
+    it('reapplies a configured redactor when reading canonical SQL replay rows', async () => {
+        const dataDir = await tempDataDir('read-redaction');
+        const sessionId = 'session_sqlite_read_redaction';
+        const credential = ['canonical', 'replay', 'credential'].join('_');
+        const store = await openLocalSessionEventStore({ dataDir, sessionId });
+        await store.append({
+            type: 'task.completed',
+            timestamp: CREATED_AT,
+            sessionId,
+            message: `completed with ${credential}`,
+        });
+        await store.close();
+
+        const result = await readLocalSessionReplay({
+            dataDir,
+            sessionId,
+            observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
+        });
+
+        expect(result.kind).toBe('found');
+        expect(JSON.stringify(result)).toContain('[REDACTED_CREDENTIAL]');
+        expect(JSON.stringify(result)).not.toContain(credential);
+    });
+
+    it('uses the configured redactor when startup imports a legacy JSONL session', async () => {
+        const dataDir = await tempDataDir('startup-redaction');
+        const sessionId = 'session_startup_import_redaction';
+        const credential = ['startup', 'legacy', 'credential'].join('_');
+        await writeLegacySource(
+            dataDir,
+            sessionId,
+            jsonlFor(sessionId, [
+                {
+                    eventId: 'event_startup_redaction_0',
+                    sequence: 0,
+                    createdAt: CREATED_AT,
+                    sessionId,
+                    durability: 'durable',
+                    event: {
+                        type: 'task.completed',
+                        timestamp: CREATED_AT,
+                        sessionId,
+                        message: `legacy ${credential}`,
+                    },
+                },
+            ]),
+        );
+        const store = await openLocalSessionEventStore({
+            dataDir,
+            sessionId,
+            observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
+        });
+        await store.close();
+        const opened = await openCanonicalRuntimeDb({ dataDir, sessionControlMaintenance: false });
+
+        try {
+            const rows = await opened.runtime.client.execute({
+                sql: 'SELECT payload_json FROM session_events WHERE session_id = ?',
+                args: [sessionId],
+            });
+            const observable = JSON.stringify(rows.rows);
+            expect(observable).toContain('[REDACTED_CREDENTIAL]');
+            expect(observable).not.toContain(credential);
+        } finally {
+            opened.runtime.close();
+        }
     });
 });

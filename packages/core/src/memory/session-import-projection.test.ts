@@ -14,11 +14,14 @@ import {
 import {
     createJsonlSessionEventRecord,
     createJsonlSessionLogHeader,
+    parseJsonlSessionLog,
     serializeJsonlRecord,
 } from './jsonl-session-records.js';
 import { importLegacySessionCompatibilityWindow } from './session-import.js';
+import { writeLegacyLog } from './session-import-regression-test-support.js';
+import { listLegacySessionImportLedger } from './session-import-sql.js';
 import { countRows, openMigratedTestDb } from './session-import-test-support.js';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const TMP_ROOT = join(process.cwd(), 'tmp', 'session-import-projection-tests');
@@ -80,6 +83,63 @@ describe('legacy session import detailed projections', () => {
                     request_id: 'provider_request_task_prompt_1',
                 },
             ]);
+        } finally {
+            runtime.close();
+        }
+    });
+
+    it('rebuilds projections from the complete canonical ledger when a source is truncated', async () => {
+        const sessionId = 'legacy_projection_session';
+        const dataDir = join(TMP_ROOT, 'truncated-import', 'data');
+        const sessionsDir = join(dataDir, 'sessions');
+        const sourcePath = join(sessionsDir, `${sessionId}.jsonl`);
+        await mkdir(sessionsDir, { recursive: true });
+        await writeFile(sourcePath, detailedLegacyJsonl(sessionId), 'utf8');
+        const runtime = await openMigratedTestDb();
+
+        try {
+            await importLegacySessionCompatibilityWindow({
+                ...runtime,
+                dataDir,
+                includeRunSources: false,
+                now: () => '2026-07-01T00:00:00.000Z',
+            });
+            const parsed = parseJsonlSessionLog({
+                contents: await readFile(sourcePath, 'utf8'),
+                filePath: sourcePath,
+                sessionId,
+            });
+            const first = parsed.envelopes[0];
+            if (first === undefined) throw new Error('missing detailed legacy fixture event');
+            await writeLegacyLog({
+                filePath: sourcePath,
+                sessionId,
+                createdAt: '2026-06-05T09:59:59.000Z',
+                envelopes: [first],
+            });
+            const truncatedBytes = await readFile(sourcePath, 'utf8');
+
+            const result = await importLegacySessionCompatibilityWindow({
+                ...runtime,
+                dataDir,
+                includeRunSources: false,
+                now: () => '2026-07-01T00:01:00.000Z',
+            });
+            const summary = await runtime.client.execute({
+                sql: 'SELECT status, last_event_seq FROM sessions WHERE session_id = ?',
+                args: [sessionId],
+            });
+            const ledger = await listLegacySessionImportLedger(runtime.client);
+
+            expect(result.importedEventCount).toBe(0);
+            expect(summary.rows).toEqual([{ status: 'stopped', last_event_seq: 9 }]);
+            await expect(countRows(runtime.client, 'session_messages')).resolves.toBe(1);
+            await expect(countRows(runtime.client, 'tool_calls')).resolves.toBe(1);
+            await expect(countRows(runtime.client, 'approvals')).resolves.toBe(1);
+            expect(
+                ledger.map(({ importedEventCount }) => importedEventCount).sort((left, right) => left - right),
+            ).toEqual([0, 10]);
+            await expect(readFile(sourcePath, 'utf8')).resolves.toBe(truncatedBytes);
         } finally {
             runtime.close();
         }

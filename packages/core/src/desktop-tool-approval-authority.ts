@@ -55,7 +55,7 @@ export function toolCallsFromEvents(events: readonly AgentEvent[]): readonly Too
     return events.flatMap(toolCallsFromEvent);
 }
 
-function toolCallsFromEvent(event: AgentEvent): readonly ToolCall[] {
+export function toolCallsFromEvent(event: AgentEvent): readonly ToolCall[] {
     const chunk = event.providerStreamChunk;
     if (chunk?.kind === 'tool_call_completed') return [chunk.toolCall];
 

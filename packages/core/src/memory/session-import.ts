@@ -1,4 +1,10 @@
 import { type LocalLibsqlWriteTarget, runLocalLibsqlWrite } from '../db/local-libsql-db.js';
+import { ensureLocalDbSchema } from '../db/local-libsql-schema.js';
+import {
+    createObservabilityRedactor,
+    type ObservabilityRedactor,
+    redactAgentEventEnvelopeForObservability,
+} from '../providers/observability-redactor.js';
 import {
     createJsonlSessionEventRecord,
     createJsonlSessionLogHeader,
@@ -7,10 +13,12 @@ import {
 import { markSessionExported, readExportEnvelopes } from './session-import-event-sql.js';
 import { jsonlSourcePaths, runSourcePaths } from './session-import-files.js';
 import { type ImportAccumulator, importJsonlSource, importRunSource } from './session-import-sources.js';
-import { ensureLegacySessionImportTables, type LegacySessionImportDiagnostic } from './session-import-sql.js';
+import type { LegacySessionImportDiagnostic } from './session-import-sql.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+export type { LegacySessionImportConflictCode } from './session-import-conflict.js';
+export { LegacySessionImportConflictError } from './session-import-conflict.js';
 export { listLegacySessionImportLedger } from './session-import-sql.js';
 
 export type LegacySessionImportResult = {
@@ -32,9 +40,10 @@ export async function importLegacySessionCompatibilityWindow(
         readonly omoRoot?: string;
         readonly includeRunSources?: boolean;
         readonly now?: () => string;
+        readonly observabilityRedactor?: ObservabilityRedactor;
     },
 ): Promise<LegacySessionImportResult> {
-    await runLocalLibsqlWrite(input, ensureLegacySessionImportTables);
+    await runLocalLibsqlWrite(input, ensureLocalDbSchema);
     const acc: ImportAccumulator = {
         importedEventCount: 0,
         importedRunCount: 0,
@@ -45,11 +54,27 @@ export async function importLegacySessionCompatibilityWindow(
     const omoRoot = input.omoRoot ?? join(input.dataDir, '.omo');
 
     for (const sourcePath of await jsonlSourcePaths(input.dataDir)) {
-        await importJsonlSource({ writeTarget: input, sourcePath, now, acc });
+        await importJsonlSource({
+            writeTarget: input,
+            sourcePath,
+            now,
+            acc,
+            ...(input.observabilityRedactor !== undefined
+                ? { observabilityRedactor: input.observabilityRedactor }
+                : {}),
+        });
     }
     if (input.includeRunSources ?? true) {
         for (const sourcePath of await runSourcePaths(omoRoot)) {
-            await importRunSource({ writeTarget: input, sourcePath, now, acc });
+            await importRunSource({
+                writeTarget: input,
+                sourcePath,
+                now,
+                acc,
+                ...(input.observabilityRedactor !== undefined
+                    ? { observabilityRedactor: input.observabilityRedactor }
+                    : {}),
+            });
         }
     }
 
@@ -66,10 +91,14 @@ export async function exportLegacySessionJsonl(
         readonly sessionId: string;
         readonly outputDir: string;
         readonly now?: () => string;
+        readonly observabilityRedactor?: ObservabilityRedactor;
     },
 ): Promise<LegacySessionExportResult> {
     const now = input.now ?? (() => new Date().toISOString());
-    const envelopes = await readExportEnvelopes({ client: input.client, sessionId: input.sessionId });
+    const redactor = input.observabilityRedactor ?? createObservabilityRedactor();
+    const envelopes = (await readExportEnvelopes({ client: input.client, sessionId: input.sessionId })).map(
+        (envelope) => redactAgentEventEnvelopeForObservability(envelope, redactor),
+    );
     await mkdir(input.outputDir, { recursive: true });
     const filePath = join(input.outputDir, `${input.sessionId}.jsonl`);
     const createdAt = envelopes.at(0)?.createdAt ?? now();

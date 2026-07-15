@@ -1,40 +1,13 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type { AgentEvent, ApprovalRecord, ToolCall } from '@mission-control/protocol';
-import { type DesktopApprovalEffect, sameDesktopApprovalEffect } from './desktop-approval-effect.js';
 import { fixedNow } from './desktop-session-commands-test-support.js';
 import type { DesktopApprovalSettlementOptions, DesktopApprovalStore } from './desktop-tool-approvals.js';
 
-export type MemoryApprovalStore = DesktopApprovalStore & {
-    readonly events: readonly AgentEvent[];
-};
-
-export function createMemoryApprovalStore(initialEvents: readonly AgentEvent[]): MemoryApprovalStore {
-    const events: AgentEvent[] = [...initialEvents];
-    const effects = new Map<string, { readonly effect: DesktopApprovalEffect; settled: boolean }>();
-    return {
-        events,
-        append: async (event) => {
-            events.push(event);
-        },
-        getEvents: async () => [...events],
-        reserveDesktopApprovalEffect: async (effect) => {
-            const existing = effects.get(effect.approvalId);
-            if (existing !== undefined) return !existing.settled && sameDesktopApprovalEffect(existing.effect, effect);
-            effects.set(effect.approvalId, { effect, settled: false });
-            return true;
-        },
-        claimDesktopApprovalEffect: async (effect) => {
-            const existing = effects.get(effect.approvalId);
-            if (existing === undefined) {
-                effects.set(effect.approvalId, { effect, settled: true });
-                return true;
-            }
-            if (existing.settled || !sameDesktopApprovalEffect(existing.effect, effect)) return false;
-            existing.settled = true;
-            return true;
-        },
-    };
-}
+export { createDeferred, type Deferred } from './desktop-tool-approval-async-test-support.js';
+export {
+    createMemoryApprovalStore,
+    type MemoryApprovalStore,
+} from './desktop-tool-approval-memory-store-test-support.js';
 
 export function approvalDecision(sessionId: string, approvalId: string, reason: string) {
     return { sessionId, approvalId, state: 'approved' as const, reason };
@@ -44,6 +17,8 @@ export function approvalOptions(input: {
     readonly store: DesktopApprovalStore;
     readonly sessionId: string;
     readonly workspaceRoot: string;
+    readonly now?: () => string;
+    readonly executionLeaseMs?: number;
     readonly commandExecutor?: NonNullable<DesktopApprovalSettlementOptions['commandExecutor']>;
 }): DesktopApprovalSettlementOptions {
     return {
@@ -51,7 +26,8 @@ export function approvalOptions(input: {
         sessionId: input.sessionId,
         workspaceRoot: input.workspaceRoot,
         modelProviderSelection: defaultModelProviderSelection,
-        now: fixedNow,
+        now: input.now ?? fixedNow,
+        ...(input.executionLeaseMs !== undefined ? { executionLeaseMs: input.executionLeaseMs } : {}),
         ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
     };
 }
@@ -257,25 +233,6 @@ export function completedCommandResult() {
 
 export function countEvents(events: readonly AgentEvent[], type: AgentEvent['type']): number {
     return events.filter((event) => event.type === type).length;
-}
-
-export type Deferred<T> = {
-    readonly promise: Promise<T>;
-    readonly resolve: (value: T | PromiseLike<T>) => void;
-    readonly reject: (reason?: unknown) => void;
-};
-
-export function createDeferred<T>(): Deferred<T> {
-    let resolve: Deferred<T>['resolve'] | undefined;
-    let reject: Deferred<T>['reject'] | undefined;
-    const promise = new Promise<T>((promiseResolve, promiseReject) => {
-        resolve = promiseResolve;
-        reject = promiseReject;
-    });
-    if (resolve === undefined || reject === undefined) {
-        throw new Error('deferred initialization failed');
-    }
-    return { promise, resolve, reject };
 }
 
 function approvalRecord(toolCall: ToolCall): ApprovalRecord {

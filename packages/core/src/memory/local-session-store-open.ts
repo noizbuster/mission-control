@@ -1,5 +1,13 @@
-import type { AgentEventEnvelope } from '@mission-control/protocol';
-import type { DesktopApprovalEffect } from '../desktop-approval-effect.js';
+import type { AgentEventEnvelope, ToolCall } from '@mission-control/protocol';
+import type {
+    DesktopApprovalEffect,
+    DesktopApprovalEffectClaimInput,
+    DesktopApprovalEffectClaimResult,
+    DesktopApprovalEffectRecord,
+    DesktopApprovalEffectResolutionInput,
+    DesktopApprovalEffectSettlementInput,
+} from '../desktop-approval-effect.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
 import { resolveMissionControlDataDir } from './data-dir.js';
 import type { JsonlSessionEventIdFactory } from './jsonl-session-event-store.js';
 import { openEnsuredLocalSessionDatabase } from './local-session-store-database.js';
@@ -12,7 +20,13 @@ export type LocalSessionEventStore = MemoryStore & {
     appendEnvelope(envelope: AgentEventEnvelope): Promise<void>;
     appendEnvelopeWithStoreSequence(envelope: AgentEventEnvelope): Promise<void>;
     reserveDesktopApprovalEffect?(effect: DesktopApprovalEffect): Promise<boolean>;
-    claimDesktopApprovalEffect?(effect: DesktopApprovalEffect): Promise<boolean>;
+    claimDesktopApprovalEffect?(input: DesktopApprovalEffectClaimInput): Promise<DesktopApprovalEffectClaimResult>;
+    settleDesktopApprovalEffect?(input: DesktopApprovalEffectSettlementInput): Promise<boolean>;
+    getDesktopApprovalEffect?(approvalId: string): Promise<DesktopApprovalEffectRecord | undefined>;
+    getDesktopApprovalToolCall?(toolCallId: string): Promise<ToolCall | undefined>;
+    resolveDesktopApprovalEffect?(
+        input: DesktopApprovalEffectResolutionInput,
+    ): Promise<DesktopApprovalEffectRecord | undefined>;
     close(): Promise<void> | void;
 };
 
@@ -21,6 +35,7 @@ export type OpenLocalSessionEventStoreOptions = {
     readonly sessionId: string;
     readonly now?: () => string;
     readonly createEventId?: JsonlSessionEventIdFactory;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 export async function openLocalSessionEventStore(
@@ -29,13 +44,24 @@ export async function openLocalSessionEventStore(
     const dataDir = options.dataDir ?? resolveMissionControlDataDir();
     const sessionId = parseLocalSessionId(options.sessionId);
     const now = options.now ?? (() => new Date().toISOString());
-    const { runtime } = await openEnsuredLocalSessionDatabase({ dataDir, now });
+    const { runtime } = await openEnsuredLocalSessionDatabase({
+        dataDir,
+        now,
+        ...(options.observabilityRedactor !== undefined
+            ? { observabilityRedactor: options.observabilityRedactor }
+            : {}),
+    });
     try {
-        return SqliteSessionEventStore.fromRuntime(runtime, {
+        const store = SqliteSessionEventStore.fromRuntime(runtime, {
             sessionId,
             now,
             ...(options.createEventId !== undefined ? { createEventId: options.createEventId } : {}),
+            ...(options.observabilityRedactor !== undefined
+                ? { observabilityRedactor: options.observabilityRedactor }
+                : {}),
         });
+        await store.recoverExpiredDesktopApprovalEffects();
+        return store;
     } catch (error: unknown) {
         runtime.close();
         throw error;

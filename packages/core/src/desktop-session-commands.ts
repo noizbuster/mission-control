@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 405 -> current 494 pure LOC; one desktop session command state machine preserving transaction ordering.
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type {
     AbgNodeModelOptions,
@@ -9,6 +10,7 @@ import type {
 } from '@mission-control/protocol';
 import { createCodingAgentGraph } from './behavior/coding-agent-graph.js';
 import { createCodingAgentNodeRegistry } from './behavior/coding-agent-registry.js';
+import { type DesktopApprovalEffectOutcome, type DesktopApprovalEffectRecord } from './desktop-approval-effect.js';
 import {
     hasPendingDesktopApprovals,
     projectDesktopApprovalContinuationMessages,
@@ -22,8 +24,13 @@ import {
 } from './desktop-tool-approvals.js';
 import type { JsonlSessionEventIdFactory } from './memory/jsonl-session-event-store.js';
 import type { LocalSessionEventStore } from './memory/local-session-store.js';
+import { openLocalSessionEventStore } from './memory/local-session-store.js';
 import { wrapFlatProviderAsSdkModel } from './providers/ai-sdk/flat-provider-bridge.js';
-import { createProviderAuthStoreCredentialResolver } from './providers/provider-auth-resolver.js';
+import { createObservabilityRedactor, type ObservabilityRedactor } from './providers/observability-redactor.js';
+import {
+    createProviderAuthStoreCredentialResolver,
+    createProviderAuthStoreObservabilityRedactor,
+} from './providers/provider-auth-resolver.js';
 import { createProviderAuthStore } from './providers/provider-auth-store.js';
 import { createProviderRouter } from './providers/provider-factory.js';
 import type { ProviderAdapter } from './providers/provider-turn-types.js';
@@ -54,8 +61,23 @@ export type DesktopRunCommandInput = {
 
 export type DesktopCommandReceipt = {
     readonly sessionId: string;
-    readonly status: 'blocked' | SessionRunOwnerReceipt['status'];
+    readonly status: 'blocked' | 'unknown' | SessionRunOwnerReceipt['status'];
     readonly eventsWritten: number;
+};
+
+export type DesktopApprovalEffectQueryInput = {
+    readonly sessionId: string;
+    readonly approvalId: string;
+};
+
+export type DesktopApprovalEffectResolutionCommandInput = DesktopApprovalEffectQueryInput & {
+    readonly outcome: DesktopApprovalEffectOutcome;
+};
+
+export type DesktopApprovalEffectResolutionReceipt = {
+    readonly sessionId: string;
+    readonly status: 'resolved' | 'idle';
+    readonly effect?: DesktopApprovalEffectRecord;
 };
 
 export type DesktopSessionCommandServiceOptions = {
@@ -67,6 +89,7 @@ export type DesktopSessionCommandServiceOptions = {
     readonly createEventId?: JsonlSessionEventIdFactory;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly sessionControlHost?: SessionControlHost;
+    readonly observabilityRedactor?: ObservabilityRedactor | Promise<ObservabilityRedactor>;
 };
 
 export type DesktopSessionCommandService = {
@@ -76,6 +99,12 @@ export type DesktopSessionCommandService = {
     readonly resumeRun: (input: DesktopRunCommandInput) => Promise<DesktopCommandReceipt>;
     readonly interruptRun: (input: DesktopRunCommandInput) => Promise<DesktopCommandReceipt>;
     readonly decideApproval: (input: DesktopApprovalDecisionInput) => Promise<DesktopCommandReceipt>;
+    readonly getApprovalEffect: (
+        input: DesktopApprovalEffectQueryInput,
+    ) => Promise<DesktopApprovalEffectRecord | undefined>;
+    readonly resolveApprovalEffect: (
+        input: DesktopApprovalEffectResolutionCommandInput,
+    ) => Promise<DesktopApprovalEffectResolutionReceipt>;
 };
 
 export function createDesktopSessionCommandService(
@@ -88,18 +117,33 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
     private readonly options: DesktopSessionCommandServiceOptions;
     private readonly now: () => string;
     private readonly provider: ProviderAdapter;
+    private readonly observabilityRedactorPromise: Promise<ObservabilityRedactor>;
     private readonly runOwners: SessionRunOwnerRegistry;
     private graphToolRegistryPromise: Promise<ToolRegistry> | undefined;
 
     constructor(options: DesktopSessionCommandServiceOptions) {
         this.options = options;
         this.now = options.now ?? (() => new Date().toISOString());
-        this.provider = options.provider ?? createDefaultDesktopProvider();
+        if (options.provider !== undefined) {
+            this.provider = options.provider;
+            this.observabilityRedactorPromise =
+                options.observabilityRedactor === undefined
+                    ? Promise.resolve(createObservabilityRedactor())
+                    : Promise.resolve(options.observabilityRedactor);
+        } else {
+            const authStore = createProviderAuthStore();
+            this.provider = createProviderRouter(createProviderAuthStoreCredentialResolver(authStore));
+            this.observabilityRedactorPromise =
+                options.observabilityRedactor === undefined
+                    ? createProviderAuthStoreObservabilityRedactor(authStore)
+                    : Promise.resolve(options.observabilityRedactor);
+        }
         this.runOwners = new SessionRunOwnerRegistry({
             ...(options.dataDir !== undefined ? { dataDir: options.dataDir } : {}),
             provider: this.provider,
             modelProviderSelection: this.selection(),
             now: this.now,
+            observabilityRedactor: this.observabilityRedactorPromise,
             // Drive every owner on the ABG graph (the desktop's engine); a denied/non-allowlisted tool
             // terminates the run instead of looping (parity with the CLI graph owner path).
             haltOnFailedToolSettlement: true,
@@ -230,6 +274,44 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
         );
     }
 
+    async getApprovalEffect(input: DesktopApprovalEffectQueryInput): Promise<DesktopApprovalEffectRecord | undefined> {
+        const store = await this.openApprovalEffectStore(input.sessionId);
+        try {
+            return await requireDesktopApprovalStore(store).getDesktopApprovalEffect(input.approvalId);
+        } finally {
+            await store.close();
+        }
+    }
+
+    async resolveApprovalEffect(
+        input: DesktopApprovalEffectResolutionCommandInput,
+    ): Promise<DesktopApprovalEffectResolutionReceipt> {
+        const store = await this.openApprovalEffectStore(input.sessionId);
+        try {
+            const effect = await requireDesktopApprovalStore(store).resolveDesktopApprovalEffect({
+                approvalId: input.approvalId,
+                outcome: input.outcome,
+                resolvedAt: this.now(),
+            });
+            return {
+                sessionId: input.sessionId,
+                status: effect === undefined ? 'idle' : 'resolved',
+                ...(effect !== undefined ? { effect } : {}),
+            };
+        } finally {
+            await store.close();
+        }
+    }
+
+    private openApprovalEffectStore(sessionId: string): Promise<LocalSessionEventStore> {
+        return openLocalSessionEventStore({
+            ...(this.options.dataDir !== undefined ? { dataDir: this.options.dataDir } : {}),
+            sessionId,
+            now: this.now,
+            ...(this.options.createEventId !== undefined ? { createEventId: this.options.createEventId } : {}),
+        });
+    }
+
     private selection(input?: { readonly modelProviderSelection?: ModelProviderSelection }): ModelProviderSelection {
         return input?.modelProviderSelection ?? this.options.modelProviderSelection ?? defaultModelProviderSelection;
     }
@@ -272,6 +354,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
         readonly modelProviderSelection: ModelProviderSelection;
     }): Promise<RunCoordinatorTurnRunner> {
         const toolRegistry = await this.ensureGraphToolRegistry();
+        const observabilityRedactor = await this.observabilityRedactorPromise;
         const selection = deps.modelProviderSelection;
         const resolveSdkModel = (options: AbgNodeModelOptions) =>
             wrapFlatProviderAsSdkModel({
@@ -292,6 +375,7 @@ class DefaultDesktopSessionCommandService implements DesktopSessionCommandServic
             // Match the flat run loop's sequential tool cadence so a multi-call batch surfaces ONE
             // pending approval at a time (the desktop approval broker's single-pending invariant).
             serializeToolExecution: true,
+            observabilityRedactor,
         });
     }
 
@@ -393,10 +477,6 @@ function assertNeverAgentMessage(message: never): never {
     throw new TypeError(`Unexpected agent message role: ${JSON.stringify(message)}`);
 }
 
-function createDefaultDesktopProvider(): ProviderAdapter {
-    return createProviderRouter(createProviderAuthStoreCredentialResolver(createProviderAuthStore()));
-}
-
 async function backfillCurrentBlockedDesktopApproval(
     store: LocalSessionEventStore,
     sessionId: string,
@@ -429,13 +509,28 @@ async function backfillCurrentBlockedDesktopApproval(
 function requireDesktopApprovalStore(store: LocalSessionEventStore): DesktopApprovalStore {
     const reserveDesktopApprovalEffect = store.reserveDesktopApprovalEffect;
     const claimDesktopApprovalEffect = store.claimDesktopApprovalEffect;
-    if (reserveDesktopApprovalEffect === undefined || claimDesktopApprovalEffect === undefined) {
+    const settleDesktopApprovalEffect = store.settleDesktopApprovalEffect;
+    const getDesktopApprovalEffect = store.getDesktopApprovalEffect;
+    const getDesktopApprovalToolCall = store.getDesktopApprovalToolCall;
+    const resolveDesktopApprovalEffect = store.resolveDesktopApprovalEffect;
+    if (
+        reserveDesktopApprovalEffect === undefined ||
+        claimDesktopApprovalEffect === undefined ||
+        settleDesktopApprovalEffect === undefined ||
+        getDesktopApprovalEffect === undefined ||
+        getDesktopApprovalToolCall === undefined ||
+        resolveDesktopApprovalEffect === undefined
+    ) {
         throw new TypeError('desktop approval requires a durable SQLite session store');
     }
     return {
         append: (event) => store.append(event),
         getEvents: (sessionId) => store.getEvents(sessionId),
         reserveDesktopApprovalEffect: (effect) => reserveDesktopApprovalEffect.call(store, effect),
-        claimDesktopApprovalEffect: (effect) => claimDesktopApprovalEffect.call(store, effect),
+        claimDesktopApprovalEffect: (input) => claimDesktopApprovalEffect.call(store, input),
+        settleDesktopApprovalEffect: (input) => settleDesktopApprovalEffect.call(store, input),
+        getDesktopApprovalEffect: (approvalId) => getDesktopApprovalEffect.call(store, approvalId),
+        getDesktopApprovalToolCall: (toolCallId) => getDesktopApprovalToolCall.call(store, toolCallId),
+        resolveDesktopApprovalEffect: (input) => resolveDesktopApprovalEffect.call(store, input),
     };
 }

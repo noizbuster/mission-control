@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { deleteLocalSessionRows, openLocalSessionEventStore, readLocalSessionReplay } from './local-session-store.js';
+import { openLocalLibsqlDb } from '../db/local-libsql-db.js';
+import {
+    deleteLocalSessionRows,
+    localSessionDbUrl,
+    openLocalSessionEventStore,
+    readLocalSessionReplay,
+} from './local-session-store.js';
 import { seedSessionScopedSqlRows, sessionReferenceCounts } from './local-session-store-delete-test-support.js';
 import { CREATED_AT, sessionStartedEvent, tempDataDir, UPDATED_AT } from './local-session-store-test-support.js';
 
@@ -19,6 +25,16 @@ describe('local session store delete cleanup', () => {
         await store.append(sessionStartedEvent(sessionId));
         await store.close();
         await seedSessionScopedSqlRows({ dataDir, sessionId, childSessionId, otherSessionId });
+        const guardRuntime = await openLocalLibsqlDb({ url: localSessionDbUrl(dataDir) });
+        await guardRuntime.client.execute(`
+            CREATE TRIGGER require_desktop_effect_cleanup_before_session_delete
+            BEFORE DELETE ON sessions
+            WHEN EXISTS (SELECT 1 FROM desktop_approval_effects WHERE session_id = OLD.session_id)
+            BEGIN
+                SELECT RAISE(ABORT, 'desktop approval effects must be deleted first');
+            END
+        `);
+        guardRuntime.close();
 
         // When: the production local session delete path removes the original id.
         await deleteLocalSessionRows({ dataDir, sessionIds: [sessionId] });
@@ -26,6 +42,8 @@ describe('local session store delete cleanup', () => {
         // Then: no stale rows or session references can attach to a recreated id.
         await expect(sessionReferenceCounts(dataDir, sessionId)).resolves.toEqual({
             sessions: 0,
+            desktopToolProposals: 0,
+            desktopApprovalEffects: 0,
             sessionInputs: 0,
             sessionAwaits: 0,
             sessionAwaitsChild: 0,
@@ -53,6 +71,8 @@ describe('local session store delete cleanup', () => {
             'event_recreated_cleanup_0',
         ]);
         await expect(sessionReferenceCounts(dataDir, sessionId)).resolves.toMatchObject({
+            desktopToolProposals: 0,
+            desktopApprovalEffects: 0,
             sessionInputs: 0,
             sessionAwaits: 0,
             sessionAwaitsChild: 0,

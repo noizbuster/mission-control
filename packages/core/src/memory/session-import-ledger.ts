@@ -33,9 +33,9 @@ export async function recordImport(input: {
     readonly importedAt: string;
     readonly importedEventCount?: number;
     readonly diagnostics?: readonly LegacySessionImportDiagnostic[];
-}): Promise<void> {
+}): Promise<boolean> {
     const entry: LegacySessionImportLedgerEntry = {
-        importId: checksumFor(`${input.source.sourceKind}\0${input.source.sourcePath}\0${input.source.checksum}`),
+        importId: legacyImportIdFor(input.source),
         sourcePath: input.source.sourcePath,
         sourceKind: input.source.sourceKind,
         checksum: input.source.checksum,
@@ -43,5 +43,9 @@ export async function recordImport(input: {
         importedAt: input.importedAt,
         diagnostics: input.diagnostics ?? [],
     };
-    await runLocalLibsqlWrite(input.writeTarget, (client) => recordLegacyImport({ client, entry }));
+    return runLocalLibsqlWrite(input.writeTarget, (client) => recordLegacyImport({ client, entry }));
+}
+
+export function legacyImportIdFor(source: FoundLegacySource): string {
+    return checksumFor(`${source.sourceKind}\0${source.sourcePath}\0${source.checksum}`);
 }

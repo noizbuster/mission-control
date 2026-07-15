@@ -1,47 +1,43 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
-import type {
-    AgentEvent,
-    ApprovalRecord,
-    ModelProviderSelection,
-    PermissionDecision,
-    PermissionRequest,
-} from '@mission-control/protocol';
+import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ApprovalTerminalState } from './approval-gate.js';
-import { type DesktopApprovalEffect, desktopApprovalEffect } from './desktop-approval-effect.js';
+import {
+    type DesktopApprovalEffect,
+    type DesktopApprovalEffectClaimInput,
+    type DesktopApprovalEffectClaimResult,
+    type DesktopApprovalEffectRecord,
+    type DesktopApprovalEffectResolutionInput,
+    type DesktopApprovalEffectSettlementInput,
+    desktopApprovalEffect,
+} from './desktop-approval-effect.js';
 import { withDesktopApprovalSettlementLock } from './desktop-approval-settlement-lock.js';
+import type { DesktopApprovalBackfillStore } from './desktop-tool-approval-backfill.js';
 import {
     approvalEvent,
-    approvalIdForToolCall,
     decidedRecord,
     hasTerminalRunAfterApproval,
-    latestApprovalRecord,
-    type PendingApprovalContext,
     pendingApprovalContextForCurrentRun,
-    sessionEvent,
-    toolFailed,
 } from './desktop-tool-approval-events.js';
-import {
-    blockedToolAuthority,
-    hasRuntimeOwnedCancelledApproval,
-    hasRuntimeOwnedPermissionRequest,
-    pendingApprovalRecord,
-    permissionRequestedEvent,
-} from './desktop-tool-approval-provenance.js';
-import {
-    type CommandExecutionRequest,
-    type CommandExecutionResult,
-    registerCommandRunTool,
-} from './tools/command-run.js';
-import { registerFileEditTool } from './tools/file-edit.js';
-import { registerFilePatchTool } from './tools/file-patch.js';
-import { registerFileWriteTool } from './tools/file-write.js';
-import { ToolRegistry } from './tools/tool-registry.js';
+import { executeApprovedDesktopTool } from './desktop-tool-approval-execution.js';
+import type { CommandExecutionRequest, CommandExecutionResult } from './tools/command-run.js';
+import { randomUUID } from 'node:crypto';
 
-export type DesktopApprovalStore = {
-    readonly append: (event: AgentEvent) => Promise<void>;
-    readonly getEvents: (sessionId: string) => Promise<readonly AgentEvent[]>;
-    readonly reserveDesktopApprovalEffect: (effect: DesktopApprovalEffect) => Promise<boolean>;
-    readonly claimDesktopApprovalEffect: (effect: DesktopApprovalEffect) => Promise<boolean>;
+export {
+    ensurePendingToolApprovalForCurrentBlockedRun,
+    ensureRuntimeOwnedPermissionRequestForBlockedToolCall,
+} from './desktop-tool-approval-backfill.js';
+
+const DEFAULT_DESKTOP_APPROVAL_EFFECT_LEASE_MS = 300_000;
+
+export type DesktopApprovalStore = DesktopApprovalBackfillStore & {
+    readonly claimDesktopApprovalEffect: (
+        input: DesktopApprovalEffectClaimInput,
+    ) => Promise<DesktopApprovalEffectClaimResult>;
+    readonly settleDesktopApprovalEffect: (input: DesktopApprovalEffectSettlementInput) => Promise<boolean>;
+    readonly getDesktopApprovalEffect: (approvalId: string) => Promise<DesktopApprovalEffectRecord | undefined>;
+    readonly resolveDesktopApprovalEffect: (
+        input: DesktopApprovalEffectResolutionInput,
+    ) => Promise<DesktopApprovalEffectRecord | undefined>;
 };
 
 export type DesktopApprovalDecisionInput = {
@@ -57,115 +53,12 @@ export type DesktopApprovalSettlementOptions = {
     readonly workspaceRoot: string;
     readonly modelProviderSelection?: ModelProviderSelection;
     readonly now: () => string;
+    readonly createExecutionToken?: () => string;
+    readonly executionLeaseMs?: number;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
 };
 
-export type DesktopApprovalSettlementStatus = 'completed' | 'blocked' | 'failed' | 'idle';
-
-export async function ensurePendingToolApprovalForCurrentBlockedRun(input: {
-    readonly store: DesktopApprovalStore;
-    readonly sessionId: string;
-    readonly modelProviderSelection: ModelProviderSelection;
-    readonly now: () => string;
-    readonly blockedToolCallId: string;
-    readonly workspaceRoot: string;
-}): Promise<void> {
-    const approvalId = approvalIdForToolCall(input.blockedToolCallId);
-    await withDesktopApprovalSettlementLock(input.store, { sessionId: input.sessionId, approvalId }, async () => {
-        await ensurePendingToolApprovalForCurrentBlockedRunUnlocked(input);
-    });
-}
-
-async function ensurePendingToolApprovalForCurrentBlockedRunUnlocked(input: {
-    readonly store: DesktopApprovalStore;
-    readonly sessionId: string;
-    readonly modelProviderSelection: ModelProviderSelection;
-    readonly now: () => string;
-    readonly blockedToolCallId: string;
-    readonly workspaceRoot: string;
-}): Promise<void> {
-    const events = await input.store.getEvents(input.sessionId);
-    const authority = blockedToolAuthority(events);
-    if (authority === undefined || authority.toolCall.toolCallId !== input.blockedToolCallId) {
-        return;
-    }
-    const approvalId = approvalIdForToolCall(authority.toolCall.toolCallId);
-    const latestApproval = latestApprovalRecord(events, approvalId);
-    if (latestApproval !== undefined && latestApproval.state !== 'cancelled') {
-        if (latestApproval.state !== 'pending') return;
-    }
-    const pendingApproval =
-        latestApproval?.state === 'pending' ? pendingApprovalContextForCurrentRun(events, approvalId) : undefined;
-    if (latestApproval?.state === 'pending' && pendingApproval === undefined) return;
-    const toolCall = authority.toolCall;
-    const currentRunStartIndex = authority.runStartEventIndex + 1;
-    if (!hasRuntimeOwnedPermissionRequest(events, toolCall, currentRunStartIndex)) {
-        return;
-    }
-    if (
-        latestApproval?.state === 'cancelled' &&
-        !hasRuntimeOwnedCancelledApproval(events, toolCall, currentRunStartIndex)
-    ) {
-        return;
-    }
-    const effect = desktopApprovalEffect({
-        sessionId: input.sessionId,
-        approvalId,
-        runId: authority.runId,
-        toolCall,
-        workspaceRoot: input.workspaceRoot,
-    });
-    if (!(await input.store.reserveDesktopApprovalEffect(effect))) {
-        return;
-    }
-    if (pendingApproval !== undefined) {
-        return;
-    }
-    await input.store.append(
-        approvalEvent({
-            type: 'approval.requested',
-            sessionId: input.sessionId,
-            modelProviderSelection: input.modelProviderSelection,
-            record: pendingApprovalRecord(toolCall, input.now()),
-            message: `approval requested: ${toolCall.toolName}`,
-            now: input.now,
-        }),
-    );
-}
-
-export async function ensureRuntimeOwnedPermissionRequestForBlockedToolCall(input: {
-    readonly store: DesktopApprovalStore;
-    readonly sessionId: string;
-    readonly modelProviderSelection: ModelProviderSelection;
-    readonly now: () => string;
-    readonly blockedToolCallId: string;
-}): Promise<void> {
-    const approvalId = approvalIdForToolCall(input.blockedToolCallId);
-    await withDesktopApprovalSettlementLock(input.store, { sessionId: input.sessionId, approvalId }, async () => {
-        await ensureRuntimeOwnedPermissionRequestForBlockedToolCallUnlocked(input);
-    });
-}
-
-async function ensureRuntimeOwnedPermissionRequestForBlockedToolCallUnlocked(input: {
-    readonly store: DesktopApprovalStore;
-    readonly sessionId: string;
-    readonly modelProviderSelection: ModelProviderSelection;
-    readonly now: () => string;
-    readonly blockedToolCallId: string;
-}): Promise<void> {
-    const events = await input.store.getEvents(input.sessionId);
-    const authority = blockedToolAuthority(events);
-    if (authority === undefined || authority.toolCall.toolCallId !== input.blockedToolCallId) {
-        return;
-    }
-    const toolCall = authority.toolCall;
-    if (hasRuntimeOwnedPermissionRequest(events, toolCall, authority.runStartEventIndex + 1)) {
-        return;
-    }
-    await input.store.append(
-        permissionRequestedEvent(input.sessionId, input.modelProviderSelection, toolCall, input.now),
-    );
-}
+export type DesktopApprovalSettlementStatus = 'completed' | 'blocked' | 'failed' | 'idle' | 'unknown';
 
 export async function settleDesktopApproval(
     input: DesktopApprovalDecisionInput,
@@ -181,25 +74,34 @@ async function settleDesktopApprovalUnlocked(
     const events = await options.store.getEvents(input.sessionId);
     const pendingApproval = pendingApprovalContextForCurrentRun(events, input.approvalId);
     if (pendingApproval === undefined) {
-        return 'idle';
+        return (await options.store.getDesktopApprovalEffect(input.approvalId))?.state === 'unknown'
+            ? 'unknown'
+            : 'idle';
     }
     const pending = pendingApproval.record;
     if (hasTerminalRunAfterApproval(events, pending.approvalId, pendingApproval.runId)) {
         return 'idle';
     }
+    const toolCall = await options.store.getDesktopApprovalToolCall(pendingApproval.toolCall.toolCallId);
+    if (toolCall === undefined || toolCall.toolName !== pendingApproval.toolCall.toolName) return 'idle';
     const effect = desktopApprovalEffect({
         sessionId: input.sessionId,
         approvalId: pending.approvalId,
         runId: pendingApproval.runId,
-        toolCall: pendingApproval.toolCall,
+        toolCall,
         workspaceRoot: options.workspaceRoot,
     });
-    if (!(await options.store.reserveDesktopApprovalEffect(effect))) {
-        return 'idle';
-    }
-    if (!(await options.store.claimDesktopApprovalEffect(effect))) {
-        return 'idle';
-    }
+    await options.store.reserveDesktopApprovalEffect(effect);
+    const executionToken = options.createExecutionToken?.() ?? randomUUID();
+    const executingAt = options.now();
+    const claim = await options.store.claimDesktopApprovalEffect({
+        effect,
+        executionToken,
+        leaseExpiresAt: new Date(
+            Date.parse(executingAt) + (options.executionLeaseMs ?? DEFAULT_DESKTOP_APPROVAL_EFFECT_LEASE_MS),
+        ).toISOString(),
+    });
+    if (claim.status !== 'claimed') return statusForUnclaimedEffect(claim);
     const modelProviderSelection = options.modelProviderSelection ?? defaultModelProviderSelection;
     const decided = decidedRecord(pending, input.state, options.now(), input.reason);
     await options.store.append(
@@ -223,7 +125,7 @@ async function settleDesktopApprovalUnlocked(
                 now: options.now,
             }),
         );
-        return 'blocked';
+        return (await settleClaimedEffect(options, effect, executionToken, 'failed')) ? 'blocked' : 'unknown';
     }
     await options.store.append(
         approvalEvent({
@@ -235,62 +137,45 @@ async function settleDesktopApprovalUnlocked(
             now: options.now,
         }),
     );
-    return invokeApprovedTool(pendingApproval.toolCall, decided, options, modelProviderSelection);
+    const outcome = await executeApprovedDesktopTool({
+        append: (event) => options.store.append(event),
+        sessionId: options.sessionId,
+        workspaceRoot: options.workspaceRoot,
+        toolCall,
+        record: decided,
+        modelProviderSelection,
+        ...(options.commandExecutor !== undefined ? { commandExecutor: options.commandExecutor } : {}),
+    });
+    return (await settleClaimedEffect(options, effect, executionToken, outcome)) ? outcome : 'unknown';
 }
 
-async function invokeApprovedTool(
-    toolCall: PendingApprovalContext['toolCall'],
-    record: PendingApprovalContext['record'],
+async function settleClaimedEffect(
     options: DesktopApprovalSettlementOptions,
-    modelProviderSelection: ModelProviderSelection,
-): Promise<DesktopApprovalSettlementStatus> {
-    const registry = new ToolRegistry();
-    await registerFileEditTool(registry, {
-        workspaceRoot: options.workspaceRoot,
-        requestPermission: permissionResolver(record),
+    effect: DesktopApprovalEffect,
+    executionToken: string,
+    outcome: 'completed' | 'failed',
+): Promise<boolean> {
+    return options.store.settleDesktopApprovalEffect({
+        effect,
+        executionToken,
+        outcome,
     });
-    await registerFileWriteTool(registry, {
-        workspaceRoot: options.workspaceRoot,
-        requestPermission: permissionResolver(record),
-    });
-    await registerFilePatchTool(registry, {
-        workspaceRoot: options.workspaceRoot,
-        requestPermission: permissionResolver(record),
-    });
-    await registerCommandRunTool(registry, {
-        workspaceRoot: options.workspaceRoot,
-        requestPermission: permissionResolver(record),
-        requirePermissionForAllowlisted: true,
-        ...(options.commandExecutor !== undefined ? { executor: options.commandExecutor } : {}),
-    });
-    const advertisement = registry.advertise().find((tool) => tool.name === toolCall.toolName);
-    if (advertisement === undefined) {
-        await options.store.append(
-            toolFailed(options.sessionId, toolCall.toolCallId, `unknown tool: ${toolCall.toolName}`),
-        );
-        return 'failed';
-    }
-    const settlement = await registry.invoke({
-        toolCallId: toolCall.toolCallId,
-        toolName: toolCall.toolName,
-        advertisedVersion: advertisement.version,
-        argumentsJson: toolCall.argumentsJson,
-    });
-    for (const event of settlement.events) {
-        await options.store.append(sessionEvent(event, options.sessionId, modelProviderSelection));
-    }
-    return settlement.result.status === 'completed' ? 'completed' : 'failed';
 }
 
-function permissionResolver(record: ApprovalRecord): (request: PermissionRequest) => PermissionDecision {
-    return (request) => {
-        if (record.subject.kind === 'tool' && request.id === record.requestId && request.action === record.subject.id) {
-            return {
-                requestId: request.id,
-                status: 'allow',
-                ...(record.reason !== undefined ? { reason: record.reason } : {}),
-            };
-        }
-        return { requestId: request.id, status: 'deny', reason: 'desktop approval did not authorize this request' };
-    };
+function statusForUnclaimedEffect(claim: Exclude<DesktopApprovalEffectClaimResult, { readonly status: 'claimed' }>) {
+    switch (claim.status) {
+        case 'unknown':
+            return 'unknown' as const;
+        case 'executing':
+        case 'settled':
+        case 'missing':
+        case 'identity_mismatch':
+            return 'idle' as const;
+        default:
+            return assertNeverUnclaimedEffect(claim);
+    }
+}
+
+function assertNeverUnclaimedEffect(claim: never): never {
+    throw new TypeError(`Unexpected desktop approval effect claim: ${JSON.stringify(claim)}`);
 }

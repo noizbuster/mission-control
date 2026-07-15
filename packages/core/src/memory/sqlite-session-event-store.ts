@@ -2,14 +2,25 @@ import {
     type AbgGraphSnapshot,
     type AgentEvent,
     type AgentEventEnvelope,
-    AgentEventEnvelopeSchema,
-    AgentEventSchema,
     type AgentSnapshot,
+    type ToolCall,
 } from '@mission-control/protocol';
 import type { AbgTimelineEntry } from '../behavior/timeline.js';
 import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
 import { openMissionControlDb } from '../db/mission-control-db.js';
-import type { DesktopApprovalEffect } from '../desktop-approval-effect.js';
+import type {
+    DesktopApprovalEffect,
+    DesktopApprovalEffectClaimInput,
+    DesktopApprovalEffectClaimResult,
+    DesktopApprovalEffectRecord,
+    DesktopApprovalEffectResolutionInput,
+    DesktopApprovalEffectSettlementInput,
+} from '../desktop-approval-effect.js';
+import {
+    createObservabilityRedactor,
+    type ObservabilityRedactor,
+    redactAgentEventEnvelopeForObservability,
+} from '../providers/observability-redactor.js';
 import { projectSessionReplay, type SessionReplayProjection } from '../session-replay.js';
 import type { JsonlSessionEventIdFactory } from './jsonl-session-event-store.js';
 import { defaultSession, deriveSession } from './jsonl-session-projection.js';
@@ -17,13 +28,18 @@ import type { MemoryStore, SessionCompactionRecordInput } from './memory-store.j
 import { createSessionCompactionEvent } from './session-compaction-event.js';
 import {
     claimSqliteDesktopApprovalEffect,
+    readSqliteDesktopApprovalEffect,
+    recoverExpiredSqliteDesktopApprovalEffects,
     reserveSqliteDesktopApprovalEffect,
+    resolveSqliteDesktopApprovalEffect,
+    settleSqliteDesktopApprovalEffect,
 } from './sqlite-session-approval-effects.js';
-import { appendParsedSqliteEnvelope, ensureWritableEvent } from './sqlite-session-event-store-append.js';
+import { readSqliteDesktopToolProposal } from './sqlite-session-desktop-tool-proposals.js';
+import { SqliteSessionEventAppender } from './sqlite-session-event-appender.js';
 import { SqliteSessionEventStoreError } from './sqlite-session-event-store-errors.js';
 import { readSqliteSessionEnvelopes } from './sqlite-session-event-store-read.js';
 import { logFromEvents } from './sqlite-session-event-store-rows.js';
-import { ensureSqliteSessionRows, readSqliteNextSequence } from './sqlite-session-event-store-sql.js';
+import { ensureSqliteSessionRows } from './sqlite-session-event-store-sql.js';
 import { runSqliteSessionWriteTransaction } from './sqlite-session-event-store-transaction.js';
 import { randomUUID } from 'node:crypto';
 
@@ -34,6 +50,7 @@ export type SqliteSessionEventStoreOpenOptions = {
     readonly sessionId: string;
     readonly now?: () => string;
     readonly createEventId?: JsonlSessionEventIdFactory;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 export type SqliteSessionEventStoreRuntimeOptions = Omit<SqliteSessionEventStoreOpenOptions, 'dataDir'>;
@@ -43,6 +60,8 @@ export class SqliteSessionEventStore implements MemoryStore {
     private readonly runtime: LocalLibsqlDb;
     private readonly now: () => string;
     private readonly createEventId: JsonlSessionEventIdFactory;
+    private readonly observabilityRedactor: ObservabilityRedactor;
+    private readonly eventAppender: SqliteSessionEventAppender;
     private appendQueue: Promise<void> = Promise.resolve();
     private closed = false;
 
@@ -51,18 +70,35 @@ export class SqliteSessionEventStore implements MemoryStore {
         readonly sessionId: string;
         readonly now: () => string;
         readonly createEventId: JsonlSessionEventIdFactory;
+        readonly observabilityRedactor: ObservabilityRedactor;
     }) {
         this.runtime = input.runtime;
         this.sessionId = input.sessionId;
         this.now = input.now;
         this.createEventId = input.createEventId;
+        this.observabilityRedactor = input.observabilityRedactor;
+        this.eventAppender = new SqliteSessionEventAppender({
+            runtime: this.runtime,
+            sessionId: this.sessionId,
+            now: this.now,
+            createEventId: this.createEventId,
+            observabilityRedactor: this.observabilityRedactor,
+            enqueueWrite: <Result>(write: () => Promise<Result>) => this.enqueueAppend(write),
+        });
     }
 
     static async open(options: SqliteSessionEventStoreOpenOptions): Promise<SqliteSessionEventStore> {
         const runtime = await openMissionControlDb({
             ...(options.dataDir !== undefined ? { dataDir: options.dataDir } : {}),
         });
-        return SqliteSessionEventStore.fromRuntime(runtime, options);
+        try {
+            const store = SqliteSessionEventStore.fromRuntime(runtime, options);
+            await store.recoverExpiredDesktopApprovalEffects();
+            return store;
+        } catch (error: unknown) {
+            runtime.close();
+            throw error;
+        }
     }
 
     static fromRuntime(
@@ -74,51 +110,20 @@ export class SqliteSessionEventStore implements MemoryStore {
             sessionId: options.sessionId,
             now: options.now ?? (() => new Date().toISOString()),
             createEventId: options.createEventId ?? (() => randomUUID()),
+            observabilityRedactor: options.observabilityRedactor ?? createObservabilityRedactor(),
         });
     }
 
     async append(event: AgentEvent): Promise<void> {
-        const parsedEvent = AgentEventSchema.parse(event);
-        ensureWritableEvent({ sessionId: this.sessionId, event: parsedEvent });
-        await this.enqueueAppend(async () => {
-            await this.ensureSessionRowsInOpenTransaction(this.now());
-            const sequence = await this.readNextSequenceInOpenTransaction();
-            const envelope = AgentEventEnvelopeSchema.parse({
-                eventId: this.createEventId(parsedEvent, sequence),
-                sequence,
-                createdAt: this.now(),
-                sessionId: this.sessionId,
-                durability: 'durable',
-                event: parsedEvent,
-            });
-            await this.appendParsedEnvelopeInOpenTransaction(envelope, sequence);
-        });
+        await this.eventAppender.append(event);
     }
 
     async appendEnvelope(envelope: AgentEventEnvelope): Promise<void> {
-        const parsedEnvelope = AgentEventEnvelopeSchema.parse(envelope);
-        if (parsedEnvelope.durability === 'ephemeral') {
-            return;
-        }
-        await this.enqueueAppend(() =>
-            (async () => {
-                await this.ensureSessionRowsInOpenTransaction(parsedEnvelope.createdAt);
-                const sequence = await this.readNextSequenceInOpenTransaction();
-                await this.appendParsedEnvelopeInOpenTransaction(parsedEnvelope, sequence);
-            })(),
-        );
+        await this.eventAppender.appendEnvelope(envelope);
     }
 
     async appendEnvelopeWithStoreSequence(envelope: AgentEventEnvelope): Promise<void> {
-        const parsedEnvelope = AgentEventEnvelopeSchema.parse(envelope);
-        if (parsedEnvelope.durability === 'ephemeral') {
-            return;
-        }
-        await this.enqueueAppend(async () => {
-            await this.ensureSessionRowsInOpenTransaction(parsedEnvelope.createdAt);
-            const sequence = await this.readNextSequenceInOpenTransaction();
-            await this.appendParsedEnvelopeInOpenTransaction({ ...parsedEnvelope, sequence }, sequence);
-        });
+        await this.eventAppender.appendEnvelopeWithStoreSequence(envelope);
     }
 
     async getEvents(sessionId: string): Promise<readonly AgentEvent[]> {
@@ -150,17 +155,48 @@ export class SqliteSessionEventStore implements MemoryStore {
     }
 
     async reserveDesktopApprovalEffect(effect: DesktopApprovalEffect): Promise<boolean> {
+        this.assertEffectSession(effect);
         return this.enqueueAppend(async () => {
             await this.ensureSessionRowsInOpenTransaction(this.now());
             return reserveSqliteDesktopApprovalEffect(this.runtime.client, effect, this.now());
         });
     }
 
-    async claimDesktopApprovalEffect(effect: DesktopApprovalEffect): Promise<boolean> {
+    async claimDesktopApprovalEffect(
+        input: DesktopApprovalEffectClaimInput,
+    ): Promise<DesktopApprovalEffectClaimResult> {
+        this.assertEffectSession(input.effect);
         return this.enqueueAppend(async () => {
             await this.ensureSessionRowsInOpenTransaction(this.now());
-            return claimSqliteDesktopApprovalEffect(this.runtime.client, effect, this.now());
+            return claimSqliteDesktopApprovalEffect(this.runtime.client, input, this.now());
         });
+    }
+
+    async settleDesktopApprovalEffect(input: DesktopApprovalEffectSettlementInput): Promise<boolean> {
+        this.assertEffectSession(input.effect);
+        return this.enqueueAppend(() => settleSqliteDesktopApprovalEffect(this.runtime.client, input, this.now()));
+    }
+
+    async getDesktopApprovalEffect(approvalId: string): Promise<DesktopApprovalEffectRecord | undefined> {
+        await this.appendQueue;
+        this.ensureOpen();
+        return readSqliteDesktopApprovalEffect(this.runtime.client, this.sessionId, approvalId);
+    }
+
+    async getDesktopApprovalToolCall(toolCallId: string): Promise<ToolCall | undefined> {
+        await this.appendQueue;
+        this.ensureOpen();
+        return readSqliteDesktopToolProposal(this.runtime.client, this.sessionId, toolCallId);
+    }
+
+    async resolveDesktopApprovalEffect(
+        input: DesktopApprovalEffectResolutionInput,
+    ): Promise<DesktopApprovalEffectRecord | undefined> {
+        return this.enqueueAppend(() => resolveSqliteDesktopApprovalEffect(this.runtime.client, this.sessionId, input));
+    }
+
+    async recoverExpiredDesktopApprovalEffects(): Promise<number> {
+        return this.enqueueAppend(() => recoverExpiredSqliteDesktopApprovalEffects(this.runtime.client, this.now()));
     }
 
     async close(): Promise<void> {
@@ -181,21 +217,10 @@ export class SqliteSessionEventStore implements MemoryStore {
         return queued;
     }
 
-    private async readNextSequenceInOpenTransaction(): Promise<number> {
-        return readSqliteNextSequence({ client: this.runtime.client, sessionId: this.sessionId });
-    }
-
-    private async appendParsedEnvelopeInOpenTransaction(
-        envelope: AgentEventEnvelope,
-        expectedSequence: number,
-    ): Promise<void> {
-        await appendParsedSqliteEnvelope({
-            client: this.runtime.client,
-            sessionId: this.sessionId,
-            envelope,
-            expectedSequence,
-            now: this.now,
-        });
+    private assertEffectSession(effect: DesktopApprovalEffect): void {
+        if (effect.sessionId !== this.sessionId) {
+            throw new TypeError('desktop approval effect session does not match the store session');
+        }
     }
 
     private async ensureSessionRowsInOpenTransaction(createdAt: string): Promise<void> {
@@ -209,7 +234,9 @@ export class SqliteSessionEventStore implements MemoryStore {
     }
 
     private async readEnvelopesBySessionId(sessionId: string): Promise<readonly AgentEventEnvelope[]> {
-        return readSqliteSessionEnvelopes({ client: this.runtime.client, sessionId });
+        return (await readSqliteSessionEnvelopes({ client: this.runtime.client, sessionId })).map((envelope) =>
+            redactAgentEventEnvelopeForObservability(envelope, this.observabilityRedactor),
+        );
     }
 
     private ensureOpen(): void {

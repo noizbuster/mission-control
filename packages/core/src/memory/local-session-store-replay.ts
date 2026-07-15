@@ -1,4 +1,9 @@
 import type { Client } from '@libsql/client';
+import {
+    createObservabilityRedactor,
+    type ObservabilityRedactor,
+    redactAgentEventEnvelopeForObservability,
+} from '../providers/observability-redactor.js';
 import { type JsonlSessionReplayPrefixProjection, projectSessionReplay } from '../session-replay.js';
 import type { ReplayDiagnostic } from '../session-replay-types.js';
 import { resolveMissionControlDataDir } from './data-dir.js';
@@ -19,15 +24,20 @@ export async function readLocalSessionReplay(input: {
     readonly dataDir?: string;
     readonly sessionId: string;
     readonly now?: () => string;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 }): Promise<LocalSessionReplayReadResult> {
     const dataDir = input.dataDir ?? resolveMissionControlDataDir();
+    const observabilityRedactor = input.observabilityRedactor ?? createObservabilityRedactor();
     const { runtime } = await openEnsuredLocalSessionDatabase({
         dataDir,
         ...(input.now !== undefined ? { now: input.now } : {}),
+        observabilityRedactor,
     });
     try {
         if (await hasSqliteSession(runtime.client, input.sessionId)) {
-            const envelopes = await readExportEnvelopes({ client: runtime.client, sessionId: input.sessionId });
+            const envelopes = (await readExportEnvelopes({ client: runtime.client, sessionId: input.sessionId })).map(
+                (envelope) => redactAgentEventEnvelopeForObservability(envelope, observabilityRedactor),
+            );
             if (envelopes.length > 0) {
                 const projection = projectSessionReplay({ sessionId: input.sessionId, envelopes });
                 return { kind: 'found', replay: { projection, diagnostics: projection.diagnostics } };

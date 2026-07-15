@@ -1,11 +1,15 @@
 import type { Client } from '@libsql/client';
 import { z } from 'zod';
-import { legacyImportTableSql } from './session-import-schema.js';
 
 export const legacySessionSourceKinds = ['jsonl', 'mission_run'] as const;
 export type LegacySessionSourceKind = (typeof legacySessionSourceKinds)[number];
 
-export const legacySessionImportDiagnosticCodes = ['corrupt_jsonl', 'invalid_run', 'read_failed'] as const;
+export const legacySessionImportDiagnosticCodes = [
+    'corrupt_jsonl',
+    'invalid_run',
+    'read_failed',
+    'session_owner_stripped',
+] as const;
 export type LegacySessionImportDiagnosticCode = (typeof legacySessionImportDiagnosticCodes)[number];
 
 export type LegacySessionImportDiagnostic = {
@@ -38,12 +42,6 @@ const ledgerRowSchema = z.object({
     diagnostics_json: z.string().nullable(),
 });
 
-export async function ensureLegacySessionImportTables(client: Client): Promise<void> {
-    for (const sql of legacyImportTableSql) {
-        await client.execute(sql);
-    }
-}
-
 export async function hasLegacyImport(input: {
     readonly client: Client;
     readonly sourcePath: string;
@@ -68,12 +66,13 @@ export async function listLegacySessionImportLedger(
 export async function recordLegacyImport(input: {
     readonly client: Client;
     readonly entry: LegacySessionImportLedgerEntry;
-}): Promise<void> {
-    await input.client.execute({
+}): Promise<boolean> {
+    const result = await input.client.execute({
         sql: `
-            INSERT OR IGNORE INTO legacy_session_imports
+            INSERT INTO legacy_session_imports
                 (import_id, source_path, source_kind, checksum, imported_event_count, imported_at, diagnostics_json)
             VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(source_path, checksum) DO NOTHING
         `,
         args: [
             input.entry.importId,
@@ -85,6 +84,7 @@ export async function recordLegacyImport(input: {
             JSON.stringify(input.entry.diagnostics),
         ],
     });
+    return result.rowsAffected === 1;
 }
 
 function ledgerEntryFromRow(row: z.infer<typeof ledgerRowSchema>): LegacySessionImportLedgerEntry {

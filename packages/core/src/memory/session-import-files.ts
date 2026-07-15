@@ -1,6 +1,6 @@
 import type { LegacySessionSourceKind } from './session-import-sql.js';
 import { createHash } from 'node:crypto';
-import { readdir, readFile } from 'node:fs/promises';
+import { type FileHandle, lstat, open, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export type FoundLegacySource = {
@@ -13,18 +13,51 @@ export type FoundLegacySource = {
 
 export type LegacySourceRead = FoundLegacySource | { readonly kind: 'missing' };
 
+export const MAX_LEGACY_SOURCE_BYTES = 64 * 1024 * 1024;
+
 export async function readLegacySource(
     sourcePath: string,
     sourceKind: LegacySessionSourceKind,
 ): Promise<LegacySourceRead> {
+    let fileHandle: FileHandle | undefined;
     try {
-        const contents = await readFile(sourcePath, 'utf8');
+        const pathStats = await lstat(sourcePath);
+        if (pathStats.isSymbolicLink() || !pathStats.isFile() || pathStats.size > MAX_LEGACY_SOURCE_BYTES) {
+            throw new Error(`Legacy session source exceeds the safe import bound: ${sourcePath}`);
+        }
+        fileHandle = await open(sourcePath, 'r');
+        const openedStats = await fileHandle.stat();
+        if (
+            !openedStats.isFile() ||
+            openedStats.dev !== pathStats.dev ||
+            openedStats.ino !== pathStats.ino ||
+            openedStats.size > MAX_LEGACY_SOURCE_BYTES
+        ) {
+            throw new Error(`Legacy session source changed during import: ${sourcePath}`);
+        }
+        const expectedBytes = openedStats.size;
+        const buffer = Buffer.allocUnsafe(Math.min(expectedBytes + 1, MAX_LEGACY_SOURCE_BYTES + 1));
+        let totalBytes = 0;
+        while (totalBytes < buffer.length) {
+            const { bytesRead } = await fileHandle.read(buffer, totalBytes, buffer.length - totalBytes, totalBytes);
+            if (bytesRead === 0) break;
+            totalBytes += bytesRead;
+        }
+        if (totalBytes > MAX_LEGACY_SOURCE_BYTES) {
+            throw new Error(`Legacy session source exceeds the safe import bound: ${sourcePath}`);
+        }
+        if (totalBytes !== expectedBytes) {
+            throw new Error(`Legacy session source changed during import: ${sourcePath}`);
+        }
+        const contents = buffer.subarray(0, totalBytes).toString('utf8');
         return { kind: 'found', sourceKind, sourcePath, contents, checksum: checksumFor(contents) };
     } catch (error: unknown) {
         if (isErrorCode(error, 'ENOENT')) {
             return { kind: 'missing' };
         }
         throw error;
+    } finally {
+        await fileHandle?.close();
     }
 }
 
