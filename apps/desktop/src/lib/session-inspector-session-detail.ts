@@ -68,8 +68,8 @@ export function projectSessionDetail(input: {
               });
     return {
         sessionList: input.sessions.map((session) => ({
-            sessionId: session.sessionId,
-            fileName: session.fileName,
+            sessionId: redactDisplayText(session.sessionId),
+            fileName: redactDisplayText(session.fileName),
             state: session.state,
             eventCount: session.eventCount,
             ...(session.updatedAt !== undefined ? { updatedAt: session.updatedAt } : {}),
@@ -88,23 +88,23 @@ export function projectSessionDetail(input: {
 
 function sessionTreePanel(sessionTree: SessionTreeProjection): SessionTreePanel {
     return {
-        sessionName: sessionTree.sessionName ?? '',
-        cwd: sessionTree.cwd ?? '',
-        trustedRoot: sessionTree.trustedRoot ?? '',
+        sessionName: redactDisplayText(sessionTree.sessionName ?? ''),
+        cwd: redactDisplayText(sessionTree.cwd ?? ''),
+        trustedRoot: redactDisplayText(sessionTree.trustedRoot ?? ''),
         workspaceTrust: sessionTree.workspaceTrust ?? '',
-        parentSessionId: sessionTree.parentSessionId ?? '',
-        activeLeafId: sessionTree.activeLeafId ?? '',
-        forkSourceSessionId: sessionTree.forkSource?.sessionId ?? '',
-        cloneSourceSessionId: sessionTree.cloneSource?.sessionId ?? '',
+        parentSessionId: redactDisplayText(sessionTree.parentSessionId ?? ''),
+        activeLeafId: redactDisplayText(sessionTree.activeLeafId ?? ''),
+        forkSourceSessionId: redactDisplayText(sessionTree.forkSource?.sessionId ?? ''),
+        cloneSourceSessionId: redactDisplayText(sessionTree.cloneSource?.sessionId ?? ''),
         entryCount: sessionTree.nodes.length,
         branchCount: branchCount(sessionTree),
         compactionCount: sessionTree.compactionBoundaries.length,
         exportCount: sessionTree.exports.length,
         importCount: sessionTree.imports.length,
         rows: sessionTree.nodes.map((node) => ({
-            key: node.entryId,
-            entryId: node.entryId,
-            parentEntryId: node.parentEntryId ?? '',
+            key: redactDisplayText(node.entryId),
+            entryId: redactDisplayText(node.entryId),
+            parentEntryId: redactDisplayText(node.parentEntryId ?? ''),
             eventType: node.eventType,
             timestamp: node.timestamp,
             message: redactDisplayText(node.message ?? ''),

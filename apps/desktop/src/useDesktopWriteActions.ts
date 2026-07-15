@@ -1,8 +1,10 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type {
     DesktopAgentClient,
     DesktopApprovalDecisionState,
+    DesktopApprovalEffectOutcome,
+    DesktopApprovalEffectRecord,
     DesktopCommandReceipt,
     DesktopSessionLog,
     DesktopSessionSummary,
@@ -11,6 +13,10 @@ import type {
 type SessionSourceState = 'loading' | 'ready' | 'error';
 type PromptCommandKind = 'submit' | 'queue' | 'steer';
 type SessionCommandKind = 'interrupt' | 'resume';
+type ApprovalEffectResolution = {
+    readonly approvalId: string;
+    readonly outcome: DesktopApprovalEffectOutcome;
+};
 
 export type ProviderRunGate = {
     readonly canStart: boolean;
@@ -32,6 +38,10 @@ export type DesktopWriteActionsInput = {
 export function useDesktopWriteActions(input: DesktopWriteActionsInput) {
     const [promptValue, setPromptValue] = useState<string>('');
     const [actionMessage, setActionMessage] = useState<string>('ready');
+    const resolvingApprovalEffectIds = useRef<Set<string>>(new Set());
+    const [resolvingApprovalEffectIdsState, setResolvingApprovalEffectIdsState] = useState<ReadonlySet<string>>(
+        () => new Set(),
+    );
 
     async function decideApproval(approvalId: string, state: DesktopApprovalDecisionState): Promise<void> {
         if (input.sessionId.length === 0) {
@@ -47,6 +57,26 @@ export function useDesktopWriteActions(input: DesktopWriteActionsInput) {
         await reloadAfterWrite(input, receipt, setActionMessage);
     }
 
+    async function resolveApprovalEffect(
+        approvalId: string,
+        outcome: DesktopApprovalEffectOutcome,
+    ): Promise<DesktopApprovalEffectRecord | undefined> {
+        if (resolvingApprovalEffectIds.current.has(approvalId)) {
+            return undefined;
+        }
+        resolvingApprovalEffectIds.current.add(approvalId);
+        setResolvingApprovalEffectIdsState(new Set(resolvingApprovalEffectIds.current));
+        try {
+            return await resolveDesktopApprovalEffect(input, { approvalId, outcome }, setActionMessage);
+        } catch (error: unknown) {
+            setActionMessage(`effect resolution failed: ${errorMessage(error)}`);
+            return undefined;
+        } finally {
+            resolvingApprovalEffectIds.current.delete(approvalId);
+            setResolvingApprovalEffectIdsState(new Set(resolvingApprovalEffectIds.current));
+        }
+    }
+
     return {
         promptValue,
         actionMessage,
@@ -57,7 +87,32 @@ export function useDesktopWriteActions(input: DesktopWriteActionsInput) {
         interruptRun: () => runDesktopSessionCommand(input, 'interrupt', setActionMessage),
         resumeRun: () => runDesktopSessionCommand(input, 'resume', setActionMessage),
         decideApproval,
+        resolveApprovalEffect,
+        resolvingApprovalEffectIds: resolvingApprovalEffectIdsState,
     };
+}
+
+export async function resolveDesktopApprovalEffect(
+    input: DesktopWriteActionsInput,
+    resolution: ApprovalEffectResolution,
+    setActionMessage: (message: string) => void,
+): Promise<DesktopApprovalEffectRecord | undefined> {
+    if (input.sessionId.length === 0) {
+        setActionMessage('session required');
+        return undefined;
+    }
+    const receipt = await input.client.resolveApprovalEffect({
+        sessionId: input.sessionId,
+        approvalId: resolution.approvalId,
+        outcome: resolution.outcome,
+    });
+    await reloadSessionProjection(input, receipt.sessionId);
+    if (receipt.status === 'resolved') {
+        setActionMessage(`effect marked ${resolution.outcome}`);
+        return receipt.effect;
+    }
+    setActionMessage('effect unavailable');
+    return undefined;
 }
 
 export async function runDesktopPromptCommand(
@@ -124,14 +179,22 @@ async function reloadAfterWrite(
     setActionMessage: (message: string) => void,
 ): Promise<void> {
     setActionMessage(`${receipt.status}: ${receipt.eventsWritten} events`);
+    await reloadSessionProjection(input, receipt.sessionId);
+}
+
+async function reloadSessionProjection(input: DesktopWriteActionsInput, sessionId: string): Promise<void> {
     const [sessions, log, snapshot] = await Promise.all([
         input.client.listSessions(),
-        input.client.readSessionEvents(receipt.sessionId),
-        input.client.readSessionSnapshot(receipt.sessionId),
+        input.client.readSessionEvents(sessionId),
+        input.client.readSessionSnapshot(sessionId),
     ]);
     input.setSessionSummaries(sessions);
     input.setSessionLog(log);
-    input.setSessionId(receipt.sessionId);
+    input.setSessionId(sessionId);
     input.setSourceState(log.state === 'corrupt' ? 'error' : 'ready');
     input.setSourceMessage(`${snapshot.eventCount} events, ${snapshot.graphIds.length} graphs`);
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }

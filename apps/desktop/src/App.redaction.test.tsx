@@ -31,7 +31,7 @@ function summary(): DesktopSessionSummary {
         sessionId: 'session_desktop_redaction',
         fileName: 'session_desktop_redaction.jsonl',
         state: 'available',
-        eventCount: 3,
+        eventCount: 5,
         diagnostics: [{ code: 'corrupt_line', message: 'bad json', lineNumber: 3 }],
     };
 }
@@ -108,6 +108,27 @@ function sessionLog(secrets: readonly string[]): DesktopSessionLog {
                     subject: { kind: 'tool', id: 'file.patch' },
                     requestedAt: '2026-06-09T00:00:01.000Z',
                     reason: `approve ${payload}`,
+                },
+            }),
+            envelope(3, {
+                type: 'session.metadata.updated',
+                timestamp: '2026-06-09T00:00:03.000Z',
+                sessionId: 'session_desktop_redaction',
+                sessionTree: {
+                    kind: 'metadata',
+                    name: `session ${payload}`,
+                    cwd: `/workspace/${payload}`,
+                    trustedRoot: `/trusted/${payload}`,
+                },
+            }),
+            envelope(4, {
+                type: 'tool.completed',
+                timestamp: '2026-06-09T00:00:04.000Z',
+                sessionId: 'session_desktop_redaction',
+                toolResult: {
+                    toolCallId: 'call_secret_output',
+                    status: 'completed',
+                    output: `tool output ${payload}`,
                 },
             }),
         ],

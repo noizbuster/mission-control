@@ -9,6 +9,12 @@ import { isTauri, invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { credentialSummary, demoEvents, demoSession, mockReceipt } from './agent-client-demo.js';
 import {
     type DesktopApprovalDecisionInput,
+    type DesktopApprovalEffectQueryInput,
+    type DesktopApprovalEffectRecord,
+    type DesktopApprovalEffectResolutionInput,
+    type DesktopApprovalEffectResolutionReceipt,
+    DesktopApprovalEffectRecordSchema,
+    DesktopApprovalEffectResolutionReceiptSchema,
     type DesktopCommandReceipt,
     DesktopCommandReceiptSchema,
     type DesktopPromptCommandInput,
@@ -26,11 +32,21 @@ import {
 export type {
     DesktopApprovalDecisionInput,
     DesktopApprovalDecisionState,
+    DesktopApprovalEffectOutcome,
+    DesktopApprovalEffectQueryInput,
+    DesktopApprovalEffectRecord,
+    DesktopApprovalEffectResolutionInput,
+    DesktopApprovalEffectResolutionReceipt,
     DesktopCommandReceipt,
     DesktopPromptCommandInput,
     DesktopRunCommandInput,
 } from './desktop-command-schemas.js';
 export { DesktopCommandReceiptSchema } from './desktop-command-schemas.js';
+export {
+    DesktopApprovalEffectRecordSchema,
+    DesktopApprovalEffectResolutionReceiptSchema,
+    isUnresolvedUnknownApprovalEffect,
+} from './desktop-command-schemas.js';
 export type {
     DesktopSessionDiagnostic,
     DesktopSessionLog,
@@ -68,6 +84,10 @@ export interface DesktopAgentClient {
     interruptRun(input: DesktopRunCommandInput): Promise<DesktopCommandReceipt>;
     resumeRun(input: DesktopRunCommandInput): Promise<DesktopCommandReceipt>;
     decideApproval(input: DesktopApprovalDecisionInput): Promise<DesktopCommandReceipt>;
+    getApprovalEffect(input: DesktopApprovalEffectQueryInput): Promise<DesktopApprovalEffectRecord | undefined>;
+    resolveApprovalEffect(
+        input: DesktopApprovalEffectResolutionInput,
+    ): Promise<DesktopApprovalEffectResolutionReceipt>;
     listProviderCredentials(): Promise<readonly ProviderCredentialSummary[]>;
     saveProviderCredential(input: SaveDesktopProviderCredentialInput): Promise<ProviderCredentialSummary>;
 }
@@ -105,6 +125,17 @@ export function createTauriDesktopAgentClient(invokeCommand: TauriInvoke = defau
         },
         async decideApproval(input: DesktopApprovalDecisionInput): Promise<DesktopCommandReceipt> {
             return DesktopCommandReceiptSchema.parse(await invokeCommand('decide_approval', { input }));
+        },
+        async getApprovalEffect(input: DesktopApprovalEffectQueryInput): Promise<DesktopApprovalEffectRecord | undefined> {
+            const payload = await invokeCommand('get_approval_effect', { input });
+            return DesktopApprovalEffectRecordSchema.nullable().parse(payload) ?? undefined;
+        },
+        async resolveApprovalEffect(
+            input: DesktopApprovalEffectResolutionInput,
+        ): Promise<DesktopApprovalEffectResolutionReceipt> {
+            return DesktopApprovalEffectResolutionReceiptSchema.parse(
+                await invokeCommand('resolve_approval_effect', { input }),
+            );
         },
         async listProviderCredentials(): Promise<readonly ProviderCredentialSummary[]> {
             return ProviderCredentialSummarySchema.array().parse(await invokeCommand('list_provider_credentials'));
@@ -156,6 +187,14 @@ export function createMockDesktopAgentClient(): MockDesktopAgentClient {
         },
         async decideApproval(input: DesktopApprovalDecisionInput): Promise<DesktopCommandReceipt> {
             return mockReceipt(input.sessionId, input.state === 'approved' ? 'completed' : 'blocked');
+        },
+        async getApprovalEffect(): Promise<DesktopApprovalEffectRecord | undefined> {
+            return undefined;
+        },
+        async resolveApprovalEffect(
+            input: DesktopApprovalEffectResolutionInput,
+        ): Promise<DesktopApprovalEffectResolutionReceipt> {
+            return { sessionId: input.sessionId, status: 'idle' };
         },
         async startDemoSession(): Promise<AgentSession> {
             return demoSession();

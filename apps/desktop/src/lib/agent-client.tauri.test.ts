@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 337 -> current 400 pure LOC; Tauri boundary suite covers credentials sessions and effect resolution
 import { AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { createTauriDesktopAgentClient } from './agent-client.js';
@@ -301,6 +302,53 @@ describe('tauri desktop agent client', () => {
         });
     });
 
+    it('sends an explicit unknown-effect outcome through the Tauri boundary', async () => {
+        // Given: a session has a durably unknown command effect.
+        const calls: { readonly command: string; readonly args: Record<string, unknown> | undefined }[] = [];
+        const client = createTauriDesktopAgentClient(async (command, args) => {
+            calls.push({ command, args });
+            if (command === 'get_approval_effect') {
+                return unknownEffectRecord();
+            }
+            if (command === 'resolve_approval_effect') {
+                return { sessionId: 'session_write', status: 'resolved', effect: unknownEffectRecord('completed') };
+            }
+            throw new Error(`unexpected command ${command}`);
+        });
+
+        // When: an operator inspects then records the observed outcome.
+        const effect = await client.getApprovalEffect({
+            sessionId: 'session_write',
+            approvalId: 'approval_effect',
+        });
+        const receipt = await client.resolveApprovalEffect({
+            sessionId: 'session_write',
+            approvalId: 'approval_effect',
+            outcome: 'completed',
+        });
+
+        // Then: the client uses recovery commands, never an approval decision command.
+        expect(effect).toMatchObject({ state: 'unknown' });
+        expect(effect).not.toHaveProperty('outcome');
+        expect(receipt).toMatchObject({ status: 'resolved', effect: { outcome: 'completed' } });
+        expect(calls).toEqual([
+            {
+                command: 'get_approval_effect',
+                args: { input: { sessionId: 'session_write', approvalId: 'approval_effect' } },
+            },
+            {
+                command: 'resolve_approval_effect',
+                args: {
+                    input: {
+                        sessionId: 'session_write',
+                        approvalId: 'approval_effect',
+                        outcome: 'completed',
+                    },
+                },
+            },
+        ]);
+    });
+
     it('lists and saves provider credentials through the Tauri boundary', async () => {
         // Given
         const calls: { readonly command: string; readonly args: Record<string, unknown> | undefined }[] = [];
@@ -360,12 +408,14 @@ describe('tauri desktop agent client', () => {
         // Then
         expect(Object.keys(client).sort()).toEqual([
             'decideApproval',
+            'getApprovalEffect',
             'interruptRun',
             'listProviderCredentials',
             'listSessions',
             'queueFollowUp',
             'readSessionEvents',
             'readSessionSnapshot',
+            'resolveApprovalEffect',
             'resumeRun',
             'saveProviderCredential',
             'steerRun',
@@ -373,3 +423,24 @@ describe('tauri desktop agent client', () => {
         ]);
     });
 });
+
+function unknownEffectRecord(outcome?: 'completed' | 'failed') {
+    return {
+        state: 'unknown',
+        requestedAt: '2026-07-15T03:00:00.000Z',
+        executionToken: 'execution_token',
+        leaseExpiresAt: '2026-07-15T03:01:00.000Z',
+        executingAt: '2026-07-15T03:00:01.000Z',
+        unknownAt: '2026-07-15T03:02:00.000Z',
+        ...(outcome === undefined ? {} : { outcome, resolvedAt: '2026-07-15T03:03:00.000Z' }),
+        effect: {
+            sessionId: 'session_write',
+            approvalId: 'approval_effect',
+            runId: 'run_effect',
+            toolCallId: 'call_effect',
+            toolName: 'command.run',
+            argumentsJson: '{"command":"node"}',
+            workspaceRoot: '/workspace',
+        },
+    };
+}

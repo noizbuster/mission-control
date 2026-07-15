@@ -1,3 +1,8 @@
+import {
+    isUnresolvedUnknownApprovalEffect,
+    type DesktopApprovalEffectOutcome,
+    type DesktopApprovalEffectRecord,
+} from './lib/agent-client.js';
 import type { SessionInspectorProjection } from './lib/session-inspector.js';
 
 export function OutputPanelSection({
@@ -77,12 +82,21 @@ export function OutputPanelSection({
 }
 
 export function UtilityRailPanel({
+    approvalEffects,
     projection,
+    recoveryErrorMessage,
+    resolvingApprovalEffectIds,
     onDecideApproval,
+    onResolveApprovalEffect,
 }: {
+    readonly approvalEffects: readonly DesktopApprovalEffectRecord[];
     readonly projection: SessionInspectorProjection;
+    readonly recoveryErrorMessage: string | undefined;
+    readonly resolvingApprovalEffectIds: ReadonlySet<string>;
     readonly onDecideApproval: (approvalId: string, state: 'approved' | 'denied') => void;
+    readonly onResolveApprovalEffect: (approvalId: string, outcome: DesktopApprovalEffectOutcome) => void;
 }): React.JSX.Element {
+    const unresolvedEffects = approvalEffects.filter(isUnresolvedUnknownApprovalEffect);
     return (
         <aside className="utility-rail" aria-label="graph inspector">
             <h2>Trust status</h2>
@@ -140,6 +154,55 @@ export function UtilityRailPanel({
                     ))}
                 </div>
             ))}
+            {unresolvedEffects.map((record) => {
+                const resolving = resolvingApprovalEffectIds.has(record.effect.approvalId);
+                return (
+                    <section
+                        aria-busy={resolving}
+                        aria-label={`effect recovery for ${record.effect.toolName}`}
+                        className="unknown-effect-recovery"
+                        key={record.effect.approvalId}
+                    >
+                        <h2>Effect recovery required</h2>
+                        <p>
+                            The system cannot determine whether this tool effect finished. Do not rerun it here. Record
+                            only the observed outcome.
+                        </p>
+                        <div className="unknown-effect-details">
+                            <strong>{record.effect.toolName}</strong>
+                            <span>approval {record.effect.approvalId}</span>
+                            <span>tool call {record.effect.toolCallId}</span>
+                            <span>run {record.effect.runId}</span>
+                            <span>Operator outcome: not yet recorded</span>
+                            <time dateTime={record.unknownAt}>unknown since {record.unknownAt}</time>
+                        </div>
+                        {recoveryErrorMessage !== undefined ? (
+                            <p className="unknown-effect-error" role="alert">
+                                {recoveryErrorMessage}
+                            </p>
+                        ) : null}
+                        <div className="unknown-effect-actions">
+                            <button
+                                aria-label={`Mark ${record.effect.toolName} completed`}
+                                disabled={resolving}
+                                type="button"
+                                onClick={() => onResolveApprovalEffect(record.effect.approvalId, 'completed')}
+                            >
+                                {resolving ? 'Marking observed outcome' : 'Mark completed'}
+                            </button>
+                            <button
+                                aria-label={`Mark ${record.effect.toolName} failed`}
+                                data-outcome="failed"
+                                disabled={resolving}
+                                type="button"
+                                onClick={() => onResolveApprovalEffect(record.effect.approvalId, 'failed')}
+                            >
+                                Mark failed
+                            </button>
+                        </div>
+                    </section>
+                );
+            })}
             <h2>Approval queue</h2>
             {projection.approvals.length === 0 ? <p className="empty-state">No approvals</p> : null}
             {projection.approvals.map((approval) => (

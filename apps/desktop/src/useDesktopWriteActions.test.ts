@@ -1,8 +1,12 @@
+// allow: SIZE_OK -- HEAD 189 -> current 253 pure LOC; write-action suite covers gates resume interrupt and effect resolve
 import type { ModelProviderSelection, ProviderCredentialSummary } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import type {
     DesktopAgentClient,
     DesktopApprovalDecisionInput,
+    DesktopApprovalEffectRecord,
+    DesktopApprovalEffectResolutionInput,
+    DesktopApprovalEffectResolutionReceipt,
     DesktopCommandReceipt,
     DesktopPromptCommandInput,
     DesktopRunCommandInput,
@@ -13,6 +17,7 @@ import type {
 } from './lib/agent-client.js';
 import {
     type DesktopWriteActionsInput,
+    resolveDesktopApprovalEffect,
     runDesktopPromptCommand,
     runDesktopSessionCommand,
 } from './useDesktopWriteActions.js';
@@ -76,6 +81,33 @@ describe('Desktop write actions', () => {
             'readSessionSnapshot',
         ]);
         expect(fixture.actionMessages).toEqual(['interrupted: 1 events']);
+    });
+
+    it('records an unknown effect outcome without deciding approval and refreshes the session', async () => {
+        // Given: an operator must settle an uncertain effect after recovery.
+        const fixture = writeActionFixture({
+            providerRunGate: {
+                canStart: false,
+                message: 'run disabled: model discovery only',
+            },
+        });
+
+        // When: the operator marks the effect failed.
+        const effect = await resolveDesktopApprovalEffect(
+            fixture.input,
+            { approvalId: 'approval_effect', outcome: 'failed' },
+            fixture.recordActionMessage,
+        );
+
+        // Then: only the non-executing resolution seam runs before the projection refresh.
+        expect(effect).toMatchObject({ state: 'unknown', outcome: 'failed' });
+        expect(fixture.clientCalls).toEqual([
+            'resolveApprovalEffect',
+            'listSessions',
+            'readSessionEvents',
+            'readSessionSnapshot',
+        ]);
+        expect(fixture.actionMessages).toEqual(['effect marked failed']);
     });
 });
 
@@ -163,6 +195,20 @@ function spyClient(calls: string[]): DesktopAgentClient {
             calls.push('decideApproval');
             return receipt(input.sessionId, 'completed');
         },
+        async getApprovalEffect(): Promise<DesktopApprovalEffectRecord | undefined> {
+            calls.push('getApprovalEffect');
+            return undefined;
+        },
+        async resolveApprovalEffect(
+            input: DesktopApprovalEffectResolutionInput,
+        ): Promise<DesktopApprovalEffectResolutionReceipt> {
+            calls.push('resolveApprovalEffect');
+            return {
+                sessionId: input.sessionId,
+                status: 'resolved',
+                effect: unknownEffectRecord(input.sessionId, input.approvalId, input.outcome),
+            };
+        },
         async listProviderCredentials(): Promise<readonly ProviderCredentialSummary[]> {
             calls.push('listProviderCredentials');
             return [];
@@ -201,5 +247,31 @@ function sessionLog(sessionId: string): DesktopSessionLog {
         contents: '',
         envelopes: [],
         diagnostics: [],
+    };
+}
+
+function unknownEffectRecord(
+    sessionId: string,
+    approvalId: string,
+    outcome: 'completed' | 'failed',
+): DesktopApprovalEffectRecord {
+    return {
+        state: 'unknown',
+        requestedAt: '2026-07-15T03:00:00.000Z',
+        executionToken: 'execution_token',
+        leaseExpiresAt: '2026-07-15T03:01:00.000Z',
+        executingAt: '2026-07-15T03:00:01.000Z',
+        unknownAt: '2026-07-15T03:02:00.000Z',
+        outcome,
+        resolvedAt: '2026-07-15T03:03:00.000Z',
+        effect: {
+            sessionId,
+            approvalId,
+            runId: 'run_effect',
+            toolCallId: 'call_effect',
+            toolName: 'command.run',
+            argumentsJson: '{"command":"node"}',
+            workspaceRoot: '/workspace',
+        },
     };
 }

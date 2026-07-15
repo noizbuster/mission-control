@@ -71,10 +71,10 @@ function emptyReplayRows(): ReplayInspectorRows {
 
 function approvalRows(approvals: readonly ApprovalProjection[], events: readonly AgentEvent[]): readonly ApprovalRow[] {
     return approvals.map((record, index) => ({
-        key: `${record.approvalId}-${index}`,
-        approvalId: record.approvalId,
+        key: `${redactDisplayText(record.approvalId)}-${index}`,
+        approvalId: redactDisplayText(record.approvalId),
         state: record.state,
-        subject: `${record.subject.kind}:${record.subject.id}`,
+        subject: redactDisplayText(`${record.subject.kind}:${record.subject.id}`),
         reason: redactDisplayText(record.reason ?? ''),
         preview: approvalPreviewForRecord(record, events),
     }));
@@ -98,16 +98,16 @@ function codingStepRow(step: CodingReplayStep): CodingStepRow {
                 key: step.eventId,
                 kind: step.kind,
                 timestamp: step.timestamp,
-                subject: `${step.toolName} ${step.toolCallId}`,
+                subject: redactDisplayText(`${step.toolName} ${step.toolCallId}`),
                 status: 'requested',
-                detail: step.taskId ?? '',
+                detail: redactDisplayText(step.taskId ?? ''),
             };
         case 'provider.message':
             return {
                 key: step.eventId,
                 kind: step.kind,
                 timestamp: step.timestamp,
-                subject: step.messageId,
+                subject: redactDisplayText(step.messageId),
                 status: step.continuation ? 'continuation' : 'initial',
                 detail: redactDisplayText(step.message),
             };
@@ -116,7 +116,7 @@ function codingStepRow(step: CodingReplayStep): CodingStepRow {
                 key: step.eventId,
                 kind: step.kind,
                 timestamp: step.timestamp,
-                subject: step.providerTurnId ?? step.requestId,
+                subject: redactDisplayText(step.providerTurnId ?? step.requestId),
                 status: 'failed',
                 detail: redactDisplayText(step.error.message),
             };
@@ -125,16 +125,16 @@ function codingStepRow(step: CodingReplayStep): CodingStepRow {
                 key: step.eventId,
                 kind: step.kind,
                 timestamp: step.timestamp,
-                subject: `${step.subject.kind}:${step.subject.id}`,
+                subject: redactDisplayText(`${step.subject.kind}:${step.subject.id}`),
                 status: step.state,
-                detail: step.approvalId,
+                detail: redactDisplayText(step.approvalId),
             };
         case 'tool.result':
             return {
                 key: step.eventId,
                 kind: step.kind,
                 timestamp: step.timestamp,
-                subject: step.toolCallId,
+                subject: redactDisplayText(step.toolCallId),
                 status: step.status,
                 detail: joinParts([
                     step.message,
@@ -148,8 +148,8 @@ function codingStepRow(step: CodingReplayStep): CodingStepRow {
 
 function toolOutcomeRow(outcome: ToolOutcomeProjection): ToolOutcomeRow {
     return {
-        key: outcome.toolId,
-        toolId: outcome.toolId,
+        key: redactDisplayText(outcome.toolId),
+        toolId: redactDisplayText(outcome.toolId),
         status: outcome.status,
         timestamps: joinParts([outcome.startedAt, outcome.completedAt, outcome.failedAt]),
         detail: joinParts([outcome.lastMessage, resultDetail(outcome), appliedFilesText(outcome.appliedFiles)]),

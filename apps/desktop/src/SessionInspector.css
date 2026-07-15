@@ -11,3 +11,57 @@
     background: var(--danger);
     border-color: var(--danger-border);
 }
+
+.unknown-effect-recovery {
+    --inspector-focus-offset: 2px;
+    --inspector-space-2: 8px;
+    --inspector-space-3: 12px;
+    background: var(--warn);
+    border: 1px solid var(--warn-border);
+    display: grid;
+    gap: var(--inspector-space-2);
+    padding: var(--inspector-space-3);
+}
+
+.unknown-effect-recovery > h2,
+.unknown-effect-recovery > p {
+    margin: 0;
+}
+
+.unknown-effect-details {
+    display: grid;
+    gap: var(--inspector-space-2);
+}
+
+.unknown-effect-details > span,
+.unknown-effect-details > time {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.unknown-effect-error {
+    color: var(--ink);
+    font-weight: 700;
+}
+
+.unknown-effect-actions {
+    display: grid;
+    gap: var(--inspector-space-2);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.unknown-effect-actions button[data-outcome="failed"]:not(:disabled) {
+    background: var(--danger);
+    border-color: var(--danger-border);
+}
+
+.unknown-effect-actions button:focus-visible {
+    outline: medium solid var(--ink);
+    outline-offset: var(--inspector-focus-offset);
+}
+
+@media (max-width: 700px) {
+    .unknown-effect-actions {
+        grid-template-columns: 1fr;
+    }
+}

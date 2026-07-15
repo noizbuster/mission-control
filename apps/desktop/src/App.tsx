@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 247 -> current 312 pure LOC; desktop shell owns provider controls plus unknown-effect recovery wiring
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type { ModelProviderSelection, ProviderCredentialSummary } from '@mission-control/protocol';
 import { useEffect, useMemo, useState } from 'react';
@@ -5,6 +6,7 @@ import { ChatComposer } from './ChatComposer.js';
 import {
     createTauriDesktopAgentClient,
     type DesktopAgentClient,
+    type DesktopApprovalEffectRecord,
     type DesktopSessionLog,
     type DesktopSessionSummary,
 } from './lib/agent-client.js';
@@ -17,6 +19,7 @@ export type AppProps = {
     readonly initialSessionId?: string;
     readonly initialCredentialSummaries?: readonly ProviderCredentialSummary[];
     readonly initialModelProviderSelection?: ModelProviderSelection;
+    readonly initialApprovalEffects?: readonly DesktopApprovalEffectRecord[];
     readonly initialSessionSummaries?: readonly DesktopSessionSummary[];
     readonly initialSessionLog?: DesktopSessionLog;
     readonly client?: DesktopAgentClient;
@@ -28,6 +31,7 @@ export function App({
     initialSessionId,
     initialCredentialSummaries = [],
     initialModelProviderSelection = defaultModelProviderSelection,
+    initialApprovalEffects = [],
     initialSessionSummaries = [],
     initialSessionLog,
     client: providedClient,
@@ -37,6 +41,8 @@ export function App({
     const [sessionId, setSessionId] = useState<string>(initialSelectedSessionId);
     const [sessionSummaries, setSessionSummaries] = useState<readonly DesktopSessionSummary[]>(initialSessionSummaries);
     const [sessionLog, setSessionLog] = useState<DesktopSessionLog | undefined>(initialSessionLog);
+    const [approvalEffects, setApprovalEffects] =
+        useState<readonly DesktopApprovalEffectRecord[]>(initialApprovalEffects);
     const hasInitialSessionSource = initialSessionSummaries.length > 0 || initialSessionLog !== undefined;
     const [sourceState, setSourceState] = useState<SessionSourceState>(hasInitialSessionSource ? 'ready' : 'loading');
     const [sourceMessage, setSourceMessage] = useState<string>(
@@ -105,6 +111,29 @@ export function App({
             isMounted = false;
         };
     }, [client]);
+
+    useEffect(() => {
+        if (selectedSessionLog === undefined) {
+            setApprovalEffects([]);
+            return;
+        }
+        let isMounted = true;
+        loadApprovalEffects(client, selectedSessionLog).then(
+            (effects) => {
+                if (isMounted) {
+                    setApprovalEffects(effects);
+                }
+            },
+            (error: unknown) => {
+                if (isMounted) {
+                    setSourceMessage(`approval effect source unavailable: ${errorMessage(error)}`);
+                }
+            },
+        );
+        return () => {
+            isMounted = false;
+        };
+    }, [client, selectedSessionLog]);
 
     function handleProviderSelectionChange(selection: ModelProviderSelection): void {
         setSelectedProviderID(selection.providerID);
@@ -220,12 +249,26 @@ export function App({
                 selectedSessionId={sessionId}
                 sourceMessage={displayedSourceStatus.message}
                 sourceState={displayedSourceStatus.state}
+                approvalEffects={approvalEffects}
                 onDecideApproval={(approvalId, state) => {
                     void writeActions.decideApproval(approvalId, state);
+                }}
+                onResolveApprovalEffect={(approvalId, outcome) => {
+                    void writeActions.resolveApprovalEffect(approvalId, outcome).then((effect) => {
+                        if (effect !== undefined) {
+                            setApprovalEffects((current) => replaceApprovalEffect(current, effect));
+                        }
+                    });
                 }}
                 onLoadSession={loadSelectedSession}
                 onRefreshSessions={refreshSessions}
                 onSelectSession={setSessionId}
+                recoveryErrorMessage={
+                    writeActions.actionMessage.startsWith('effect resolution failed:')
+                        ? writeActions.actionMessage
+                        : undefined
+                }
+                resolvingApprovalEffectIds={writeActions.resolvingApprovalEffectIds}
             />
         </main>
     );
@@ -236,6 +279,32 @@ function replaceCredentialSummary(
     summary: ProviderCredentialSummary,
 ): readonly ProviderCredentialSummary[] {
     return [...current.filter((entry) => entry.providerID !== summary.providerID), summary];
+}
+
+function replaceApprovalEffect(
+    current: readonly DesktopApprovalEffectRecord[],
+    next: DesktopApprovalEffectRecord,
+): readonly DesktopApprovalEffectRecord[] {
+    return [
+        ...current.filter((effect) => effect.effect.approvalId !== next.effect.approvalId),
+        next,
+    ];
+}
+
+async function loadApprovalEffects(
+    client: DesktopAgentClient,
+    selectedSessionLog: DesktopSessionLog,
+): Promise<readonly DesktopApprovalEffectRecord[]> {
+    const approvals = projectSessionInspector({ sessions: [], selectedLog: selectedSessionLog }).approvals;
+    const effects = await Promise.all(
+        approvals.map((approval) =>
+            client.getApprovalEffect({
+                sessionId: selectedSessionLog.sessionId,
+                approvalId: approval.approvalId,
+            }),
+        ),
+    );
+    return effects.filter((effect): effect is DesktopApprovalEffectRecord => effect !== undefined);
 }
 
 function errorMessage(error: unknown): string {

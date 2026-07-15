@@ -1,3 +1,4 @@
+import type { DesktopApprovalEffectOutcome, DesktopApprovalEffectRecord } from './lib/agent-client.js';
 import type { SessionInspectorProjection } from './lib/session-inspector.js';
 import { OutputPanelSection, UtilityRailPanel } from './SessionInspectorDetailPanels.js';
 import { SessionListPanel, TimelinePanelSection } from './SessionInspectorPanels.js';
@@ -10,8 +11,12 @@ export type SessionInspectorProps = {
     readonly onRefreshSessions: () => void;
     readonly onLoadSession: () => void;
     readonly onDecideApproval: (approvalId: string, state: 'approved' | 'denied') => void;
+    readonly onResolveApprovalEffect: (approvalId: string, outcome: DesktopApprovalEffectOutcome) => void;
     readonly sourceMessage: string;
     readonly sourceState: 'loading' | 'ready' | 'error';
+    readonly approvalEffects: readonly DesktopApprovalEffectRecord[];
+    readonly resolvingApprovalEffectIds: ReadonlySet<string>;
+    readonly recoveryErrorMessage: string | undefined;
 };
 
 export function SessionInspector({
@@ -21,8 +26,12 @@ export function SessionInspector({
     onRefreshSessions,
     onLoadSession,
     onDecideApproval,
+    onResolveApprovalEffect,
     sourceMessage,
     sourceState,
+    approvalEffects,
+    resolvingApprovalEffectIds,
+    recoveryErrorMessage,
 }: SessionInspectorProps): React.JSX.Element {
     return (
         <section className="inspector" aria-label="read-only session inspector">
@@ -63,7 +72,14 @@ export function SessionInspector({
                     <TimelinePanelSection projection={projection} />
                     <OutputPanelSection projection={projection} />
                 </div>
-                <UtilityRailPanel projection={projection} onDecideApproval={onDecideApproval} />
+                <UtilityRailPanel
+                    approvalEffects={approvalEffects}
+                    projection={projection}
+                    recoveryErrorMessage={recoveryErrorMessage}
+                    resolvingApprovalEffectIds={resolvingApprovalEffectIds}
+                    onDecideApproval={onDecideApproval}
+                    onResolveApprovalEffect={onResolveApprovalEffect}
+                />
             </div>
         </section>
     );

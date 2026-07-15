@@ -36,6 +36,71 @@ pub struct DesktopApprovalDecisionInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DesktopApprovalEffectOutcome {
+    Completed,
+    Failed,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopApprovalEffectQueryInput {
+    pub session_id: String,
+    pub approval_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopApprovalEffectResolutionInput {
+    pub session_id: String,
+    pub approval_id: String,
+    pub outcome: DesktopApprovalEffectOutcome,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopApprovalEffectIdentity {
+    pub session_id: String,
+    pub approval_id: String,
+    pub run_id: String,
+    pub tool_call_id: String,
+    pub tool_name: String,
+    pub arguments_json: String,
+    pub workspace_root: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopApprovalEffectRecord {
+    pub effect: DesktopApprovalEffectIdentity,
+    pub requested_at: String,
+    pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lease_expires_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub executing_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<DesktopApprovalEffectOutcome>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub settled_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unknown_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopApprovalEffectResolutionReceipt {
+    pub session_id: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effect: Option<DesktopApprovalEffectRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopCommandReceipt {
     pub session_id: String,
@@ -127,6 +192,22 @@ pub fn decide_approval(
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub fn get_approval_effect(
+    input: DesktopApprovalEffectQueryInput,
+) -> Result<Option<DesktopApprovalEffectRecord>, String> {
+    let data_dir = sessions::resolve_data_dir().map_err(|error| error.to_string())?;
+    get_approval_effect_in_data_dir(input, &data_dir)
+}
+
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub fn resolve_approval_effect(
+    input: DesktopApprovalEffectResolutionInput,
+) -> Result<DesktopApprovalEffectResolutionReceipt, String> {
+    let data_dir = sessions::resolve_data_dir().map_err(|error| error.to_string())?;
+    resolve_approval_effect_in_data_dir(input, &data_dir)
+}
+
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub fn list_provider_credentials() -> Result<Vec<DesktopProviderCredentialSummary>, String> {
     let data_dir = sessions::resolve_data_dir().map_err(|error| error.to_string())?;
     invoke_default_bridge_json(
@@ -190,6 +271,20 @@ pub(crate) fn decide_approval_in_data_dir(
         }
     };
     invoke_default_bridge("decideApproval", input.session_id.clone(), &input, data_dir)
+}
+
+pub(crate) fn get_approval_effect_in_data_dir(
+    input: DesktopApprovalEffectQueryInput,
+    data_dir: &Path,
+) -> Result<Option<DesktopApprovalEffectRecord>, String> {
+    invoke_default_bridge_json("getApprovalEffect", &input, data_dir)
+}
+
+pub(crate) fn resolve_approval_effect_in_data_dir(
+    input: DesktopApprovalEffectResolutionInput,
+    data_dir: &Path,
+) -> Result<DesktopApprovalEffectResolutionReceipt, String> {
+    invoke_default_bridge_json("resolveApprovalEffect", &input, data_dir)
 }
 
 pub fn list_sessions_in_data_dir(

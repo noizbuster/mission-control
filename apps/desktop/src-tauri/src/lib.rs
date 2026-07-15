@@ -6,11 +6,14 @@ mod desktop_commands;
 mod sessions;
 
 pub use desktop_commands::{
-    DesktopApprovalDecisionInput, DesktopCommandReceipt, DesktopPromptCommandInput,
+    DesktopApprovalDecisionInput, DesktopApprovalEffectOutcome, DesktopApprovalEffectQueryInput,
+    DesktopApprovalEffectRecord, DesktopApprovalEffectResolutionInput,
+    DesktopApprovalEffectResolutionReceipt, DesktopCommandReceipt, DesktopPromptCommandInput,
     DesktopProviderCredentialSummary, DesktopRunCommandInput, SaveDesktopProviderCredentialInput,
-    decide_approval, interrupt_run, list_provider_credentials, list_sessions_in_data_dir,
-    queue_follow_up, read_session_events_from_data_dir, read_session_snapshot_from_data_dir,
-    resume_run, save_provider_credential, steer_run, submit_prompt,
+    decide_approval, get_approval_effect, interrupt_run, list_provider_credentials,
+    list_sessions_in_data_dir, queue_follow_up, read_session_events_from_data_dir,
+    read_session_snapshot_from_data_dir, resolve_approval_effect, resume_run,
+    save_provider_credential, steer_run, submit_prompt,
 };
 pub use sessions::{
     DesktopSessionLog, DesktopSessionSnapshot, DesktopSessionSummary, SessionLogState,
@@ -55,6 +58,8 @@ pub fn run() {
             interrupt_run,
             resume_run,
             decide_approval,
+            get_approval_effect,
+            resolve_approval_effect,
             list_provider_credentials,
             save_provider_credential
         ])

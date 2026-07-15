@@ -1,12 +1,12 @@
 import { openLocalSessionProjectionStore, readLocalSessionReplay } from '@mission-control/core';
 
-export async function listSessions(dataDir) {
+export async function listSessions(dataDir, observabilityRedactor) {
     const store = await openLocalSessionProjectionStore({ dataDir });
     try {
         const records = await store.listSessions();
         const summaries = [];
         for (const record of records) {
-            summaries.push(await sessionSummary(dataDir, store, record));
+            summaries.push(await sessionSummary(dataDir, store, record, observabilityRedactor));
         }
         return summaries;
     } finally {
@@ -14,9 +14,9 @@ export async function listSessions(dataDir) {
     }
 }
 
-export async function readSessionEvents(dataDir, sessionId) {
+export async function readSessionEvents(dataDir, sessionId, observabilityRedactor) {
     assertSessionId(sessionId);
-    const replay = await readLocalSessionReplay({ dataDir, sessionId });
+    const replay = await readLocalSessionReplay({ dataDir, sessionId, observabilityRedactor });
     if (replay.kind === 'missing') {
         const record = await readSessionRecord(dataDir, sessionId);
         return {
@@ -36,13 +36,13 @@ export async function readSessionEvents(dataDir, sessionId) {
     };
 }
 
-export async function readSessionSnapshot(dataDir, sessionId) {
+export async function readSessionSnapshot(dataDir, sessionId, observabilityRedactor) {
     assertSessionId(sessionId);
     const store = await openLocalSessionProjectionStore({ dataDir });
     try {
         const record = (await store.getSession(sessionId)) ?? undefined;
         const projectionDiagnostics = (await store.getDiagnostics(sessionId)).map(projectionDiagnostic);
-        const replay = await readLocalSessionReplay({ dataDir, sessionId });
+        const replay = await readLocalSessionReplay({ dataDir, sessionId, observabilityRedactor });
         if (replay.kind === 'missing') {
             return {
                 sessionId,
@@ -80,9 +80,13 @@ export async function readSessionSnapshot(dataDir, sessionId) {
     }
 }
 
-async function sessionSummary(dataDir, store, record) {
+async function sessionSummary(dataDir, store, record, observabilityRedactor) {
     const projectionDiagnostics = (await store.getDiagnostics(record.sessionId)).map(projectionDiagnostic);
-    const replay = await readLocalSessionReplay({ dataDir, sessionId: record.sessionId });
+    const replay = await readLocalSessionReplay({
+        dataDir,
+        sessionId: record.sessionId,
+        observabilityRedactor,
+    });
     if (replay.kind === 'missing') {
         return {
             sessionId: record.sessionId,

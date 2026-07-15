@@ -1,3 +1,4 @@
+import { createObservabilityRedactor, redactAgentEventEnvelopeForObservability } from '@mission-control/core/redaction';
 import type { AgentEventEnvelope, SessionAwaitingDetails, SessionStatus } from '@mission-control/protocol';
 import { AgentEventEnvelopeSchema, SessionAwaitingDetailsSchema, SessionStatusSchema } from '@mission-control/protocol';
 import { z } from 'zod';
@@ -126,6 +127,8 @@ export const DesktopSessionLogSchema = z
     .strict();
 export type DesktopSessionLog = z.infer<typeof DesktopSessionLogSchema>;
 
+const desktopObservabilityRedactor = createObservabilityRedactor();
+
 export const DesktopSessionSnapshotSchema = z
     .object({
         sessionId: z.string().min(1),
@@ -172,7 +175,7 @@ export function parseDesktopSessionLogPayload(payload: unknown): DesktopSessionL
         }
         previousSequence = parsedEnvelope.data.sequence;
         seenEventIds.add(parsedEnvelope.data.eventId);
-        envelopes.push(parsedEnvelope.data);
+        envelopes.push(redactAgentEventEnvelopeForObservability(parsedEnvelope.data, desktopObservabilityRedactor));
     }
     let state: DesktopSessionState = raw.state;
     if (state === 'available' && diagnostics.length > raw.diagnostics.length) {
@@ -181,9 +184,12 @@ export function parseDesktopSessionLogPayload(payload: unknown): DesktopSessionL
     return {
         sessionId: raw.sessionId,
         state,
-        contents: raw.contents,
+        contents: desktopObservabilityRedactor.redactText(raw.contents),
         envelopes,
-        diagnostics,
+        diagnostics: diagnostics.map((diagnostic) => ({
+            ...diagnostic,
+            message: desktopObservabilityRedactor.redactText(diagnostic.message),
+        })),
     };
 }
 

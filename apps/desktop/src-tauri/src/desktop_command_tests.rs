@@ -1,9 +1,11 @@
-use crate::desktop_command_test_support::{seed_pending_file_patch_approval, temp_data_dir};
+use crate::desktop_command_test_support::{
+    seed_imported_jsonl_pending_file_patch_approval, temp_data_dir,
+};
 use crate::desktop_commands::{
     DesktopApprovalDecisionInput, DesktopPromptCommandInput, DesktopRunCommandInput,
     decide_approval_with_bridge, interrupt_run_in_data_dir, queue_follow_up_in_data_dir,
-    read_session_events_from_data_dir, resume_run_in_data_dir, steer_run_in_data_dir,
-    submit_prompt_in_data_dir, submit_prompt_with_bridge,
+    read_session_events_from_data_dir, resolve_approval_effect_in_data_dir, resume_run_in_data_dir,
+    steer_run_in_data_dir, submit_prompt_in_data_dir, submit_prompt_with_bridge,
 };
 use crate::sessions::SessionLogState;
 use std::error::Error;
@@ -35,7 +37,7 @@ fn prompt_commands_call_core_service_and_append_parseable_session_events()
 }
 
 #[test]
-fn run_and_approval_commands_append_parseable_session_events() -> Result<(), Box<dyn Error>> {
+fn run_commands_append_events_and_imported_approval_stays_inert() -> Result<(), Box<dyn Error>> {
     let data_dir = temp_data_dir("run-approval-bridge")?;
     let run_session_id = "session_bridge_run";
     let approval_session_id = "session_bridge_approval";
@@ -53,7 +55,7 @@ fn run_and_approval_commands_append_parseable_session_events() -> Result<(), Box
     let queued = queue_follow_up_in_data_dir(prompt_input(run_session_id), &data_dir)?;
     let resumed = resume_run_in_data_dir(run.clone(), &data_dir)?;
     let interrupted = interrupt_run_in_data_dir(run, &data_dir)?;
-    seed_pending_file_patch_approval(
+    seed_imported_jsonl_pending_file_patch_approval(
         &data_dir,
         approval_session_id,
         "approval_permission_call_patch",
@@ -70,17 +72,17 @@ fn run_and_approval_commands_append_parseable_session_events() -> Result<(), Box
     assert_eq!(queued.status, "queued");
     assert_eq!(resumed.status, "completed");
     assert_eq!(interrupted.status, "idle");
-    assert_eq!(decided.status, "blocked");
+    assert_eq!(decided.status, "idle");
     assert!(queued.events_written > 0);
     assert!(resumed.events_written > 0);
     assert!(interrupted.events_written > 0);
-    assert!(decided.events_written > 0);
+    assert_eq!(decided.events_written, 0);
     assert_eq!(run_log.state, SessionLogState::Available);
     assert_eq!(approval_log.state, SessionLogState::Available);
     assert!(run_commands(&run_log).contains(&"resume".to_owned()));
     assert!(run_commands(&run_log).contains(&"interrupt".to_owned()));
-    assert!(event_types(&approval_log).contains(&"approval.updated".to_owned()));
-    assert!(event_types(&approval_log).contains(&"approval.blocked".to_owned()));
+    assert!(!event_types(&approval_log).contains(&"approval.updated".to_owned()));
+    assert!(!event_types(&approval_log).contains(&"approval.blocked".to_owned()));
     remove_dir_all(data_dir)?;
     Ok(())
 }
@@ -101,6 +103,28 @@ fn command_returns_failed_when_bridge_is_unavailable() -> Result<(), Box<dyn Err
     assert_eq!(receipt.status, "failed");
     assert_eq!(receipt.events_written, 0);
     assert!(!data_file.exists());
+    Ok(())
+}
+
+#[test]
+fn unknown_effect_resolution_reaches_the_core_bridge_without_a_tool_execution_receipt()
+-> Result<(), Box<dyn Error>> {
+    // Given: no executable tool action is requested, only an operator outcome for an unknown effect.
+    let data_dir = temp_data_dir("effect-resolution-bridge")?;
+    let input = crate::desktop_commands::DesktopApprovalEffectResolutionInput {
+        session_id: "session_effect".to_owned(),
+        approval_id: "approval_effect".to_owned(),
+        outcome: crate::desktop_commands::DesktopApprovalEffectOutcome::Failed,
+    };
+
+    // When: the Tauri command bridge dispatches the resolution to core.
+    let receipt = resolve_approval_effect_in_data_dir(input, &data_dir)?;
+
+    // Then: an absent effect is reported as idle rather than invoking an approval decision or tool run.
+    assert_eq!(receipt.session_id, "session_effect");
+    assert_eq!(receipt.status, "idle");
+    assert!(receipt.effect.is_none());
+    remove_dir_all(data_dir)?;
     Ok(())
 }
 

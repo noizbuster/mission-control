@@ -3,6 +3,7 @@ import {
     createDesktopSessionCommandService,
     createProviderAuthStore,
     createProviderAuthStoreCredentialResolver,
+    createProviderAuthStoreObservabilityRedactor,
     createProviderRouter,
     fenceProcessSessionControlHosts,
     getProcessSessionControlHost,
@@ -19,6 +20,8 @@ const ACTION_METHODS = new Map([
     ['resumeRun', 'resumeRun'],
     ['interruptRun', 'interruptRun'],
     ['decideApproval', 'decideApproval'],
+    ['getApprovalEffect', 'getApprovalEffect'],
+    ['resolveApprovalEffect', 'resolveApprovalEffect'],
     ['listProviderCredentials', 'listProviderCredentials'],
     ['saveProviderCredential', 'saveProviderCredential'],
 ]);
@@ -78,14 +81,15 @@ async function handleStreamLine(line, context) {
 }
 
 async function executeRequest(request, context) {
+    const observabilityRedactor = await context.observabilityRedactor;
     if (request.method === 'listSessions') {
-        return listSessions(request.dataDir);
+        return listSessions(request.dataDir, observabilityRedactor);
     }
     if (request.method === 'readSessionEvents') {
-        return readSessionEvents(request.dataDir, readString(request.input, 'sessionId'));
+        return readSessionEvents(request.dataDir, readString(request.input, 'sessionId'), observabilityRedactor);
     }
     if (request.method === 'readSessionSnapshot') {
-        return readSessionSnapshot(request.dataDir, readString(request.input, 'sessionId'));
+        return readSessionSnapshot(request.dataDir, readString(request.input, 'sessionId'), observabilityRedactor);
     }
     if (request.method === 'listProviderCredentials') {
         return context.authStore.listCredentialSummaries();
@@ -98,6 +102,8 @@ async function executeRequest(request, context) {
             apiKey: readString(request.input, 'apiKey'),
             now: new Date().toISOString(),
         });
+        context.observabilityRedactor = createProviderAuthStoreObservabilityRedactor(context.authStore);
+        context.services.clear();
         return savedCredentialSummary(context.authStore, readString(request.input, 'providerID'));
     }
     const service = await commandService(request, context);
@@ -109,6 +115,7 @@ function createBridgeContext() {
     const credentialResolver = createProviderAuthStoreCredentialResolver(authStore);
     return {
         authStore,
+        observabilityRedactor: createProviderAuthStoreObservabilityRedactor(authStore),
         provider: createProviderRouter(credentialResolver),
         services: new Map(),
     };
@@ -124,6 +131,7 @@ async function commandService(request, context) {
         dataDir: request.dataDir,
         workspaceRoot: request.workspaceRoot,
         provider: context.provider,
+        observabilityRedactor: context.observabilityRedactor,
         sessionControlHost: await getProcessSessionControlHost(request.dataDir),
     });
     context.services.set(cacheKey, service);
