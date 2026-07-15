@@ -8,7 +8,7 @@ import {
     modelProviderCatalog,
     opencodeProviderCatalog,
     variantsForReasoningOptions,
-} from './index.js';
+} from './index';
 
 describe('config catalog constants', () => {
     it('exports the default local model provider selection and catalog without test providers', () => {

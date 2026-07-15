@@ -1,13 +1,13 @@
 import type { ProviderExecutionCapability } from '@mission-control/protocol';
 import modelsDevCatalogSnapshot from './generated/models-dev-catalog.json' with { type: 'json' };
-import { loadVariantOverrides, type VariantOverrides } from './model-variant-overrides.js';
-import { variantsForReasoningOptions } from './model-variant-presets.js';
-import { generatedDefaultProviderCapability, generatedProviderCapabilities } from './provider-capabilities.js';
+import { loadVariantOverrides, type VariantOverrides } from './model-variant-overrides';
+import { variantsForReasoningOptions } from './model-variant-presets';
+import { generatedDefaultProviderCapability, generatedProviderCapabilities } from './provider-capabilities';
 
-export { loadVariantOverrides, type VariantOverrideEntry, type VariantOverrides } from './model-variant-overrides.js';
-export { variantsForReasoningOptions } from './model-variant-presets.js';
-export type { RawModelsDevReasoningOption } from './models-dev-runtime.js';
-export { getModelContextLimit } from './models-dev-runtime.js';
+export { loadVariantOverrides, type VariantOverrideEntry, type VariantOverrides } from './model-variant-overrides';
+export { variantsForReasoningOptions } from './model-variant-presets';
+export type { RawModelsDevReasoningOption } from './models-dev-runtime';
+export { getModelContextLimit } from './models-dev-runtime';
 
 export const appName = 'mission-control';
 export const cliCommandName = 'mc';
@@ -181,14 +181,14 @@ export const modelProviderCatalog: readonly ModelProviderCatalogEntry[] = [
 ];
 
 export async function getRuntimeModelProviderCatalog(): Promise<readonly ModelProviderCatalogEntry[]> {
-    const { loadModelsDevCatalog } = await import('./models-dev-runtime.js');
-    type RawModelsDevCatalog = import('./models-dev-runtime.js').RawModelsDevCatalog;
+    const { loadModelsDevCatalog } = await import('./models-dev-runtime');
+    type RawModelsDevCatalog = import('./models-dev-runtime').RawModelsDevCatalog;
     const rawCatalog: RawModelsDevCatalog = await loadModelsDevCatalog();
     return [...scaffoldModelProviderCatalog, ...transformRawCatalog(rawCatalog, loadVariantOverrides())];
 }
 
 function transformRawCatalog(
-    rawCatalog: import('./models-dev-runtime.js').RawModelsDevCatalog,
+    rawCatalog: import('./models-dev-runtime').RawModelsDevCatalog,
     overrides: VariantOverrides,
 ): readonly ModelProviderCatalogEntry[] {
     return rawCatalog.providers

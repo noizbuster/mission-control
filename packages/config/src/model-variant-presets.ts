@@ -1,4 +1,4 @@
-import type { RawModelsDevReasoningOption } from './models-dev-runtime.js';
+import type { RawModelsDevReasoningOption } from './models-dev-runtime';
 
 export type ModelVariantPreset = {
     readonly id: string;

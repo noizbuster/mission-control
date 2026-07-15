@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getModelContextLimit, getVendoredModelsDevCatalog } from './models-dev-runtime.js';
+import { getModelContextLimit, getVendoredModelsDevCatalog } from './models-dev-runtime';
 
 describe('getModelContextLimit vendored catalog lookup', () => {
     it('returns a finite positive context limit for a known vendored model', () => {
