@@ -13,6 +13,12 @@
     },
     "typecheck": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": ["cli"],
+          "target": "build"
+        }
+      ],
       "outputs": [],
       "options": {
         "command": "tsc -p scripts/tsconfig.json --noEmit"
@@ -26,9 +32,21 @@
     },
     "test": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": ["cli"],
+          "target": "build"
+        }
+      ],
       "inputs": [
-        "{workspaceRoot}/tests/**/*.ts",
-        "{workspaceRoot}/scripts/**/*.ts",
+        "{workspaceRoot}/tests/**/*",
+        "{workspaceRoot}/scripts/**/*",
+        "{workspaceRoot}/.github/workflows/**/*",
+        "workflowParity",
+        "{workspaceRoot}/README.md",
+        "{workspaceRoot}/project.json",
+        "{workspaceRoot}/nx.json",
+        "{workspaceRoot}/apps/cli/project.json",
         "{workspaceRoot}/package.json",
         "{workspaceRoot}/tsconfig.base.json",
         "{workspaceRoot}/vitest.config.ts"

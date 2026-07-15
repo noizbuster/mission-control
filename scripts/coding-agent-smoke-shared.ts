@@ -1,23 +1,13 @@
+import type {
+    DesktopApprovalSettlementStatus,
+    DesktopApprovalStore,
+} from '../packages/core/src/desktop-tool-approvals.js';
 import type { AgentEvent } from '../packages/protocol/src/index.js';
 
 export const codingAgentSmokeSelection = { providerID: 'local', modelID: 'local-echo' } as const;
 
-export type SmokeApprovalStore = {
-    readonly append: (event: AgentEvent) => Promise<void>;
-    readonly getEvents: (sessionId: string) => Promise<readonly AgentEvent[]>;
-    readonly reserveDesktopApprovalEffect: (effect: SmokeApprovalEffect) => Promise<boolean>;
-    readonly claimDesktopApprovalEffect: (effect: SmokeApprovalEffect) => Promise<boolean>;
+export type SmokeApprovalStore = DesktopApprovalStore & {
     readonly close: () => Promise<void> | void;
-};
-
-type SmokeApprovalEffect = {
-    readonly sessionId: string;
-    readonly approvalId: string;
-    readonly runId: string;
-    readonly toolCallId: string;
-    readonly toolName: string;
-    readonly argumentsJson: string;
-    readonly workspaceRoot: string;
 };
 
 export type SmokeApprovalDependencies = {
@@ -49,7 +39,7 @@ export type SmokeApprovalDependencies = {
             readonly modelProviderSelection: typeof codingAgentSmokeSelection;
             readonly now: () => string;
         },
-    ) => Promise<'completed' | 'blocked' | 'failed' | 'idle'>;
+    ) => Promise<DesktopApprovalSettlementStatus>;
 };
 
 export function createSmokeApprovalEventId(_event: AgentEvent, sequence: number): string {

@@ -12,16 +12,25 @@ leases, and Ground Control's Mission Control adapter:
   for session inputs, Mission/Run records, context epochs, runtime agents,
   async jobs, and relation rows uses the same local-only data-dir `mission-control.db`
   file. `session_events` is authoritative for session, run, approval, and input
-  history. `mission_runs` and `async_jobs` remain authoritative for their own
-  durable work, so lifecycle refresh consults all three authorities.
+  history. `mission_runs` is the authoritative durable SQL Run store, and
+  `async_jobs` is authoritative for durable job work, so lifecycle refresh
+  consults all three authorities.
 
 Remote Turso is out of scope: the local DB opener accepts `:memory:` and `file:`
 URLs only, rejects `libsql://` and other remote schemes, and does not read auth
 tokens or configure sync.
 
-Legacy JSONL session logs remain explicit import/export compatibility inputs.
-They are not deleted during import, and explicit export can write a
-SQLite-native session back to JSONL/archive form.
+Legacy JSONL session logs remain session-timeline and import/export compatibility
+inputs. A normal session-store open automatically discovers
+`sessions/*.jsonl`, imports each source idempotently, and leaves the source
+unchanged. JSONL is not authoritative Run storage, and explicit export can
+write a SQLite-native session back to JSONL/archive form.
+
+This is a bounded local persistence contract, not a remote scheduler or replica:
+there is no Turso sync, vector index, automatic job re-execution, or implicit
+workflow resume. Mission/Run and job authorities remain durable and explicit.
+Blocked Runs resume only through an explicit lifecycle action; cancelled Runs
+are terminal and cannot resume.
 
 ## Contents
 
@@ -34,7 +43,7 @@ SQLite-native session back to JSONL/archive form.
 - [Awaiting Semantics](#awaiting-semantics)
 - [Owner IPC, Leases, And Operations](#owner-ipc-leases-and-operations)
 - [Subagent Lineage And Jobs](#subagent-lineage-and-jobs)
-- [Explicit Session Import And Export](#explicit-session-import-and-export)
+- [Compatibility Import And Explicit Export](#compatibility-import-and-explicit-export)
 - [Local Path And Memory Relationship](#local-path-and-memory-relationship)
 - [Hierarchy And Guarded Deletion](#hierarchy-and-guarded-deletion)
 - [Backup And Operations](#backup-and-operations)
@@ -52,11 +61,13 @@ Core `<MCTRL_DATA_DIR>/mission-control.db` tables:
 | `session_messages` | Transcript read projection by message. Used by CLI and desktop inspection without replaying all events. |
 | `session_parts` | Normalized message parts such as text, tool call, tool result, reasoning, file, and data parts. |
 | `session_awaits` | Wait projection rows for approval-blocked runs, blocking `user_input`, foreground `subagent` waits, and imported legacy awaiting metadata. |
-| `mission_runs` | Mission/Run SQL write target in `mission-control.db`; `.omo/runs/*.json` remains a separate compatibility format. |
+| `mission_runs` | Authoritative durable Mission/Run SQL storage in `mission-control.db`; `.omo/runs/*.json` remains a separate compatibility format. |
 | `approvals` | Approval projection keyed by `approval_id`, including subject, status, request/decision timestamps, and decision metadata. |
 | `tool_calls` | Tool-call projection keyed by `tool_call_id`, including name, status, arguments, result, approval id, timestamps, errors, and applied files. |
+| `desktop_tool_proposals` | Private exact tool-call payloads used only to execute a later desktop approval. Public events and replay stay redacted. Reusing one tool-call id with different content marks the proposal conflicted and non-executable. |
+| `desktop_approval_effects` | At-most-once ledger for one approved desktop tool effect, separate from approval decision history. It records exact identity, `pending -> executing -> settled | unknown`, an opaque execution token and lease, known outcomes, and execution/recovery/resolution timestamps. |
 | `provider_failures` | Provider failure projection keyed by a failure id, with unique `(session_id, event_id)` rows for request/provider-turn diagnostics. |
-| `legacy_session_imports` | Idempotent import ledger for JSONL logs and `.omo/runs/*.json` files. Records source path, source kind, checksum, imported event count, import timestamp, and diagnostics. |
+| `legacy_session_imports` | Idempotent compatibility-import ledger keyed by source path and checksum. Normal session-store opens use it for `sessions/*.jsonl`; callers that opt into Run sources can also record `.omo/runs/*.json` files. |
 
 Shared local `mission-control.db` runtime tables:
 
@@ -66,7 +77,7 @@ Shared local `mission-control.db` runtime tables:
 | `session_inputs` | Durable input delivery rows for `steer` and `queue` prompts. Tracks admitted/promoted sequence numbers and cancellation. |
 | `session_awaits` | Runtime wait rows for blocking input delivery and foreground child-agent waits. |
 | `missions` | Materialized workflow mission records mirrored into SQL. The original mission payload is preserved as JSON. |
-| `mission_runs` | SQL run records with parent run id, linked session id, child agent kind/id, child session ids, retry state, status timestamps, prompt, and passthrough JSON. |
+| `mission_runs` | SQL run records with parent run id, optional linked session id, child agent kind/id, child session ids, retry state, status timestamps, prompt, and passthrough JSON. A `blocked` Run is nonterminal and carries no `terminalReason`; a `cancelled` Run is terminal and carries its cancellation `terminalReason` plus `endedAt`. |
 | `context_epochs` | Pull-based system-context epoch records by session, epoch, and source. |
 | `runtime_agents` | Durable mirror of visible runtime agent references when a `SqlAgentJobMirror` is injected. |
 | `async_jobs` | Durable mirror of background and foreground child-agent jobs when a `SqlAgentJobMirror` is injected. |
@@ -78,16 +89,21 @@ Shared local `mission-control.db` runtime tables:
 ## Local Database Runtime Contract
 
 The product opener resolves and opens `<MCTRL_DATA_DIR>/mission-control.db`
-directly. Runtime startup does not probe an older SQL filename and has no legacy
-SQL migration path. Within one process, every canonical database file has one
-leased libSQL client and one Drizzle handle. Another process owns its own client
-for the same file.
+directly. Runtime startup does not probe, attach, or import a separate older SQL
+database file. Schema setup migrates legacy projection table names in place
+within the already-open canonical database: `session_index_runs` is copied into
+`session_projection_runs` and then dropped, and
+`session_index_diagnostics` is copied into `session_projection_diagnostics` and
+then dropped. Within one process, every canonical database file has one leased
+libSQL client and one Drizzle handle. Another process owns its own client for the
+same file.
 
 Every in-process mutation, including schema initialization, enters the explicit
 file-scoped write lane. Drizzle is a query layer and does not provide this
 serialization. Cross-process contention is bounded by a 5000 ms busy timeout.
-Before a file-backed client is published, the opener establishes and verifies
-`journal_mode=WAL`, `synchronous=NORMAL`, and that busy timeout.
+Before a client is published, the opener enables and verifies
+`foreign_keys=ON`. File-backed clients additionally establish and verify
+`journal_mode=WAL`, `synchronous=NORMAL`, and the busy timeout.
 
 The persistent working-memory adapter may remain unavailable when its optional
 libSQL native binary cannot be loaded. Once a local file configuration reaches
@@ -101,6 +117,27 @@ Session projection tables:
 | --- | --- |
 | `session_projection_runs` | Run-event projection for session list/detail reads. It records event id, sequence, event type, command/state, run/input/provider ids, reason, and error code. |
 | `session_projection_diagnostics` | Projection diagnostics produced while importing legacy session data. |
+
+Exact desktop tool proposals are recorded transactionally before their public
+events are redacted. They are private execution authority, not event, replay,
+or archive data. A repeated tool-call id with a different name or arguments is
+marked conflicted and cannot be approved or executed.
+
+`desktop_approval_effects` is a separate at-most-once ledger. Reserving an
+effect stores its exact session, approval, run, tool-call, tool name, arguments,
+and workspace identity as `pending`. A full-identity claim records an opaque
+execution token and lease while advancing to `executing`. Known tool result
+events are appended durably before that same token can advance the row to
+`settled` with a `completed` or `failed` outcome. Claims and settlements use the
+store clock; an owner cannot claim with an already-expired lease or settle at or
+after lease expiry. An expired execution advances only to `unknown`; it is never executable again. An operator can attach a
+`completed` or `failed` resolution to `unknown` without running the tool.
+Approval requests and decisions remain in `approvals` and `session_events`.
+
+Canonical schema setup detects only the exact older ten-column effect table and
+rebuilds that shape in place. Legacy `pending` rows remain pending, legacy
+`settled` rows become `unknown`, and orphaned rows are not copied. Other table
+shapes fail closed instead of entering a general migration framework.
 
 ## Key Indexes
 
@@ -131,6 +168,7 @@ awaiting-state rendering, child lookup, and import diagnostics:
 | `tool_calls_session_status_idx` | `(session_id, status)` | Tool outcome summaries. |
 | `tool_calls_run_idx` | `run_id` | Run-scoped tool lookup. |
 | `tool_calls_approval_idx` | `approval_id` | Tool-to-approval join. |
+| `desktop_approval_effects_state_idx` | `state` | Pending, executing, settled, and unknown effect work. |
 | `provider_failures_request_idx` | `(session_id, request_id)` | Provider request diagnostics. |
 | `context_epochs_session_epoch_source_unique` | `(session_id, epoch, source_id)` | Idempotent context-source epoch writes. |
 | `runtime_agents_session_idx` | `session_id` | Live/adopted agent lookup by session. |
@@ -160,6 +198,15 @@ the source of truth for nonterminal Mission work, and live jobs plus the durable
 reaches `idle` only after event-derived waits and inputs, mission work, and job
 work are all quiescent. A replay can rebuild event-derived projections, but it
 does not invent mission or job authority.
+
+Run blocking is intentionally narrow. The public `blockRun` service transitions
+`running -> blocked` without writing `terminalReason`; the reason remains in the
+event stream until typed Run wait metadata exists. `blocked` is nonterminal and
+resumable through the explicit `blocked -> running` transition, such as after an
+approval decision. It is also cancellable through `blocked -> cancelled`; no
+automatic blocked resume exists. The public `cancelRun` service supplies the
+cancellation `terminalReason`, and the store auto-manages `endedAt`. `cancelled`
+is terminal, has no outgoing transition, and cannot resume.
 
 Projection tables are read models derived from event envelopes or runtime
 state. They may be deleted and rebuilt for a session from `session_events` and
@@ -272,16 +319,27 @@ when the SQL mirror is wired into the task runtime. Resolving the child marks
 the wait `resolved` and updates the job terminal state. Detached jobs only write
 `async_jobs`; they do not create a blocking wait.
 
-## Explicit Session Import And Export
+## Compatibility Import And Explicit Export
 
 Runtime startup opens the unified database directly and does not probe or
-automatically import prior SQL stores. JSONL import and export remain an
-explicit compatibility path. JSONL envelopes
-are validated before insertion, and `legacy_session_imports` records their
-source and checksum. Export reads ordered `session_events` and writes JSONL or
-an archive only when requested. Export does not delete or rewrite source files.
-Mission and Run JSON records under `.omo/` remain supported by their owning
-persistence stores and are not inspected by database startup.
+automatically import prior SQL stores. It separately runs the JSONL compatibility
+importer on every normal session-store open. The importer discovers only
+`sessions/*.jsonl`, validates each envelope before insertion, and
+`legacy_session_imports` makes the JSONL import idempotent by source path and
+checksum. It does not rewrite or delete the JSONL source.
+
+The normal opener passes `includeRunSources: false`, so `.omo/runs/*.json` files
+are not auto-imported. Mission and Run JSON records under `.omo/` remain owned
+by their own persistence stores. A caller that explicitly opts into Run-source
+compatibility import may import those files, with `sessionRunId` stripped and a
+`session_owner_stripped` diagnostic recorded when it was present. Only the
+canonical runtime owner attach/settle path may persist `sessionRunId`.
+
+Export is explicit. It reads ordered `session_events` and writes JSONL or an
+archive only when requested, without deleting or rewriting source files. Public
+Run creation is insert-only and rejects a duplicate id rather than replacing an
+existing owner or status. Imported terminal reasons are credential-redacted
+before entering SQL while compatibility source files remain unchanged.
 
 ## Local Path And Memory Relationship
 
@@ -305,7 +363,8 @@ agent/job mirror tables intentionally share `mission-control.db`. `:memory:` rem
 available for tests and ephemeral stores.
 
 Legacy JSONL logs, if present, remain at `<data-dir>/sessions/<session-id>.jsonl`
-and are treated as import/export compatibility artifacts.
+and are automatically imported by normal session-store opens as idempotent,
+source-preserving compatibility artifacts.
 
 ## Hierarchy And Guarded Deletion
 

@@ -25,11 +25,11 @@ jobs:
           version: 10.24.0
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 26.3.0
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @mission-control/cli build
+      - run: NX_DAEMON=false NX_ISOLATE_PLUGINS=false pnpm exec nx run cli:build
       - run: cargo build --release --manifest-path native/sidecar/Cargo.toml
       - run: pnpm dev:package-cli
       - name: artifact name
@@ -42,9 +42,3 @@ jobs:
           files: |
             dist/release/mctrl-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
             dist/release/mctrl-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.sha256
-      - name: publish npm
-        if: ${{ secrets.NPM_TOKEN != '' }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm --filter @mission-control/cli publish --access public --no-git-checks

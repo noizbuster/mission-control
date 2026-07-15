@@ -48,7 +48,7 @@
     "vite-plugin-solid": "^2.11.12"
   },
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && tsc -p tsconfig.json --emitDeclarationOnly",
     "test": "sh -c 'cd ../.. && while [ \"${1:-}\" = \"--\" ]; do shift; done; vitest run --reporter verbose \"$@\"' --",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }

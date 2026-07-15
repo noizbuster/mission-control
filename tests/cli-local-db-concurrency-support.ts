@@ -1,9 +1,9 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { EventEmitter, once } from 'node:events';
+import { existsSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -15,18 +15,28 @@ const preopenPreloadUrl = pathToFileURL(
 const lockWorkerPath = join(repositoryRoot, 'packages', 'core', 'src', 'db', 'test-fixtures', 'local-db-worker.ts');
 const processes = new Set<CapturedProcess>();
 
+class BuiltCliArtifactMissingError extends Error {
+    readonly artifactPath: string;
+
+    constructor(artifactPath: string) {
+        super(
+            `Built CLI artifact is missing at ${artifactPath}. Build it once before focused Vitest runs: NX_DAEMON=false NX_ISOLATE_PLUGINS=false pnpm exec nx run cli:build`,
+        );
+        this.name = 'BuiltCliArtifactMissingError';
+        this.artifactPath = artifactPath;
+    }
+}
+
 export type ProcessResult = {
     readonly code: number | null;
     readonly signal: NodeJS.Signals | null;
     readonly stdout: string;
     readonly stderr: string;
-    readonly elapsedMs: number;
 };
 
 export class CapturedProcess {
     readonly child: ChildProcessWithoutNullStreams;
     private readonly events = new EventEmitter();
-    private readonly startedAt = performance.now();
     private readonly exit: Promise<ProcessResult>;
     private stdout = '';
     private stderr = '';
@@ -52,7 +62,6 @@ export class CapturedProcess {
                     signal,
                     stdout: this.stdout,
                     stderr: this.stderr,
-                    elapsedMs: performance.now() - this.startedAt,
                 });
             });
         });
@@ -111,9 +120,9 @@ export class CapturedProcess {
     }
 }
 
-export async function buildRealCli(): Promise<ProcessResult> {
-    const executable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-    return new CapturedProcess(executable, ['exec', 'nx', 'run', 'cli:build', '--skip-nx-cache']).waitForExit(120_000);
+export function resolveBuiltCliEntryPath(): string {
+    if (!existsSync(cliEntryPath)) throw new BuiltCliArtifactMissingError(cliEntryPath);
+    return cliEntryPath;
 }
 
 export function startBuiltCli(
@@ -121,10 +130,11 @@ export function startBuiltCli(
     env: NodeJS.ProcessEnv,
     drainSessionId?: string,
 ): CapturedProcess {
+    const entryPath = resolveBuiltCliEntryPath();
     const nodeArgs = [
         '--experimental-ffi',
         ...(drainSessionId === undefined ? [] : ['--import', drainPreloadUrl]),
-        cliEntryPath,
+        entryPath,
         ...args,
     ];
     return new CapturedProcess(process.execPath, nodeArgs, {
@@ -149,9 +159,10 @@ export function startPreopenedBuiltCli(
     env: NodeJS.ProcessEnv,
     releasePath: string,
 ): CapturedProcess {
+    const entryPath = resolveBuiltCliEntryPath();
     return new CapturedProcess(
         process.execPath,
-        ['--experimental-ffi', '--import', preopenPreloadUrl, cliEntryPath, ...args],
+        ['--experimental-ffi', '--import', preopenPreloadUrl, entryPath, ...args],
         { ...env, MCTRL_TASK12_PREOPEN_RELEASE_PATH: releasePath },
     );
 }

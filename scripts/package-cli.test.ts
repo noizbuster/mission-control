@@ -1,22 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { createCurrentPlatformPackage } from './package-cli.js';
+import { packageJson, withPackageFixture, writeFixtureFile } from './package-cli-test-fixture.js';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, join } from 'node:path';
 
 const root = process.cwd();
 
 type CliManifest = {
+    readonly private?: boolean;
     readonly files?: readonly string[];
-    readonly bin?: {
-        readonly mc?: string;
-        readonly mctrl?: string;
-    };
-    readonly publishConfig?: {
-        readonly access?: string;
-    };
+    readonly bin?: { readonly mc?: string; readonly mctrl?: string };
+    readonly publishConfig?: unknown;
+    readonly dependencies?: Readonly<Record<string, string>>;
+};
+
+type RuntimeManifest = {
+    readonly dependencies?: Readonly<Record<string, string>>;
 };
 
 function readCliManifest(): CliManifest {
@@ -24,18 +26,28 @@ function readCliManifest(): CliManifest {
 }
 
 describe('CLI package distribution contract', () => {
-    it('declares publish-ready npm metadata', () => {
-        const manifest = readCliManifest();
+    it('declares puppeteer-core as a regular core runtime dependency', () => {
+        const manifest = JSON.parse(readFileSync(join(root, 'packages/core/package.json'), 'utf8')) as RuntimeManifest;
+        expect(manifest.dependencies?.['puppeteer-core']).toMatch(/^\^?25\./u);
+    });
 
+    it('keeps the CLI private without public publication metadata', () => {
+        const manifest = readCliManifest();
+        expect(manifest.private).toBe(true);
         expect(manifest.files).toEqual(['dist']);
         expect(manifest.bin?.mc).toBe('./dist/index.js');
         expect(manifest.bin?.mctrl).toBe('./dist/index.js');
-        expect(manifest.publishConfig?.access).toBe('public');
+        expect(manifest.publishConfig).toBeUndefined();
+        expect(manifest.dependencies).toMatchObject({
+            '@mission-control/config': 'workspace:*',
+            '@mission-control/core': 'workspace:*',
+            '@mission-control/protocol': 'workspace:*',
+            '@mission-control/tui': 'workspace:*',
+        });
     });
 
     it('package helper verifies CLI dist and sidecar before creating a current-platform tarball', () => {
         const source = readFileSync(join(root, 'scripts/package-cli.ts'), 'utf8');
-
         expect(source).toContain('apps/cli/dist/index.js');
         expect(source).toContain('mission-control-sidecar');
         expect(source).toContain(['mctrl-', '$', '{platform.os}-', '$', '{platform.arch}.tar.gz'].join(''));
@@ -44,18 +56,17 @@ describe('CLI package distribution contract', () => {
 
     it('install script preserves the stable sidecar binary name from release artifacts', () => {
         const source = readFileSync(join(root, 'scripts/install.sh'), 'utf8');
-
         expect(source).toContain(['artifact="mctrl-', '$', '{os}-', '$', '{arch}.tar.gz"'].join(''));
         expect(source).toContain('mission-control-sidecar');
         expect(source).toContain('artifact did not contain mission-control-sidecar');
         expect(source).toContain('installed mission-control-sidecar');
     });
 
-    it('stages the runnable CLI dist tree, provider packages, zod, and sidecar in the tarball', () => {
+    it('stages the runnable CLI dist tree, versioned browser dependencies, zod, and sidecar', () => {
         withPackageFixture({ includeSidecar: true }, (fixtureRoot) => {
             const artifactPath = createCurrentPlatformPackage(fixtureRoot);
             const entries = listTarEntries(artifactPath);
-
+            const stageRoot = artifactPath.replace(/\.tar\.gz$/u, '');
             expect(entries).toEqual(
                 expect.arrayContaining([
                     './mc',
@@ -68,10 +79,17 @@ describe('CLI package distribution contract', () => {
                     './node_modules/@mission-control/protocol/dist/index.js',
                     './node_modules/@mission-control/tui/dist/index.js',
                     './node_modules/@mission-control/tui/package.json',
+                    './node_modules/puppeteer-core/package.json',
+                    './node_modules/puppeteer-core/node_modules/zod/transitive-runtime-version.js',
+                    './node_modules/zod/correct-runtime-version.js',
                     './node_modules/zod/package.json',
                     './mission-control-sidecar',
                 ]),
             );
+            expect(readPackageVersion(join(stageRoot, 'node_modules/zod/package.json'))).toBe('4.4.3');
+            expect(
+                readPackageVersion(join(stageRoot, 'node_modules/puppeteer-core/node_modules/zod/package.json')),
+            ).toBe('3.25.76');
         });
     });
 
@@ -79,10 +97,21 @@ describe('CLI package distribution contract', () => {
         withPackageFixture({ includeSidecar: true }, (fixtureRoot) => {
             const artifactPath = createCurrentPlatformPackage(fixtureRoot);
             const expectedDigest = createHash('sha256').update(readFileSync(artifactPath)).digest('hex');
-
             expect(readFileSync(`${artifactPath}.sha256`, 'utf8')).toBe(
                 `${expectedDigest}  ${basename(artifactPath)}\n`,
             );
+        });
+    });
+
+    it('stages a private package manifest for the release tarball', () => {
+        withPackageFixture({ includeSidecar: true }, (fixtureRoot) => {
+            const artifactPath = createCurrentPlatformPackage(fixtureRoot);
+            const stageRoot = artifactPath.replace(/\.tar\.gz$/u, '');
+            const stagedManifest = JSON.parse(readFileSync(join(stageRoot, 'package.json'), 'utf8')) as {
+                readonly private?: boolean;
+            };
+
+            expect(stagedManifest.private).toBe(true);
         });
     });
 
@@ -90,17 +119,14 @@ describe('CLI package distribution contract', () => {
         withPackageFixture({ includeSidecar: true }, (fixtureRoot) => {
             const artifactPath = createCurrentPlatformPackage(fixtureRoot);
             const unpackRoot = mkdtempSync(join(tmpdir(), 'mission-control-package-unpack-'));
-
             try {
                 const unpack = spawnSync('tar', ['-xzf', artifactPath, '-C', unpackRoot], { encoding: 'utf8' });
                 expect(unpack.status).toBe(0);
-
                 const mc = join(unpackRoot, 'mc');
                 const legacyMctrl = join(unpackRoot, 'mctrl');
                 const help = spawnSync(mc, ['--help'], { encoding: 'utf8' });
                 const legacyHelp = spawnSync(legacyMctrl, ['--help'], { encoding: 'utf8' });
                 const dataDir = join(unpackRoot, 'data');
-                const authFile = join(unpackRoot, 'auth.json');
                 const prompt = spawnSync(
                     mc,
                     ['run', 'package smoke', '--jsonl', '--provider', 'local', '--model', 'local-echo'],
@@ -109,11 +135,10 @@ describe('CLI package distribution contract', () => {
                         env: {
                             ...process.env,
                             MCTRL_DATA_DIR: dataDir,
-                            MISSION_CONTROL_AUTH_FILE: authFile,
+                            MISSION_CONTROL_AUTH_FILE: join(unpackRoot, 'auth.json'),
                         },
                     },
                 );
-
                 expect(help.status).toBe(0);
                 expect(help.stdout).toContain('Usage: mc');
                 expect(legacyHelp.status).toBe(0);
@@ -132,116 +157,111 @@ describe('CLI package distribution contract', () => {
             expect(() => createCurrentPlatformPackage(fixtureRoot)).toThrow('mission-control-sidecar binary missing');
         });
     });
+
+    it('rejects dependency names that can escape node_modules', () => {
+        withPackageFixture({ includeSidecar: true }, (fixtureRoot) => {
+            writeFixtureFile(
+                join(fixtureRoot, 'packages/core/package.json'),
+                packageJson('@mission-control/core', { '.': './dist/index.js' }, { '../../outside': 'fixture' }),
+            );
+            expect(() => createCurrentPlatformPackage(fixtureRoot)).toThrow('invalid dependency package name');
+        });
+    });
+
+    it('rejects dependency symlinks that resolve outside the package workspace', () => {
+        withPackageFixture({ includeSidecar: true }, (fixtureRoot) => {
+            const outsideRoot = mkdtempSync(join(tmpdir(), 'mission-control-package-outside-'));
+            try {
+                writeFixtureFile(
+                    join(outsideRoot, 'package.json'),
+                    packageJson('puppeteer-core', { '.': './index.js' }),
+                );
+                writeFixtureFile(join(outsideRoot, 'index.js'), 'export const escaped = true;\n');
+                const source = join(fixtureRoot, 'node_modules/puppeteer-core');
+                rmSync(source, { recursive: true, force: true });
+                symlinkSync(outsideRoot, source, 'dir');
+                expect(() => createCurrentPlatformPackage(fixtureRoot)).toThrow('source for puppeteer-core escapes');
+            } finally {
+                rmSync(outsideRoot, { recursive: true, force: true });
+            }
+        });
+    });
+
+    it('rejects dependency symlinks that escape their package inside the workspace', () => {
+        withPackageFixture({ includeSidecar: true }, (fixtureRoot) => {
+            const dependencyRoot = join(fixtureRoot, 'node_modules/puppeteer-core');
+            symlinkSync(
+                join(fixtureRoot, 'packages/core/package.json'),
+                join(dependencyRoot, 'leaked-core-package.json'),
+            );
+
+            expect(() => createCurrentPlatformPackage(fixtureRoot)).toThrow('escapes package root');
+        });
+    });
+
+    it('rejects an installed dependency version outside the requested range', () => {
+        withPackageFixture({ includeSidecar: true }, (fixtureRoot) => {
+            writeFixtureFile(
+                join(fixtureRoot, 'packages/core/package.json'),
+                packageJson('@mission-control/core', { '.': './dist/index.js' }, { 'puppeteer-core': '^25.3.0' }),
+            );
+            writeFixtureFile(
+                join(fixtureRoot, 'node_modules/puppeteer-core/package.json'),
+                packageJson('puppeteer-core', { '.': './index.js' }, { zod: 'transitive-fixture' }, '24.0.0'),
+            );
+
+            expect(() => createCurrentPlatformPackage(fixtureRoot)).toThrow('does not satisfy ^25.3.0');
+        });
+    });
+
+    it('rejects an undeclared prerelease for a stable requested range', () => {
+        withPackageFixture({ includeSidecar: true }, (fixtureRoot) => {
+            writeFixtureFile(
+                join(fixtureRoot, 'node_modules/puppeteer-core/package.json'),
+                packageJson('puppeteer-core', { '.': './index.js' }, { zod: '^3.25.0' }, '25.3.0-evil'),
+            );
+
+            expect(() => createCurrentPlatformPackage(fixtureRoot)).toThrow('does not satisfy ^25.3.0');
+        });
+    });
+
+    it('rejects a later undeclared prerelease inside a stable requested range', () => {
+        withPackageFixture({ includeSidecar: true }, (fixtureRoot) => {
+            writeFixtureFile(
+                join(fixtureRoot, 'node_modules/puppeteer-core/package.json'),
+                packageJson('puppeteer-core', { '.': './index.js' }, { zod: '^3.25.0' }, '25.4.0-evil'),
+            );
+
+            expect(() => createCurrentPlatformPackage(fixtureRoot)).toThrow('does not satisfy ^25.3.0');
+        });
+    });
+
+    it('rejects a different prerelease for an exact prerelease request', () => {
+        withPackageFixture({ includeSidecar: true }, (fixtureRoot) => {
+            writeFixtureFile(
+                join(fixtureRoot, 'packages/core/package.json'),
+                packageJson(
+                    '@mission-control/core',
+                    { '.': './dist/index.js' },
+                    { 'puppeteer-core': '=25.3.0-evil.2' },
+                ),
+            );
+            writeFixtureFile(
+                join(fixtureRoot, 'node_modules/puppeteer-core/package.json'),
+                packageJson('puppeteer-core', { '.': './index.js' }, { zod: '^3.25.0' }, '25.3.0-evil'),
+            );
+
+            expect(() => createCurrentPlatformPackage(fixtureRoot)).toThrow('does not satisfy =25.3.0-evil.2');
+        });
+    });
 });
-
-type PackageFixtureOptions = {
-    readonly includeSidecar: boolean;
-};
-
-function withPackageFixture(options: PackageFixtureOptions, run: (fixtureRoot: string) => void): void {
-    const fixtureRoot = mkdtempSync(join(tmpdir(), 'mission-control-package-fixture-'));
-    try {
-        writePackageFixture(fixtureRoot, options);
-        run(fixtureRoot);
-    } finally {
-        rmSync(fixtureRoot, { recursive: true, force: true });
-    }
-}
-
-function writePackageFixture(fixtureRoot: string, options: PackageFixtureOptions): void {
-    writeFixtureFile(
-        join(fixtureRoot, 'apps/cli/package.json'),
-        packageJson('@mission-control/cli', { '.': './dist/index.js' }, { zod: 'fixture' }),
-    );
-    writeFixtureFile(join(fixtureRoot, 'apps/cli/dist/index.js'), fixtureCliEntrypoint());
-    writeFixtureFile(join(fixtureRoot, 'apps/cli/dist/args.js'), 'export const args = [];\n');
-    writeFixtureFile(
-        join(fixtureRoot, 'apps/cli/dist/commands/local-coding-provider.js'),
-        'export const local = true;\n',
-    );
-    writeFixtureFile(
-        join(fixtureRoot, 'apps/cli/dist/commands/provider-factory.js'),
-        'export const provider = true;\n',
-    );
-    writeFixtureFile(
-        join(fixtureRoot, 'packages/config/package.json'),
-        packageJson('@mission-control/config', { '.': './dist/index.js' }),
-    );
-    writeFixtureFile(join(fixtureRoot, 'packages/config/dist/index.js'), 'export const config = true;\n');
-    writeFixtureFile(
-        join(fixtureRoot, 'packages/config/dist/provider-capabilities.js'),
-        'export const capabilities = true;\n',
-    );
-    writeFixtureFile(
-        join(fixtureRoot, 'packages/core/package.json'),
-        packageJson('@mission-control/core', { '.': './dist/index.js' }),
-    );
-    writeFixtureFile(join(fixtureRoot, 'packages/core/dist/index.js'), 'export const core = true;\n');
-    writeFixtureFile(
-        join(fixtureRoot, 'packages/core/dist/providers/openai/openai-responses-provider.js'),
-        'export const openai = true;\n',
-    );
-    writeFixtureFile(
-        join(fixtureRoot, 'packages/protocol/package.json'),
-        packageJson('@mission-control/protocol', { '.': './dist/index.js' }),
-    );
-    writeFixtureFile(join(fixtureRoot, 'packages/protocol/dist/index.js'), 'export const protocol = true;\n');
-    writeFixtureFile(
-        join(fixtureRoot, 'apps/tui/package.json'),
-        packageJson('@mission-control/tui', { '.': './dist/index.js' }),
-    );
-    writeFixtureFile(join(fixtureRoot, 'apps/tui/dist/index.js'), 'export const tui = true;\n');
-    writeFixtureFile(join(fixtureRoot, 'node_modules/zod/package.json'), packageJson('zod', { '.': './index.js' }));
-    writeFixtureFile(join(fixtureRoot, 'node_modules/zod/index.js'), 'export const z = {};\n');
-
-    if (options.includeSidecar) {
-        const sidecarPath = join(fixtureRoot, 'native/sidecar/target/debug/mission-control-sidecar');
-        writeFixtureFile(sidecarPath, '#!/usr/bin/env sh\necho sidecar\n');
-        chmodSync(sidecarPath, 0o755);
-    }
-}
-
-function writeFixtureFile(path: string, contents: string): void {
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, contents);
-}
-
-function packageJson(name: string, exportsMap: Record<string, string>, dependencies?: Record<string, string>): string {
-    return `${JSON.stringify({ name, type: 'module', exports: exportsMap, dependencies }, null, 2)}\n`;
-}
-
-function fixtureCliEntrypoint(): string {
-    return [
-        '#!/usr/bin/env -S node --experimental-ffi',
-        "import { mkdirSync, writeFileSync } from 'node:fs';",
-        "import { join } from 'node:path';",
-        '',
-        "if (process.argv.includes('--help')) {",
-        "    console.log('Usage: mc');",
-        '    process.exit(0);',
-        '}',
-        '',
-        "if (process.argv[2] === 'run') {",
-        "    const dataDir = process.env.MCTRL_DATA_DIR ?? '';",
-        '    if (dataDir.length === 0) {',
-        "        console.error('MCTRL_DATA_DIR is required for package smoke');",
-        '        process.exit(1);',
-        '    }',
-        '    mkdirSync(dataDir, { recursive: true });',
-        "    const prompt = process.argv[3] ?? '';",
-        "    writeFileSync(join(dataDir, 'session_fixture.jsonl'), JSON.stringify({ prompt }) + '\\n');",
-        "    console.log(JSON.stringify({ type: 'task.completed', message: 'received prompt: ' + prompt }));",
-        '    process.exit(0);',
-        '}',
-        '',
-        "console.error('unsupported fixture command');",
-        'process.exit(1);',
-        '',
-    ].join('\n');
-}
 
 function listTarEntries(artifactPath: string): readonly string[] {
     const tar = spawnSync('tar', ['-tzf', artifactPath], { encoding: 'utf8' });
     expect(tar.status).toBe(0);
     return tar.stdout.trim().split('\n');
+}
+
+function readPackageVersion(manifestPath: string): string | undefined {
+    return (JSON.parse(readFileSync(manifestPath, 'utf8')) as { readonly version?: string }).version;
 }

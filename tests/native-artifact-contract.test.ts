@@ -207,7 +207,7 @@ describe('CI builds both Rust crates on every release platform', () => {
         expect(ci).toContain('cargo build --release --manifest-path native/sidecar/Cargo.toml');
     });
 
-    it('does not add npm publish steps (release distribution is a future task)', () => {
+    it('keeps ordinary CI free of npm publication while workspace packages are private', () => {
         const ci = readText('.github/workflows/ci.yml');
 
         expect(ci).not.toContain('npm publish');

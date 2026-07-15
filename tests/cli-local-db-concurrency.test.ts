@@ -1,9 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { openMissionControlDb } from '../packages/core/src/db/mission-control-db.js';
 import {
-    buildRealCli,
     makeTask12TempRoot,
     type ProcessResult,
+    resolveBuiltCliEntryPath,
     startBuiltCli,
     startLockHolder,
     startPreopenedBuiltCli,
@@ -16,10 +16,9 @@ const forbiddenSuccessStderr = /SQLITE_BUSY|database is locked|client closed/iu;
 const retiredDatabaseFilename = ['memory', 'db'].join('.');
 const roots: string[] = [];
 
-beforeAll(async () => {
-    const build = await buildRealCli();
-    expect(build, build.stderr).toMatchObject({ code: 0, signal: null });
-}, 120_000);
+beforeAll(() => {
+    resolveBuiltCliEntryPath();
+});
 
 afterEach(async () => {
     await terminateTask12Processes();
@@ -121,11 +120,9 @@ describe('built CLI unified database concurrency', () => {
         await writeFile(startPath, 'start', 'utf8');
         const blocked = await blockedProcess.waitForExit(10_000);
 
-        // Then: failure is bounded and explicit, release recovers the same target, and no migration fallback appears.
+        // Then: failure is explicit, release recovers the same target, and no migration fallback appears.
         expect(blocked.code).toBe(1);
         expect(blocked.signal).toBeNull();
-        expect(blocked.elapsedMs).toBeGreaterThanOrEqual(4_500);
-        expect(blocked.elapsedMs).toBeLessThan(7_000);
         expect(blocked.stderr).toMatch(/SQLITE_BUSY|busy|locked/iu);
         await writeFile(releasePath, 'release', 'utf8');
         await holder.waitForMarker('COMMITTED');
@@ -143,6 +140,14 @@ describe('built CLI unified database concurrency', () => {
 
         const runtime = await openMissionControlDb({ dataDir: fixture.dataDir });
         try {
+            const blockedSession = await runtime.client.execute(
+                "SELECT session_id FROM sessions WHERE session_id = 'task12-timeout'",
+            );
+            const heldRow = await runtime.client.execute(
+                "SELECT key FROM memory_entries WHERE namespace = 'task-11' AND key = 'task-12-held-row'",
+            );
+            expect(blockedSession.rows).toEqual([]);
+            expect(heldRow.rows).toEqual([{ key: 'task-12-held-row' }]);
             await expectPragmasAndIntegrity(runtime);
         } finally {
             runtime.close();

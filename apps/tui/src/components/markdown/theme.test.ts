@@ -31,8 +31,8 @@ describe('TerminalMarkdownTheme built-ins', () => {
         expect(darkTheme.codeBlockIndent?.length).toBeGreaterThan(0);
     });
 
-    it('wires the highlightCode slot on darkTheme (T5) and leaves noColorTheme unset', () => {
-        expect(typeof darkTheme.highlightCode).toBe('function');
+    it('keeps the public theme framework-free for plain renderers', () => {
+        expect(darkTheme.highlightCode).toBeUndefined();
         expect(noColorTheme.highlightCode).toBeUndefined();
     });
 

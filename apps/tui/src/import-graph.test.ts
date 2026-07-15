@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 const root = process.cwd();
 const stateSourceRoot = 'apps/tui/src/state';
+const plainMarkdownSourceRoot = 'apps/tui/src/plain-markdown';
 const testFilePattern = /\.(test|spec)\.(ts|tsx)$/u;
 
 function collectSourceFiles(dir: string): string[] {
@@ -41,7 +42,11 @@ const topLevelPureSourceFiles = [
  * When a new pure subpath is added, append its top-level source path here or put
  * it under `src/state/` so the recursive guard covers it.
  */
-const pureSourceFiles = [...topLevelPureSourceFiles, ...collectSourceFiles(stateSourceRoot)].sort();
+const pureSourceFiles = [
+    ...topLevelPureSourceFiles,
+    ...collectSourceFiles(stateSourceRoot),
+    ...collectSourceFiles(plainMarkdownSourceRoot),
+].sort();
 
 /**
  * Forbidden import strings. `react` is matched via its import-statement forms
@@ -57,6 +62,7 @@ const forbiddenImportStrings = [
     '@opentui/keymap/solid',
     'solid-js',
     'opentui-renderer',
+    '@mission-control/tui/highlight',
     'apps/cli',
     '../cli',
     '../../cli',
@@ -90,5 +96,13 @@ describe('apps/tui/src pure-subpath import-graph guard', () => {
         expect(failures, `pure/eager subpaths must not import opentui/react/solid/cli\n${failures.join('\n')}`).toEqual(
             [],
         );
+    });
+
+    it('keeps highlighting wired exclusively through the interactive markdown surface', () => {
+        const componentSource = readFileSync(join(root, 'apps/tui/src/components/markdown/Markdown.tsx'), 'utf8');
+        const themeSource = readFileSync(join(root, 'apps/tui/src/components/markdown/interactive-theme.ts'), 'utf8');
+
+        expect(componentSource).toContain("from './highlight.js'");
+        expect(themeSource).toContain("from './highlight.js'");
     });
 });

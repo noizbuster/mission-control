@@ -162,7 +162,13 @@ describe('clean unified storage artifact guard', () => {
         const approvedVocabulary = [
             {
                 term: legacySessionTable,
-                paths: ['docs/session-data-model.md', 'packages/core/src/db/', 'packages/core/src/memory/'],
+                paths: [
+                    'README.md',
+                    'docs/session-data-model.md',
+                    'packages/core/src/db/',
+                    'packages/core/src/memory/',
+                    'tests/readme-runtime-contract.test.ts',
+                ],
             },
             {
                 term: schemaMigrationTable,

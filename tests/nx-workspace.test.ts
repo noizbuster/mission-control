@@ -183,7 +183,7 @@ describe('Nx workspace', () => {
         // biome-ignore lint/complexity/useLiteralKeys: Record<string, string> requires bracket access per noPropertyAccessFromIndexSignature
         expect(manifest.scripts?.['typecheck']).toBe(`${nxRuntime} nx run-many -t typecheck`);
         // biome-ignore lint/complexity/useLiteralKeys: Record<string, string> requires bracket access per noPropertyAccessFromIndexSignature
-        expect(manifest.scripts?.['test']).toBe(`${nxRuntime} nx run-many -t test`);
+        expect(manifest.scripts?.['test']).toBe(`${nxRuntime} nx run-many -t test --parallel=1`);
         // biome-ignore lint/complexity/useLiteralKeys: Record<string, string> requires bracket access per noPropertyAccessFromIndexSignature
         expect(manifest.scripts?.['lint']).toBe(`${nxRuntime} nx run workspace:lint`);
         // Interactive TUI must not run under the Nx process wrapper (SIGWINCH/resize).
@@ -205,6 +205,8 @@ describe('Nx workspace', () => {
         // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
         expect(config.targetDefaults?.['test']).toMatchObject({ cache: true });
         // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
+        expect(config.targetDefaults?.['test']).toMatchObject({ inputs: expect.arrayContaining(['workflowParity']) });
+        // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
         expect(config.targetDefaults?.['typecheck']).toMatchObject({ cache: true });
         // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
         expect(config.targetDefaults?.['lint']).toMatchObject({ cache: true });
@@ -216,6 +218,64 @@ describe('Nx workspace', () => {
         expect(readTargetCommand(config, 'lint')).toBe(
             'biome lint apps docs examples native packages scripts tests package.json project.json nx.json tsconfig.base.json vitest.config.ts biome.jsonc biome.usd.jsonc skills-lock.json',
         );
+    });
+
+    it('builds the CLI dependency graph before workspace tests and typechecking', () => {
+        // Given: workspace verification imports built package declarations and executes built-CLI suites.
+        const config = readProjectConfig('project.json');
+
+        // When: Nx resolves the workspace verification targets.
+        const testTarget = config.targets === undefined ? undefined : Reflect.get(config.targets, 'test');
+        const typecheckTarget = config.targets === undefined ? undefined : Reflect.get(config.targets, 'typecheck');
+
+        // Then: the precise CLI build and its canonical dependency builds complete first.
+        expect(typecheckTarget).toMatchObject({ dependsOn: [{ projects: ['cli'], target: 'build' }] });
+        expect(testTarget).toMatchObject({
+            dependsOn: [{ projects: ['cli'], target: 'build' }],
+            inputs: expect.arrayContaining([
+                '{workspaceRoot}/tests/**/*',
+                '{workspaceRoot}/scripts/**/*',
+                '{workspaceRoot}/.github/workflows/**/*',
+                'workflowParity',
+                '{workspaceRoot}/README.md',
+                '{workspaceRoot}/project.json',
+                '{workspaceRoot}/nx.json',
+                '{workspaceRoot}/apps/cli/project.json',
+            ]),
+        });
+    });
+
+    it('hashes every built-in workflow fixture into parity test caches', () => {
+        const config = readNxConfig();
+
+        // biome-ignore lint/complexity/useLiteralKeys: JsonObject (Record<string, unknown>) requires bracket access per noPropertyAccessFromIndexSignature
+        expect(config.namedInputs?.['workflowParity']).toEqual(
+            expect.arrayContaining([
+                '{workspaceRoot}/examples/abg/default.workflow.json',
+                '{workspaceRoot}/examples/abg/planner.workflow.json',
+                '{workspaceRoot}/examples/abg/runner.workflow.json',
+                '{workspaceRoot}/examples/abg/custom-example.workflow.jsonc',
+                '{workspaceRoot}/ABG.md',
+                '{workspaceRoot}/docs/abg-reference-parity-matrix.md',
+            ]),
+        );
+    });
+
+    it('keeps the built-CLI workspace helper free of nested Nx builds', () => {
+        // Given: both built-CLI suites share the same support module.
+        const support = readFileSync(join(root, 'tests/cli-local-db-concurrency-support.ts'), 'utf8');
+
+        // When: the helper source is inspected as part of the workspace contract.
+        // Then: it resolves a prebuilt artifact instead of launching another task runner.
+        expect(support).toContain('resolveBuiltCliEntryPath');
+        expect(support).not.toContain("['exec', 'nx', 'run', 'cli:build'");
+    });
+
+    it('keeps the TUI-to-CLI boundary scan unconditional', () => {
+        const boundary = readFileSync(join(root, 'tests/tui-cli-boundary.test.ts'), 'utf8');
+
+        expect(boundary).not.toMatch(/it\.skip|skipIf/u);
+        expect(boundary).not.toContain('not yet created');
     });
 
     it('defines Nx projects for every workspace boundary', () => {
@@ -246,7 +306,6 @@ describe('Nx workspace', () => {
 
     it('keeps root Vitest TUI subpath aliases on Solid viewport naming', () => {
         const config = readFileSync(join(root, 'vitest.config.ts'), 'utf8');
-
 
         expect(config).not.toContain('@mission-control/tui/terminal-viewport-react');
         expect(config).not.toContain('platform/terminal-viewport-react.ts');

@@ -4,9 +4,11 @@
 // (docs/plugin-authoring.md). It shows every optional block a workflow file
 // can carry: a behavior graph, a mode overlay, and a category preset.
 //
-// Invoke it from the CLI:
-//   mctrl "#custom-example {your question}"            # interactive
-//   mctrl run --workflow custom-example "your question"  # non-interactive
+// Copy it into a discovery scope, then invoke it from the CLI:
+//   mkdir -p .mctrl/workflows
+//   cp examples/abg/custom-example.workflow.jsonc .mctrl/workflows/
+//   mc "#custom-example {your question}"                 # interactive
+//   mc run --workflow custom-example "your question"     # non-interactive
 //
 // JSONC notes:
 //   - `//` line comments and `/* ... */` block comments are stripped before
@@ -19,7 +21,7 @@
   // unique if you ship this into a shared config dir.
   "name": "custom-example",
   // Free-form description. Surfaced in registry listings and diagnostics.
-  "description": "Documented example: research a question with a tool node, then answer. Ships a read-only mode and a researcher category preset.",
+  "description": "Documented example: list workspace context with a tool node, confirm readiness, then answer in prose. Ships a read-only mode and a researcher category preset.",
 
   // ----- The authorable behavior graph (AbgGraphSpec) ---------------------
   "graph": {
@@ -43,19 +45,33 @@
         // sequence, parallel, race, join, watch, policy, statechart, actor,
         // memory, tool, llm, human-approval.
         "kind": "tool",
-        "label": "Gather context via repo search",
+        "label": "Gather context via repository listing",
         // `capabilities` are free-form verbs the graph policies can gate on.
-        "capabilities": ["search"]
+        "capabilities": ["repo.list"],
+        "config": {
+          "tool": "repo.list",
+          "arguments": { "path": "." }
+        }
       },
       {
         "id": "answer",
         "kind": "llm",
-        "label": "Synthesize the final answer",
+        "label": "Confirm the research is ready to answer",
         // `config` is an opaque record (string keys). Common keys used by the
         // built-in llm node: systemPrompt, outputKey.
         "config": {
-          "systemPrompt": "Answer the user's question using the research results.",
-          "outputKey": "answer.ready"
+          "systemPrompt": "Output ONLY the JSON boolean `true` when complete. The repository listing is sufficient research for this example. Do not include reasoning, markdown, or a user-facing answer.",
+          "outputKey": "answer.ready",
+          "outputShape": "boolean"
+        }
+      },
+      {
+        "id": "respond",
+        "kind": "llm",
+        "label": "Synthesize the final answer",
+        "capabilities": ["repo.list"],
+        "config": {
+          "systemPrompt": "Answer the user's question in normal user-facing prose after the research readiness gate passes."
         }
       }
     ],
@@ -64,22 +80,22 @@
       { "source": "research", "target": "answer" },
       // A conditional edge references a rule id in `condition`. Lower
       // `priority` numbers win when multiple edges from the same source qualify.
-      { "source": "answer", "target": "answer", "condition": "answer-loop", "priority": 5 }
+      { "source": "answer", "target": "respond", "condition": "answer-ready", "priority": 5 }
     ],
     "rules": [
       {
-        "id": "answer-loop",
-        "description": "Re-enter answer while the LLM signals it is still working",
+        "id": "answer-ready",
+        "description": "Respond only after the strict readiness signal is true",
         // `when` is a discriminated rule predicate. Available kinds:
         //   event.type.equals, signal.type.equals, node.status.equals,
         //   blackboard.key.exists, blackboard.value.equals, policy.decision.equals
-        "when": { "kind": "blackboard.value.equals", "key": "llm.loop_active", "value": true }
+        "when": { "kind": "blackboard.value.equals", "key": "answer.ready", "value": true }
       }
     ],
     // Graph-level policies use { id, capability, decision }.
     // `decision` is one of: "allow" | "deny" | "requires_approval".
     // This is DISTINCT from mode policy rules (action/resource/effect) below.
-    "policies": [{ "id": "allow-search", "capability": "search", "decision": "allow" }]
+    "policies": [{ "id": "allow-repo-list", "capability": "repo.list", "decision": "allow" }]
   },
 
   // ----- Mode overlays (optional) -----------------------------------------
@@ -90,14 +106,14 @@
   "modes": [
     {
       "id": "read-only",
-      "systemPromptOverlay": "You are in read-only mode. Never modify files. Cite your sources.",
+      "systemPromptOverlay": "Exploratory/research intent. You are in read-only mode. Never modify files. Cite your sources.",
       // Mode policy rules use { action, resource, effect }.
       // `effect` is one of: "allow" | "deny" | "ask". Last-match-wins.
       "policies": [
         { "action": "write", "resource": "**", "effect": "deny" },
         { "action": "edit", "resource": "**", "effect": "deny" }
       ],
-      "requiredTools": ["read", "grep"]
+      "requiredTools": ["repo.list"]
     }
   ],
 
@@ -115,7 +131,7 @@
       },
       "permissions": ["read", "network"],
       "systemPromptAddendum": "You are a research specialist. Gather sources before answering.",
-      "tools": ["read", "ls", "grep", "find", "webfetch"]
+      "tools": ["repo.read", "repo.list", "repo.search", "repo.read.tagged", "webfetch"]
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "name": "default",
-  "description": "Default workflow: intent-gate verbalizes intent and classifies into 5 classes (trivial, exploratory-research, open-ended-planning, explicit-implementation, ambiguous). Exploratory routes read-only; open-ended routes to #planner or one question (never implements); explicit runs memory, maturity-check, anti-dup/delegation-bias guard, todo-plan, delegate-wave, verify-wave critic, evidence-check, and a 3-strike supervisor recovery loop. The no-# fallback.",
+  "description": "Default workflow: intent-gate classifies requests into 5 classes (trivial, exploratory-research, open-ended-planning, explicit-implementation, ambiguous). Exploratory routes read-only; open-ended routes to #planner or one question (never implements); explicit runs memory, maturity-check, anti-dup/delegation-bias guard, todo-plan, delegate-wave, verify-wave critic, evidence-check, and a 3-strike supervisor recovery loop. The no-# fallback.",
   "graph": {
     "id": "default",
     "version": "0.1.0",
@@ -12,9 +12,9 @@
       {
         "id": "intent-gate",
         "kind": "llm",
-        "label": "Intent gate — verbalize intent, then classify into 5 classes",
+        "label": "Intent gate: classify into 5 classes",
         "config": {
-          "systemPrompt": "You are the intent gate for the default workflow. Map the user's surface request to its true intent (the real goal behind the words), then classify.\n\nIntent routing map (surface form -> true intent -> routing):\n- \"explain X\", \"how does Y work\", \"what is Z\", \"find Y\" -> exploratory-research (read + synthesize, NEVER edit files).\n- \"implement X\", \"add Y\", \"fix Z\", \"create W\" with clear scope -> explicit-implementation (structured todos + delegate + verify).\n- \"refactor\", \"improve\", \"make X better\", \"clean up\", \"optimize\" with no clear target -> open-ended-planning (route to #planner or ask exactly ONE question; NEVER implement).\n- greeting, simple factual question, single-turn answer needing no tools -> trivial.\n- vague, multiple plausible interpretations, or missing critical info -> ambiguous.\n\nMis-routing an open-ended request to explicit-implementation silently implements when the user wanted to be consulted first — when genuinely unsure between open-ended-planning and explicit-implementation, prefer open-ended-planning.\n\nFirst briefly state your reasoning (1-3 sentences). Then on the LAST line, output EXACTLY one class name — no quotes, no formatting, no extra text:\n- trivial\n- exploratory-research\n- open-ended-planning\n- explicit-implementation\n- ambiguous",
+          "systemPrompt": "You are the intent gate for the default workflow. Map the user's surface request to its true intent (the real goal behind the words), then classify.\n\nIntent routing map (surface form -> true intent -> routing):\n- \"explain X\", \"how does Y work\", \"what is Z\", \"find Y\" -> exploratory-research (read + synthesize, NEVER edit files).\n- \"implement X\", \"add Y\", \"fix Z\", \"create W\" with clear scope -> explicit-implementation (structured todos + delegate + verify).\n- \"refactor\", \"improve\", \"make X better\", \"clean up\", \"optimize\" with no clear target -> open-ended-planning (route to #planner or ask exactly ONE question; NEVER implement).\n- greeting, simple factual question, single-turn answer needing no tools -> trivial.\n- vague, multiple plausible interpretations, or missing critical info -> ambiguous.\n\nMis-routing an open-ended request to explicit-implementation silently implements when the user wanted to be consulted first — when genuinely unsure between open-ended-planning and explicit-implementation, prefer open-ended-planning.\n\nOutput ONLY one class name — no quotes, no formatting, no extra text:\n- trivial\n- exploratory-research\n- open-ended-planning\n- explicit-implementation\n- ambiguous",
           "outputKey": "intent.classification",
           "outputEnum": [
             "trivial",
@@ -22,8 +22,7 @@
             "open-ended-planning",
             "explicit-implementation",
             "ambiguous"
-          ],
-          "outputDefault": "ambiguous"
+          ]
         }
       },
       {
@@ -37,7 +36,7 @@
         "label": "Exploratory research — read-only, NO edits",
         "capabilities": ["read"],
         "config": {
-          "systemPrompt": "Exploratory/research intent. Explore the codebase and/or external docs to answer the user's question, then synthesize a grounded answer. You are READ-ONLY: you must NOT edit, write, patch, or run effectful tools. Cite file:line evidence for every claim about the codebase. Do NOT begin implementation — if the exploration reveals the user actually wants implementation, say so and stop.\nPATH RESILIENCE: paths mentioned in project docs (AGENTS.md, CLAUDE.md) may be stale after refactors. If a documented path returns not_found, do NOT conclude the file or feature is missing — fall back to glob with the basename (e.g. \"**/<basename>\"), grep for a distinctive symbol from the docs, or list the parent directory. Only conclude \"not present\" after at least one alternative search has returned empty. A failed read is NOT explored ground — it tells you nothing about whether the file exists elsewhere.\nMulti-turn: keep calling tools until you have enough grounded evidence for a complete answer. While exploring, call tools and do NOT output true. When ready, synthesize the answer, then on the LAST line output EXACTLY `true` (boolean) — no quotes, no formatting, no extra text.",
+          "systemPrompt": "Exploratory/research intent. Explore the codebase and/or external docs to answer the user's question, then synthesize a grounded answer. You are READ-ONLY: you must NOT edit, write, patch, or run effectful tools. Cite file:line evidence for every claim about the codebase. Do NOT begin implementation — if the exploration reveals the user actually wants implementation, say so and stop.\nPATH RESILIENCE: paths mentioned in project docs (AGENTS.md, CLAUDE.md) may be stale after refactors. If a documented path returns not_found, do NOT conclude the file or feature is missing — fall back to glob with the basename (e.g. \"**/<basename>\"), grep for a distinctive symbol from the docs, or list the parent directory. Only conclude \"not present\" after at least one alternative search has returned empty. A failed read is NOT explored ground — it tells you nothing about whether the file exists elsewhere.\nMulti-turn: keep calling tools until you have enough grounded evidence for a complete answer. While exploring, call tools and do NOT output true. When ready, synthesize the answer. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
           "outputKey": "explore.complete",
           "outputShape": "boolean"
         }
@@ -77,10 +76,9 @@
         "kind": "llm",
         "label": "Anti-dup exploration guard and delegation-bias check",
         "config": {
-          "systemPrompt": "Two checks before delegation:\n1. ANTI-DUP: if the work was already SUCCESSFULLY explored (a read that returned content, a grep with matches — check prior exploration results in context), do NOT re-read the same files. Skip redundant exploration and proceed with what is already known. Re-running the same successful searches wastes tokens and can contradict earlier findings. A tool FAILURE (not_found, read_failed, empty glob) is NOT explored ground — it tells you nothing, so it must NOT count as prior exploration. If a documented path failed, switch tools (glob the basename, grep a symbol, list the parent) before treating the area as covered.\n2. DELEGATION-BIAS: assess whether delegation is appropriate. Is the task small enough to do directly with certainty? Is there an existing pattern to follow (per the maturity check)? Default bias is DELEGATE for non-trivial work, but trivial single-file work you can do correctly yourself should be done directly rather than over-delegated.\nFirst briefly state your reasoning (1-3 sentences). Then on the LAST line, output EXACTLY `true` or `false` — no quotes, no formatting, no extra text. Output `true` when both checks pass and the plan may proceed to todo planning; output `false` otherwise.",
+          "systemPrompt": "Two checks before delegation:\n1. ANTI-DUP: if the work was already SUCCESSFULLY explored (a read that returned content, a grep with matches — check prior exploration results in context), do NOT re-read the same files. Skip redundant exploration and proceed with what is already known. Re-running the same successful searches wastes tokens and can contradict earlier findings. A tool FAILURE (not_found, read_failed, empty glob) is NOT explored ground — it tells you nothing, so it must NOT count as prior exploration. If a documented path failed, switch tools (glob the basename, grep a symbol, list the parent) before treating the area as covered.\n2. DELEGATION-BIAS: assess whether delegation is appropriate. Is the task small enough to do directly with certainty? Is there an existing pattern to follow (per the maturity check)? Default bias is DELEGATE for non-trivial work, but trivial single-file work you can do correctly yourself should be done directly rather than over-delegated.\nOutput ONLY the JSON boolean `true` or `false` — no prose, no formatting, no extra text. Output `true` when both checks pass and the plan may proceed to todo planning; output `false` otherwise.",
           "outputKey": "guard.cleared",
-          "outputShape": "boolean",
-          "outputDefault": "true"
+          "outputShape": "boolean"
         }
       },
       {
@@ -127,10 +125,9 @@
         "kind": "llm",
         "label": "Evidence check — verify concrete evidence, not just child claims",
         "config": {
-          "systemPrompt": "Personal verification after delegation. Do NOT trust the child's \"done\" claim alone. Verify concrete evidence: lsp_diagnostics clean on changed files, build exit code 0, test run passing, expected file changes present, command output matching. Confirm the work followed MUST DO / MUST NOT DO requirements and existing codebase patterns. NO EVIDENCE = NOT COMPLETE.\nFirst briefly state your reasoning (1-3 sentences). Then on the LAST line, output EXACTLY `true` or `false` — no quotes, no formatting, no extra text. Output `true` only when concrete evidence confirms the work; output `false` to trigger a bounded retry.",
+          "systemPrompt": "Personal verification after delegation. Do NOT trust the child's \"done\" claim alone. Verify concrete evidence: lsp_diagnostics clean on changed files, build exit code 0, test run passing, expected file changes present, command output matching. Confirm the work followed MUST DO / MUST NOT DO requirements and existing codebase patterns. NO EVIDENCE = NOT COMPLETE.\nOutput ONLY the JSON boolean `true` or `false` — no prose, no formatting, no extra text. Output `true` only when concrete evidence confirms the work; output `false` to trigger a bounded retry.",
           "outputKey": "evidence.verified",
-          "outputShape": "boolean",
-          "outputDefault": "false"
+          "outputShape": "boolean"
         }
       },
       {

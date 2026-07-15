@@ -9,6 +9,16 @@
       "!{projectRoot}/src/**/*.test.ts",
       "!{projectRoot}/src/**/*.test.tsx"
     ],
+    "workflowParity": [
+      "{workspaceRoot}/examples/abg/default.workflow.json",
+      "{workspaceRoot}/examples/abg/planner.workflow.json",
+      "{workspaceRoot}/examples/abg/runner.workflow.json",
+      "{workspaceRoot}/examples/abg/custom-example.workflow.jsonc",
+      "{workspaceRoot}/ABG.md",
+      "{workspaceRoot}/docs/ABG.ko.md",
+      "{workspaceRoot}/docs/abg-reference-parity-matrix.md",
+      "{workspaceRoot}/README.md"
+    ],
     "sharedGlobals": [
       "{workspaceRoot}/package.json",
       "{workspaceRoot}/pnpm-lock.yaml",
@@ -33,7 +43,7 @@
     },
     "test": {
       "cache": true,
-      "inputs": ["default", "^production"],
+      "inputs": ["default", "^production", "workflowParity"],
       "outputs": []
     },
     "lint": {

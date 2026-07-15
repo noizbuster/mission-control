@@ -528,7 +528,10 @@ A graph that classifies intent and routes to two nodes.
       {
         "id": "gate",
         "kind": "llm",
-        "config": { "outputKey": "intent.classification" }
+        "config": {
+          "systemPrompt": "Classify the request. Output ONLY one exact class name, `trivial` or `ambiguous`, with no reasoning, markdown, or extra text.",
+          "outputKey": "intent.classification"
+        }
       },
       { "id": "direct", "kind": "llm" },
       { "id": "clarify", "kind": "llm" }
@@ -550,6 +553,11 @@ A graph that classifies intent and routes to two nodes.
   }
 }
 ```
+
+For an `llm` node with `outputKey`, prompt for one whole, exact output
+representation. Do not ask for reasoning followed by a final line. The parser
+checks the whole turn, so it does not extract a last line or supply a default
+when parsing fails.
 
 ### Workflow with a mode
 
@@ -602,7 +610,18 @@ Ship a researcher preset for `task()` delegation.
 
 See [custom-example.workflow.jsonc](/examples/abg/custom-example.workflow.jsonc).
 It combines a graph, a mode, and a category in one file with inline JSONC
-comments on every field.
+comments on every field. Install it into a discovery scope before invoking it:
+
+```bash
+mkdir -p .mctrl/workflows
+cp examples/abg/custom-example.workflow.jsonc .mctrl/workflows/
+mc run --workflow custom-example "summarize the available project context"
+```
+
+The graph calls the production read-only `repo.list` tool on the workspace
+root, writes the exact boolean `true` to `answer.ready`, routes through the
+`answer-ready` condition, and leaves the final `respond` node unkeyed so its
+normal prose remains user-facing.
 
 ---
 

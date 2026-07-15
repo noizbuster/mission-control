@@ -1,6 +1,6 @@
 {
   "name": "planner",
-  "description": "Planner workflow (Prometheus mechanics): intake -> assess-ambiguity routes clear requests through explore-filter (needs-exploration vs direct-draft) -> explore -> draft-plan, unclear requests through research -> adopt-defaults -> draft-plan, and on-the-fence requests through ask-one-question -> re-classify. draft-plan writes .omo/drafts/<slug>.md, review-plan gates completeness, approval-gate blocks for explicit okay, write-plan commits the scaffold to .omo/plans/<slug>.md. The planner is READ-ONLY: its planner-readonly mode denies all writes except .omo/plans/**, .omo/specs/**, and .omo/drafts/**. Plan mode is sticky: \"do/fix/build\" all mean \"plan\".",
+  "description": "Planner workflow (Prometheus mechanics): intake -> assess-ambiguity routes clear requests through explore-filter (needs-exploration vs direct-draft) -> explore -> draft-plan, unclear requests through research -> adopt-defaults -> draft-plan, and on-the-fence requests through ask-one-question -> re-classify. draft-plan writes .omo/drafts/<slug>.md, review-plan gates completeness, approval-gate blocks for explicit okay, write-plan commits the scaffold to .omo/plans/<slug>.md. The planner workflow nodes are READ-ONLY after the planner-readonly mode is applied: it denies all writes except .omo/plans/**, .omo/specs/**, and .omo/drafts/**. Spawned children do not inherit those workflow policy sets; category and AgentDefinition path policies constrain them independently. Plan mode is sticky: \"do/fix/build\" all mean \"plan\".",
   "graph": {
     "id": "planner",
     "version": "0.1.0",
@@ -42,7 +42,7 @@
         "label": "Explore the codebase to ground the plan",
         "capabilities": ["read"],
         "config": {
-          "systemPrompt": "Explore the relevant codebase areas to ground the plan in real structure. Cite file:line evidence for every claim. You are operating under planner-readonly. Any child agent you delegate to (explore/librarian) INHERITS the planner-readonly boundary: it may NOT write outside .omo/plans/**, .omo/specs/**, and .omo/drafts/**. Frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / VERIFY) and treat subagent output as claims until verified. Multi-turn: keep calling tools until exploration is grounded. While exploring, call tools and do NOT output true. When ready, synthesize findings, then on the LAST line output EXACTLY `true` (boolean) — no quotes, no formatting, no extra text.",
+          "systemPrompt": "Explore the relevant codebase areas to ground the plan in real structure. Cite file:line evidence for every claim. Planner-readonly applies to these workflow nodes after mode materialization. Spawned child agents do NOT inherit workflow PolicyEffectRule sets; their authority is independently constrained by the selected read-only category and AgentDefinition.pathPolicies. Delegate only to explore/librarian, frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / VERIFY), and treat subagent output as claims until verified. Multi-turn: keep calling tools until exploration is grounded. While exploring, call tools and do NOT output true. When ready, synthesize findings. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
           "outputKey": "explore.complete",
           "outputShape": "boolean"
         }
@@ -53,7 +53,7 @@
         "label": "Research best practices for an unclear request",
         "capabilities": ["read"],
         "config": {
-          "systemPrompt": "The request outcome is fuzzy. Research best practices and prior art to make it plannable WITHOUT interrogating the user — adopt and ANNOUNCE defensible defaults (industry standard or repo convention) with rationale. You are operating under planner-readonly. Any child agent you delegate to (explore/librarian) INHERITS the planner-readonly boundary: it may NOT write outside .omo/plans/**, .omo/specs/**, and .omo/drafts/**. Frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / VERIFY) and treat subagent output as claims until verified. Multi-turn: keep calling tools until research is grounded. While researching, call tools and do NOT output true. When ready, synthesize findings, then on the LAST line output EXACTLY `true` (boolean) — no quotes, no formatting, no extra text.",
+          "systemPrompt": "The request outcome is fuzzy. Research best practices and prior art to make it plannable WITHOUT interrogating the user — adopt and ANNOUNCE defensible defaults (industry standard or repo convention) with rationale. Planner-readonly applies to these workflow nodes after mode materialization. Spawned child agents do NOT inherit workflow PolicyEffectRule sets; their authority is independently constrained by the selected read-only category and AgentDefinition.pathPolicies. Delegate only to explore/librarian, frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / VERIFY), and treat subagent output as claims until verified. Multi-turn: keep calling tools until research is grounded. While researching, call tools and do NOT output true. When ready, synthesize findings. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.",
           "outputKey": "research.complete",
           "outputShape": "boolean"
         }
@@ -101,7 +101,7 @@
         "kind": "llm",
         "label": "Approval gate — block for explicit okay before the final plan",
         "config": {
-          "systemPrompt": "Present the approval brief ONCE: what you found (key facts with paths), the approach, and every surviving owner-decision with your recommended option. Then WAIT for the user's explicit okay. Approval authorizes writing the plan ONLY — it is NEVER authorization to implement. Read the user's next reply as a decision: approve, scope-change (revise the draft, re-present), or still-unclear (emit one short line, do not re-explore). On the LAST line, output EXACTLY `true` when the user explicitly approves, or `false` otherwise — no quotes, no formatting, no extra text.",
+          "systemPrompt": "Present the approval brief ONCE: what you found (key facts with paths), the approach, and every surviving owner-decision with your recommended option. Then WAIT for the user's explicit okay. Approval authorizes writing the plan ONLY — it is NEVER authorization to implement. Read the user's next reply as a decision: approve, scope-change (revise the draft, re-present), or still-unclear (emit one short line, do not re-explore). Output ONLY the JSON boolean `true` when the user explicitly approves, or `false` otherwise — no prose, no formatting, no extra text.",
           "outputKey": "plan.ready",
           "outputShape": "boolean"
         }

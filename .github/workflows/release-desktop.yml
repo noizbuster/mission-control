@@ -19,7 +19,7 @@ jobs:
           version: 10.24.0
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 26.3.0
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
       - run: pnpm install --frozen-lockfile

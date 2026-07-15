@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = process.cwd();
@@ -40,10 +40,7 @@ function collectSourceFiles(dir: string): string[] {
 }
 
 describe('TUI -> CLI boundary', () => {
-    if (!existsSync(join(root, tuiSourceRoot))) {
-        it.skip('apps/tui/src not yet created — will activate after Todo 2', () => {});
-        return;
-    }
+    expect(statSync(join(root, tuiSourceRoot)).isDirectory(), `${tuiSourceRoot} exists`).toBe(true);
 
     it('no source file under apps/tui/src references apps/cli or @mission-control/cli', () => {
         const failures: string[] = [];

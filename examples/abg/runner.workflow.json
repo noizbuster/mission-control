@@ -14,7 +14,7 @@
         "kind": "llm",
         "label": "Plan admission gate — reject missing/malformed/unapproved plans",
         "config": {
-          "systemPrompt": "You are the runner plan admission gate. BEFORE any task delegation, verify the plan is complete and approved. Read the plan from .omo/plans/<slug>.md and check ALL of: (1) the plan exists and is non-empty; (2) it carries the scaffold sections ## TL;DR, ## Scope, ## Todos, ## Final Verification Wave; (3) ## Todos contains at least one \"- [ ]\" checkbox; (4) ## Final Verification Wave is present; (5) the plan is marked approved/ready (a \"Status: Approved\" | \"Status: Ready\" | \"Status: Accepted\" line). A missing, malformed, or unapproved plan must never reach delegate-wave — the graph routes a rejected plan to plan-rejected-terminal which emits a clear failure event and stops.\nOn the LAST line, output EXACTLY `true` if every check passes, or `false` if any check fails — no quotes, no formatting, no extra text.",
+          "systemPrompt": "You are the runner plan admission gate. BEFORE any task delegation, verify the plan is complete and approved. Read the plan from .omo/plans/<slug>.md and check ALL of: (1) the plan exists and is non-empty; (2) it carries the scaffold sections ## TL;DR, ## Scope, ## Todos, ## Final Verification Wave; (3) ## Todos contains at least one \"- [ ]\" checkbox; (4) ## Final Verification Wave is present; (5) the plan is marked approved/ready (a \"Status: Approved\" | \"Status: Ready\" | \"Status: Accepted\" line). A missing, malformed, or unapproved plan must never reach delegate-wave — the graph routes a rejected plan to plan-rejected-terminal which emits a clear failure event and stops.\nOutput ONLY the JSON boolean `true` if every check passes, or `false` if any check fails — no prose, no formatting, no extra text.",
           "outputKey": "plan.admitted",
           "outputShape": "boolean"
         }
@@ -55,7 +55,7 @@
         "kind": "llm",
         "label": "Select next wave of unchecked tasks (parallel-by-default, dependency-blocked)",
         "config": {
-          "systemPrompt": "Inspect the section-scoped plan checklist (plan.todos). If unchecked tasks remain, output 'true' on the last line. If all tasks are checked, output 'false' on the last line.",
+          "systemPrompt": "Inspect the section-scoped plan checklist (plan.todos). If unchecked tasks remain, output ONLY the JSON boolean `true`. If all tasks are checked, output ONLY the JSON boolean `false` — no prose, no formatting, no extra text.",
           "outputKey": "wave.pending",
           "outputShape": "boolean"
         }
@@ -123,7 +123,7 @@
         "kind": "llm",
         "label": "F1 — Goal verification critic",
         "config": {
-          "systemPrompt": "F1: Verify the implementation achieves the plan stated goal. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.",
+          "systemPrompt": "F1: Verify the implementation achieves the plan stated goal. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.",
           "outputKey": "final.f1"
         }
       },
@@ -132,7 +132,7 @@
         "kind": "llm",
         "label": "F2 — Constraint verification critic",
         "config": {
-          "systemPrompt": "F2: Verify all explicit constraints were honored. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.",
+          "systemPrompt": "F2: Verify all explicit constraints were honored. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.",
           "outputKey": "final.f2"
         }
       },
@@ -141,7 +141,7 @@
         "kind": "llm",
         "label": "F3 — Test verification critic",
         "config": {
-          "systemPrompt": "F3: Verify all tests pass. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.",
+          "systemPrompt": "F3: Verify all tests pass. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.",
           "outputKey": "final.f3"
         }
       },
@@ -150,7 +150,7 @@
         "kind": "llm",
         "label": "F4 — Code quality verification critic",
         "config": {
-          "systemPrompt": "F4: Verify the code is clean and well-structured. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.",
+          "systemPrompt": "F4: Verify the code is clean and well-structured. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.",
           "outputKey": "final.f4"
         }
       },

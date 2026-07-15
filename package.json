@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run-many -t build",
+    "check:changed-ts-size": "node --experimental-strip-types scripts/changed-typescript-size.ts",
     "dev:cli": "pnpm --filter @mission-control/cli dev",
     "dev:desktop": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run desktop:dev",
     "dev:package-cli": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run workspace:package-cli",
@@ -21,16 +22,18 @@
     "biome:ci": "biome ci",
     "smoke:coding-agent-built-dist": "node --experimental-strip-types scripts/coding-agent-built-dist-smoke.ts",
     "smoke:coding-agent-mcp-tools": "node --experimental-strip-types scripts/coding-agent-built-dist-mcp-smoke.ts",
-    "test": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run-many -t test",
+    "test": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run-many -t test --parallel=1",
     "typecheck": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run-many -t typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.3",
     "@opentui/solid": "^0.4.3",
     "@types/node": "^26.1.1",
+    "@types/semver": "^7.7.1",
     "babel-plugin-module-resolver": "^5.0.3",
     "diff": "^9.0.0",
     "nx": "23.0.0",
+    "semver": "^7.8.5",
     "solid-js": "^1.9.14",
     "typescript": "^7.0.2",
     "vite-plugin-solid": "^2.11.12",

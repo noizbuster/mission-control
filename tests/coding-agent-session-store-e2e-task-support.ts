@@ -55,6 +55,7 @@ function buildTaskRuntime(
             description: 'Parent agent',
             systemPrompt: 'You are the parent.',
             source: 'bundled',
+            spawns: ['child-agent'],
         },
         spawnFn: async (context) => {
             const result = await spawnImpl(context.sessionId);

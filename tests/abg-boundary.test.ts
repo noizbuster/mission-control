@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { registerReadOnlyRepoTools, ToolRegistry } from '../packages/core/src/index.js';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { findForbiddenModuleSpecifiers } from './module-specifier-boundary.js';
+import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,7 +14,8 @@ function collectSourceFiles(dir: string): string[] {
     const files: string[] = [];
     for (const entry of readdirSync(absoluteDir)) {
         const path = join(absoluteDir, entry);
-        const stat = statSync(path);
+        const stat = lstatSync(path);
+        if (stat.isSymbolicLink()) continue;
         if (stat.isDirectory()) {
             files.push(...collectSourceFiles(path.slice(root.length + 1)));
             continue;
@@ -32,22 +34,41 @@ describe('ABG runtime boundaries', () => {
     });
 
     it('core runtime has no imports from CLI desktop or React UI', () => {
-        const forbidden = [
-            'apps/cli',
-            'apps/desktop',
-            'apps/tui',
-            '@mission-control/cli',
-            '@mission-control/desktop',
-            '@mission-control/tui',
-            'react',
-        ];
-
+        const violations: string[] = [];
         for (const file of collectSourceFiles('packages/core/src')) {
             const source = readFileSync(file, 'utf8');
-            for (const term of forbidden) {
-                expect(source, `${file} must not depend on ${term}`).not.toContain(term);
-            }
+            violations.push(...findForbiddenModuleSpecifiers(source, file).map((specifier) => `${file}: ${specifier}`));
         }
+        expect(violations).toEqual([]);
+    });
+
+    it('matches forbidden module specifiers without raw-substring false positives', () => {
+        const allowed = [
+            "const reactivate = () => 'desktop reaction';",
+            "import { reactivate } from 'reactivate';",
+            "export const cliDescription = 'apps/cli remains outside core';",
+            "const ignored = object.require('react');",
+            "const optionalIgnored = object?.require('react');",
+            "export { reactivate }\nconst from = 'react';",
+        ].join('\n');
+        const forbidden = [
+            "import React from 'react';",
+            "export { render } from 'react/jsx-runtime';",
+            "import type { Cli } from '@mission-control/cli/runtime';",
+            "const desktop = import('../../../apps/desktop/src/main.js');",
+            "const tui = require('@mission-control/tui');",
+            "const desktopModule = module.require('@mission-control/desktop');",
+        ].join('\n');
+
+        expect(findForbiddenModuleSpecifiers(allowed, 'allowed.ts')).toEqual([]);
+        expect(findForbiddenModuleSpecifiers(forbidden, 'forbidden.ts')).toEqual([
+            'react',
+            'react/jsx-runtime',
+            '@mission-control/cli/runtime',
+            '../../../apps/desktop/src/main.js',
+            '@mission-control/tui',
+            '@mission-control/desktop',
+        ]);
     });
 
     it('reference repos are planning evidence only', async () => {

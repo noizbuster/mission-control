@@ -6,20 +6,30 @@ on:
   pull_request:
     branches: [master, dev]
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           version: 10.24.0
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 26.3.0
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
       - run: pnpm install --frozen-lockfile
+      - name: Check changed TypeScript size
+        env:
+          MCTRL_CHANGED_TS_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: pnpm check:changed-ts-size
       - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm build
@@ -54,6 +64,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - name: Build native/natives cdylib addon
         run: cargo build --release --manifest-path native/natives/Cargo.toml

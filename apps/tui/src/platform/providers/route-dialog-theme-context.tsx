@@ -3,7 +3,8 @@
 import { TuiStores } from '@mission-control/core';
 import { type TuiThemePreference, TuiThemePreferenceSchema } from '@mission-control/protocol';
 import { type Accessor, createMemo, createSignal, type JSX, onCleanup, onMount } from 'solid-js';
-import { darkTheme, noColorTheme, type TerminalMarkdownTheme } from '../../components/markdown/theme.js';
+import { darkTheme, noColorTheme } from '../../components/markdown/interactive-theme.js';
+import type { TerminalMarkdownTheme } from '../../components/markdown/theme.js';
 import {
     ACCENTS,
     APPROVAL_LEVEL_COLORS,
