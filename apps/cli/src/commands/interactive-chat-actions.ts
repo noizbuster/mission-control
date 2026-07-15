@@ -1,40 +1,40 @@
 import type { AgentRuntime } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { type ModelChoice, slashCommandChoices } from '@mission-control/tui/state';
-import type { ChatLineAction } from './chat-commands.js';
-import { runAgentsAction, runSkillsAction } from './interactive-agent-actions.js';
-import { runApprovalAction } from './interactive-approval-action.js';
-import type { ModelSelector } from './interactive-chat.js';
-import type { CodingActionContext } from './interactive-chat-action-context.js';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import { runBashAction, runBashDisplayOnlyAction } from './interactive-chat-bash-action.js';
-import { runClearAction } from './interactive-chat-clear-action.js';
-import { runCompactAction } from './interactive-chat-compaction-action.js';
-import { runExportAction } from './interactive-chat-export-action.js';
-import { runHelpAction } from './interactive-chat-help-action.js';
-import { runHotkeysAction } from './interactive-chat-hotkeys-action.js';
-import type { ChatOutput } from './interactive-chat-io.js';
-import { runModelListAction, runModelPickAction, runModelSelectionAction } from './interactive-chat-model-actions.js';
-import { runBranchContinueAction, runSessionNavigationAction } from './interactive-chat-navigation-actions.js';
-import { startPromptTurn } from './interactive-chat-prompt-turn.js';
-import { runRenameAction } from './interactive-chat-rename-action.js';
-import { runTrustAction } from './interactive-chat-trust.js';
-import { runRedoAction, runUndoAction } from './interactive-chat-undo-redo-action.js';
-import { runMissionAction, runModelsAction } from './interactive-mission-actions.js';
+import type { ChatLineAction } from './chat-commands';
+import { runAgentsAction, runSkillsAction } from './interactive-agent-actions';
+import { runApprovalAction } from './interactive-approval-action';
+import type { ModelSelector } from './interactive-chat';
+import type { CodingActionContext } from './interactive-chat-action-context';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import { runBashAction, runBashDisplayOnlyAction } from './interactive-chat-bash-action';
+import { runClearAction } from './interactive-chat-clear-action';
+import { runCompactAction } from './interactive-chat-compaction-action';
+import { runExportAction } from './interactive-chat-export-action';
+import { runHelpAction } from './interactive-chat-help-action';
+import { runHotkeysAction } from './interactive-chat-hotkeys-action';
+import type { ChatOutput } from './interactive-chat-io';
+import { runModelListAction, runModelPickAction, runModelSelectionAction } from './interactive-chat-model-actions';
+import { runBranchContinueAction, runSessionNavigationAction } from './interactive-chat-navigation-actions';
+import { startPromptTurn } from './interactive-chat-prompt-turn';
+import { runRenameAction } from './interactive-chat-rename-action';
+import { runTrustAction } from './interactive-chat-trust';
+import { runRedoAction, runUndoAction } from './interactive-chat-undo-redo-action';
+import { runMissionAction, runModelsAction } from './interactive-mission-actions';
 import {
     runActivePromptAdmissionAction,
     runPromptAction,
     runResumeLastSessionAction,
     runSessionPickerAction,
     runSkillAction,
-} from './interactive-prompt-actions.js';
-import { runWorkflowAction } from './interactive-workflow-actions.js';
-import { runApprovalResumeAction, runInterruptAction, runRetryAction } from './interactive-workflow-resume-actions.js';
+} from './interactive-prompt-actions';
+import { runWorkflowAction } from './interactive-workflow-actions';
+import { runApprovalResumeAction, runInterruptAction, runRetryAction } from './interactive-workflow-resume-actions';
 
-export { loadDashboardAgentEntries } from './interactive-agent-actions.js';
-export type { CodingActionContext } from './interactive-chat-action-context.js';
-export { loadMissionPanelRows } from './interactive-mission-actions.js';
-export { startWorkflowTurn } from './interactive-workflow-actions.js';
+export { loadDashboardAgentEntries } from './interactive-agent-actions';
+export type { CodingActionContext } from './interactive-chat-action-context';
+export { loadMissionPanelRows } from './interactive-mission-actions';
+export { startWorkflowTurn } from './interactive-workflow-actions';
 
 export async function runChatAction(
     runtime: AgentRuntime,

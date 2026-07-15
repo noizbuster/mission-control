@@ -11,25 +11,25 @@ import {
     type ToolInvocationSettlement,
 } from '@mission-control/core';
 import type { AbgSignal, AgentEvent, AgentEventEnvelope, ToolCall } from '@mission-control/protocol';
-import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
-import { createGraphObservabilityRedactor } from './graph-observability-redactor.js';
-import type { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
-import type { CodingAgentTurnOptions } from './interactive-coding-agent-types.js';
+import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context';
+import { createGraphObservabilityRedactor } from './graph-observability-redactor';
+import type { createInteractiveApprovalBroker } from './interactive-approval-broker';
+import type { CodingAgentTurnOptions } from './interactive-coding-agent-types';
 import {
     interactiveGraphStreamSignal,
     type ProviderRenderState,
     renderInteractiveGraphDurableEvent,
-} from './interactive-coding-graph-rendering.js';
-import { type AbgOverlayWiring, wireAbgOverlay } from './interactive-coding-overlay.js';
-import { renderInteractiveToolSettlement, renderProviderEnvelope } from './interactive-coding-provider-rendering.js';
-import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools.js';
-import type { InteractiveGraphSignalObserver } from './interactive-graph-signal-observers.js';
+} from './interactive-coding-graph-rendering';
+import { type AbgOverlayWiring, wireAbgOverlay } from './interactive-coding-overlay';
+import { renderInteractiveToolSettlement, renderProviderEnvelope } from './interactive-coding-provider-rendering';
+import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools';
+import type { InteractiveGraphSignalObserver } from './interactive-graph-signal-observers';
 import {
     closeProductionToolRegistry,
     type ProductionToolRegistry,
     withProductionToolSetup,
-} from './production-tool-registry.js';
-import { buildCodingAgentGraphForSelection, resolveGraphSdkModel } from './run-agent-graph-prompt.js';
+} from './production-tool-registry';
+import { buildCodingAgentGraphForSelection, resolveGraphSdkModel } from './run-agent-graph-prompt';
 
 type OwnedTurnOptions = Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string };
 

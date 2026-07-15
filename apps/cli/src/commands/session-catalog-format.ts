@@ -1,5 +1,5 @@
-import { formatSessionStatusWithSource } from '../ui/session-status-format.js';
-import type { CliSessionCatalogEntry } from './session-catalog-types.js';
+import { formatSessionStatusWithSource } from '../ui/session-status-format';
+import type { CliSessionCatalogEntry } from './session-catalog-types';
 
 export function formatSessionCatalogEntry(entry: CliSessionCatalogEntry): string {
     return [

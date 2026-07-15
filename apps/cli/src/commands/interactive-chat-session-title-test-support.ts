@@ -1,7 +1,7 @@
 import type { ProviderAdapter, ProviderAuthStore, ProviderTurnRequest } from '@mission-control/core';
 import type { ModelProviderSelection, ModelRole, ProviderStreamChunk } from '@mission-control/protocol';
-import { createSessionTitleWriteQueue } from './interactive-chat-session-title.js';
-import { createEmptyAuthStore } from './run-agent-chat-test-support.js';
+import { createSessionTitleWriteQueue } from './interactive-chat-session-title';
+import { createEmptyAuthStore } from './run-agent-chat-test-support';
 
 export const activeSelection: ModelProviderSelection = { providerID: 'active', modelID: 'large' };
 export const testSignal = new AbortController().signal;

@@ -6,14 +6,14 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runAgent } from './run-agent.js';
+import { parseArgs } from '../args';
+import { runAgent } from './run-agent';
 import {
     createBufferedChatOutput,
     createEmptyAuthStore,
     createScriptedChatInput,
-} from './run-agent-chat-test-support.js';
-import { replayedTypes } from './session-replay-test-support.js';
+} from './run-agent-chat-test-support';
+import { replayedTypes } from './session-replay-test-support';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -17,13 +17,13 @@ import {
     type NoninteractiveWorkflowRunHandle,
     settleNoninteractiveWorkflowRunWithOwner,
     type WorkflowRunOutcome,
-} from './run-agent-workflow-run.js';
+} from './run-agent-workflow-run';
 import {
     createWorkflowPersistenceFixture,
     removeWorkflowPersistenceFixture,
     WORKFLOW_PERSISTENCE_SPEC,
     type WorkflowPersistenceFixture,
-} from './run-agent-workflow-test-support.js';
+} from './run-agent-workflow-test-support';
 
 const TERMINAL_OUTCOMES = [
     { status: 'completed' },

@@ -6,8 +6,8 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { startPromptTurn } from './interactive-chat-prompt-turn.js';
-import { MissionControlServices, resetMissionControlServicesCache } from './mission-control-services.js';
+import { startPromptTurn } from './interactive-chat-prompt-turn';
+import { MissionControlServices, resetMissionControlServicesCache } from './mission-control-services';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

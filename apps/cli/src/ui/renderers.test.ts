@@ -2,9 +2,9 @@ import { AgentRuntime } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { darkTheme, noColorTheme } from '@mission-control/tui/markdown-theme';
 import { describe, expect, it, vi } from 'vitest';
-import { joinBlocks, type RenderBlockOptions, renderBlock } from './block-renderer.js';
-import type { OutputBlock } from './output-blocks.js';
-import { type AgentUIRenderer, JsonRenderer, PlainRenderer, TuiRenderer } from './renderers.js';
+import { joinBlocks, type RenderBlockOptions, renderBlock } from './block-renderer';
+import type { OutputBlock } from './output-blocks';
+import { type AgentUIRenderer, JsonRenderer, PlainRenderer, TuiRenderer } from './renderers';
 
 // allow: SIZE_OK -- HEAD 250 -> current 266 pure LOC; renderer event integration matrix requires a shared fixture pipeline.
 const TS = '2026-07-05T02:00:00.000Z';

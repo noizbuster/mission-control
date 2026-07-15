@@ -7,8 +7,8 @@ import {
     redactAgentEventForObservability,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
-import type { CliArgs } from '../args.js';
-import { createSessionWorkspaceMetadataEvent, resolveSessionWorkspaceMetadata } from './session-workspace-metadata.js';
+import type { CliArgs } from '../args';
+import { createSessionWorkspaceMetadataEvent, resolveSessionWorkspaceMetadata } from './session-workspace-metadata';
 
 export type EnsuredSession = {
     readonly sessionId: string;

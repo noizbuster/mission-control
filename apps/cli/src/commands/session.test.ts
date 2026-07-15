@@ -1,7 +1,7 @@
 import { missionControlDataDirEnvKey } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runSessionCommand } from './session.js';
+import { parseArgs } from '../args';
+import { runSessionCommand } from './session';
 import {
     diagnosticRecords,
     eventRecords,
@@ -10,7 +10,7 @@ import {
     taskCompletedEvent,
     writeLocalSessionEvents,
     writeSessionEvents,
-} from './session-test-support.js';
+} from './session-test-support';
 import { appendFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

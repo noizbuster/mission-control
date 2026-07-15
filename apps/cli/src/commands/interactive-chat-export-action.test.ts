@@ -4,9 +4,9 @@ import {
     resolveSlashCommandMenuSubmission,
 } from '@mission-control/tui/state';
 import { describe, expect, it, vi } from 'vitest';
-import { parseChatLine } from './chat-commands.js';
-import { runExportAction } from './interactive-chat-export-action.js';
-import { exportSessionArchiveFile } from './session-archive.js';
+import { parseChatLine } from './chat-commands';
+import { runExportAction } from './interactive-chat-export-action';
+import { exportSessionArchiveFile } from './session-archive';
 
 vi.mock('./session-archive.js', () => ({
     exportSessionArchiveFile: vi.fn(),

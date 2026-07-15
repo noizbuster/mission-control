@@ -1,14 +1,14 @@
 import { InProcessLspClient, type LspDiagnostic } from '@mission-control/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools.js';
+import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools';
 import {
     capturingYieldResolver,
     fakeBroker,
     throwingResolver,
     toolCall,
     toolOptions,
-} from './interactive-coding-tools-test-support.js';
-import { createBufferedChatOutput } from './run-agent-chat-test-support.js';
+} from './interactive-coding-tools-test-support';
+import { createBufferedChatOutput } from './run-agent-chat-test-support';
 import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

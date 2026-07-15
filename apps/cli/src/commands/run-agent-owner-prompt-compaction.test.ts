@@ -1,9 +1,9 @@
 import type { ProviderTurnRequest } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { captureSequentialProvider, seedCompactedSession, tempRoot } from './compact-command-test-support.js';
-import { runAgent } from './run-agent.js';
-import { createEmptyAuthStore } from './run-agent-chat-test-support.js';
+import { parseArgs } from '../args';
+import { captureSequentialProvider, seedCompactedSession, tempRoot } from './compact-command-test-support';
+import { runAgent } from './run-agent';
+import { createEmptyAuthStore } from './run-agent-chat-test-support';
 import { rm } from 'node:fs/promises';
 
 describe('runAgent owner prompt compaction replay', () => {

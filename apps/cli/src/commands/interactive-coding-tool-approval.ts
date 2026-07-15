@@ -1,8 +1,8 @@
 import type { ToolInvocationSettlement } from '@mission-control/core';
 import type { PermissionKind, PermissionRequest, ToolCall } from '@mission-control/protocol';
 import { ToolResultSchema } from '@mission-control/protocol';
-import type { InteractiveApprovalBroker } from './interactive-approval-broker.js';
-import { renderToolPreview } from './interactive-coding-tool-preview.js';
+import type { InteractiveApprovalBroker } from './interactive-approval-broker';
+import { renderToolPreview } from './interactive-coding-tool-preview';
 import {
     parseBashRunPreview,
     parseCommandRunPreview,
@@ -13,8 +13,8 @@ import {
     parseWebfetchUrl,
     parseWebSearchQuery,
     patchTargetPaths,
-} from './interactive-coding-tool-previews.js';
-import type { InteractiveToolOptions } from './interactive-coding-tools.js';
+} from './interactive-coding-tool-previews';
+import type { InteractiveToolOptions } from './interactive-coding-tools';
 
 export async function preflightInteractiveToolCall(
     toolCall: ToolCall,

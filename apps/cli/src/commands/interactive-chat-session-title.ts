@@ -8,8 +8,8 @@ import {
     redactProviderAuthStoreCredentialText,
 } from '@mission-control/core';
 import type { ModelProviderSelection, ModelRole } from '@mission-control/protocol';
-import { cleanGeneratedSessionTitle, normalizeSessionPromptTitle } from './interactive-chat-session-title-text.js';
-import { buildRoleConfigFromAuth } from './model-role-config.js';
+import { cleanGeneratedSessionTitle, normalizeSessionPromptTitle } from './interactive-chat-session-title-text';
+import { buildRoleConfigFromAuth } from './model-role-config';
 
 export { cleanGeneratedSessionTitle, normalizeSessionPromptTitle };
 

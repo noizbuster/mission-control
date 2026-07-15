@@ -9,12 +9,12 @@
 import type { ProviderAdapter } from '@mission-control/core';
 import { discoverWorkflows, WorkflowRegistry } from '@mission-control/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { runAgent } from './run-agent.js';
+import { runAgent } from './run-agent';
 import {
     buildWorkflowArgs,
     createWorkflowLocalProvider,
     parseWorkflowJsonEvents,
-} from './workflow-e2e-test-support.js';
+} from './workflow-e2e-test-support';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

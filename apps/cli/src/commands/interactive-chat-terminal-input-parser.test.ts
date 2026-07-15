@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTerminalInputParser } from './interactive-chat-terminal-input-parser.js';
+import { createTerminalInputParser } from './interactive-chat-terminal-input-parser';
 
 describe('terminal input parser', () => {
     it('emits complete UTF-8 graphemes only after bytes are complete', () => {

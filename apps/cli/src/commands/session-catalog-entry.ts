@@ -10,9 +10,9 @@ import {
     readProjectionDiagnosticsForSession,
     readSessionProjectionState,
     type SessionProjectionReadState,
-} from './session-catalog-projection.js';
-import type { CliSessionCatalogEntry } from './session-catalog-types.js';
-import { parseCliSessionId } from './session-id.js';
+} from './session-catalog-projection';
+import type { CliSessionCatalogEntry } from './session-catalog-types';
+import { parseCliSessionId } from './session-id';
 import { resolve } from 'node:path';
 
 type SessionProjectionResult =

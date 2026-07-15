@@ -1,5 +1,5 @@
-import type { CliArgs } from './args.js';
-import { parseProfileName } from './args.js';
+import type { CliArgs } from './args';
+import { parseProfileName } from './args';
 
 export type McpSubcommand = 'add' | 'list' | 'remove' | 'test';
 export type McpScope = 'project' | 'user';

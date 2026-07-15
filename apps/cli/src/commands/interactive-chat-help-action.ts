@@ -1,10 +1,10 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { padEndToDisplayWidth, terminalDisplayWidth } from '@mission-control/tui';
 import { Keybinds } from '@mission-control/tui/keybind';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import { formatKeyboardShortcutsSection } from './interactive-chat-hotkeys-action.js';
-import type { ChatOutput } from './interactive-chat-io.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import { formatKeyboardShortcutsSection } from './interactive-chat-hotkeys-action';
+import type { ChatOutput } from './interactive-chat-io';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 
 export type HelpAction = { readonly kind: 'help' };
 

@@ -10,15 +10,15 @@ import type {
 import { redactAgentEventForObservability } from '@mission-control/core';
 import type { AgentEvent, AgentSnapshot, ModelProviderSelection } from '@mission-control/protocol';
 import { closeTreeSitterClient } from '@mission-control/tui/highlight';
-import type { CliArgs } from '../args.js';
-import type { ProviderAuthStore } from '../auth-store.js';
-import { loadPersistedApprovalLevel, savePersistedApprovalLevel } from './approval-level-store.js';
-import type { ChatInput, ChatOutput, ModelSelector, PlainPromptGraph } from './interactive-chat.js';
-import { runInteractiveChatSession } from './interactive-chat.js';
-import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery.js';
-import { listAuthenticatedModelChoices } from './run-agent-model-selection.js';
-import { closePersistentStore } from './run-agent-rendering.js';
-import { createRunEventRecorder } from './run-agent-session.js';
+import type { CliArgs } from '../args';
+import type { ProviderAuthStore } from '../auth-store';
+import { loadPersistedApprovalLevel, savePersistedApprovalLevel } from './approval-level-store';
+import type { ChatInput, ChatOutput, ModelSelector, PlainPromptGraph } from './interactive-chat';
+import { runInteractiveChatSession } from './interactive-chat';
+import { createDefaultModelDiscovery, type ModelDiscovery } from './model-discovery';
+import { listAuthenticatedModelChoices } from './run-agent-model-selection';
+import { closePersistentStore } from './run-agent-rendering';
+import { createRunEventRecorder } from './run-agent-session';
 
 type InteractiveRunOptions = {
     readonly chatInput?: ChatInput;

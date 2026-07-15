@@ -1,6 +1,6 @@
 import type { JsonlSessionReplayPrefixProjection } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { formatSessionStatusWithSource } from '../ui/session-status-format.js';
+import { formatSessionStatusWithSource } from '../ui/session-status-format';
 
 export function formatSessionSummary(sessionId: string, replay: JsonlSessionReplayPrefixProjection): string {
     const selection = latestSelection(replay);

@@ -18,9 +18,9 @@
 import { registerBuiltinWorkflows, WorkflowRegistry } from '@mission-control/core';
 import { type AbgPolicySpec, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { resolveWorkflowInvocation } from './run-agent.js';
-import { readGraphFile } from './run-agent-graph.js';
-import { graphForDefaultFallback, graphForWorkflowSpec } from './workflow-materialization.js';
+import { resolveWorkflowInvocation } from './run-agent';
+import { readGraphFile } from './run-agent-graph';
+import { graphForDefaultFallback, graphForWorkflowSpec } from './workflow-materialization';
 
 function registryWithBuiltins(): WorkflowRegistry {
     const registry = new WorkflowRegistry();

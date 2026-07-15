@@ -1,7 +1,7 @@
 import { Keybinds } from '@mission-control/tui/keybind';
 import { describe, expect, it } from 'vitest';
-import { parseChatLine } from './chat-commands.js';
-import { formatHelpText, runHelpAction } from './interactive-chat-help-action.js';
+import { parseChatLine } from './chat-commands';
+import { formatHelpText, runHelpAction } from './interactive-chat-help-action';
 
 type CapturingOutput = {
     readonly write: (text: string) => void;

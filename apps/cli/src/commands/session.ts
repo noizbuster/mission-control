@@ -7,17 +7,17 @@ import {
     readLocalSessionReplay,
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
-import type { CliArgs } from '../args.js';
-import { type CliCommandResult, successfulCliCommand } from '../cli-command-result.js';
-import { formatSessionStatusWithSource } from '../ui/session-status-format.js';
-import { exportSessionArchiveFile, importSessionArchiveFile } from './session-archive.js';
-import { formatSessionCatalogEntry, listSessionCatalogEntries, readSessionCatalogEntry } from './session-catalog.js';
-import { CliSessionCommandError } from './session-command-error.js';
-import { deleteSessionTree } from './session-delete-command.js';
-import { parseCliSessionId } from './session-id.js';
-import { runSessionStopCommand } from './session-stop-command.js';
+import type { CliArgs } from '../args';
+import { type CliCommandResult, successfulCliCommand } from '../cli-command-result';
+import { formatSessionStatusWithSource } from '../ui/session-status-format';
+import { exportSessionArchiveFile, importSessionArchiveFile } from './session-archive';
+import { formatSessionCatalogEntry, listSessionCatalogEntries, readSessionCatalogEntry } from './session-catalog';
+import { CliSessionCommandError } from './session-command-error';
+import { deleteSessionTree } from './session-delete-command';
+import { parseCliSessionId } from './session-id';
+import { runSessionStopCommand } from './session-stop-command';
 
-export type { CliSessionCommandErrorCode } from './session-command-error.js';
+export type { CliSessionCommandErrorCode } from './session-command-error';
 export { CliSessionCommandError };
 
 export async function runSessionCommand(args: CliArgs): Promise<CliCommandResult> {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createHelpText, getVersion, runCli, writeCliCommandResult } from './index.js';
+import { createHelpText, getVersion, runCli, writeCliCommandResult } from './index';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 

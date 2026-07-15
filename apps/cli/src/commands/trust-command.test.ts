@@ -1,15 +1,15 @@
 import { missionControlDataDirEnvKey } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { createHelpText } from '../index.js';
-import { parseChatLine } from './chat-commands.js';
-import { runTrustAction } from './interactive-chat-trust.js';
-import { runAgent } from './run-agent.js';
+import { parseArgs } from '../args';
+import { createHelpText } from '../index';
+import { parseChatLine } from './chat-commands';
+import { runTrustAction } from './interactive-chat-trust';
+import { runAgent } from './run-agent';
 import {
     createBufferedChatOutput,
     createEmptyAuthStore,
     createScriptedChatInput,
-} from './run-agent-chat-test-support.js';
+} from './run-agent-chat-test-support';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

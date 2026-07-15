@@ -12,9 +12,9 @@ import {
     type WorkflowRegistry,
 } from '@mission-control/core';
 import type { AbgGraphSpec, Mission, Run, WorkflowSpec } from '@mission-control/protocol';
-import type { CodingActionContext } from './interactive-chat-action-context.js';
-import type { PromptTurnContext } from './interactive-chat-prompt-turn.js';
-import { settleNoninteractiveWorkflowRun, type WorkflowRunOutcome } from './run-agent-workflow-run.js';
+import type { CodingActionContext } from './interactive-chat-action-context';
+import type { PromptTurnContext } from './interactive-chat-prompt-turn';
+import { settleNoninteractiveWorkflowRun, type WorkflowRunOutcome } from './run-agent-workflow-run';
 
 export type WorkflowRunHandle = {
     readonly location: NormalizedMissionRunStoreLocation;

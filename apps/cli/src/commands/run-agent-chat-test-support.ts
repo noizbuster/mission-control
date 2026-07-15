@@ -1,6 +1,6 @@
 import { missionControlAuthSchemaURL } from '@mission-control/config';
 import type { ProviderAuthFile, ProviderCredentialSummary } from '@mission-control/protocol';
-import type { ProviderAuthStore } from '../auth-store.js';
+import type { ProviderAuthStore } from '../auth-store';
 
 type ScriptedChatEvent =
     | {

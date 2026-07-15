@@ -10,23 +10,23 @@ import {
     redactAgentEventForObservability,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
-import type { CliArgs } from '../args.js';
-import type { ProviderAuthStore } from '../auth-store.js';
-import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
-import { redactWorkflowError } from './interactive-workflow-run-outcome.js';
-import type { MissionControlServices } from './mission-control-services.js';
-import { resolveMissionControlServices } from './mission-control-services-resolver.js';
-import { loadPricingTable } from './pricing-table-store.js';
+import type { CliArgs } from '../args';
+import type { ProviderAuthStore } from '../auth-store';
+import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context';
+import { redactWorkflowError } from './interactive-workflow-run-outcome';
+import type { MissionControlServices } from './mission-control-services';
+import { resolveMissionControlServices } from './mission-control-services-resolver';
+import { loadPricingTable } from './pricing-table-store';
 import {
     buildCodingAgentGraphForSelection,
     resolveGraphSdkModel,
     runCodingPromptOnGraph,
-} from './run-agent-graph-prompt.js';
-import type { RunAgentOptions } from './run-agent-options.js';
-import { runOwnerPrompt } from './run-agent-owner-prompt.js';
-import { closePersistentStore, createRenderer } from './run-agent-rendering.js';
-import { createRunEventRecorder } from './run-agent-session.js';
-import { resolveNoninteractiveWorkflowSelection } from './run-agent-workflow.js';
+} from './run-agent-graph-prompt';
+import type { RunAgentOptions } from './run-agent-options';
+import { runOwnerPrompt } from './run-agent-owner-prompt';
+import { closePersistentStore, createRenderer } from './run-agent-rendering';
+import { createRunEventRecorder } from './run-agent-session';
+import { resolveNoninteractiveWorkflowSelection } from './run-agent-workflow';
 import {
     beginNoninteractiveWorkflowRun,
     settleNoninteractiveWorkflowRun,
@@ -34,7 +34,7 @@ import {
     type WorkflowRunOutcome,
     workflowOutcomeFromGraphStatus,
     workflowOutcomeFromOwnerStatus,
-} from './run-agent-workflow-run.js';
+} from './run-agent-workflow-run';
 
 type RunNoninteractiveAgentInput = {
     readonly args: CliArgs;

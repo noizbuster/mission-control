@@ -11,9 +11,31 @@
     "mc": "./dist/index.js",
     "mctrl": "./dist/index.js"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./args": {
+      "types": "./dist/args.d.ts",
+      "import": "./dist/args.js"
+    },
+    "./commands/run-agent": {
+      "types": "./dist/commands/run-agent.d.ts",
+      "import": "./dist/commands/run-agent.js"
+    },
+    "./commands/session": {
+      "types": "./dist/commands/session.d.ts",
+      "import": "./dist/commands/session.js"
+    },
+    "./commands/mission-control-services": {
+      "types": "./dist/commands/mission-control-services.d.ts",
+      "import": "./dist/commands/mission-control-services.js"
+    }
+  },
   "scripts": {
     "prebuild": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run tui:build",
-    "build": "tsc -p tsconfig.json",
+    "build": "vite build && tsc -p tsconfig.json --emitDeclarationOnly",
     "dev": "pnpm build && node --experimental-ffi dist/index.js",
     "test": "sh -c 'cd ../.. && while [ \"${1:-}\" = \"--\" ]; do shift; done; vitest run --reporter verbose \"$@\"' --",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -27,6 +49,7 @@
   "devDependencies": {
     "@ai-sdk/provider": "^3.0.10",
     "ai": "^6.0.208",
+    "vite": "^8.0.16",
     "zod": "^4.1.13"
   }
 }

@@ -1,4 +1,4 @@
-import type { AuthCredentialArg, CliArgs } from './args.js';
+import type { AuthCredentialArg, CliArgs } from './args';
 
 type AuthCliCommand = Extract<CliArgs['command'], 'auth-login' | 'auth-list' | 'auth-logout'>;
 

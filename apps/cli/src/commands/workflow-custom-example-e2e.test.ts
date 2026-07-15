@@ -1,10 +1,10 @@
 import { AgentRuntime, discoverWorkflows, materializeWorkflow, WorkflowRegistry } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createProviderAuthStore } from '../auth-store.js';
-import { createCliRuntimeOptions } from './cli-runtime-options.js';
-import { runCodingPromptOnGraph } from './run-agent-graph-prompt.js';
-import { createWorkflowLocalProvider } from './workflow-e2e-test-support.js';
+import { createProviderAuthStore } from '../auth-store';
+import { createCliRuntimeOptions } from './cli-runtime-options';
+import { runCodingPromptOnGraph } from './run-agent-graph-prompt';
+import { createWorkflowLocalProvider } from './workflow-e2e-test-support';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

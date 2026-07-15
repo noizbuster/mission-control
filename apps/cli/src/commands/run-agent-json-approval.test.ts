@@ -6,15 +6,15 @@ import {
 } from '@mission-control/core';
 import { AgentEventSchema, type AgentMessage, type ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runAgent } from './run-agent.js';
+import { parseArgs } from '../args';
+import { runAgent } from './run-agent';
 import {
     knownSafePatchPath,
     lastRecord,
     parseJsonRecords,
     providerWithWrite,
     writeToolWorkflow,
-} from './run-agent-json-approval-test-support.js';
+} from './run-agent-json-approval-test-support';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

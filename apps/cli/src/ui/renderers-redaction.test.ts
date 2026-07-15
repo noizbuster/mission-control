@@ -1,7 +1,7 @@
 import { AgentRuntime } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import { JsonRenderer, PlainRenderer } from './renderers.js';
+import { JsonRenderer, PlainRenderer } from './renderers';
 
 const NOW = '2026-07-13T00:00:00.000Z';
 const REDACTED_CREDENTIAL = '[REDACTED_CREDENTIAL]';

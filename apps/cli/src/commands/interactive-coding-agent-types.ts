@@ -15,7 +15,7 @@ import type {
 } from '@mission-control/core';
 import type { AbgGraphSpec, AgentEvent, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import type { AbgOverlayController, ApprovalLevel } from '@mission-control/tui/state';
-import type { ChatOutput } from './interactive-chat-io.js';
+import type { ChatOutput } from './interactive-chat-io';
 
 export type ActiveCodingAgentTurn = {
     readonly done: Promise<void>;

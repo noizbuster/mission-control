@@ -10,10 +10,10 @@ import {
 } from '@mission-control/core';
 import { AgentEventSchema } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { captureSequentialProvider } from './compact-command-test-support.js';
-import { runAgent } from './run-agent.js';
-import { runSessionCommand } from './session.js';
+import { parseArgs } from '../args';
+import { captureSequentialProvider } from './compact-command-test-support';
+import { runAgent } from './run-agent';
+import { runSessionCommand } from './session';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

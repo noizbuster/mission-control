@@ -1,25 +1,25 @@
 import { createSlashCommandMenuState, interruptTokenEncodingFamily } from '@mission-control/tui/state';
-import { createTerminalChatInputBuffer } from './interactive-chat-input-block.js';
+import { createTerminalChatInputBuffer } from './interactive-chat-input-block';
 import {
     type TerminalKeyboardMode,
     terminalModifiedKeyDisableSequence,
     terminalModifiedKeyEnableSequence,
-} from './interactive-chat-keyboard.js';
-import { createTerminalInputParser } from './interactive-chat-terminal-input-parser.js';
+} from './interactive-chat-keyboard';
+import { createTerminalInputParser } from './interactive-chat-terminal-input-parser';
 import {
     readTerminalChatEvent,
     type TerminalInputStream,
     type TerminalOutputStream,
-} from './interactive-chat-terminal-read.js';
+} from './interactive-chat-terminal-read';
 import {
     type ChatInputRenderContext,
     emptyRenderedInputBlock,
     renderTerminalInputBlock,
-} from './interactive-chat-terminal-renderer.js';
+} from './interactive-chat-terminal-renderer';
 import { stdin as processInput, stdout as processOutput } from 'node:process';
 
 export type { ChatInputEvent } from '@mission-control/tui/state';
-export type { ChatInputRenderContext } from './interactive-chat-terminal-renderer.js';
+export type { ChatInputRenderContext } from './interactive-chat-terminal-renderer';
 
 import type { ChatInputEvent } from '@mission-control/tui/state';
 

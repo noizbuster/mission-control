@@ -2,7 +2,7 @@ import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { AgentRuntime, ProjectTrustStore } from '@mission-control/core';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { runCodingPromptOnGraph } from './run-agent-graph-prompt.js';
+import { runCodingPromptOnGraph } from './run-agent-graph-prompt';
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

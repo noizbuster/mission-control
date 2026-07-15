@@ -2,16 +2,16 @@ import type { ProviderAdapter, ProviderTurnRequest } from '@mission-control/core
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ModelChoice } from '@mission-control/tui/state';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runAgent } from './run-agent.js';
+import { parseArgs } from '../args';
+import { runAgent } from './run-agent';
 import {
     createAuthStoreWithSummaries,
     createBufferedChatOutput,
     createCredentialSummary,
     createFieldsCredential,
     createScriptedChatInput,
-} from './run-agent-chat-test-support.js';
-import { useIsolatedMissionControlDataDir } from './run-agent-data-dir-test-support.js';
+} from './run-agent-chat-test-support';
+import { useIsolatedMissionControlDataDir } from './run-agent-data-dir-test-support';
 
 describe('runAgent /model provider variant picker', () => {
     let cleanupDataDir: (() => Promise<void>) | undefined;

@@ -1,6 +1,6 @@
 import { modelProviderCatalog } from '@mission-control/config';
 import { describe, expect, it } from 'vitest';
-import { createDefaultModelDiscovery, type ModelDiscoveryFetch } from './model-discovery.js';
+import { createDefaultModelDiscovery, type ModelDiscoveryFetch } from './model-discovery';
 
 type RecordedModelDiscoveryRequest = {
     readonly url: string;

@@ -11,8 +11,8 @@ import {
 import { MissionSchema, type ModelProviderSelection, RunSchema, type WorkflowSpec } from '@mission-control/protocol';
 import { createChatStore, type MissionPanelRow } from '@mission-control/tui/state';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import { loadMissionPanelRows, runChatAction } from './interactive-chat-actions.js';
+import type { CodingActionContext } from './interactive-chat-actions';
+import { loadMissionPanelRows, runChatAction } from './interactive-chat-actions';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

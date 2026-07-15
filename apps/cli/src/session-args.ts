@@ -1,5 +1,5 @@
-import type { CliArgs } from './args.js';
-import { parseCliSessionId } from './commands/session-id.js';
+import type { CliArgs } from './args';
+import { parseCliSessionId } from './commands/session-id';
 
 export const SESSION_STOP_USAGE = 'Usage: mc session stop <session-id> [--only | --child-only] [--timeout <duration>]';
 export const SESSION_DELETE_USAGE = 'Usage: mc session delete <session-id> [--expected-tree-token <sha256>]';

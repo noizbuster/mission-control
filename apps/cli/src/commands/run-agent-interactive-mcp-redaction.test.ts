@@ -1,13 +1,13 @@
 import { missionControlDataDirEnvKey, readLocalSessionReplay } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runAgent } from './run-agent.js';
+import { parseArgs } from '../args';
+import { runAgent } from './run-agent';
 import {
     createBufferedChatOutput,
     createEmptyAuthStore,
     createScriptedChatInput,
-} from './run-agent-chat-test-support.js';
-import { providerFromTurns } from './run-agent-tool-registry-test-support.js';
+} from './run-agent-chat-test-support';
+import { providerFromTurns } from './run-agent-tool-registry-test-support';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

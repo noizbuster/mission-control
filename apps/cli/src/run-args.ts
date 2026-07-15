@@ -1,6 +1,6 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import type { CliArgs, CliMode } from './args.js';
-import { parseProfileName } from './args.js';
+import type { CliArgs, CliMode } from './args';
+import { parseProfileName } from './args';
 
 type InitialRunArgs = {
     readonly graphPath?: string;

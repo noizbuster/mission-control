@@ -5,11 +5,11 @@ import {
     resolveSlashCommandMenuSubmission,
 } from '@mission-control/tui/state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseChatLine } from './chat-commands.js';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import { runClearAction } from './interactive-chat-clear-action.js';
-import type { SessionNavigationController, SessionNavigationResult } from './interactive-chat-session-navigation.js';
-import type { UndoRedoConversationController } from './interactive-chat-undo-redo-action.js';
+import { parseChatLine } from './chat-commands';
+import type { CodingActionContext } from './interactive-chat-actions';
+import { runClearAction } from './interactive-chat-clear-action';
+import type { SessionNavigationController, SessionNavigationResult } from './interactive-chat-session-navigation';
+import type { UndoRedoConversationController } from './interactive-chat-undo-redo-action';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,16 +1,16 @@
 import { missionControlAuthFileEnvKey } from '@mission-control/config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { createProviderAuthStore } from '../auth-store.js';
-import { runAgent } from './run-agent.js';
+import { parseArgs } from '../args';
+import { createProviderAuthStore } from '../auth-store';
+import { runAgent } from './run-agent';
 import {
     createAuthStoreWithSummaries,
     createBufferedChatOutput,
     createCredentialSummary,
     createFieldsCredential,
     createScriptedChatInput,
-} from './run-agent-chat-test-support.js';
-import { useIsolatedMissionControlDataDir } from './run-agent-data-dir-test-support.js';
+} from './run-agent-chat-test-support';
+import { useIsolatedMissionControlDataDir } from './run-agent-data-dir-test-support';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

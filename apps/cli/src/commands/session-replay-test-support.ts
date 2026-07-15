@@ -1,6 +1,6 @@
 import { type AgentEvent, AgentEventSchema } from '@mission-control/protocol';
-import { parseArgs } from '../args.js';
-import { runSessionCommand } from './session.js';
+import { parseArgs } from '../args';
+import { runSessionCommand } from './session';
 
 export async function replayedMessages(sessionId: string): Promise<readonly string[]> {
     return replayedEvents(sessionId).then((events) =>

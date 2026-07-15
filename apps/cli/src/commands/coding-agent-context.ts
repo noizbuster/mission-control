@@ -18,7 +18,7 @@ import {
     ProjectTrustStore,
     type SystemPromptEnvironment,
 } from '@mission-control/core';
-import { isGitWorkspace } from './git-workspace.js';
+import { isGitWorkspace } from './git-workspace';
 
 export type BuildSystemPromptEnvInput = {
     readonly workspaceRoot: string;

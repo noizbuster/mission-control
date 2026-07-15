@@ -1,7 +1,7 @@
 import { AgentRuntime, type ProviderAdapter } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createCliRuntimeOptions } from './cli-runtime-options.js';
+import { createCliRuntimeOptions } from './cli-runtime-options';
 
 describe('createCliRuntimeOptions', () => {
     it('surfaces approval-required JSON events for effectful non-interactive permissions', async () => {

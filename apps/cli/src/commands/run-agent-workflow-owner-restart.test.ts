@@ -7,22 +7,22 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent, ApprovalRecord } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { disposeAllMissionControlServices } from './mission-control-services.js';
-import { runAgent } from './run-agent.js';
+import { parseArgs } from '../args';
+import { disposeAllMissionControlServices } from './mission-control-services';
+import { runAgent } from './run-agent';
 import {
     createBufferedChatOutput,
     createEmptyAuthStore,
     createScriptedChatInput,
-} from './run-agent-chat-test-support.js';
-import { writeToolWorkflow } from './run-agent-json-approval-test-support.js';
+} from './run-agent-chat-test-support';
+import { writeToolWorkflow } from './run-agent-json-approval-test-support';
 import {
     createCompletingWorkflowModel,
     createWorkflowPersistenceFixture,
     firstRecord,
     removeWorkflowPersistenceFixture,
     type WorkflowPersistenceFixture,
-} from './run-agent-workflow-test-support.js';
+} from './run-agent-workflow-test-support';
 
 describe('noninteractive blocked workflow owner restart', () => {
     let fixture: WorkflowPersistenceFixture;

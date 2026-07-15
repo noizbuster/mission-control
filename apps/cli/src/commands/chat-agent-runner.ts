@@ -28,12 +28,12 @@ import type { ModelProviderSelection } from '@mission-control/protocol';
 import { closeTreeSitterClient } from '@mission-control/tui/highlight';
 import type { ApprovalLevel, ChatStore, ModelChoice } from '@mission-control/tui/state';
 import { approvalLevelRules } from '@mission-control/tui/state';
-import { type ChatLineAction, type ChatLineOptions, parseChatLine } from './chat-commands.js';
-import { appendInputHistoryEntry } from './input-history-store.js';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { ChatInputEvent, ChatOutput } from './interactive-chat-io.js';
-import { maxChatPromptLength } from './interactive-chat-io.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import { type ChatLineAction, type ChatLineOptions, parseChatLine } from './chat-commands';
+import { appendInputHistoryEntry } from './input-history-store';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { ChatInputEvent, ChatOutput } from './interactive-chat-io';
+import { maxChatPromptLength } from './interactive-chat-io';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 
 const YIELD_BEFORE_READ_MS = 25;
 

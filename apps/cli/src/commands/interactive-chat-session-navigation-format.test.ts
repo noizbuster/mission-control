@@ -1,6 +1,6 @@
 import { projectJsonlSessionReplayPrefix } from '@mission-control/core';
 import { describe, expect, it } from 'vitest';
-import { formatSessionSummary } from './interactive-chat-session-navigation-format.js';
+import { formatSessionSummary } from './interactive-chat-session-navigation-format';
 
 describe('interactive session navigation formatting', () => {
     it.each([

@@ -8,7 +8,7 @@ import {
     type SqliteSessionProjectionStore,
 } from '@mission-control/core';
 import type { AgentSnapshot } from '@mission-control/protocol';
-import type { CliSessionCatalogDiagnostic } from './session-catalog.js';
+import type { CliSessionCatalogDiagnostic } from './session-catalog';
 
 export type SessionProjectionReadState = {
     readonly records: ReadonlyMap<string, SessionProjectionSessionRecord>;

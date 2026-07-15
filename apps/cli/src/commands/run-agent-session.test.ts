@@ -1,9 +1,9 @@
 import { localSessionDbPath, missionControlDataDirEnvKey, readLocalSessionReplay } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type CliArgs, type CliMode, parseArgs } from '../args.js';
-import { runAgent } from './run-agent.js';
-import { createRunEventRecorder } from './run-agent-session.js';
+import { type CliArgs, type CliMode, parseArgs } from '../args';
+import { runAgent } from './run-agent';
+import { createRunEventRecorder } from './run-agent-session';
 import { access, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

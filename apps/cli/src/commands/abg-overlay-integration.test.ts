@@ -2,7 +2,7 @@ import { type AbgSignal, type AgentEvent } from '@mission-control/protocol';
 import { ABG_OVERLAY_TABS } from '@mission-control/tui/abg-overlay';
 import { createAbgOverlayController, createAbgOverlayStore } from '@mission-control/tui/state';
 import { describe, expect, it } from 'vitest';
-import { wireAbgOverlay } from './interactive-coding-agent.js';
+import { wireAbgOverlay } from './interactive-coding-agent';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 

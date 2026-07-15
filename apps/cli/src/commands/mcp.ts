@@ -17,9 +17,9 @@ import {
     writeUserMcpServer,
 } from '@mission-control/core';
 import { type McpConfigEntry, McpConfigEntrySchema } from '@mission-control/protocol';
-import type { CliArgs } from '../args.js';
-import { formatRemoteUrlForDisplay } from './mcp-display.js';
-import { resolveWorkspaceRoot } from './run-agent-workspace.js';
+import type { CliArgs } from '../args';
+import { formatRemoteUrlForDisplay } from './mcp-display';
+import { resolveWorkspaceRoot } from './run-agent-workspace';
 
 const SECRET_MASK = '***';
 

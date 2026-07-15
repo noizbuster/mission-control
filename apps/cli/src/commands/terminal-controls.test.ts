@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { setTtyState } from './run-agent-chat-test-support.js';
+import { setTtyState } from './run-agent-chat-test-support';
 import {
     detectGitBranch,
     detectGitWorktree,
@@ -19,7 +19,7 @@ import {
     TERMINAL_TITLE_RESET,
     TERMINAL_TITLE_SET_PREFIX,
     TERMINAL_TITLE_SET_SUFFIX,
-} from './terminal-controls.js';
+} from './terminal-controls';
 import { execSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

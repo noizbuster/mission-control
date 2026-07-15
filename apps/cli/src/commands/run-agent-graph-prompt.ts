@@ -32,16 +32,16 @@ import {
     wrapFlatProviderAsSdkModel,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AbgNodeModelOptions, ModelProviderSelection } from '@mission-control/protocol';
-import type { ProviderAuthStore } from '../auth-store.js';
-import { createCliProviderCredentialResolver } from '../provider-credential-resolver.js';
-import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
-import { createGraphObservabilityRedactor } from './graph-observability-redactor.js';
-import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
+import type { ProviderAuthStore } from '../auth-store';
+import { createCliProviderCredentialResolver } from '../provider-credential-resolver';
+import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context';
+import { createGraphObservabilityRedactor } from './graph-observability-redactor';
+import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry';
 import {
     closeProductionToolRegistry,
     type ProductionToolRegistry,
     withProductionToolSetup,
-} from './production-tool-registry.js';
+} from './production-tool-registry';
 
 export type RunCodingPromptOnGraphInput = {
     readonly runtime: AgentRuntime;

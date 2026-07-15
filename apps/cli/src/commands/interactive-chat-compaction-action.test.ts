@@ -1,6 +1,6 @@
 import type { AgentMessage } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { buildCompactionRequestMessages } from './interactive-chat-compact.js';
+import { buildCompactionRequestMessages } from './interactive-chat-compact';
 
 describe('buildCompactionRequestMessages', () => {
     const history: readonly AgentMessage[] = [

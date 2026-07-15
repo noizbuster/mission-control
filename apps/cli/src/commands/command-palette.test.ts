@@ -31,7 +31,7 @@ import {
 } from '@mission-control/tui/slash-mapping';
 import { slashCommandChoices } from '@mission-control/tui/state';
 import { describe, expect, it } from 'vitest';
-import { parseChatLine } from './chat-commands.js';
+import { parseChatLine } from './chat-commands';
 
 /**
  * Independently derive the base-name set from the slash menu so the coverage

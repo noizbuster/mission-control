@@ -1,7 +1,7 @@
 import { redactCredentialText, type ToolInvocationSettlement } from '@mission-control/core';
 import type { AbgSignal, AgentEvent } from '@mission-control/protocol';
-import type { ChatOutput } from './interactive-chat-io.js';
-import { parseFileWriteOutput } from './interactive-coding-file-write-preview.js';
+import type { ChatOutput } from './interactive-chat-io';
+import { parseFileWriteOutput } from './interactive-coding-file-write-preview';
 import {
     extractSignalError,
     formatToolCountSummary,
@@ -11,12 +11,12 @@ import {
     readStringField,
     readToolCallProposal,
     structuredToolOutput,
-} from './interactive-coding-signal-payload.js';
-import { parseFileEditOutput, parseFilePatchOutput, renderToolPreview } from './interactive-coding-tool-preview.js';
+} from './interactive-coding-signal-payload';
+import { parseFileEditOutput, parseFilePatchOutput, renderToolPreview } from './interactive-coding-tool-preview';
 import {
     type InteractiveGraphSignalObserver,
     notifyInteractiveGraphSignalObservers,
-} from './interactive-graph-signal-observers.js';
+} from './interactive-graph-signal-observers';
 
 export type ProviderRenderState = {
     streamingText: boolean;

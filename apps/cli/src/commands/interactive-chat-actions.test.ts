@@ -9,11 +9,11 @@ import {
 import type { ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import type { SessionPickerEntry } from '@mission-control/tui/state';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import { runChatAction } from './interactive-chat-actions.js';
-import type { SessionNavigationController } from './interactive-chat-session-navigation.js';
-import { SessionNavigationError } from './interactive-chat-session-navigation-store.js';
-import { providerFromTurns } from './run-agent-tool-registry-test-support.js';
+import type { CodingActionContext } from './interactive-chat-actions';
+import { runChatAction } from './interactive-chat-actions';
+import type { SessionNavigationController } from './interactive-chat-session-navigation';
+import { SessionNavigationError } from './interactive-chat-session-navigation-store';
+import { providerFromTurns } from './run-agent-tool-registry-test-support';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';

@@ -1,8 +1,8 @@
 import type { ModelProviderSelection, SessionStopScope } from '@mission-control/protocol';
-import { parseAuthArgs } from './auth-args.js';
-import { type McpKeyValueArg, type McpScope, parseMcpArgs } from './mcp-args.js';
-import { parseGraphArgs, parseRunArgs } from './run-args.js';
-import { parseSessionArgs } from './session-args.js';
+import { parseAuthArgs } from './auth-args';
+import { type McpKeyValueArg, type McpScope, parseMcpArgs } from './mcp-args';
+import { parseGraphArgs, parseRunArgs } from './run-args';
+import { parseSessionArgs } from './session-args';
 
 export type CliMode = 'tui' | 'plain' | 'json' | 'jsonl';
 

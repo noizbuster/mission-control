@@ -7,11 +7,11 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
-import { createInteractiveToolRegistry } from './interactive-coding-tools.js';
-import { noLspServers, toolOptions, trustedProjectTrustStore } from './interactive-coding-tools-test-support.js';
-import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
-import { createBufferedChatOutput } from './run-agent-chat-test-support.js';
+import { createInteractiveApprovalBroker } from './interactive-approval-broker';
+import { createInteractiveToolRegistry } from './interactive-coding-tools';
+import { noLspServers, toolOptions, trustedProjectTrustStore } from './interactive-coding-tools-test-support';
+import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry';
+import { createBufferedChatOutput } from './run-agent-chat-test-support';
 import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

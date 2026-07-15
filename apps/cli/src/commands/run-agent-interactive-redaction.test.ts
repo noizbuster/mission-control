@@ -9,15 +9,15 @@ import {
 } from '@mission-control/core';
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runAgent } from './run-agent.js';
+import { parseArgs } from '../args';
+import { runAgent } from './run-agent';
 import {
     createBufferedChatOutput,
     createEmptyAuthStore,
     createScriptedChatInput,
-} from './run-agent-chat-test-support.js';
-import { providerFromTurns } from './run-agent-tool-registry-test-support.js';
-import { runSessionCommand } from './session.js';
+} from './run-agent-chat-test-support';
+import { providerFromTurns } from './run-agent-tool-registry-test-support';
+import { runSessionCommand } from './session';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -4,7 +4,7 @@ import {
     formatSessionSummary,
     formatSessionTree,
     latestSelection,
-} from './interactive-chat-session-navigation-format.js';
+} from './interactive-chat-session-navigation-format';
 import {
     appendSessionNavigationEvent,
     assertReplayIsReadable,
@@ -17,8 +17,8 @@ import {
     requireCurrentStore,
     SessionNavigationError,
     validatedSessionId,
-} from './interactive-chat-session-navigation-store.js';
-import { formatSessionCatalogEntry, listSessionCatalogEntries } from './session-catalog.js';
+} from './interactive-chat-session-navigation-store';
+import { formatSessionCatalogEntry, listSessionCatalogEntries } from './session-catalog';
 
 export type SessionNavigationResult = {
     readonly message: string;

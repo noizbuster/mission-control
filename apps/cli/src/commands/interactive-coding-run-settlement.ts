@@ -5,8 +5,8 @@ import {
     type SessionRunOwnerReceipt,
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
-import type { ActiveCodingAgentTurnOutcome, CodingAgentTurnOptions } from './interactive-coding-agent-types.js';
-import type { ProviderRenderState } from './interactive-coding-graph-rendering.js';
+import type { ActiveCodingAgentTurnOutcome, CodingAgentTurnOptions } from './interactive-coding-agent-types';
+import type { ProviderRenderState } from './interactive-coding-graph-rendering';
 
 type OwnedTurnOptions = Omit<CodingAgentTurnOptions, 'prompt'> & { readonly prompt?: string };
 

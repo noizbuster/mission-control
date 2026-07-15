@@ -6,7 +6,7 @@ import {
     RECENT_EVENTS_CAP,
 } from '@mission-control/tui/state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { interactiveGraphStreamSignal, wireAbgOverlay } from './interactive-coding-agent.js';
+import { interactiveGraphStreamSignal, wireAbgOverlay } from './interactive-coding-agent';
 import { performance } from 'node:perf_hooks';
 
 const TS = '2026-01-01T00:00:00.000Z';

@@ -1,7 +1,7 @@
 import type { ProjectTrustLookup } from '@mission-control/core';
 import { ProjectTrustStore } from '@mission-control/core';
-import type { TrustCommandAction } from './chat-commands.js';
-import type { ChatOutput } from './interactive-chat-io.js';
+import type { TrustCommandAction } from './chat-commands';
+import type { ChatOutput } from './interactive-chat-io';
 
 export async function runTrustAction(
     chatOutput: ChatOutput,

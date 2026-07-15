@@ -7,7 +7,7 @@ import {
     readLocalSessionReplay,
 } from '@mission-control/core';
 import { type AgentEvent, AgentEventSchema, type ProviderStreamChunk } from '@mission-control/protocol';
-import type { CliCommandResult } from '../cli-command-result.js';
+import type { CliCommandResult } from '../cli-command-result';
 
 export type ReplayRecord =
     | { readonly kind: 'event'; readonly event: AgentEvent }

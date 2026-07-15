@@ -1,8 +1,8 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import type { ChatOutput } from './interactive-chat-io.js';
-import { exportSessionArchiveFile } from './session-archive.js';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { CodingActionContext } from './interactive-chat-actions';
+import type { ChatOutput } from './interactive-chat-io';
+import { exportSessionArchiveFile } from './session-archive';
 
 export type ExportAction = { readonly kind: 'export'; readonly path: string };
 

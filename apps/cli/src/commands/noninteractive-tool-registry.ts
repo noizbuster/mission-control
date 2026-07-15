@@ -43,12 +43,12 @@ import type {
     PermissionRequest,
     WorkflowSpec,
 } from '@mission-control/protocol';
-import { readModelPatternOverrides } from './agents-model-overrides-config.js';
-import { cliAllowsAction } from './cli-permission-policy.js';
-import { createGraphObservabilityRedactor } from './graph-observability-redactor.js';
-import { registerAvailableLspTool } from './lsp-tool-registration.js';
-import { buildRoleConfigFromAuth } from './model-role-config.js';
-import { completeProductionToolSetup, type ProductionToolRegistry } from './production-tool-registry.js';
+import { readModelPatternOverrides } from './agents-model-overrides-config';
+import { cliAllowsAction } from './cli-permission-policy';
+import { createGraphObservabilityRedactor } from './graph-observability-redactor';
+import { registerAvailableLspTool } from './lsp-tool-registration';
+import { buildRoleConfigFromAuth } from './model-role-config';
+import { completeProductionToolSetup, type ProductionToolRegistry } from './production-tool-registry';
 
 type NonInteractiveToolRegistryOptions = {
     readonly workspaceRoot: string;

@@ -1,13 +1,13 @@
 import type { AgentRuntime } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
-import type { WorkflowInvocationAction } from './chat-commands.js';
-import type { CodingActionContext } from './interactive-chat-action-context.js';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { ChatOutput } from './interactive-chat-io.js';
-import { runPromptAction } from './interactive-prompt-actions.js';
-import { createWorkflowRunOutcomeObserver, redactWorkflowError } from './interactive-workflow-run-outcome.js';
-import { seedOverlayForWorkflow, settleWorkflowRun, tryCreateWorkflowRun } from './interactive-workflow-state.js';
-import { graphForWorkflowSpec } from './workflow-materialization.js';
+import type { WorkflowInvocationAction } from './chat-commands';
+import type { CodingActionContext } from './interactive-chat-action-context';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { ChatOutput } from './interactive-chat-io';
+import { runPromptAction } from './interactive-prompt-actions';
+import { createWorkflowRunOutcomeObserver, redactWorkflowError } from './interactive-workflow-run-outcome';
+import { seedOverlayForWorkflow, settleWorkflowRun, tryCreateWorkflowRun } from './interactive-workflow-state';
+import { graphForWorkflowSpec } from './workflow-materialization';
 
 export async function runWorkflowAction(
     runtime: AgentRuntime,

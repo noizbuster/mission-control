@@ -4,8 +4,8 @@ import {
     stopLocalSessionTree,
 } from '@mission-control/core';
 import type { SessionStopScope } from '@mission-control/protocol';
-import type { CliArgs } from '../args.js';
-import type { CliCommandResult } from '../cli-command-result.js';
+import type { CliArgs } from '../args';
+import type { CliCommandResult } from '../cli-command-result';
 import { randomUUID } from 'node:crypto';
 
 type SessionStopCommandInput = Pick<

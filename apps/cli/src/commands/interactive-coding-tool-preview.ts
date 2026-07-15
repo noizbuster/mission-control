@@ -1,11 +1,11 @@
 import { redactCredentialText } from '@mission-control/core';
 import type { ToolCall } from '@mission-control/protocol';
-import type { ChatOutput } from './interactive-chat-io.js';
+import type { ChatOutput } from './interactive-chat-io';
 import {
     buildFileWritePreview,
     parseFileWritePreviewValue,
     renderFileWritePreview,
-} from './interactive-coding-file-write-preview.js';
+} from './interactive-coding-file-write-preview';
 
 export async function renderToolPreview(toolCall: ToolCall, output: ChatOutput, workspaceRoot?: string): Promise<void> {
     if (output.isToolOutputExpanded?.() === false) {

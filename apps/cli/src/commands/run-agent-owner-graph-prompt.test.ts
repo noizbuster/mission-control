@@ -28,11 +28,11 @@ import {
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { captureSequentialProvider, tempRoot } from './compact-command-test-support.js';
-import { runAgent } from './run-agent.js';
-import { createEmptyAuthStore } from './run-agent-chat-test-support.js';
-import { buildCodingAgentGraphForSelection } from './run-agent-graph-prompt.js';
+import { parseArgs } from '../args';
+import { captureSequentialProvider, tempRoot } from './compact-command-test-support';
+import { runAgent } from './run-agent';
+import { createEmptyAuthStore } from './run-agent-chat-test-support';
+import { buildCodingAgentGraphForSelection } from './run-agent-graph-prompt';
 import { rm } from 'node:fs/promises';
 
 const SELECTION: ModelProviderSelection = { providerID: 'openai', modelID: 'gpt-test' };

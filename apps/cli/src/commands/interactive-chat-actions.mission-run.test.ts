@@ -10,8 +10,8 @@ import {
 } from '@mission-control/core';
 import type { ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import { runChatAction } from './interactive-chat-actions.js';
+import type { CodingActionContext } from './interactive-chat-actions';
+import { runChatAction } from './interactive-chat-actions';
 import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

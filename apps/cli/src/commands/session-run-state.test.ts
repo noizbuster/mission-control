@@ -1,9 +1,9 @@
 import { missionControlDataDirEnvKey } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runSessionCommand } from './session.js';
-import { codingStepRecords, eventRecords, parseReplayRecords, writeSessionEvents } from './session-test-support.js';
+import { parseArgs } from '../args';
+import { runSessionCommand } from './session';
+import { codingStepRecords, eventRecords, parseReplayRecords, writeSessionEvents } from './session-test-support';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

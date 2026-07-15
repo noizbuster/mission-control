@@ -20,12 +20,12 @@ import {
     insertTerminalChatInputText,
     moveTerminalChatInputCursor,
     renderTerminalChatInputBlock,
-} from './interactive-chat-input-block.js';
+} from './interactive-chat-input-block';
 import {
     isTerminalShiftEnterSequence,
     terminalModifiedKeyDisableSequence,
     terminalModifiedKeyEnableSequence,
-} from './interactive-chat-keyboard.js';
+} from './interactive-chat-keyboard';
 
 describe('interactive chat command menu', () => {
     it('opens slash commands, filters by typed query, and submits the arrow-selected command', () => {

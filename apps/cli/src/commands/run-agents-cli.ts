@@ -13,9 +13,9 @@
  * than reimplemented here.
  */
 import { resolveUserConfigDir } from '@mission-control/core';
-import type { CliArgs } from '../args.js';
-import { type AgentsCliOptions, parseAgentsSubcommand, runAgentsCliCommand } from './agents-cli.js';
-import { resolveWorkspaceRoot } from './run-agent.js';
+import type { CliArgs } from '../args';
+import { type AgentsCliOptions, parseAgentsSubcommand, runAgentsCliCommand } from './agents-cli';
+import { resolveWorkspaceRoot } from './run-agent';
 
 export async function runAgentsCommand(args: CliArgs): Promise<string> {
     const options: AgentsCliOptions = {

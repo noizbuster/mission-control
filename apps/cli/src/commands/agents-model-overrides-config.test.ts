@@ -7,7 +7,7 @@ import {
     readOverridesMap,
     resolveOverridesConfigPath,
     setOverride,
-} from './agents-model-overrides-config.js';
+} from './agents-model-overrides-config';
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

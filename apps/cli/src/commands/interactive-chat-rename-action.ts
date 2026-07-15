@@ -1,7 +1,7 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { ChatOutput } from './interactive-chat-io.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { ChatOutput } from './interactive-chat-io';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 
 export type RenameAction = { readonly kind: 'rename'; readonly name?: string };
 

@@ -7,9 +7,9 @@ import {
     type ModelChoice,
     resolveModelCommand,
 } from '@mission-control/tui/state';
-import { type AgentsCommand, parseAgentsCommand } from './agents-command.js';
-import { splitCommandParts } from './chat-command-parts.js';
-import { parseSessionSlashCommand } from './chat-session-commands.js';
+import { type AgentsCommand, parseAgentsCommand } from './agents-command';
+import { splitCommandParts } from './chat-command-parts';
+import { parseSessionSlashCommand } from './chat-session-commands';
 
 export type SkillsCommand = { readonly kind: 'reload' } | { readonly kind: 'invalid'; readonly message: string };
 

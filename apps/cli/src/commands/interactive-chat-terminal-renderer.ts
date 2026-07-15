@@ -6,7 +6,7 @@ import {
     type TerminalChatInputBlock,
     type TerminalChatInputBuffer,
     type TerminalChatInputStatus,
-} from './interactive-chat-input-block.js';
+} from './interactive-chat-input-block';
 
 export type ChatInputRenderContext = {
     readonly modelProviderSelection?: ModelProviderSelection;

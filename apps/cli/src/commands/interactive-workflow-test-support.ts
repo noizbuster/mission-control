@@ -9,8 +9,8 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import { expect, vi } from 'vitest';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import { runChatAction } from './interactive-chat-actions.js';
+import type { CodingActionContext } from './interactive-chat-actions';
+import { runChatAction } from './interactive-chat-actions';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

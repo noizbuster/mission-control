@@ -1,9 +1,9 @@
 import type { AgentRuntime } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import { startCompactionTurn } from './interactive-chat-compact.js';
-import type { ChatOutput } from './interactive-chat-io.js';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { CodingActionContext } from './interactive-chat-actions';
+import { startCompactionTurn } from './interactive-chat-compact';
+import type { ChatOutput } from './interactive-chat-io';
 
 export function runCompactAction(
     _runtime: AgentRuntime,

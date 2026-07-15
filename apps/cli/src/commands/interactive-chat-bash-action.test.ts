@@ -1,10 +1,10 @@
 import { ProjectTrustStore } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parseChatLine } from './chat-commands.js';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import { runBashAction, runBashDisplayOnlyAction } from './interactive-chat-bash-action.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import { parseChatLine } from './chat-commands';
+import type { CodingActionContext } from './interactive-chat-actions';
+import { runBashAction, runBashDisplayOnlyAction } from './interactive-chat-bash-action';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

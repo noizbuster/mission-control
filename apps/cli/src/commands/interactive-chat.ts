@@ -39,20 +39,20 @@ import {
     loadAbgOverlayPrefs,
     type ModelChoice,
 } from '@mission-control/tui/state';
-import type { ProviderAuthStore } from '../auth-store.js';
-import { getVersion } from '../cli-version.js';
-import { toggleDisabled } from './agents-disabled-config.js';
-import { parseModelPatternString, setOverride } from './agents-model-overrides-config.js';
-import { parseChatLine } from './chat-commands.js';
-import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
-import type { ChatActionResult } from './interactive-chat-action-result.js';
+import type { ProviderAuthStore } from '../auth-store';
+import { getVersion } from '../cli-version';
+import { toggleDisabled } from './agents-disabled-config';
+import { parseModelPatternString, setOverride } from './agents-model-overrides-config';
+import { parseChatLine } from './chat-commands';
+import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store';
+import type { ChatActionResult } from './interactive-chat-action-result';
 import {
     type CodingActionContext,
     loadDashboardAgentEntries,
     loadMissionPanelRows,
     runChatAction,
     startWorkflowTurn,
-} from './interactive-chat-actions.js';
+} from './interactive-chat-actions';
 import {
     type ChatInput,
     type ChatInputEvent,
@@ -60,7 +60,7 @@ import {
     createTerminalChatInput,
     createTerminalChatOutput,
     maxChatPromptLength,
-} from './interactive-chat-io.js';
+} from './interactive-chat-io';
 import {
     areModelProviderSelectionsEqual,
     ChatInputPump,
@@ -68,26 +68,26 @@ import {
     registerProcessTerminalCleanup,
     stopActiveTurn,
     suspendChatInputWhileSelectingModel,
-} from './interactive-chat-loop-support.js';
-import { createTerminalModelSelector } from './interactive-chat-model-selector.js';
-import { createSessionNavigationController } from './interactive-chat-session-navigation.js';
+} from './interactive-chat-loop-support';
+import { createTerminalModelSelector } from './interactive-chat-model-selector';
+import { createSessionNavigationController } from './interactive-chat-session-navigation';
 import {
     createSessionTitleWriteQueue,
     drainSessionTitleWriteQueue,
     initializeInteractiveSessionTitle,
-} from './interactive-chat-session-title.js';
-import { formatModelProviderStatus } from './interactive-chat-status.js';
-import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+} from './interactive-chat-session-title';
+import { formatModelProviderStatus } from './interactive-chat-status';
+import { createUndoRedoStack, type UndoRedoStack } from './interactive-chat-undo-redo-stack';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 import {
     getOrCreateMissionControlServices,
     isOmoRootNotFoundError,
     type MissionControlServices,
-} from './mission-control-services.js';
-import { loadPricingTable } from './pricing-table-store.js';
-import type { EnsuredSession } from './run-agent-session.js';
-import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
-import { loadSessionTranscript } from './session-transcript-reconstruction.js';
+} from './mission-control-services';
+import { loadPricingTable } from './pricing-table-store';
+import type { EnsuredSession } from './run-agent-session';
+import { listSessionCatalogEntriesForWorkspace } from './session-catalog';
+import { loadSessionTranscript } from './session-transcript-reconstruction';
 import {
     detectGitBranch,
     detectGitWorktree,
@@ -98,8 +98,8 @@ import {
     setTerminalTitle,
     suppressTitleManagement,
     suspendTerminal,
-} from './terminal-controls.js';
-import { gatherWelcomeData } from './welcome-data.js';
+} from './terminal-controls';
+import { gatherWelcomeData } from './welcome-data';
 
 export type { ChatInput, ChatInputEvent, ChatOutput };
 

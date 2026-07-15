@@ -1,8 +1,8 @@
 import type { ProviderAdapter } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import type { CliArgs } from '../args.js';
-import { createProviderAuthStore } from '../auth-store.js';
-import { createCliProviderForSelection } from './run-agent.js';
+import type { CliArgs } from '../args';
+import { createProviderAuthStore } from '../auth-store';
+import { createCliProviderForSelection } from './run-agent';
 
 const LOCAL_SELECTION: ModelProviderSelection = { providerID: 'local', modelID: 'local-echo' };
 

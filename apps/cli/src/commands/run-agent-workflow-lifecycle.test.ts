@@ -7,14 +7,14 @@ import {
     type WorkflowRunOutcome,
     workflowOutcomeFromGraphStatus,
     workflowOutcomeFromOwnerStatus,
-} from './run-agent-workflow-run.js';
+} from './run-agent-workflow-run';
 import {
     createWorkflowPersistenceFixture,
     firstRecord,
     removeWorkflowPersistenceFixture,
     WORKFLOW_PERSISTENCE_SPEC,
     type WorkflowPersistenceFixture,
-} from './run-agent-workflow-test-support.js';
+} from './run-agent-workflow-test-support';
 
 const EXPECTED_GRAPH_OUTCOMES = {
     created: { status: 'failed', reason: 'graph settled non-terminally as created' },

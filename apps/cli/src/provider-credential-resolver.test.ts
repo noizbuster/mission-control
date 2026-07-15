@@ -1,7 +1,7 @@
 import type { ProviderAuthFile } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createCliProviderCredentialResolver } from './provider-credential-resolver.js';
-import { PlainRenderer } from './ui/renderers.js';
+import { createCliProviderCredentialResolver } from './provider-credential-resolver';
+import { PlainRenderer } from './ui/renderers';
 
 describe('CLI provider credential resolver', () => {
     it('maps auth-store credentials to a fake core resolver without leaking raw keys to CLI output', async () => {

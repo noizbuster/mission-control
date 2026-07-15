@@ -1,21 +1,21 @@
 import type { ProviderTurnRequest } from '@mission-control/core';
 import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
-import { runAgent } from './run-agent.js';
+import { parseArgs } from '../args';
+import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry';
+import { runAgent } from './run-agent';
 import {
     createBufferedChatOutput,
     createEmptyAuthStore,
     createScriptedChatInput,
-} from './run-agent-chat-test-support.js';
+} from './run-agent-chat-test-support';
 import {
     firstAdvertisedToolNames,
     mcpFixturePath,
     providerFromTurns,
     tempRoot,
     writeToolWorkflow,
-} from './run-agent-tool-registry-test-support.js';
+} from './run-agent-tool-registry-test-support';
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

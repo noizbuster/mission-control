@@ -3,7 +3,7 @@ import {
     isOmoRootNotFoundError,
     type MissionControlServices,
     type MissionControlServicesOptions,
-} from './mission-control-services.js';
+} from './mission-control-services';
 
 export async function resolveMissionControlServices(
     workspaceRoot: string,

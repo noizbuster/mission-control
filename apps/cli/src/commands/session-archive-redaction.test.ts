@@ -1,15 +1,15 @@
 import { missionControlDataDirEnvKey, ProjectTrustStore } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { createProviderAuthStore } from '../auth-store.js';
-import { runSessionCommand } from './session.js';
+import { parseArgs } from '../args';
+import { createProviderAuthStore } from '../auth-store';
+import { runSessionCommand } from './session';
 import {
     createArchiveJson,
     createSessionLog,
     fixedNow,
     useTempDataDir,
     withProcessCwd,
-} from './session-import-export-fixtures.js';
+} from './session-import-export-fixtures';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

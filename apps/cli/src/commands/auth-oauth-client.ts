@@ -1,7 +1,7 @@
-import type { SaveProviderOAuthCredentialInput } from '../auth-store.js';
-import { type BrowserOpener, openBrowserURL } from './auth-browser-opener.js';
-import type { ProviderOAuthClient, ProviderOAuthLoginInput } from './auth-oauth.js';
-import { waitForCallbackCode } from './auth-oauth-callback.js';
+import type { SaveProviderOAuthCredentialInput } from '../auth-store';
+import { type BrowserOpener, openBrowserURL } from './auth-browser-opener';
+import type { ProviderOAuthClient, ProviderOAuthLoginInput } from './auth-oauth';
+import { waitForCallbackCode } from './auth-oauth-callback';
 import {
     type DeviceCodeResponse,
     extractAccountLabel,
@@ -11,7 +11,7 @@ import {
     parseOAuthTokenResponse,
     parseOpenAIHeadlessCode,
     parseOpenAIHeadlessToken,
-} from './auth-oauth-client-parse.js';
+} from './auth-oauth-client-parse';
 import { createHash, randomBytes } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 

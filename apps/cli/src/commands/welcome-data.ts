@@ -13,9 +13,9 @@ import {
     type Skill,
     takeDataDirPermissionWarnings,
 } from '@mission-control/core';
-import { getVersion } from '../cli-version.js';
-import type { CliSessionCatalogEntry } from './session-catalog.js';
-import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
+import { getVersion } from '../cli-version';
+import type { CliSessionCatalogEntry } from './session-catalog';
+import { listSessionCatalogEntriesForWorkspace } from './session-catalog';
 
 /**
  * A configured MCP server surfaced on the welcome screen. We collapse the

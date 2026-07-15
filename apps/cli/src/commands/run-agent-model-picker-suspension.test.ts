@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runAgent } from './run-agent.js';
+import { parseArgs } from '../args';
+import { runAgent } from './run-agent';
 import {
     createAuthStoreWithSummaries,
     createBufferedChatOutput,
     createCredentialSummary,
-} from './run-agent-chat-test-support.js';
-import { useIsolatedMissionControlDataDir } from './run-agent-data-dir-test-support.js';
+} from './run-agent-chat-test-support';
+import { useIsolatedMissionControlDataDir } from './run-agent-data-dir-test-support';
 
 type SuspendableScriptedChatEvent =
     | {

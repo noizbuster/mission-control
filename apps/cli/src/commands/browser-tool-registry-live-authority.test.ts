@@ -4,10 +4,10 @@ import {
     allowPermission,
     configureBrowser,
     createBrowserConfigFixture as createFixture,
-} from './browser-tool-registry-test-support.js';
-import { noLspServers } from './interactive-coding-tools-test-support.js';
-import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
-import { closeProductionToolRegistry } from './production-tool-registry.js';
+} from './browser-tool-registry-test-support';
+import { noLspServers } from './interactive-coding-tools-test-support';
+import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry';
+import { closeProductionToolRegistry } from './production-tool-registry';
 import { rm } from 'node:fs/promises';
 
 describe('production browser live authority', () => {

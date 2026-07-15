@@ -6,7 +6,7 @@ import {
     readLocalSessionReplay,
 } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
-import { writeLocalSessionEvents } from './session-test-support.js';
+import { writeLocalSessionEvents } from './session-test-support';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

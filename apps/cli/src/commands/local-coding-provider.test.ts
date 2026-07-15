@@ -1,6 +1,6 @@
 import type { ProviderTurnRequest } from '@mission-control/core';
 import { describe, expect, it } from 'vitest';
-import { createLocalCodingProvider } from './local-coding-provider.js';
+import { createLocalCodingProvider } from './local-coding-provider';
 
 describe('createLocalCodingProvider', () => {
     it('returns a final answer instead of repeating deterministic tools after tool results', async () => {

@@ -13,7 +13,7 @@
  * surface). The same shadowing applies to cross-harness imported agents.
  */
 import type { AgentDefinition } from '@mission-control/protocol';
-import { splitCommandParts } from './chat-command-parts.js';
+import { splitCommandParts } from './chat-command-parts';
 
 export type AgentsCommand =
     | { readonly kind: 'dashboard' }

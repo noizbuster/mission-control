@@ -1,9 +1,9 @@
 import { missionControlAuthFileEnvKey } from '@mission-control/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { createProviderAuthStore } from '../auth-store.js';
-import { runAuthCommand } from './auth.js';
-import { createPromptSession, maskSecretHint } from './auth-prompts.js';
+import { parseArgs } from '../args';
+import { createProviderAuthStore } from '../auth-store';
+import { runAuthCommand } from './auth';
+import { createPromptSession, maskSecretHint } from './auth-prompts';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

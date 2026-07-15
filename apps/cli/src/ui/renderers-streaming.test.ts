@@ -1,6 +1,6 @@
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import { JsonRenderer, PlainRenderer, TuiRenderer } from './renderers.js';
+import { JsonRenderer, PlainRenderer, TuiRenderer } from './renderers';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 

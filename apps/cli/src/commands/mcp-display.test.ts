@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runMcpCommand } from './mcp.js';
-import { envRef, makeTempDirs, type TempDirs, writeRaw } from './mcp-command-test-support.js';
-import { formatRemoteUrlForDisplay } from './mcp-display.js';
+import { parseArgs } from '../args';
+import { runMcpCommand } from './mcp';
+import { envRef, makeTempDirs, type TempDirs, writeRaw } from './mcp-command-test-support';
+import { formatRemoteUrlForDisplay } from './mcp-display';
 import { readFile, rm } from 'node:fs/promises';
 
 describe('mcp remote URL display', () => {

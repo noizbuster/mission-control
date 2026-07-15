@@ -41,13 +41,13 @@ import {
 } from '@mission-control/core';
 import type { AbgNodeModelOptions, AgentEvent, ModelProviderSelection, WorkflowSpec } from '@mission-control/protocol';
 import type { ApprovalLevel } from '@mission-control/tui/state';
-import { readModelPatternOverrides } from './agents-model-overrides-config.js';
-import { cliAllowsAction } from './cli-permission-policy.js';
-import type { InteractiveApprovalBroker } from './interactive-approval-broker.js';
-import type { ChatOutput } from './interactive-chat-io.js';
-import { registerAvailableLspTool } from './lsp-tool-registration.js';
-import { buildRoleConfigFromAuth } from './model-role-config.js';
-import { completeProductionToolSetup, type ProductionToolRegistry } from './production-tool-registry.js';
+import { readModelPatternOverrides } from './agents-model-overrides-config';
+import { cliAllowsAction } from './cli-permission-policy';
+import type { InteractiveApprovalBroker } from './interactive-approval-broker';
+import type { ChatOutput } from './interactive-chat-io';
+import { registerAvailableLspTool } from './lsp-tool-registration';
+import { buildRoleConfigFromAuth } from './model-role-config';
+import { completeProductionToolSetup, type ProductionToolRegistry } from './production-tool-registry';
 
 export type InteractiveToolOptions = {
     readonly workspaceRoot: string;
@@ -115,7 +115,7 @@ export type InteractiveToolOptions = {
     readonly browserConnect?: BrowserConnectFn;
 };
 
-export { preflightInteractiveToolCall } from './interactive-coding-tool-approval.js';
+export { preflightInteractiveToolCall } from './interactive-coding-tool-approval';
 
 export async function createInteractiveToolRegistry(
     options: InteractiveToolOptions,

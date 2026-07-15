@@ -12,14 +12,14 @@ import type {
 } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { parseArgs } from '../args.js';
-import type { ProviderAuthStore } from '../auth-store.js';
-import { createCliProviderForSelection, runAgent } from './run-agent.js';
+import { parseArgs } from '../args';
+import type { ProviderAuthStore } from '../auth-store';
+import { createCliProviderForSelection, runAgent } from './run-agent';
 import {
     createAuthStoreWithSummaries,
     createCredentialSummary,
     createFieldsCredential,
-} from './run-agent-chat-test-support.js';
+} from './run-agent-chat-test-support';
 
 describe('runAgent provider factory', () => {
     it('creates declared executable adapter families for CLI selections', async () => {

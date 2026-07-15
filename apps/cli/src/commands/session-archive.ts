@@ -13,9 +13,9 @@ import {
 } from '@mission-control/core';
 import { redactAgentEventEnvelopeForObservability } from '@mission-control/core/redaction';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
-import { createProviderAuthStore } from '../auth-store.js';
-import { deriveSessionCatalogProjection } from './session-catalog-projection.js';
-import { parseCliSessionId } from './session-id.js';
+import { createProviderAuthStore } from '../auth-store';
+import { deriveSessionCatalogProjection } from './session-catalog-projection';
+import { parseCliSessionId } from './session-id';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 

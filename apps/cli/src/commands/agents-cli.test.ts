@@ -1,6 +1,6 @@
 import { type AgentDefinition, AgentIndex, discoverAgents } from '@mission-control/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { formatAgentsCliList, parseAgentsSubcommand, runAgentsCliCommand } from './agents-cli.js';
+import { formatAgentsCliList, parseAgentsSubcommand, runAgentsCliCommand } from './agents-cli';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

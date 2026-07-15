@@ -1,18 +1,17 @@
-#!/usr/bin/env -S node --experimental-ffi
-import { parseArgs } from './args.js';
-import type { CliCommandResult } from './cli-command-result.js';
-import { getVersion } from './cli-version.js';
-import { runAuthCommand } from './commands/auth.js';
-import { runMcpCommand } from './commands/mcp.js';
-import { disposeAllMissionControlServices } from './commands/mission-control-services.js';
-import { runModelsCommand } from './commands/models.js';
-import { runAgent } from './commands/run-agent.js';
-import { runAgentsCommand } from './commands/run-agents-cli.js';
-import { runSessionCommand } from './commands/session.js';
-import { SessionCliUsageError } from './session-args.js';
+import { parseArgs } from './args';
+import type { CliCommandResult } from './cli-command-result';
+import { getVersion } from './cli-version';
+import { runAuthCommand } from './commands/auth';
+import { runMcpCommand } from './commands/mcp';
+import { disposeAllMissionControlServices } from './commands/mission-control-services';
+import { runModelsCommand } from './commands/models';
+import { runAgent } from './commands/run-agent';
+import { runAgentsCommand } from './commands/run-agents-cli';
+import { runSessionCommand } from './commands/session';
+import { SessionCliUsageError } from './session-args';
 import { pathToFileURL } from 'node:url';
 
-export { getVersion } from './cli-version.js';
+export { getVersion } from './cli-version';
 
 export function createHelpText(): string {
     return [

@@ -7,8 +7,8 @@ import type {
     ToolCall,
 } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
-import type { InteractiveApprovalBroker } from './interactive-approval-broker.js';
-import type { InteractiveToolOptions } from './interactive-coding-tools.js';
+import type { InteractiveApprovalBroker } from './interactive-approval-broker';
+import type { InteractiveToolOptions } from './interactive-coding-tools';
 
 export const noLspServers: LspServerManagerDeps = { commandExists: async () => false };
 

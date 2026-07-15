@@ -15,8 +15,8 @@ import {
     eventWithReply,
     parsePermissionReply,
     renderApprovalResult,
-} from './interactive-approval-helpers.js';
-import type { InteractiveToolOptions } from './interactive-coding-tools.js';
+} from './interactive-approval-helpers';
+import type { InteractiveToolOptions } from './interactive-coding-tools';
 
 export type InteractiveApprovalBroker = {
     readonly requestApproval: (request: PermissionRequest) => Promise<PermissionDecision>;

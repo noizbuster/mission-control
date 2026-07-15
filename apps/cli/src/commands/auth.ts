@@ -1,9 +1,9 @@
 import { modelProviderCatalog } from '@mission-control/config';
 import type { ModelProviderSelection, ProviderCredentialSummary } from '@mission-control/protocol';
-import type { CliArgs } from '../args.js';
-import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store.js';
-import { rejectOAuthCredentialFlags, saveApiCredential } from './auth-login-credential.js';
-import { createProviderOAuthClient, type ProviderOAuthClient, resolveAuthMethodForLogin } from './auth-oauth.js';
+import type { CliArgs } from '../args';
+import { createProviderAuthStore, type ProviderAuthStore } from '../auth-store';
+import { rejectOAuthCredentialFlags, saveApiCredential } from './auth-login-credential';
+import { createProviderOAuthClient, type ProviderOAuthClient, resolveAuthMethodForLogin } from './auth-oauth';
 import {
     type AuthPrompt,
     type AuthPromptSession,
@@ -12,7 +12,7 @@ import {
     isPromptInputTTY,
     type ProviderPromptChoice,
     resolveProviderChoiceInput,
-} from './auth-prompts.js';
+} from './auth-prompts';
 
 export type AuthCommandOptions = {
     readonly store?: ProviderAuthStore;

@@ -1,11 +1,11 @@
 import { AgentRuntime, createDeterministicProvider } from '@mission-control/core';
 import type { WorkflowSpec } from '@mission-control/protocol';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { runInteractiveChatSession } from './interactive-chat.js';
-import type { ChatActionResult } from './interactive-chat-action-result.js';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
-import { createBufferedChatOutput, createScriptedChatInput } from './run-agent-chat-test-support.js';
+import { runInteractiveChatSession } from './interactive-chat';
+import type { ChatActionResult } from './interactive-chat-action-result';
+import type { CodingActionContext } from './interactive-chat-actions';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
+import { createBufferedChatOutput, createScriptedChatInput } from './run-agent-chat-test-support';
 
 const actionMocks = vi.hoisted(() => ({
     runChatAction: vi.fn(),
@@ -13,7 +13,7 @@ const actionMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('./interactive-chat-actions.js', async () => {
-    const actual = await vi.importActual<typeof import('./interactive-chat-actions.js')>(
+    const actual = await vi.importActual<typeof import('./interactive-chat-actions')>(
         './interactive-chat-actions.js',
     );
     return {
@@ -37,7 +37,7 @@ beforeEach(() => {
 describe('interactive self-invoked workflow chaining', () => {
     it('starts a queued workflow after its parent completes successfully', async () => {
         actionMocks.runChatAction.mockImplementationOnce(
-            async (...args: Parameters<typeof import('./interactive-chat-actions.js')['runChatAction']>) => {
+            async (...args: Parameters<typeof import('./interactive-chat-actions')['runChatAction']>) => {
                 queueDefaultWorkflow(args[6]);
                 return resultWithTurn(settledTurn('completed'));
             },
@@ -62,7 +62,7 @@ describe('interactive self-invoked workflow chaining', () => {
 
     it('drops a queued workflow when the owner is externally interrupted', async () => {
         actionMocks.runChatAction.mockImplementationOnce(
-            async (...args: Parameters<typeof import('./interactive-chat-actions.js')['runChatAction']>) => {
+            async (...args: Parameters<typeof import('./interactive-chat-actions')['runChatAction']>) => {
                 queueDefaultWorkflow(args[6]);
                 return resultWithTurn(settledTurn('interrupted'));
             },
@@ -89,7 +89,7 @@ describe('interactive self-invoked workflow chaining', () => {
         const interrupted = deferredTurn();
         actionMocks.runChatAction
             .mockImplementationOnce(
-                async (...args: Parameters<typeof import('./interactive-chat-actions.js')['runChatAction']>) => {
+                async (...args: Parameters<typeof import('./interactive-chat-actions')['runChatAction']>) => {
                     queueDefaultWorkflow(args[6]);
                     return resultWithTurn(interrupted.turn);
                 },

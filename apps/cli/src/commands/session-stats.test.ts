@@ -1,8 +1,8 @@
 import { ProjectTrustStore } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runSessionCommand } from './session.js';
-import { createSessionLog, fixedNow, useTempDataDir } from './session-import-export-fixtures.js';
+import { parseArgs } from '../args';
+import { runSessionCommand } from './session';
+import { createSessionLog, fixedNow, useTempDataDir } from './session-import-export-fixtures';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

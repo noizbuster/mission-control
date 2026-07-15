@@ -3,13 +3,13 @@ import { createChatTuiHandle } from '@mission-control/tui/create-chat-tui';
 import type { ChatTuiHandle } from '@mission-control/tui/state';
 import { createChatStore } from '@mission-control/tui/state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { runInteractiveChatSession } from './interactive-chat.js';
-import { setTtyState } from './run-agent-chat-test-support.js';
+import { runInteractiveChatSession } from './interactive-chat';
+import { setTtyState } from './run-agent-chat-test-support';
 import {
     type IsolatedMissionControlTestScope,
     useIsolatedMissionControlTestScope,
-} from './run-agent-data-dir-test-support.js';
-import { TERMINAL_TITLE_RESET, TERMINAL_TITLE_SET_PREFIX } from './terminal-controls.js';
+} from './run-agent-data-dir-test-support';
+import { TERMINAL_TITLE_RESET, TERMINAL_TITLE_SET_PREFIX } from './terminal-controls';
 
 const createChatTuiMock = vi.hoisted(() => vi.fn());
 let testScope: IsolatedMissionControlTestScope | undefined;

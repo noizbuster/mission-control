@@ -15,9 +15,9 @@ import {
     type ProviderAdapter,
 } from '@mission-control/core';
 import type { ModelProviderSelection, ProviderAdapterFamily } from '@mission-control/protocol';
-import type { ProviderAuthStore } from '../auth-store.js';
-import { createCliProviderCredentialResolver } from '../provider-credential-resolver.js';
-import { createLocalCodingProvider } from './local-coding-provider.js';
+import type { ProviderAuthStore } from '../auth-store';
+import { createCliProviderCredentialResolver } from '../provider-credential-resolver';
+import { createLocalCodingProvider } from './local-coding-provider';
 
 export type CliProviderFactoryTransports = {
     readonly openAIResponses?: OpenAIResponsesTransport;

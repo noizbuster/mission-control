@@ -1,9 +1,9 @@
 import { ProjectTrustStore, redactCredentialText } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import type { ChatOutput } from './interactive-chat-io.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { CodingActionContext } from './interactive-chat-actions';
+import type { ChatOutput } from './interactive-chat-io';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 import { execSync } from 'node:child_process';
 
 export type BashAction = { readonly kind: 'bash'; readonly command: string };

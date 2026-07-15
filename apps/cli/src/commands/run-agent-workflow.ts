@@ -1,7 +1,7 @@
 import { discoverWorkflows, PluginManager, registerBuiltinWorkflows, WorkflowRegistry } from '@mission-control/core';
 import type { AbgGraphSpec, WorkflowSpec } from '@mission-control/protocol';
-import { splitCommandParts } from './chat-command-parts.js';
-import { graphForDefaultFallback, graphForWorkflowSpec } from './workflow-materialization.js';
+import { splitCommandParts } from './chat-command-parts';
+import { graphForDefaultFallback, graphForWorkflowSpec } from './workflow-materialization';
 
 const WORKFLOW_NAME_PATTERN = /^[A-Za-z0-9_.:/-]+$/;
 

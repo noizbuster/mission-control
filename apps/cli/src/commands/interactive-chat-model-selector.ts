@@ -7,8 +7,8 @@ import {
     createProviderPromptView,
     reduceProviderPromptKeypress,
 } from '@mission-control/tui/state';
-import type { ChatOutput, ModelSelector } from './interactive-chat.js';
-import type { TerminalInputStream, TerminalOutputStream } from './interactive-chat-terminal-read.js';
+import type { ChatOutput, ModelSelector } from './interactive-chat';
+import type { TerminalInputStream, TerminalOutputStream } from './interactive-chat-terminal-read';
 import { stdin, stdout } from 'node:process';
 
 export type ModelSelectorRenderInput = {

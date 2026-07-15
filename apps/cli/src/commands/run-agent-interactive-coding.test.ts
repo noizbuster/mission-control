@@ -8,15 +8,15 @@ import {
 } from '@mission-control/core';
 import { type AgentEvent, type AgentEventEnvelope, type ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runAgent } from './run-agent.js';
+import { parseArgs } from '../args';
+import { runAgent } from './run-agent';
 import {
     createBufferedChatOutput,
     createEmptyAuthStore,
     createScriptedChatInput,
-} from './run-agent-chat-test-support.js';
-import { replayedEvents, replayedMessages, replayedTypes } from './session-replay-test-support.js';
-import { writeSessionEvents } from './session-test-support.js';
+} from './run-agent-chat-test-support';
+import { replayedEvents, replayedMessages, replayedTypes } from './session-replay-test-support';
+import { writeSessionEvents } from './session-test-support';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

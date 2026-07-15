@@ -1,8 +1,8 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { closeTreeSitterClient } from '@mission-control/tui/highlight';
-import type { ModelSelector } from './interactive-chat.js';
-import type { ChatInput, ChatInputEvent } from './interactive-chat-io.js';
-import type { ActiveCodingAgentTurn, ActiveCodingAgentTurnOutcome } from './interactive-coding-agent.js';
+import type { ModelSelector } from './interactive-chat';
+import type { ChatInput, ChatInputEvent } from './interactive-chat-io';
+import type { ActiveCodingAgentTurn, ActiveCodingAgentTurnOutcome } from './interactive-coding-agent';
 
 export async function stopActiveTurn(activeTurn: ActiveCodingAgentTurn | undefined): Promise<undefined> {
     if (activeTurn === undefined) {

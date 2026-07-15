@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatSkillInvocationPrompt, parseChatLine } from './chat-commands.js';
+import { formatSkillInvocationPrompt, parseChatLine } from './chat-commands';
 
 describe('chat command parser', () => {
     it('parses model commands when a provider model shorthand is supplied', () => {

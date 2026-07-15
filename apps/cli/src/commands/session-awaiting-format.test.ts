@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type CliSessionCatalogEntry, formatSessionCatalogEntry } from './session-catalog.js';
+import { type CliSessionCatalogEntry, formatSessionCatalogEntry } from './session-catalog';
 
 describe('session awaiting list formatting', () => {
     it('formats compact reason and source metadata', () => {

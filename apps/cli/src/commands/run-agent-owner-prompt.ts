@@ -19,12 +19,12 @@ import {
     type ToolRegistry,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
-import { createCliPermissionDecision, type NonInteractiveAutomationPolicy } from './cli-permission-policy.js';
-import { createGraphObservabilityRedactor } from './graph-observability-redactor.js';
-import { resolveMissionControlServices } from './mission-control-services-resolver.js';
-import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
-import { closeProductionToolRegistry, type ProductionToolRegistry } from './production-tool-registry.js';
-import { emitOwnerPromptTaskEvent, nextOwnerPromptTaskId } from './run-agent-owner-prompt-events.js';
+import { createCliPermissionDecision, type NonInteractiveAutomationPolicy } from './cli-permission-policy';
+import { createGraphObservabilityRedactor } from './graph-observability-redactor';
+import { resolveMissionControlServices } from './mission-control-services-resolver';
+import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry';
+import { closeProductionToolRegistry, type ProductionToolRegistry } from './production-tool-registry';
+import { emitOwnerPromptTaskEvent, nextOwnerPromptTaskId } from './run-agent-owner-prompt-events';
 
 export type RunOwnerPromptInput = {
     readonly sessionId: string;

@@ -7,13 +7,13 @@ import {
 } from '@mission-control/core';
 import type { AgentDefinition, ModelProviderSelection } from '@mission-control/protocol';
 import type { DashboardAgentEntry } from '@mission-control/tui/state';
-import { type AgentsCommand, formatAgentDetails, formatAgentsList } from './agents-command.js';
-import { readDisabledSet, toggleDisabled } from './agents-disabled-config.js';
-import { readOverridesMap } from './agents-model-overrides-config.js';
-import type { SkillsCommand } from './chat-commands.js';
-import type { CodingActionContext } from './interactive-chat-action-context.js';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { ChatOutput } from './interactive-chat-io.js';
+import { type AgentsCommand, formatAgentDetails, formatAgentsList } from './agents-command';
+import { readDisabledSet, toggleDisabled } from './agents-disabled-config';
+import { readOverridesMap } from './agents-model-overrides-config';
+import type { SkillsCommand } from './chat-commands';
+import type { CodingActionContext } from './interactive-chat-action-context';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { ChatOutput } from './interactive-chat-io';
 
 export async function runAgentsAction(
     chatOutput: ChatOutput,

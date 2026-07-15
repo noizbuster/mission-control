@@ -5,12 +5,12 @@ import {
     allowPermission,
     configureBrowser,
     createBrowserConfigFixture as createFixture,
-} from './browser-tool-registry-test-support.js';
-import { createInteractiveToolRegistry } from './interactive-coding-tools.js';
-import { noLspServers, toolOptions } from './interactive-coding-tools-test-support.js';
-import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
-import { closeProductionToolRegistry } from './production-tool-registry.js';
-import { createBufferedChatOutput } from './run-agent-chat-test-support.js';
+} from './browser-tool-registry-test-support';
+import { createInteractiveToolRegistry } from './interactive-coding-tools';
+import { noLspServers, toolOptions } from './interactive-coding-tools-test-support';
+import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry';
+import { closeProductionToolRegistry } from './production-tool-registry';
+import { createBufferedChatOutput } from './run-agent-chat-test-support';
 import { rm } from 'node:fs/promises';
 
 describe('production browser tool registry', () => {

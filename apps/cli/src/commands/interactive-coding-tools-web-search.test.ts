@@ -1,10 +1,10 @@
 import type { PermissionRequest } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { InteractiveApprovalBroker } from './interactive-approval-broker.js';
-import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools.js';
-import { allowAllPermission, toolCall, toolOptions } from './interactive-coding-tools-test-support.js';
-import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
-import { createBufferedChatOutput } from './run-agent-chat-test-support.js';
+import type { InteractiveApprovalBroker } from './interactive-approval-broker';
+import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools';
+import { allowAllPermission, toolCall, toolOptions } from './interactive-coding-tools-test-support';
+import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry';
+import { createBufferedChatOutput } from './run-agent-chat-test-support';
 import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

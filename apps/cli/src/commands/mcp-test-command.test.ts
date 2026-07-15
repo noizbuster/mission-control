@@ -1,8 +1,8 @@
 import { ProjectTrustStore } from '@mission-control/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runMcpCommand } from './mcp.js';
-import { FIXTURE_SERVER, makeTempDirs, type TempDirs, writeRaw } from './mcp-command-test-support.js';
+import { parseArgs } from '../args';
+import { runMcpCommand } from './mcp';
+import { FIXTURE_SERVER, makeTempDirs, type TempDirs, writeRaw } from './mcp-command-test-support';
 import { access, mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';

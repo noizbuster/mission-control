@@ -5,22 +5,22 @@ import {
     type SessionRunOwner,
     type SessionRunOwnerReceipt,
 } from '@mission-control/core';
-import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
-import type { ActiveCodingAgentTurn, CodingAgentTurnOptions } from './interactive-coding-agent-types.js';
-import type { ProviderRenderState } from './interactive-coding-graph-rendering.js';
-import { createInteractiveRunOwner } from './interactive-coding-run-owner.js';
-import { emitInteractiveTaskEvent, runOwnedCodingAgentTurn } from './interactive-coding-run-settlement.js';
-import { closeProductionToolRegistry } from './production-tool-registry.js';
+import { createInteractiveApprovalBroker } from './interactive-approval-broker';
+import type { ActiveCodingAgentTurn, CodingAgentTurnOptions } from './interactive-coding-agent-types';
+import type { ProviderRenderState } from './interactive-coding-graph-rendering';
+import { createInteractiveRunOwner } from './interactive-coding-run-owner';
+import { emitInteractiveTaskEvent, runOwnedCodingAgentTurn } from './interactive-coding-run-settlement';
+import { closeProductionToolRegistry } from './production-tool-registry';
 
 export type {
     ActiveCodingAgentTurn,
     ActiveCodingAgentTurnOutcome,
     CodingAgentTurnOptions,
     InterruptMode,
-} from './interactive-coding-agent-types.js';
-export { interactiveGraphStreamSignal } from './interactive-coding-graph-rendering.js';
-export { type AbgOverlayWiring, wireAbgOverlay } from './interactive-coding-overlay.js';
-export { formatToolCountSummary } from './interactive-coding-signal-payload.js';
+} from './interactive-coding-agent-types';
+export { interactiveGraphStreamSignal } from './interactive-coding-graph-rendering';
+export { type AbgOverlayWiring, wireAbgOverlay } from './interactive-coding-overlay';
+export { formatToolCountSummary } from './interactive-coding-signal-payload';
 
 export async function startCodingAgentTurn(options: CodingAgentTurnOptions): Promise<ActiveCodingAgentTurn> {
     return startOwnedCodingAgentTurn(options, {

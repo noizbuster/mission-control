@@ -1,6 +1,6 @@
 import { type PersistentMemoryStore, TursoPersistentStore } from '@mission-control/core';
-import type { CliArgs } from '../args.js';
-import { type AgentUIRenderer, JsonRenderer, PlainRenderer, TuiRenderer } from '../ui/renderers.js';
+import type { CliArgs } from '../args';
+import { type AgentUIRenderer, JsonRenderer, PlainRenderer, TuiRenderer } from '../ui/renderers';
 
 export function closePersistentStore(store: PersistentMemoryStore | undefined): void {
     if (store instanceof TursoPersistentStore) {

@@ -1,6 +1,6 @@
 import { redactCredentialText } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
-import type { WorkflowRunOutcome } from './run-agent-workflow-run.js';
+import type { WorkflowRunOutcome } from './run-agent-workflow-run';
 
 export type TrackedWorkflowRunOutcome = WorkflowRunOutcome | { readonly status: 'pending' };
 

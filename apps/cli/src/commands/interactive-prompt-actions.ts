@@ -6,13 +6,13 @@ import {
     type SkillToolOutput,
 } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import type { ChatLineAction } from './chat-commands.js';
-import type { CodingActionContext } from './interactive-chat-action-context.js';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { ChatOutput } from './interactive-chat-io.js';
-import { emitPromptAdmission, runSessionNavigationAction } from './interactive-chat-navigation-actions.js';
-import { startPromptTurn } from './interactive-chat-prompt-turn.js';
-import { graphForDefaultFallback } from './workflow-materialization.js';
+import type { ChatLineAction } from './chat-commands';
+import type { CodingActionContext } from './interactive-chat-action-context';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { ChatOutput } from './interactive-chat-io';
+import { emitPromptAdmission, runSessionNavigationAction } from './interactive-chat-navigation-actions';
+import { startPromptTurn } from './interactive-chat-prompt-turn';
+import { graphForDefaultFallback } from './workflow-materialization';
 
 export async function runPromptAction(
     runtime: AgentRuntime,

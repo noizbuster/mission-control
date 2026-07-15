@@ -1,7 +1,7 @@
 import { createObservabilityRedactor, PermissionSession } from '@mission-control/core';
 import type { AgentEvent, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
+import { createInteractiveApprovalBroker } from './interactive-approval-broker';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,6 +1,6 @@
 import { AgentRuntime, createDeterministicProvider, type SdkModelResolver } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { runChatAction, startWorkflowTurn } from './interactive-chat-actions.js';
+import { runChatAction, startWorkflowTurn } from './interactive-chat-actions';
 import {
     cleanupWorkflowFixtures,
     currentSelection,
@@ -10,7 +10,7 @@ import {
     makeWorkflowFixture,
     readOnlyRun,
     runWorkflow,
-} from './interactive-workflow-test-support.js';
+} from './interactive-workflow-test-support';
 
 afterEach(cleanupWorkflowFixtures);
 

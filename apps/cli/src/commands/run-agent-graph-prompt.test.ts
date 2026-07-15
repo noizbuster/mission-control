@@ -22,12 +22,12 @@ import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
+import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry';
 import {
     buildCodingAgentGraphForSelection,
     resolveGraphSdkModel,
     runCodingPromptOnGraph,
-} from './run-agent-graph-prompt.js';
+} from './run-agent-graph-prompt';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

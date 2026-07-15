@@ -3,8 +3,8 @@ import {
     type CliSessionCatalogEntry,
     filterCatalogEntriesByWorkspace,
     listSessionCatalogEntriesForWorkspace,
-} from './session-catalog.js';
-import { createSessionLog, useTempDataDir } from './session-import-export-fixtures.js';
+} from './session-catalog';
+import { createSessionLog, useTempDataDir } from './session-import-export-fixtures';
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

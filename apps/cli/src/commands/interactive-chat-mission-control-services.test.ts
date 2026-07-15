@@ -1,8 +1,8 @@
 import { AgentRuntime, createDeterministicProvider } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { runInteractiveChatSession } from './interactive-chat.js';
-import { disposeAllMissionControlServices } from './mission-control-services.js';
-import { createBufferedChatOutput, createScriptedChatInput } from './run-agent-chat-test-support.js';
+import { runInteractiveChatSession } from './interactive-chat';
+import { disposeAllMissionControlServices } from './mission-control-services';
+import { createBufferedChatOutput, createScriptedChatInput } from './run-agent-chat-test-support';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,7 +10,7 @@ import { join } from 'node:path';
 const getOrCreateMissionControlServicesMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./mission-control-services.js', async () => {
-    const actual = await vi.importActual<typeof import('./mission-control-services.js')>(
+    const actual = await vi.importActual<typeof import('./mission-control-services')>(
         './mission-control-services.js',
     );
     return {
@@ -33,7 +33,7 @@ describe('runInteractiveChatSession MissionControlServices error handling', () =
         const dataDir = await tempRoot('mctrl-interactive-no-omo-data-');
         const workspaceRoot = await tempRoot('mctrl-interactive-no-omo-workspace-');
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
-        const actual = await vi.importActual<typeof import('./mission-control-services.js')>(
+        const actual = await vi.importActual<typeof import('./mission-control-services')>(
             './mission-control-services.js',
         );
         getOrCreateMissionControlServicesMock.mockImplementation(actual.getOrCreateMissionControlServices);

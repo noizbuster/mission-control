@@ -1,7 +1,7 @@
 import type { ModelPattern, ProviderAuthStore } from '@mission-control/core';
 import type { ModelProviderSelection, ModelRole } from '@mission-control/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import { buildRoleConfigFromAuth, modelRolesToRoleConfig } from './model-role-config.js';
+import { buildRoleConfigFromAuth, modelRolesToRoleConfig } from './model-role-config';
 
 function makeStore(roles: Partial<Record<ModelRole, ModelProviderSelection>>): ProviderAuthStore {
     return {

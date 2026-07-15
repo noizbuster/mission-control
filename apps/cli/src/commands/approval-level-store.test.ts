@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadPersistedApprovalLevel, savePersistedApprovalLevel } from './approval-level-store.js';
+import { loadPersistedApprovalLevel, savePersistedApprovalLevel } from './approval-level-store';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

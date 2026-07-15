@@ -1,8 +1,8 @@
 import type { SessionStopTreeResult } from '@mission-control/core';
 import { describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { SESSION_STOP_USAGE, SessionCliUsageError } from '../session-args.js';
-import { runSessionStopCommand } from './session-stop-command.js';
+import { parseArgs } from '../args';
+import { SESSION_STOP_USAGE, SessionCliUsageError } from '../session-args';
+import { runSessionStopCommand } from './session-stop-command';
 
 const TARGET_ID = 'session_stop_root';
 

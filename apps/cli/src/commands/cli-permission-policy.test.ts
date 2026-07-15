@@ -1,6 +1,6 @@
 import type { PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import { cliAllowsAction, createCliPermissionDecision } from './cli-permission-policy.js';
+import { cliAllowsAction, createCliPermissionDecision } from './cli-permission-policy';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

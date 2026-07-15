@@ -1,6 +1,6 @@
 import { modelProviderCatalog } from '@mission-control/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createDefaultProviderOAuthClient } from './auth-oauth-client.js';
+import { createDefaultProviderOAuthClient } from './auth-oauth-client';
 import { createServer, type Server } from 'node:http';
 
 type FakeIssuer = {

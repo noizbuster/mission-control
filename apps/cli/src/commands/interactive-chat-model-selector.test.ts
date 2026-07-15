@@ -3,7 +3,7 @@ import { terminalDisplayWidth } from '@mission-control/tui';
 import type { ModelChoice } from '@mission-control/tui/state';
 import { createProviderPromptKeypressState, createProviderPromptView } from '@mission-control/tui/state';
 import { describe, expect, it } from 'vitest';
-import { createTerminalModelSelectorFromStreams, renderModelSelectorLines } from './interactive-chat-model-selector.js';
+import { createTerminalModelSelectorFromStreams, renderModelSelectorLines } from './interactive-chat-model-selector';
 import { EventEmitter } from 'node:events';
 
 describe('terminal model selector renderer', () => {

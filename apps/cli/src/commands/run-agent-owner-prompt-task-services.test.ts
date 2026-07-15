@@ -5,9 +5,9 @@ import {
     type SdkModelResolver,
 } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { captureSequentialProvider, tempRoot } from './compact-command-test-support.js';
-import { disposeAllMissionControlServices } from './mission-control-services.js';
-import { runOwnerPrompt } from './run-agent-owner-prompt.js';
+import { captureSequentialProvider, tempRoot } from './compact-command-test-support';
+import { disposeAllMissionControlServices } from './mission-control-services';
+import { runOwnerPrompt } from './run-agent-owner-prompt';
 import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';

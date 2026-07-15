@@ -16,8 +16,8 @@ import {
     discoverAgents,
     parseAgentFile,
 } from '@mission-control/core';
-import { formatAgentDetails } from './agents-command.js';
-import { readDisabledSet, toggleDisabled } from './agents-disabled-config.js';
+import { formatAgentDetails } from './agents-command';
+import { readDisabledSet, toggleDisabled } from './agents-disabled-config';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 

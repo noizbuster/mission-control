@@ -1,8 +1,8 @@
 import { missionControlAuthFileEnvKey } from '@mission-control/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { createProviderAuthStore } from '../auth-store.js';
-import { runModelsCommand } from './models.js';
+import { parseArgs } from '../args';
+import { createProviderAuthStore } from '../auth-store';
+import { runModelsCommand } from './models';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

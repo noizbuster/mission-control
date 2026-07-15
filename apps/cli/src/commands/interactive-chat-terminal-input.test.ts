@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTerminalChatInputFromStreams } from './interactive-chat-io.js';
+import { createTerminalChatInputFromStreams } from './interactive-chat-io';
 import { EventEmitter } from 'node:events';
 
 class FakeTerminalInput extends EventEmitter {

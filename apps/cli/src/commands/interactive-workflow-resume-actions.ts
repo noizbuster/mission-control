@@ -8,13 +8,13 @@ import {
     updateRunStatus,
 } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import type { CodingActionContext } from './interactive-chat-action-context.js';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { ChatOutput } from './interactive-chat-io.js';
-import { type ActiveCodingAgentTurn, resumeCodingAgentTurn } from './interactive-coding-agent.js';
-import { runWorkflowAction } from './interactive-workflow-actions.js';
-import { createWorkflowRunOutcomeObserver, redactWorkflowError } from './interactive-workflow-run-outcome.js';
-import { findResumableWorkflowRun, settleWorkflowRun } from './interactive-workflow-state.js';
+import type { CodingActionContext } from './interactive-chat-action-context';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { ChatOutput } from './interactive-chat-io';
+import { type ActiveCodingAgentTurn, resumeCodingAgentTurn } from './interactive-coding-agent';
+import { runWorkflowAction } from './interactive-workflow-actions';
+import { createWorkflowRunOutcomeObserver, redactWorkflowError } from './interactive-workflow-run-outcome';
+import { findResumableWorkflowRun, settleWorkflowRun } from './interactive-workflow-state';
 
 export async function runInterruptAction(
     chatOutput: ChatOutput,

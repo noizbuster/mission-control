@@ -1,21 +1,21 @@
 import type { ProviderTurnRequest } from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runAgent } from './run-agent.js';
+import { parseArgs } from '../args';
+import { runAgent } from './run-agent';
 import {
     createBufferedChatOutput,
     createEmptyAuthStore,
     createScriptedChatInput,
-} from './run-agent-chat-test-support.js';
+} from './run-agent-chat-test-support';
 import {
     addFilePatch,
     fakeCommandExecutor,
     firstAdvertisedToolNames,
     providerFromTurns,
     tempRoot,
-} from './run-agent-tool-registry-test-support.js';
-import { replayedTypes } from './session-replay-test-support.js';
+} from './run-agent-tool-registry-test-support';
+import { replayedTypes } from './session-replay-test-support';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

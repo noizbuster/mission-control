@@ -6,7 +6,7 @@ import {
     createSessionTitleTurnInput,
     normalizeSessionPromptTitle,
     selectSessionTitleModel,
-} from './interactive-chat-session-title.js';
+} from './interactive-chat-session-title';
 
 declare global {
     interface String {

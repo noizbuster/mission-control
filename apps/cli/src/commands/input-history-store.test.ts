@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store.js';
+import { appendInputHistoryEntry, loadInputHistoryEntries } from './input-history-store';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

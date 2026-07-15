@@ -4,7 +4,7 @@ import {
     formatAwaitingSource,
     formatSessionStatusLabel,
     formatSessionStatusWithSource,
-} from './session-status-format.js';
+} from './session-status-format';
 
 describe('session status formatting', () => {
     it.each([

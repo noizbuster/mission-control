@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runSessionCommand } from './session.js';
+import { parseArgs } from '../args';
+import { runSessionCommand } from './session';
 import {
     metadataEvent,
     pathExists,
@@ -8,8 +8,8 @@ import {
     setCanonicalSessionParent,
     taskCompletedEvent,
     useTempDataDir,
-} from './session-delete-test-support.js';
-import { readStoredSessionProjection, writeSessionEvents } from './session-test-support.js';
+} from './session-delete-test-support';
+import { readStoredSessionProjection, writeSessionEvents } from './session-test-support';
 import { rm } from 'node:fs/promises';
 
 describe('session delete', () => {

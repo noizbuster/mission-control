@@ -12,9 +12,9 @@ import {
     type MissionPanelRow,
     type ModelChoice,
 } from '@mission-control/tui/state';
-import type { CodingActionContext } from './interactive-chat-action-context.js';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { ChatOutput } from './interactive-chat-io.js';
+import type { CodingActionContext } from './interactive-chat-action-context';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { ChatOutput } from './interactive-chat-io';
 
 export async function runModelsAction(
     chatOutput: ChatOutput,

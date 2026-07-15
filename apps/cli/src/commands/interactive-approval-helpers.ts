@@ -5,7 +5,7 @@ import type {
     PermissionReply,
     PermissionRequest,
 } from '@mission-control/protocol';
-import type { InteractiveToolOptions } from './interactive-coding-tools.js';
+import type { InteractiveToolOptions } from './interactive-coding-tools';
 
 export function parsePermissionReply(line: string): PermissionReply {
     const answer = line.trim().toLowerCase();

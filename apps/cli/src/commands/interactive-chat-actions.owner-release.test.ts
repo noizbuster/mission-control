@@ -1,6 +1,6 @@
 import { AgentRuntime, createDeterministicProvider } from '@mission-control/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { runChatAction } from './interactive-chat-actions.js';
+import { runChatAction } from './interactive-chat-actions';
 import {
     cleanupWorkflowFixtures,
     currentSelection,
@@ -8,8 +8,8 @@ import {
     makeCodingContext,
     makeWorkflowFixture,
     readOnlyRun,
-} from './interactive-workflow-test-support.js';
-import { MissionControlServices } from './mission-control-services.js';
+} from './interactive-workflow-test-support';
+import { MissionControlServices } from './mission-control-services';
 
 describe('interactive blocked workflow owner release', () => {
     afterEach(cleanupWorkflowFixtures);

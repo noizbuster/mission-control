@@ -1,14 +1,14 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { ChatOutput } from './interactive-chat-io.js';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { ChatOutput } from './interactive-chat-io';
 import {
     extractLastMessagePair,
     formatMessagePair,
     popUndonePair,
     pushUndonePair,
     type UndoRedoStack,
-} from './interactive-chat-undo-redo-stack.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+} from './interactive-chat-undo-redo-stack';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 
 export type UndoAction = { readonly kind: 'undo' };
 export type RedoAction = { readonly kind: 'redo' };

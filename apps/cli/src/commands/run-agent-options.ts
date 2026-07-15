@@ -5,10 +5,10 @@ import type {
     SdkModelResolver,
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
-import type { ProviderAuthStore } from '../auth-store.js';
-import type { NonInteractiveAutomationPolicy } from './cli-runtime-options.js';
-import type { ChatInput, ChatOutput, ModelSelector, PlainPromptGraph } from './interactive-chat.js';
-import type { ModelDiscovery } from './model-discovery.js';
+import type { ProviderAuthStore } from '../auth-store';
+import type { NonInteractiveAutomationPolicy } from './cli-runtime-options';
+import type { ChatInput, ChatOutput, ModelSelector, PlainPromptGraph } from './interactive-chat';
+import type { ModelDiscovery } from './model-discovery';
 
 export type RunAgentOptions = {
     readonly authStore?: ProviderAuthStore;

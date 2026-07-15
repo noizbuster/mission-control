@@ -11,8 +11,8 @@ import {
     readLocalSessionReplay,
 } from '@mission-control/core';
 import type { AgentEvent, AgentMessage, ModelProviderSelection } from '@mission-control/protocol';
-import type { ChatOutput } from './interactive-chat-io.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import type { ChatOutput } from './interactive-chat-io';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 
 type CompactionTurnOptions = {
     readonly sessionId: string;

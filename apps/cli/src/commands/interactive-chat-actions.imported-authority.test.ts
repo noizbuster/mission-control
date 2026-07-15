@@ -13,21 +13,21 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent, AgentEventEnvelope, ModelProviderSelection } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import { runChatAction } from './interactive-chat-actions.js';
-import { runSessionCommand } from './session.js';
-import { createArchiveJson, fixedNow, withProcessCwd } from './session-import-export-fixtures.js';
+import { parseArgs } from '../args';
+import type { CodingActionContext } from './interactive-chat-actions';
+import { runChatAction } from './interactive-chat-actions';
+import { runSessionCommand } from './session';
+import { createArchiveJson, fixedNow, withProcessCwd } from './session-import-export-fixtures';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const resumeCodingAgentTurnMock = vi.hoisted(() =>
-    vi.fn<typeof import('./interactive-coding-agent.js').resumeCodingAgentTurn>(),
+    vi.fn<typeof import('./interactive-coding-agent').resumeCodingAgentTurn>(),
 );
 
 vi.mock('./interactive-coding-agent.js', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('./interactive-coding-agent.js')>()),
+    ...(await importOriginal<typeof import('./interactive-coding-agent')>()),
     resumeCodingAgentTurn: resumeCodingAgentTurnMock,
 }));
 

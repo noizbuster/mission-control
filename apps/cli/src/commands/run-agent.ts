@@ -5,25 +5,25 @@ import {
     createProviderAuthStoreObservabilityRedactor,
     resolveMissionControlDataDir,
 } from '@mission-control/core';
-import type { CliArgs } from '../args.js';
-import { createProviderAuthStore } from '../auth-store.js';
-import { createCliRuntimeOptions } from './cli-runtime-options.js';
-import { createCliProviderForSelection } from './provider-factory.js';
-import { readGraphFile, validateGraphModelOptions, validateModelProviderSelection } from './run-agent-graph.js';
-import { shouldRunInteractiveChat } from './run-agent-mode.js';
-import { buildAgentModelLookup, resolveModelProviderSelection } from './run-agent-model-selection.js';
-import { runNoninteractiveAgent } from './run-agent-noninteractive.js';
-import type { RunAgentOptions } from './run-agent-options.js';
-import { resolveWorkspaceRoot } from './run-agent-workspace.js';
+import type { CliArgs } from '../args';
+import { createProviderAuthStore } from '../auth-store';
+import { createCliRuntimeOptions } from './cli-runtime-options';
+import { createCliProviderForSelection } from './provider-factory';
+import { readGraphFile, validateGraphModelOptions, validateModelProviderSelection } from './run-agent-graph';
+import { shouldRunInteractiveChat } from './run-agent-mode';
+import { buildAgentModelLookup, resolveModelProviderSelection } from './run-agent-model-selection';
+import { runNoninteractiveAgent } from './run-agent-noninteractive';
+import type { RunAgentOptions } from './run-agent-options';
+import { resolveWorkspaceRoot } from './run-agent-workspace';
 
-export { createCliProviderForSelection } from './provider-factory.js';
+export { createCliProviderForSelection } from './provider-factory';
 export {
     resolveWorkflowInvocation,
     type WorkflowInvocation,
     type WorkflowInvocationInput,
-} from './run-agent-workflow.js';
-export { detectWorkspaceRoot, resolveWorkspaceRoot } from './run-agent-workspace.js';
-export type { RunAgentOptions } from './run-agent-options.js';
+} from './run-agent-workflow';
+export { detectWorkspaceRoot, resolveWorkspaceRoot } from './run-agent-workspace';
+export type { RunAgentOptions } from './run-agent-options';
 
 export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Promise<string> {
     const authStore = options.authStore ?? createProviderAuthStore();
@@ -57,7 +57,7 @@ export async function runAgent(args: CliArgs, options: RunAgentOptions = {}): Pr
         }),
     );
     if (shouldRunChat) {
-        const { runInteractiveAgent } = await import('./run-agent-interactive.js');
+        const { runInteractiveAgent } = await import('./run-agent-interactive');
         return await runInteractiveAgent({
             args,
             runtime,

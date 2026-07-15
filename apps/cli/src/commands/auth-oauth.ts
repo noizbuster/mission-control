@@ -1,7 +1,7 @@
 import type { ModelProviderCatalogEntry, ProviderAuthMethod } from '@mission-control/config';
-import type { SaveProviderOAuthCredentialInput } from '../auth-store.js';
-import { createDefaultProviderOAuthClient } from './auth-oauth-client.js';
-import { type AuthProviderPrompt, resolveProviderChoiceInput } from './auth-prompts.js';
+import type { SaveProviderOAuthCredentialInput } from '../auth-store';
+import { createDefaultProviderOAuthClient } from './auth-oauth-client';
+import { type AuthProviderPrompt, resolveProviderChoiceInput } from './auth-prompts';
 
 export type ProviderOAuthLoginInput = {
     readonly providerID: string;

@@ -1,8 +1,8 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import type { ChatActionResult } from './interactive-chat-action-result.js';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import type { ChatOutput } from './interactive-chat-io.js';
-import { runSessionNavigationAction } from './interactive-chat-navigation-actions.js';
+import type { ChatActionResult } from './interactive-chat-action-result';
+import type { CodingActionContext } from './interactive-chat-actions';
+import type { ChatOutput } from './interactive-chat-io';
+import { runSessionNavigationAction } from './interactive-chat-navigation-actions';
 
 export type ClearAction = { readonly kind: 'clear'; readonly sessionId?: string };
 

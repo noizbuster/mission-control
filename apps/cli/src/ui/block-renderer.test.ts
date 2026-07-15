@@ -1,8 +1,8 @@
 import { RESET, TEXT_DANGER_BOLD } from '@mission-control/tui/ansi-theme';
 import { darkTheme, noColorTheme } from '@mission-control/tui/markdown-theme';
 import { describe, expect, it } from 'vitest';
-import { joinBlocks, renderBlock } from './block-renderer.js';
-import type { OutputBlock } from './output-blocks.js';
+import { joinBlocks, renderBlock } from './block-renderer';
+import type { OutputBlock } from './output-blocks';
 
 const ttyOpts = { width: 80, tty: true, thinking: true, theme: darkTheme } as const;
 const noTtyOpts = { width: 80, tty: false, thinking: true, theme: noColorTheme } as const;

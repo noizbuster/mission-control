@@ -7,8 +7,8 @@ import {
     readLocalSessionReplay,
 } from '@mission-control/core';
 import type { AgentEvent, AgentEventEnvelope, ModelProviderSelection } from '@mission-control/protocol';
-import { latestSelection } from './interactive-chat-session-navigation-format.js';
-import { createSessionWorkspaceMetadataEvent, resolveSessionWorkspaceMetadata } from './session-workspace-metadata.js';
+import { latestSelection } from './interactive-chat-session-navigation-format';
+import { createSessionWorkspaceMetadataEvent, resolveSessionWorkspaceMetadata } from './session-workspace-metadata';
 
 export type SessionNavigationStoreObserver = ((event: AgentEvent) => void) | undefined;
 

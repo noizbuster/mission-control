@@ -1,9 +1,9 @@
 import type { ModelProviderCatalogEntry } from '@mission-control/config';
 import type { ModelProviderSelection, ProviderCredential } from '@mission-control/protocol';
-import type { CliArgs } from '../args.js';
-import type { ProviderAuthStore } from '../auth-store.js';
-import { resolveProviderCredentialInput } from './auth-credential-resolution.js';
-import type { AuthPrompt } from './auth-prompts.js';
+import type { CliArgs } from '../args';
+import type { ProviderAuthStore } from '../auth-store';
+import { resolveProviderCredentialInput } from './auth-credential-resolution';
+import type { AuthPrompt } from './auth-prompts';
 
 export type SaveApiCredentialOptions = {
     readonly store: ProviderAuthStore;

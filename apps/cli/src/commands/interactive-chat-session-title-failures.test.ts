@@ -4,7 +4,7 @@ import {
     applyGeneratedSessionTitle,
     initializeInteractiveSessionTitle,
     runSessionTitleGeneration,
-} from './interactive-chat-session-title.js';
+} from './interactive-chat-session-title';
 import {
     activeSelection,
     authStoreWithRoles,
@@ -14,7 +14,7 @@ import {
     mutableTitleState,
     registerTestTask,
     testSignal,
-} from './interactive-chat-session-title-test-support.js';
+} from './interactive-chat-session-title-test-support';
 
 describe('interactive session title generation failures', () => {
     it('preserves a non-empty manual title that exists before lazy initialization', async () => {

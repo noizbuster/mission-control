@@ -1,8 +1,8 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { APPROVAL_LEVEL_META, type ApprovalLevel } from '@mission-control/tui/state';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { ChatOutput } from './interactive-chat-io.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { ChatOutput } from './interactive-chat-io';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 
 export async function runApprovalAction(
     chatOutput: ChatOutput,

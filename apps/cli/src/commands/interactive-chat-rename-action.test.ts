@@ -4,8 +4,8 @@ import {
     resolveSlashCommandMenuSubmission,
 } from '@mission-control/tui/state';
 import { describe, expect, it } from 'vitest';
-import { parseChatLine } from './chat-commands.js';
-import { runRenameAction, type SessionDisplayNameController } from './interactive-chat-rename-action.js';
+import { parseChatLine } from './chat-commands';
+import { runRenameAction, type SessionDisplayNameController } from './interactive-chat-rename-action';
 
 type CapturingOutput = {
     readonly write: (text: string) => void;

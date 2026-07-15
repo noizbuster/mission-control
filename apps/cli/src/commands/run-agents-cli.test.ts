@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runAgentsCommand } from './run-agents-cli.js';
+import { parseArgs } from '../args';
+import { runAgentsCommand } from './run-agents-cli';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

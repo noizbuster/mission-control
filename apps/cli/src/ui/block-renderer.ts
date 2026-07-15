@@ -21,7 +21,7 @@ import { renderMarkdownAnsi } from '@mission-control/tui/ansi-renderer';
 import { TEXT_DANGER_BOLD, terminalTextStyleToAnsi, wrap } from '@mission-control/tui/ansi-theme';
 import type { TerminalMarkdownTheme } from '@mission-control/tui/markdown-theme';
 import { mergeTextStyle, noColorTheme } from '@mission-control/tui/markdown-theme';
-import type { OutputBlock } from './output-blocks.js';
+import type { OutputBlock } from './output-blocks';
 
 export type RenderBlockOptions = {
     readonly width: number;

@@ -1,13 +1,13 @@
 import { localSessionDbPath, missionControlDataDirEnvKey } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runSessionCommand } from './session.js';
+import { parseArgs } from '../args';
+import { runSessionCommand } from './session';
 import {
     eventRecords,
     parseReplayRecords,
     sessionCommandFixtureEvents,
     writeLocalSessionEvents,
-} from './session-test-support.js';
+} from './session-test-support';
 import { access, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,16 +1,16 @@
 import type { ObservabilityRedactor } from '@mission-control/core';
-import { normalizeWorkspaceRootWithFallback, readSessionCatalogEntry } from './session-catalog-entry.js';
-import { readSessionProjectionState } from './session-catalog-projection.js';
-import type { CliSessionCatalogEntry } from './session-catalog-types.js';
-import { parseCliSessionId } from './session-id.js';
+import { normalizeWorkspaceRootWithFallback, readSessionCatalogEntry } from './session-catalog-entry';
+import { readSessionProjectionState } from './session-catalog-projection';
+import type { CliSessionCatalogEntry } from './session-catalog-types';
+import { parseCliSessionId } from './session-id';
 
-export { readSessionCatalogEntry } from './session-catalog-entry.js';
-export { formatSessionCatalogEntry } from './session-catalog-format.js';
+export { readSessionCatalogEntry } from './session-catalog-entry';
+export { formatSessionCatalogEntry } from './session-catalog-format';
 export type {
     CliSessionCatalogDiagnostic,
     CliSessionCatalogEntry,
     CliSessionListStatus,
-} from './session-catalog-types.js';
+} from './session-catalog-types';
 
 export async function listSessionCatalogEntries(
     observabilityRedactor?: ObservabilityRedactor,

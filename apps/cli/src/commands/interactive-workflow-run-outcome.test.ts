@@ -1,6 +1,6 @@
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkflowRunOutcomeObserver } from './interactive-workflow-run-outcome.js';
+import { createWorkflowRunOutcomeObserver } from './interactive-workflow-run-outcome';
 
 const timestamp = '2026-07-13T00:00:00.000Z';
 

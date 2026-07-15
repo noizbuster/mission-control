@@ -1,7 +1,7 @@
 import type { CodingReplayStep } from '@mission-control/core';
 import type { AgentEvent, AgentEventEnvelope } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { reconstructSessionTranscript } from './session-transcript-reconstruction.js';
+import { reconstructSessionTranscript } from './session-transcript-reconstruction';
 
 const SESSION_ID = 'session_test';
 const NOW = '2026-07-01T00:00:00.000Z';

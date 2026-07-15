@@ -8,10 +8,10 @@ import type {
     ModelProviderSelection,
 } from '@mission-control/protocol';
 import { darkTheme, noColorTheme } from '@mission-control/tui/markdown-theme';
-import { joinBlocks, renderBlock } from './block-renderer.js';
-import { createBlockAccumulator } from './output-blocks.js';
-import type { AgentUIRenderer } from './ui-adapter.js';
-import { JsonMachineStateTracker } from './json-machine-state.js';
+import { joinBlocks, renderBlock } from './block-renderer';
+import { createBlockAccumulator } from './output-blocks';
+import type { AgentUIRenderer } from './ui-adapter';
+import { JsonMachineStateTracker } from './json-machine-state';
 
 abstract class BufferedRenderer implements AgentUIRenderer {
     protected readonly events: AgentEvent[] = [];

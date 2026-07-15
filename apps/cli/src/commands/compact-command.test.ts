@@ -1,8 +1,8 @@
 import { ProjectTrustStore, type ProviderTurnRequest } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
-import { createHelpText } from '../index.js';
-import { parseChatLine } from './chat-commands.js';
+import { parseArgs } from '../args';
+import { createHelpText } from '../index';
+import { parseChatLine } from './chat-commands';
 import {
     captureFailingProvider,
     captureSequentialProvider,
@@ -12,8 +12,8 @@ import {
     readReplay,
     seedCompactionSession,
     tempRoot,
-} from './compact-command-test-support.js';
-import { runAgent } from './run-agent.js';
+} from './compact-command-test-support';
+import { runAgent } from './run-agent';
 import {
     createAuthStoreWithSummaries,
     createBufferedChatOutput,
@@ -21,7 +21,7 @@ import {
     createEmptyAuthStore,
     createFieldsCredential,
     createScriptedChatInput,
-} from './run-agent-chat-test-support.js';
+} from './run-agent-chat-test-support';
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

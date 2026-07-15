@@ -13,15 +13,15 @@ import {
     moveTerminalChatInputCursor,
     type TerminalChatInputBlock,
     type TerminalChatInputBuffer,
-} from './interactive-chat-input-block.js';
-import type { ChatInputEvent } from './interactive-chat-io.js';
-import { isTerminalShiftEnterSequence, type TerminalKeyboardMode } from './interactive-chat-keyboard.js';
+} from './interactive-chat-input-block';
+import type { ChatInputEvent } from './interactive-chat-io';
+import { isTerminalShiftEnterSequence, type TerminalKeyboardMode } from './interactive-chat-keyboard';
 import {
     type ChatInputRenderContext,
     commitTerminalInputBlock,
     discardTerminalInputBlock,
     renderTerminalInputBlock,
-} from './interactive-chat-terminal-renderer.js';
+} from './interactive-chat-terminal-renderer';
 
 export type TerminalInputStream = {
     readonly isRaw?: boolean;

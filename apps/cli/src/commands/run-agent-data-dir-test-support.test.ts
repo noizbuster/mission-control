@@ -1,6 +1,6 @@
 import { missionControlDataDirEnvKey } from '@mission-control/core';
 import { describe, expect, it } from 'vitest';
-import { useIsolatedMissionControlTestScope } from './run-agent-data-dir-test-support.js';
+import { useIsolatedMissionControlTestScope } from './run-agent-data-dir-test-support';
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';

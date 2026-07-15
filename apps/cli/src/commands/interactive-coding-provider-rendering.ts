@@ -1,10 +1,10 @@
 import type { ToolInvocationSettlement } from '@mission-control/core';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
-import type { ChatOutput } from './interactive-chat-io.js';
-import { parseFileWriteOutput } from './interactive-coding-file-write-preview.js';
-import type { ProviderRenderState } from './interactive-coding-graph-rendering.js';
-import { parseCommandRunStatus } from './interactive-coding-signal-payload.js';
-import { parseFileEditOutput, parseFilePatchOutput } from './interactive-coding-tool-preview.js';
+import type { ChatOutput } from './interactive-chat-io';
+import { parseFileWriteOutput } from './interactive-coding-file-write-preview';
+import type { ProviderRenderState } from './interactive-coding-graph-rendering';
+import { parseCommandRunStatus } from './interactive-coding-signal-payload';
+import { parseFileEditOutput, parseFilePatchOutput } from './interactive-coding-tool-preview';
 
 export function renderProviderEnvelope(
     output: ChatOutput,

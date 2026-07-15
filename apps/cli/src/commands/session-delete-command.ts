@@ -3,7 +3,7 @@ import {
     LocalSessionTreeDeleteError,
     resolveMissionControlDataDir,
 } from '@mission-control/core';
-import { CliSessionCommandError } from './session-command-error.js';
+import { CliSessionCommandError } from './session-command-error';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 

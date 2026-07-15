@@ -6,7 +6,7 @@ import {
     drainSessionTitleWriteQueue,
     initializeInteractiveSessionTitle,
     runSessionTitleGeneration,
-} from './interactive-chat-session-title.js';
+} from './interactive-chat-session-title';
 import {
     activeSelection,
     completedChunk,
@@ -15,8 +15,8 @@ import {
     mutableTitleState,
     testSignal,
     waitForAbort,
-} from './interactive-chat-session-title-test-support.js';
-import { createAuthStoreWithSummaries, createFieldsCredential } from './run-agent-chat-test-support.js';
+} from './interactive-chat-session-title-test-support';
+import { createAuthStoreWithSummaries, createFieldsCredential } from './run-agent-chat-test-support';
 
 describe('interactive session title concurrency', () => {
     it('drains generated and manual writes in request order before continuing', async () => {

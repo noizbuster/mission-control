@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatToolCountSummary } from './interactive-coding-agent.js';
+import { formatToolCountSummary } from './interactive-coding-agent';
 
 describe('formatToolCountSummary', () => {
     it('returns the name as-is for a single tool call', () => {

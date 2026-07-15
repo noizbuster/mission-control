@@ -6,8 +6,8 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection, ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSessionNavigationController } from './interactive-chat-session-navigation.js';
-import { writeSessionEvents } from './session-test-support.js';
+import { createSessionNavigationController } from './interactive-chat-session-navigation';
+import { writeSessionEvents } from './session-test-support';
 import { appendFile, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

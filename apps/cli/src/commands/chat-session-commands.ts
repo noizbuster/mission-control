@@ -1,5 +1,5 @@
-import { splitCommandParts } from './chat-command-parts.js';
-import type { ChatLineAction } from './chat-commands.js';
+import { splitCommandParts } from './chat-command-parts';
+import type { ChatLineAction } from './chat-commands';
 
 export function parseSessionSlashCommand(command: string, input: string): ChatLineAction | undefined {
     switch (command) {

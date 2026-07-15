@@ -1,5 +1,5 @@
 import type { AbgGraphSpec } from '@mission-control/protocol';
-import type { CliArgs } from '../args.js';
+import type { CliArgs } from '../args';
 
 export function shouldRunInteractiveChat(
     args: CliArgs,

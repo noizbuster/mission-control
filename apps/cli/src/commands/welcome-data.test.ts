@@ -1,6 +1,6 @@
 import type { Skill } from '@mission-control/core';
 import { describe, expect, it } from 'vitest';
-import type { CliSessionCatalogEntry } from './session-catalog.js';
+import type { CliSessionCatalogEntry } from './session-catalog';
 import {
     buildWelcomeLspServers,
     type GatherWelcomeDataDeps,
@@ -11,7 +11,7 @@ import {
     WELCOME_SESSION_LIMIT,
     type WelcomeData,
     type WelcomeSession,
-} from './welcome-data.js';
+} from './welcome-data';
 
 function makeCatalogEntry(overrides: Partial<CliSessionCatalogEntry> = {}): CliSessionCatalogEntry {
     return {

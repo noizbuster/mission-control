@@ -1,6 +1,6 @@
 import { createProviderAuthStore, McpConnectionManager, redactAgentEventForObservability } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createGraphObservabilityRedactor } from './graph-observability-redactor.js';
+import { createGraphObservabilityRedactor } from './graph-observability-redactor';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -8,21 +8,21 @@ import {
     type SessionControlHost,
 } from '@mission-control/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../args.js';
+import { parseArgs } from '../args';
 import {
     disposeAllMissionControlServices,
     getOrCreateMissionControlServices,
     MissionControlServices,
-} from './mission-control-services.js';
-import { runAgent } from './run-agent.js';
-import { writeToolWorkflow } from './run-agent-json-approval-test-support.js';
+} from './mission-control-services';
+import { runAgent } from './run-agent';
+import { writeToolWorkflow } from './run-agent-json-approval-test-support';
 import {
     createCompletingWorkflowModel,
     createWorkflowPersistenceFixture,
     firstRecord,
     removeWorkflowPersistenceFixture,
     type WorkflowPersistenceFixture,
-} from './run-agent-workflow-test-support.js';
+} from './run-agent-workflow-test-support';
 
 describe('noninteractive workflow session owner linkage', () => {
     let fixture: WorkflowPersistenceFixture;

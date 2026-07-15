@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parseArgs } from '../args.js';
-import { runMcpCommand } from './mcp.js';
-import { envRef, FIXTURE_SERVER, makeTempDirs, type TempDirs, writeRaw } from './mcp-command-test-support.js';
+import { parseArgs } from '../args';
+import { runMcpCommand } from './mcp';
+import { envRef, FIXTURE_SERVER, makeTempDirs, type TempDirs, writeRaw } from './mcp-command-test-support';
 import { readFile, rm } from 'node:fs/promises';
 
 describe('mcp add then list', () => {

@@ -3,10 +3,10 @@ import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ApprovalLevel } from '@mission-control/tui/state';
 import { ChatStore } from '@mission-control/tui/state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type AgentRunnerHandle, type DispatchActionContext, startChatAgentRunner } from './chat-agent-runner.js';
-import type { ChatLineAction } from './chat-commands.js';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import { type AgentRunnerHandle, type DispatchActionContext, startChatAgentRunner } from './chat-agent-runner';
+import type { ChatLineAction } from './chat-commands';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 
 const SELECTION: ModelProviderSelection = { providerID: 'test', modelID: 'echo' };
 

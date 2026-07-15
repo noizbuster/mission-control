@@ -8,7 +8,7 @@ import {
     type ProviderAdapter,
 } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { createCliPermissionDecision, type NonInteractiveAutomationPolicy } from './cli-permission-policy.js';
+import { createCliPermissionDecision, type NonInteractiveAutomationPolicy } from './cli-permission-policy';
 
 type CliRuntimeOptionsInput = {
     readonly useNative?: boolean;

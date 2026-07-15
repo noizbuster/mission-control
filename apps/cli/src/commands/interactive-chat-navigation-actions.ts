@@ -1,10 +1,10 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { actionResult, type ChatActionResult } from './interactive-chat-action-result.js';
-import type { CodingActionContext } from './interactive-chat-actions.js';
-import type { ChatOutput } from './interactive-chat-io.js';
-import type { SessionNavigationResult } from './interactive-chat-session-navigation.js';
-import { isSessionNavigationError } from './interactive-chat-session-navigation-store.js';
-import { loadSessionTranscript } from './session-transcript-reconstruction.js';
+import { actionResult, type ChatActionResult } from './interactive-chat-action-result';
+import type { CodingActionContext } from './interactive-chat-actions';
+import type { ChatOutput } from './interactive-chat-io';
+import type { SessionNavigationResult } from './interactive-chat-session-navigation';
+import { isSessionNavigationError } from './interactive-chat-session-navigation-store';
+import { loadSessionTranscript } from './session-transcript-reconstruction';
 
 export function runBranchContinueAction(
     chatOutput: ChatOutput,

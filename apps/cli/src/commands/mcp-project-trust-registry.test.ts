@@ -1,10 +1,10 @@
 import { ProjectTrustStore } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createInteractiveToolRegistry } from './interactive-coding-tools.js';
-import { allowAllPermission, fakeBroker, noLspServers, toolOptions } from './interactive-coding-tools-test-support.js';
-import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
-import { createBufferedChatOutput } from './run-agent-chat-test-support.js';
-import { mcpFixturePath, tempRoot } from './run-agent-tool-registry-test-support.js';
+import { createInteractiveToolRegistry } from './interactive-coding-tools';
+import { allowAllPermission, fakeBroker, noLspServers, toolOptions } from './interactive-coding-tools-test-support';
+import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry';
+import { createBufferedChatOutput } from './run-agent-chat-test-support';
+import { mcpFixturePath, tempRoot } from './run-agent-tool-registry-test-support';
 import { access, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

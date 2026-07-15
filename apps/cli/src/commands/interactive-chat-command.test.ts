@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseChatInput } from './interactive-chat-command.js';
+import { parseChatInput } from './interactive-chat-command';
 
 describe('interactive chat command parser', () => {
     it('parses normal slash and skill inputs', () => {

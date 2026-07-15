@@ -1,6 +1,6 @@
 import type { AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createBlockAccumulator, foldEvents } from './output-blocks.js';
+import { createBlockAccumulator, foldEvents } from './output-blocks';
 
 const TS = '2026-07-05T00:00:00.000Z';
 

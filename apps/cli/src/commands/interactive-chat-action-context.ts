@@ -8,13 +8,13 @@ import type {
     ModelsOverlayRoleRow,
     SessionPickerEntry,
 } from '@mission-control/tui/state';
-import type { ProviderAuthStore } from '../auth-store.js';
-import type { PlainPromptGraph } from './interactive-chat.js';
-import type { PromptTurnContext } from './interactive-chat-prompt-turn.js';
-import type { SessionDisplayNameController } from './interactive-chat-rename-action.js';
-import type { SessionNavigationController } from './interactive-chat-session-navigation.js';
-import type { UndoRedoConversationController } from './interactive-chat-undo-redo-action.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import type { ProviderAuthStore } from '../auth-store';
+import type { PlainPromptGraph } from './interactive-chat';
+import type { PromptTurnContext } from './interactive-chat-prompt-turn';
+import type { SessionDisplayNameController } from './interactive-chat-rename-action';
+import type { SessionNavigationController } from './interactive-chat-session-navigation';
+import type { UndoRedoConversationController } from './interactive-chat-undo-redo-action';
+import type { ActiveCodingAgentTurn } from './interactive-coding-agent';
 
 export type CodingActionContext = PromptTurnContext & {
     readonly activeTurn: ActiveCodingAgentTurn | undefined;
