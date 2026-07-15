@@ -3,8 +3,8 @@
   "compilerOptions": {
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "noEmit": true
   },
   "include": ["./**/*.ts"]

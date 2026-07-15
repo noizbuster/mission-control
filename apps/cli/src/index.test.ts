@@ -10,10 +10,11 @@ describe('CLI entrypoint', () => {
     });
 
     it('entrypoint exposes shebang and version/help output', () => {
+        const distEntry = readFileSync(join(process.cwd(), 'apps/cli/dist/index.js'), 'utf8');
         const source = readFileSync(join(process.cwd(), 'apps/cli/src/index.tsx'), 'utf8');
         const help = createHelpText();
 
-        expect(source.startsWith('#!/usr/bin/env -S node --experimental-ffi')).toBe(true);
+        expect(distEntry.startsWith('#!/usr/bin/env -S node --experimental-ffi')).toBe(true);
         expect(source).toContain('export async function runCli');
         expect(getVersion()).toBe('0.1.0');
         expect(help).toContain('mc');
