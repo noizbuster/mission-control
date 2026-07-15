@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { openMissionControlDb } from '../packages/core/src/db/mission-control-db.js';
+import { openMissionControlDb } from '../packages/core/src/db/mission-control-db';
 import {
     makeTask12TempRoot,
     type ProcessResult,
@@ -8,7 +8,7 @@ import {
     startLockHolder,
     startPreopenedBuiltCli,
     terminateTask12Processes,
-} from './cli-local-db-concurrency-support.js';
+} from './cli-local-db-concurrency-support';
 import { access, chmod, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

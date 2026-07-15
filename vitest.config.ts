@@ -33,6 +33,7 @@ export default defineConfig({
     ],
     resolve: {
         alias: [
+            // Core formal exports (package.json exports keys) — subpaths before main.
             {
                 find: '@mission-control/core/replay',
                 replacement: new URL('./packages/core/src/replay.ts', import.meta.url).pathname,
@@ -42,12 +43,29 @@ export default defineConfig({
                 replacement: new URL('./packages/core/src/redaction.ts', import.meta.url).pathname,
             },
             {
+                find: '@mission-control/core',
+                replacement: new URL('./packages/core/src/index.ts', import.meta.url).pathname,
+            },
+            {
                 find: '@mission-control/config',
                 replacement: new URL('./packages/config/src/index.ts', import.meta.url).pathname,
             },
+            // CLI formal multi-entry exports — subpaths only (main entry has top-level await).
             {
-                find: '@mission-control/core',
-                replacement: new URL('./packages/core/src/index.ts', import.meta.url).pathname,
+                find: '@mission-control/cli/args',
+                replacement: new URL('./apps/cli/src/args.ts', import.meta.url).pathname,
+            },
+            {
+                find: '@mission-control/cli/commands/run-agent',
+                replacement: new URL('./apps/cli/src/commands/run-agent.ts', import.meta.url).pathname,
+            },
+            {
+                find: '@mission-control/cli/commands/session',
+                replacement: new URL('./apps/cli/src/commands/session.ts', import.meta.url).pathname,
+            },
+            {
+                find: '@mission-control/cli/commands/mission-control-services',
+                replacement: new URL('./apps/cli/src/commands/mission-control-services.ts', import.meta.url).pathname,
             },
             // TUI subpath aliases — MUST precede the generic '@mission-control/tui' entry
             // so prefix matching resolves to the correct source file.

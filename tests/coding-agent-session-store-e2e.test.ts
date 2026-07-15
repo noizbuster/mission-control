@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../apps/cli/src/args.js';
-import { runSessionCommand } from '../apps/cli/src/commands/session.js';
-import { SqlAgentJobMirror } from '../packages/core/src/agents/agent-job-sql-mirror.js';
-import { openLocalLibsqlDb } from '../packages/core/src/db/local-libsql-db.js';
+import { parseArgs } from '@mission-control/cli/args';
+import { runSessionCommand } from '@mission-control/cli/commands/session';
+import { SqlAgentJobMirror } from '../packages/core/src/agents/agent-job-sql-mirror';
+import { openLocalLibsqlDb } from '../packages/core/src/db/local-libsql-db';
 import {
     exportLegacySessionJsonl,
     localSessionDbPath,
     parseSessionArchive,
     readLocalSessionReplay,
-} from '../packages/core/src/index.js';
-import { SqlSessionInputDelivery } from '../packages/core/src/runtime/session-input-delivery.js';
+} from '@mission-control/core';
+import { SqlSessionInputDelivery } from '../packages/core/src/runtime/session-input-delivery';
 import {
     appendNativeEvents,
     approvalEvent,
@@ -30,8 +30,8 @@ import {
     toolCompletedEvent,
     writeDbRowsArtifact,
     writeLegacyJsonl,
-} from './coding-agent-session-store-e2e-support.js';
-import { startForegroundChildWait } from './coding-agent-session-store-e2e-task-support.js';
+} from './coding-agent-session-store-e2e-support';
+import { startForegroundChildWait } from './coding-agent-session-store-e2e-task-support';
 import { readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 

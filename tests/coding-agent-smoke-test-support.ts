@@ -1,18 +1,18 @@
 import { expect } from 'vitest';
-import { ensurePendingToolApprovalForCurrentBlockedRun } from '../packages/core/src/desktop-tool-approvals.js';
 import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
+    ensurePendingToolApprovalForCurrentBlockedRun,
     openLocalSessionEventStore,
     ProjectTrustStore,
     type ProviderTurnRequest,
     settleDesktopApproval,
-} from '../packages/core/src/index.js';
+} from '@mission-control/core';
 import {
     approvePendingSmokePatch as approvePendingSmokePatchShared,
     scriptedCodingSmokeProvider,
-} from '../scripts/coding-agent-smoke-support.js';
-import { parseCodingStepLines, parseDiagnosticLines, parseEventLines } from './coding-agent-smoke-replay-support.js';
+} from '../scripts/coding-agent-smoke-support';
+import { parseCodingStepLines, parseDiagnosticLines, parseEventLines } from './coding-agent-smoke-replay-support';
 import { execFile } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';

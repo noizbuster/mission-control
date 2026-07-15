@@ -1,18 +1,18 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { openMissionControlDb } from '../packages/core/src/db/mission-control-db.js';
-import { AgentEventEnvelopeSchema } from '../packages/protocol/src/index.js';
+import { openMissionControlDb } from '../packages/core/src/db/mission-control-db';
+import { AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import {
     type CustomWorkflowFixture,
     createCustomWorkflowFixture,
     runWorkflow,
     workflowArgs,
-} from './cli-custom-workflow-tool-call-id-support.js';
+} from './cli-custom-workflow-tool-call-id-support';
 import {
     type ProcessResult,
     resolveBuiltCliEntryPath,
     startBuiltCli,
     terminateTask12Processes,
-} from './cli-local-db-concurrency-support.js';
+} from './cli-local-db-concurrency-support';
 import { rm } from 'node:fs/promises';
 
 const forbiddenSuccessStderr = /SQLITE_BUSY|database is locked|client closed|UNIQUE constraint failed/iu;

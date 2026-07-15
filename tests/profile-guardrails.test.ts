@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 256 -> current 256 pure LOC; one profile isolation guardrail matrix across data auth trust and discovery.
 /**
  * T6 — Profile guardrail regression suite.
  *
@@ -13,15 +14,15 @@
  * turns into a red test instead of a silent data-file redirect.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../apps/cli/src/args.js';
-import { missionControlAuthFileEnvKey } from '../packages/config/src/index.js';
-import { discoverAgents } from '../packages/core/src/agents/agent-loader.js';
-import { resolveMissionControlDataDir } from '../packages/core/src/memory/data-dir.js';
-import { createProviderAuthStore } from '../packages/core/src/providers/provider-auth-store.js';
-import { discoverSkills, resolveUserConfigDir } from '../packages/core/src/skills/skill-loader.js';
-import { loadResolvedMcpConfig, resolveProjectConfigPath } from '../packages/core/src/tools/mcp/config.js';
-import { ProjectTrustStore } from '../packages/core/src/trust/project-trust-store.js';
-import { discoverWorkflows } from '../packages/core/src/workflows/workflow-loader.js';
+import { parseArgs } from '@mission-control/cli/args';
+import { missionControlAuthFileEnvKey } from '@mission-control/config';
+import { discoverAgents } from '../packages/core/src/agents/agent-loader';
+import { resolveMissionControlDataDir } from '../packages/core/src/memory/data-dir';
+import { createProviderAuthStore } from '../packages/core/src/providers/provider-auth-store';
+import { discoverSkills, resolveUserConfigDir } from '../packages/core/src/skills/skill-loader';
+import { loadResolvedMcpConfig, resolveProjectConfigPath } from '../packages/core/src/tools/mcp/config';
+import { ProjectTrustStore } from '../packages/core/src/trust/project-trust-store';
+import { discoverWorkflows } from '../packages/core/src/workflows/workflow-loader';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,4 +1,4 @@
-import { makeTask12TempRoot, type ProcessResult, startBuiltCli } from './cli-local-db-concurrency-support.js';
+import { makeTask12TempRoot, type ProcessResult, startBuiltCli } from './cli-local-db-concurrency-support';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

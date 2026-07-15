@@ -5,7 +5,7 @@ import {
     OWNER_FIXTURE_SESSION_IDS,
     OWNER_FIXTURE_STATE_TABLE,
     parseOwnerFixtureCommand,
-} from './fixtures/session-stop-owner.js';
+} from './fixtures/session-stop-owner';
 import { readFileSync } from 'node:fs';
 
 describe('session stop owner fixture protocol', () => {

@@ -82,8 +82,9 @@ async function main() {
         modules.push({ base, moduleFileName, identifier: toIdentifier(base) });
     }
 
+    // Extensionless relative imports (Vite/tsc bundler resolution → *.md.ts).
     const importLines = modules
-        .map((mod) => `import ${mod.identifier} from './${mod.moduleFileName.replace(/\.ts$/, '.js')}';`)
+        .map((mod) => `import ${mod.identifier} from './${mod.moduleFileName.replace(/\.ts$/, '')}';`)
         .join('\n');
 
     const arrayEntries = modules.map((mod) => `    ${mod.identifier},`).join('\n');

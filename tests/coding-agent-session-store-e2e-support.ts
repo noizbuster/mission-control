@@ -1,19 +1,18 @@
-import { type LocalLibsqlDb } from '../packages/core/src/db/local-libsql-db.js';
-import { openLocalSessionEventStore } from '../packages/core/src/index.js';
+import { type LocalLibsqlDb } from '../packages/core/src/db/local-libsql-db';
+import { openLocalSessionEventStore } from '@mission-control/core';
 import {
     createJsonlSessionEventRecord,
     createJsonlSessionLogHeader,
     serializeJsonlRecord,
-} from '../packages/core/src/memory/jsonl-session-records.js';
-import type { AgentEvent, AgentEventEnvelope } from '../packages/protocol/src/index.js';
-import { AgentEventEnvelopeSchema } from '../packages/protocol/src/index.js';
+} from '../packages/core/src/memory/jsonl-session-records';
+import { type AgentEvent, type AgentEventEnvelope, AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 const CREATED_AT = '2026-07-06T00:00:00.000Z';
 
-export * from './coding-agent-session-store-e2e-events.js';
+export * from './coding-agent-session-store-e2e-events';
 
 export type SessionStatusRow = {
     readonly session_id: string;

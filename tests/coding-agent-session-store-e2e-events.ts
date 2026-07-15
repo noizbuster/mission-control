@@ -1,4 +1,4 @@
-import type { AgentEvent } from '../packages/protocol/src/index.js';
+import type { AgentEvent } from '@mission-control/protocol';
 
 const CREATED_AT = '2026-07-06T00:00:00.000Z';
 const WORKSPACE_ROOT = '/workspace/mission-control-e2e';

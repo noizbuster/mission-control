@@ -8,13 +8,15 @@ import { join, relative } from 'node:path';
  * ESM evaluation and exits with Node status 13 (unsettled top-level await).
  *
  * Production command modules must import product metadata from `cli-version.ts`
- * (or another non-entrypoint module), never from `../index.js`.
+ * (or another non-entrypoint module), never from `../index`, `../index.js`,
+ * `./index`, or `./index.js`.
  */
 const repositoryRoot = process.cwd();
 const cliSrcRoot = join(repositoryRoot, 'apps/cli/src');
 const entrypointRelative = 'apps/cli/src/index.tsx';
+// Match relative entrypoint forms with or without a trailing `.js` extension.
 const entrypointImportPattern =
-    /(?:from|import)\s+['"](?:\.\.\/)+index\.js['"]|(?:from|import)\s+['"]\.\/index\.js['"]/u;
+    /(?:from|import)\s+['"](?:\.\.\/)+index(?:\.js)?['"]|(?:from|import)\s+['"]\.\/index(?:\.js)?['"]/u;
 
 function listSourceFiles(directory: string): readonly string[] {
     const entries = readdirSync(directory);
@@ -46,8 +48,24 @@ describe('CLI entrypoint import cycle guard', () => {
             }
         }
 
-        // Then none re-import index.js (would deadlock top-level await runCli)
+        // Then none re-import the entrypoint (would deadlock top-level await runCli)
         expect(offenders).toEqual([]);
+    });
+
+    it('flags both bare and .js-suffixed relative entrypoint imports', () => {
+        // Given synthetic sources that static-import the entrypoint under both forms
+        const bareParent = "import { getVersion } from '../index';\n";
+        const jsParent = "import { getVersion } from '../index.js';\n";
+        const bareLocal = "export { runCli } from './index';\n";
+        const jsLocal = "export { runCli } from './index.js';\n";
+        const safe = "import { getVersion } from '../cli-version';\n";
+
+        // Then the guard pattern matches every entrypoint form and ignores safe modules
+        expect(entrypointImportPattern.test(bareParent)).toBe(true);
+        expect(entrypointImportPattern.test(jsParent)).toBe(true);
+        expect(entrypointImportPattern.test(bareLocal)).toBe(true);
+        expect(entrypointImportPattern.test(jsLocal)).toBe(true);
+        expect(entrypointImportPattern.test(safe)).toBe(false);
     });
 
     it('exposes getVersion from the non-entrypoint cli-version module', () => {

@@ -1,4 +1,4 @@
-import { type AgentEvent, AgentEventSchema } from '../packages/protocol/src/index.js';
+import { type AgentEvent, AgentEventSchema } from '@mission-control/protocol';
 
 export function parseEventLines(output: string): readonly AgentEvent[] {
     return output

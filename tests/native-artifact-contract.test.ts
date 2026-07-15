@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createNativesClient } from '../packages/core/src/native/natives-client.js';
+import { createNativesClient } from '@mission-control/core';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 

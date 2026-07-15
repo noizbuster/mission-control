@@ -14,15 +14,15 @@
  * cleanup); pure-function tests need no I/O.
  */
 import { describe, expect, it } from 'vitest';
-import { resolveApproval } from '../packages/core/src/agents/approval-tier.js';
-import { CapabilityRegistry } from '../packages/core/src/agents/capability/index.js';
-import { adaptLegacyCategoryInput, adaptLegacySimpleInput } from '../packages/core/src/agents/legacy-compat.js';
-import { parseModelAlias } from '../packages/core/src/agents/model-roles.js';
-import { CROSS_HARNESS_PROVIDERS, registerBuiltinProviders } from '../packages/core/src/agents/providers/index.js';
-import { canSpawnAtDepth } from '../packages/core/src/agents/recursion-policy.js';
-import { canSpawn } from '../packages/core/src/agents/spawn-policy.js';
-import type { AgentDefinition } from '../packages/core/src/index.js';
-import { AgentIndex, discoverAgents, parseAgentFile } from '../packages/core/src/index.js';
+import { resolveApproval } from '../packages/core/src/agents/approval-tier';
+import { CapabilityRegistry } from '../packages/core/src/agents/capability/index';
+import { adaptLegacyCategoryInput, adaptLegacySimpleInput } from '../packages/core/src/agents/legacy-compat';
+import { parseModelAlias } from '../packages/core/src/agents/model-roles';
+import { CROSS_HARNESS_PROVIDERS, registerBuiltinProviders } from '../packages/core/src/agents/providers/index';
+import { canSpawnAtDepth } from '../packages/core/src/agents/recursion-policy';
+import { canSpawn } from '../packages/core/src/agents/spawn-policy';
+import type { AgentDefinition } from '@mission-control/core';
+import { AgentIndex, discoverAgents, parseAgentFile } from '@mission-control/core';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

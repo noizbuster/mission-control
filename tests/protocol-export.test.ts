@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 357 -> current 357 pure LOC; one protocol public-export contract matrix for every boundary schema.
 import { describe, expect, it } from 'vitest';
 import {
     AbgGraphSnapshotSchema,
@@ -105,7 +106,7 @@ import {
     TuiThemePreferenceSchema,
     WorkflowDiscoveryDiagnosticSchema,
     WorkflowSpecSchema,
-} from '../packages/protocol/src/index.js';
+} from '@mission-control/protocol';
 
 describe('protocol public exports', () => {
     it('exports schemas for public event session permission and sidecar boundaries', () => {

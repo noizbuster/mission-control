@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../apps/cli/src/args.js';
-import { createProviderAuthStore } from '../apps/cli/src/auth-store.js';
-import { runAuthCommand } from '../apps/cli/src/commands/auth.js';
-import { createCliProviderForSelection, runAgent } from '../apps/cli/src/commands/run-agent.js';
-import { missionControlAuthFileEnvKey } from '../packages/config/src/index.js';
-import { missionControlDataDirEnvKey } from '../packages/core/src/memory/data-dir.js';
+import { parseArgs } from '@mission-control/cli/args';
+import { createProviderAuthStore } from '../apps/cli/src/auth-store';
+import { runAuthCommand } from '../apps/cli/src/commands/auth';
+import { createCliProviderForSelection, runAgent } from '@mission-control/cli/commands/run-agent';
+import { missionControlAuthFileEnvKey } from '@mission-control/config';
+import { missionControlDataDirEnvKey } from '../packages/core/src/memory/data-dir';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

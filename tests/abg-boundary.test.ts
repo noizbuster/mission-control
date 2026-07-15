@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { registerReadOnlyRepoTools, ToolRegistry } from '../packages/core/src/index.js';
-import { findForbiddenModuleSpecifiers } from './module-specifier-boundary.js';
+import { registerReadOnlyRepoTools, ToolRegistry } from '@mission-control/core';
+import { findForbiddenModuleSpecifiers } from './module-specifier-boundary';
 import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -55,7 +55,7 @@ describe('ABG runtime boundaries', () => {
             "import React from 'react';",
             "export { render } from 'react/jsx-runtime';",
             "import type { Cli } from '@mission-control/cli/runtime';",
-            "const desktop = import('../../../apps/desktop/src/main.js');",
+            "const desktop = import('../../../apps/desktop/src/main');",
             "const tui = require('@mission-control/tui');",
             "const desktopModule = module.require('@mission-control/desktop');",
         ].join('\n');
@@ -65,7 +65,7 @@ describe('ABG runtime boundaries', () => {
             'react',
             'react/jsx-runtime',
             '@mission-control/cli/runtime',
-            '../../../apps/desktop/src/main.js',
+            '../../../apps/desktop/src/main',
             '@mission-control/tui',
             '@mission-control/desktop',
         ]);

@@ -3,13 +3,13 @@ import {
     AgentIndex,
     AgentLifecycleManager,
     AsyncJobManager,
+    type ChildSpawnRequest,
     ConcreteTaskToolRuntime,
     RuntimeAgentRegistry,
-    type SqlAgentJobMirror,
     type TaskToolRuntimeServices,
-} from '../packages/core/src/index.js';
-import type { ChildSpawnRequest } from '../packages/core/src/tools/task/task-tool.js';
-import { ToolRegistry } from '../packages/core/src/tools/tool-registry.js';
+    ToolRegistry,
+} from '@mission-control/core';
+import type { SqlAgentJobMirror } from '../packages/core/src/agents/agent-job-sql-mirror';
 
 export type ForegroundChildWait = {
     readonly done: Promise<unknown>;

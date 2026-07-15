@@ -6,7 +6,7 @@ import {
     hasAttributedSizeOk,
     inspectChangedTypeScript,
     parseChangedTypeScriptBaseArgument,
-} from '../scripts/changed-typescript-size.js';
+} from '../scripts/changed-typescript-size';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
