@@ -40,7 +40,7 @@ import {
     type ModelChoice,
 } from '@mission-control/tui/state';
 import type { ProviderAuthStore } from '../auth-store.js';
-import { getVersion } from '../index.js';
+import { getVersion } from '../cli-version.js';
 import { toggleDisabled } from './agents-disabled-config.js';
 import { parseModelPatternString, setOverride } from './agents-model-overrides-config.js';
 import { parseChatLine } from './chat-commands.js';

@@ -50,7 +50,8 @@ JSON error responses from providers (e.g., `{"error":{"message":"..."}}`) are pa
 | Workspace resolution | `src/commands/run-agent.ts` (`resolveWorkspaceRoot`, `detectWorkspaceRoot`) | `--workspace <path>` flag wins, then `MCTRL_WORKSPACE` env var, then `.git`/workspaces heuristic walking up from `process.cwd()`. |
 | Session store fix | `src/commands/run-agent-session.ts` | `createsTransientSessionStore` includes the `'tui'` mode so the graph path (with tools) is always used. |
 | Mission control services | `src/commands/mission-control-services.ts` | CLI session-owned runtime manager (lifecycle, job manager, registry). Passed to TUI via `MissionControlServicesLike` structural interface. |
-| Welcome data factory | `src/commands/welcome-data.ts` | Imports `../index.js` (CLI entry) + session-catalog. Types moved to `@mission-control/tui/state`. |
+| Welcome data factory | `src/commands/welcome-data.ts` | Imports `../cli-version.js` (not the entrypoint) + session-catalog. Types moved to `@mission-control/tui/state`. |
+| Product version | `src/cli-version.ts` | `getVersion()` lives here so interactive paths never static-import `index.tsx` (top-level `await runCli()` would deadlock and exit 13). |
 | Agents config (disabled) | `src/commands/agents-disabled-config.ts` | Writes agent config to disk; used by CLI runtime. Components call it via injected `ChatAppActions.toggleAgentDisabled`. |
 | Agents config (model overrides) | `src/commands/agents-model-overrides-config.ts` | Writes model override config; used by CLI runtime. Components call it via injected `ChatAppActions.setAgentModelOverride` + `isValidModelPattern`. |
 | Retryable tool errors | `packages/core/src/tools/read-tools-errors.ts` | Repo tool failures are `retryable: true` - the model can adjust and retry instead of the run dying. |

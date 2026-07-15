@@ -1,6 +1,7 @@
 #!/usr/bin/env -S node --experimental-ffi
 import { parseArgs } from './args.js';
 import type { CliCommandResult } from './cli-command-result.js';
+import { getVersion } from './cli-version.js';
 import { runAuthCommand } from './commands/auth.js';
 import { runMcpCommand } from './commands/mcp.js';
 import { disposeAllMissionControlServices } from './commands/mission-control-services.js';
@@ -11,9 +12,7 @@ import { runSessionCommand } from './commands/session.js';
 import { SessionCliUsageError } from './session-args.js';
 import { pathToFileURL } from 'node:url';
 
-export function getVersion(): string {
-    return '0.1.0';
-}
+export { getVersion } from './cli-version.js';
 
 export function createHelpText(): string {
     return [
