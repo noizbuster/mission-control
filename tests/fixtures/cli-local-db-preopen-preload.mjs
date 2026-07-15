@@ -1,4 +1,4 @@
-import { getOrCreateMissionControlServices } from '../../apps/cli/dist/commands/mission-control-services.js';
+import { getOrCreateMissionControlServices } from '@mission-control/cli/commands/mission-control-services';
 import { watch } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
