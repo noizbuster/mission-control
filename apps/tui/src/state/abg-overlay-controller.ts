@@ -1,6 +1,6 @@
 import type { AbgOverlayPrefs } from '@mission-control/protocol';
-import { saveAbgOverlayPrefs } from './abg-overlay-prefs-store.js';
-import type { AbgOverlayState, AbgOverlayStore } from './abg-overlay-state.js';
+import { saveAbgOverlayPrefs } from './abg-overlay-prefs-store';
+import type { AbgOverlayState, AbgOverlayStore } from './abg-overlay-state';
 
 export type AbgOverlayPrefsSnapshotProvider = () => AbgOverlayPrefs;
 

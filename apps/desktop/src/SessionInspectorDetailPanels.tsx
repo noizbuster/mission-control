@@ -2,8 +2,8 @@ import {
     isUnresolvedUnknownApprovalEffect,
     type DesktopApprovalEffectOutcome,
     type DesktopApprovalEffectRecord,
-} from './lib/agent-client.js';
-import type { SessionInspectorProjection } from './lib/session-inspector.js';
+} from './lib/agent-client';
+import type { SessionInspectorProjection } from './lib/session-inspector';
 
 export function OutputPanelSection({
     projection,

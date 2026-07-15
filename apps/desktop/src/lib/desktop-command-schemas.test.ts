@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     DesktopApprovalEffectRecordSchema,
     DesktopApprovalEffectResolutionReceiptSchema,
-} from './desktop-command-schemas.js';
+} from './desktop-command-schemas';
 
 describe('desktop approval-effect command schemas', () => {
     it('parses an unknown effect resolution receipt separately from approval decisions', () => {

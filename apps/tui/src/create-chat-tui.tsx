@@ -1,8 +1,8 @@
 import { getModelContextLimit } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import type { ChatTuiHandle, ChatTuiRuntimeOptions } from './state/chat-tui-types.js';
-import type { ModelsOverlayRoleRow } from './state/index.js';
-import { type ChatStore, createChatStore } from './state/index.js';
+import type { ChatTuiHandle, ChatTuiRuntimeOptions } from './state/chat-tui-types';
+import type { ModelsOverlayRoleRow } from './state/index';
+import { type ChatStore, createChatStore } from './state/index';
 
 export type ChatTuiOptions = ChatTuiRuntimeOptions;
 

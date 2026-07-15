@@ -4,10 +4,10 @@ import { blockPrefix, type ChatBlock, joinBlockText, readToolBlockTitle } from '
 import { MacOSScrollAccel, type ScrollAcceleration, type ScrollBoxRenderable, TextAttributes } from '@opentui/core';
 import { useTerminalDimensions } from '@opentui/solid';
 import { For, type JSX } from 'solid-js';
-import { darkTheme } from './markdown/interactive-theme.js';
-import { Markdown } from './markdown/Markdown.js';
-import type { TerminalMarkdownTheme } from './markdown/theme.js';
-import { ToolCard } from './ToolCard.js';
+import { darkTheme } from './markdown/interactive-theme';
+import { Markdown } from './markdown/Markdown';
+import type { TerminalMarkdownTheme } from './markdown/theme';
+import { ToolCard } from './ToolCard';
 
 export interface ChatScrollboxHandle {
     readonly get: () => ChatScrollboxSurface | undefined;

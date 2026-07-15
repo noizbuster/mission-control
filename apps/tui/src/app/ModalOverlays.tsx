@@ -1,12 +1,12 @@
 /** @jsxImportSource @opentui/solid */
 
 import type { JSX } from 'solid-js';
-import type { ChatAppActions } from '../state/chat-app-actions.js';
-import type { ChatStore, ChatStoreOverlayMode } from '../state/chat-store.js';
-import type { MissionControlServicesLike } from '../state/mission-services-types.js';
-import { MissionPanelOverlay } from '../components/MissionPanelOverlay.js';
-import { AgentsDashboardOverlay } from '../components/OverlayPanels.js';
-import { ModalPopup } from './ModalPopup.js';
+import type { ChatAppActions } from '../state/chat-app-actions';
+import type { ChatStore, ChatStoreOverlayMode } from '../state/chat-store';
+import type { MissionControlServicesLike } from '../state/mission-services-types';
+import { MissionPanelOverlay } from '../components/MissionPanelOverlay';
+import { AgentsDashboardOverlay } from '../components/OverlayPanels';
+import { ModalPopup } from './ModalPopup';
 
 export type ModalOverlaysProps = {
     readonly store: ChatStore;

@@ -2,9 +2,9 @@
 
 import { resolveMissionControlDataDir, resolveUserConfigDir } from '@mission-control/core';
 import type { JSX } from 'solid-js';
-import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
-import { type ResolveKeybindConfigResult, resolveKeybindConfig } from '../keymap/keybind-config-loader.js';
-import { createRequiredContext } from './context-base.js';
+import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types';
+import { type ResolveKeybindConfigResult, resolveKeybindConfig } from '../keymap/keybind-config-loader';
+import { createRequiredContext } from './context-base';
 
 export type TuiColorMode = 'auto' | 'forced' | 'disabled';
 

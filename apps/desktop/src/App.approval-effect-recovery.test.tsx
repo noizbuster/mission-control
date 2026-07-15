@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { App } from './App.js';
-import type { DesktopApprovalEffectRecord, DesktopSessionLog, DesktopSessionSummary } from './lib/agent-client.js';
+import { App } from './App';
+import type { DesktopApprovalEffectRecord, DesktopSessionLog, DesktopSessionSummary } from './lib/agent-client';
 
 describe('desktop unknown-effect recovery inspector', () => {
     it('renders only unresolved unknown effects apart from approval decision history', () => {

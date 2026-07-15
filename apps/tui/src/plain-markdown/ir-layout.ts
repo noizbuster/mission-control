@@ -1,6 +1,6 @@
 import wrapAnsi from 'wrap-ansi';
-import { terminalDisplayWidth } from '../terminal-text.js';
-import type { InlineRun, RenderLine } from './ir-types.js';
+import { terminalDisplayWidth } from '../terminal-text';
+import type { InlineRun, RenderLine } from './ir-types';
 
 export function longestWordWidth(text: string, max?: number): number {
     let longest = 0;

@@ -5,7 +5,7 @@ import type {
     DiffHunk,
     ModelProviderSelection,
 } from '@mission-control/protocol';
-import { redactDisplayLines, redactDisplayText } from './redaction.js';
+import { redactDisplayLines, redactDisplayText } from './redaction';
 
 export type TimelineRow = {
     readonly key: string;

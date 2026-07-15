@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allPluginCapabilities, demoManifest, renderPluginProviderValues } from './plugin-runtime-test-support.js';
+import { allPluginCapabilities, demoManifest, renderPluginProviderValues } from './plugin-runtime-test-support';
 
 describe('TUI plugin runtime provider capabilities', () => {
     it('keeps denied capabilities from registering anything and records redacted diagnostics', async () => {

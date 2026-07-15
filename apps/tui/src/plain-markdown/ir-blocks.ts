@@ -1,9 +1,9 @@
 import { marked, type Token, type Tokens } from 'marked';
 import wrapAnsi from 'wrap-ansi';
-import { streamBlocks } from '../markdown.js';
-import { terminalDisplayWidth } from '../terminal-text.js';
-import { renderInlineToRuns } from './ir-inline.js';
-import { buildTableBorder, computeTableColumnWidths, reflowRuns } from './ir-layout.js';
+import { streamBlocks } from '../markdown';
+import { terminalDisplayWidth } from '../terminal-text';
+import { renderInlineToRuns } from './ir-inline';
+import { buildTableBorder, computeTableColumnWidths, reflowRuns } from './ir-layout';
 import {
     classifyHeading,
     type InlineRun,
@@ -11,8 +11,8 @@ import {
     type RenderBlock,
     type RenderLine,
     textRun,
-} from './ir-types.js';
-import type { TerminalMarkdownTheme, TerminalTextStyle } from './theme.js';
+} from './ir-types';
+import type { TerminalMarkdownTheme, TerminalTextStyle } from './theme';
 
 const blankBlock: RenderBlock = { lines: [[]] };
 

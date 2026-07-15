@@ -2,8 +2,8 @@ import { TuiStores } from '@mission-control/core';
 import type { TuiPluginCapabilityId, TuiPluginManifestInput } from '@mission-control/protocol';
 import { createRoot, type JSX } from 'solid-js';
 import { createComponent } from 'solid-js/web';
-import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
-import { BASE_MODE, type ModeStackApi, ModeStackContext } from '../keymap/mode-stack.js';
+import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types';
+import { BASE_MODE, type ModeStackApi, ModeStackContext } from '../keymap/mode-stack';
 import {
     composeMissionControlProviderTree,
     type MissionControlTuiProviderEnvironment,
@@ -18,7 +18,7 @@ import {
     useTuiRoute,
     useTuiTheme,
     useTuiToast,
-} from './index.js';
+} from './index';
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,1 +1,1 @@
-export { renderMarkdownAnsi } from '../../plain-markdown/ansi-renderer.js';
+export { renderMarkdownAnsi } from '../../plain-markdown/ansi-renderer';

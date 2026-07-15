@@ -1,13 +1,13 @@
 /** @jsxImportSource @opentui/solid */
 
 import type { JSX } from 'solid-js';
-import type { AbgOverlayController } from '../../state/abg-overlay-controller.js';
-import type { ChatAppActions } from '../../state/chat-app-actions.js';
-import type { ChatStore } from '../../state/chat-store.js';
-import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
-import type { MissionControlServicesLike } from '../../state/mission-services-types.js';
-import type { WelcomeData } from '../../state/welcome-data-types.js';
-import { createRequiredContext } from './context-base.js';
+import type { AbgOverlayController } from '../../state/abg-overlay-controller';
+import type { ChatAppActions } from '../../state/chat-app-actions';
+import type { ChatStore } from '../../state/chat-store';
+import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types';
+import type { MissionControlServicesLike } from '../../state/mission-services-types';
+import type { WelcomeData } from '../../state/welcome-data-types';
+import { createRequiredContext } from './context-base';
 
 export type TuiChatSessionValue = {
     readonly store: ChatStore;

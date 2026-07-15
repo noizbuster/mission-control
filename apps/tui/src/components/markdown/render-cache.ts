@@ -11,8 +11,8 @@
  * erased at compile time, so it introduces no runtime edge.
  */
 
-import type { RenderBlock } from './Markdown.js';
-import type { TerminalMarkdownTheme } from './theme.js';
+import type { RenderBlock } from './Markdown';
+import type { TerminalMarkdownTheme } from './theme';
 
 /** Maximum entries retained in the render cache (LRU eviction). */
 export const CACHE_LIMIT = 64;

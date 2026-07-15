@@ -102,7 +102,7 @@ describe('apps/tui/src pure-subpath import-graph guard', () => {
         const componentSource = readFileSync(join(root, 'apps/tui/src/components/markdown/Markdown.tsx'), 'utf8');
         const themeSource = readFileSync(join(root, 'apps/tui/src/components/markdown/interactive-theme.ts'), 'utf8');
 
-        expect(componentSource).toContain("from './highlight.js'");
-        expect(themeSource).toContain("from './highlight.js'");
+        expect(componentSource).toContain("from './highlight'");
+        expect(themeSource).toContain("from './highlight'");
     });
 });

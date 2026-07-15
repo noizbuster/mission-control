@@ -4,7 +4,7 @@ import type {
     ModelProviderSelection,
     ProviderCredentialSummary,
 } from '@mission-control/protocol';
-import type { DesktopCommandReceipt, SaveDesktopProviderCredentialInput } from './agent-client.js';
+import type { DesktopCommandReceipt, SaveDesktopProviderCredentialInput } from './agent-client';
 
 export function demoSession(): AgentSession {
     return {

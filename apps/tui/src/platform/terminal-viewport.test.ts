@@ -4,7 +4,7 @@ import {
     normalizeTerminalViewport,
     type OpenTuiTerminalDimensions,
     type TerminalViewport,
-} from './terminal-viewport.js';
+} from './terminal-viewport';
 
 type Case = {
     readonly name: string;

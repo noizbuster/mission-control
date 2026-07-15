@@ -2,7 +2,7 @@
 import { TextAttributes } from '@opentui/core';
 import { useTerminalDimensions } from '@opentui/solid';
 import { type JSX, Show } from 'solid-js';
-import { type TuiToastVariant, useTuiToast } from '../platform/providers/clipboard-toast-context.js';
+import { type TuiToastVariant, useTuiToast } from '../platform/providers/clipboard-toast-context';
 
 const TOAST_VARIANT_COLORS: Readonly<Record<TuiToastVariant, string>> = {
     info: '#00ffff',

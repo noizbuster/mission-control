@@ -1,15 +1,15 @@
 /** @jsxImportSource @opentui/solid */
 
 import { type JSX } from 'solid-js';
-import { useSolidStoreSelector } from '../../platform/use-solid-store-selector.js';
+import { useSolidStoreSelector } from '../../platform/use-solid-store-selector';
 import {
     APPROVAL_LEVEL_PICKER_ENTRIES,
     APPROVAL_OPTIONS,
     type ChatStore,
     type ChatStoreOverlayMode,
-} from '../../state/chat-store.js';
-import { DialogPrompt } from './dialog-prompt.js';
-import { DialogSelect, type DialogSelectOption } from './dialog-select.js';
+} from '../../state/chat-store';
+import { DialogPrompt } from './dialog-prompt';
+import { DialogSelect, type DialogSelectOption } from './dialog-select';
 
 export type DialogContent = {
     readonly element: JSX.Element;

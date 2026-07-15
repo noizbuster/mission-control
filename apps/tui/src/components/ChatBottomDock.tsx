@@ -2,29 +2,29 @@
 
 import { useTerminalDimensions } from '@opentui/solid';
 import { type JSX, Show } from 'solid-js';
-import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
-import type { ChatAppActions } from '../state/chat-app-actions.js';
-import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
-import type { HistoryPickerEntry, HistoryPickerState } from '../state/history-picker-state.js';
-import type { SlashCommandMenuState } from '../state/interactive-chat-command-menu.js';
-import type { FileAutocompleteState } from '../state/interactive-chat-file-autocomplete.js';
-import { resolveSeparatorState } from '../state/separator-state.js';
-import { ChatInputArea } from './ChatInputArea.js';
-import type { ChatTextareaHandle } from './ChatInputTextarea.js';
-import type { ChatScrollboxHandle } from './ChatTranscript.js';
-import { type BottomDockMenuPolicy, bottomDockPolicy } from './chat-bottom-dock-policy.js';
-import { FileAutocompletePanel } from './FileAutocompletePanel.js';
-import { HistoryPickerPanel } from './HistoryPickerPanel.js';
-import { QuestionOverlay } from './OverlayPanels.js';
-import type { SeparatorState } from './Separator.js';
-import { SlashMenuPanel } from './SlashMenuPanel.js';
+import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
+import type { ChatAppActions } from '../state/chat-app-actions';
+import type { ChatStore, ChatStoreState } from '../state/chat-store';
+import type { HistoryPickerEntry, HistoryPickerState } from '../state/history-picker-state';
+import type { SlashCommandMenuState } from '../state/interactive-chat-command-menu';
+import type { FileAutocompleteState } from '../state/interactive-chat-file-autocomplete';
+import { resolveSeparatorState } from '../state/separator-state';
+import { ChatInputArea } from './ChatInputArea';
+import type { ChatTextareaHandle } from './ChatInputTextarea';
+import type { ChatScrollboxHandle } from './ChatTranscript';
+import { type BottomDockMenuPolicy, bottomDockPolicy } from './chat-bottom-dock-policy';
+import { FileAutocompletePanel } from './FileAutocompletePanel';
+import { HistoryPickerPanel } from './HistoryPickerPanel';
+import { QuestionOverlay } from './OverlayPanels';
+import type { SeparatorState } from './Separator';
+import { SlashMenuPanel } from './SlashMenuPanel';
 import {
     BottomStatusBar,
     type StatusBarLayout,
     type StatusBarProps,
     statusBarLayoutFromPolicy,
     TopStatusBar,
-} from './StatusBar.js';
+} from './StatusBar';
 
 export type ChatBottomDockSlice = {
     readonly inputMode: 'input' | 'question';

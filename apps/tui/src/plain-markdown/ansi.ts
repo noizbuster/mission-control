@@ -1,4 +1,4 @@
-import type { TerminalTextStyle } from './theme.js';
+import type { TerminalTextStyle } from './theme';
 
 export const TEXT_HIGHLIGHT = '\x1b[96m';
 export const TEXT_HIGHLIGHT_BOLD = '\x1b[96m\x1b[1m';

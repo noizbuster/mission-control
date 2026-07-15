@@ -10,30 +10,30 @@ import {
     useTuiLocalPreferences,
     useTuiPromptStash,
     useTuiRuntime,
-} from './platform/providers/index.js';
-import { useSolidStoreSelector } from './platform/use-solid-store-selector.js';
-import type { ChatStore } from './state/chat-store.js';
-import { ChatTranscript } from './components/ChatTranscript.js';
+} from './platform/providers/index';
+import { useSolidStoreSelector } from './platform/use-solid-store-selector';
+import type { ChatStore } from './state/chat-store';
+import { ChatTranscript } from './components/ChatTranscript';
 import {
     deriveStatusBarProps,
     preserveBlockReferences,
     promptPanelRepaintKey,
-} from './app/app-helpers.js';
-import { FullscreenOverlays } from './app/FullscreenOverlays.js';
-import { ModalOverlays } from './app/ModalOverlays.js';
-import { UpperRegion } from './app/UpperRegion.js';
-import { KeymapChrome } from './platform/keymap/keymap-chrome.js';
-import { useGlobalKeyboard } from './app/use-global-keyboard.js';
-import { useKeymapLayers } from './app/use-keymap-layers.js';
-import { useRenderableHandles } from './app/use-renderable-handles.js';
-import { useRepaintEffects } from './app/use-repaint-effects.js';
-import { useSelectionMouseUp } from './app/use-selection-mouseup.js';
-import { useSubmit } from './app/use-submit.js';
-import { useTransientToast } from './app/use-transient-toast.js';
-import { DialogHost } from './components/dialog/dialog-host.js';
-import { DialogOverlay, DialogProvider } from './components/dialog/dialog.js';
-import { ChatBottomDock } from './components/ChatBottomDock.js';
-import { bottomDockPolicy } from './components/chat-bottom-dock-policy.js';
+} from './app/app-helpers';
+import { FullscreenOverlays } from './app/FullscreenOverlays';
+import { ModalOverlays } from './app/ModalOverlays';
+import { UpperRegion } from './app/UpperRegion';
+import { KeymapChrome } from './platform/keymap/keymap-chrome';
+import { useGlobalKeyboard } from './app/use-global-keyboard';
+import { useKeymapLayers } from './app/use-keymap-layers';
+import { useRenderableHandles } from './app/use-renderable-handles';
+import { useRepaintEffects } from './app/use-repaint-effects';
+import { useSelectionMouseUp } from './app/use-selection-mouseup';
+import { useSubmit } from './app/use-submit';
+import { useTransientToast } from './app/use-transient-toast';
+import { DialogHost } from './components/dialog/dialog-host';
+import { DialogOverlay, DialogProvider } from './components/dialog/dialog';
+import { ChatBottomDock } from './components/ChatBottomDock';
+import { bottomDockPolicy } from './components/chat-bottom-dock-policy';
 
 export {
     type PromptPanelRepaintKeyInput,
@@ -42,7 +42,7 @@ export {
     preserveBlockReferences,
     promptPanelRepaintKey,
     recentModelPreferenceSelections,
-} from './app/app-helpers.js';
+} from './app/app-helpers';
 
 function createStableMessageBlocks(outputText: Accessor<string>): Accessor<readonly ChatBlock[]> {
     let previous: readonly ChatBlock[] = [];

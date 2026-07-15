@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { App } from './App.js';
-import type { DesktopSessionLog, DesktopSessionSummary } from './lib/agent-client.js';
+import { App } from './App';
+import type { DesktopSessionLog, DesktopSessionSummary } from './lib/agent-client';
 
 describe('Desktop session timeline fields', () => {
     it('renders structured event type timestamp message task id and sidecar status fields', () => {

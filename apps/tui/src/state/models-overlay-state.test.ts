@@ -1,6 +1,6 @@
 import type { ModelProviderSelection, ModelRole } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { formatModelSelection } from './interactive-chat-model.js';
+import { formatModelSelection } from './interactive-chat-model';
 import {
     assignSelectedRole,
     cancelPendingAssignment,
@@ -20,7 +20,7 @@ import {
     setModelsOverlayProviderTab,
     setModelsOverlaySearchQuery,
     switchModelsOverlayColumn,
-} from './models-overlay-state.js';
+} from './models-overlay-state';
 
 function selection(providerID: string, modelID: string, variantID?: string): ModelProviderSelection {
     return { providerID, modelID, ...(variantID !== undefined ? { variantID } : {}) };

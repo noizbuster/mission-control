@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@mission-control/tui', async () => await import('./terminal-text.js'));
-vi.mock('@mission-control/tui/chat', async () => await import('./chat.js'));
+vi.mock('@mission-control/tui', async () => await import('./terminal-text'));
+vi.mock('@mission-control/tui/chat', async () => await import('./chat'));
 vi.mock('@mission-control/core', () => ({
     ContinuationRuntime: class ContinuationRuntime {},
     MAIN_AGENT_ID: 'main',
@@ -16,8 +16,8 @@ vi.mock('@mission-control/core', () => ({
  */
 describe('App public re-export surface', () => {
     it('re-exports pure helpers from app-helpers', async () => {
-        const chatApp = await import('./app.js');
-        const helpers = await import('./app/app-helpers.js');
+        const chatApp = await import('./app');
+        const helpers = await import('./app/app-helpers');
 
         expect(chatApp.deriveStatusBarProps).toBe(helpers.deriveStatusBarProps);
         expect(chatApp.preserveBlockReferences).toBe(helpers.preserveBlockReferences);

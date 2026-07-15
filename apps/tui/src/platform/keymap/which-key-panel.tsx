@@ -3,7 +3,7 @@ import { padEndToDisplayWidth } from '@mission-control/tui';
 import { type KeyEvent, type Renderable, TextAttributes } from '@opentui/core';
 import { useBindings, useKeymapSelector } from '@opentui/keymap/solid';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
-import { useModeStack } from './mode-stack.js';
+import { useModeStack } from './mode-stack';
 import {
     createWhichKeyLayer,
     formatSequence,
@@ -17,7 +17,7 @@ import {
     type WhichKeyGroup,
     type WhichKeyHandlers,
     type WhichKeyLayout,
-} from './which-key-panel-core.js';
+} from './which-key-panel-core';
 
 export type { WhichKeyGroup, WhichKeyHandlers, WhichKeyLayout };
 export {

@@ -6,9 +6,9 @@ import {
     type ToolOutcomeProjection,
 } from '@mission-control/core/replay';
 import type { AgentEvent } from '@mission-control/protocol';
-import type { DesktopSessionDiagnostic, DesktopSessionLog } from './agent-client.js';
-import { redactDisplayText } from './redaction.js';
-import { approvalPreviewForRecord, type ToolCallPreview } from './tool-call-preview.js';
+import type { DesktopSessionDiagnostic, DesktopSessionLog } from './agent-client';
+import { redactDisplayText } from './redaction';
+import { approvalPreviewForRecord, type ToolCallPreview } from './tool-call-preview';
 
 export type ApprovalRow = {
     readonly key: string;

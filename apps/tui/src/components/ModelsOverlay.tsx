@@ -5,16 +5,16 @@ import { padEndToDisplayWidth } from '@mission-control/tui';
 import { TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/solid';
 import { createMemo, For, type JSX, Show } from 'solid-js';
-import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
-import type { ChatStore } from '../state/chat-store.js';
+import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
+import type { ChatStore } from '../state/chat-store';
 import {
     createModelsOverlayView,
     formatRoleFallback,
     type ModelsOverlayRoleRow,
     type ModelsOverlayState,
-} from '../state/models-overlay-state.js';
-import { OverlayFrame } from './OverlayFrame.js';
-import { SELECTED_BG } from './overlay-theme.js';
+} from '../state/models-overlay-state';
+import { OverlayFrame } from './OverlayFrame';
+import { SELECTED_BG } from './overlay-theme';
 
 const MODELS_OVERLAY_MAX_VISIBLE = 12;
 

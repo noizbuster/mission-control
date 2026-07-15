@@ -41,9 +41,9 @@ import type { CliRenderer, KeyEvent, Renderable } from '@opentui/core';
 import { InputRenderable, TextareaRenderable } from '@opentui/core';
 import type { Command, Keymap } from '@opentui/keymap';
 import { registerEditBufferCommands, registerTextareaMappingSuspension } from '@opentui/keymap/addons/opentui';
-import { type InputBinding, inputBindingsFromKeybinds, Keybinds } from './keybind.js';
-import { resolveKeybindConfig } from './keybind-config-loader.js';
-import { registerKillRingLayer } from './kill-ring.js';
+import { type InputBinding, inputBindingsFromKeybinds, Keybinds } from './keybind';
+import { resolveKeybindConfig } from './keybind-config-loader';
+import { registerKillRingLayer } from './kill-ring';
 
 // ---------------------------------------------------------------------------
 // Focus gate

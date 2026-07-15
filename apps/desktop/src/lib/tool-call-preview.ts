@@ -1,5 +1,5 @@
 import type { AgentEvent, ApprovalRecord, ToolCall } from '@mission-control/protocol';
-import { redactDisplayText } from './redaction.js';
+import { redactDisplayText } from './redaction';
 
 export type ToolCallPreview = {
     readonly summary: string;

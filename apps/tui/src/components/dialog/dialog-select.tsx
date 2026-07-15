@@ -4,8 +4,8 @@ import { type MouseEvent, TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/solid';
 import { createMemo, createSignal, For, Show, type JSX, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { useDialog, type DialogContext } from './dialog.js';
-import { SELECTED_BG } from '../overlay-theme.js';
+import { useDialog, type DialogContext } from './dialog';
+import { SELECTED_BG } from '../overlay-theme';
 
 export type DialogSelectOption<T = unknown> = {
     readonly title: string;

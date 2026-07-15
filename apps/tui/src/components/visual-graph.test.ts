@@ -6,7 +6,7 @@ import {
     type VisualGraphEdge,
     type VisualGraphNode,
     visualGraphBoundsForViewport,
-} from './visual-graph.js';
+} from './visual-graph';
 
 const AbgNodeStatusValues = ['idle', 'starting', 'running', 'succeeded', 'failed', 'blocked', 'cancelled'] as const;
 

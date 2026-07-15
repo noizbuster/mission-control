@@ -3,13 +3,13 @@
 import type { KeyEvent, PasteEvent } from '@opentui/core';
 import { decodePasteBytes } from '@opentui/core';
 import type { JSX } from 'solid-js';
-import { evaluatePaste, makeMarker } from '../platform/keymap/bracketed-paste.js';
-import { collectDiffEntries } from '../platform/keymap/diff-viewer.js';
-import { halfPageScrollDelta } from '../platform/keymap/messages-scroll.js';
-import { useTuiPromptRef } from '../platform/providers/index.js';
-import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
-import type { ChatAppActions } from '../state/chat-app-actions.js';
-import type { ChatStore, ChatStoreState } from '../state/chat-store.js';
+import { evaluatePaste, makeMarker } from '../platform/keymap/bracketed-paste';
+import { collectDiffEntries } from '../platform/keymap/diff-viewer';
+import { halfPageScrollDelta } from '../platform/keymap/messages-scroll';
+import { useTuiPromptRef } from '../platform/providers/index';
+import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
+import type { ChatAppActions } from '../state/chat-app-actions';
+import type { ChatStore, ChatStoreState } from '../state/chat-store';
 import {
     isSlashCommandMenuOpen,
     isWorkflowCommandMenuOpen,
@@ -17,10 +17,10 @@ import {
     resolveSlashCommandMenuSubmission,
     resolveWorkflowCommandMenuInsertText,
     resolveWorkflowCommandMenuSubmission,
-} from '../state/interactive-chat-command-menu.js';
-import { buildFileAutocompleteCompletion } from '../state/interactive-chat-file-autocomplete.js';
-import { ChatInputTextarea, type ChatTextareaHandle } from './ChatInputTextarea.js';
-import type { ChatScrollboxHandle } from './ChatTranscript.js';
+} from '../state/interactive-chat-command-menu';
+import { buildFileAutocompleteCompletion } from '../state/interactive-chat-file-autocomplete';
+import { ChatInputTextarea, type ChatTextareaHandle } from './ChatInputTextarea';
+import type { ChatScrollboxHandle } from './ChatTranscript';
 
 const DOUBLE_ESC_WINDOW_MS = 500;
 const DOUBLE_ESC_ACTION_ENV = 'MCTRL_DOUBLE_ESC_ACTION';

@@ -3,7 +3,7 @@
 import { TextAttributes } from '@opentui/core';
 import { useBindings } from '@opentui/keymap/solid';
 import { type JSX } from 'solid-js';
-import { type DialogContext, useDialog } from './dialog.js';
+import { type DialogContext, useDialog } from './dialog';
 
 export type DialogAlertProps = {
     readonly title: string;

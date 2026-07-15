@@ -1,6 +1,6 @@
 import { For, type JSX } from 'solid-js';
-import { DiffView } from './diff/DiffView.js';
-import { renderDiff } from './diff/render-diff.js';
+import { DiffView } from './diff/DiffView';
+import { renderDiff } from './diff/render-diff';
 
 export type ToolCardProps = {
     readonly lines: readonly string[];

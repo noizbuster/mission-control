@@ -2,9 +2,9 @@
 import { type AgentEvent, type AgentEventEnvelope } from '@mission-control/protocol';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import { createSignal } from 'solid-js';
-import { AbgOverlay } from './components/AbgOverlay.js';
-import { mountOpenTui, type OpenTuiMountResult } from './platform/opentui-renderer.js';
-import { createAbgOverlayStore, projectAgentEvent } from './state/index.js';
+import { AbgOverlay } from './components/AbgOverlay';
+import { mountOpenTui, type OpenTuiMountResult } from './platform/opentui-renderer';
+import { createAbgOverlayStore, projectAgentEvent } from './state/index';
 
 export type ReplayOverlayOptions = {
     readonly sessionId: string;

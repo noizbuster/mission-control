@@ -3,8 +3,8 @@
 import { TuiStores } from '@mission-control/core';
 import { type TuiThemePreference, TuiThemePreferenceSchema } from '@mission-control/protocol';
 import { type Accessor, createMemo, createSignal, type JSX, onCleanup, onMount } from 'solid-js';
-import { darkTheme, noColorTheme } from '../../components/markdown/interactive-theme.js';
-import type { TerminalMarkdownTheme } from '../../components/markdown/theme.js';
+import { darkTheme, noColorTheme } from '../../components/markdown/interactive-theme';
+import type { TerminalMarkdownTheme } from '../../components/markdown/theme';
 import {
     ACCENTS,
     APPROVAL_LEVEL_COLORS,
@@ -15,10 +15,10 @@ import {
     QUESTION_SELECTED_FG,
     SELECTED_BG,
     STATUS_LINE_BG,
-} from '../../components/overlay-theme.js';
-import { useModeStack } from '../keymap/mode-stack.js';
-import { createRequiredContext } from './context-base.js';
-import { useTuiRuntime } from './runtime-context.js';
+} from '../../components/overlay-theme';
+import { useModeStack } from '../keymap/mode-stack';
+import { createRequiredContext } from './context-base';
+import { useTuiRuntime } from './runtime-context';
 
 export type TuiRouteKind = 'chat' | 'session' | 'plugin' | 'dialog' | 'system';
 

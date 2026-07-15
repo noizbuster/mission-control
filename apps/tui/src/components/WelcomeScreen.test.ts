@@ -6,7 +6,7 @@ import type {
     WelcomeMcpServer,
     WelcomeSession,
     WelcomeSkill,
-} from '../state/welcome-data-types.js';
+} from '../state/welcome-data-types';
 import {
     buildProjectDescriptor,
     formatLspGlyphs,
@@ -23,9 +23,9 @@ import {
     truncateSessionId,
     welcomeRowBudgetPlan,
     welcomeWidthBudget,
-} from './WelcomeScreen.js';
+} from './WelcomeScreen';
 
-vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
+vi.mock('@mission-control/tui', async () => await import('../terminal-text'));
 
 const NOW = new Date('2026-07-01T12:00:00Z');
 const isoMinutesAgo = (mins: number): string => new Date(NOW.getTime() - mins * 60_000).toISOString();

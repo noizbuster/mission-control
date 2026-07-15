@@ -2,7 +2,7 @@ import type {
     ProviderPromptKeypressChoice,
     ProviderPromptKeypressState,
     ProviderPromptView,
-} from './auth-provider-keypress-types.js';
+} from './auth-provider-keypress-types';
 
 export function createProviderPromptView(
     state: ProviderPromptKeypressState,

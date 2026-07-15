@@ -2,8 +2,8 @@ import type { TuiThemePreference } from '@mission-control/protocol';
 import { createRoot, type JSX } from 'solid-js';
 import { createComponent } from 'solid-js/web';
 import { describe, expect, it } from 'vitest';
-import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
-import { BASE_MODE, type ModeStackApi, ModeStackContext, useModeStack } from '../keymap/mode-stack.js';
+import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types';
+import { BASE_MODE, type ModeStackApi, ModeStackContext, useModeStack } from '../keymap/mode-stack';
 import {
     composeMissionControlProviderTree,
     type TuiDialogService,
@@ -14,7 +14,7 @@ import {
     useTuiDialog,
     useTuiRoute,
     useTuiTheme,
-} from './index.js';
+} from './index';
 
 type TestRenderer = {
     readonly id: string;

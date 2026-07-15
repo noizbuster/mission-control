@@ -1,7 +1,7 @@
 import { createEffect } from 'solid-js';
-import { useTuiToast } from '../platform/providers/index.js';
-import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
-import type { ChatStore } from '../state/chat-store.js';
+import { useTuiToast } from '../platform/providers/index';
+import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
+import type { ChatStore } from '../state/chat-store';
 
 /**
  * Bridges ChatStore.transientNotice into the provider toast service so store

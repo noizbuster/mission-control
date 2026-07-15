@@ -2,8 +2,8 @@ import type { FiletypeParserOptions, SimpleHighlight, SyntaxStyle, TextChunk, Tr
 import { RGBA } from '@opentui/core';
 import { marked } from 'marked';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { darkTheme } from './interactive-theme.js';
-import type { InlineRun } from './Markdown.js';
+import { darkTheme } from './interactive-theme';
+import type { InlineRun } from './Markdown';
 import {
     buildBlocks,
     buildOsc8Hyperlink,
@@ -18,9 +18,9 @@ import {
     renderCodeBlock,
     renderInlineToRuns,
     stripMailto,
-} from './Markdown.js';
-import { clearRenderCache, getCachedBlocks } from './render-cache.js';
-import { type HighlighterRuntime, resetHighlighterForTest, setHighlighterRuntime } from './tree-sitter-highlighter.js';
+} from './Markdown';
+import { clearRenderCache, getCachedBlocks } from './render-cache';
+import { type HighlighterRuntime, resetHighlighterForTest, setHighlighterRuntime } from './tree-sitter-highlighter';
 
 // allow: SIZE_OK -- HEAD 250 -> current 342 pure LOC; markdown tree-sitter fixture and rendering behavior matrix stay cohesive.
 /**

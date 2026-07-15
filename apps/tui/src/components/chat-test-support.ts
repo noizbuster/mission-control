@@ -27,8 +27,8 @@
 
 import type { KeyEvent } from '@opentui/core';
 import { KeyEvent as KeyEventClass } from '@opentui/core';
-import type { ChatTextareaHandle, ChatTextareaSurface } from './ChatInputTextarea.js';
-import type { ChatScrollboxHandle, ChatScrollboxSurface } from './ChatTranscript.js';
+import type { ChatTextareaHandle, ChatTextareaSurface } from './ChatInputTextarea';
+import type { ChatScrollboxHandle, ChatScrollboxSurface } from './ChatTranscript';
 
 /**
  * The textarea port the runtime depends on. Mirrors the opentui

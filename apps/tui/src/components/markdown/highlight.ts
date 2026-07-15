@@ -20,7 +20,7 @@
  * `./tree-sitter-highlighter.ts` for the full orchestration.
  */
 
-import type { TerminalTextStyle } from './theme.js';
+import type { TerminalTextStyle } from './theme';
 
 /** One styled text fragment produced by the highlighter. */
 export type HighlightedSpan = { readonly text: string; readonly style: TerminalTextStyle };
@@ -34,4 +34,4 @@ export {
     highlightTreeSitter as highlightCode,
     monochrome,
     subscribeHighlight,
-} from './tree-sitter-highlighter.js';
+} from './tree-sitter-highlighter';

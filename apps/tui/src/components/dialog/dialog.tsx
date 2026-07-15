@@ -9,11 +9,11 @@ import {
     APPROVAL_LEVEL_PICKER_ENTRIES,
     APPROVAL_OPTIONS,
     type ChatStore,
-} from '../../state/chat-store.js';
-import { useSolidStoreSelector } from '../../platform/use-solid-store-selector.js';
-import { useModeStack } from '../../platform/keymap/mode-stack.js';
-import { useTuiClipboard, useTuiToast } from '../../platform/providers/clipboard-toast-context.js';
-import { useTuiTheme } from '../../platform/providers/route-dialog-theme-context.js';
+} from '../../state/chat-store';
+import { useSolidStoreSelector } from '../../platform/use-solid-store-selector';
+import { useModeStack } from '../../platform/keymap/mode-stack';
+import { useTuiClipboard, useTuiToast } from '../../platform/providers/clipboard-toast-context';
+import { useTuiTheme } from '../../platform/providers/route-dialog-theme-context';
 
 /**
  * Dialog shell: fullscreen dimmed backdrop + centered panel.

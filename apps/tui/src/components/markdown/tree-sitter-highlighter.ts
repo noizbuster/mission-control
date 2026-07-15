@@ -32,12 +32,12 @@ import {
     SyntaxStyle,
     treeSitterToTextChunks,
 } from '@opentui/core';
-import type { HighlightedLine, HighlightedSpan } from './highlight.js';
-import { TREE_SITTER_PARSERS } from './parsers-config.js';
-import { clearRenderCache } from './render-cache.js';
-import { buildSyntaxRules } from './syntax-rules.js';
-import { textChunkToSpan } from './text-attributes.js';
-import type { TerminalTextStyle } from './theme.js';
+import type { HighlightedLine, HighlightedSpan } from './highlight';
+import { TREE_SITTER_PARSERS } from './parsers-config';
+import { clearRenderCache } from './render-cache';
+import { buildSyntaxRules } from './syntax-rules';
+import { textChunkToSpan } from './text-attributes';
+import type { TerminalTextStyle } from './theme';
 
 // ---------------------------------------------------------------------------
 // Types

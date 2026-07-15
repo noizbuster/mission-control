@@ -20,7 +20,7 @@
  */
 import { useKeymapSelector } from '@opentui/keymap/solid';
 import { createMemo, type JSX, Show } from 'solid-js';
-import type { OpenTuiKeymap } from './keymap-instance.js';
+import type { OpenTuiKeymap } from './keymap-instance';
 
 export function LeaderPendingCue(): JSX.Element {
     const sequence = useKeymapSelector((keymap: OpenTuiKeymap) => keymap.getPendingSequence());

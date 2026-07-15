@@ -3,7 +3,7 @@ import {
     BOTTOM_DOCK_HEIGHT_POLICY,
     BOTTOM_DOCK_WIDTH_BREAKPOINTS,
     bottomDockPolicy,
-} from './chat-bottom-dock-policy.js';
+} from './chat-bottom-dock-policy';
 
 describe('bottom dock responsive constants', () => {
     it('pins the approved width breakpoints', () => {

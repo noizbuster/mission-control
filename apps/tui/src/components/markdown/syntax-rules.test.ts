@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSyntaxRules, darkSyntaxPalette } from './syntax-rules.js';
+import { buildSyntaxRules, darkSyntaxPalette } from './syntax-rules';
 
 // Note: we deliberately do NOT call `SyntaxStyle.fromTheme(rules)` here. That
 // call wraps a native Zig pointer requiring the FFI backend (node:ffi +

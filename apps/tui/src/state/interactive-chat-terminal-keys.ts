@@ -1,4 +1,4 @@
-import type { TerminalChatCursorDirection } from './interactive-chat-cursor-navigation.js';
+import type { TerminalChatCursorDirection } from './interactive-chat-cursor-navigation';
 
 export function readTerminalCursorDirection(text: string): TerminalChatCursorDirection | undefined {
     if (matchesTerminalEscapeSequence(text, ctrlLeftSequences)) {

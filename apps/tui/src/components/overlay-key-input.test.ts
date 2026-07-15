@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { printableCharFromKey } from './overlay-key-input.js';
+import { printableCharFromKey } from './overlay-key-input';
 
 const key = (
     name: string,

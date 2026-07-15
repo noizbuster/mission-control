@@ -4,17 +4,17 @@ import {
     isPendingPromptControlSequence,
     type PromptArrowKeypress,
     readPromptControlArrowKeypress,
-} from './auth-provider-keypress-escape.js';
-import type { ProviderPromptKeypressChoice, ProviderPromptKeypressState } from './auth-provider-keypress-types.js';
-import { filterProviderPromptChoices } from './auth-provider-keypress-view.js';
-import { isTerminalInterruptToken } from './interactive-chat-terminal-keys.js';
+} from './auth-provider-keypress-escape';
+import type { ProviderPromptKeypressChoice, ProviderPromptKeypressState } from './auth-provider-keypress-types';
+import { filterProviderPromptChoices } from './auth-provider-keypress-view';
+import { isTerminalInterruptToken } from './interactive-chat-terminal-keys';
 
 export type {
     ProviderPromptKeypressChoice,
     ProviderPromptKeypressState,
     ProviderPromptView,
-} from './auth-provider-keypress-types.js';
-export { createProviderPromptView, filterProviderPromptChoices } from './auth-provider-keypress-view.js';
+} from './auth-provider-keypress-types';
+export { createProviderPromptView, filterProviderPromptChoices } from './auth-provider-keypress-view';
 
 type ProviderPromptKeypressReduction = {
     readonly state: ProviderPromptKeypressState;

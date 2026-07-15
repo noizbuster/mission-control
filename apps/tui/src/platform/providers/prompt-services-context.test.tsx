@@ -2,8 +2,8 @@ import { TuiStores } from '@mission-control/core';
 import { createRoot, type JSX } from 'solid-js';
 import { createComponent } from 'solid-js/web';
 import { describe, expect, it } from 'vitest';
-import { type ChatStore, createChatStore } from '../../state/chat-store.js';
-import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
+import { type ChatStore, createChatStore } from '../../state/chat-store';
+import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types';
 import {
     composeMissionControlProviderTree,
     type MissionControlTuiProviderEnvironment,
@@ -11,7 +11,7 @@ import {
     useTuiFrecency,
     useTuiPromptRef,
     useTuiPromptStash,
-} from './index.js';
+} from './index';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';

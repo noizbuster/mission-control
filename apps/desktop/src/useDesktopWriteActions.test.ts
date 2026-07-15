@@ -14,13 +14,13 @@ import type {
     DesktopSessionSnapshot,
     DesktopSessionSummary,
     SaveDesktopProviderCredentialInput,
-} from './lib/agent-client.js';
+} from './lib/agent-client';
 import {
     type DesktopWriteActionsInput,
     resolveDesktopApprovalEffect,
     runDesktopPromptCommand,
     runDesktopSessionCommand,
-} from './useDesktopWriteActions.js';
+} from './useDesktopWriteActions';
 
 describe('Desktop write actions', () => {
     it('blocks unsupported provider write attempts before client command invocation', async () => {

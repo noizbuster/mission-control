@@ -20,7 +20,7 @@
 
 import { createTestKeymap } from '@opentui/keymap/testing';
 import { describe, expect, it } from 'vitest';
-import { BASE_MODE, currentMode, type ModeStack, popMode, pushMode } from './mode-stack.js';
+import { BASE_MODE, currentMode, type ModeStack, popMode, pushMode } from './mode-stack';
 import {
     formatSequence,
     groupEntries,
@@ -29,7 +29,7 @@ import {
     registerWhichKeyLayer,
     WHICH_KEY_LAYOUT_COMMAND,
     WHICH_KEY_TOGGLE_COMMAND,
-} from './which-key-panel-core.js';
+} from './which-key-panel-core';
 
 /** Flatten grouped entries to "chord|label" strings for exact assertions. */
 function flatGroups(

@@ -1,7 +1,7 @@
 import { TextAttributes } from '@opentui/core';
 import { describe, expect, it } from 'vitest';
-import type { OverlayVariant } from './overlay-theme.js';
-import { ACCENTS, resolveOverlayChrome, SELECTED_BG } from './overlay-theme.js';
+import type { OverlayVariant } from './overlay-theme';
+import { ACCENTS, resolveOverlayChrome, SELECTED_BG } from './overlay-theme';
 
 describe('overlay-theme SELECTED_BG', () => {
     it('pins the shared selection background constant', () => {

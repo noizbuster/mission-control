@@ -1,4 +1,4 @@
-import type { ClipboardService } from './clipboard-service.js';
+import type { ClipboardService } from './clipboard-service';
 
 /**
  * A renderable that may carry its own clipboard-text transform.

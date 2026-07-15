@@ -1,5 +1,5 @@
-import type { DesktopSessionDiagnostic, DesktopSessionLog, DesktopSessionSummary } from './agent-client.js';
-import { redactMessageFields } from './redaction.js';
+import type { DesktopSessionDiagnostic, DesktopSessionLog, DesktopSessionSummary } from './agent-client';
+import { redactMessageFields } from './redaction';
 import {
     type BranchRow,
     type CommandRow,
@@ -11,19 +11,19 @@ import {
     projectPatchRows,
     projectTimelineRows,
     type TimelineRow,
-} from './session-inspector-event-rows.js';
+} from './session-inspector-event-rows';
 import {
     type ApprovalRow,
     type CodingStepRow,
     projectReplayInspectorRows,
     type ToolOutcomeRow,
-} from './session-inspector-replay.js';
+} from './session-inspector-replay';
 import {
     projectSessionDetail,
     type SessionListRow,
     type SessionStatsPanel,
     type SessionTreePanel,
-} from './session-inspector-session-detail.js';
+} from './session-inspector-session-detail';
 
 export type SessionInspectorProjection = {
     readonly sessions: readonly SessionListRow[];

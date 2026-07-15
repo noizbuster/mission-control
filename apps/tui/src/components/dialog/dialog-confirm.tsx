@@ -4,7 +4,7 @@ import { TextAttributes } from '@opentui/core';
 import { useBindings } from '@opentui/keymap/solid';
 import { For, type JSX } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { type DialogContext, useDialog } from './dialog.js';
+import { type DialogContext, useDialog } from './dialog';
 
 export type DialogConfirmProps = {
     readonly title: string;

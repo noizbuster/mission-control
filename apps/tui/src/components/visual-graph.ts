@@ -2,8 +2,8 @@ import type { GraphLabel, NodeLabel } from '@dagrejs/dagre';
 import { graphlib, layout } from '@dagrejs/dagre';
 import type { AbgNodeStatus } from '@mission-control/protocol';
 import { truncateTerminalText } from '@mission-control/tui';
-import type { TerminalViewport } from '../platform/terminal-viewport.js';
-import { nodeStatusTheme } from './abg-status-theme.js';
+import type { TerminalViewport } from '../platform/terminal-viewport';
+import { nodeStatusTheme } from './abg-status-theme';
 
 export type VisualGraphNode = {
     readonly nodeId: string;

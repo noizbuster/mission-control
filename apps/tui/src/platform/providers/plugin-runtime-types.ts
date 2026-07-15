@@ -10,7 +10,7 @@ import type {
     TuiPluginSlotDescriptor,
 } from '@mission-control/protocol';
 import type { Accessor } from 'solid-js';
-import type { TuiDialogService, TuiRouteService, TuiThemeService } from './route-dialog-theme-context.js';
+import type { TuiDialogService, TuiRouteService, TuiThemeService } from './route-dialog-theme-context';
 
 export type TuiPluginManifestStoreLike = {
     readonly listManifests: () => Promise<readonly TuiPluginManifest[]>;

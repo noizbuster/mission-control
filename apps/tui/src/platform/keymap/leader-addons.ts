@@ -44,7 +44,7 @@ import {
     registerEscapeClearsPendingSequence,
     registerTimedLeader,
 } from '@opentui/keymap/addons';
-import { CommandMap, expandToChords, Keybinds } from './keybind.js';
+import { CommandMap, expandToChords, Keybinds } from './keybind';
 
 /** The leader token name. `<leader>` in binding strings resolves to this. */
 export const LEADER_TOKEN_NAME = 'leader';

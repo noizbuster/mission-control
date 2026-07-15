@@ -1,8 +1,8 @@
 import type { ProviderAuthStore } from '@mission-control/core';
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type ChatStore, createChatStore } from '../state/chat-store.js';
-import { createModelsOverlayRoleRows } from '../state/models-overlay-state.js';
+import { type ChatStore, createChatStore } from '../state/chat-store';
+import { createModelsOverlayRoleRows } from '../state/models-overlay-state';
 
 function selection(providerID: string, modelID: string, variantID?: string): ModelProviderSelection {
     return { providerID, modelID, ...(variantID !== undefined ? { variantID } : {}) };

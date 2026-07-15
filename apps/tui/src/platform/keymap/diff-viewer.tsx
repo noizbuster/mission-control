@@ -32,9 +32,9 @@
 import { type ChatBlock, parseMessageBlocks } from '@mission-control/tui/chat';
 import { TextAttributes } from '@opentui/core';
 import { createMemo, For, type JSX, Show } from 'solid-js';
-import { DiffView } from '../../components/diff/DiffView.js';
-import { type DiffLine, renderDiff } from '../../components/diff/render-diff.js';
-import { hasDiffContent } from '../../components/ToolCard.js';
+import { DiffView } from '../../components/diff/DiffView';
+import { type DiffLine, renderDiff } from '../../components/diff/render-diff';
+import { hasDiffContent } from '../../components/ToolCard';
 
 // ---------------------------------------------------------------------------
 // Types

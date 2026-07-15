@@ -2,18 +2,18 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import type { ModelProviderSelection, ProviderCredentialSummary } from '@mission-control/protocol';
 import { useEffect, useMemo, useState } from 'react';
-import { ChatComposer } from './ChatComposer.js';
+import { ChatComposer } from './ChatComposer';
 import {
     createTauriDesktopAgentClient,
     type DesktopAgentClient,
     type DesktopApprovalEffectRecord,
     type DesktopSessionLog,
     type DesktopSessionSummary,
-} from './lib/agent-client.js';
-import { projectSessionInspector } from './lib/session-inspector.js';
-import { getProviderExecutionGate, ProviderControls } from './ProviderControls.js';
-import { SessionInspector } from './SessionInspector.js';
-import { useDesktopWriteActions } from './useDesktopWriteActions.js';
+} from './lib/agent-client';
+import { projectSessionInspector } from './lib/session-inspector';
+import { getProviderExecutionGate, ProviderControls } from './ProviderControls';
+import { SessionInspector } from './SessionInspector';
+import { useDesktopWriteActions } from './useDesktopWriteActions';
 
 export type AppProps = {
     readonly initialSessionId?: string;

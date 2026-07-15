@@ -1,5 +1,5 @@
 import { padEndToDisplayWidth, truncateTerminalText } from '@mission-control/tui';
-import { readTerminalCursorDirection } from './interactive-chat-terminal-keys.js';
+import { readTerminalCursorDirection } from './interactive-chat-terminal-keys';
 
 export type SlashCommandMenuChoice = {
     readonly id: string;

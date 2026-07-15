@@ -21,8 +21,8 @@
 
 import { createTestKeymap } from '@opentui/keymap/testing';
 import { describe, expect, it } from 'vitest';
-import { CommandMap, type KeybindName, Keybinds } from './keybind.js';
-import { createConfigDrivenTextareaBindings, EXCLUDED_TEXTAREA_CHORDS } from './keymap-managed-layer.js';
+import { CommandMap, type KeybindName, Keybinds } from './keybind';
+import { createConfigDrivenTextareaBindings, EXCLUDED_TEXTAREA_CHORDS } from './keymap-managed-layer';
 
 /** Collect all chord strings that map to a given command id. */
 function chordsForCommand(

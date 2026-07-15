@@ -3,17 +3,17 @@
 import { ProjectTrustStore, TuiPluginHostRegistry, TuiStores } from '@mission-control/core';
 import type { TuiPluginCapabilityId } from '@mission-control/protocol';
 import type { JSX } from 'solid-js';
-import { useTuiToast } from './clipboard-toast-context.js';
-import { createRequiredContext } from './context-base.js';
-import { createTuiPluginRuntimeService } from './plugin-runtime-service.js';
+import { useTuiToast } from './clipboard-toast-context';
+import { createRequiredContext } from './context-base';
+import { createTuiPluginRuntimeService } from './plugin-runtime-service';
 import type {
     TuiPluginKvStoreLike,
     TuiPluginManifestStoreLike,
     TuiPluginRuntimeDefinition,
     TuiPluginRuntimeService,
-} from './plugin-runtime-types.js';
-import { useTuiDialog, useTuiRoute, useTuiTheme } from './route-dialog-theme-context.js';
-import { useTuiPaths, useTuiStartup } from './runtime-context.js';
+} from './plugin-runtime-types';
+import { useTuiDialog, useTuiRoute, useTuiTheme } from './route-dialog-theme-context';
+import { useTuiPaths, useTuiStartup } from './runtime-context';
 
 export type {
     TuiPluginCommandHandler,
@@ -23,7 +23,7 @@ export type {
     TuiPluginRuntimeApi,
     TuiPluginRuntimeDefinition,
     TuiPluginRuntimeService,
-} from './plugin-runtime-types.js';
+} from './plugin-runtime-types';
 
 export type MissionControlPluginRuntimeProviderProps = {
     readonly manifestStore?: TuiPluginManifestStoreLike;

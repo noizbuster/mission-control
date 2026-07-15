@@ -1,6 +1,6 @@
 import { ClipboardTarget } from '@opentui/core';
 import { describe, expect, it } from 'vitest';
-import { createClipboardService } from './clipboard-service.js';
+import { createClipboardService } from './clipboard-service';
 
 describe('createClipboardService', () => {
     it('copies via copyToClipboardOSC52 with ClipboardTarget.Clipboard when OSC52 is supported', async () => {

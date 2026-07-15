@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderDiff } from './render-diff.js';
+import { renderDiff } from './render-diff';
 
 describe('renderDiff classification', () => {
     it('returns an empty array for empty input', () => {

@@ -12,7 +12,7 @@ import {
     TuiPluginSlotDescriptorSchema,
 } from '@mission-control/protocol';
 import { createSignal, onCleanup } from 'solid-js';
-import type { TuiToastService } from './clipboard-toast-context.js';
+import type { TuiToastService } from './clipboard-toast-context';
 import type {
     TuiPluginCommandHandler,
     TuiPluginDispatchResult,
@@ -21,8 +21,8 @@ import type {
     TuiPluginRuntimeApi,
     TuiPluginRuntimeDefinition,
     TuiPluginRuntimeService,
-} from './plugin-runtime-types.js';
-import type { TuiDialogService, TuiRouteService, TuiThemeService } from './route-dialog-theme-context.js';
+} from './plugin-runtime-types';
+import type { TuiDialogService, TuiRouteService, TuiThemeService } from './route-dialog-theme-context';
 
 type RegisteredCommand = {
     readonly pluginName: string;

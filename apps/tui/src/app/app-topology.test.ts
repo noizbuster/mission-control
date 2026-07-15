@@ -396,7 +396,7 @@ describe('app import-graph invariants', () => {
         expect(importLines.some((line) => line.includes('use-global-keyboard'))).toBe(true);
         expect(importLines.some((line) => line.includes('use-keymap-layers'))).toBe(true);
         expect(importLines.some((line) => line.includes('use-repaint-effects'))).toBe(true);
-        expect(source).toContain("from './components/ChatBottomDock.js'");
+        expect(source).toContain("from './components/ChatBottomDock'");
         expect(source).not.toContain("from './AgentSpinner");
         expect(source).not.toContain("from './ModalPopup");
         expect(source).not.toContain("from './NormalLayout");

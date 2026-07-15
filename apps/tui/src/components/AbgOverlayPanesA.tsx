@@ -2,17 +2,17 @@
 
 import { truncateTerminalText } from '@mission-control/tui';
 import { For, type JSX, Show } from 'solid-js';
-import type { TerminalViewport } from '../platform/terminal-viewport.js';
-import type { AbgOverlayState } from '../state/abg-overlay-state.js';
-import { graphStatusTheme, nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
-import { useSpinnerFrame } from './spinner.js';
+import type { TerminalViewport } from '../platform/terminal-viewport';
+import type { AbgOverlayState } from '../state/abg-overlay-state';
+import { graphStatusTheme, nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme';
+import { useSpinnerFrame } from './spinner';
 import {
     renderVisualGraph,
     type VisualGraphEdge,
     type VisualGraphNode,
     type VisualGraphRow,
     visualGraphBoundsForViewport,
-} from './visual-graph.js';
+} from './visual-graph';
 
 export interface PaneProps {
     readonly state: AbgOverlayState;

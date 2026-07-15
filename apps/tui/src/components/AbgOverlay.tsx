@@ -2,13 +2,13 @@
 
 import { truncateTerminalText } from '@mission-control/tui';
 import { For, type JSX } from 'solid-js';
-import type { TerminalViewport } from '../platform/terminal-viewport.js';
-import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
-import type { AbgOverlayState, AbgOverlayStore } from '../state/abg-overlay-state.js';
-import { DEFAULT_REFRESH_MS } from '../state/abg-overlay-state.js';
-import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA.js';
-import { ApprovalsPane, BlackboardPane, CostPolicyPane, TimelinePane, ToolsPane } from './AbgOverlayPanesB.js';
-import { graphStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
+import type { TerminalViewport } from '../platform/terminal-viewport';
+import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
+import type { AbgOverlayState, AbgOverlayStore } from '../state/abg-overlay-state';
+import { DEFAULT_REFRESH_MS } from '../state/abg-overlay-state';
+import { GraphPane, NodesPane, OverviewPane } from './AbgOverlayPanesA';
+import { ApprovalsPane, BlackboardPane, CostPolicyPane, TimelinePane, ToolsPane } from './AbgOverlayPanesB';
+import { graphStatusTheme, STATUS_FG_GRAY } from './abg-status-theme';
 
 export type AbgOverlayTab =
     | 'overview'

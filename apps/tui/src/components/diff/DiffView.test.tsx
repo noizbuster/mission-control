@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { type DiffKindStyle, DiffView, kindStyle, splitLineSpans, type TextSpan } from './DiffView.js';
-import type { DiffLine } from './render-diff.js';
+import { type DiffKindStyle, DiffView, kindStyle, splitLineSpans, type TextSpan } from './DiffView';
+import type { DiffLine } from './render-diff';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 

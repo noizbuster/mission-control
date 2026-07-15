@@ -5,19 +5,19 @@ import { ContinuationRuntime, type ContinuationState, MAIN_AGENT_ID, readBoulder
 import { TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/solid';
 import { createEffect, createMemo, createSignal, For, type JSX, onCleanup } from 'solid-js';
-import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
-import type { ChatAppActions } from '../state/chat-app-actions.js';
-import type { ChatStore, MissionPanelTab } from '../state/chat-store.js';
-import type { MissionControlServicesLike } from '../state/mission-services-types.js';
-import { buildAgentPanelRows, buildJobPanelRows } from './mission-panel-rows.js';
+import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
+import type { ChatAppActions } from '../state/chat-app-actions';
+import type { ChatStore, MissionPanelTab } from '../state/chat-store';
+import type { MissionControlServicesLike } from '../state/mission-services-types';
+import { buildAgentPanelRows, buildJobPanelRows } from './mission-panel-rows';
 import {
     renderAgentsTab,
     renderContinueTab,
     renderDrainTab,
     renderJobsTab,
     renderRunsTab,
-} from './mission-panel-tabs.js';
-import { OverlayFrame } from './OverlayFrame.js';
+} from './mission-panel-tabs';
+import { OverlayFrame } from './OverlayFrame';
 
 const MISSION_PANEL_TABS: readonly MissionPanelTab[] = ['runs', 'jobs', 'agents', 'drain', 'continue'];
 

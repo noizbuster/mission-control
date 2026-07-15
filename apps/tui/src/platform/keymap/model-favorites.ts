@@ -46,7 +46,7 @@
 
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { Command, Keymap, KeymapEvent } from '@opentui/keymap';
-import { CommandMap, expandToChords, type InputBinding, type KeybindName, Keybinds } from './keybind.js';
+import { CommandMap, expandToChords, type InputBinding, type KeybindName, Keybinds } from './keybind';
 
 // ---------------------------------------------------------------------------
 // ModelProviderSelection helpers (pure)

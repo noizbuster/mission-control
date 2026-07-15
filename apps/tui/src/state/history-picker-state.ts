@@ -5,7 +5,7 @@
  */
 
 import type { TuiPromptHistoryEntry } from '@mission-control/protocol';
-import { formatHistoryContentPreview, formatHistoryTimeColumn } from './history-picker-format.js';
+import { formatHistoryContentPreview, formatHistoryTimeColumn } from './history-picker-format';
 
 /** Aligns with durable `TuiPromptHistoryEntry` (id, text, timestamp ms). */
 export type HistoryPickerEntry = TuiPromptHistoryEntry;

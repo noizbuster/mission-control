@@ -1,8 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 import { TextAttributes } from '@opentui/core';
 import type { JSX } from 'solid-js';
-import type { OverlayVariant } from './overlay-theme.js';
-import { resolveOverlayChrome } from './overlay-theme.js';
+import type { OverlayVariant } from './overlay-theme';
+import { resolveOverlayChrome } from './overlay-theme';
 
 export type OverlayFrameProps = {
     readonly variant: OverlayVariant;

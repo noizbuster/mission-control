@@ -15,11 +15,11 @@ import {
     type SessionAwaitingDetails,
 } from '@mission-control/protocol';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
-import type { ChatStore } from '../../state/chat-store.js';
-import { useSolidStoreSelector } from '../use-solid-store-selector.js';
-import { createRequiredContext } from './context-base.js';
-import { useTuiPaths, useTuiRuntime } from './runtime-context.js';
-import { useTuiRuntimeEvents } from './runtime-events-context.js';
+import type { ChatStore } from '../../state/chat-store';
+import { useSolidStoreSelector } from '../use-solid-store-selector';
+import { createRequiredContext } from './context-base';
+import { useTuiPaths, useTuiRuntime } from './runtime-context';
+import { useTuiRuntimeEvents } from './runtime-events-context';
 
 export type TuiRuntimeEventProjection = Pick<
     SessionReplayProjection,

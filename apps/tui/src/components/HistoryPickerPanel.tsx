@@ -8,9 +8,9 @@ import {
     type HistoryPickerEntry,
     type HistoryPickerState,
     type HistoryPickerVisibleRow,
-} from '../state/history-picker-state.js';
-import { OverlayFrame } from './OverlayFrame.js';
-import { SELECTED_BG } from './overlay-theme.js';
+} from '../state/history-picker-state';
+import { OverlayFrame } from './OverlayFrame';
+import { SELECTED_BG } from './overlay-theme';
 
 export type HistoryPickerPanelProps = {
     readonly entries: readonly HistoryPickerEntry[];

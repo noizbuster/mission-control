@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { darkTheme, noColorTheme, THEME_STYLE_KEYS } from './theme.js';
+import { darkTheme, noColorTheme, THEME_STYLE_KEYS } from './theme';
 
 describe('TerminalMarkdownTheme built-ins', () => {
     it('darkTheme declares a style record for every required element key', () => {

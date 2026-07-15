@@ -39,7 +39,7 @@
  */
 
 import type { Command, Keymap, KeymapEvent } from '@opentui/keymap';
-import { CommandMap } from './keybind.js';
+import { CommandMap } from './keybind';
 
 // allow: SIZE_OK — the T5 FILE LANE mandates the KillRing storage AND the
 // registerKillRingLayer command-layer registration live in ONE file; splitting

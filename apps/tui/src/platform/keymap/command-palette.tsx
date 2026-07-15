@@ -50,11 +50,11 @@ import {
     Show,
     useContext,
 } from 'solid-js';
-import { useTuiPluginRuntime } from '../providers/plugin-runtime-context.js';
-import { CommandMap } from './keybind.js';
-import type { OpenTuiKeymap } from './keymap-instance.js';
-import { PaletteOpenContext } from './palette-open-context.js';
-import { getPaletteSlashCommands, type PaletteSlashEntry } from './slash-mapping.js';
+import { useTuiPluginRuntime } from '../providers/plugin-runtime-context';
+import { CommandMap } from './keybind';
+import type { OpenTuiKeymap } from './keymap-instance';
+import { PaletteOpenContext } from './palette-open-context';
+import { getPaletteSlashCommands, type PaletteSlashEntry } from './slash-mapping';
 
 /** The palette toggle command id (mirrors `CommandMap.command_list`). */
 const PALETTE_COMMAND_ID: string = CommandMap.command_list;

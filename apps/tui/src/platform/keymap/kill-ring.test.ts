@@ -29,7 +29,7 @@
 
 import { createTestKeymap } from '@opentui/keymap/testing';
 import { describe, expect, it } from 'vitest';
-import { KILL_RING_MAX_ENTRIES, KillRing, type KillRingEditor, registerKillRingLayer } from './kill-ring.js';
+import { KILL_RING_MAX_ENTRIES, KillRing, type KillRingEditor, registerKillRingLayer } from './kill-ring';
 
 // ---------------------------------------------------------------------------
 // Inline recording editor (kept FFI-free; mirrors the real editor surface)

@@ -1,6 +1,6 @@
 import type { Accessor } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useSolidStoreSelector } from './use-solid-store-selector.js';
+import { useSolidStoreSelector } from './use-solid-store-selector';
 
 type SolidLifecycle = {
     cleanups: (() => void)[];

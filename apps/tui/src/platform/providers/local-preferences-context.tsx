@@ -9,9 +9,9 @@ import {
     type TuiVariantCyclingHint,
 } from '@mission-control/protocol';
 import { type Accessor, createSignal, type JSX, onCleanup, onMount } from 'solid-js';
-import { formatModelSelection } from '../../state/interactive-chat-model.js';
-import { createRequiredContext } from './context-base.js';
-import { useTuiPaths } from './runtime-context.js';
+import { formatModelSelection } from '../../state/interactive-chat-model';
+import { createRequiredContext } from './context-base';
+import { useTuiPaths } from './runtime-context';
 
 export type TuiLocalPreferencesStoreLike = {
     readonly getPreferences: () => Promise<TuiLocalPreferences>;

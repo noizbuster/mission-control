@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { OverlayFrame } from './OverlayFrame.js';
-import { resolveOverlayChrome } from './overlay-theme.js';
+import { OverlayFrame } from './OverlayFrame';
+import { resolveOverlayChrome } from './overlay-theme';
 
 describe('OverlayFrame export shape', () => {
     it('exports a presentational function component', () => {

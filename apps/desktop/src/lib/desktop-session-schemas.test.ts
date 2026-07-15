@@ -4,7 +4,7 @@ import {
     DesktopSessionSnapshotSchema,
     DesktopSessionSummarySchema,
     parseDesktopSessionLogPayload,
-} from './desktop-session-schemas.js';
+} from './desktop-session-schemas';
 
 type SessionPayloadFields = {
     readonly sessionId: string;

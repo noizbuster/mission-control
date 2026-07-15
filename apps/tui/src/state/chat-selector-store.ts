@@ -24,7 +24,7 @@
  *   object get the same semantics applied field-by-field.
  */
 
-import type { ChatStore, ChatStoreState } from './chat-store.js';
+import type { ChatStore, ChatStoreState } from './chat-store';
 
 /** The external-store subscription contract. */
 export interface ChatSelectorStore<T> {

@@ -16,8 +16,8 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createChatSelectorStore } from './chat-selector-store.js';
-import { type ChatStore, createChatStore } from './chat-store.js';
+import { createChatSelectorStore } from './chat-selector-store';
+import { type ChatStore, createChatStore } from './chat-store';
 
 describe('createChatSelectorStore', () => {
     let store: ChatStore;

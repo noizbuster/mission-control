@@ -8,8 +8,8 @@ import {
     DRAIN_TAB_MESSAGE,
     type JobPanelRow,
     jobStatusColor,
-} from './mission-panel-rows.js';
-import { SELECTED_BG } from './overlay-theme.js';
+} from './mission-panel-rows';
+import { SELECTED_BG } from './overlay-theme';
 
 const MISSION_PANEL_MAX_VISIBLE = 12;
 

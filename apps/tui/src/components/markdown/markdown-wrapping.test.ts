@@ -5,10 +5,10 @@
 // so a CJK character is correctly counted as 2 columns.
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { InlineRun, RenderLine } from './Markdown.js';
-import { buildBlocks, reflowRuns } from './Markdown.js';
-import { clearRenderCache, getCachedBlocks } from './render-cache.js';
-import { darkTheme } from './theme.js';
+import type { InlineRun, RenderLine } from './Markdown';
+import { buildBlocks, reflowRuns } from './Markdown';
+import { clearRenderCache, getCachedBlocks } from './render-cache';
+import { darkTheme } from './theme';
 
 /** Visible terminal width of a string, counting East Asian Wide chars as 2. */
 function visibleWidth(text: string): number {

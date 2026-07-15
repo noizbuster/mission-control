@@ -1,6 +1,6 @@
 import { TuiStores } from '@mission-control/core';
 import { describe, expect, it } from 'vitest';
-import { allPluginCapabilities, demoManifest, renderPluginProviderValues } from './plugin-runtime-test-support.js';
+import { allPluginCapabilities, demoManifest, renderPluginProviderValues } from './plugin-runtime-test-support';
 
 describe('TUI plugin runtime provider', () => {
     it('lets a trusted in-process plugin register descriptors and use command, KV, route, dialog, and theme adapters', async () => {

@@ -7,16 +7,16 @@
 import type { ProviderAuthStore } from '@mission-control/core';
 import { type ModelProviderSelection, type ModelRole } from '@mission-control/protocol';
 import { normalizeQuestionOptions, type QuestionBatchEntry, type QuestionOption } from '@mission-control/tui/chat';
-import { PasteMarkerStore } from '../platform/keymap/bracketed-paste.js';
-import type { DiffEntry } from '../platform/keymap/diff-viewer.js';
-import { APPROVAL_LEVELS, type ApprovalLevel, isApprovalLevel } from './approval-level.js';
+import { PasteMarkerStore } from '../platform/keymap/bracketed-paste';
+import type { DiffEntry } from '../platform/keymap/diff-viewer';
+import { APPROVAL_LEVELS, type ApprovalLevel, isApprovalLevel } from './approval-level';
 import {
     createProviderPromptKeypressState,
     filterProviderPromptChoices,
     type ProviderPromptKeypressState,
     reduceProviderPromptKeypress,
-} from './auth-provider-keypress.js';
-import type { ChatInputEvent } from './chat-input-event.js';
+} from './auth-provider-keypress';
+import type { ChatInputEvent } from './chat-input-event';
 import {
     clampHistoryPickerSelection,
     closeHistoryPicker,
@@ -25,21 +25,21 @@ import {
     type HistoryPickerState,
     navigateHistoryPicker as reduceHistoryPickerNavigation,
     openHistoryPicker as reduceOpenHistoryPicker,
-} from './history-picker-state.js';
+} from './history-picker-state';
 import {
     createSlashCommandMenuState,
     reduceSlashCommandMenuSelection,
     reduceWorkflowCommandMenuSelection,
     type SlashCommandMenuState,
-} from './interactive-chat-command-menu.js';
+} from './interactive-chat-command-menu';
 import {
     createFileAutocompleteState,
     type FileAutocompleteState,
     navigateFileAutocompleteDown,
     navigateFileAutocompleteUp,
     updateFileAutocomplete,
-} from './interactive-chat-file-autocomplete.js';
-import { createVariantChoices, type ModelChoice } from './interactive-chat-model.js';
+} from './interactive-chat-file-autocomplete';
+import { createVariantChoices, type ModelChoice } from './interactive-chat-model';
 import {
     type ModelsOverlayRoleRow,
     type ModelsOverlayState,
@@ -49,9 +49,9 @@ import {
     setModelsOverlayProviderTab as reduceModelsOverlayProviderTab,
     setModelsOverlaySearchQuery as reduceModelsOverlaySearchQuery,
     selectModelForAssignment as selectModelForAssignmentReducer,
-} from './models-overlay-state.js';
+} from './models-overlay-state';
 
-export type { HistoryPickerEntry, HistoryPickerState } from './history-picker-state.js';
+export type { HistoryPickerEntry, HistoryPickerState } from './history-picker-state';
 
 export type HistoryPickerSnapshot = {
     readonly open: boolean;

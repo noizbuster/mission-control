@@ -134,7 +134,7 @@ export function formatRoleFallback(row: ModelsOverlayRoleRow): string {
  * Shared by {@linkcode formatRoleFallback} and the search filter so both
  * match the same string the component renders.
  */
-import { formatModelSelection } from './interactive-chat-model.js';
+import { formatModelSelection } from './interactive-chat-model';
 
 /**
  * Format a provider tab label: `providerID.replace(/[-_]+/g, ' ').toUpperCase()`.

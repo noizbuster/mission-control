@@ -33,7 +33,7 @@
  */
 
 import type { Command, Keymap, KeymapEvent } from '@opentui/keymap';
-import { CommandMap, expandToChords, type InputBinding, type KeybindName, Keybinds } from './keybind.js';
+import { CommandMap, expandToChords, type InputBinding, type KeybindName, Keybinds } from './keybind';
 
 // ---------------------------------------------------------------------------
 // Pure extraction: byte-exact substring stash

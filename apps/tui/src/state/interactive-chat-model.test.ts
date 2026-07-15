@@ -5,7 +5,7 @@ import {
     formatModelSelection,
     parseModelSelection,
     resolveModelCommand,
-} from './interactive-chat-model.js';
+} from './interactive-chat-model';
 
 const currentSelection = {
     providerID: 'local',

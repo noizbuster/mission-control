@@ -7,7 +7,7 @@ import {
     navigateHistoryPicker,
     openHistoryPicker,
     type HistoryPickerEntry,
-} from './history-picker-state.js';
+} from './history-picker-state';
 
 const NOW_MS = new Date(2026, 6, 10, 12, 0, 0, 0).getTime();
 

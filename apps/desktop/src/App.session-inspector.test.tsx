@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { App } from './App.js';
-import type { DesktopSessionLog } from './lib/agent-client.js';
+import { App } from './App';
+import type { DesktopSessionLog } from './lib/agent-client';
 
 describe('Desktop read-only session inspector', () => {
     it('renders empty corrupt and missing states without crashing', () => {

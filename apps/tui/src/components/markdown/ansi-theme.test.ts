@@ -18,8 +18,8 @@ import {
     TEXT_WARNING_BOLD,
     terminalTextStyleToAnsi,
     wrap,
-} from './ansi-theme.js';
-import type { TerminalTextStyle } from './theme.js';
+} from './ansi-theme';
+import type { TerminalTextStyle } from './theme';
 
 describe('ansi-theme SGR constants (mirror opencode UI.Style)', () => {
     it('TEXT_HIGHLIGHT is bright cyan', () => {

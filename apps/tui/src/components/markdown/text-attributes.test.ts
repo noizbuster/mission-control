@@ -1,7 +1,7 @@
 import { attributesWithLink, createTextAttributes, RGBA, rgbToHex } from '@opentui/core';
 import { describe, expect, it } from 'vitest';
-import { chunkAttributesToStyle, textChunkToSpan, textChunkToSpanStyle } from './text-attributes.js';
-import type { TerminalTextStyle } from './theme.js';
+import { chunkAttributesToStyle, textChunkToSpan, textChunkToSpanStyle } from './text-attributes';
+import type { TerminalTextStyle } from './theme';
 
 /**
  * Each opentui base-attribute flag, built via {@link createTextAttributes} so

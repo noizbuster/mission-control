@@ -14,7 +14,7 @@
 
 export const TUI_PACKAGE_NAME = '@mission-control/tui';
 
-export * from './chat.js';
-export * from './markdown.js';
-export * from './state/index.js';
-export * from './terminal-text.js';
+export * from './chat';
+export * from './markdown';
+export * from './state/index';
+export * from './terminal-text';

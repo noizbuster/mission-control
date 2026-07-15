@@ -1,9 +1,9 @@
 import { type ChatBlock, parseMessageBlocks } from '@mission-control/tui/chat';
 import { describe, expect, it, vi } from 'vitest';
-import { preserveBlockReferences, promptPanelRepaintKey } from './app-helpers.js';
+import { preserveBlockReferences, promptPanelRepaintKey } from './app-helpers';
 
-vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
-vi.mock('@mission-control/tui/chat', async () => await import('../chat.js'));
+vi.mock('@mission-control/tui', async () => await import('../terminal-text'));
+vi.mock('@mission-control/tui/chat', async () => await import('../chat'));
 vi.mock('@mission-control/core', () => ({
     ContinuationRuntime: class ContinuationRuntime {},
     MAIN_AGENT_ID: 'main',

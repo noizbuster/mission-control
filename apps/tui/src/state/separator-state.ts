@@ -1,4 +1,4 @@
-import type { SeparatorState } from '../components/Separator.js';
+import type { SeparatorState } from '../components/Separator';
 
 type SeparatorStateSnapshot = {
     readonly generating: boolean;

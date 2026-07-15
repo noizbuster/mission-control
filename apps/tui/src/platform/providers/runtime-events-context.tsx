@@ -3,8 +3,8 @@
 import { type AbgOverlayStore, createAbgOverlayStore, projectAgentEvent } from '@mission-control/core';
 import { type AgentEvent, type AgentSnapshot, AgentSnapshotSchema } from '@mission-control/protocol';
 import { type Accessor, createSignal, type JSX, onCleanup } from 'solid-js';
-import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
-import { createRequiredContext } from './context-base.js';
+import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types';
+import { createRequiredContext } from './context-base';
 
 export type TuiRuntimeEventsService = {
     readonly events: Accessor<readonly AgentEvent[]>;

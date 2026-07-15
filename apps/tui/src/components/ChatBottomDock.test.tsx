@@ -1,20 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createChatSelectorStore } from '../state/chat-selector-store.js';
-import { createChatStore } from '../state/chat-store.js';
-import { createSlashCommandMenuState } from '../state/interactive-chat-command-menu.js';
+import { createChatSelectorStore } from '../state/chat-selector-store';
+import { createChatStore } from '../state/chat-store';
+import { createSlashCommandMenuState } from '../state/interactive-chat-command-menu';
 import {
     buildBottomStatusBarProps,
     buildTopStatusBarProps,
     type ChatBottomDockSlice,
     selectChatBottomDockSlice,
-} from './ChatBottomDock.js';
-import { bottomDockPolicy } from './chat-bottom-dock-policy.js';
-import { type StatusBarProps, statusBarLayoutFromPolicy } from './StatusBar.js';
+} from './ChatBottomDock';
+import { bottomDockPolicy } from './chat-bottom-dock-policy';
+import { type StatusBarProps, statusBarLayoutFromPolicy } from './StatusBar';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
-vi.mock('@mission-control/tui/chat', async () => await import('../chat.js'));
+vi.mock('@mission-control/tui', async () => await import('../terminal-text'));
+vi.mock('@mission-control/tui/chat', async () => await import('../chat'));
 vi.mock('@mission-control/core', () => ({
     resolveUserConfigDir: () => '/tmp/mission-control-test-config',
 }));

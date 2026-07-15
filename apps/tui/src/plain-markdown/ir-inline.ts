@@ -1,7 +1,7 @@
 import type { Token } from 'marked';
-import type { InlineRun } from './ir-types.js';
-import { linkFallbackSuffix, textRun } from './ir-types.js';
-import type { TerminalMarkdownTheme, TerminalTextStyle } from './theme.js';
+import type { InlineRun } from './ir-types';
+import { linkFallbackSuffix, textRun } from './ir-types';
+import type { TerminalMarkdownTheme, TerminalTextStyle } from './theme';
 
 function flattenRunsText(runs: readonly InlineRun[]): string {
     return runs.map((run) => run.text).join('');

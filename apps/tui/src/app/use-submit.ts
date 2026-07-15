@@ -1,10 +1,10 @@
 import type { Accessor } from 'solid-js';
-import type { ChatStore } from '../state/chat-store.js';
+import type { ChatStore } from '../state/chat-store';
 import {
     resolveSlashCommandMenuInsertText,
     resolveWorkflowCommandMenuInsertText,
-} from '../state/interactive-chat-command-menu.js';
-import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
+} from '../state/interactive-chat-command-menu';
+import type { ChatTextareaHandle } from '../components/ChatInputTextarea';
 
 export type UseSubmitOptions = {
     readonly store: ChatStore;

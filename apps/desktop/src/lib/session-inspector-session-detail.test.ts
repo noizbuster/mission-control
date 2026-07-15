@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { DesktopSessionLog } from './agent-client.js';
-import { projectSessionDetail } from './session-inspector-session-detail.js';
+import type { DesktopSessionLog } from './agent-client';
+import { projectSessionDetail } from './session-inspector-session-detail';
 
 describe('projectSessionDetail', () => {
     it('counts only currently blocked runs after a resumed run completes', () => {

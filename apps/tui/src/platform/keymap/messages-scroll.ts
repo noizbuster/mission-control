@@ -25,8 +25,8 @@
  */
 
 import type { Command, Keymap, KeymapEvent } from '@opentui/keymap';
-import type { ClipboardService } from '../clipboard-service.js';
-import { CommandMap, expandToChords, type InputBinding, type KeybindName, Keybinds } from './keybind.js';
+import type { ClipboardService } from '../clipboard-service';
+import { CommandMap, expandToChords, type InputBinding, type KeybindName, Keybinds } from './keybind';
 
 // ---------------------------------------------------------------------------
 // Structural ports (keep the module FFI-free and unit-testable)

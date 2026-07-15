@@ -1,20 +1,20 @@
 import type { ProviderAuthStore } from '@mission-control/core';
 import type { AgentEvent, AgentSnapshot, ModelProviderSelection } from '@mission-control/protocol';
-import type { QuestionBatchEntry, QuestionOption } from '../chat.js';
-import type { AbgOverlayController } from './abg-overlay-controller.js';
-import type { ApprovalLevel } from './approval-level.js';
-import type { ChatAppActions } from './chat-app-actions.js';
-import type { ChatInputEvent } from './chat-input-event.js';
+import type { QuestionBatchEntry, QuestionOption } from '../chat';
+import type { AbgOverlayController } from './abg-overlay-controller';
+import type { ApprovalLevel } from './approval-level';
+import type { ChatAppActions } from './chat-app-actions';
+import type { ChatInputEvent } from './chat-input-event';
 import type {
     DashboardAgentEntry,
     HistoryPickerEntry,
     MissionPanelRow,
     SessionPickerEntry,
-} from './chat-store.js';
-import type { ModelChoice } from './interactive-chat-model.js';
-import type { MissionControlServicesLike } from './mission-services-types.js';
-import type { ModelsOverlayRoleRow } from './models-overlay-state.js';
-import type { WelcomeData } from './welcome-data-types.js';
+} from './chat-store';
+import type { ModelChoice } from './interactive-chat-model';
+import type { MissionControlServicesLike } from './mission-services-types';
+import type { ModelsOverlayRoleRow } from './models-overlay-state';
+import type { WelcomeData } from './welcome-data-types';
 
 /** Public surface consumed by the imperative chat loop. */
 export type ChatTuiHandle = {

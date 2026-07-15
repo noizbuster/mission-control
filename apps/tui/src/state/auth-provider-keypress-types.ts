@@ -1,4 +1,4 @@
-import type { PromptArrowKeypress } from './auth-provider-keypress-escape.js';
+import type { PromptArrowKeypress } from './auth-provider-keypress-escape';
 
 export type ProviderPromptKeypressChoice = {
     readonly id: string;

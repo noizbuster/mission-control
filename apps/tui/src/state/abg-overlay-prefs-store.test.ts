@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_ABG_OVERLAY_PREFS, loadAbgOverlayPrefs, saveAbgOverlayPrefs } from './abg-overlay-prefs-store.js';
+import { DEFAULT_ABG_OVERLAY_PREFS, loadAbgOverlayPrefs, saveAbgOverlayPrefs } from './abg-overlay-prefs-store';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 

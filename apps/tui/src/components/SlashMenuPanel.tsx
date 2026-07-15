@@ -5,9 +5,9 @@ import {
     createSlashCommandMenuView,
     createWorkflowCommandMenuView,
     type SlashCommandMenuState,
-} from '../state/interactive-chat-command-menu.js';
-import { OverlayFrame } from './OverlayFrame.js';
-import { SELECTED_BG } from './overlay-theme.js';
+} from '../state/interactive-chat-command-menu';
+import { OverlayFrame } from './OverlayFrame';
+import { SELECTED_BG } from './overlay-theme';
 
 export type SlashMenuPanelProps = {
     readonly inputBuffer: string;

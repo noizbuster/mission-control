@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // under test, so the partial factory is sufficient.
 vi.mock('./render-cache.js', () => ({ clearRenderCache: vi.fn() }));
 
-import { clearRenderCache } from './render-cache.js';
+import { clearRenderCache } from './render-cache';
 import {
     closeTreeSitterClient,
     getHighlightVersion,
@@ -17,7 +17,7 @@ import {
     resetHighlighterForTest,
     setHighlighterRuntime,
     subscribeHighlight,
-} from './tree-sitter-highlighter.js';
+} from './tree-sitter-highlighter';
 
 /**
  * Controls returned by {@link setupMockRuntime}. Each spy mirrors one boundary

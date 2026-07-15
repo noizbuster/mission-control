@@ -22,14 +22,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { Keybinds } from './keybind.js';
+import { Keybinds } from './keybind';
 import {
     clearKeybindConfigCache,
     KEYBIND_CONFIG_FILENAME,
     loadKeybindConfig,
     resolveKeybindConfig,
     resolveKeybindConfigDir,
-} from './keybind-config-loader.js';
+} from './keybind-config-loader';
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

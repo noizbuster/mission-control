@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ClipboardService } from './clipboard-service.js';
-import type { FocusableSelectionTarget, SelectionCopyRenderer, Toast } from './selection-copy.js';
-import { copy } from './selection-copy.js';
+import type { ClipboardService } from './clipboard-service';
+import type { FocusableSelectionTarget, SelectionCopyRenderer, Toast } from './selection-copy';
+import { copy } from './selection-copy';
 
 function makeToast(): Toast & {
     messages: Array<{ readonly message: string; readonly variant: 'info' | 'success' | 'warning' | 'error' }>;

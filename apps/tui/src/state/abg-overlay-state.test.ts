@@ -9,7 +9,7 @@ import {
     projectAgentEvent,
     RECENT_EVENTS_CAP,
     readRefreshMsFromEnv,
-} from './abg-overlay-state.js';
+} from './abg-overlay-state';
 
 const SECRET = 'sk-1234567890abcdef';
 const TS = '2026-01-01T00:00:00.000Z';

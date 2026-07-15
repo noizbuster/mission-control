@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { App } from './App.js';
-import type { DesktopSessionLog, DesktopSessionSummary } from './lib/agent-client.js';
+import { App } from './App';
+import type { DesktopSessionLog, DesktopSessionSummary } from './lib/agent-client';
 
 describe('Desktop redaction projection', () => {
     it('redacts credential families from rendered timeline patch command and approval previews', () => {

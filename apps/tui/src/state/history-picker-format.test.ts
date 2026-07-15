@@ -4,7 +4,7 @@ import {
     formatHistoryContentPreview,
     formatHistoryRelativeTime,
     formatHistoryTimeColumn,
-} from './history-picker-format.js';
+} from './history-picker-format';
 
 const EM_DASH = '—';
 const ELLIPSIS = '…';

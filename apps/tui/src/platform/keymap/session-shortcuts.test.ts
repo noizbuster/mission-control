@@ -28,8 +28,8 @@
 
 import { createTestKeymap } from '@opentui/keymap/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LEADER_TIMEOUT_MS, registerLeaderAddons } from './leader-addons.js';
-import type { SessionTreeDirection } from './session-shortcuts.js';
+import { LEADER_TIMEOUT_MS, registerLeaderAddons } from './leader-addons';
+import type { SessionTreeDirection } from './session-shortcuts';
 import {
     buildQueuedPromptsNotice,
     MAX_STASH_ENTRIES,
@@ -38,7 +38,7 @@ import {
     type PromptStashServiceLike,
     registerSessionShortcutsLayer,
     type SessionShortcutsDeps,
-} from './session-shortcuts.js';
+} from './session-shortcuts';
 
 // ---------------------------------------------------------------------------
 // Inline recording deps (kept FFI-free — no @opentui/core value import)

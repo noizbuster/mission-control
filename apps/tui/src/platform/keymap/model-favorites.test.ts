@@ -24,7 +24,7 @@
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import { createTestKeymap } from '@opentui/keymap/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LEADER_TIMEOUT_MS, registerLeaderAddons } from './leader-addons.js';
+import { LEADER_TIMEOUT_MS, registerLeaderAddons } from './leader-addons';
 import {
     ModelFavorites,
     ModelFrecency,
@@ -32,7 +32,7 @@ import {
     registerModelShortcutsLayer,
     seedOrdering,
     selectionKey,
-} from './model-favorites.js';
+} from './model-favorites';
 
 // ---------------------------------------------------------------------------
 // Pure helpers

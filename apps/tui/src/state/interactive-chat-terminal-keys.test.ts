@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isTerminalInterruptToken, readTerminalCursorDirection } from './interactive-chat-terminal-keys.js';
+import { isTerminalInterruptToken, readTerminalCursorDirection } from './interactive-chat-terminal-keys';
 
 describe('interactive chat terminal keys', () => {
     it('ignores Kitty Ctrl+C release reports without dropping press and repeat interrupts', () => {

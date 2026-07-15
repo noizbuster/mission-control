@@ -1,5 +1,5 @@
 import { useRenderer } from '@opentui/solid';
-import { useTuiToast } from '../platform/providers/index.js';
+import { useTuiToast } from '../platform/providers/index';
 
 /**
  * Read-only mouse-up hook: when a drag-selection exists, surface the

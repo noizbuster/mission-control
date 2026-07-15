@@ -1,6 +1,6 @@
 import type { TuiPluginCommandDescriptor } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { buildPaletteItems, filterPaletteItems } from './command-palette.js';
+import { buildPaletteItems, filterPaletteItems } from './command-palette';
 
 describe('command palette provider items', () => {
     it('merges keymap, slash, and plugin commands into one searchable list', () => {

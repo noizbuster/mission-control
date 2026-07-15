@@ -1,6 +1,6 @@
 import { ContinuationRuntime, type ContinuationState } from '@mission-control/core';
 import { describe, expect, it } from 'vitest';
-import { buildContinuationPanelView, DRAIN_TAB_MESSAGE, deriveContinuationReason } from './mission-panel-rows.js';
+import { buildContinuationPanelView, DRAIN_TAB_MESSAGE, deriveContinuationReason } from './mission-panel-rows';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

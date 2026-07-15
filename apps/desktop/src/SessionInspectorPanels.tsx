@@ -1,4 +1,4 @@
-import type { SessionInspectorProjection } from './lib/session-inspector.js';
+import type { SessionInspectorProjection } from './lib/session-inspector';
 
 type PanelProps = {
     readonly projection: SessionInspectorProjection;

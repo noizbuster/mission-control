@@ -3,10 +3,10 @@
 import { TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/solid';
 import { createEffect, createSignal, onMount, Show, type JSX } from 'solid-js';
-import { useSpinnerFrame } from '../spinner.js';
-import { useTuiTheme } from '../../platform/providers/route-dialog-theme-context.js';
-import { type DialogContext, useDialog } from './dialog.js';
-import { printableCharFromKey } from '../overlay-key-input.js';
+import { useSpinnerFrame } from '../spinner';
+import { useTuiTheme } from '../../platform/providers/route-dialog-theme-context';
+import { type DialogContext, useDialog } from './dialog';
+import { printableCharFromKey } from '../overlay-key-input';
 
 export type DialogPromptProps = {
     readonly title: string;

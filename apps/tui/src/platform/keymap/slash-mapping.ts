@@ -25,7 +25,7 @@
  * without a TTY or native FFI backend.
  */
 
-import { slashCommandChoices } from '../../state/interactive-chat-command-menu.js';
+import { slashCommandChoices } from '../../state/interactive-chat-command-menu';
 
 /** A slash command surfaceable in the command palette (argument-less). */
 export interface PaletteSlashEntry {

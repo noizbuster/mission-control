@@ -28,7 +28,7 @@
 
 import { createTestKeymap } from '@opentui/keymap/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LEADER_TIMEOUT_MS, registerAbgMinimapToggleLayer, registerLeaderAddons } from './leader-addons.js';
+import { LEADER_TIMEOUT_MS, registerAbgMinimapToggleLayer, registerLeaderAddons } from './leader-addons';
 
 /**
  * Register a `<leader>m` -> command binding + handler that tracks firing.

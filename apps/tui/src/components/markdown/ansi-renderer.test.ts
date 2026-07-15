@@ -1,9 +1,9 @@
 import { terminalDisplayWidth } from '@mission-control/tui';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { renderMarkdownAnsi } from './ansi-renderer.js';
-import { RESET } from './ansi-theme.js';
-import { darkTheme, noColorTheme } from './theme.js';
-import { resetHighlighterForTest, setHighlighterRuntime } from './tree-sitter-highlighter.js';
+import { renderMarkdownAnsi } from './ansi-renderer';
+import { RESET } from './ansi-theme';
+import { darkTheme, noColorTheme } from './theme';
+import { resetHighlighterForTest, setHighlighterRuntime } from './tree-sitter-highlighter';
 
 /**
  * The ANSI renderer flattens the same `tokenToBlocks` IR the interactive

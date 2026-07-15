@@ -6,7 +6,7 @@ import type {
 } from '@mission-control/protocol';
 import { ProviderCredentialSummarySchema } from '@mission-control/protocol';
 import { isTauri, invoke as tauriInvoke } from '@tauri-apps/api/core';
-import { credentialSummary, demoEvents, demoSession, mockReceipt } from './agent-client-demo.js';
+import { credentialSummary, demoEvents, demoSession, mockReceipt } from './agent-client-demo';
 import {
     type DesktopApprovalDecisionInput,
     type DesktopApprovalEffectQueryInput,
@@ -19,7 +19,7 @@ import {
     DesktopCommandReceiptSchema,
     type DesktopPromptCommandInput,
     type DesktopRunCommandInput,
-} from './desktop-command-schemas.js';
+} from './desktop-command-schemas';
 import {
     type DesktopSessionLog,
     type DesktopSessionSnapshot,
@@ -27,7 +27,7 @@ import {
     type DesktopSessionSummary,
     DesktopSessionSummaryListSchema,
     parseDesktopSessionLogPayload,
-} from './desktop-session-schemas.js';
+} from './desktop-session-schemas';
 
 export type {
     DesktopApprovalDecisionInput,
@@ -40,20 +40,20 @@ export type {
     DesktopCommandReceipt,
     DesktopPromptCommandInput,
     DesktopRunCommandInput,
-} from './desktop-command-schemas.js';
-export { DesktopCommandReceiptSchema } from './desktop-command-schemas.js';
+} from './desktop-command-schemas';
+export { DesktopCommandReceiptSchema } from './desktop-command-schemas';
 export {
     DesktopApprovalEffectRecordSchema,
     DesktopApprovalEffectResolutionReceiptSchema,
     isUnresolvedUnknownApprovalEffect,
-} from './desktop-command-schemas.js';
+} from './desktop-command-schemas';
 export type {
     DesktopSessionDiagnostic,
     DesktopSessionLog,
     DesktopSessionSnapshot,
     DesktopSessionState,
     DesktopSessionSummary,
-} from './desktop-session-schemas.js';
+} from './desktop-session-schemas';
 export {
     DESKTOP_SESSION_STATES,
     DesktopSessionDiagnosticSchema,
@@ -63,7 +63,7 @@ export {
     DesktopSessionSummaryListSchema,
     DesktopSessionSummarySchema,
     parseDesktopSessionLogPayload,
-} from './desktop-session-schemas.js';
+} from './desktop-session-schemas';
 
 export type TauriInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 

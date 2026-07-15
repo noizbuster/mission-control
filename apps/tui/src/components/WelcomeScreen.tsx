@@ -8,7 +8,7 @@ import type {
     WelcomeSession,
     WelcomeSkill,
     WelcomeWarning,
-} from '../state/welcome-data-types.js';
+} from '../state/welcome-data-types';
 
 export type WelcomeScreenProps = {
     readonly data: WelcomeData;

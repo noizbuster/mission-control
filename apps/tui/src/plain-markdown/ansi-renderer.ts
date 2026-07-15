@@ -1,8 +1,8 @@
 import { marked, type Token } from 'marked';
-import { terminalTextStyleToAnsi, wrap } from './ansi.js';
-import { tokenToBlocks } from './ir-blocks.js';
-import { buildOsc8Hyperlink, type InlineRun, type RenderLine } from './ir-types.js';
-import type { TerminalMarkdownTheme } from './theme.js';
+import { terminalTextStyleToAnsi, wrap } from './ansi';
+import { tokenToBlocks } from './ir-blocks';
+import { buildOsc8Hyperlink, type InlineRun, type RenderLine } from './ir-types';
+import type { TerminalMarkdownTheme } from './theme';
 
 export function renderMarkdownAnsi(
     source: string,

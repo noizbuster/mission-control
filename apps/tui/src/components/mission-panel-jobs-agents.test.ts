@@ -7,7 +7,7 @@ import {
     formatPanelTimestamp,
     jobStatusColor,
     truncatePanelId,
-} from './mission-panel-rows.js';
+} from './mission-panel-rows';
 
 function makeJob(
     overrides: Partial<BackgroundJobHandle> & Pick<BackgroundJobHandle, 'jobId' | 'status'>,

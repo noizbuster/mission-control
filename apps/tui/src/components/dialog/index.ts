@@ -1,10 +1,10 @@
-export { Dialog, DialogProvider, useDialog, type DialogContext } from './dialog.js';
-export { DialogPrompt, type DialogPromptProps } from './dialog-prompt.js';
+export { Dialog, DialogProvider, useDialog, type DialogContext } from './dialog';
+export { DialogPrompt, type DialogPromptProps } from './dialog-prompt';
 export {
     DialogSelect,
     type DialogSelectOption,
     type DialogSelectAction,
     type DialogSelectProps,
-} from './dialog-select.js';
-export { DialogConfirm, type DialogConfirmProps, type DialogConfirmResult } from './dialog-confirm.js';
-export { DialogAlert, type DialogAlertProps } from './dialog-alert.js';
+} from './dialog-select';
+export { DialogConfirm, type DialogConfirmProps, type DialogConfirmResult } from './dialog-confirm';
+export { DialogAlert, type DialogAlertProps } from './dialog-alert';

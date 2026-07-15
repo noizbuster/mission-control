@@ -1,8 +1,8 @@
 import { modelProviderCatalog } from '@mission-control/config';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { App } from './App.js';
-import type { DesktopSessionLog } from './lib/agent-client.js';
+import { App } from './App';
+import type { DesktopSessionLog } from './lib/agent-client';
 import {
     formatProviderCapabilityStatus,
     getCredentialStatus,
@@ -10,8 +10,8 @@ import {
     getProviderExecutionGate,
     ProviderExecutionStatus,
     resolveSelectionForProviderChange,
-} from './ProviderControls.js';
-import { providerRunBlockMessage } from './useDesktopWriteActions.js';
+} from './ProviderControls';
+import { providerRunBlockMessage } from './useDesktopWriteActions';
 
 describe('Desktop App', () => {
     it('renders mission-control title, controls, and read-only session timeline', () => {

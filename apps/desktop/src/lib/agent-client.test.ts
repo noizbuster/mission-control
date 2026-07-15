@@ -1,8 +1,8 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import { describe, expect, it } from 'vitest';
-import { createMockDesktopAgentClient } from './agent-client.js';
-import { DesktopCommandReceiptSchema } from './desktop-command-schemas.js';
-import { redactDisplayText } from './redaction.js';
+import { createMockDesktopAgentClient } from './agent-client';
+import { DesktopCommandReceiptSchema } from './desktop-command-schemas';
+import { redactDisplayText } from './redaction';
 
 describe('desktop agent client', () => {
     it('mock desktop client emits demo event log', async () => {

@@ -3,9 +3,9 @@
 import { terminalDisplayWidth } from '@mission-control/tui';
 import { TextAttributes } from '@opentui/core';
 import type { JSX } from 'solid-js';
-import type { ApprovalLevel } from '../state/approval-level.js';
-import { type BottomDockPolicy, type BottomDockStatusPolicy, bottomDockPolicy } from './chat-bottom-dock-policy.js';
-import { APPROVAL_LEVEL_COLORS, STATUS_LINE_BG } from './overlay-theme.js';
+import type { ApprovalLevel } from '../state/approval-level';
+import { type BottomDockPolicy, type BottomDockStatusPolicy, bottomDockPolicy } from './chat-bottom-dock-policy';
+import { APPROVAL_LEVEL_COLORS, STATUS_LINE_BG } from './overlay-theme';
 import { basename } from 'node:path';
 
 export type StatusBarLayout = {

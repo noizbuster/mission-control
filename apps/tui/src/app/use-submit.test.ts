@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createChatStore } from '../state/chat-store.js';
-import { asTextareaRef, createRecordingTextarea } from '../components/chat-test-support.js';
-import { useSubmit } from './use-submit.js';
+import { createChatStore } from '../state/chat-store';
+import { asTextareaRef, createRecordingTextarea } from '../components/chat-test-support';
+import { useSubmit } from './use-submit';
 
-vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
-vi.mock('@mission-control/tui/chat', async () => await import('../chat.js'));
+vi.mock('@mission-control/tui', async () => await import('../terminal-text'));
+vi.mock('@mission-control/tui/chat', async () => await import('../chat'));
 vi.mock('@mission-control/core', () => ({
     ContinuationRuntime: class ContinuationRuntime {},
     MAIN_AGENT_ID: 'main',

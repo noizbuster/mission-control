@@ -1,4 +1,4 @@
-import type { TerminalTextStyle } from './theme.js';
+import type { TerminalTextStyle } from './theme';
 
 export type InlineRun = {
     readonly text: string;

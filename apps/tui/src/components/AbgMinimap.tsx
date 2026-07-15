@@ -2,17 +2,17 @@
 
 import type { AbgNodeStatus } from '@mission-control/protocol';
 import { createMemo, For, type JSX, Show } from 'solid-js';
-import type { TerminalViewport } from '../platform/terminal-viewport.js';
-import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
-import type { AbgOverlayStore } from '../state/abg-overlay-state.js';
-import { nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
+import type { TerminalViewport } from '../platform/terminal-viewport';
+import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
+import type { AbgOverlayStore } from '../state/abg-overlay-state';
+import { nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme';
 import {
     renderVisualGraph,
     type VisualGraphEdge,
     type VisualGraphInput,
     type VisualGraphNode,
     type VisualGraphRow,
-} from './visual-graph.js';
+} from './visual-graph';
 
 const MINIMAP_MAX_WIDTH = 22;
 const MINIMAP_MAX_NODES = 6;

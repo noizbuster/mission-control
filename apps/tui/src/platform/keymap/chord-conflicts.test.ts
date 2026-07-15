@@ -29,13 +29,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { expandToChords, inputBindingsFromKeybinds, type KeybindName, Keybinds } from './keybind.js';
+import { expandToChords, inputBindingsFromKeybinds, type KeybindName, Keybinds } from './keybind';
 import {
     createConfigDrivenTextareaBindings,
     EXCLUDED_TEXTAREA_CHORDS,
     filterTextareaBindings,
     type TextareaBindingLike,
-} from './keymap-managed-layer.js';
+} from './keymap-managed-layer';
 
 const defaults = Keybinds.parse({});
 

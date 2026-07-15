@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TREE_SITTER_PARSERS } from './parsers-config.js';
+import { TREE_SITTER_PARSERS } from './parsers-config';
 
 // Pure-data inspection: no network, no opentui FFI. Just asserts the ported
 // array matches the documented contract (count in the 30s, no `queries.locals`,

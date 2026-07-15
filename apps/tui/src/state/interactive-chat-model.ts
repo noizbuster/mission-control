@@ -1,6 +1,6 @@
 import { type ModelProviderCatalogEntry, modelProviderCatalog } from '@mission-control/config';
 import type { ModelProviderSelection } from '@mission-control/protocol';
-import { formatProviderCapabilityBadge, getProviderCodingUnavailableReason } from './model-capability.js';
+import { formatProviderCapabilityBadge, getProviderCodingUnavailableReason } from './model-capability';
 
 export type ModelChoice = {
     readonly id: string;

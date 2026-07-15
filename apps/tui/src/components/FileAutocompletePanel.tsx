@@ -1,8 +1,8 @@
 import { TextAttributes } from '@opentui/core';
 import { For, type JSX } from 'solid-js';
-import { createFileAutocompleteView, type FileAutocompleteState } from '../state/interactive-chat-file-autocomplete.js';
-import { OverlayFrame } from './OverlayFrame.js';
-import { SELECTED_BG } from './overlay-theme.js';
+import { createFileAutocompleteView, type FileAutocompleteState } from '../state/interactive-chat-file-autocomplete';
+import { OverlayFrame } from './OverlayFrame';
+import { SELECTED_BG } from './overlay-theme';
 
 export type FileAutocompletePanelProps = {
     readonly fileAutocomplete: FileAutocompleteState;

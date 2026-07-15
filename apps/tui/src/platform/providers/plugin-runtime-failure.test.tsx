@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { demoManifest, renderPluginProviderValues } from './plugin-runtime-test-support.js';
+import { demoManifest, renderPluginProviderValues } from './plugin-runtime-test-support';
 
 describe('TUI plugin runtime provider failures', () => {
     it('reports plugin command failures through diagnostics and toast without crashing the provider', async () => {

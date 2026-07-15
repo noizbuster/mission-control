@@ -9,7 +9,7 @@
  * `DashboardAgentEntry` and `MissionPanelRow` come from the chat store state
  * (same package). All callbacks are optional; overlays no-op when undefined.
  */
-import type { DashboardAgentEntry, MissionPanelRow } from './chat-store.js';
+import type { DashboardAgentEntry, MissionPanelRow } from './chat-store';
 
 export type ExternalEditorActionResult =
     | { readonly kind: 'updated'; readonly text: string }

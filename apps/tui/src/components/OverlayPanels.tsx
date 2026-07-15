@@ -5,18 +5,18 @@ import { padEndToDisplayWidth } from '@mission-control/tui';
 import { MouseButton, type MouseEvent, TextAttributes } from '@opentui/core';
 import { useKeyboard } from '@opentui/solid';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
-import { useSolidStoreSelector } from '../platform/use-solid-store-selector.js';
-import { createProviderPromptView } from '../state/auth-provider-keypress-view.js';
-import type { ChatAppActions } from '../state/chat-app-actions.js';
+import { useSolidStoreSelector } from '../platform/use-solid-store-selector';
+import { createProviderPromptView } from '../state/auth-provider-keypress-view';
+import type { ChatAppActions } from '../state/chat-app-actions';
 import {
     APPROVAL_LEVEL_PICKER_ENTRIES,
     APPROVAL_OPTIONS,
     type ChatStore,
     createAgentsDashboardView,
     createSessionPickerView,
-} from '../state/chat-store.js';
-import { OverlayFrame } from './OverlayFrame.js';
-import { printableCharFromKey } from './overlay-key-input.js';
+} from '../state/chat-store';
+import { OverlayFrame } from './OverlayFrame';
+import { printableCharFromKey } from './overlay-key-input';
 import {
     ACCENTS,
     LEFT_ACCENT_BORDER,
@@ -25,7 +25,7 @@ import {
     QUESTION_CURSOR_FG,
     QUESTION_SELECTED_FG,
     SELECTED_BG,
-} from './overlay-theme.js';
+} from './overlay-theme';
 
 const MODEL_PICKER_MAX_VISIBLE = 10;
 

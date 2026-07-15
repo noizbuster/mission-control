@@ -6,10 +6,10 @@ import {
     chatTranscriptScrollOptions,
     MarkdownPanel,
     MessageBlock,
-} from './ChatTranscript.js';
+} from './ChatTranscript';
 
-vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
-vi.mock('@mission-control/tui/chat', async () => await import('../chat.js'));
+vi.mock('@mission-control/tui', async () => await import('../terminal-text'));
+vi.mock('@mission-control/tui/chat', async () => await import('../chat'));
 vi.mock('@mission-control/core', () => ({
     resolveMissionControlDataDir: () => '/tmp/mission-control-test',
 }));

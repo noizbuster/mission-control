@@ -1,6 +1,6 @@
 import { ABG_GRAPH_STATUSES, ABG_NODE_STATUSES } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { graphStatusTheme, nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme.js';
+import { graphStatusTheme, nodeStatusTheme, STATUS_FG_GRAY } from './abg-status-theme';
 
 /**
  * Table-driven coverage over the protocol status unions. `it.each` iterates the

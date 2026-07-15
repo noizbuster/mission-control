@@ -37,7 +37,7 @@ import {
     type KeybindOverrides,
     Keybinds,
     unknownKeys,
-} from './keybind.js';
+} from './keybind';
 import { existsSync, lstatSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';

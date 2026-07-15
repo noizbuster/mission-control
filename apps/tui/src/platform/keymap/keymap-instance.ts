@@ -18,9 +18,9 @@
 import type { CliRenderer, KeyEvent, Renderable } from '@opentui/core';
 import type { Keymap } from '@opentui/keymap';
 import { createDefaultOpenTuiKeymap } from '@opentui/keymap/opentui';
-import { type BindingValue, LeaderDefault } from './keybind.js';
-import { resolveKeybindConfig } from './keybind-config-loader.js';
-import { LEADER_TIMEOUT_MS, registerLeaderAddons } from './leader-addons.js';
+import { type BindingValue, LeaderDefault } from './keybind';
+import { resolveKeybindConfig } from './keybind-config-loader';
+import { LEADER_TIMEOUT_MS, registerLeaderAddons } from './leader-addons';
 
 /** The concrete opentui keymap type threaded through the React bridge. */
 export type OpenTuiKeymap = Keymap<Renderable, KeyEvent>;

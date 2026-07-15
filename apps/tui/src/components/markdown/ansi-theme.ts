@@ -32,6 +32,6 @@ export {
     TEXT_WARNING_BOLD,
     terminalTextStyleToAnsi,
     wrap,
-} from '../../plain-markdown/ansi.js';
+} from '../../plain-markdown/ansi';
 
 // --- SGR escape constants (mirror opencode UI.Style) ------------------------

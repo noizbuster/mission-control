@@ -1,17 +1,17 @@
 import type { JSX } from 'solid-js';
 import { expect } from 'vitest';
-import { createChatStore } from '../state/chat-store.js';
-import type { FileAutocompleteState } from '../state/interactive-chat-file-autocomplete.js';
-import { ChatBottomDockBase, type ChatBottomDockSlice, selectChatBottomDockSlice } from './ChatBottomDock.js';
-import { type BottomDockMenuPolicy, bottomDockPolicy } from './chat-bottom-dock-policy.js';
+import { createChatStore } from '../state/chat-store';
+import type { FileAutocompleteState } from '../state/interactive-chat-file-autocomplete';
+import { ChatBottomDockBase, type ChatBottomDockSlice, selectChatBottomDockSlice } from './ChatBottomDock';
+import { type BottomDockMenuPolicy, bottomDockPolicy } from './chat-bottom-dock-policy';
 import {
     asScrollboxRef,
     asTextareaRef,
     createRecordingScrollbox,
     createRecordingTextarea,
-} from './chat-test-support.js';
-import { OverlayFrame, type OverlayFrameProps } from './OverlayFrame.js';
-import { type StatusBarProps, statusBarLayoutFromPolicy } from './StatusBar.js';
+} from './chat-test-support';
+import { OverlayFrame, type OverlayFrameProps } from './OverlayFrame';
+import { type StatusBarProps, statusBarLayoutFromPolicy } from './StatusBar';
 
 export const statusLayout = statusBarLayoutFromPolicy(bottomDockPolicy({ columns: 120, rows: 24 }));
 export const slashFooter = 'Up/Down to navigate, Enter to select, Esc to close';

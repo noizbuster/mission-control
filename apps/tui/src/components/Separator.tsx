@@ -1,5 +1,5 @@
 import { createEffect, createSignal, type JSX, onCleanup } from 'solid-js';
-import { resolveSpinnerMode } from './spinner.js';
+import { resolveSpinnerMode } from './spinner';
 
 export type SeparatorProps = {
     readonly state: SeparatorState;

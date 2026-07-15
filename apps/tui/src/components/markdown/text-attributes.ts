@@ -16,8 +16,8 @@
 
 import type { RGBA } from '@opentui/core';
 import { createTextAttributes, getBaseAttributes, rgbToHex, TextAttributes } from '@opentui/core';
-import type { HighlightedSpan } from './highlight.js';
-import type { TerminalTextStyle } from './theme.js';
+import type { HighlightedSpan } from './highlight';
+import type { TerminalTextStyle } from './theme';
 
 type ChunkStyleFields = {
     readonly fg?: RGBA;

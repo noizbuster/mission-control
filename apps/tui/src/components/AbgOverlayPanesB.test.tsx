@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { type AbgOverlayStore, createAbgOverlayStore } from '../state/abg-overlay-state.js';
+import { type AbgOverlayStore, createAbgOverlayStore } from '../state/abg-overlay-state';
 
 function createMockStore(): AbgOverlayStore {
     return createAbgOverlayStore();

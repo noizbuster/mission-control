@@ -1,5 +1,5 @@
 import { For, type JSX } from 'solid-js';
-import type { DiffLine, DiffLineKind } from './render-diff.js';
+import type { DiffLine, DiffLineKind } from './render-diff';
 
 export type DiffViewProps = {
     readonly lines: readonly DiffLine[];

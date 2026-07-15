@@ -1,6 +1,6 @@
 import type { ScrollBoxRenderable, TextareaRenderable } from '@opentui/core';
-import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
-import type { ChatScrollboxHandle } from '../components/ChatTranscript.js';
+import type { ChatTextareaHandle } from '../components/ChatInputTextarea';
+import type { ChatScrollboxHandle } from '../components/ChatTranscript';
 
 export type ChatKeymapScrollboxRef = {
     readonly current: ScrollBoxRenderable | null;

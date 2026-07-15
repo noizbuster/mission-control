@@ -1,7 +1,7 @@
 // allow: SIZE_OK -- HEAD 337 -> current 400 pure LOC; Tauri boundary suite covers credentials sessions and effect resolution
 import { AgentEventEnvelopeSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
-import { createTauriDesktopAgentClient } from './agent-client.js';
+import { createTauriDesktopAgentClient } from './agent-client';
 
 describe('tauri desktop agent client', () => {
     it('lists and reads durable sessions through Tauri commands', async () => {

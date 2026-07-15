@@ -125,7 +125,7 @@ describe('TUI provider-port guardrails', () => {
     it('scanner flags provider runtime imports in a synthetic state source fixture', () => {
         const findings = scanSourceForTerms(
             'apps/tui/src/state/synthetic-provider-fixture.ts',
-            "import { Provider } from '../platform/providers/provider.js';\nimport { createSignal } from 'solid-js';",
+            "import { Provider } from '../platform/providers/provider';\nimport { createSignal } from 'solid-js';",
             stateProviderImportTerms,
         );
 
@@ -136,7 +136,7 @@ describe('TUI provider-port guardrails', () => {
     });
 
     it('scanner flags provider exports in a synthetic barrel fixture', () => {
-        const findings = indexProviderExportFindings("export * from './platform/providers/sdk-provider.js';");
+        const findings = indexProviderExportFindings("export * from './platform/providers/sdk-provider';");
 
         expect(findings).toEqual([{ file: indexSourcePath, term: 'provider' }]);
     });

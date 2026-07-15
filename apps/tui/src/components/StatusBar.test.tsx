@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { APPROVAL_LEVELS, type ApprovalLevel } from '../state/approval-level.js';
-import { bottomDockPolicy } from './chat-bottom-dock-policy.js';
+import { APPROVAL_LEVELS, type ApprovalLevel } from '../state/approval-level';
+import { bottomDockPolicy } from './chat-bottom-dock-policy';
 import {
     approvalLevelColor,
     buildStatusDivider,
@@ -11,7 +11,7 @@ import {
     humanizeTokens,
     type StatusBarProps,
     statusBarLayoutFromPolicy,
-} from './StatusBar.js';
+} from './StatusBar';
 
 const baseProps: StatusBarProps = { providerID: 'local', modelID: 'local-echo' };
 

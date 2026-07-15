@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { AbgOverlayState } from '../state/abg-overlay-state';
 
-vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
+vi.mock('@mission-control/tui', async () => await import('../terminal-text'));
 
 const TEST_VIEWPORT = { columns: 120, rows: 30 } as const;
 

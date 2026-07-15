@@ -1,6 +1,6 @@
 import { projectSessionReplay, type SessionTreeProjection } from '@mission-control/core/replay';
-import type { DesktopSessionLog, DesktopSessionSummary } from './agent-client.js';
-import { redactDisplayText } from './redaction.js';
+import type { DesktopSessionLog, DesktopSessionSummary } from './agent-client';
+import { redactDisplayText } from './redaction';
 
 export type SessionListRow = {
     readonly sessionId: string;

@@ -1,13 +1,13 @@
 import { createRoot, type JSX } from 'solid-js';
 import { createComponent } from 'solid-js/web';
 import { describe, expect, it } from 'vitest';
-import { createAbgOverlayController } from '../../state/abg-overlay-controller.js';
-import { createAbgOverlayStore } from '../../state/abg-overlay-state.js';
-import type { ChatAppActions } from '../../state/chat-app-actions.js';
-import { createChatStore } from '../../state/chat-store.js';
-import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
-import type { MissionControlServicesLike } from '../../state/mission-services-types.js';
-import type { WelcomeData } from '../../state/welcome-data-types.js';
+import { createAbgOverlayController } from '../../state/abg-overlay-controller';
+import { createAbgOverlayStore } from '../../state/abg-overlay-state';
+import type { ChatAppActions } from '../../state/chat-app-actions';
+import { createChatStore } from '../../state/chat-store';
+import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types';
+import type { MissionControlServicesLike } from '../../state/mission-services-types';
+import type { WelcomeData } from '../../state/welcome-data-types';
 import {
     composeMissionControlProviderTree,
     MissingTuiProviderError,
@@ -17,7 +17,7 @@ import {
     useChatSession,
     useMissionControlServices,
     useWelcomeData,
-} from './index.js';
+} from './index';
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -2,7 +2,7 @@
 import type { AbgToolOutcomeSnapshot, ApprovalRecord } from '@mission-control/protocol';
 import { truncateTerminalText } from '@mission-control/tui';
 import { For, type JSX } from 'solid-js';
-import type { AbgOverlayState, RecentEvent } from '../state/abg-overlay-state.js';
+import type { AbgOverlayState, RecentEvent } from '../state/abg-overlay-state';
 
 export interface AbgOverlayPaneProps {
     readonly state: AbgOverlayState;

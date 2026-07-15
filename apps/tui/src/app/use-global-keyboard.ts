@@ -7,11 +7,11 @@ import {
     nextHunk,
     prevFile,
     prevHunk,
-} from '../platform/keymap/diff-viewer.js';
-import type { AbgOverlayController } from '../state/abg-overlay-controller.js';
-import type { ChatStore } from '../state/chat-store.js';
-import { ABG_OVERLAY_TABS } from '../components/AbgOverlay.js';
-import type { ChatTextareaHandle } from '../components/ChatInputTextarea.js';
+} from '../platform/keymap/diff-viewer';
+import type { AbgOverlayController } from '../state/abg-overlay-controller';
+import type { ChatStore } from '../state/chat-store';
+import { ABG_OVERLAY_TABS } from '../components/AbgOverlay';
+import type { ChatTextareaHandle } from '../components/ChatInputTextarea';
 
 /**
  * Shared deps for the App global keyboard sink (Ctrl+C + overlay-only keys).

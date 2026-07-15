@@ -1,7 +1,7 @@
 import type { Keymap, KeymapEvent } from '@opentui/keymap';
-import { CommandMap } from './keybind.js';
-import type { OpenTuiKeymap } from './keymap-instance.js';
-import { BASE_MODE } from './mode-stack.js';
+import { CommandMap } from './keybind';
+import type { OpenTuiKeymap } from './keymap-instance';
+import { BASE_MODE } from './mode-stack';
 
 export const WHICH_KEY_TOGGLE_COMMAND: string = CommandMap.which_key_toggle;
 export const WHICH_KEY_LAYOUT_COMMAND: string = CommandMap.which_key_layout_toggle;

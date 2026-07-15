@@ -3,14 +3,14 @@ import type { ModelProviderSelection, TuiLocalPreferences } from '@mission-contr
 import { createRoot, type JSX } from 'solid-js';
 import { createComponent } from 'solid-js/web';
 import { describe, expect, it } from 'vitest';
-import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
+import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types';
 import {
     composeMissionControlProviderTree,
     type MissionControlTuiProviderEnvironment,
     type TuiKeymapProviderComponent,
     useTuiArgs,
     useTuiLocalPreferences,
-} from './index.js';
+} from './index';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';

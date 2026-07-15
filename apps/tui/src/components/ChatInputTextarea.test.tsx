@@ -1,6 +1,6 @@
 import { defaultTextareaKeyBindings } from '@opentui/core';
 import { describe, expect, it } from 'vitest';
-import { ChatInputTextarea, ChatInputTextareaBase } from './ChatInputTextarea.js';
+import { ChatInputTextarea, ChatInputTextareaBase } from './ChatInputTextarea';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 

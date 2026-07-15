@@ -22,7 +22,7 @@ import {
     type KeybindOverrides,
     Keybinds,
     unknownKeys,
-} from './keybind.js';
+} from './keybind';
 
 /** Flatten any binding value to a single comparable string for chord checks. */
 function bindingChords(value: unknown): string {

@@ -8,7 +8,7 @@ import type {
     DesktopCommandReceipt,
     DesktopSessionLog,
     DesktopSessionSummary,
-} from './lib/agent-client.js';
+} from './lib/agent-client';
 
 type SessionSourceState = 'loading' | 'ready' | 'error';
 type PromptCommandKind = 'submit' | 'queue' | 'steer';

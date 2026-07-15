@@ -1,15 +1,15 @@
 import { terminalDisplayWidth } from '@mission-control/tui';
 import { describe, expect, it, vi } from 'vitest';
-import type { HistoryPickerVisibleRow } from '../state/history-picker-state.js';
+import type { HistoryPickerVisibleRow } from '../state/history-picker-state';
 import {
     computeHistoryContentColumnWidth,
     computeHistoryTimeColumnWidth,
     layoutHistoryPickerRow,
-} from './HistoryPickerPanel.js';
+} from './HistoryPickerPanel';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-vi.mock('@mission-control/tui', async () => await import('../terminal-text.js'));
+vi.mock('@mission-control/tui', async () => await import('../terminal-text'));
 
 function makeRow(overrides: Partial<HistoryPickerVisibleRow> = {}): HistoryPickerVisibleRow {
     return {

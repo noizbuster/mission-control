@@ -1,7 +1,7 @@
 import { createRoot, type JSX } from 'solid-js';
 import { createComponent } from 'solid-js/web';
 import { describe, expect, it } from 'vitest';
-import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
+import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types';
 import {
     composeMissionControlProviderTree,
     createRequiredContext,
@@ -16,7 +16,7 @@ import {
     useTuiProviderLifecycle,
     useTuiRoute,
     useTuiTheme,
-} from './index.js';
+} from './index';
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

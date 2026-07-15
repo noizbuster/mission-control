@@ -29,14 +29,14 @@
 
 import { createTestKeymap } from '@opentui/keymap/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ClipboardService } from '../clipboard-service.js';
-import { LEADER_TIMEOUT_MS, registerLeaderAddons } from './leader-addons.js';
+import type { ClipboardService } from '../clipboard-service';
+import { LEADER_TIMEOUT_MS, registerLeaderAddons } from './leader-addons';
 import {
     halfPageScrollDelta,
     registerMessagesScrollLayer,
     registerSelectionCopyLayer,
     type ScrollboxLike,
-} from './messages-scroll.js';
+} from './messages-scroll';
 
 // ---------------------------------------------------------------------------
 // Inline test doubles (kept FFI-free)

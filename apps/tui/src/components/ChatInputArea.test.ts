@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createChatStore } from '../state/chat-store.js';
-import { fileCompletionFrecencyKey } from './ChatInputArea.js';
-import { createRecordingTextarea, makeKeyEvent } from './chat-test-support.js';
+import { createChatStore } from '../state/chat-store';
+import { fileCompletionFrecencyKey } from './ChatInputArea';
+import { createRecordingTextarea, makeKeyEvent } from './chat-test-support';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 

@@ -3,7 +3,7 @@ import {
     createProviderPromptKeypressState,
     createProviderPromptView,
     reduceProviderPromptKeypress,
-} from './auth-provider-keypress.js';
+} from './auth-provider-keypress';
 
 const providerChoices = [
     { id: 'local', name: 'Local Sandbox' },

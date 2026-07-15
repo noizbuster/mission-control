@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { type ChatTuiOptions, createChatTuiHandle } from './create-chat-tui.js';
-import type { ChatTuiHandle } from './state/chat-tui-types.js';
-import { createAbgOverlayController, createAbgOverlayStore, createChatStore } from './state/index.js';
+import { type ChatTuiOptions, createChatTuiHandle } from './create-chat-tui';
+import type { ChatTuiHandle } from './state/chat-tui-types';
+import { createAbgOverlayController, createAbgOverlayStore, createChatStore } from './state/index';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 

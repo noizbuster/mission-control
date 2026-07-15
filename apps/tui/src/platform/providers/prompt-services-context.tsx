@@ -8,9 +8,9 @@ import {
     TuiPromptStashEntrySchema,
 } from '@mission-control/protocol';
 import { type Accessor, createSignal, type JSX, onCleanup } from 'solid-js';
-import type { ChatStore } from '../../state/chat-store.js';
-import { createRequiredContext } from './context-base.js';
-import { useTuiPaths } from './runtime-context.js';
+import type { ChatStore } from '../../state/chat-store';
+import { createRequiredContext } from './context-base';
+import { useTuiPaths } from './runtime-context';
 
 export type TuiPromptStashStoreLike = {
     readonly listEntries: () => Promise<readonly TuiPromptStashEntry[]>;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { DesktopSessionLog } from './agent-client.js';
-import { projectReplayInspectorRows } from './session-inspector-replay.js';
+import type { DesktopSessionLog } from './agent-client';
+import { projectReplayInspectorRows } from './session-inspector-replay';
 
 describe('desktop replay inspector run state rows', () => {
     it('renders failed and blocked run states as distinct coding rows', () => {

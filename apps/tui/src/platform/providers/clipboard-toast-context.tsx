@@ -1,8 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 
 import { type Accessor, createSignal, type JSX, onCleanup } from 'solid-js';
-import { type ClipboardService, type ClipboardServiceRenderer, createClipboardService } from '../clipboard-service.js';
-import { createRequiredContext } from './context-base.js';
+import { type ClipboardService, type ClipboardServiceRenderer, createClipboardService } from '../clipboard-service';
+import { createRequiredContext } from './context-base';
 
 export type TuiToastVariant = 'info' | 'success' | 'warning' | 'error';
 

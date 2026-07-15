@@ -1,5 +1,5 @@
 import { type Accessor, createEffect } from 'solid-js';
-import type { ChatStoreOverlayMode } from '../state/chat-store.js';
+import type { ChatStoreOverlayMode } from '../state/chat-store';
 
 export type ChatRepaintRenderer = {
     requestRender(): void;

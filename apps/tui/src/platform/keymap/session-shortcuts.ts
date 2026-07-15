@@ -48,7 +48,7 @@
  */
 
 import type { Command, Keymap, KeymapEvent } from '@opentui/keymap';
-import { CommandMap, expandToChords, Keybinds } from './keybind.js';
+import { CommandMap, expandToChords, Keybinds } from './keybind';
 
 // ---------------------------------------------------------------------------
 // Session-tree direction

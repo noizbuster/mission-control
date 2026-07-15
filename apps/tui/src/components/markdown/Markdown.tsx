@@ -2,14 +2,14 @@
 
 import { SyntaxStyle } from '@opentui/core';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
-import { useSolidStoreSelector } from '../../platform/use-solid-store-selector.js';
-import { getHighlightVersion, subscribeHighlight } from './highlight.js';
-import type { TerminalMarkdownTheme } from './theme.js';
+import { useSolidStoreSelector } from '../../platform/use-solid-store-selector';
+import { getHighlightVersion, subscribeHighlight } from './highlight';
+import type { TerminalMarkdownTheme } from './theme';
 
-export * from '../../plain-markdown/ir-blocks.js';
-export * from '../../plain-markdown/ir-inline.js';
-export * from '../../plain-markdown/ir-layout.js';
-export * from '../../plain-markdown/ir-types.js';
+export * from '../../plain-markdown/ir-blocks';
+export * from '../../plain-markdown/ir-inline';
+export * from '../../plain-markdown/ir-layout';
+export * from '../../plain-markdown/ir-types';
 
 export type MarkdownProps = {
     readonly text: string;

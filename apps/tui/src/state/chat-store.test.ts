@@ -1,8 +1,8 @@
 import { extractUsageFromModelCallCompleted } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createProviderPromptKeypressState } from './auth-provider-keypress.js';
-import type { ChatInputEvent } from './chat-input-event.js';
+import { createProviderPromptKeypressState } from './auth-provider-keypress';
+import type { ChatInputEvent } from './chat-input-event';
 import {
     type AgentsDashboardState,
     type ChatStore,
@@ -13,8 +13,8 @@ import {
     type MissionPanelRow,
     type MissionPanelTab,
     type SessionPickerEntry,
-} from './chat-store.js';
-import type { ModelChoice } from './interactive-chat-model.js';
+} from './chat-store';
+import type { ModelChoice } from './interactive-chat-model';
 
 function makeSelection(providerID: string, modelID: string): ModelProviderSelection {
     return { providerID, modelID };

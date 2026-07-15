@@ -2,7 +2,7 @@ import { ClipboardTarget } from '@opentui/core';
 import { createRoot, type JSX } from 'solid-js';
 import { createComponent } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
+import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types';
 import {
     composeMissionControlProviderTree,
     type TuiClipboardService,
@@ -10,7 +10,7 @@ import {
     type TuiToastService,
     useTuiClipboard,
     useTuiToast,
-} from './index.js';
+} from './index';
 
 type TestRenderer = {
     readonly id: string;

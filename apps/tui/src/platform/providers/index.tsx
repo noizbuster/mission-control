@@ -3,49 +3,49 @@
 import type { TuiPluginCapabilityId } from '@mission-control/protocol';
 import type { CliRenderer } from '@opentui/core';
 import type { JSX } from 'solid-js';
-import type { ChatStore } from '../../state/chat-store.js';
-import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
-import type { ClipboardServiceRenderer } from '../clipboard-service.js';
-import { ChatKeymapProvider } from '../keymap/keymap-provider.js';
-import { MissionControlChatSessionGate } from './chat-session-context.js';
-import { MissionControlClipboardToastProviders } from './clipboard-toast-context.js';
-import { TuiProviderLifecycleScope } from './context-base.js';
+import type { ChatStore } from '../../state/chat-store';
+import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types';
+import type { ClipboardServiceRenderer } from '../clipboard-service';
+import { ChatKeymapProvider } from '../keymap/keymap-provider';
+import { MissionControlChatSessionGate } from './chat-session-context';
+import { MissionControlClipboardToastProviders } from './clipboard-toast-context';
+import { TuiProviderLifecycleScope } from './context-base';
 import {
     MissionControlLocalPreferencesProvider,
     type TuiLocalPreferencesStoreLike,
-} from './local-preferences-context.js';
+} from './local-preferences-context';
 import {
     MissionControlPluginRuntimeProvider,
     type TuiPluginKvStoreLike,
     type TuiPluginManifestStoreLike,
     type TuiPluginRuntimeDefinition,
-} from './plugin-runtime-context.js';
-import { MissionControlProjectSyncProvider } from './project-sync-context.js';
-import { MissionControlPromptHistoryProvider, type TuiPromptHistoryStoreLike } from './prompt-history-context.js';
+} from './plugin-runtime-context';
+import { MissionControlProjectSyncProvider } from './project-sync-context';
+import { MissionControlPromptHistoryProvider, type TuiPromptHistoryStoreLike } from './prompt-history-context';
 import {
     MissionControlPromptServicesProvider,
     type TuiFrecencyStoreLike,
     type TuiPromptStashStoreLike,
-} from './prompt-services-context.js';
+} from './prompt-services-context';
 import {
     MissionControlDialogProvider,
     MissionControlRouteThemeProviders,
     type TuiThemePreferenceStoreLike,
-} from './route-dialog-theme-context.js';
-import { MissionControlRuntimeProviders, type MissionControlTuiProviderEnvironment } from './runtime-context.js';
-import { MissionControlRuntimeEventsProvider } from './runtime-events-context.js';
+} from './route-dialog-theme-context';
+import { MissionControlRuntimeProviders, type MissionControlTuiProviderEnvironment } from './runtime-context';
+import { MissionControlRuntimeEventsProvider } from './runtime-events-context';
 
-export * from './chat-session-context.js';
-export * from './clipboard-toast-context.js';
-export * from './context-base.js';
-export * from './local-preferences-context.js';
-export * from './plugin-runtime-context.js';
-export * from './project-sync-context.js';
-export * from './prompt-history-context.js';
-export * from './prompt-services-context.js';
-export * from './route-dialog-theme-context.js';
-export * from './runtime-context.js';
-export * from './runtime-events-context.js';
+export * from './chat-session-context';
+export * from './clipboard-toast-context';
+export * from './context-base';
+export * from './local-preferences-context';
+export * from './plugin-runtime-context';
+export * from './project-sync-context';
+export * from './prompt-history-context';
+export * from './prompt-services-context';
+export * from './route-dialog-theme-context';
+export * from './runtime-context';
+export * from './runtime-events-context';
 
 export type TuiKeymapProviderComponent<TRenderer = CliRenderer> = (props: {
     readonly useRenderer: () => TRenderer;

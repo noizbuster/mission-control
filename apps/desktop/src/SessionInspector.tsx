@@ -1,7 +1,7 @@
-import type { DesktopApprovalEffectOutcome, DesktopApprovalEffectRecord } from './lib/agent-client.js';
-import type { SessionInspectorProjection } from './lib/session-inspector.js';
-import { OutputPanelSection, UtilityRailPanel } from './SessionInspectorDetailPanels.js';
-import { SessionListPanel, TimelinePanelSection } from './SessionInspectorPanels.js';
+import type { DesktopApprovalEffectOutcome, DesktopApprovalEffectRecord } from './lib/agent-client';
+import type { SessionInspectorProjection } from './lib/session-inspector';
+import { OutputPanelSection, UtilityRailPanel } from './SessionInspectorDetailPanels';
+import { SessionListPanel, TimelinePanelSection } from './SessionInspectorPanels';
 import './SessionInspector.css';
 
 export type SessionInspectorProps = {

@@ -1,8 +1,8 @@
 import { createRoot, type JSX } from 'solid-js';
 import { createComponent } from 'solid-js/web';
 import { describe, expect, it } from 'vitest';
-import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types.js';
-import { clearKeybindConfigCache, KEYBIND_CONFIG_FILENAME } from '../keymap/keybind-config-loader.js';
+import type { ChatTuiRuntimeOptions } from '../../state/chat-tui-types';
+import { clearKeybindConfigCache, KEYBIND_CONFIG_FILENAME } from '../keymap/keybind-config-loader';
 import {
     composeMissionControlProviderTree,
     type MissionControlTuiProviderEnvironment,
@@ -13,7 +13,7 @@ import {
     useTuiRuntime,
     useTuiStartup,
     useTuiTerminalEnvironment,
-} from './index.js';
+} from './index';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

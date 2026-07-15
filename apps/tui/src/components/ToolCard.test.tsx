@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildHeaderLabel, hasDiffContent, ToolCard } from './ToolCard.js';
+import { buildHeaderLabel, hasDiffContent, ToolCard } from './ToolCard';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 

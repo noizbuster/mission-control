@@ -1,5 +1,5 @@
 import { type BorderCharacters, TextAttributes } from '@opentui/core';
-import type { ApprovalLevel } from '../state/approval-level.js';
+import type { ApprovalLevel } from '../state/approval-level';
 
 /**
  * Shared selection background for overlays/menus. Supersedes the per-file

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APPROVAL_LEVEL_META, APPROVAL_LEVELS, approvalLevelRules, isApprovalLevel } from './approval-level.js';
+import { APPROVAL_LEVEL_META, APPROVAL_LEVELS, approvalLevelRules, isApprovalLevel } from './approval-level';
 
 describe('approval-level', () => {
     it('exposes the canonical ordered level list', () => {
