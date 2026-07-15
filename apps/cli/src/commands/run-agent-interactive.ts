@@ -2,10 +2,12 @@ import type {
     AgentRuntime,
     CommandExecutionRequest,
     CommandExecutionResult,
+    ObservabilityRedactor,
     PersistentMemoryStore,
     ProviderAdapter,
     SdkModelResolver,
 } from '@mission-control/core';
+import { redactAgentEventForObservability } from '@mission-control/core';
 import type { AgentEvent, AgentSnapshot, ModelProviderSelection } from '@mission-control/protocol';
 import { closeTreeSitterClient } from '@mission-control/tui/highlight';
 import type { CliArgs } from '../args.js';
@@ -40,10 +42,14 @@ type RunInteractiveAgentInput = {
     readonly workspaceRoot: string;
     readonly persistentStore: PersistentMemoryStore | undefined;
     readonly options: InteractiveRunOptions;
+    readonly observabilityRedactor: ObservabilityRedactor;
 };
 
 export async function runInteractiveAgent(input: RunInteractiveAgentInput): Promise<string> {
-    const recorder = await createRunEventRecorder(input.args, { workspaceRoot: input.workspaceRoot });
+    const recorder = await createRunEventRecorder(input.args, {
+        workspaceRoot: input.workspaceRoot,
+        observabilityRedactor: input.observabilityRedactor,
+    });
     const tuiEventListeners = new Set<(event: AgentEvent) => void>();
     const emitRuntimeEvent = (event: AgentEvent) => {
         const recorded = recorder.record(event);
@@ -53,9 +59,10 @@ export async function runInteractiveAgent(input: RunInteractiveAgentInput): Prom
         }
     };
     const observeStoredEvent = (event: AgentEvent) => {
-        input.options.onRuntimeEvent?.(event);
+        const observableEvent = redactAgentEventForObservability(event, input.observabilityRedactor);
+        input.options.onRuntimeEvent?.(observableEvent);
         for (const listener of tuiEventListeners) {
-            listener(event);
+            listener(observableEvent);
         }
     };
     const subscribeEvents = (listener: (event: AgentEvent) => void): (() => void) => {
@@ -79,6 +86,7 @@ export async function runInteractiveAgent(input: RunInteractiveAgentInput): Prom
             modelProviderSelection: input.selectedModelProvider,
             provider: input.provider,
             authStore: input.authStore,
+            observabilityRedactor: input.observabilityRedactor,
             ...(interactiveSessionId !== undefined ? { sessionId: interactiveSessionId } : {}),
             workspaceRoot: input.workspaceRoot,
             modelChoices: await listAuthenticatedModelChoices(

@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 888 -> current 914 pure LOC; one interactive chat event-loop state machine after action extraction.
 import {
     type AgentRuntime,
     type AskUserQuestionRequest,
@@ -6,6 +7,7 @@ import {
     discoverSkills,
     discoverWorkflows,
     type LocalSessionEventStore,
+    type ObservabilityRedactor,
     PermissionRuleStore,
     PermissionSession,
     PluginManager,
@@ -155,6 +157,7 @@ export type InteractiveChatOptions = {
     readonly authStore?: ProviderAuthStore;
     readonly profileName?: string;
     readonly plainPromptGraph?: PlainPromptGraph;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 export type PlainPromptGraph = 'default-workflow' | 'coding-agent';
@@ -174,7 +177,10 @@ export async function runInteractiveChatSession(
     const initialHistoryEntries = useTui ? await loadInputHistoryEntries() : [];
     const initialAbgOverlayPrefs = useTui ? await loadAbgOverlayPrefs() : undefined;
     const pricingTableForSession = await loadPricingTable();
-    const missionControlServices = await resolveMissionControlServices(options.workspaceRoot);
+    const missionControlServices = await resolveMissionControlServices(
+        options.workspaceRoot,
+        options.observabilityRedactor,
+    );
     let tuiHandleRef: ChatTuiHandle | undefined;
     const abgOverlayController = useTui
         ? createAbgOverlayController(createAbgOverlayStore(), {
@@ -414,7 +420,10 @@ export async function runInteractiveChatSession(
         let name: string | undefined;
         try {
             if (options.workspaceRoot !== undefined) {
-                const entries = await listSessionCatalogEntriesForWorkspace(options.workspaceRoot);
+                const entries = await listSessionCatalogEntriesForWorkspace(
+                    options.workspaceRoot,
+                    options.observabilityRedactor,
+                );
                 const entry = entries.find((it) => it.sessionId === sid);
                 name = entry?.name;
             }
@@ -562,7 +571,7 @@ export async function runInteractiveChatSession(
         // Best-effort: load the prior conversation so it's visible on resume. A missing or
         // corrupt log leaves the transcript blank and resume still proceeds.
         if (currentSessionId !== undefined) {
-            const resumedTranscript = await loadSessionTranscript(currentSessionId);
+            const resumedTranscript = await loadSessionTranscript(currentSessionId, options.observabilityRedactor);
             if (resumedTranscript.length > 0) {
                 if (tuiHandle !== undefined) {
                     tuiHandle.replaceOutputText(resumedTranscript);
@@ -585,22 +594,25 @@ export async function runInteractiveChatSession(
             const next = await nextChatLoopEvent(inputPump, activeTurn);
             if (next.type === 'active-completed') {
                 if (
+                    next.outcome === 'completed' &&
                     lastCodingContext !== undefined &&
                     pendingWorkflowTurns.length > 0 &&
                     workflowChainDepth < MAX_CHAINED_WORKFLOW_TURNS
                 ) {
-                    const pending = pendingWorkflowTurns.shift()!;
-                    workflowChainDepth += 1;
-                    const workflowResult = await startWorkflowTurn(
-                        runtime,
-                        chatOutput,
-                        pending.spec,
-                        pending.prompt,
-                        currentModelProviderSelection,
-                        lastCodingContext,
-                    );
-                    activeTurn = workflowResult.activeTurn;
-                    continue;
+                    const pending = pendingWorkflowTurns.shift();
+                    if (pending !== undefined) {
+                        workflowChainDepth += 1;
+                        const workflowResult = await startWorkflowTurn(
+                            runtime,
+                            chatOutput,
+                            pending.spec,
+                            pending.prompt,
+                            currentModelProviderSelection,
+                            lastCodingContext,
+                        );
+                        activeTurn = workflowResult.activeTurn;
+                        continue;
+                    }
                 }
                 workflowChainDepth = 0;
                 pendingWorkflowTurns.length = 0;
@@ -614,6 +626,8 @@ export async function runInteractiveChatSession(
                     interruptedTurn.interrupt('soft');
                     await interruptedTurn.done;
                     activeTurn = undefined;
+                    workflowChainDepth = 0;
+                    pendingWorkflowTurns.length = 0;
                     pendingInterrupt = false;
                     showExitHint('Press Ctrl+C twice to exit');
                     continue;
@@ -757,7 +771,10 @@ export async function runInteractiveChatSession(
                         : {}),
                     listWorkspaceSessions: async () => {
                         if (options.workspaceRoot === undefined) return [];
-                        const entries = await listSessionCatalogEntriesForWorkspace(options.workspaceRoot);
+                        const entries = await listSessionCatalogEntriesForWorkspace(
+                            options.workspaceRoot,
+                            options.observabilityRedactor,
+                        );
                         return entries.map((entry) => ({
                             sessionId: entry.sessionId,
                             label: entry.name ?? entry.sessionId,
@@ -803,6 +820,9 @@ export async function runInteractiveChatSession(
                           }
                         : {}),
                     ...(options.authStore !== undefined ? { authStore: options.authStore } : {}),
+                    ...(options.observabilityRedactor !== undefined
+                        ? { observabilityRedactor: options.observabilityRedactor }
+                        : {}),
                     ...(tuiHandle !== undefined
                         ? {
                               selectApprovalLevel: (currentLevel?: ApprovalLevel) =>
@@ -857,6 +877,10 @@ export async function runInteractiveChatSession(
                     modelChoices,
                     codingContext,
                 );
+                if (action.kind === 'interrupt') {
+                    workflowChainDepth = 0;
+                    pendingWorkflowTurns.length = 0;
+                }
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 chatOutput.write(`Error: ${message}\n`);
@@ -917,10 +941,13 @@ export async function runInteractiveChatSession(
 
 async function resolveMissionControlServices(
     workspaceRoot: string | undefined,
+    observabilityRedactor: ObservabilityRedactor | undefined,
 ): Promise<MissionControlServices | undefined> {
     if (workspaceRoot === undefined) return undefined;
     try {
-        return await getOrCreateMissionControlServices(workspaceRoot);
+        return await getOrCreateMissionControlServices(workspaceRoot, {
+            ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
+        });
     } catch (error: unknown) {
         if (isOmoRootNotFoundError(error)) {
             return undefined;

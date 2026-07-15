@@ -1,3 +1,4 @@
+import type { ObservabilityRedactor } from '@mission-control/core';
 import { normalizeWorkspaceRootWithFallback, readSessionCatalogEntry } from './session-catalog-entry.js';
 import { readSessionProjectionState } from './session-catalog-projection.js';
 import type { CliSessionCatalogEntry } from './session-catalog-types.js';
@@ -11,14 +12,16 @@ export type {
     CliSessionListStatus,
 } from './session-catalog-types.js';
 
-export async function listSessionCatalogEntries(): Promise<readonly CliSessionCatalogEntry[]> {
+export async function listSessionCatalogEntries(
+    observabilityRedactor?: ObservabilityRedactor,
+): Promise<readonly CliSessionCatalogEntry[]> {
     const projectionState = await readSessionProjectionState();
     try {
         const ids = [...projectionState.records.values()]
             .map((record) => record.sessionId)
             .filter((sessionId) => parseCliSessionId(sessionId) !== undefined);
         const entries = await Promise.all(
-            [...ids].map((sessionId) => readSessionCatalogEntry(sessionId, projectionState)),
+            [...ids].map((sessionId) => readSessionCatalogEntry(sessionId, projectionState, observabilityRedactor)),
         );
         return entries.sort(compareCatalogEntries);
     } finally {
@@ -37,9 +40,10 @@ export function filterCatalogEntriesByWorkspace(
 
 export async function listSessionCatalogEntriesForWorkspace(
     workspaceRoot: string,
+    observabilityRedactor?: ObservabilityRedactor,
 ): Promise<readonly CliSessionCatalogEntry[]> {
     const normalizedRoot = await normalizeWorkspaceRootWithFallback(workspaceRoot);
-    const entries = await listSessionCatalogEntries();
+    const entries = await listSessionCatalogEntries(observabilityRedactor);
     return filterCatalogEntriesByWorkspace(entries, normalizedRoot);
 }
 

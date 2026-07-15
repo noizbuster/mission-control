@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 372 -> current 373 pure LOC; one JSON/JSONL command-surface integration matrix with shared lifecycle fixtures.
 import {
     createDeterministicProvider,
     createOpenAIResponsesProvider,
@@ -10,6 +11,7 @@ import {
 import { AgentEventSchema } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
+import { captureSequentialProvider } from './compact-command-test-support.js';
 import { runAgent } from './run-agent.js';
 import { runSessionCommand } from './session.js';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -60,7 +62,7 @@ describe('runAgent JSON reporter', () => {
         const output = await runAgent(
             parseArgs(['run', 'summarize this repository', '--json', '--session', 'session_json_completed_state']),
             {
-                provider: createDeterministicProvider([{ kind: 'response_completed', content: 'summarized' }]),
+                provider: captureSequentialProvider([], ['exploratory-research', 'true', 'summarized']),
             },
         );
         const records = parseJsonRecords(output);

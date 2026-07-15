@@ -31,6 +31,7 @@ export function runCompactAction(
             ...(coding.workspaceRoot !== undefined ? { workspaceRoot: coding.workspaceRoot } : {}),
             ...(coding.observeStoredEvent !== undefined ? { observeStoredEvent: coding.observeStoredEvent } : {}),
             ...(instructions !== undefined ? { instructions } : {}),
+            ...(coding.authStore !== undefined ? { authStore: coding.authStore } : {}),
         }),
     );
 }

@@ -8,6 +8,7 @@ import {
 } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
+import { captureSequentialProvider } from './compact-command-test-support.js';
 import { runAgent } from './run-agent.js';
 import { runSessionCommand } from './session.js';
 import { readStoredSessionProjection } from './session-test-support.js';
@@ -35,7 +36,7 @@ describe('runAgent JSON machine state', () => {
         const output = await runAgent(
             parseArgs(['run', 'summarize this repository', '--json', '--session', 'session_json_completed_state']),
             {
-                provider: createDeterministicProvider([{ kind: 'response_completed', content: 'summarized' }]),
+                provider: captureSequentialProvider([], ['exploratory-research', 'true', 'summarized']),
             },
         );
         const records = parseJsonRecords(output);

@@ -1,8 +1,8 @@
-import { PermissionSession } from '@mission-control/core';
+import { createObservabilityRedactor, PermissionSession } from '@mission-control/core';
 import type { AgentEvent, PermissionRequest } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createInteractiveApprovalBroker } from './interactive-approval-broker.js';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -78,6 +78,71 @@ describe('interactive approval broker', () => {
         });
     });
 
+    it('redacts credential-bearing approval metadata before live output and event emission', async () => {
+        // Given
+        const secret = ['sk', 'approval_metadata_123'].join('-');
+        const events: AgentEvent[] = [];
+        const options = baseBrokerOptions(events);
+        const broker = createInteractiveApprovalBroker(options);
+        const request: PermissionRequest = {
+            id: 'permission_secret_metadata',
+            action: 'command.run',
+            reason: `run node --token ${secret}`,
+            permission: {
+                kind: 'bash',
+                patterns: [`node --token ${secret}`],
+                workspaceRoot: `/workspace/${secret}`,
+            },
+        };
+
+        // When
+        const pending = broker.requestPermission(request);
+        await waitForPendingApproval(broker);
+        broker.answer('deny');
+        await pending;
+        const observable = JSON.stringify({ events, output: options.output.getOutput() });
+
+        // Then
+        expect(observable).toContain('[REDACTED_CREDENTIAL]');
+        expect(observable).not.toContain(secret);
+    });
+
+    it('does not persist credential-bearing always-approval patterns', async () => {
+        // Given
+        const secret = ['configured', 'approval', 'pattern'].join('_');
+        const events: AgentEvent[] = [];
+        const options = {
+            ...baseBrokerOptions(events),
+            observabilityRedactor: createObservabilityRedactor({ secrets: [secret] }),
+        };
+        const broker = createInteractiveApprovalBroker(options);
+        const request: PermissionRequest = {
+            id: 'permission_configured_pattern',
+            action: 'command.run',
+            reason: `run ${secret}`,
+            permission: { kind: 'bash', patterns: [`node --token ${secret}`], workspaceRoot: '/workspace' },
+        };
+
+        // When
+        const pending = broker.requestPermission(request);
+        await waitForPendingApproval(broker);
+        broker.answer('always');
+        await pending;
+        const dataDir = process.env['MCTRL_DATA_DIR'];
+        if (dataDir === undefined) throw new Error('expected isolated permission data directory');
+        let persisted = '';
+        try {
+            persisted = readFileSync(join(dataDir, 'trust', 'permission-rules.json'), 'utf8');
+        } catch (error: unknown) {
+            if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error;
+        }
+
+        // Then
+        expect(persisted).not.toContain(secret);
+        expect(persisted).not.toContain('[REDACTED_CREDENTIAL]');
+        expect(options.output.getOutput()).toContain('Approved once command.run');
+    });
+
     // Regression: a session-scoped "always" approval must survive broker recreation, because the
     // interactive chat builds one broker per prompt turn over a single shared PermissionSession.
     // Before the fix each turn made its own session and "this session" approvals vanished.
@@ -110,6 +175,9 @@ function baseBrokerOptions(events: AgentEvent[] = []) {
                 output += text;
             },
             getOutput: () => output,
+            showApproval: (_action: string, reason?: string) => {
+                output += reason ?? '';
+            },
         },
         emitEvent: (event: AgentEvent) => {
             events.push(event);

@@ -19,6 +19,25 @@ describe('cli permission policy', () => {
         expect(decision.reason).toContain('bash.run');
     });
 
+    it('scopes eval through the bash-class CLI permission policy', async () => {
+        const request: PermissionRequest = {
+            id: 'permission_eval',
+            action: 'eval',
+            reason: 'run local eval cells in the workspace',
+            permission: {
+                kind: 'bash',
+                patterns: ['eval'],
+                workspaceRoot: '/tmp/workspace',
+            },
+        };
+
+        expect(cliAllowsAction(request.action)).toBe(true);
+        await expect(createCliPermissionDecision(request)).resolves.toMatchObject({
+            requestId: request.id,
+            status: 'requires_approval',
+        });
+    });
+
     it('allows the read-class glob action and scopes webfetch to requires_approval', async () => {
         expect(cliAllowsAction('glob')).toBe(true);
         expect(cliAllowsAction('webfetch')).toBe(true);

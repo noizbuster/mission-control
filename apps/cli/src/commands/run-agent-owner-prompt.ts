@@ -1,11 +1,17 @@
 import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
+    createObservabilityRedactor,
+    createProviderAuthStoreObservabilityRedactor,
     type LocalSessionEventStore,
     type LspClient,
+    type ObservabilityRedactor,
     PermissionGate,
+    ProjectTrustStore,
     type ProviderAdapter,
+    type ProviderAuthStore,
     type RunCoordinatorTurnRunner,
+    redactAgentEventForObservability,
     type SdkModelResolver,
     SessionRunOwner,
     type SessionRunOwnerReceipt,
@@ -14,12 +20,11 @@ import {
 } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import { createCliPermissionDecision, type NonInteractiveAutomationPolicy } from './cli-permission-policy.js';
-import {
-    getOrCreateMissionControlServices,
-    isOmoRootNotFoundError,
-    type MissionControlServices,
-} from './mission-control-services.js';
+import { createGraphObservabilityRedactor } from './graph-observability-redactor.js';
+import { resolveMissionControlServices } from './mission-control-services-resolver.js';
 import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
+import { closeProductionToolRegistry, type ProductionToolRegistry } from './production-tool-registry.js';
+import { emitOwnerPromptTaskEvent, nextOwnerPromptTaskId } from './run-agent-owner-prompt-events.js';
 
 export type RunOwnerPromptInput = {
     readonly sessionId: string;
@@ -32,7 +37,6 @@ export type RunOwnerPromptInput = {
     readonly observeStoredEvent: (event: AgentEvent) => void;
     readonly commandExecutor?: (request: CommandExecutionRequest) => Promise<CommandExecutionResult>;
     readonly nonInteractiveAutomationPolicy?: NonInteractiveAutomationPolicy;
-    readonly throwOnTerminalFailure?: boolean;
     /**
      * Inject a turn runner to drive an alternate engine (e.g. the ABG graph via
      * `createGraphTurnRunner`) instead of the flat provider tool loop. Built AFTER the
@@ -40,7 +44,10 @@ export type RunOwnerPromptInput = {
      * path would — the graph's tool calls route through the same approval/blocking machinery.
      * Omit to drive the flat provider loop (the default).
      */
-    readonly createTurnRunner?: (deps: { readonly toolRegistry: ToolRegistry }) => RunCoordinatorTurnRunner;
+    readonly createTurnRunner?: (deps: {
+        readonly toolRegistry: ToolRegistry;
+        readonly observabilityRedactor: ObservabilityRedactor;
+    }) => RunCoordinatorTurnRunner;
     /**
      * When set, the `task` subagent tool registers with a real spawn closure. The graph turn
      * runner built by `createTurnRunner` already needs a resolver; this same resolver drives the
@@ -50,11 +57,23 @@ export type RunOwnerPromptInput = {
     /** LSP seam: inject a real `LspClient` to register the `lsp` tool. Default undefined (off). */
     readonly lspClient?: LspClient;
     readonly taskRuntimeServices?: TaskToolRuntimeServices;
+    readonly authStore?: ProviderAuthStore;
+    readonly profileName?: string;
 };
 
-export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> {
+export type RunOwnerPromptResult = {
+    readonly status: 'completed' | 'blocked' | 'failed' | 'cancelled';
+    readonly runId?: string;
+    readonly reason?: string;
+};
+
+export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<RunOwnerPromptResult> {
     const taskId = await nextOwnerPromptTaskId(input.store, input.sessionId);
     let finalMessage: string | undefined;
+    let activeObservabilityRedactor =
+        input.authStore === undefined
+            ? createObservabilityRedactor()
+            : await createProviderAuthStoreObservabilityRedactor(input.authStore);
     const gate = new PermissionGate({
         resolveDecision: (request) =>
             createCliPermissionDecision(request, {
@@ -63,55 +82,74 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
                     : {}),
                 workspaceRoot: input.workspaceRoot,
             }),
-        emit: input.emitEvent,
+        emit: (event) => input.emitEvent(redactAgentEventForObservability(event, activeObservabilityRedactor)),
         now: () => new Date().toISOString(),
         pendingApprovalBehavior: 'block',
     });
     const ownedServices =
-        input.taskRuntimeServices === undefined ? await resolveMissionControlServices(input.workspaceRoot) : undefined;
+        input.taskRuntimeServices === undefined
+            ? await resolveMissionControlServices(input.workspaceRoot, {
+                  observabilityRedactor: activeObservabilityRedactor,
+              })
+            : undefined;
     const taskRuntimeServices = input.taskRuntimeServices ?? ownedServices?.getTaskRuntimeServices();
     const sessionControlHost = taskRuntimeServices?.sessionControlHost ?? ownedServices?.getSessionControlHost();
-    const { registry: toolRegistry, mcpConnectionManager } = await createNonInteractiveToolRegistry({
-        workspaceRoot: input.workspaceRoot,
-        requestPermission: (request) =>
-            gate.requestPermission(request, {
-                sessionId: input.sessionId,
-                taskId,
-                modelProviderSelection: input.modelProviderSelection,
-            }),
-        ...(input.resolveSdkModel !== undefined ? { resolveSdkModel: input.resolveSdkModel } : {}),
-        modelProviderSelection: input.modelProviderSelection,
-        sessionId: input.sessionId,
-        ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
-        ...(input.lspClient !== undefined ? { lspClient: input.lspClient } : {}),
-        ...(taskRuntimeServices !== undefined ? { services: taskRuntimeServices } : {}),
-    });
-    // When an alternate engine is requested, build its turn runner over the SAME permission-gated
-    // tool surface so the graph's tool calls honor the same approval/blocking behavior as the flat
-    // loop. The coordinator owns queue/steer/resume around whichever turn runner is installed.
-    const runProviderTurn = input.createTurnRunner?.({ toolRegistry });
+    let tools: ProductionToolRegistry | undefined;
     let owner: SessionRunOwner | undefined;
-    owner = new SessionRunOwner({
-        sessionId: input.sessionId,
-        store: input.store,
-        provider: input.provider,
-        modelProviderSelection: input.modelProviderSelection,
-        haltOnFailedToolSettlement: true,
-        projectContext: { workspaceRoot: input.workspaceRoot },
-        toolRegistry,
-        ...(runProviderTurn !== undefined ? { runProviderTurn } : {}),
-        onDurableEvent: (event: AgentEvent) => {
-            if (event.type === 'model.call.completed') {
-                finalMessage = event.message;
-            }
-            input.observeStoredEvent(event);
-        },
-        ...(sessionControlHost !== undefined ? { sessionControlHost } : {}),
-    });
-
-    emitTaskEvent(input, taskId, 'task.started', `user prompt: ${input.prompt}`);
     let receipt: SessionRunOwnerReceipt;
     try {
+        tools = await createNonInteractiveToolRegistry({
+            workspaceRoot: input.workspaceRoot,
+            enableTrustedBash: await workspaceHasTrustedBash(input.workspaceRoot),
+            requestPermission: (request) =>
+                gate.requestPermission(request, {
+                    sessionId: input.sessionId,
+                    taskId,
+                    modelProviderSelection: input.modelProviderSelection,
+                }),
+            ...(input.resolveSdkModel !== undefined ? { resolveSdkModel: input.resolveSdkModel } : {}),
+            modelProviderSelection: input.modelProviderSelection,
+            sessionId: input.sessionId,
+            ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
+            ...(input.lspClient !== undefined ? { lspClient: input.lspClient } : {}),
+            ...(input.authStore !== undefined ? { authStore: input.authStore } : {}),
+            ...(taskRuntimeServices !== undefined ? { services: taskRuntimeServices } : {}),
+            ...(input.profileName !== undefined ? { profileName: input.profileName } : {}),
+        });
+        const observabilityRedactor = await createGraphObservabilityRedactor({
+            mcpConnectionManager: tools.mcpConnectionManager,
+            ...(input.authStore !== undefined ? { authStore: input.authStore } : {}),
+        });
+        activeObservabilityRedactor = observabilityRedactor;
+        const runProviderTurn = input.createTurnRunner?.({
+            toolRegistry: tools.registry,
+            observabilityRedactor,
+        });
+        owner = new SessionRunOwner({
+            sessionId: input.sessionId,
+            store: input.store,
+            provider: input.provider,
+            modelProviderSelection: input.modelProviderSelection,
+            haltOnFailedToolSettlement: true,
+            projectContext: { workspaceRoot: input.workspaceRoot },
+            toolRegistry: tools.registry,
+            observabilityRedactor,
+            ...(runProviderTurn !== undefined ? { runProviderTurn } : {}),
+            onDurableEvent: (event: AgentEvent) => {
+                if (event.type === 'model.call.completed') {
+                    finalMessage = event.message;
+                }
+                input.observeStoredEvent(event);
+            },
+            ...(sessionControlHost !== undefined ? { sessionControlHost } : {}),
+        });
+        emitOwnerPromptTaskEvent(
+            input,
+            taskId,
+            'task.started',
+            `user prompt: ${input.prompt}`,
+            activeObservabilityRedactor,
+        );
         receipt = await owner.submit({
             prompt: input.prompt,
             inputId: `input_${taskId}`,
@@ -125,102 +163,60 @@ export async function runOwnerPrompt(input: RunOwnerPromptInput): Promise<void> 
             }
         } finally {
             try {
-                await mcpConnectionManager.disconnectAll();
+                if (tools !== undefined) await closeProductionToolRegistry(tools);
             } finally {
                 await ownedServices?.dispose();
             }
         }
     }
     if (receipt.status === 'completed') {
-        emitTaskEvent(input, taskId, 'task.completed', finalMessage ?? 'run completed');
-        return;
+        emitOwnerPromptTaskEvent(
+            input,
+            taskId,
+            'task.completed',
+            finalMessage ?? 'run completed',
+            activeObservabilityRedactor,
+        );
+        return resultFromReceipt('completed', receipt);
     }
     if (receipt.status === 'blocked_on_approval') {
-        return;
+        return resultFromReceipt('blocked', receipt);
     }
-    if (receipt.status === 'failed' || receipt.status === 'interrupted') {
-        emitTaskEvent(input, taskId, 'task.failed', receipt.reason ?? `run ${receipt.status}`);
-        if (input.throwOnTerminalFailure ?? true) {
-            throw new Error(receipt.reason ?? `run ${receipt.status}`);
-        }
+    if (receipt.status === 'interrupted') {
+        emitOwnerPromptTaskEvent(
+            input,
+            taskId,
+            'task.failed',
+            receipt.reason ?? `run ${receipt.status}`,
+            activeObservabilityRedactor,
+        );
+        return resultFromReceipt('cancelled', receipt);
     }
+    if (receipt.status === 'failed') {
+        emitOwnerPromptTaskEvent(
+            input,
+            taskId,
+            'task.failed',
+            receipt.reason ?? `run ${receipt.status}`,
+            activeObservabilityRedactor,
+        );
+        return resultFromReceipt('failed', receipt);
+    }
+    return resultFromReceipt('failed', receipt);
 }
 
-async function resolveMissionControlServices(workspaceRoot: string): Promise<MissionControlServices | undefined> {
-    try {
-        return await getOrCreateMissionControlServices(workspaceRoot);
-    } catch (error: unknown) {
-        if (isOmoRootNotFoundError(error)) {
-            return undefined;
-        }
-        throw error;
-    }
+async function workspaceHasTrustedBash(workspaceRoot: string): Promise<boolean> {
+    const trust = await new ProjectTrustStore().getDecision(workspaceRoot);
+    return trust.decision === 'trusted';
 }
 
-async function nextOwnerPromptTaskId(store: LocalSessionEventStore, sessionId: string): Promise<string> {
-    const events = await store.getEvents(sessionId);
-    let maxIndex = 0;
-    for (const event of events) {
-        if (event.sessionId !== sessionId) {
-            continue;
-        }
-        maxIndex = Math.max(maxIndex, maxNumericSuffix(ownerPromptIdsFromEvent(event)));
-    }
-    return `task_prompt_${maxIndex + 1}`;
-}
-
-function ownerPromptIdsFromEvent(event: AgentEvent): readonly (string | undefined)[] {
-    return [
-        event.taskId,
-        event.run?.runId,
-        event.run?.inputId,
-        event.run?.messageId,
-        event.run?.providerTurnId,
-        event.run?.toolCallId,
-        event.run?.graphId,
-        event.run?.nodeId,
-        event.transcript?.inputId,
-        event.transcript?.messageId,
-        event.transcript?.providerTurnId,
-        event.transcript?.toolCallId,
-        event.transcript?.graphId,
-        event.transcript?.nodeId,
-        event.providerStreamChunk?.requestId,
-    ];
-}
-
-function maxNumericSuffix(ids: readonly (string | undefined)[]): number {
-    let maxIndex = 0;
-    for (const id of ids) {
-        const index = numericSuffix(id);
-        if (index !== undefined) {
-            maxIndex = Math.max(maxIndex, index);
-        }
-    }
-    return maxIndex;
-}
-
-function numericSuffix(id: string | undefined): number | undefined {
-    const match = id?.match(/_(\d+)$/u);
-    if (match?.[1] === undefined) {
-        return undefined;
-    }
-    return Number.parseInt(match[1], 10);
-}
-
-function emitTaskEvent(
-    input: RunOwnerPromptInput,
-    taskId: string,
-    type: 'task.started' | 'task.completed' | 'task.failed',
-    message: string,
-): void {
-    input.emitEvent({
-        type,
-        timestamp: new Date().toISOString(),
-        sessionId: input.sessionId,
-        taskId,
-        message,
-        nativeSidecarStatus: 'mock',
-        modelProviderSelection: input.modelProviderSelection,
-    });
+function resultFromReceipt(
+    status: RunOwnerPromptResult['status'],
+    receipt: SessionRunOwnerReceipt,
+): RunOwnerPromptResult {
+    return {
+        status,
+        ...(receipt.runId !== undefined ? { runId: receipt.runId } : {}),
+        ...(receipt.reason !== undefined ? { reason: receipt.reason } : {}),
+    };
 }

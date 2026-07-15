@@ -1,5 +1,7 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
 import {
+    createProviderAuthStore,
+    createProviderAuthStoreObservabilityRedactor,
     DEFAULT_LSP_SERVERS,
     discoverSkills,
     type LspServerConfig,
@@ -163,7 +165,8 @@ async function gatherProjectSkills(workspaceRoot: string | undefined): Promise<r
 async function gatherRecentSessions(workspaceRoot: string | undefined): Promise<readonly WelcomeSession[]> {
     if (workspaceRoot === undefined) return [];
     try {
-        const entries = await listSessionCatalogEntriesForWorkspace(workspaceRoot);
+        const observabilityRedactor = await createProviderAuthStoreObservabilityRedactor(createProviderAuthStore());
+        const entries = await listSessionCatalogEntriesForWorkspace(workspaceRoot, observabilityRedactor);
         return entries.slice(0, WELCOME_SESSION_LIMIT).map(toWelcomeSession);
     } catch {
         return [];

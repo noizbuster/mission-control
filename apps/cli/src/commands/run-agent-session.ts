@@ -1,5 +1,11 @@
 import { defaultModelProviderSelection } from '@mission-control/config';
-import { type LocalSessionEventStore, openLocalSessionEventStore } from '@mission-control/core';
+import {
+    createObservabilityRedactor,
+    type LocalSessionEventStore,
+    type ObservabilityRedactor,
+    openLocalSessionEventStore,
+    redactAgentEventForObservability,
+} from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { createSessionWorkspaceMetadataEvent, resolveSessionWorkspaceMetadata } from './session-workspace-metadata.js';
@@ -20,10 +26,11 @@ export type RunEventRecorder = {
 
 export async function createRunEventRecorder(
     args: CliArgs,
-    options: { readonly workspaceRoot?: string } = {},
+    options: { readonly workspaceRoot?: string; readonly observabilityRedactor?: ObservabilityRedactor } = {},
 ): Promise<RunEventRecorder> {
     const lazy = args.mode === 'tui' && args.sessionId === undefined;
     const modelProviderSelection: ModelProviderSelection = args.modelProviderSelection ?? defaultModelProviderSelection;
+    const observabilityRedactor = options.observabilityRedactor ?? createObservabilityRedactor();
     let currentSessionId: string | undefined;
     let currentStore: LocalSessionEventStore | undefined;
     let metadataRecorded: boolean;
@@ -36,7 +43,7 @@ export async function createRunEventRecorder(
         currentStore =
             currentSessionId === undefined
                 ? undefined
-                : await openLocalSessionEventStore({ sessionId: currentSessionId });
+                : await openLocalSessionEventStore({ sessionId: currentSessionId, observabilityRedactor });
         metadataRecorded =
             currentSessionId === undefined || currentStore === undefined
                 ? false
@@ -59,7 +66,7 @@ export async function createRunEventRecorder(
         await flushAppends();
         await currentStore?.close();
         currentSessionId = sessionId;
-        currentStore = await openLocalSessionEventStore({ sessionId });
+        currentStore = await openLocalSessionEventStore({ sessionId, observabilityRedactor });
         metadataRecorded = await hasWorkspaceMetadata(currentStore, sessionId);
         return currentStore;
     };
@@ -70,7 +77,7 @@ export async function createRunEventRecorder(
             return { sessionId: currentSessionId, store: currentStore };
         }
         const sessionId = createSessionId();
-        const store = await openLocalSessionEventStore({ sessionId });
+        const store = await openLocalSessionEventStore({ sessionId, observabilityRedactor });
         currentSessionId = sessionId;
         currentStore = store;
         metadataRecorded = false;
@@ -98,7 +105,10 @@ export async function createRunEventRecorder(
             if (currentSessionId === undefined || currentStore === undefined) {
                 return event;
             }
-            const mapped = { ...event, sessionId: currentSessionId };
+            const mapped = redactAgentEventForObservability(
+                { ...event, sessionId: currentSessionId },
+                observabilityRedactor,
+            );
             appendPromises.push(currentStore.append(mapped));
             if (!metadataRecorded && mapped.type === 'session.started' && workspaceMetadata !== undefined) {
                 metadataRecorded = true;

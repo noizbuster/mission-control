@@ -52,23 +52,26 @@ function buildUsage() {
     };
 }
 
-function finalTextChunks(): LanguageModelV3StreamPart[] {
+function finalTextChunks(content: string): LanguageModelV3StreamPart[] {
     return [
         { type: 'stream-start', warnings: [] },
         { type: 'text-start', id: 't2' },
-        { type: 'text-delta', id: 't2', delta: 'Done.' },
+        { type: 'text-delta', id: 't2', delta: content },
         { type: 'text-end', id: 't2' },
         { type: 'finish', finishReason: { unified: 'stop', raw: undefined }, usage: buildUsage() },
     ];
 }
 
 function buildScriptedModel(onDoStream?: (options: unknown) => void): MockLanguageModelV3 {
+    let callIndex = 0;
     return new MockLanguageModelV3({
         provider: SELECTION.providerID,
         modelId: SELECTION.modelID,
         doStream: async (options) => {
             onDoStream?.(options);
-            return { stream: convertArrayToReadableStream(finalTextChunks()) };
+            const content = callIndex === 0 ? 'trivial' : 'Done.';
+            callIndex += 1;
+            return { stream: convertArrayToReadableStream(finalTextChunks(content)) };
         },
     });
 }

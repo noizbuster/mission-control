@@ -1,6 +1,7 @@
 import {
     type JsonlSessionReplayPrefixProjection,
     type LocalSessionEventStore,
+    type ObservabilityRedactor,
     openLocalSessionEventStore,
     projectSessionReplay,
     readLocalSessionReplay,
@@ -24,8 +25,14 @@ export type PreparedTargetSession = {
     readonly store: LocalSessionEventStore;
 };
 
-export async function readSessionNavigationReplay(sessionId: string): Promise<JsonlSessionReplayPrefixProjection> {
-    const replay = await readLocalSessionReplay({ sessionId });
+export async function readSessionNavigationReplay(
+    sessionId: string,
+    observabilityRedactor?: ObservabilityRedactor,
+): Promise<JsonlSessionReplayPrefixProjection> {
+    const replay = await readLocalSessionReplay({
+        sessionId,
+        ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
+    });
     if (replay.kind === 'found') {
         return replay.replay;
     }
@@ -53,9 +60,13 @@ export async function prepareTargetSession(input: {
     readonly startedMessage: string;
     readonly observeStoredEvent: SessionNavigationStoreObserver;
     readonly workspaceRoot?: string;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 }): Promise<PreparedTargetSession> {
     const sessionId = validatedSessionId(input.requestedSessionId ?? generatedSessionId());
-    const store = await openLocalSessionEventStore({ sessionId });
+    const store = await openLocalSessionEventStore({
+        sessionId,
+        ...(input.observabilityRedactor !== undefined ? { observabilityRedactor: input.observabilityRedactor } : {}),
+    });
     const existing = await store.getEvents(sessionId);
     if (existing.length > 0) {
         await store.close();

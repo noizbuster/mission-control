@@ -16,6 +16,7 @@ import {
     createEmptyAuthStore,
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
+import { providerFromTurns } from './run-agent-tool-registry-test-support.js';
 import { runSessionCommand } from './session.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -52,6 +53,7 @@ describe('interactive coding-agent redaction', () => {
             chatOutput: createBufferedChatOutput().output,
             workspaceRoot,
             commandExecutor: fakeSecretCommandExecutor(secret),
+            plainPromptGraph: 'coding-agent',
             provider: createDeterministicProvider([
                 { kind: 'text_delta', delta: `stream ${secret}` },
                 {
@@ -91,22 +93,30 @@ describe('interactive coding-agent redaction', () => {
                     { type: 'line', value: 'preview command tool arguments' },
                     { type: 'line', value: 'n' },
                     { type: 'interrupt' },
+                    { type: 'interrupt' },
                 ]),
                 chatOutput: createBufferedChatOutput().output,
                 workspaceRoot,
                 commandExecutor: fakeSecretCommandExecutor(secret),
-                provider: createDeterministicProvider([
-                    {
-                        kind: 'tool_call_completed',
-                        toolCallId: 'command_preview_secret',
-                        toolName: 'command.run',
-                        argumentsJson: JSON.stringify({
-                            command: 'pnpm',
-                            args: ['exec', 'vitest', 'run', `${secret}.test.ts`],
-                        }),
-                    },
-                    { kind: 'response_completed', content: 'preview command' },
-                ]),
+                plainPromptGraph: 'coding-agent',
+                provider: providerFromTurns(
+                    [],
+                    [
+                        [
+                            {
+                                kind: 'tool_call_completed',
+                                toolCallId: 'command_preview_secret',
+                                toolName: 'command.run',
+                                argumentsJson: JSON.stringify({
+                                    command: 'pnpm',
+                                    args: ['exec', 'vitest', 'run', `${secret}.test.ts`],
+                                }),
+                            },
+                            { kind: 'response_completed', content: 'preview command' },
+                        ],
+                        [{ kind: 'response_completed', content: 'adapted after command denial' }],
+                    ],
+                ),
             },
         );
         const patchPreview = await runAgent(
@@ -117,18 +127,26 @@ describe('interactive coding-agent redaction', () => {
                     { type: 'line', value: 'preview patch tool arguments' },
                     { type: 'line', value: 'n' },
                     { type: 'interrupt' },
+                    { type: 'interrupt' },
                 ]),
                 chatOutput: createBufferedChatOutput().output,
                 workspaceRoot,
-                provider: createDeterministicProvider([
-                    {
-                        kind: 'tool_call_completed',
-                        toolCallId: 'patch_preview_secret',
-                        toolName: 'file.patch',
-                        argumentsJson: JSON.stringify({ patch: addFilePatch('.preview-secret.txt', secret) }),
-                    },
-                    { kind: 'response_completed', content: 'preview patch' },
-                ]),
+                plainPromptGraph: 'coding-agent',
+                provider: providerFromTurns(
+                    [],
+                    [
+                        [
+                            {
+                                kind: 'tool_call_completed',
+                                toolCallId: 'patch_preview_secret',
+                                toolName: 'file.patch',
+                                argumentsJson: JSON.stringify({ patch: addFilePatch('.preview-secret.txt', secret) }),
+                            },
+                            { kind: 'response_completed', content: 'preview patch' },
+                        ],
+                        [{ kind: 'response_completed', content: 'adapted after patch denial' }],
+                    ],
+                ),
             },
         );
 

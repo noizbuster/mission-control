@@ -61,3 +61,14 @@ export function runModelListAction(
     }
     return actionResult(currentSelection, activeTurn);
 }
+
+export function runModelSelectionAction(
+    runtime: AgentRuntime,
+    chatOutput: ChatOutput,
+    selection: ModelProviderSelection,
+    activeTurn: CodingActionContext['activeTurn'],
+): ChatActionResult {
+    runtime.setModelProviderSelection(selection);
+    chatOutput.write(formatModelProviderStatus(selection, { nodeMode: 'none' }));
+    return actionResult(selection, activeTurn, { persistModelProviderSelection: true });
+}

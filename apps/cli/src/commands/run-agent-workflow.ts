@@ -1,18 +1,4 @@
-import {
-    completeRun,
-    createMission,
-    discoverWorkflows,
-    ensureOmoDirs,
-    failRun,
-    materializeMission,
-    type NormalizedMissionRunStoreLocation,
-    normalizeMissionRunStoreLocation,
-    PluginManager,
-    registerBuiltinWorkflows,
-    resolveOmoRoot,
-    startRun,
-    WorkflowRegistry,
-} from '@mission-control/core';
+import { discoverWorkflows, PluginManager, registerBuiltinWorkflows, WorkflowRegistry } from '@mission-control/core';
 import type { AbgGraphSpec, WorkflowSpec } from '@mission-control/protocol';
 import { splitCommandParts } from './chat-command-parts.js';
 import { graphForDefaultFallback, graphForWorkflowSpec } from './workflow-materialization.js';
@@ -27,16 +13,6 @@ export type WorkflowInvocation = {
 export type WorkflowInvocationInput = {
     readonly workflowName?: string;
     readonly prompt?: string;
-};
-
-export type NoninteractiveWorkflowRunHandle = {
-    readonly location: NormalizedMissionRunStoreLocation;
-    readonly runId: string;
-};
-
-export type WorkflowRunOutcome = {
-    readonly failed: boolean;
-    readonly reason?: string;
 };
 
 export type NoninteractiveWorkflowSelection = {
@@ -128,46 +104,4 @@ export async function resolveNoninteractiveWorkflowSelection(input: {
             : { effectivePrompt: input.args.prompt, workflowGraph: fallbackGraph };
     }
     return input.args.prompt === undefined ? {} : { effectivePrompt: input.args.prompt };
-}
-
-export async function beginNoninteractiveWorkflowRun(
-    workspaceRoot: string,
-    workflowSpec: WorkflowSpec | undefined,
-): Promise<NoninteractiveWorkflowRunHandle | undefined> {
-    if (workflowSpec === undefined) {
-        return undefined;
-    }
-    let omoRoot: string;
-    try {
-        omoRoot = await resolveOmoRoot(workspaceRoot);
-    } catch {
-        return undefined;
-    }
-    await ensureOmoDirs(omoRoot);
-    const location = normalizeMissionRunStoreLocation({ omoRoot });
-    const mission = materializeMission(workflowSpec);
-    await createMission(location, mission);
-    const run = await startRun(location, mission.id, '');
-    return { location, runId: run.id };
-}
-
-export async function settleNoninteractiveWorkflowRun(
-    handle: NoninteractiveWorkflowRunHandle | undefined,
-    outcome: WorkflowRunOutcome,
-): Promise<void> {
-    if (handle === undefined) {
-        return;
-    }
-    try {
-        if (outcome.failed) {
-            await failRun(handle.location, handle.runId, outcome.reason ?? 'run failed');
-        } else {
-            await completeRun(handle.location, handle.runId);
-        }
-    } catch (error: unknown) {
-        if (error instanceof Error) {
-            return;
-        }
-        return;
-    }
 }

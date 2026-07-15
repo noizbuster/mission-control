@@ -19,6 +19,7 @@ import {
     type BackgroundJobHandle,
     createSqlTaskRuntimeServices,
     MAIN_AGENT_ID,
+    type ObservabilityRedactor,
     type RuntimeAgentRegistry,
     resolveMissionControlDataDir,
     resolveOmoRoot,
@@ -39,6 +40,7 @@ export interface MissionControlServicesOptions {
      * the session-wide default a caller threads into `adopt`.
      */
     readonly defaultIdleTtlMs?: number;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 }
 
 export interface JobStatsSnapshot {
@@ -91,6 +93,9 @@ export class MissionControlServices {
         const resolvedOptions = options ?? {};
         const sqlServices = await createSqlTaskRuntimeServices(resolveMissionControlDataDir(), {
             maxConcurrency: resolvedOptions.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY,
+            ...(resolvedOptions.observabilityRedactor !== undefined
+                ? { observabilityRedactor: resolvedOptions.observabilityRedactor }
+                : {}),
         });
         return new MissionControlServices(omoRoot, resolvedOptions, sqlServices);
     }

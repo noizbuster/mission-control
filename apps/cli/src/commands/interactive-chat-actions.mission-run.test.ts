@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 258 -> current 265 pure LOC; one workflow Mission/Run persistence lifecycle integration matrix.
 import {
     AgentRuntime,
     createAllowPermissionDecision,
@@ -40,7 +41,12 @@ describe('workflow Mission/Run persistence', () => {
             currentSelection,
             async () => undefined,
             [],
-            makeCodingContext({ workspaceRoot: workspace, provider, workflowRegistry: registry }),
+            makeCodingContext({
+                workspaceRoot: workspace,
+                provider,
+                workflowRegistry: registry,
+                sessionId: 'session_interactive_actual',
+            }),
         );
 
         const location = locationForWorkspace(workspace);
@@ -52,6 +58,7 @@ describe('workflow Mission/Run persistence', () => {
         const runs = await listRunsForMission(location, missions[0]!.id);
         expect(runs).toHaveLength(1);
         expect(runs[0]?.status).toBe('completed');
+        expect(runs[0]?.sessionId).toBe('session_interactive_actual');
     });
 
     it('settles the Run as failed when the workflow turn fails', async () => {
@@ -255,6 +262,7 @@ function makeCodingContext(overrides: {
     readonly provider?: ProviderAdapter;
     readonly workflowRegistry?: WorkflowRegistry;
     readonly activeTurn?: NonNullable<CodingActionContext['activeTurn']>;
+    readonly sessionId?: string;
 }): CodingActionContext {
     return {
         activeTurn: overrides.activeTurn,
@@ -264,7 +272,7 @@ function makeCodingContext(overrides: {
         nextTurnId: () => 'turn_test',
         observeStoredEvent: undefined,
         provider: overrides.provider,
-        sessionId: undefined,
+        sessionId: overrides.sessionId,
         sessionStore: undefined,
         workspaceRoot: overrides.workspaceRoot,
         ...(overrides.workflowRegistry !== undefined ? { workflowRegistry: overrides.workflowRegistry } : {}),

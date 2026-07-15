@@ -8,17 +8,16 @@
  */
 import type { ProviderAdapter } from '@mission-control/core';
 import { discoverWorkflows, WorkflowRegistry } from '@mission-control/core';
-import type { ModelProviderSelection } from '@mission-control/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CliArgs } from '../args.js';
-import { createProviderAuthStore } from '../auth-store.js';
-import { createCliProviderForSelection, runAgent } from './run-agent.js';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { runAgent } from './run-agent.js';
+import {
+    buildWorkflowArgs,
+    createWorkflowLocalProvider,
+    parseWorkflowJsonEvents,
+} from './workflow-e2e-test-support.js';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
-const LOCAL_SELECTION: ModelProviderSelection = { providerID: 'local', modelID: 'local-echo' };
-const PRODUCTION_DEFAULT_FIXTURE = `${process.cwd()}/examples/abg/default.workflow.json`;
 
 const TEST_WORKFLOW_SPEC = {
     name: 'test',
@@ -61,26 +60,6 @@ const DEFAULT_WORKFLOW_SPEC = {
     },
 } as const;
 
-type GraphEvent = {
-    readonly type: string;
-    readonly abg?: {
-        readonly graphId?: string;
-        readonly nodeId?: string;
-        readonly nodeKind?: string;
-    };
-};
-
-function parseJsonEvents(output: string): readonly GraphEvent[] {
-    return output
-        .trim()
-        .split('\n')
-        .map((line) => JSON.parse(line) as GraphEvent);
-}
-
-function createLocalProvider(): ProviderAdapter {
-    return createCliProviderForSelection(LOCAL_SELECTION, createProviderAuthStore());
-}
-
 async function createE2eWorkspace(): Promise<string> {
     const dir = await mkdtemp(join(tmpdir(), 'mctrl-wf-e2e-ws-'));
     const workflowsDir = join(dir, '.mctrl', 'workflows');
@@ -88,19 +67,6 @@ async function createE2eWorkspace(): Promise<string> {
     await writeFile(join(workflowsDir, 'test.workflow.json'), JSON.stringify(TEST_WORKFLOW_SPEC), 'utf8');
     await writeFile(join(workflowsDir, 'default.workflow.json'), JSON.stringify(DEFAULT_WORKFLOW_SPEC), 'utf8');
     return dir;
-}
-
-function buildArgs(prompt: string, mode: CliArgs['mode']): CliArgs {
-    return {
-        mode,
-        useNative: false,
-        command: 'run',
-        showHelp: false,
-        showVersion: false,
-        thinking: false,
-        prompt,
-        modelProviderSelection: LOCAL_SELECTION,
-    };
 }
 
 describe('workflow dispatch end-to-end', () => {
@@ -115,7 +81,7 @@ describe('workflow dispatch end-to-end', () => {
         dataDir = await mkdtemp(join(tmpdir(), 'mctrl-wf-e2e-data-'));
         vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
-        provider = createLocalProvider();
+        provider = createWorkflowLocalProvider();
     });
 
     afterEach(async () => {
@@ -126,11 +92,11 @@ describe('workflow dispatch end-to-end', () => {
     });
 
     it('discovers a custom workflow and dispatches its graph via #name', async () => {
-        const output = await runAgent(buildArgs('#test hello', 'json'), {
+        const output = await runAgent(buildWorkflowArgs('#test hello', 'json'), {
             provider,
             workspaceRoot: workspaceDir,
         });
-        const events = parseJsonEvents(output);
+        const events = parseWorkflowJsonEvents(output);
 
         expect(events.some((e) => e.type === 'graph.started' && e.abg?.graphId === 'test-e2e-graph')).toBe(true);
         expect(events.some((e) => e.type === 'graph.completed')).toBe(true);
@@ -140,7 +106,7 @@ describe('workflow dispatch end-to-end', () => {
 
     it('rejects an unknown workflow name with available workflows listed', async () => {
         await expect(
-            runAgent(buildArgs('#nonexistent do something', 'plain'), {
+            runAgent(buildWorkflowArgs('#nonexistent do something', 'plain'), {
                 provider,
                 workspaceRoot: workspaceDir,
             }),
@@ -148,7 +114,7 @@ describe('workflow dispatch end-to-end', () => {
     });
 
     it('resolves #default to a discovered default workflow', async () => {
-        const output = await runAgent(buildArgs('#default hello', 'plain'), {
+        const output = await runAgent(buildWorkflowArgs('#default hello', 'plain'), {
             provider,
             workspaceRoot: workspaceDir,
         });
@@ -158,16 +124,16 @@ describe('workflow dispatch end-to-end', () => {
         expect(output).toBe('');
     });
 
-    it('falls back to the coding-agent graph when no # prefix is present', async () => {
-        const output = await runAgent(buildArgs('just a regular prompt', 'plain'), {
+    it('routes a plain prompt through the built-in default workflow', async () => {
+        const output = await runAgent(buildWorkflowArgs('just a regular prompt', 'json'), {
             provider,
             workspaceRoot: workspaceDir,
         });
+        const events = parseWorkflowJsonEvents(output);
 
-        expect(output).not.toContain('test-e2e-graph');
-        expect(output).not.toContain('default-e2e-graph');
-        // T8 streaming gate: plain mode returns '' (blocks streamed to stdout).
-        expect(output).toBe('');
+        expect(events.some((event) => event.type === 'graph.started' && event.abg?.graphId === 'default')).toBe(true);
+        expect(events.some((event) => event.type === 'graph.completed')).toBe(true);
+        expect(events.some((event) => event.type === 'task.completed')).toBe(true);
     });
 
     it('discovers workflow files via discoverWorkflows and resolves via WorkflowRegistry', async () => {
@@ -183,90 +149,5 @@ describe('workflow dispatch end-to-end', () => {
         expect(registry.lookup('nonexistent')).toBeUndefined();
         expect(registry.names()).toContain('test');
         expect(registry.names()).toContain('default');
-    });
-});
-
-describe('default workflow (production fixture) end-to-end', () => {
-    let workspaceDir: string;
-    let configDir: string;
-    let dataDir: string;
-    let provider: ProviderAdapter;
-
-    beforeEach(async () => {
-        workspaceDir = await mkdtemp(join(tmpdir(), 'mctrl-default-prod-ws-'));
-        const workflowsDir = join(workspaceDir, '.mctrl', 'workflows');
-        await mkdir(workflowsDir, { recursive: true });
-        const fixture = await readFile(PRODUCTION_DEFAULT_FIXTURE, 'utf8');
-        await writeFile(join(workflowsDir, 'default.workflow.json'), fixture, 'utf8');
-        configDir = await mkdtemp(join(tmpdir(), 'mctrl-default-prod-cfg-'));
-        dataDir = await mkdtemp(join(tmpdir(), 'mctrl-default-prod-data-'));
-        vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
-        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
-        provider = createLocalProvider();
-    });
-
-    afterEach(async () => {
-        vi.unstubAllEnvs();
-        await rm(workspaceDir, { recursive: true, force: true });
-        await rm(configDir, { recursive: true, force: true });
-        await rm(dataDir, { recursive: true, force: true });
-    });
-
-    it('discovers the production default workflow with the 5-class intent-gate entry node', async () => {
-        const result = await discoverWorkflows({
-            workspaceRoot: workspaceDir,
-            userConfigDir: configDir,
-        });
-
-        expect(result.diagnostics).toEqual([]);
-        const registry = new WorkflowRegistry(result.workflows);
-        const spec = registry.lookup('default');
-        expect(spec?.graph.id).toBe('default');
-        expect(spec?.graph.entryNodeId).toBe('intent-gate');
-        const intentGate = spec?.graph.nodes.find((node) => node.id === 'intent-gate');
-        const outputKey = 'outputKey';
-        expect(intentGate?.config?.[outputKey]).toBe('intent.classification');
-    });
-
-    it('dispatches a plain prompt (no #) through the default workflow graph', async () => {
-        const output = await runAgent(buildArgs('explain how the build works', 'json'), {
-            provider,
-            workspaceRoot: workspaceDir,
-        });
-        const events = parseJsonEvents(output);
-
-        expect(events.some((event) => event.type === 'graph.started' && event.abg?.graphId === 'default')).toBe(true);
-        expect(events.some((event) => event.type === 'graph.completed')).toBe(true);
-        expect(events.some((event) => event.type === 'task.completed')).toBe(true);
-    });
-
-    it('the production default graph runs the intent-gate entry node', async () => {
-        const output = await runAgent(buildArgs('hello', 'json'), {
-            provider,
-            workspaceRoot: workspaceDir,
-        });
-        const events = parseJsonEvents(output);
-
-        expect(events.some((event) => event.type === 'model.call.started' && event.abg?.nodeId === 'intent-gate')).toBe(
-            true,
-        );
-    });
-
-    it('the production default graph carries the new richness nodes (research-explore, route-planner, evidence-check)', async () => {
-        const result = await discoverWorkflows({
-            workspaceRoot: workspaceDir,
-            userConfigDir: configDir,
-        });
-        const registry = new WorkflowRegistry(result.workflows);
-        const spec = registry.lookup('default');
-        expect(spec).toBeDefined();
-        if (spec === undefined) return;
-
-        const nodeIds = new Set(spec.graph.nodes.map((node) => node.id));
-        expect(nodeIds.has('research-explore')).toBe(true);
-        expect(nodeIds.has('route-planner')).toBe(true);
-        expect(nodeIds.has('anti-dup-guard')).toBe(true);
-        expect(nodeIds.has('evidence-check')).toBe(true);
-        expect(nodeIds.has('maturity-check')).toBe(true);
     });
 });

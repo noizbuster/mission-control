@@ -15,8 +15,11 @@ import {
 } from './compact-command-test-support.js';
 import { runAgent } from './run-agent.js';
 import {
+    createAuthStoreWithSummaries,
     createBufferedChatOutput,
+    createCredentialSummary,
     createEmptyAuthStore,
+    createFieldsCredential,
     createScriptedChatInput,
 } from './run-agent-chat-test-support.js';
 import { rm, writeFile } from 'node:fs/promises';
@@ -169,6 +172,36 @@ describe('interactive compact command', () => {
                     message.content.includes('Session memory summary (untrusted, model-generated):'),
             ),
         ).toBe(false);
+    });
+
+    it('redacts an arbitrary configured credential from the persisted compaction summary', async () => {
+        // Given
+        const dataDir = await tempRoot(roots, 'mctrl-compact-configured-data-');
+        const sessionId = 'session_compact_configured_credential';
+        const secret = ['configured', 'compaction', 'credential'].join('_');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await seedCompactionSession(dataDir, sessionId);
+        const authStore = createAuthStoreWithSummaries([createCredentialSummary('custom-provider')], {
+            'custom-provider': createFieldsCredential('custom-provider', secret),
+        });
+
+        // When
+        await runAgent(parseArgs(['--session', sessionId]), {
+            authStore,
+            chatInput: createScriptedChatInput([
+                { type: 'line', value: '/compact' },
+                { type: 'line', value: '/exit' },
+            ]),
+            chatOutput: createBufferedChatOutput().output,
+            provider: captureSummaryProvider([], `summary contains ${secret}`),
+        });
+        const observable = JSON.stringify(
+            (await readReplay(dataDir, sessionId)).projection.sessionTree.compactionBoundaries,
+        );
+
+        // Then
+        expect(observable).toContain('[REDACTED_CREDENTIAL]');
+        expect(observable).not.toContain(secret);
     });
 
     it('reports provider failures without corrupting session state', async () => {

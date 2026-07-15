@@ -1,6 +1,7 @@
 import { createDeterministicProvider } from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
+import { captureSequentialProvider } from './compact-command-test-support.js';
 import { runAgent } from './run-agent.js';
 import { writeToolWorkflow } from './run-agent-json-approval-test-support.js';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -29,7 +30,7 @@ describe('runAgent JSON headless final state', () => {
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
 
         const output = await runAgent(parseArgs(['run', 'summarize this repository', '--json']), {
-            provider: createDeterministicProvider([{ kind: 'response_completed', content: 'summarized' }]),
+            provider: captureSequentialProvider([], ['exploratory-research', 'true', 'summarized']),
         });
         const finalRecord = lastRecord(parseJsonRecords(output));
 

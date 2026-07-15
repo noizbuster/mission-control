@@ -1,7 +1,13 @@
 import { InProcessLspClient, type LspDiagnostic } from '@mission-control/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createInteractiveToolRegistry, preflightInteractiveToolCall } from './interactive-coding-tools.js';
-import { fakeBroker, throwingResolver, toolCall, toolOptions } from './interactive-coding-tools-test-support.js';
+import {
+    capturingYieldResolver,
+    fakeBroker,
+    throwingResolver,
+    toolCall,
+    toolOptions,
+} from './interactive-coding-tools-test-support.js';
 import { createBufferedChatOutput } from './run-agent-chat-test-support.js';
 import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
@@ -156,6 +162,33 @@ describe('interactive coding tool registry surface', () => {
             .find((advertisement: { name: string }) => advertisement.name === 'task');
         expect(taskAd?.guideline).toBeDefined();
         expect(taskAd?.capabilityClasses).toContain('subagent');
+    });
+
+    it('keeps the interactive root honest: explore category denies remove child mutation tools', async () => {
+        const workspaceRoot = mkdtempSync(join(tmpdir(), 'mctrl-interactive-child-policy-'));
+        tempRoots.push(workspaceRoot);
+        const output = createBufferedChatOutput();
+        const capturedToolNames: string[][] = [];
+        const result = await createInteractiveToolRegistry(
+            {
+                ...toolOptions(output.output, workspaceRoot, capturingYieldResolver(capturedToolNames)),
+                enableTrustedBash: true,
+            },
+            fakeBroker(),
+        );
+        const task = result.registry.advertise().find((advertisement) => advertisement.name === 'task');
+        if (task === undefined) throw new Error('task tool was not registered');
+
+        const settlement = await result.registry.invoke({
+            toolCallId: 'interactive-explore-task',
+            toolName: 'task',
+            advertisedVersion: task.version,
+            argumentsJson: JSON.stringify({ category: 'explore', prompt: 'inspect without mutations' }),
+        });
+
+        expect(settlement.result.status).toBe('completed');
+        expect(capturedToolNames[0]).not.toContain('file.write');
+        expect(capturedToolNames[0]).not.toContain('bash.run');
     });
 
     it('omits the task tool when resolveSdkModel is not provided', async () => {

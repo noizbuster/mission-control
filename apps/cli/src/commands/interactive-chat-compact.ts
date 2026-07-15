@@ -1,6 +1,10 @@
 import {
+    createObservabilityRedactor,
+    createProviderAuthStoreObservabilityRedactor,
     type LocalSessionEventStore,
+    type ObservabilityRedactor,
     type ProviderAdapter,
+    type ProviderAuthStore,
     ProviderTurnError,
     ProviderTurnRunner,
     prepareSessionCompaction,
@@ -19,6 +23,7 @@ type CompactionTurnOptions = {
     readonly workspaceRoot?: string;
     readonly observeStoredEvent?: (event: AgentEvent) => void;
     readonly instructions?: string;
+    readonly authStore?: ProviderAuthStore;
 };
 
 export function startCompactionTurn(options: CompactionTurnOptions): ActiveCodingAgentTurn {
@@ -43,7 +48,14 @@ export function startCompactionTurn(options: CompactionTurnOptions): ActiveCodin
 }
 
 async function runCompactionTurn(options: CompactionTurnOptions, signal: AbortSignal): Promise<void> {
-    const replay = await readLocalSessionReplay({ sessionId: options.sessionId });
+    const observabilityRedactor =
+        options.authStore === undefined
+            ? createObservabilityRedactor()
+            : await createProviderAuthStoreObservabilityRedactor(options.authStore);
+    const replay = await readLocalSessionReplay({
+        sessionId: options.sessionId,
+        observabilityRedactor,
+    });
     if (replay.kind === 'missing') {
         options.output.write(`Compaction failed: session not found: ${options.sessionId}\n`);
         return;
@@ -58,7 +70,12 @@ async function runCompactionTurn(options: CompactionTurnOptions, signal: AbortSi
         return;
     }
 
-    const summary = await generateCompactionSummary(options, preparation.summaryMessages, signal);
+    const summary = await generateCompactionSummary({
+        options,
+        visibleMessages: preparation.summaryMessages,
+        signal,
+        observabilityRedactor,
+    });
     const storedEvent = await options.store.compact({
         sessionId: options.sessionId,
         timestamp: new Date().toISOString(),
@@ -77,11 +94,13 @@ async function runCompactionTurn(options: CompactionTurnOptions, signal: AbortSi
     );
 }
 
-async function generateCompactionSummary(
-    options: CompactionTurnOptions,
-    visibleMessages: readonly AgentMessage[],
-    signal: AbortSignal,
-): Promise<string> {
+async function generateCompactionSummary(input: {
+    readonly options: CompactionTurnOptions;
+    readonly visibleMessages: readonly AgentMessage[];
+    readonly signal: AbortSignal;
+    readonly observabilityRedactor: ObservabilityRedactor;
+}): Promise<string> {
+    const { observabilityRedactor, options, signal, visibleMessages } = input;
     const runner = new ProviderTurnRunner({ provider: options.provider, retryLimit: 0 });
     const requestMessages = buildCompactionRequestMessages(visibleMessages, options.instructions);
     const result = await runner.runTurn({
@@ -96,6 +115,7 @@ async function generateCompactionSummary(
         messages: requestMessages,
         startSequence: 0,
         signal,
+        observabilityRedactor,
     });
     if (result.status === 'failed') {
         throw new ProviderTurnError(result.error);

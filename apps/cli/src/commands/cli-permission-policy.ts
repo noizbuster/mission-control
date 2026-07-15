@@ -11,6 +11,7 @@ const permissionScopedCliActions = [
     'file.patch',
     'command.run',
     'bash.run',
+    'eval',
     'glob',
     'webfetch',
     'task',

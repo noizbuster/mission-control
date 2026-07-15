@@ -1,4 +1,4 @@
-import { type LocalSessionEventStore as SessionStore } from '@mission-control/core';
+import { type ObservabilityRedactor, type LocalSessionEventStore as SessionStore } from '@mission-control/core';
 import type { AgentEvent, ModelProviderSelection } from '@mission-control/protocol';
 import {
     formatSessionSummary,
@@ -61,7 +61,9 @@ export function createSessionNavigationController(input: {
     readonly switchSessionStore: (sessionId: string) => Promise<SessionStore>;
     readonly observeStoredEvent?: (event: AgentEvent) => void;
     readonly workspaceRoot?: string;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 }): SessionNavigationController {
+    const readReplay = (sessionId: string) => readSessionNavigationReplay(sessionId, input.observabilityRedactor);
     return {
         startNewSession: async ({ modelProviderSelection, sessionId }) => {
             const prepared = await prepareTargetSession({
@@ -70,6 +72,9 @@ export function createSessionNavigationController(input: {
                 observeStoredEvent: input.observeStoredEvent,
                 ...(input.workspaceRoot !== undefined ? { workspaceRoot: input.workspaceRoot } : {}),
                 ...(sessionId !== undefined ? { requestedSessionId: sessionId } : {}),
+                ...(input.observabilityRedactor !== undefined
+                    ? { observabilityRedactor: input.observabilityRedactor }
+                    : {}),
             });
             const store = await finalizeAndSwitchTargetSession(prepared, input.switchSessionStore);
             return {
@@ -79,7 +84,7 @@ export function createSessionNavigationController(input: {
             };
         },
         switchSession: async ({ sessionId }) => {
-            const replay = await readSessionNavigationReplay(validatedSessionId(sessionId));
+            const replay = await readReplay(validatedSessionId(sessionId));
             assertReplayIsReadable(replay, sessionId, 'switch');
             const store = await input.switchSessionStore(sessionId);
             const selection = latestSelection(replay);
@@ -92,7 +97,7 @@ export function createSessionNavigationController(input: {
         },
         listSessions: async () => {
             const currentSessionId = input.getCurrentSessionId();
-            const lines = (await listSessionCatalogEntries()).map(
+            const lines = (await listSessionCatalogEntries(input.observabilityRedactor)).map(
                 (entry) => `${entry.sessionId === currentSessionId ? '* ' : '  '}${formatSessionCatalogEntry(entry)}`,
             );
             return { message: `${lines.join('\n')}\n` };
@@ -101,19 +106,19 @@ export function createSessionNavigationController(input: {
             const resolvedSessionId = validatedSessionId(
                 sessionId ?? requireCurrentSessionId(input.getCurrentSessionId()),
             );
-            const replay = await readSessionNavigationReplay(resolvedSessionId);
+            const replay = await readReplay(resolvedSessionId);
             return { message: formatSessionSummary(resolvedSessionId, replay) };
         },
         showTree: async ({ sessionId }) => {
             const resolvedSessionId = validatedSessionId(
                 sessionId ?? requireCurrentSessionId(input.getCurrentSessionId()),
             );
-            const replay = await readSessionNavigationReplay(resolvedSessionId);
+            const replay = await readReplay(resolvedSessionId);
             return { message: formatSessionTree(resolvedSessionId, replay) };
         },
         forkSession: async ({ entryId, modelProviderSelection, sessionId }) => {
             const sourceSessionId = requireCurrentSessionId(input.getCurrentSessionId());
-            const replay = await readSessionNavigationReplay(sourceSessionId);
+            const replay = await readReplay(sourceSessionId);
             assertReplayIsReadable(replay, sourceSessionId, 'fork');
             const sourceNode = replay.projection.sessionTree.nodes.find((node) => node.entryId === entryId);
             if (sourceNode === undefined) {
@@ -126,6 +131,9 @@ export function createSessionNavigationController(input: {
                 observeStoredEvent: input.observeStoredEvent,
                 ...(input.workspaceRoot !== undefined ? { workspaceRoot: input.workspaceRoot } : {}),
                 ...(sessionId !== undefined ? { requestedSessionId: sessionId } : {}),
+                ...(input.observabilityRedactor !== undefined
+                    ? { observabilityRedactor: input.observabilityRedactor }
+                    : {}),
             });
             await copyDurableReplayEnvelopes(
                 prepared.store,
@@ -162,7 +170,7 @@ export function createSessionNavigationController(input: {
         },
         cloneSession: async ({ modelProviderSelection, sessionId }) => {
             const sourceSessionId = requireCurrentSessionId(input.getCurrentSessionId());
-            const replay = await readSessionNavigationReplay(sourceSessionId);
+            const replay = await readReplay(sourceSessionId);
             assertReplayIsReadable(replay, sourceSessionId, 'clone');
             const prepared = await prepareTargetSession({
                 fallbackSelection: modelProviderSelection,
@@ -171,6 +179,9 @@ export function createSessionNavigationController(input: {
                 observeStoredEvent: input.observeStoredEvent,
                 ...(input.workspaceRoot !== undefined ? { workspaceRoot: input.workspaceRoot } : {}),
                 ...(sessionId !== undefined ? { requestedSessionId: sessionId } : {}),
+                ...(input.observabilityRedactor !== undefined
+                    ? { observabilityRedactor: input.observabilityRedactor }
+                    : {}),
             });
             await copyDurableReplayEnvelopes(
                 prepared.store,
@@ -200,7 +211,7 @@ export function createSessionNavigationController(input: {
         selectBranch: async ({ entryId, modelProviderSelection }) => {
             const sessionId = requireCurrentSessionId(input.getCurrentSessionId());
             const store = requireCurrentStore(input.getCurrentStore());
-            const replay = await readSessionNavigationReplay(sessionId);
+            const replay = await readReplay(sessionId);
             assertReplayIsReadable(replay, sessionId, 'select branch');
             if (!replay.projection.sessionTree.nodes.some((node) => node.entryId === entryId)) {
                 throw new SessionNavigationError(`Session tree entry not found: ${entryId}`);

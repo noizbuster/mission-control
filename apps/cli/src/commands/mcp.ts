@@ -1,6 +1,7 @@
 import {
     type LoadMcpConfigOptions,
     loadResolvedMcpConfig,
+    loadRuntimeMcpConfig,
     type McpClient,
     type McpToolInfo,
     RemoteMcpClient,
@@ -8,6 +9,7 @@ import {
     removeProjectMcpServer,
     removeUserMcpServer,
     resolveProjectConfigPath,
+    resolveProjectTrustDecision,
     resolveUserConfigPath,
     StdioMcpClient,
     ToolExecutionError,
@@ -16,6 +18,8 @@ import {
 } from '@mission-control/core';
 import { type McpConfigEntry, McpConfigEntrySchema } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
+import { formatRemoteUrlForDisplay } from './mcp-display.js';
+import { resolveWorkspaceRoot } from './run-agent-workspace.js';
 
 const SECRET_MASK = '***';
 
@@ -94,7 +98,9 @@ async function runMcpTest(args: CliArgs, options: McpCommandOptions): Promise<st
     if (args.mcpName === undefined) {
         throw new Error('mcp test requires a server name');
     }
-    const resolved = await loadResolvedMcpConfig(options);
+    const workspaceRoot = options.workspaceRoot ?? resolveWorkspaceRoot(undefined);
+    const projectTrustDecision = await resolveProjectTrustDecision(workspaceRoot);
+    const resolved = await loadRuntimeMcpConfig({ ...options, workspaceRoot, projectTrustDecision });
     const server = resolved.servers.find((entry) => entry.name === args.mcpName);
     if (server === undefined) {
         return `MCP server ${args.mcpName} is not configured\n`;
@@ -102,26 +108,23 @@ async function runMcpTest(args: CliArgs, options: McpCommandOptions): Promise<st
     if (!server.enabled) {
         return `MCP server ${args.mcpName} is disabled; enable it to test\n`;
     }
-    const client = buildClientFromServer(server, resolved.expandedSecrets, options.workspaceRoot ?? process.cwd());
+    const client = buildClientFromServer(server, resolved.expandedSecrets, workspaceRoot);
     let tools: readonly McpToolInfo[];
     try {
         await client.connect();
         tools = await client.listTools();
     } catch (error) {
-        return formatTestFailure(args.mcpName, error);
+        const failure = error instanceof Error ? error : String(error);
+        return redactSecrets(formatTestFailure(args.mcpName, failure), resolved.expandedSecrets);
     } finally {
-        try {
-            await client.close();
-        } catch {
-            // best-effort teardown
-        }
+        await Promise.allSettled([client.close()]);
     }
     const lines: string[] = [`MCP server ${args.mcpName} (${tools.length} tool${tools.length === 1 ? '' : 's'})`];
     for (const tool of tools) {
         lines.push(`  ${tool.name}${tool.description !== undefined ? ` - ${tool.description}` : ''}`);
     }
     lines.push('');
-    return lines.join('\n');
+    return redactSecrets(lines.join('\n'), resolved.expandedSecrets);
 }
 
 function buildEntryFromArgs(args: CliArgs): McpConfigEntry {
@@ -201,7 +204,7 @@ function formatServerLine(server: ResolvedMcpServer): string {
             : Object.entries(server.headers).map(([key]) => `      ${key}=${SECRET_MASK}`);
     return [
         `  ${server.name} [remote, ${server.scope}]${enabledLabel}`,
-        `      url: ${server.url}`,
+        `      url: ${formatRemoteUrlForDisplay(server.url)}`,
         ...(server.timeoutMs !== undefined ? [`      timeout: ${server.timeoutMs}ms`] : []),
         ...(headerLines.length > 0 ? ['      headers:', ...headerLines] : []),
     ].join('\n');

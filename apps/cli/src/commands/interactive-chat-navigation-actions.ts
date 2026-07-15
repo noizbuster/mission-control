@@ -48,7 +48,7 @@ export async function runSessionNavigationAction(
             return actionResult(modelProviderSelection);
         }
         if (result.sessionId !== undefined) {
-            const transcript = await loadSessionTranscript(result.sessionId);
+            const transcript = await loadSessionTranscript(result.sessionId, coding.observabilityRedactor);
             coding.undoRedo?.replaceOutputText(transcript);
         }
         chatOutput.write(result.message);

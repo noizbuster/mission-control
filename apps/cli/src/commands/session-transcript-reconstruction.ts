@@ -1,5 +1,5 @@
 import type { CodingReplayStep } from '@mission-control/core';
-import { readLocalSessionReplay } from '@mission-control/core';
+import { type ObservabilityRedactor, readLocalSessionReplay } from '@mission-control/core';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
 
 /**
@@ -107,9 +107,15 @@ export function reconstructSessionTranscript(input: SessionTranscriptInput): str
  * transcript text. Returns an empty string when the log is missing, empty, or
  * corrupt so callers can resume unconditionally without a try/catch.
  */
-export async function loadSessionTranscript(sessionId: string): Promise<string> {
+export async function loadSessionTranscript(
+    sessionId: string,
+    observabilityRedactor?: ObservabilityRedactor,
+): Promise<string> {
     try {
-        const replay = await readLocalSessionReplay({ sessionId });
+        const replay = await readLocalSessionReplay({
+            sessionId,
+            ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
+        });
         return replay.kind === 'found' ? reconstructSessionTranscript(replay.replay.projection) : '';
     } catch (error: unknown) {
         if (error instanceof Error) {

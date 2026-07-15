@@ -5,12 +5,14 @@ import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
     type LocalSessionEventStore,
+    type ObservabilityRedactor,
     type PermissionSession,
     type PricingTable,
     type ProviderAdapter,
     type ProviderAuthStore,
     ProviderTurnRunner,
     prependProjectContextMessages,
+    redactAgentEventForObservability,
     type SdkModelResolver,
     type TaskToolRuntimeServices,
 } from '@mission-control/core';
@@ -45,6 +47,7 @@ export type PromptTurnContext = {
     readonly onWorkflowStarted?: WorkflowStartedCallback;
     readonly profileName?: string;
     readonly taskRuntimeServices?: TaskToolRuntimeServices;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 export async function startPromptTurn(
@@ -96,6 +99,9 @@ export async function startPromptTurn(
                     : {}),
                 messages,
                 startSequence: 0,
+                ...(coding.observabilityRedactor !== undefined
+                    ? { observabilityRedactor: coding.observabilityRedactor }
+                    : {}),
                 onEnvelope: (envelope) => {
                     if (envelope.durability === 'durable') {
                         coding.emitEvent?.(envelope.event);
@@ -164,7 +170,7 @@ function emitFallbackTaskEvent(
     message: string,
     modelProviderSelection: ModelProviderSelection,
 ): void {
-    coding.emitEvent?.({
+    const event: AgentEvent = {
         type,
         timestamp: new Date().toISOString(),
         sessionId,
@@ -172,5 +178,10 @@ function emitFallbackTaskEvent(
         message,
         nativeSidecarStatus: 'mock',
         modelProviderSelection,
-    });
+    };
+    coding.emitEvent?.(
+        coding.observabilityRedactor === undefined
+            ? event
+            : redactAgentEventForObservability(event, coding.observabilityRedactor),
+    );
 }

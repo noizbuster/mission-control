@@ -24,18 +24,24 @@ import {
     createSdkModelResolver,
     type LspClient,
     McpConnectionManager,
+    ProjectTrustStore,
     type ProviderAdapter,
     type SdkModelResolver,
     SdkModelResolverError,
     type ToolRegistry,
-    type ToolRegistryWithMcp,
     wrapFlatProviderAsSdkModel,
 } from '@mission-control/core';
 import type { AbgGraphSpec, AbgNodeModelOptions, ModelProviderSelection } from '@mission-control/protocol';
 import type { ProviderAuthStore } from '../auth-store.js';
 import { createCliProviderCredentialResolver } from '../provider-credential-resolver.js';
 import { buildCodingAgentSystemPromptEnv, loadTrustedProjectInstructionResources } from './coding-agent-context.js';
+import { createGraphObservabilityRedactor } from './graph-observability-redactor.js';
 import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
+import {
+    closeProductionToolRegistry,
+    type ProductionToolRegistry,
+    withProductionToolSetup,
+} from './production-tool-registry.js';
 
 export type RunCodingPromptOnGraphInput = {
     readonly runtime: AgentRuntime;
@@ -72,6 +78,7 @@ export type RunCodingPromptOnGraphInput = {
     readonly pricingTable?: PricingTable;
     /** Optional agent-name → model resolver for graphs that use `agent` refs instead of explicit `model`. */
     readonly agentModelLookup?: AgentModelLookup;
+    readonly profileName?: string;
 };
 
 /** Build the coding-agent graph wiring and drive it through the runtime. Non-destructive. */
@@ -83,26 +90,40 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
         ...(input.provider !== undefined ? { provider: input.provider } : {}),
     });
 
-    const toolRegistryResult: ToolRegistryWithMcp =
+    const toolRegistryResult: ProductionToolRegistry =
         input.toolRegistry !== undefined
-            ? { registry: input.toolRegistry, mcpConnectionManager: new McpConnectionManager() }
+            ? {
+                  registry: input.toolRegistry,
+                  mcpConnectionManager: new McpConnectionManager(),
+                  browserTool: null,
+                  ownsMcpConnectionManager: true,
+              }
             : await createNonInteractiveToolRegistry({
                   workspaceRoot: input.workspaceRoot,
+                  enableTrustedBash: await workspaceHasTrustedBash(input.workspaceRoot),
                   requestPermission: (request) => input.runtime.requestPermission(request),
                   resolveSdkModel,
                   modelProviderSelection: input.selection,
                   ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
                   ...(input.lspClient !== undefined ? { lspClient: input.lspClient } : {}),
+                  ...(input.authStore !== undefined ? { authStore: input.authStore } : {}),
+                  ...(input.profileName !== undefined ? { profileName: input.profileName } : {}),
               });
 
-    const toolRegistry = toolRegistryResult.registry;
-    const mcpDisconnect = (): Promise<void> => toolRegistryResult.mcpConnectionManager.disconnectAll();
-
-    const systemPromptEnv = await buildCodingAgentSystemPromptEnv({
-        workspaceRoot: input.workspaceRoot,
-        modelId: input.selection.modelID,
-    });
-    const projectInstructionResources = await loadTrustedProjectInstructionResources(input.workspaceRoot);
+    const { observabilityRedactor, systemPromptEnv, projectInstructionResources } = await withProductionToolSetup(
+        toolRegistryResult,
+        async () => ({
+            observabilityRedactor: await createGraphObservabilityRedactor({
+                mcpConnectionManager: toolRegistryResult.mcpConnectionManager,
+                ...(input.authStore !== undefined ? { authStore: input.authStore } : {}),
+            }),
+            systemPromptEnv: await buildCodingAgentSystemPromptEnv({
+                workspaceRoot: input.workspaceRoot,
+                modelId: input.selection.modelID,
+            }),
+            projectInstructionResources: await loadTrustedProjectInstructionResources(input.workspaceRoot),
+        }),
+    );
 
     try {
         return await input.runtime.runGraph(
@@ -112,17 +133,23 @@ export async function runCodingPromptOnGraph(input: RunCodingPromptOnGraphInput)
                 registry: createCodingAgentNodeRegistry(),
                 resolveSdkModel,
                 ...(input.agentModelLookup !== undefined ? { agentModelLookup: input.agentModelLookup } : {}),
-                toolRegistry,
+                toolRegistry: toolRegistryResult.registry,
                 initialMessages: [{ role: 'user', content: input.prompt }],
                 haltOnFailedToolSettlement: true,
                 systemPromptEnv,
+                observabilityRedactor,
                 ...(projectInstructionResources.length > 0 ? { projectInstructionResources } : {}),
                 ...(input.pricingTable !== undefined ? { pricingTable: input.pricingTable } : {}),
             },
         );
     } finally {
-        await mcpDisconnect();
+        await closeProductionToolRegistry(toolRegistryResult);
     }
+}
+
+async function workspaceHasTrustedBash(workspaceRoot: string): Promise<boolean> {
+    const trust = await new ProjectTrustStore().getDecision(workspaceRoot);
+    return trust.decision === 'trusted';
 }
 
 /**

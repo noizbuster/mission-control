@@ -113,6 +113,37 @@ describe('createRunEventRecorder lazy session creation', () => {
         await expect(readdir(join(dataDir, 'sessions'))).rejects.toMatchObject({ code: 'ENOENT' });
     });
 
+    it('redacts credential-bearing events before the SQLite recorder persists them', async () => {
+        // Given
+        await useTempDataDir();
+        const sessionId = 'session_recorder_redaction';
+        const secret = ['sk', 'recorder_persistence_123'].join('-');
+        const recorder = await createRunEventRecorder(makeArgs({ mode: 'tui', sessionId }));
+
+        try {
+            // When
+            recorder.record({
+                type: 'permission.requested',
+                timestamp: '2026-07-13T00:00:00.000Z',
+                sessionId,
+                message: `permission ${secret}`,
+                permissionRequest: {
+                    id: 'permission_recorder_redaction',
+                    action: 'command.run',
+                    reason: `run ${secret}`,
+                    permission: { kind: 'bash', patterns: [`node --token ${secret}`] },
+                },
+            });
+        } finally {
+            await recorder.close();
+        }
+        const observable = JSON.stringify(await readSessionEvents(sessionId));
+
+        // Then
+        expect(observable).toContain('[REDACTED_CREDENTIAL]');
+        expect(observable).not.toContain(secret);
+    });
+
     it('(g) explicit local/local-echo --session prompts resume without duplicate owner prompt id or failed partial append', async () => {
         await useTempDataDir();
         const sessionId = 'session_explicit_owner_resume';
@@ -127,7 +158,7 @@ describe('createRunEventRecorder lazy session creation', () => {
                 'local-echo',
                 '--session',
                 sessionId,
-                'create a short explicit session',
+                'hello from a short explicit session',
             ]),
         );
         const secondOutput = await runAgent(

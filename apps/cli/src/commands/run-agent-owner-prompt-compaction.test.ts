@@ -23,7 +23,7 @@ describe('runAgent owner prompt compaction replay', () => {
 
         await runAgent(parseArgs(['--no-tui', '--session', sessionId, 'NEW_PROMPT']), {
             authStore: createEmptyAuthStore(),
-            provider: captureSequentialProvider(requests, ['owner prompt continued']),
+            provider: captureSequentialProvider(requests, ['trivial', 'owner prompt continued']),
         });
 
         expect(requests.length).toBeGreaterThan(1);

@@ -1,4 +1,11 @@
-import { type CodingReplayStep, type ReplayDiagnostic, readLocalSessionReplay } from '@mission-control/core';
+import {
+    type CodingReplayStep,
+    createProviderAuthStore,
+    createProviderAuthStoreObservabilityRedactor,
+    type ObservabilityRedactor,
+    type ReplayDiagnostic,
+    readLocalSessionReplay,
+} from '@mission-control/core';
 import type { AgentEvent } from '@mission-control/protocol';
 import type { CliArgs } from '../args.js';
 import { type CliCommandResult, successfulCliCommand } from '../cli-command-result.js';
@@ -14,19 +21,32 @@ export type { CliSessionCommandErrorCode } from './session-command-error.js';
 export { CliSessionCommandError };
 
 export async function runSessionCommand(args: CliArgs): Promise<CliCommandResult> {
+    const loadObservabilityRedactor = () => createProviderAuthStoreObservabilityRedactor(createProviderAuthStore());
     switch (args.command) {
-        case 'session-list':
-            return successfulCliCommand((await listSessionCatalogEntries()).map(formatSessionCatalogEntry).join('\n'));
-        case 'session-show':
-            return successfulCliCommand(JSON.stringify(await showSession(requireSessionId(args)), null, 2));
-        case 'session-replay':
+        case 'session-list': {
+            const observabilityRedactor = await loadObservabilityRedactor();
+            return successfulCliCommand(
+                (await listSessionCatalogEntries(observabilityRedactor)).map(formatSessionCatalogEntry).join('\n'),
+            );
+        }
+        case 'session-show': {
+            const observabilityRedactor = await loadObservabilityRedactor();
+            return successfulCliCommand(
+                JSON.stringify(await showSession(requireSessionId(args), observabilityRedactor), null, 2),
+            );
+        }
+        case 'session-replay': {
+            const observabilityRedactor = await loadObservabilityRedactor();
             if (args.replayInteractive === true) {
-                await runReplayInteractiveSession(requireSessionId(args));
+                await runReplayInteractiveSession(requireSessionId(args), observabilityRedactor);
                 return successfulCliCommand('');
             }
             return successfulCliCommand(
-                (await replaySession(requireSessionId(args))).map((record) => JSON.stringify(record)).join('\n'),
+                (await replaySession(requireSessionId(args), observabilityRedactor))
+                    .map((record) => JSON.stringify(record))
+                    .join('\n'),
             );
+        }
         case 'session-export':
             return successfulCliCommand(
                 stripTrailingLineFeed(
@@ -61,9 +81,9 @@ function stripTrailingLineFeed(value: string): string {
     return value.endsWith('\n') ? value.slice(0, -1) : value;
 }
 
-async function showSession(sessionId: string) {
-    const summary = await readSessionCatalogEntry(sessionId);
-    const projection = await requireSessionReplay(sessionId);
+async function showSession(sessionId: string, observabilityRedactor: ObservabilityRedactor) {
+    const summary = await readSessionCatalogEntry(sessionId, undefined, observabilityRedactor);
+    const projection = await requireSessionReplay(sessionId, observabilityRedactor);
     return {
         sessionId,
         status: summary.status,
@@ -93,8 +113,11 @@ type ReplayJsonlRecord =
     | { readonly kind: 'coding.step'; readonly step: CodingReplayStep }
     | { readonly kind: 'diagnostic'; readonly diagnostic: ReplayDiagnostic };
 
-async function replaySession(sessionId: string): Promise<readonly ReplayJsonlRecord[]> {
-    const replay = await requireSessionReplay(sessionId);
+async function replaySession(
+    sessionId: string,
+    observabilityRedactor: ObservabilityRedactor,
+): Promise<readonly ReplayJsonlRecord[]> {
+    const replay = await requireSessionReplay(sessionId, observabilityRedactor);
     const stepsByEventId = codingStepsByEventId(replay.projection.codingSteps);
     return [
         ...replay.projection.envelopes.flatMap((envelope) => [
@@ -105,8 +128,11 @@ async function replaySession(sessionId: string): Promise<readonly ReplayJsonlRec
     ];
 }
 
-async function runReplayInteractiveSession(sessionId: string): Promise<void> {
-    const replay = await requireSessionReplay(sessionId);
+async function runReplayInteractiveSession(
+    sessionId: string,
+    observabilityRedactor: ObservabilityRedactor,
+): Promise<void> {
+    const replay = await requireSessionReplay(sessionId, observabilityRedactor);
     if (replay.projection.envelopes.length === 0) {
         process.stderr.write(`No events found for session ${sessionId}\n`);
         return;
@@ -126,9 +152,9 @@ function codingStepsByEventId(steps: readonly CodingReplayStep[]): ReadonlyMap<s
     return byEventId;
 }
 
-async function requireSessionReplay(sessionId: string) {
+async function requireSessionReplay(sessionId: string, observabilityRedactor: ObservabilityRedactor) {
     const parsedSessionId = requireValidSessionId(sessionId);
-    const replay = await readLocalSessionReplay({ sessionId: parsedSessionId });
+    const replay = await readLocalSessionReplay({ sessionId: parsedSessionId, observabilityRedactor });
     if (replay.kind === 'found') {
         return replay.replay;
     }

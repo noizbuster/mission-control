@@ -6,6 +6,7 @@ import { joinBlocks, type RenderBlockOptions, renderBlock } from './block-render
 import type { OutputBlock } from './output-blocks.js';
 import { type AgentUIRenderer, JsonRenderer, PlainRenderer, TuiRenderer } from './renderers.js';
 
+// allow: SIZE_OK -- HEAD 250 -> current 266 pure LOC; renderer event integration matrix requires a shared fixture pipeline.
 const TS = '2026-07-05T02:00:00.000Z';
 
 /**
@@ -213,6 +214,20 @@ describe('CLI renderers', () => {
         expect(output).toContain('Answer.');
         expect(output).toContain('\u2699 file.patch');
         expect(output).toContain('patch applied');
+    });
+
+    it('keeps plain and buffered TUI renderer block output byte-identical', async () => {
+        const events: AgentEvent[] = [
+            runStarted('openai', 'gpt-5'),
+            reasoningCompleted('r1', 1, 'Reasoning.'),
+            responseCompleted('r1', 2, '# Answer\n\nWith **formatting**.'),
+            toolCallCompleted('tc1', 'read', 3, '{"path":"README.md"}'),
+        ];
+
+        const plain = await renderEvents(new PlainRenderer({ thinking: true }), events);
+        const tui = await renderEvents(new TuiRenderer({ thinking: true }), events);
+
+        expect(plain).toBe(tui);
     });
 
     it('emits zero ANSI escape bytes when tty=false across every block kind', () => {

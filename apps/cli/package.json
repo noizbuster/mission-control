@@ -11,9 +11,6 @@
     "mc": "./dist/index.js",
     "mctrl": "./dist/index.js"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "prebuild": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false nx run tui:build",
     "build": "tsc -p tsconfig.json",

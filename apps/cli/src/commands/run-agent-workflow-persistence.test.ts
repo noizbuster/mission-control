@@ -8,91 +8,20 @@
  * when the turn settles — without changing the plain/JSON output contract, and
  * without persisting anything for a plain (non-workflow) prompt.
  */
-import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { listMissions, listRunsForMission } from '@mission-control/core';
-import { WorkflowSpecSchema } from '@mission-control/protocol';
-import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runAgent } from './run-agent.js';
-import { beginNoninteractiveWorkflowRun } from './run-agent-workflow.js';
+import {
+    createCompletingWorkflowModel,
+    createFailingWorkflowModel,
+    createWorkflowPersistenceFixture,
+    firstRecord,
+    removeWorkflowPersistenceFixture,
+    WORKFLOW_PERSISTENCE_SPEC,
+} from './run-agent-workflow-test-support.js';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
-const PLANNER_WORKFLOW = {
-    name: 'persist-demo',
-    description: 'Test workflow for noninteractive persistence',
-    graph: {
-        id: 'persist-demo-graph',
-        version: '0.1.0',
-        entryNodeId: 'persist-intake',
-        defaults: {
-            model: { providerID: 'local', modelID: 'local-echo' },
-            maxNodeRuns: 10,
-        },
-        nodes: [{ id: 'persist-intake', kind: 'llm', label: 'Persist intake' }],
-        edges: [{ source: 'persist-intake', target: 'persist-intake', condition: 'persist-loop', priority: 10 }],
-        rules: [
-            {
-                id: 'persist-loop',
-                when: { kind: 'blackboard.value.equals', key: 'llm.loop_active', value: true },
-            },
-        ],
-        policies: [],
-    },
-} as const;
-
-function buildMockUsage() {
-    return {
-        inputTokens: { total: 4, noCache: 4, cacheRead: 0, cacheWrite: 0 },
-        outputTokens: { total: 6, text: 6, reasoning: 0 },
-    };
-}
-
-function finalTextChunks(): LanguageModelV3StreamPart[] {
-    return [
-        { type: 'stream-start', warnings: [] },
-        { type: 'text-start', id: 't1' },
-        { type: 'text-delta', id: 't1', delta: 'Done.' },
-        { type: 'text-end', id: 't1' },
-        { type: 'finish', finishReason: { unified: 'stop', raw: undefined }, usage: buildMockUsage() },
-    ];
-}
-
-function createCompletingModel(): MockLanguageModelV3 {
-    return new MockLanguageModelV3({
-        provider: 'local',
-        modelId: 'local-echo',
-        doStream: async () => ({ stream: convertArrayToReadableStream(finalTextChunks()) }),
-    });
-}
-
-function createFailingModel(): MockLanguageModelV3 {
-    return new MockLanguageModelV3({
-        provider: 'local',
-        modelId: 'local-echo',
-        doStream: async () => {
-            throw new Error('provider stream failed');
-        },
-    });
-}
-
-async function createWorkflowWorkspace(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'mctrl-wf-persist-ws-'));
-    await mkdir(join(dir, '.omo'), { recursive: true });
-    const workflowsDir = join(dir, '.mctrl', 'workflows');
-    await mkdir(workflowsDir, { recursive: true });
-    await writeFile(join(workflowsDir, 'persist-demo.workflow.json'), JSON.stringify(PLANNER_WORKFLOW), 'utf8');
-    return dir;
-}
-
-function first<T>(items: readonly T[]): T {
-    const head = items[0];
-    if (head === undefined) {
-        throw new Error('expected at least one record');
-    }
-    return head;
-}
 
 describe('noninteractive workflow Mission/Run persistence', () => {
     let workspaceDir: string;
@@ -100,17 +29,17 @@ describe('noninteractive workflow Mission/Run persistence', () => {
     let dataDir: string;
 
     beforeEach(async () => {
-        workspaceDir = await createWorkflowWorkspace();
-        configDir = await mkdtemp(join(tmpdir(), 'mctrl-wf-persist-cfg-'));
-        dataDir = join(workspaceDir, 'data');
+        const fixture = await createWorkflowPersistenceFixture();
+        workspaceDir = fixture.workspaceDir;
+        configDir = fixture.configDir;
+        dataDir = fixture.dataDir;
         vi.stubEnv('MCTRL_CONFIG_DIR', configDir);
         vi.stubEnv('MCTRL_DATA_DIR', dataDir);
     });
 
     afterEach(async () => {
         vi.unstubAllEnvs();
-        await rm(workspaceDir, { recursive: true, force: true });
-        await rm(configDir, { recursive: true, force: true });
+        await removeWorkflowPersistenceFixture({ workspaceDir, configDir, dataDir });
     });
 
     it('persists a completed Mission and Run for --workflow', async () => {
@@ -128,7 +57,7 @@ describe('noninteractive workflow Mission/Run persistence', () => {
             },
             {
                 workspaceRoot: workspaceDir,
-                resolveSdkModel: () => createCompletingModel(),
+                resolveSdkModel: () => createCompletingWorkflowModel(),
             },
         );
 
@@ -138,24 +67,41 @@ describe('noninteractive workflow Mission/Run persistence', () => {
         const location = { omoRoot: workspaceDir, dataDir };
         const missions = await listMissions(location);
         expect(missions).toHaveLength(1);
-        const mission = first(missions);
+        const mission = firstRecord(missions);
         expect(mission.workflowName).toBe('persist-demo');
         expect(mission.status).toBe('active');
 
         const runs = await listRunsForMission(location, mission.id);
         expect(runs).toHaveLength(1);
-        const run = first(runs);
+        const run = firstRecord(runs);
         expect(run.status).toBe('completed');
         expect(run.missionId).toBe(mission.id);
-        expect(run.sessionId).toBeDefined();
+        expect(run.sessionId).toBeUndefined();
     });
 
-    it('carries one normalized project and data location in the workflow handle', async () => {
-        const handle = await beginNoninteractiveWorkflowRun(workspaceDir, WorkflowSpecSchema.parse(PLANNER_WORKFLOW));
+    it('links the noninteractive workflow Run to the recorder session', async () => {
+        await runAgent(
+            {
+                mode: 'jsonl',
+                useNative: false,
+                command: 'run',
+                showHelp: false,
+                showVersion: false,
+                thinking: false,
+                sessionId: 'session_noninteractive_run',
+                workflowName: 'persist-demo',
+                prompt: 'plan the migration',
+                modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+            },
+            {
+                workspaceRoot: workspaceDir,
+                resolveSdkModel: () => createCompletingWorkflowModel(),
+            },
+        );
 
-        expect(handle).toMatchObject({
-            location: { omoRoot: workspaceDir, dataDir },
-        });
+        const mission = firstRecord(await listMissions({ omoRoot: workspaceDir, dataDir }));
+        const run = firstRecord(await listRunsForMission({ omoRoot: workspaceDir, dataDir }, mission.id));
+        expect(run.sessionId).toBe('session_noninteractive_run');
     });
 
     it('records a failed Run when the provider fails', async () => {
@@ -173,18 +119,18 @@ describe('noninteractive workflow Mission/Run persistence', () => {
             },
             {
                 workspaceRoot: workspaceDir,
-                resolveSdkModel: () => createFailingModel(),
+                resolveSdkModel: () => createFailingWorkflowModel(),
             },
         );
 
         const location = { omoRoot: workspaceDir, dataDir };
         const missions = await listMissions(location);
         expect(missions).toHaveLength(1);
-        const mission = first(missions);
+        const mission = firstRecord(missions);
 
         const runs = await listRunsForMission(location, mission.id);
         expect(runs).toHaveLength(1);
-        const run = first(runs);
+        const run = firstRecord(runs);
         expect(run.status).toBe('failed');
         expect(run.terminalReason).toBeDefined();
     });
@@ -203,16 +149,16 @@ describe('noninteractive workflow Mission/Run persistence', () => {
             },
             {
                 workspaceRoot: workspaceDir,
-                resolveSdkModel: () => createCompletingModel(),
+                resolveSdkModel: () => createCompletingWorkflowModel(),
             },
         );
 
         const location = { omoRoot: workspaceDir, dataDir };
         const missions = await listMissions(location);
         expect(missions).toHaveLength(1);
-        const mission = first(missions);
+        const mission = firstRecord(missions);
         const runs = await listRunsForMission(location, mission.id);
-        expect(first(runs).status).toBe('completed');
+        expect(firstRecord(runs).status).toBe('completed');
     });
 
     it('does not persist records for a plain prompt', async () => {
@@ -229,7 +175,7 @@ describe('noninteractive workflow Mission/Run persistence', () => {
             },
             {
                 workspaceRoot: workspaceDir,
-                resolveSdkModel: () => createCompletingModel(),
+                resolveSdkModel: () => createCompletingWorkflowModel(),
             },
         );
 
@@ -241,7 +187,11 @@ describe('noninteractive workflow Mission/Run persistence', () => {
         const noOmoDir = await mkdtemp(join(tmpdir(), 'mctrl-wf-no-omo-'));
         const workflowsDir = join(noOmoDir, '.mctrl', 'workflows');
         await mkdir(workflowsDir, { recursive: true });
-        await writeFile(join(workflowsDir, 'persist-demo.workflow.json'), JSON.stringify(PLANNER_WORKFLOW), 'utf8');
+        await writeFile(
+            join(workflowsDir, 'persist-demo.workflow.json'),
+            JSON.stringify(WORKFLOW_PERSISTENCE_SPEC),
+            'utf8',
+        );
         try {
             const output = await runAgent(
                 {
@@ -257,7 +207,7 @@ describe('noninteractive workflow Mission/Run persistence', () => {
                 },
                 {
                     workspaceRoot: noOmoDir,
-                    resolveSdkModel: () => createCompletingModel(),
+                    resolveSdkModel: () => createCompletingWorkflowModel(),
                 },
             );
 

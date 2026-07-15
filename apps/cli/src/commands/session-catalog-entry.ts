@@ -1,5 +1,6 @@
 import {
     normalizeWorkspaceRoot,
+    type ObservabilityRedactor,
     ProjectTrustStore,
     type ReplayDiagnostic,
     readLocalSessionReplay,
@@ -43,14 +44,19 @@ export async function normalizeWorkspaceRootWithFallback(workspaceRoot: string):
 export async function readSessionCatalogEntry(
     sessionId: string,
     projectionState?: SessionProjectionReadState,
+    observabilityRedactor?: ObservabilityRedactor,
 ): Promise<CliSessionCatalogEntry> {
     const parsedSessionId = requireValidSessionId(sessionId);
     if (projectionState !== undefined) {
-        return readSessionCatalogEntryFromProjectionState(parsedSessionId, projectionState);
+        return readSessionCatalogEntryFromProjectionState(parsedSessionId, projectionState, observabilityRedactor);
     }
     const openedProjectionState = await readSessionProjectionState();
     try {
-        return await readSessionCatalogEntryFromProjectionState(parsedSessionId, openedProjectionState);
+        return await readSessionCatalogEntryFromProjectionState(
+            parsedSessionId,
+            openedProjectionState,
+            observabilityRedactor,
+        );
     } finally {
         openedProjectionState.store.close();
     }
@@ -59,9 +65,10 @@ export async function readSessionCatalogEntry(
 async function readSessionCatalogEntryFromProjectionState(
     parsedSessionId: string,
     projectionState: SessionProjectionReadState,
+    observabilityRedactor?: ObservabilityRedactor,
 ): Promise<CliSessionCatalogEntry> {
     const projectionRecord = projectionState.records.get(parsedSessionId);
-    const projection = await readSessionProjection(parsedSessionId);
+    const projection = await readSessionProjection(parsedSessionId, observabilityRedactor);
     const projectionDiagnostics = await readProjectionDiagnosticsForSession(parsedSessionId, projectionState);
     if (projection.kind === 'missing') {
         if (projectionRecord !== undefined) {
@@ -122,8 +129,14 @@ async function readSessionCatalogEntryFromProjectionState(
     };
 }
 
-async function readSessionProjection(sessionId: string): Promise<SessionProjectionResult> {
-    const replay = await readLocalSessionReplay({ sessionId });
+async function readSessionProjection(
+    sessionId: string,
+    observabilityRedactor?: ObservabilityRedactor,
+): Promise<SessionProjectionResult> {
+    const replay = await readLocalSessionReplay({
+        sessionId,
+        ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
+    });
     if (replay.kind === 'missing') {
         return { kind: 'missing' };
     }

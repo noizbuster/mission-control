@@ -3,13 +3,12 @@ import {
     type CommandExecutionRequest,
     type CommandExecutionResult,
     type LspClient,
+    type ObservabilityRedactor,
     type PersistentMemoryStore,
-    ProjectTrustStore,
     type ProviderAdapter,
 } from '@mission-control/core';
-import type { ModelProviderSelection, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
+import type { ModelProviderSelection } from '@mission-control/protocol';
 import { createCliPermissionDecision, type NonInteractiveAutomationPolicy } from './cli-permission-policy.js';
-import { createNonInteractiveToolRegistry } from './noninteractive-tool-registry.js';
 
 type CliRuntimeOptionsInput = {
     readonly useNative?: boolean;
@@ -22,6 +21,7 @@ type CliRuntimeOptionsInput = {
     readonly lspClient?: LspClient;
     readonly persistentStore?: PersistentMemoryStore;
     readonly profileName?: string;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 export function createCliRuntimeOptions(input: CliRuntimeOptionsInput): AgentRuntimeOptions {
@@ -32,19 +32,6 @@ export function createCliRuntimeOptions(input: CliRuntimeOptionsInput): AgentRun
             ? { projectContext: { workspaceRoot: input.workspaceRoot }, workspaceRoot: input.workspaceRoot }
             : {}),
         provider: input.provider,
-        createToolRegistry: (requestPermission: (request: PermissionRequest) => Promise<PermissionDecision>) =>
-            workspaceHasTrustedBash(input.workspaceRoot ?? process.cwd()).then(async (enableTrustedBash) => {
-                const { registry, mcpConnectionManager } = await createNonInteractiveToolRegistry({
-                    workspaceRoot: input.workspaceRoot ?? process.cwd(),
-                    requestPermission,
-                    enableTrustedBash,
-                    ...(input.commandExecutor !== undefined ? { commandExecutor: input.commandExecutor } : {}),
-                    ...(input.lspClient !== undefined ? { lspClient: input.lspClient } : {}),
-                    ...(input.profileName !== undefined ? { profileName: input.profileName } : {}),
-                });
-                void mcpConnectionManager.disconnectAll();
-                return registry;
-            }),
         permissionDecisionResolver: (request) =>
             createCliPermissionDecision(request, {
                 ...(input.nonInteractiveAutomationPolicy !== undefined
@@ -53,12 +40,8 @@ export function createCliRuntimeOptions(input: CliRuntimeOptionsInput): AgentRun
                 workspaceRoot: input.workspaceRoot ?? process.cwd(),
             }),
         pendingApprovalBehavior: 'block',
+        ...(input.observabilityRedactor !== undefined ? { observabilityRedactor: input.observabilityRedactor } : {}),
         ...(input.persistentStore !== undefined ? { persistentStore: input.persistentStore } : {}),
     };
 }
 export type { NonInteractiveAutomationPolicy };
-
-async function workspaceHasTrustedBash(workspaceRoot: string): Promise<boolean> {
-    const trust = await new ProjectTrustStore().getDecision(workspaceRoot);
-    return trust.decision === 'trusted';
-}

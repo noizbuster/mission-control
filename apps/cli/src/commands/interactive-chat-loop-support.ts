@@ -2,7 +2,7 @@ import type { ModelProviderSelection } from '@mission-control/protocol';
 import { closeTreeSitterClient } from '@mission-control/tui/highlight';
 import type { ModelSelector } from './interactive-chat.js';
 import type { ChatInput, ChatInputEvent } from './interactive-chat-io.js';
-import type { ActiveCodingAgentTurn } from './interactive-coding-agent.js';
+import type { ActiveCodingAgentTurn, ActiveCodingAgentTurnOutcome } from './interactive-coding-agent.js';
 
 export async function stopActiveTurn(activeTurn: ActiveCodingAgentTurn | undefined): Promise<undefined> {
     if (activeTurn === undefined) {
@@ -64,6 +64,7 @@ type ChatLoopEvent =
       }
     | {
           readonly type: 'active-completed';
+          readonly outcome: ActiveCodingAgentTurnOutcome | undefined;
       };
 
 export class ChatInputPump {
@@ -88,10 +89,12 @@ export async function nextChatLoopEvent(
     if (activeTurn === undefined) {
         return { type: 'input', event: await inputPump.read() };
     }
-    return Promise.race([
-        activeTurn.done.then((): ChatLoopEvent => ({ type: 'active-completed' })),
-        readAfterActiveYield(inputPump),
-    ]);
+    return Promise.race([completedTurnEvent(activeTurn), readAfterActiveYield(inputPump)]);
+}
+
+async function completedTurnEvent(activeTurn: ActiveCodingAgentTurn): Promise<ChatLoopEvent> {
+    await activeTurn.done;
+    return { type: 'active-completed', outcome: await activeTurn.outcome };
 }
 
 async function readAfterActiveYield(inputPump: ChatInputPump): Promise<ChatLoopEvent> {

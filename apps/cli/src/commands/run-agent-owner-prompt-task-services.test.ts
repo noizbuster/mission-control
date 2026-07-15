@@ -1,4 +1,9 @@
-import { JsonlSessionEventStore, PermissionRuleStore, type SdkModelResolver } from '@mission-control/core';
+import {
+    JsonlSessionEventStore,
+    PermissionRuleStore,
+    ProjectTrustStore,
+    type SdkModelResolver,
+} from '@mission-control/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { captureSequentialProvider, tempRoot } from './compact-command-test-support.js';
 import { disposeAllMissionControlServices } from './mission-control-services.js';
@@ -16,6 +21,37 @@ afterEach(async () => {
 });
 
 describe('runOwnerPrompt task services wiring', () => {
+    it('registers eval for a trusted workspace on the real owner-prompt path', async () => {
+        const dataDir = await tempRoot(roots, 'mctrl-owner-eval-data-');
+        const workspaceRoot = await tempRoot(roots, 'mctrl-owner-eval-workspace-');
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await new ProjectTrustStore({ dataDir }).setDecision(workspaceRoot, 'trusted');
+        const sessionId = 'session_owner_eval_trusted';
+        const store = await JsonlSessionEventStore.open({ sessionId, dataDir });
+
+        try {
+            const result = await runOwnerPrompt({
+                sessionId,
+                store,
+                provider: captureSequentialProvider([], []),
+                modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+                workspaceRoot,
+                prompt: 'inspect trusted tools',
+                emitEvent: () => undefined,
+                observeStoredEvent: () => undefined,
+                createTurnRunner:
+                    ({ toolRegistry }) =>
+                    async () => {
+                        expect(toolRegistry.advertise().map((tool) => tool.name)).toContain('eval');
+                        return { status: 'completed' };
+                    },
+            });
+            expect(result.status).toBe('completed');
+        } finally {
+            await store.close();
+        }
+    });
+
     it('wires MissionControlServices into the noninteractive task registry and shared data-dir DB', async () => {
         const dataDir = await tempRoot(roots, 'mctrl-owner-task-data-');
         const workspaceRoot = await tempRoot(roots, 'mctrl-owner-task-workspace-');
@@ -62,7 +98,6 @@ describe('runOwnerPrompt task services wiring', () => {
                         expect(settlement.structuredOutput).toMatchObject({ status: 'running' });
                         return { status: 'completed' };
                     },
-                throwOnTerminalFailure: true,
             });
         } finally {
             await store.close();
@@ -93,7 +128,6 @@ describe('runOwnerPrompt task services wiring', () => {
                 },
                 observeStoredEvent: () => undefined,
                 createTurnRunner: () => async () => ({ status: 'completed' }),
-                throwOnTerminalFailure: true,
             });
         } finally {
             await store.close();
@@ -124,7 +158,6 @@ describe('runOwnerPrompt task services wiring', () => {
                     emitEvent: () => undefined,
                     observeStoredEvent: () => undefined,
                     createTurnRunner: () => async () => ({ status: 'completed' }),
-                    throwOnTerminalFailure: true,
                 }),
             ).rejects.toThrow();
         } finally {

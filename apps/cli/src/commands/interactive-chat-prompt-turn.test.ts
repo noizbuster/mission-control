@@ -1,4 +1,10 @@
-import { AgentRuntime, JsonlSessionEventStore, type ProviderAdapter } from '@mission-control/core';
+import {
+    AgentRuntime,
+    createObservabilityRedactor,
+    JsonlSessionEventStore,
+    type ProviderAdapter,
+} from '@mission-control/core';
+import type { AgentEvent } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { startPromptTurn } from './interactive-chat-prompt-turn.js';
 import { MissionControlServices, resetMissionControlServicesCache } from './mission-control-services.js';
@@ -72,6 +78,38 @@ describe('startPromptTurn task services wiring', () => {
             }),
         );
     });
+
+    it('redacts configured credentials on the provider fallback output and task event boundary', async () => {
+        const credential = ['fallback', 'provider', 'credential'].join('_');
+        const writes: string[] = [];
+        const events: AgentEvent[] = [];
+        const runtime = new AgentRuntime({
+            permissionDecisionResolver: (request) => ({ requestId: request.id, status: 'allow' }),
+        });
+        await runtime.start();
+
+        await startPromptTurn(
+            runtime,
+            { write: (text) => writes.push(text) },
+            `repeat ${credential}`,
+            { providerID: 'local', modelID: 'local-echo' },
+            {
+                provider: credentialProvider(credential),
+                sessionId: undefined,
+                workspaceRoot: undefined,
+                sessionStore: undefined,
+                commandExecutor: undefined,
+                nextTurnId: () => 'turn_fallback_redaction',
+                emitEvent: (event) => events.push(event),
+                observeStoredEvent: undefined,
+                observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
+            },
+        );
+
+        const observable = JSON.stringify({ writes, events });
+        expect(observable).toContain('[REDACTED_CREDENTIAL]');
+        expect(observable).not.toContain(credential);
+    });
 });
 
 async function tempRoot(prefix: string): Promise<string> {
@@ -95,3 +133,21 @@ const unusedProvider: ProviderAdapter = {
         };
     },
 };
+
+function credentialProvider(credential: string): ProviderAdapter {
+    return {
+        streamTurn: async function* () {
+            yield {
+                kind: 'response_completed',
+                requestId: 'request_fallback_redaction',
+                sequence: 1,
+                message: {
+                    messageId: 'message_fallback_redaction',
+                    role: 'assistant',
+                    content: `provider returned ${credential}`,
+                },
+                finishReason: 'stop',
+            };
+        },
+    };
+}

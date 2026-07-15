@@ -1,4 +1,5 @@
 import {
+    createProviderAuthStoreObservabilityRedactor,
     createSessionArchive,
     JSONL_SESSION_EVENT_RECORD_KIND,
     JSONL_SESSION_LOG_HEADER_KIND,
@@ -10,7 +11,9 @@ import {
     resolveMissionControlDataDir,
     validateSessionArchiveManifestForImport,
 } from '@mission-control/core';
+import { redactAgentEventEnvelopeForObservability } from '@mission-control/core/redaction';
 import type { AgentEventEnvelope } from '@mission-control/protocol';
+import { createProviderAuthStore } from '../auth-store.js';
 import { deriveSessionCatalogProjection } from './session-catalog-projection.js';
 import { parseCliSessionId } from './session-id.js';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -64,28 +67,48 @@ export async function exportSessionArchiveFile(input: {
 }
 
 async function readArchiveSource(sessionId: string): Promise<{ readonly contents: string }> {
+    const observabilityRedactor = await createProviderAuthStoreObservabilityRedactor(createProviderAuthStore());
     const sessionPath = resolveSessionLogPath(sessionId);
     try {
         const contents = await readFile(sessionPath, 'utf8');
-        parseJsonlSessionLog({ contents, filePath: sessionPath, sessionId });
-        return { contents };
+        const parsed = parseJsonlSessionLog({ contents, filePath: sessionPath, sessionId });
+        return {
+            contents: serializeReplayAsJsonl(
+                sessionId,
+                parsed.envelopes.map((envelope) =>
+                    redactAgentEventEnvelopeForObservability(envelope, observabilityRedactor),
+                ),
+                parsed.header.createdAt,
+            ),
+        };
     } catch (error: unknown) {
         if (!isMissingFileError(error)) {
             throw error;
         }
     }
-    const replay = await readLocalSessionReplay({ sessionId });
+    const replay = await readLocalSessionReplay({ sessionId, observabilityRedactor });
     if (replay.kind === 'missing') {
         throw new SessionArchiveCommandError({
             code: 'session_not_found',
             message: `Session not found: ${sessionId}`,
         });
     }
-    return { contents: serializeReplayAsJsonl(sessionId, replay.replay.projection.envelopes) };
+    return {
+        contents: serializeReplayAsJsonl(
+            sessionId,
+            replay.replay.projection.envelopes.map((envelope) =>
+                redactAgentEventEnvelopeForObservability(envelope, observabilityRedactor),
+            ),
+        ),
+    };
 }
 
-function serializeReplayAsJsonl(sessionId: string, envelopes: readonly AgentEventEnvelope[]): string {
-    const createdAt = envelopes.at(0)?.createdAt ?? new Date().toISOString();
+function serializeReplayAsJsonl(
+    sessionId: string,
+    envelopes: readonly AgentEventEnvelope[],
+    sourceCreatedAt?: string,
+): string {
+    const createdAt = sourceCreatedAt ?? envelopes.at(0)?.createdAt ?? new Date().toISOString();
     return [
         serializeJsonlRecord({
             kind: JSONL_SESSION_LOG_HEADER_KIND,
@@ -124,17 +147,25 @@ export async function importSessionArchiveFile(input: { readonly filePath: strin
     });
     const sessionId = requireValidSessionId(archive.manifest.sessionId);
     const sessionPath = resolveSessionLogPath(sessionId);
-    parseJsonlSessionLog({
+    const parsedLog = parseJsonlSessionLog({
         contents: archive.eventsJsonl,
         filePath: sessionPath,
         sessionId,
     });
+    const observabilityRedactor = await createProviderAuthStoreObservabilityRedactor(createProviderAuthStore());
+    const observableContents = serializeReplayAsJsonl(
+        sessionId,
+        parsedLog.envelopes.map((envelope) =>
+            redactAgentEventEnvelopeForObservability(envelope, observabilityRedactor),
+        ),
+        parsedLog.header.createdAt,
+    );
     await mkdir(dirname(sessionPath), { recursive: true });
     let wroteSessionPath = false;
     try {
-        await writeFile(sessionPath, archive.eventsJsonl, { encoding: 'utf8', flag: 'wx' });
+        await writeFile(sessionPath, observableContents, { encoding: 'utf8', flag: 'wx' });
         wroteSessionPath = true;
-        const replay = await readLocalSessionReplay({ sessionId });
+        const replay = await readLocalSessionReplay({ sessionId, observabilityRedactor });
         if (replay.kind === 'missing') {
             throw new SessionArchiveCommandError({
                 code: 'session_not_found',

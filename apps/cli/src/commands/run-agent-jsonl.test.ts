@@ -1,11 +1,8 @@
-import {
-    createDeterministicProvider,
-    missionControlDataDirEnvKey,
-    readLocalSessionReplay,
-} from '@mission-control/core';
+import { missionControlDataDirEnvKey, readLocalSessionReplay } from '@mission-control/core';
 import { AgentEventSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args.js';
+import { captureSequentialProvider } from './compact-command-test-support.js';
 import { runAgent } from './run-agent.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -23,7 +20,7 @@ describe('runAgent JSONL session automation', () => {
         const output = await runAgent(
             parseArgs(['run', 'summarize this repository', '--session', sessionId, '--jsonl']),
             {
-                provider: createDeterministicProvider([{ kind: 'response_completed', content: 'summarized' }]),
+                provider: captureSequentialProvider([], ['exploratory-research', 'true', 'summarized']),
             },
         );
         const events = parseEventLines(output);
