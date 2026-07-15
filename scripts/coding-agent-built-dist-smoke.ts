@@ -10,33 +10,18 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const rootUrl = new URL('../', import.meta.url);
 const smokeCompletionTimeoutMs = 15_000;
 
-const cliArgsModule: Pick<typeof import('../apps/cli/src/args.js'), 'parseArgs'> = await import(
-    new URL('./apps/cli/dist/args.js', rootUrl).href
-);
-const cliRunModule: Pick<typeof import('../apps/cli/src/commands/run-agent.js'), 'runAgent'> = await import(
-    new URL('./apps/cli/dist/commands/run-agent.js', rootUrl).href
-);
-const cliSessionModule: Pick<typeof import('../apps/cli/src/commands/session.js'), 'runSessionCommand'> = await import(
-    new URL('./apps/cli/dist/commands/session.js', rootUrl).href
-);
-const coreModule: Pick<
-    typeof import('../packages/core/src/index.js'),
-    'openLocalSessionEventStore' | 'ProjectTrustStore' | 'missionControlDataDirEnvKey' | 'settleDesktopApproval'
-> = await import(new URL('./packages/core/dist/index.js', rootUrl).href);
-const coreApprovalModule: Pick<
-    typeof import('../packages/core/src/desktop-tool-approvals.js'),
-    'ensurePendingToolApprovalForCurrentBlockedRun'
-> = await import(new URL('./packages/core/dist/desktop-tool-approvals.js', rootUrl).href);
-
-const { parseArgs } = cliArgsModule;
-const { runAgent } = cliRunModule;
-const { runSessionCommand } = cliSessionModule;
-const { openLocalSessionEventStore, ProjectTrustStore, missionControlDataDirEnvKey, settleDesktopApproval } =
-    coreModule;
-const { ensurePendingToolApprovalForCurrentBlockedRun } = coreApprovalModule;
+const { parseArgs } = await import('@mission-control/cli/args');
+const { runAgent } = await import('@mission-control/cli/commands/run-agent');
+const { runSessionCommand } = await import('@mission-control/cli/commands/session');
+const {
+    openLocalSessionEventStore,
+    ProjectTrustStore,
+    missionControlDataDirEnvKey,
+    settleDesktopApproval,
+    ensurePendingToolApprovalForCurrentBlockedRun,
+} = await import('@mission-control/core');
 
 const tempRoots: string[] = [];
 

@@ -30,27 +30,15 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const rootUrl = new URL('../', import.meta.url);
 const fixtureServerPath = fileURLToPath(
     new URL('../packages/core/src/tools/mcp/fixtures/stdio-fixture-server.mjs', import.meta.url),
 );
 const evidenceDir = fileURLToPath(new URL('../.omo/evidence/', import.meta.url));
 const evidencePath = join(evidenceDir, 'task-13-cli-coding-agent-skills-mcp.jsonl');
 
-const cliArgsModule: Pick<typeof import('../apps/cli/src/args.js'), 'parseArgs'> = await import(
-    new URL('./apps/cli/dist/args.js', rootUrl).href
-);
-const cliRunModule: Pick<typeof import('../apps/cli/src/commands/run-agent.js'), 'runAgent'> = await import(
-    new URL('./apps/cli/dist/commands/run-agent.js', rootUrl).href
-);
-const coreModule: Pick<
-    typeof import('../packages/core/src/index.js'),
-    'ProjectTrustStore' | 'missionControlDataDirEnvKey'
-> = await import(new URL('./packages/core/dist/index.js', rootUrl).href);
-
-const { parseArgs } = cliArgsModule;
-const { runAgent } = cliRunModule;
-const { ProjectTrustStore, missionControlDataDirEnvKey } = coreModule;
+const { parseArgs } = await import('@mission-control/cli/args');
+const { runAgent } = await import('@mission-control/cli/commands/run-agent');
+const { ProjectTrustStore, missionControlDataDirEnvKey } = await import('@mission-control/core');
 
 const configDirEnvKey = 'MCTRL_CONFIG_DIR';
 const tempRoots: string[] = [];

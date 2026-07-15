@@ -1,11 +1,12 @@
-import { type LocalLibsqlDb, runLocalLibsqlWrite } from '../../packages/core/dist/db/local-libsql-db.js';
 import {
+    type LocalLibsqlDb,
+    openCanonicalRuntimeDb,
     openLocalSessionEventStore,
+    runLocalLibsqlWrite,
     type SessionControlAttachment,
     SessionControlHost,
-} from '../../packages/core/dist/index.js';
-import { openCanonicalRuntimeDb } from '../../packages/core/dist/runtime/local-runtime-db.js';
-import type { AgentEvent } from '../../packages/protocol/dist/index.js';
+} from '@mission-control/core';
+import type { AgentEvent } from '@mission-control/protocol';
 import {
     blockedSessionEvents,
     createDeferredHandle,

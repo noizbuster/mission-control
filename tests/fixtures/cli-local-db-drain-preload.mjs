@@ -1,5 +1,5 @@
-import { getOrCreateMissionControlServices } from '../../apps/cli/dist/commands/mission-control-services.js';
-import { openLocalSessionEventStore } from '../../packages/core/dist/index.js';
+import { getOrCreateMissionControlServices } from '@mission-control/cli/commands/mission-control-services';
+import { openLocalSessionEventStore } from '@mission-control/core';
 
 const workspaceRoot = process.env.MCTRL_WORKSPACE;
 const sessionId = process.env.MCTRL_TASK12_DRAIN_SESSION_ID;

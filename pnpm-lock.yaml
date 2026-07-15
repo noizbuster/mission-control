@@ -14,6 +14,18 @@ importers:
       '@biomejs/biome':
         specifier: ^2.5.3
         version: 2.5.3
+      '@mission-control/cli':
+        specifier: workspace:*
+        version: link:apps/cli
+      '@mission-control/config':
+        specifier: workspace:*
+        version: link:packages/config
+      '@mission-control/core':
+        specifier: workspace:*
+        version: link:packages/core
+      '@mission-control/protocol':
+        specifier: workspace:*
+        version: link:packages/protocol
       '@opentui/solid':
         specifier: ^0.4.3
         version: 0.4.3(solid-js@1.9.14)(typescript@7.0.2)(web-tree-sitter@0.25.10)
@@ -72,6 +84,9 @@ importers:
       ai:
         specifier: ^6.0.208
         version: 6.0.208(zod@4.4.3)
+      vite:
+        specifier: ^8.0.16
+        version: 8.0.16(@types/node@26.1.1)(esbuild@0.27.7)(yaml@2.9.0)
       zod:
         specifier: ^4.1.13
         version: 4.4.3

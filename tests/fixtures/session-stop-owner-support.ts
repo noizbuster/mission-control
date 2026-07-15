@@ -1,6 +1,5 @@
-import type { SessionControlStopContext } from '../../packages/core/dist/index.js';
-import { appendFencedSessionStopEvent } from '../../packages/core/dist/runtime/session-stop-event-writer.js';
-import type { AgentEvent } from '../../packages/protocol/dist/index.js';
+import { appendFencedSessionStopEvent, type SessionControlStopContext } from '@mission-control/core';
+import type { AgentEvent } from '@mission-control/protocol';
 
 export const OWNER_FIXTURE_SESSION_IDS = ['mc-stop-root', 'mc-stop-child', 'mc-stop-grandchild'] as const;
 export type OwnerFixtureSessionId = (typeof OWNER_FIXTURE_SESSION_IDS)[number];
