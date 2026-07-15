@@ -92,6 +92,7 @@ export default defineConfig({
             'apps/**/*.test.ts',
             'apps/**/*.test.tsx',
             'scripts/**/*.test.ts',
+            'tooling/**/*.test.ts',
         ],
         environment: 'node',
         globals: false,
