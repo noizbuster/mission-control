@@ -71,11 +71,17 @@ describe('CLI package distribution contract', () => {
                 expect.arrayContaining([
                     './mc',
                     './mctrl',
+                    './index.js',
                     './args.js',
-                    './commands/local-coding-provider.js',
-                    './commands/provider-factory.js',
-                    './node_modules/@mission-control/config/dist/provider-capabilities.js',
-                    './node_modules/@mission-control/core/dist/providers/openai/openai-responses-provider.js',
+                    './commands/run-agent.js',
+                    './commands/session.js',
+                    './commands/mission-control-services.js',
+                    './chunks/args-fixtureHASH.js',
+                    './node_modules/@mission-control/config/dist/index.js',
+                    './node_modules/@mission-control/core/dist/index.js',
+                    './node_modules/@mission-control/core/dist/replay.js',
+                    './node_modules/@mission-control/core/dist/redaction.js',
+                    './node_modules/@mission-control/core/dist/chunks/observability-fixtureHASH.js',
                     './node_modules/@mission-control/protocol/dist/index.js',
                     './node_modules/@mission-control/tui/dist/index.js',
                     './node_modules/@mission-control/tui/package.json',
@@ -86,6 +92,18 @@ describe('CLI package distribution contract', () => {
                     './mission-control-sidecar',
                 ]),
             );
+            expect(entries).not.toEqual(
+                expect.arrayContaining([
+                    './commands/local-coding-provider.js',
+                    './commands/provider-factory.js',
+                    './node_modules/@mission-control/config/dist/provider-capabilities.js',
+                    './node_modules/@mission-control/core/dist/providers/openai/openai-responses-provider.js',
+                ]),
+            );
+            const shebang = '#!/usr/bin/env -S node --experimental-ffi\n';
+            expect(readFileSync(join(stageRoot, 'mc'), 'utf8').startsWith(shebang)).toBe(true);
+            expect(readFileSync(join(stageRoot, 'mctrl'), 'utf8').startsWith(shebang)).toBe(true);
+            expect(readFileSync(join(stageRoot, 'index.js'), 'utf8').startsWith(shebang)).toBe(true);
             expect(readPackageVersion(join(stageRoot, 'node_modules/zod/package.json'))).toBe('4.4.3');
             expect(
                 readPackageVersion(join(stageRoot, 'node_modules/puppeteer-core/node_modules/zod/package.json')),

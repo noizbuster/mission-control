@@ -19,46 +19,71 @@ export function withPackageFixture(options: PackageFixtureOptions, run: (fixture
 export function writePackageFixture(fixtureRoot: string, options: PackageFixtureOptions): void {
     writeFixtureFile(
         join(fixtureRoot, 'apps/cli/package.json'),
-        packageJson('@mission-control/cli', { '.': './dist/index.js' }),
+        packageJson('@mission-control/cli', {
+            '.': './dist/index.js',
+            './args': './dist/args.js',
+            './commands/run-agent': './dist/commands/run-agent.js',
+            './commands/session': './dist/commands/session.js',
+            './commands/mission-control-services': './dist/commands/mission-control-services.js',
+        }),
     );
     writeFixtureFile(join(fixtureRoot, 'apps/cli/dist/index.js'), fixtureCliEntrypoint());
     writeFixtureFile(join(fixtureRoot, 'apps/cli/dist/args.js'), 'export const args = [];\n');
     writeFixtureFile(
-        join(fixtureRoot, 'apps/cli/dist/commands/local-coding-provider.js'),
-        'export const local = true;\n',
+        join(fixtureRoot, 'apps/cli/dist/commands/run-agent.js'),
+        'export async function runAgent() {}\n',
     );
     writeFixtureFile(
-        join(fixtureRoot, 'apps/cli/dist/commands/provider-factory.js'),
-        'export const provider = true;\n',
+        join(fixtureRoot, 'apps/cli/dist/commands/session.js'),
+        'export async function runSessionCommand() {}\n',
     );
+    writeFixtureFile(
+        join(fixtureRoot, 'apps/cli/dist/commands/mission-control-services.js'),
+        'export function getOrCreateMissionControlServices() {}\n',
+    );
+    writeFixtureFile(
+        join(fixtureRoot, 'apps/cli/dist/chunks/args-fixtureHASH.js'),
+        'export const chunk = true;\n',
+    );
+
     writeFixtureFile(
         join(fixtureRoot, 'packages/config/package.json'),
         packageJson('@mission-control/config', { '.': './dist/index.js' }),
     );
     writeFixtureFile(join(fixtureRoot, 'packages/config/dist/index.js'), 'export const config = true;\n');
-    writeFixtureFile(
-        join(fixtureRoot, 'packages/config/dist/provider-capabilities.js'),
-        'export const capabilities = true;\n',
-    );
+
     writeFixtureFile(
         join(fixtureRoot, 'packages/core/package.json'),
-        packageJson('@mission-control/core', { '.': './dist/index.js' }, { 'puppeteer-core': '^25.3.0' }),
+        packageJson(
+            '@mission-control/core',
+            {
+                '.': './dist/index.js',
+                './replay': './dist/replay.js',
+                './redaction': './dist/redaction.js',
+            },
+            { 'puppeteer-core': '^25.3.0' },
+        ),
     );
     writeFixtureFile(join(fixtureRoot, 'packages/core/dist/index.js'), 'export const core = true;\n');
+    writeFixtureFile(join(fixtureRoot, 'packages/core/dist/replay.js'), 'export const replay = true;\n');
+    writeFixtureFile(join(fixtureRoot, 'packages/core/dist/redaction.js'), 'export const redaction = true;\n');
     writeFixtureFile(
-        join(fixtureRoot, 'packages/core/dist/providers/openai/openai-responses-provider.js'),
-        'export const openai = true;\n',
+        join(fixtureRoot, 'packages/core/dist/chunks/observability-fixtureHASH.js'),
+        'export const coreChunk = true;\n',
     );
+
     writeFixtureFile(
         join(fixtureRoot, 'packages/protocol/package.json'),
         packageJson('@mission-control/protocol', { '.': './dist/index.js' }, { zod: '^4.4.0' }),
     );
     writeFixtureFile(join(fixtureRoot, 'packages/protocol/dist/index.js'), 'export const protocol = true;\n');
+
     writeFixtureFile(
         join(fixtureRoot, 'apps/tui/package.json'),
         packageJson('@mission-control/tui', { '.': './dist/index.js' }),
     );
     writeFixtureFile(join(fixtureRoot, 'apps/tui/dist/index.js'), 'export const tui = true;\n');
+
     writeFixtureFile(
         join(fixtureRoot, 'packages/protocol/node_modules/zod/package.json'),
         packageJson('zod', { '.': './index.js' }, undefined, '4.4.3'),
