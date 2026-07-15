@@ -8,6 +8,9 @@ const SESSION_STORE_DATABASE_FILENAME = 'mission-control.db';
 const DATA_DIR_PRIVATE_MODE = 0o700;
 const DATA_DIR_PERMISSION_MASK = 0o077;
 
+const recordedDataDirPermissionPaths = new Set<string>();
+const pendingDataDirPermissionWarnings: string[] = [];
+
 export type SessionStoreIdentity = {
     readonly canonicalDataDir: string;
     readonly databasePath: string;
@@ -131,7 +134,7 @@ export async function resolveSessionStoreIdentity(
         await verifyPosixDataDir({
             canonicalDataDir,
             ...(currentUid !== undefined ? { currentUid } : {}),
-            warn: options.warn ?? defaultPermissionWarning,
+            ...(options.warn !== undefined ? { warn: options.warn } : {}),
         });
     }
 
@@ -148,7 +151,7 @@ export async function resolveSessionStoreIdentity(
 async function verifyPosixDataDir(input: {
     readonly canonicalDataDir: string;
     readonly currentUid?: number;
-    readonly warn: (message: string) => void;
+    readonly warn?: (message: string) => void;
 }): Promise<void> {
     let details: Awaited<ReturnType<typeof stat>>;
     try {
@@ -170,16 +173,38 @@ async function verifyPosixDataDir(input: {
     }
     const mode = details.mode & 0o777;
     if ((mode & DATA_DIR_PERMISSION_MASK) !== 0) {
-        input.warn(
-            `Mission Control data directory ${input.canonicalDataDir} has permissive mode 0${mode
-                .toString(8)
-                .padStart(3, '0')}; permissions were not changed`,
-        );
+        const message = formatPermissiveDataDirWarning(input.canonicalDataDir, mode);
+        if (input.warn !== undefined) {
+            input.warn(message);
+            return;
+        }
+        recordDataDirPermissionWarningOnce(input.canonicalDataDir, message);
     }
 }
 
-function defaultPermissionWarning(message: string): void {
-    process.emitWarning(message, { code: 'MCTRL_DATA_DIR_PERMISSIONS' });
+export function formatPermissiveDataDirWarning(canonicalDataDir: string, mode: number): string {
+    const modeOctal = `0${(mode & 0o777).toString(8).padStart(3, '0')}`;
+    return `Mission Control data directory ${canonicalDataDir} has permissive mode ${modeOctal}; permissions were not changed. Fix: chmod 700 ${JSON.stringify(canonicalDataDir)}`;
+}
+
+export function takeDataDirPermissionWarnings(): readonly string[] {
+    if (pendingDataDirPermissionWarnings.length === 0) {
+        return [];
+    }
+    return pendingDataDirPermissionWarnings.splice(0, pendingDataDirPermissionWarnings.length);
+}
+
+export function resetDataDirPermissionWarningStateForTests(): void {
+    recordedDataDirPermissionPaths.clear();
+    pendingDataDirPermissionWarnings.length = 0;
+}
+
+function recordDataDirPermissionWarningOnce(canonicalDataDir: string, message: string): void {
+    if (recordedDataDirPermissionPaths.has(canonicalDataDir)) {
+        return;
+    }
+    recordedDataDirPermissionPaths.add(canonicalDataDir);
+    pendingDataDirPermissionWarnings.push(message);
 }
 
 async function pathExists(path: string): Promise<boolean> {

@@ -485,6 +485,8 @@ export {
     resolveCanonicalSessionTree,
 } from './runtime/session-stop-tree-resolver.js';
 export {
+    formatPermissiveDataDirWarning,
+    resetDataDirPermissionWarningStateForTests,
     resolveSessionStoreIdentity,
     SESSION_STORE_IDENTITY_GOLDEN_VECTORS,
     type SessionStoreIdentity,
@@ -492,6 +494,7 @@ export {
     type SessionStoreIdentityErrorCode,
     type SessionStoreIdentityGoldenVector,
     sessionStoreDatabasePath,
+    takeDataDirPermissionWarnings,
 } from './runtime/session-store-identity.js';
 export {
     type CanonicalSessionTreeTokenNode,

@@ -1,10 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+    formatPermissiveDataDirWarning,
+    resetDataDirPermissionWarningStateForTests,
     resolveSessionStoreIdentity,
     SESSION_STORE_IDENTITY_GOLDEN_VECTORS,
     SessionStoreIdentityError,
     sessionStoreDatabasePath,
     sessionStoreIdentityFromCanonicalDatabasePath,
+    takeDataDirPermissionWarnings,
 } from './session-store-identity.js';
 import { createHash } from 'node:crypto';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
@@ -72,7 +75,35 @@ describe('SessionStoreIdentity', () => {
 
         expect(warnings).toHaveLength(1);
         expect(warnings[0]).toContain('0755');
+        expect(warnings[0]).toContain(`Fix: chmod 700 ${JSON.stringify(dataDir)}`);
         expect((await stat(dataDir)).mode & 0o777).toBe(0o755);
+    });
+
+    it('collects default permissive-mode warnings once without process.emitWarning', async () => {
+        resetDataDirPermissionWarningStateForTests();
+        const dataDir = await makeTempDir('mctrl-identity-mode-default-');
+        await chmod(dataDir, 0o775);
+        const emitWarning = vi.spyOn(process, 'emitWarning');
+
+        await resolveSessionStoreIdentity({ dataDir, platform: 'linux' });
+        await resolveSessionStoreIdentity({ dataDir, platform: 'linux' });
+
+        expect(emitWarning).not.toHaveBeenCalled();
+        const firstTake = takeDataDirPermissionWarnings();
+        expect(firstTake).toHaveLength(1);
+        expect(firstTake[0]).toContain('0775');
+        expect(firstTake[0]).toContain('Fix: chmod 700');
+        expect(takeDataDirPermissionWarnings()).toEqual([]);
+        await resolveSessionStoreIdentity({ dataDir, platform: 'linux' });
+        expect(takeDataDirPermissionWarnings()).toEqual([]);
+        emitWarning.mockRestore();
+        resetDataDirPermissionWarningStateForTests();
+    });
+
+    it('formats a remediating chmod command for permissive data dirs', () => {
+        expect(formatPermissiveDataDirWarning('/home/alice/.local/share/mission-control', 0o775)).toBe(
+            'Mission Control data directory /home/alice/.local/share/mission-control has permissive mode 0775; permissions were not changed. Fix: chmod 700 "/home/alice/.local/share/mission-control"',
+        );
     });
 
     it('fails closed when an existing POSIX root is not owned by the current user', async () => {

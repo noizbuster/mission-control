@@ -16,6 +16,8 @@ import {
     formatSessionRow,
     formatSkillRow,
     formatWelcomeHint,
+    formatWelcomeWarning,
+    formatWelcomeWarningLines,
     padToWidth,
     sectionDividerRule,
     truncateSessionId,
@@ -313,5 +315,35 @@ describe('formatSessionRow', () => {
 describe('buildProjectDescriptor', () => {
     it('appends branch and worktree marker', () => {
         expect(buildProjectDescriptor('mission-control', 'main', true)).toBe('mission-control:main (worktree)');
+    });
+});
+
+describe('formatWelcomeWarning', () => {
+    it('prefixes the warning label and truncates to the content width', () => {
+        expect(
+            formatWelcomeWarning(
+                {
+                    severity: 'warning',
+                    message: 'Mission Control data directory /tmp/x has permissive mode 0775; permissions were not changed',
+                },
+                40,
+            ),
+        ).toBe('Warning: Mission Control data directory\u2026');
+    });
+
+    it('splits remediating Fix guidance onto its own line', () => {
+        expect(
+            formatWelcomeWarningLines(
+                {
+                    severity: 'warning',
+                    message:
+                        'Mission Control data directory /tmp/x has permissive mode 0775; permissions were not changed. Fix: chmod 700 "/tmp/x"',
+                },
+                120,
+            ),
+        ).toEqual([
+            'Warning: Mission Control data directory /tmp/x has permissive mode 0775; permissions were not changed.',
+            'Fix: chmod 700 "/tmp/x"',
+        ]);
     });
 });

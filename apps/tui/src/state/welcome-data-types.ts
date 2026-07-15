@@ -39,6 +39,11 @@ export type WelcomeSession = {
     readonly messageCount: number;
 };
 
+export type WelcomeWarning = {
+    readonly severity: 'warning';
+    readonly message: string;
+};
+
 /**
  * The full welcome-screen payload. Every section is independently gathered so
  * a failure in one (e.g. MCP config parse error) does not suppress the others.
@@ -50,4 +55,5 @@ export type WelcomeData = {
     readonly projectSkills: readonly WelcomeSkill[];
     readonly lspServers: readonly WelcomeLspServer[];
     readonly recentSessions: readonly WelcomeSession[];
+    readonly warnings?: readonly WelcomeWarning[];
 };

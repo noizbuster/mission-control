@@ -7,6 +7,7 @@ import type {
     WelcomeMcpServer,
     WelcomeSession,
     WelcomeSkill,
+    WelcomeWarning,
 } from '../state/welcome-data-types.js';
 
 export type WelcomeScreenProps = {
@@ -38,6 +39,8 @@ const HEADER_FG = '#00ffff';
 
 /** Muted color for section dividers and metadata. */
 const DIM_FG = '#888888';
+
+const WARNING_FG = '#ffcc33';
 
 /**
  * Pad or truncate a string to exactly `width` columns. Strings shorter than
@@ -199,6 +202,30 @@ export function formatWelcomeHint(contentWidth: number = welcomeWidthBudget().co
     return truncateToWidth(WELCOME_HINT, contentWidth);
 }
 
+export function formatWelcomeWarning(
+    warning: WelcomeWarning,
+    contentWidth: number = welcomeWidthBudget().contentWidth,
+): string {
+    return formatWelcomeWarningLines(warning, contentWidth)[0] ?? '';
+}
+
+export function formatWelcomeWarningLines(
+    warning: WelcomeWarning,
+    contentWidth: number = welcomeWidthBudget().contentWidth,
+): readonly string[] {
+    const fixMarker = ' Fix: ';
+    const fixIndex = warning.message.indexOf(fixMarker);
+    if (fixIndex >= 0) {
+        const problem = warning.message.slice(0, fixIndex);
+        const fix = warning.message.slice(fixIndex + fixMarker.length);
+        return [
+            truncateToWidth(`Warning: ${problem}`, contentWidth),
+            truncateToWidth(`Fix: ${fix}`, contentWidth),
+        ];
+    }
+    return [truncateToWidth(`Warning: ${warning.message}`, contentWidth)];
+}
+
 /** Truncate a session id to a fixed visible width with a trailing ellipsis. */
 export function truncateSessionId(id: string, maxLen: number = SESSION_ID_MAX): string {
     return truncateToWidth(id, maxLen);
@@ -337,93 +364,112 @@ export function WelcomeScreen(props: WelcomeScreenProps): JSX.Element {
         };
     };
 
+    const warnings = () => props.data.warnings ?? [];
+
     return (
-        <Show
-            when={rowPlan().mode === 'compact'}
-            fallback={
-                <box flexDirection="column" flexGrow={1} paddingLeft={2} paddingRight={2} paddingBottom={1}>
-                    <WelcomeHeader version={props.data.version} />
-                    <SectionHeader title="ENVIRONMENT" contentWidth={widthBudget().contentWidth} />
-                    <TwoColumnRow
-                        label={modelLine().label}
-                        value={modelLine().value}
-                        widthBudget={widthBudget()}
-                    />
-                    {projectDescriptor() !== undefined ? (
+        <box flexDirection="column" flexGrow={1} minHeight={0}>
+            <Show
+                when={rowPlan().mode === 'compact'}
+                fallback={
+                    <box flexDirection="column" flexGrow={1} paddingLeft={2} paddingRight={2} paddingBottom={1}>
+                        <WelcomeHeader version={props.data.version} />
+                        <SectionHeader title="ENVIRONMENT" contentWidth={widthBudget().contentWidth} />
                         <TwoColumnRow
-                            label="project"
-                            value={projectDescriptor() ?? ''}
+                            label={modelLine().label}
+                            value={modelLine().value}
                             widthBudget={widthBudget()}
                         />
-                    ) : null}
+                        {projectDescriptor() !== undefined ? (
+                            <TwoColumnRow
+                                label="project"
+                                value={projectDescriptor() ?? ''}
+                                widthBudget={widthBudget()}
+                            />
+                        ) : null}
 
-                    <SectionHeader title="MCP SERVERS" contentWidth={widthBudget().contentWidth} />
-                    {props.data.mcpServers.length === 0 ? (
-                        <EmptyHint text="no servers configured" widthBudget={widthBudget()} />
-                    ) : (
-                        <For each={props.data.mcpServers}>
-                            {(server) => {
-                                const row = formatMcpServerRow(server);
-                                return (
-                                    <TwoColumnRow
-                                        label={row.label}
-                                        value={row.value}
-                                        widthBudget={widthBudget()}
-                                    />
-                                );
-                            }}
-                        </For>
-                    )}
+                        <SectionHeader title="MCP SERVERS" contentWidth={widthBudget().contentWidth} />
+                        {props.data.mcpServers.length === 0 ? (
+                            <EmptyHint text="no servers configured" widthBudget={widthBudget()} />
+                        ) : (
+                            <For each={props.data.mcpServers}>
+                                {(server) => {
+                                    const row = formatMcpServerRow(server);
+                                    return (
+                                        <TwoColumnRow
+                                            label={row.label}
+                                            value={row.value}
+                                            widthBudget={widthBudget()}
+                                        />
+                                    );
+                                }}
+                            </For>
+                        )}
 
-                    <SectionHeader title="PROJECT SKILLS" contentWidth={widthBudget().contentWidth} />
-                    {props.data.projectSkills.length === 0 ? (
-                        <EmptyHint
-                            text="no project-scoped skills (.mctrl/skills, .agents/skills)"
-                            widthBudget={widthBudget()}
-                        />
-                    ) : (
-                        <For each={props.data.projectSkills}>
-                            {(skill) => {
-                                const row = formatSkillRow(skill, widthBudget().skillValueWidth);
-                                return (
-                                    <TwoColumnRow
-                                        label={row.label}
-                                        value={row.value}
-                                        widthBudget={widthBudget()}
-                                    />
-                                );
-                            }}
-                        </For>
-                    )}
+                        <SectionHeader title="PROJECT SKILLS" contentWidth={widthBudget().contentWidth} />
+                        {props.data.projectSkills.length === 0 ? (
+                            <EmptyHint
+                                text="no project-scoped skills (.mctrl/skills, .agents/skills)"
+                                widthBudget={widthBudget()}
+                            />
+                        ) : (
+                            <For each={props.data.projectSkills}>
+                                {(skill) => {
+                                    const row = formatSkillRow(skill, widthBudget().skillValueWidth);
+                                    return (
+                                        <TwoColumnRow
+                                            label={row.label}
+                                            value={row.value}
+                                            widthBudget={widthBudget()}
+                                        />
+                                    );
+                                }}
+                            </For>
+                        )}
 
-                    <SectionHeader title="LSP SERVERS" contentWidth={widthBudget().contentWidth} />
-                    {lspGlyphs().length === 0 ? (
-                        <EmptyHint text="no servers in catalog" widthBudget={widthBudget()} />
-                    ) : (
-                        <LspGlyphRow glyphs={lspGlyphs()} />
-                    )}
+                        <SectionHeader title="LSP SERVERS" contentWidth={widthBudget().contentWidth} />
+                        {lspGlyphs().length === 0 ? (
+                            <EmptyHint text="no servers in catalog" widthBudget={widthBudget()} />
+                        ) : (
+                            <LspGlyphRow glyphs={lspGlyphs()} />
+                        )}
 
-                    <SectionHeader title="RECENT SESSIONS" contentWidth={widthBudget().contentWidth} />
-                    {props.data.recentSessions.length === 0 ? (
-                        <EmptyHint text="no sessions yet for this project" widthBudget={widthBudget()} />
-                    ) : (
-                        <For each={props.data.recentSessions}>
-                            {(session) => <SessionRow session={session} widthBudget={widthBudget()} />}
-                        </For>
-                    )}
+                        <SectionHeader title="RECENT SESSIONS" contentWidth={widthBudget().contentWidth} />
+                        {props.data.recentSessions.length === 0 ? (
+                            <EmptyHint text="no sessions yet for this project" widthBudget={widthBudget()} />
+                        ) : (
+                            <For each={props.data.recentSessions}>
+                                {(session) => <SessionRow session={session} widthBudget={widthBudget()} />}
+                            </For>
+                        )}
 
-                    <box marginTop={1}>
-                        <text attributes={TextAttributes.DIM}>{formatWelcomeHint(widthBudget().contentWidth)}</text>
+                        <box marginTop={1}>
+                            <text attributes={TextAttributes.DIM}>
+                                {formatWelcomeHint(widthBudget().contentWidth)}
+                            </text>
+                        </box>
                     </box>
+                }
+            >
+                <box flexDirection="column" flexGrow={1} paddingLeft={2} paddingRight={2}>
+                    <For each={rowPlan().compactRowKeys}>
+                        {(rowKey) => renderCompactWelcomeRow(rowKey, compactContext())}
+                    </For>
                 </box>
-            }
-        >
-            <box flexDirection="column" flexGrow={1} paddingLeft={2} paddingRight={2}>
-                <For each={rowPlan().compactRowKeys}>
-                    {(rowKey) => renderCompactWelcomeRow(rowKey, compactContext())}
-                </For>
-            </box>
-        </Show>
+            </Show>
+            {warnings().length > 0 ? (
+                <box flexDirection="column" paddingLeft={2} paddingRight={2} marginTop={1} marginBottom={1}>
+                    <For each={warnings()}>
+                        {(warning) => (
+                            <box flexDirection="column">
+                                <For each={formatWelcomeWarningLines(warning, widthBudget().contentWidth)}>
+                                    {(line) => <text fg={WARNING_FG}>{line}</text>}
+                                </For>
+                            </box>
+                        )}
+                    </For>
+                </box>
+            ) : null}
+        </box>
     );
 }
 

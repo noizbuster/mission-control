@@ -7,10 +7,13 @@ import {
     type LspServerConfig,
     type LspServerManager,
     loadResolvedMcpConfig,
+    resolveMissionControlDataDir,
+    resolveSessionStoreIdentity,
     type ResolvedMcpServer,
     type Skill,
+    takeDataDirPermissionWarnings,
 } from '@mission-control/core';
-import { getVersion } from '../index.js';
+import { getVersion } from '../cli-version.js';
 import type { CliSessionCatalogEntry } from './session-catalog.js';
 import { listSessionCatalogEntriesForWorkspace } from './session-catalog.js';
 
@@ -47,6 +50,11 @@ export type WelcomeSession = {
     readonly messageCount: number;
 };
 
+export type WelcomeWarning = {
+    readonly severity: 'warning';
+    readonly message: string;
+};
+
 /**
  * The full welcome-screen payload. Every section is independently gathered so
  * a failure in one (e.g. MCP config parse error) does not suppress the others.
@@ -58,6 +66,7 @@ export type WelcomeData = {
     readonly projectSkills: readonly WelcomeSkill[];
     readonly lspServers: readonly WelcomeLspServer[];
     readonly recentSessions: readonly WelcomeSession[];
+    readonly warnings?: readonly WelcomeWarning[];
 };
 
 /** Maximum number of recent sessions to show on the welcome screen. */
@@ -228,6 +237,7 @@ export async function gatherWelcomeData(options: GatherWelcomeDataOptions = {}):
         gatherRecentSessions(workspaceRoot),
         gatherLspServers(options.deps),
     ]);
+    const warnings = await collectWelcomeDataDirWarnings();
     return {
         version: getVersion(),
         defaultModel: {
@@ -238,5 +248,11 @@ export async function gatherWelcomeData(options: GatherWelcomeDataOptions = {}):
         projectSkills,
         recentSessions,
         lspServers,
+        ...(warnings.length > 0 ? { warnings } : {}),
     };
+}
+
+async function collectWelcomeDataDirWarnings(): Promise<readonly WelcomeWarning[]> {
+    await resolveSessionStoreIdentity({ dataDir: resolveMissionControlDataDir() }).catch(() => undefined);
+    return takeDataDirPermissionWarnings().map((message) => ({ severity: 'warning', message }));
 }
