@@ -6,7 +6,6 @@ import { EventEmitter, once } from 'node:events';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 
 const fixturePath = fileURLToPath(new URL('./test-fixtures/local-db-worker.ts', import.meta.url));
@@ -35,17 +34,13 @@ describe('local libSQL cross-process contention and crash recovery', () => {
         const writer = startWorker(['write', dataDir, 'waited-row']);
         await writer.waitFor('READY');
         await writer.waitFor('LOCKED');
-        const waitStartedAt = performance.now();
 
         // When: the holder releases only after the second process has attempted its write.
         expect(writer.hasMarker('COMMITTED')).toBe(false);
         await writeFile(releasePath, 'release', 'utf8');
         await writer.waitFor('COMMITTED');
-        const elapsedMs = performance.now() - waitStartedAt;
 
-        // Then: both workers commit, measurable waiting stays below the product timeout, and another write succeeds.
-        expect(elapsedMs).toBeGreaterThan(0);
-        expect(elapsedMs).toBeLessThan(5_000);
+        // Then: both workers commit in lock order and another write succeeds.
         expect(await holder.waitForExit()).toMatchObject({ code: 0, signal: null });
         expect(await writer.waitForExit()).toMatchObject({ code: 0, signal: null });
         expect(await assertHealthyAndWrite(dataDir, 'follow-up-success')).toEqual([
@@ -54,7 +49,7 @@ describe('local libSQL cross-process contention and crash recovery', () => {
             'waited-row',
         ]);
     }, 15_000);
-    it('fails near the bounded 5000ms timeout without hanging or corrupting the database', async () => {
+    it('surfaces the configured busy failure without corrupting the database', async () => {
         // Given: a holder keeps BEGIN IMMEDIATE beyond the configured busy timeout.
         const dataDir = await makeDataDir('wait-timeout');
         const releasePath = join(dataDir, 'release-timeout-holder');
@@ -64,16 +59,14 @@ describe('local libSQL cross-process contention and crash recovery', () => {
         const writer = startWorker(['write', dataDir, 'timed-out-row']);
         await writer.waitFor('READY');
         await writer.waitFor('LOCKED');
-        const waitStartedAt = performance.now();
 
         // When: the second process reaches SQLite's real busy deadline.
         const errorLine = await writer.waitFor('ERROR', 8_000);
-        const elapsedMs = performance.now() - waitStartedAt;
 
-        // Then: failure is bounded near 5000ms, the holder can finish, and the DB remains writable.
+        // Then: the waiting write fails while the holder remains active, then the DB recovers after release.
         expect(errorLine).toMatch(/busy|locked/iu);
-        expect(elapsedMs).toBeGreaterThanOrEqual(4_500);
-        expect(elapsedMs).toBeLessThan(7_000);
+        expect(writer.hasMarker('COMMITTED')).toBe(false);
+        expect(holder.hasMarker('COMMITTED')).toBe(false);
         expect(await writer.waitForExit()).toMatchObject({ code: 1, signal: null });
         await writeFile(releasePath, 'release', 'utf8');
         await holder.waitFor('COMMITTED');

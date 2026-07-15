@@ -19,6 +19,7 @@ export interface AgentRef {
     readonly displayName: string;
     readonly kind: AgentKind;
     readonly parentId?: string;
+    readonly authorityFingerprint?: string;
     status: AgentStatus;
     readonly sessionId: string;
     sessionFile?: string;

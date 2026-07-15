@@ -16,6 +16,7 @@ export { discoverAgents } from './agent-loader.js';
 export { AgentParseError, parseAgentFile } from './agent-parser.js';
 export { AgentIndex } from './agent-registry.js';
 export {
+    AsyncJobCleanupError,
     AsyncJobManager,
     type BackgroundJobHandle,
     type JobExecuteFn,

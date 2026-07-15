@@ -14,6 +14,7 @@ import {
     readCompatibilityJsonFile,
 } from '../../persistence/json-compatibility-file.js';
 import { OmoPersistenceError } from '../../persistence/paths.js';
+import type { ObservabilityRedactor } from '../../providers/observability-redactor.js';
 import { listMissionsFromDb, readMissionFromDb, writeMissionToDb } from './mission-run-db.js';
 import { type MissionRunStoreLocation, normalizeMissionRunStoreLocation } from './mission-run-store-location.js';
 
@@ -57,7 +58,7 @@ export function missionFilePath(root: string, missionId: string): string {
  */
 export async function createMission(location: MissionRunStoreLocation, mission: Mission): Promise<Mission> {
     const normalized = normalizeMissionRunStoreLocation(location);
-    const validated = MissionSchema.parse(mission);
+    const validated = sanitizeMissionForPersistence(mission, normalized.observabilityRedactor);
     await writeMissionToDb(normalized.dataDir, validated);
     return validated;
 }
@@ -71,9 +72,12 @@ export async function readMission(location: MissionRunStoreLocation, missionId: 
     const normalized = normalizeMissionRunStoreLocation(location);
     const dbMission = await readMissionFromDb(normalized.dataDir, missionId);
     if (dbMission !== undefined) {
-        return dbMission;
+        return sanitizeMissionForPersistence(dbMission, normalized.observabilityRedactor);
     }
-    const legacyMission = await readMissionJson(normalized.omoRoot, missionId);
+    const legacyMission = sanitizeMissionForPersistence(
+        await readMissionJson(normalized.omoRoot, missionId),
+        normalized.observabilityRedactor,
+    );
     await writeMissionToDb(normalized.dataDir, legacyMission);
     return legacyMission;
 }
@@ -133,7 +137,7 @@ export async function updateMission(
     const now = options.now?.() ?? new Date().toISOString();
     const existing = await readMission(normalized, missionId);
     const updated: Mission = { ...existing, ...patch, updatedAt: now };
-    const validated = MissionSchema.parse(updated);
+    const validated = sanitizeMissionForPersistence(updated, normalized.observabilityRedactor);
     await writeMissionToDb(normalized.dataDir, validated);
     return validated;
 }
@@ -144,7 +148,9 @@ export async function updateMission(
  */
 export async function listMissions(location: MissionRunStoreLocation): Promise<readonly Mission[]> {
     const normalized = normalizeMissionRunStoreLocation(location);
-    const missions = [...(await listMissionsFromDb(normalized.dataDir))];
+    const missions = (await listMissionsFromDb(normalized.dataDir)).map((mission) =>
+        sanitizeMissionForPersistence(mission, normalized.observabilityRedactor),
+    );
     const seenIds = new Set(missions.map((mission) => mission.id));
     let missionIds: readonly string[];
     try {
@@ -157,12 +163,19 @@ export async function listMissions(location: MissionRunStoreLocation): Promise<r
         if (seenIds.has(missionId)) {
             continue;
         }
-        const mission = await readMissionJson(normalized.omoRoot, missionId);
+        const mission = sanitizeMissionForPersistence(
+            await readMissionJson(normalized.omoRoot, missionId),
+            normalized.observabilityRedactor,
+        );
         await writeMissionToDb(normalized.dataDir, mission);
         missions.push(mission);
         seenIds.add(mission.id);
     }
     return missions;
+}
+
+function sanitizeMissionForPersistence(mission: Mission, observabilityRedactor?: ObservabilityRedactor): Mission {
+    return MissionSchema.parse(observabilityRedactor?.redactValue(mission) ?? mission);
 }
 
 function mapCompatibilityError(error: unknown, missionId: string): MissionStoreError {

@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 271 -> current 272 pure LOC; one background-job command and child-session state-machine matrix.
 import type { AgentDefinition } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -281,6 +282,7 @@ describe('job tool — child surface exclusion', () => {
             description: 'parent',
             systemPrompt: 'You are the parent.',
             source: 'bundled',
+            spawns: '*',
         };
         const agentIndex = new AgentIndex();
         agentIndex.register(child);

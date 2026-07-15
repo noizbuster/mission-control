@@ -17,21 +17,23 @@ import type {
     AbgNodeModelOptions,
     AbgSignal,
     AgentEvent,
-    AgentMessage,
     ModelProviderSelection,
     ProtocolErrorCode,
 } from '@mission-control/protocol';
 import { ProtocolErrorCodeSchema } from '@mission-control/protocol';
-import type { ModelMessage } from 'ai';
 import type { PricingTable } from '../behavior/budget/cost-ledger.js';
 import { type AbgGraphRunResult, runAbgGraph } from '../behavior/graph-runner.js';
 import type { AbgNodeRegistry } from '../behavior/node-registry.js';
 import type { LlmActorModel } from '../behavior/nodes/llm-actor/llm-actor-node.js';
 import type { ProjectInstructionResource } from '../context/project-context-messages.js';
 import type { SystemPromptEnvironment } from '../context/system-prompt.js';
+import { createObservabilityRedactor, type ObservabilityRedactor } from '../providers/observability-redactor.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
+import { agentMessagesToSeedModelMessages } from './graph-coordinator-turn-messages.js';
 import type { RunCoordinatorProviderTurnResult } from './run-coordinator-lifecycle.js';
 import type { RunCoordinatorTurnRunner } from './run-coordinator-types.js';
+
+export { agentMessagesToSeedModelMessages } from './graph-coordinator-turn-messages.js';
 
 /**
  * Static graph wiring, closed over when the runner is built. The per-turn inputs (`initialMessages`
@@ -47,6 +49,7 @@ export type GraphTurnRunnerWiring = {
     readonly resolveSdkModel?: (options: AbgNodeModelOptions) => LlmActorModel;
     readonly toolRegistry?: ToolRegistry;
     readonly pricingTable?: PricingTable;
+    readonly createToolCallId?: () => string;
     /**
      * Fail the run on the first non-approval tool settlement failure instead of surfacing it to the
      * model — parity with the flat run coordinator's `haltOnFailedToolSettlement`. Flows into
@@ -91,6 +94,7 @@ export type GraphTurnRunnerWiring = {
      * trust-aware discovery (see `loadProjectResources`).
      */
     readonly projectInstructionResources?: readonly ProjectInstructionResource[];
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 /**
@@ -108,10 +112,12 @@ export function createGraphTurnRunner(wiring: GraphTurnRunnerWiring): RunCoordin
         // forwarded. Empty/absent decisions → no graphInput → the graph blocks as before.
         const { readApprovalDecisions, ...graphRunnerInput } = wiring;
         const approvalEvents = readApprovalDecisions !== undefined ? await readApprovalDecisions() : [];
+        const observabilityRedactor = wiring.observabilityRedactor ?? createObservabilityRedactor();
         const result = await runAbgGraph({
             ...graphRunnerInput,
             initialMessages,
             abortSignal: context.signal,
+            observabilityRedactor,
             ...(approvalEvents.length > 0 ? { graphInput: { events: [...approvalEvents] } } : {}),
         });
         for (const event of result.events) {
@@ -178,62 +184,6 @@ export function mapGraphTurnResult(result: AbgGraphRunResult): RunCoordinatorPro
                 errorCode: 'unknown',
             };
     }
-}
-
-/**
- * Seed the graph's Blackboard from the admitted conversation. `modelVisibleMessages` from the
- * session admission projection is always `role: 'user'` prompts; system/assistant text roles are
- * mapped too for completeness. `tool` results are also mapped: the `toolName` is recovered from a
- * preceding assistant message's `providerToolCalls` (matched by `toolCallId`) because the AI-SDK
- * tool-result shape requires it. Tool results without a matching prior proposal are skipped (the
- * SDK would reject a tool-result part with no `toolName`).
- */
-export function agentMessagesToSeedModelMessages(messages: readonly AgentMessage[]): ModelMessage[] {
-    const toolNameByCallId = new Map<string, string>();
-    for (const message of messages) {
-        if (message.role === 'assistant') {
-            for (const call of message.providerToolCalls ?? []) {
-                toolNameByCallId.set(call.toolCallId, call.toolName);
-            }
-        }
-    }
-    const seed: ModelMessage[] = [];
-    for (const message of messages) {
-        if (message.role === 'system') {
-            seed.push({ role: 'system', content: message.content });
-        } else if (message.role === 'user') {
-            seed.push({ role: 'user', content: message.content });
-        } else if (message.role === 'assistant') {
-            seed.push({ role: 'assistant', content: message.content });
-        } else if (message.role === 'tool') {
-            const toolName = toolNameByCallId.get(message.toolCallId);
-            if (toolName === undefined) {
-                continue;
-            }
-            seed.push({
-                role: 'tool',
-                content: [
-                    {
-                        type: 'tool-result',
-                        toolCallId: message.toolCallId,
-                        toolName,
-                        output: toolResultOutputFor(message),
-                    },
-                ],
-            });
-        }
-    }
-    return seed;
-}
-
-function toolResultOutputFor(
-    message: Extract<AgentMessage, { readonly role: 'tool' }>,
-): { readonly type: 'text'; readonly value: string } | { readonly type: 'error-text'; readonly value: string } {
-    if (message.status === 'failed') {
-        const error = message.error;
-        return { type: 'error-text', value: error?.message ?? 'tool failed' };
-    }
-    return { type: 'text', value: message.output ?? '' };
 }
 
 function lastEventMessage(events: readonly AgentEvent[]): string | undefined {

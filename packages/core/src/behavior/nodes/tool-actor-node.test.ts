@@ -82,10 +82,15 @@ describe('tool-actor-node', () => {
             config: { tool: 'echo' },
         };
 
-        const signals = await collectSignals(runToolActorNode(node, baseContext));
+        const signals = await collectSignals(
+            runToolActorNode(node, { ...baseContext, toolCallId: 'unavailable-call' }),
+        );
 
         expect(signals.map((s) => s.type)).toEqual(['started', 'emit', 'failure']);
         expect(eventTypes(signals)).toEqual(['tool.failed']);
+        expect(signals.find((signal) => signal.type === 'emit')?.event.payload).toMatchObject({
+            toolCallId: 'unavailable-call',
+        });
 
         const failureSignal = signals.find((s) => s.type === 'failure');
         if (failureSignal?.type !== 'failure') {
@@ -114,10 +119,15 @@ describe('tool-actor-node', () => {
                 config: testCase.config,
             };
 
-            const signals = await collectSignals(runToolActorNode(node, { ...baseContext, toolRegistry: registry }));
+            const signals = await collectSignals(
+                runToolActorNode(node, { ...baseContext, toolCallId: 'invalid-name-call', toolRegistry: registry }),
+            );
 
             expect(signals.map((s) => s.type)).toEqual(['started', 'emit', 'failure']);
             expect(eventTypes(signals)).toEqual(['tool.failed']);
+            expect(signals.find((signal) => signal.type === 'emit')?.event.payload).toMatchObject({
+                toolCallId: 'invalid-name-call',
+            });
 
             const failureSignal = signals.find((s) => s.type === 'failure');
             if (failureSignal?.type !== 'failure') {
@@ -137,10 +147,15 @@ describe('tool-actor-node', () => {
             config: { tool: 'does_not_exist' },
         };
 
-        const signals = await collectSignals(runToolActorNode(node, { ...baseContext, toolRegistry: registry }));
+        const signals = await collectSignals(
+            runToolActorNode(node, { ...baseContext, toolCallId: 'unknown-tool-call', toolRegistry: registry }),
+        );
 
         expect(signals.map((s) => s.type)).toEqual(['started', 'emit', 'failure']);
         expect(eventTypes(signals)).toEqual(['tool.failed']);
+        expect(signals.find((signal) => signal.type === 'emit')?.event.payload).toMatchObject({
+            toolCallId: 'unknown-tool-call',
+        });
 
         const failureSignal = signals.find((s) => s.type === 'failure');
         if (failureSignal?.type !== 'failure') {
@@ -176,9 +191,16 @@ describe('tool-actor-node', () => {
         expect((failureSignal.error as { code: string }).code).toBe('schema_invalid');
     });
 
-    it('uses node.id as toolCallId when not provided in config', async () => {
+    it('uses the invocation ID factory and correlates registry execution with lifecycle events', async () => {
         const registry = new ToolRegistry();
-        registry.register(echoRegistration);
+        let executedToolCallId: string | undefined;
+        registry.register({
+            ...echoRegistration,
+            execute: async (input, context) => {
+                executedToolCallId = context.toolCallId;
+                return { text: input.text };
+            },
+        });
 
         const node: AbgNodeSpec = {
             id: 'my-tool-call',
@@ -186,19 +208,19 @@ describe('tool-actor-node', () => {
             config: { tool: 'echo', arguments: { text: 'test' } },
         };
 
-        const signals = await collectSignals(runToolActorNode(node, { ...baseContext, toolRegistry: registry }));
+        const signals = await collectSignals(
+            runToolActorNode(node, { ...baseContext, toolCallId: 'generated-call-id', toolRegistry: registry }),
+        );
 
-        const startedEvent = signals.find((s) => s.type === 'emit');
-        if (startedEvent?.type !== 'emit') {
-            throw new Error('Expected emit signal');
-        }
-        expect(startedEvent.event.payload).toEqual({
-            toolName: 'echo',
-            toolCallId: 'my-tool-call',
-        });
+        const lifecycleEvents = signals.filter((signal) => signal.type === 'emit');
+        expect(executedToolCallId).toBe('generated-call-id');
+        expect(lifecycleEvents.map((signal) => signal.event.payload)).toEqual([
+            { toolName: 'echo', toolCallId: 'generated-call-id' },
+            { toolName: 'echo', toolCallId: 'generated-call-id' },
+        ]);
     });
 
-    it('uses provided toolCallId from config when available', async () => {
+    it('does not reuse an author-supplied static toolCallId as an invocation ID', async () => {
         const registry = new ToolRegistry();
         registry.register(echoRegistration);
 
@@ -212,16 +234,15 @@ describe('tool-actor-node', () => {
             },
         };
 
-        const signals = await collectSignals(runToolActorNode(node, { ...baseContext, toolRegistry: registry }));
+        const signals = await collectSignals(
+            runToolActorNode(node, { ...baseContext, toolCallId: 'generated-call-id', toolRegistry: registry }),
+        );
 
         const startedEvent = signals.find((s) => s.type === 'emit');
         if (startedEvent?.type !== 'emit') {
             throw new Error('Expected emit signal');
         }
-        expect(startedEvent.event.payload).toEqual({
-            toolName: 'echo',
-            toolCallId: 'custom-call-id',
-        });
+        expect(startedEvent.event.payload).toEqual({ toolName: 'echo', toolCallId: 'generated-call-id' });
     });
 
     it('uses modelOutput.content as fallback when result.output is undefined', async () => {

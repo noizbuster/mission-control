@@ -13,7 +13,7 @@
 | Run coordination | `src/runtime/` | Prompt admission, wake/run/resume/interrupt, scheduler. |
 | Provider turns | `src/providers/` | Adapters, retries, timeouts, redaction, OpenAI Responses mapping. |
 | Native sidecar | `src/native/` | Process spawn, handshake, status, timeout, mock fallback. |
-| Durable sessions | `src/memory/` | SQLite/libSQL session event store, data-dir resolution, projections, JSONL replay/import/export compatibility. |
+| Durable sessions | `src/memory/` | SQLite/libSQL session event store, data-dir resolution, projections, and JSONL replay/import/export compatibility. Durable Mission/Run records live in SQL `mission_runs`; JSONL never owns authoritative Run state. |
 | Replay | `src/session-replay.ts`, `src/session-*.ts` | Branch, approval, tool outcome, prompt admission projections. |
 | Tools | `src/tools/` | Tool registry, read-only repo tools, `file.patch`, `command.run`, `glob`/`todowrite`/`webfetch`, `task` subagent, `mcp` proxy + namespaced `mcp__*` clients, `skill` on-demand loader, opt-in `lsp` seam. |
 | Skills | `src/skills/` | `SKILL.md` discovery (multi-scope, first-wins) and on-demand body loading. |
@@ -23,11 +23,12 @@
 ## Invariants
 
 - Event streams are append-only. Derive projections from events instead of mutating hidden state.
-- Local storage opens `mission-control.db` directly with one leased client per canonical file/process, an explicit in-process write lane, WAL/NORMAL, and a 5000 ms busy timeout. Runtime startup has no legacy SQL migration path.
+- Local storage opens `mission-control.db` directly with one leased client per canonical file/process, an explicit in-process write lane, WAL/NORMAL, and a 5000 ms busy timeout. Runtime startup does not probe or import older standalone SQL database files; schema setup only migrates legacy projection-table names in place within the canonical database.
 - Values crossing app/package/sidecar boundaries must be parsed with `@mission-control/protocol` schemas.
 - Default permissions stay conservative; `createDefaultPermissionDecision` denies.
 - Mock/fallback sidecar behavior is part of the scaffold contract. Do not remove it while native execution remains partial.
 - `file.patch` and `command.run` stay on the TypeScript core path by default; the Rust sidecar currently negotiates `task.run` only.
+- Production child sessions never receive `task` or `job`; `AgentDefinition.recursion` remains compatibility metadata and cannot restore nested routing.
 - Do not implement unrestricted file editing, persistent vector memory, full scheduler orchestration, or a full ABG engine unless explicitly requested.
 - Keep public exports named and typed. Avoid `any`, `as any`, `as unknown`, suppression comments, and non-null assertions.
 

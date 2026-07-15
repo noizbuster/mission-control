@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 394 -> current 393 pure LOC; one byte-parity and behavior contract for the declarative default workflow graph.
 /**
  * Default workflow parity — behavioral proofs for the richer intent routing
  * (plan Task 11: port Sisyphus default-workflow behavior into `#default`).
@@ -143,12 +144,11 @@ describe('default workflow parity — schema and structure', () => {
 });
 
 describe('default workflow parity — five richer intent classes route correctly', () => {
-    it('intent-gate prompt verbalizes the chosen intent before classification', () => {
+    it('intent-gate prompt requires a strict single-line classification', () => {
         const graph = createDefaultWorkflowGraph();
         const prompt = configString(findNode(graph, 'intent-gate'), 'systemPrompt') ?? '';
-        const verbalizes =
-            /state (your|the).*(intent|classification|reason)/i.test(prompt) || /verbalize|state why/i.test(prompt);
-        expect(verbalizes).toBe(true);
+        expect(prompt).toMatch(/Output ONLY one class name/i);
+        expect(prompt).not.toMatch(/LAST line/i);
     });
 
     it('intent-gate prompt names all five intent classes', () => {

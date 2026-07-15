@@ -18,6 +18,8 @@ const entry = (overrides: Partial<MemoryEntry> = {}): MemoryEntry => ({
     ...overrides,
 });
 
+const sqliteAvailable = await isSqliteAvailable();
+
 describe('sqlite-persistent-store — pure helpers (binding-free)', () => {
     it('serializeValue round-trips JSON and envelopes non-serialisable values', () => {
         expect(deserializeValue(serializeValue({ a: 1 }))).toEqual({ a: 1 });
@@ -49,66 +51,48 @@ describe('sqlite-persistent-store — pure helpers (binding-free)', () => {
     });
 });
 
-describe('sqlite-persistent-store — DB round-trip (native binding)', () => {
-    let store: SqlitePersistentStore | undefined;
-
-    afterEach(() => {
-        store?.close();
-        store = undefined;
-    });
-
-    it.skipIf(true)('placeholder — real tests gated below on binding availability', () => {
-        expect(true).toBe(true);
-    });
-});
-
 describe('sqlite-persistent-store — DB round-trip (when binding present)', () => {
     let store: SqlitePersistentStore | undefined;
-    let available = false;
 
     afterEach(() => {
         store?.close();
         store = undefined;
     });
 
-    it('CRUD + list + query + TTL prune', async () => {
-        available = await isSqliteAvailable();
-        if (!available) {
-            console.warn(
-                '[sqlite-persistent-store] better-sqlite3 binding unavailable in this environment — skipping DB round-trip (pure helpers still tested above)',
-            );
-            return;
-        }
-        store = await SqlitePersistentStore.open(':memory:');
+    it.skipIf(!sqliteAvailable)(
+        'CRUD + list + query + TTL prune (requires optional better-sqlite3 binding)',
+        async () => {
+            store = await SqlitePersistentStore.open(':memory:');
 
-        await store.set('alpha', 'goals', { n: 1 });
-        await store.set('beta', 'goals', 'second', 10); // expires in 10ms
-        await store.set('gamma', 'observations', 'third');
+            await store.set('alpha', 'goals', { n: 1 });
+            await store.set('beta', 'goals', 'second', 10); // expires in 10ms
+            await store.set('gamma', 'observations', 'third');
 
-        expect(await store.get('alpha', 'goals')).toEqual({ n: 1 });
-        expect(await store.get('missing', 'goals')).toBeUndefined();
+            expect(await store.get('alpha', 'goals')).toEqual({ n: 1 });
+            expect(await store.get('missing', 'goals')).toBeUndefined();
 
-        const goals = await store.list('goals');
-        expect(goals.map((e) => e.key).sort()).toEqual(['alpha', 'beta']);
+            const goals = await store.list('goals');
+            expect(goals.map((e) => e.key).sort()).toEqual(['alpha', 'beta']);
 
-        const hits = await store.query({ namespace: 'goals', text: 'second' });
-        expect(hits).toHaveLength(1);
-        expect(hits[0]?.key).toBe('beta');
+            const hits = await store.query({ namespace: 'goals', text: 'second' });
+            expect(hits).toHaveLength(1);
+            expect(hits[0]?.key).toBe('beta');
 
-        // Overwrite updates in place.
-        await store.set('alpha', 'goals', { n: 2 });
-        expect(await store.get('alpha', 'goals')).toEqual({ n: 2 });
+            // Overwrite updates in place.
+            await store.set('alpha', 'goals', { n: 2 });
+            expect(await store.get('alpha', 'goals')).toEqual({ n: 2 });
 
-        // TTL: beta expires after 10ms. Wait, then prune.
-        await new Promise((resolve) => setTimeout(resolve, 30));
-        // A get() lazily deletes the expired entry.
-        expect(await store.get('beta', 'goals')).toBeUndefined();
-        // prune() also removes expired rows and reports the count.
-        await store.set('delta', 'goals', 'd', 1);
-        await new Promise((resolve) => setTimeout(resolve, 20));
-        const removed = await store.prune(new Date().toISOString());
-        expect(removed).toBeGreaterThanOrEqual(1);
-    });
+            // TTL: beta expires after 10ms. Wait, then prune.
+            await new Promise((resolve) => setTimeout(resolve, 30));
+            // A get() lazily deletes the expired entry.
+            expect(await store.get('beta', 'goals')).toBeUndefined();
+            // prune() also removes expired rows and reports the count.
+            await store.set('delta', 'goals', 'd', 1);
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            const removed = await store.prune(new Date().toISOString());
+            expect(removed).toBeGreaterThanOrEqual(1);
+        },
+    );
 
     it('isSqliteAvailable reports the binding status', async () => {
         // Sanity: the probe returns a boolean and does not throw.

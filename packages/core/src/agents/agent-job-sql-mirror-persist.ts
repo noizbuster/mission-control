@@ -30,6 +30,9 @@ export async function upsertRuntimeAgentRow(input: { readonly client: Client; re
             JSON.stringify({
                 displayName: input.ref.displayName,
                 ...(input.ref.sessionFile !== undefined ? { sessionFile: input.ref.sessionFile } : {}),
+                ...(input.ref.authorityFingerprint !== undefined
+                    ? { authorityFingerprint: input.ref.authorityFingerprint }
+                    : {}),
             }),
         ],
     });

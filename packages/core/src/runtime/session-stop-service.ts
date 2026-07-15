@@ -1,6 +1,7 @@
 import { SessionStopReceiptSchema } from '@mission-control/protocol';
 import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
 import type { LocalSessionEventStore } from '../memory/local-session-store.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
 import { releaseMissionRunControlAttachment } from './mission-run/mission-run-service.js';
 import { SessionControlFencedError, type SessionControlHost } from './session-control-host.js';
 import { runWithSessionControlLeaseFence, SessionControlLeaseError } from './session-control-lease.js';
@@ -29,6 +30,7 @@ export class SessionStopService {
     private readonly now: () => Date;
     private readonly monotonicNow: () => number;
     private readonly acquisitions: SessionStopAcquisitionController;
+    private readonly observabilityRedactor: ObservabilityRedactor | undefined;
 
     constructor(input: {
         readonly runtime: LocalLibsqlWriteTarget;
@@ -39,11 +41,13 @@ export class SessionStopService {
         readonly monotonicNow?: () => number;
         readonly deadlineSchedule?: (callback: () => void | Promise<void>, delayMs: number) => unknown;
         readonly deadlineCancel?: (timer: unknown) => void;
+        readonly observabilityRedactor?: ObservabilityRedactor;
     }) {
         this.runtime = input.runtime;
         this.host = input.host;
         this.now = input.now ?? (() => new Date());
         this.monotonicNow = input.monotonicNow ?? (() => performance.now());
+        this.observabilityRedactor = input.observabilityRedactor;
         this.acquisitions = new SessionStopAcquisitionController({
             runtime: input.runtime,
             host: input.host,
@@ -114,8 +118,22 @@ export class SessionStopService {
                 lease,
                 nowWallMs: Date.now(),
                 write: async (client) => {
-                    const result = await applyStopMutation({ client, sessionId: input.sessionId, timestamp });
-                    await appendStopCancellationEvents(client, input, result, existingEvents, timestamp);
+                    const result = await applyStopMutation({
+                        client,
+                        sessionId: input.sessionId,
+                        timestamp,
+                        ...(this.observabilityRedactor !== undefined
+                            ? { observabilityRedactor: this.observabilityRedactor }
+                            : {}),
+                    });
+                    await appendStopCancellationEvents(
+                        client,
+                        input,
+                        result,
+                        existingEvents,
+                        timestamp,
+                        this.observabilityRedactor,
+                    );
                     return result;
                 },
             });
@@ -166,6 +184,9 @@ export class SessionStopService {
                         client,
                         sessionId: input.sessionId,
                         event: abortCompletedEvent(input, mutation.affected, new Date(completedAt).toISOString()),
+                        ...(this.observabilityRedactor !== undefined
+                            ? { observabilityRedactor: this.observabilityRedactor }
+                            : {}),
                     });
                     await completeSessionControlOperationWithClient(client, {
                         lease,

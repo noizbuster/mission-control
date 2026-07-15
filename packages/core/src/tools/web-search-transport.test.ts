@@ -3,8 +3,6 @@ import { z } from 'zod';
 import type { WebSearchInput } from './web-search-schemas.js';
 import {
     executeWebSearch,
-    noProviderMessage,
-    selectWebSearchProvider,
     type WebSearchTransportOptions,
 } from './web-search-transport.js';
 
@@ -24,52 +22,6 @@ const ALL_PROVIDER_KEYS: Array<[string, string]> = [
     ['SYNTHETIC_API_KEY', 'synthetic-key'],
     ['SEARXNG_ENDPOINT', 'https://searx.test'],
 ];
-
-describe('selectWebSearchProvider (legacy exa/parallel selector)', () => {
-    const previous: Record<string, string | undefined> = {};
-    beforeEach(() => {
-        for (const [key] of ALL_PROVIDER_KEYS) {
-            previous[key] = process.env[key];
-            delete process.env[key];
-        }
-    });
-    afterEach(() => {
-        for (const [key, value] of ALL_PROVIDER_KEYS) {
-            if (previous[key] === undefined) delete process.env[key];
-            else process.env[key] = previous[key]!;
-        }
-    });
-
-    it('returns exa when EXA_API_KEY is set', () => {
-        process.env['EXA_API_KEY'] = 'exa-test-key';
-        expect(selectWebSearchProvider()).toBe('exa');
-    });
-
-    it('returns parallel when only PARALLEL_API_KEY is set', () => {
-        process.env['PARALLEL_API_KEY'] = 'parallel-test-key';
-        expect(selectWebSearchProvider()).toBe('parallel');
-    });
-
-    it('returns undefined when neither key is set', () => {
-        expect(selectWebSearchProvider()).toBeUndefined();
-    });
-
-    it('prefers exa when both keys are set', () => {
-        process.env['EXA_API_KEY'] = 'exa-test-key';
-        process.env['PARALLEL_API_KEY'] = 'parallel-test-key';
-        expect(selectWebSearchProvider()).toBe('exa');
-    });
-});
-
-describe('noProviderMessage', () => {
-    it('lists the credential env vars including exa and parallel', () => {
-        const message = noProviderMessage();
-        expect(message).toContain('EXA_API_KEY');
-        expect(message).toContain('PARALLEL_API_KEY');
-        expect(message).toContain('BRAVE_API_KEY');
-        expect(message).toContain('SEARXNG_ENDPOINT');
-    });
-});
 
 describe('executeWebSearch — auto chain', () => {
     let originalFetch: typeof globalThis.fetch;
@@ -163,14 +115,14 @@ describe('executeWebSearch — auto chain', () => {
 
         const output = await executeWebSearch(sampleInput, autoOptions);
 
-        expect(output.results[0]?.title).toBe('[REDACTED] leaked here');
+        expect(output.results[0]?.title).toBe('[REDACTED_CREDENTIAL] leaked here');
     });
 
     it('redacts the API key from the combined failure message', async () => {
         process.env['EXA_API_KEY'] = 'super-secret-key-12345';
         globalThis.fetch = jsonFetch('error body super-secret-key-12345', 500);
 
-        await expect(executeWebSearch(sampleInput, autoOptions)).rejects.toThrow(/[REDACTED]/);
+        await expect(executeWebSearch(sampleInput, autoOptions)).rejects.toThrow(/\[REDACTED_CREDENTIAL\]/u);
     });
 
     it('throws a timeout error after the 25s deadline elapses', async () => {

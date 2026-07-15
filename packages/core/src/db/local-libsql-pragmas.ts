@@ -5,7 +5,7 @@ export const LOCAL_DB_BUSY_TIMEOUT_MS = 5000;
 
 export const localDbInitializationErrorCodes = ['wal_refused', 'unexpected_pragma_value'] as const;
 export type LocalDbInitializationErrorCode = (typeof localDbInitializationErrorCodes)[number];
-export type LocalDbPragma = 'journal_mode' | 'synchronous' | 'busy_timeout';
+export type LocalDbPragma = 'journal_mode' | 'synchronous' | 'busy_timeout' | 'foreign_keys';
 export type LocalDbPragmaExpected = 'wal' | 1 | typeof LOCAL_DB_BUSY_TIMEOUT_MS;
 export type LocalDbPragmaActual = Value | undefined;
 
@@ -27,9 +27,18 @@ const numericPragmaSchema = z.number().int();
 
 type NumericPragmaExpectation = {
     readonly pragma: Exclude<LocalDbPragma, 'journal_mode'>;
-    readonly column: 'synchronous' | 'timeout';
+    readonly column: 'synchronous' | 'timeout' | 'foreign_keys';
     readonly expected: 1 | typeof LOCAL_DB_BUSY_TIMEOUT_MS;
 };
+
+export async function initializeLocalLibsqlForeignKeys(client: Client): Promise<void> {
+    await client.execute('PRAGMA foreign_keys=ON');
+    requireNumericPragma(await client.execute('PRAGMA foreign_keys'), {
+        pragma: 'foreign_keys',
+        column: 'foreign_keys',
+        expected: 1,
+    });
+}
 
 export async function initializeLocalLibsqlFilePragmas(client: Client): Promise<void> {
     const requestedJournalMode = await client.execute('PRAGMA journal_mode=WAL');

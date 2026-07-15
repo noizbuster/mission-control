@@ -35,6 +35,10 @@ export function createCompositeNodeTestContext(): CompositeNodeTestContext {
                     pass: false,
                 },
             },
+            failingApproval: {
+                id: 'failingApproval',
+                kind: 'human-approval',
+            },
             passingCondition: {
                 id: 'passingCondition',
                 kind: 'condition',

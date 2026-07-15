@@ -8,7 +8,10 @@
  * Unrelated MCP server output is NOT scrubbed here: it is untrusted external DATA, bounded by
  * the tool's output cap. Only the secrets mission-control itself injected are masked.
  */
-export const MCP_REDACTED_SECRET = '[REDACTED]';
+import { createObservabilityRedactor } from '../../providers/observability-redactor.js';
+import { REDACTED_CREDENTIAL } from '../../providers/redaction-handler.js';
+
+export const MCP_REDACTED_SECRET = REDACTED_CREDENTIAL;
 
 export type SecretRedactor = {
     readonly redactText: (text: string) => string;
@@ -16,58 +19,5 @@ export type SecretRedactor = {
 };
 
 export function createSecretRedactor(secrets: readonly string[]): SecretRedactor {
-    const ordered = uniqueNonEmptySecrets(secrets);
-    const redactText = (text: string): string => {
-        let current = text;
-        for (const secret of ordered) {
-            if (current.length === 0) {
-                break;
-            }
-            if (current.includes(secret)) {
-                current = current.split(secret).join(MCP_REDACTED_SECRET);
-            }
-        }
-        return current;
-    };
-    return {
-        redactText,
-        redactValue: (value) => redactValueRecursive(value, redactText),
-    };
-}
-
-function uniqueNonEmptySecrets(secrets: readonly string[]): readonly string[] {
-    const seen = new Set<string>();
-    const collected: string[] = [];
-    for (const secret of secrets) {
-        if (typeof secret !== 'string' || secret.length === 0) {
-            continue;
-        }
-        if (seen.has(secret)) {
-            continue;
-        }
-        seen.add(secret);
-        collected.push(secret);
-    }
-    return collected.sort((left, right) => right.length - left.length);
-}
-
-function redactValueRecursive(value: unknown, redactText: (text: string) => string): unknown {
-    if (typeof value === 'string') {
-        return redactText(value);
-    }
-    if (Array.isArray(value)) {
-        return value.map((entry) => redactValueRecursive(entry, redactText));
-    }
-    if (isPlainObject(value)) {
-        const next: Record<string, unknown> = {};
-        for (const [key, entry] of Object.entries(value)) {
-            next[key] = redactValueRecursive(entry, redactText);
-        }
-        return next;
-    }
-    return value;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
+    return createObservabilityRedactor({ secrets });
 }

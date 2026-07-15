@@ -1,8 +1,8 @@
 /**
- * Persistent eval sandbox coordinating two runtimes: a JavaScript VM owned by a
+ * Persistent eval context coordinating two runtimes: a JavaScript VM owned by a
  * `node:worker_threads` worker, and a persistent Python kernel subprocess.
  *
- * The JS worker owns a `vm.createContext()` sandbox whose global scope survives
+ * The JS worker owns a `vm.createContext()` global context whose state survives
  * across `runCode` calls, so `var` declarations persist between cells. Output
  * (console writes + the completion value of the last expression) is captured,
  * capped at 64 KiB, and returned as an `EvalRunResult`. Tool re-entry is driven
@@ -15,10 +15,7 @@
  * and the next call respawns a fresh context. Simplified relative to oh-my-pi's
  * 621-LOC pool: no session-keyed multi-worker pool, no inline fallback.
  */
-// allow: SIZE_OK — single-responsibility worker-lifecycle manager (init handshake,
-// run execution, timeout/abort race, worker-death recovery, teardown, result
-// shaping). Size reflects necessary lifecycle handling, not mixed concerns;
-// further splits would sever tightly-coupled lifecycle pieces.
+// allow: SIZE_OK -- HEAD 366 -> current 366 pure LOC; worker lifecycle remains one tightly coupled state machine (init, execution, timeout, recovery, teardown); splitting further would sever state transitions that must stay atomic.
 
 import { EvalPythonKernel, type PythonSpawnFn } from './eval-python-kernel.js';
 import { type EvalLanguage } from './eval-schemas.js';

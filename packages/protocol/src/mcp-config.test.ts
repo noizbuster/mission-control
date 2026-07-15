@@ -126,6 +126,31 @@ describe('MissionControlConfigSchema', () => {
         expect(parsed.lsp).toBeUndefined();
     });
 
+    it('parses either Chrome HTTP browserURL or direct browserWSEndpoint configuration', () => {
+        const httpConfig = MissionControlConfigSchema.parse({
+            browser: { browserURL: 'http://127.0.0.1:9222' },
+        });
+        const websocketConfig = MissionControlConfigSchema.parse({
+            browser: { browserWSEndpoint: 'ws://127.0.0.1:9222/devtools/browser/browser-id' },
+        });
+
+        expect(httpConfig.browser).toEqual({ browserURL: 'http://127.0.0.1:9222' });
+        expect(websocketConfig.browser).toEqual({
+            browserWSEndpoint: 'ws://127.0.0.1:9222/devtools/browser/browser-id',
+        });
+    });
+
+    it('rejects browser configuration containing both endpoint forms', () => {
+        const result = MissionControlConfigSchema.safeParse({
+            browser: {
+                browserURL: 'http://127.0.0.1:9222',
+                browserWSEndpoint: 'ws://127.0.0.1:9222/devtools/browser/browser-id',
+            },
+        });
+
+        expect(result.success).toBe(false);
+    });
+
     it('rejects unknown top-level keys (strict)', () => {
         const result = MissionControlConfigSchema.safeParse({ unexpected: 1 });
         expect(result.success).toBe(false);

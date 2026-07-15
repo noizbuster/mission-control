@@ -1,4 +1,5 @@
-import type { AgentEvent } from '@mission-control/protocol';
+// allow: SIZE_OK -- HEAD 330 -> current 447 pure LOC; one operator-stop fencing and settlement state-machine integration matrix.
+import { type AgentEvent, RunSchema } from '@mission-control/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type LocalLibsqlDb, openLocalLibsqlDb } from '../db/local-libsql-db.js';
 import {
@@ -6,6 +7,9 @@ import {
     missionControlDbUrl,
     openLocalSessionEventStore,
 } from '../memory/local-session-store.js';
+import { createObservabilityRedactor } from '../providers/observability-redactor.js';
+import { readRunFromDb, writeRunToDb } from './mission-run/mission-run-db.js';
+import { SessionRunOwner } from './run-owner.js';
 import { SessionControlHost, type SessionControlHostPublisher } from './session-control-host.js';
 import {
     acquireSessionControlLease,
@@ -29,6 +33,115 @@ afterEach(async () => {
 });
 
 describe('SessionStopService', () => {
+    it('redacts configured credentials before a fenced stop event reaches SQLite', async () => {
+        // Given
+        const fixture = await createFixture('session-fenced-redaction');
+        const secret = ['fenced', 'arbitrary', 'credential'].join('_');
+
+        // When
+        await appendFencedSessionStopEvent({
+            client: fixture.runtime.client,
+            sessionId: fixture.sessionId,
+            event: {
+                type: 'task.progress',
+                timestamp: '2026-07-11T00:00:00.000Z',
+                sessionId: fixture.sessionId,
+                message: `stopping ${secret}`,
+            },
+            observabilityRedactor: createObservabilityRedactor({ secrets: [secret] }),
+        });
+        const rows = await fixture.runtime.client.execute({
+            sql: 'SELECT payload_json FROM session_events WHERE session_id = ?',
+            args: [fixture.sessionId],
+        });
+        const observable = JSON.stringify(rows.rows);
+
+        // Then
+        expect(observable).toContain('[REDACTED_CREDENTIAL]');
+        expect(observable).not.toContain(secret);
+        await fixture.close();
+    });
+
+    it('redacts configured credentials in direct coordinator stop settlements', async () => {
+        const credential = ['coordinator', 'stop', 'credential'].join('_');
+        const observabilityRedactor = createObservabilityRedactor({ secrets: [credential] });
+        const fixture = await createFixture('session-coordinator-stop-redaction', observabilityRedactor);
+        let notifyTurnStarted: (() => void) | undefined;
+        const turnStarted = new Promise<void>((resolve) => {
+            notifyTurnStarted = resolve;
+        });
+        const owner = new SessionRunOwner({
+            sessionId: fixture.sessionId,
+            store: fixture.store,
+            provider: unusedProvider,
+            modelProviderSelection: { providerID: 'local', modelID: 'local-echo' },
+            sessionControlHost: fixture.host,
+            observabilityRedactor,
+            runProviderTurn: async (context) => {
+                notifyTurnStarted?.();
+                await new Promise<void>((resolve) =>
+                    context.signal.addEventListener('abort', () => resolve(), { once: true }),
+                );
+                return { status: 'interrupted' };
+            },
+        });
+        const running = owner.submit({
+            prompt: 'wait for stop',
+            inputId: 'input_coordinator_stop',
+            messageId: 'message_coordinator_stop',
+        });
+        await turnStarted;
+        const token = await fixture.host.acquire(fixture.sessionId);
+
+        await fixture.service.stopExact({
+            sessionId: fixture.sessionId,
+            requestId: `request_${credential}`,
+            operationId: `operation_${credential}`,
+            ownerId: token.ownerId,
+            ownerEpoch: token.epoch,
+            timeoutMs: 1_000,
+        });
+        await running;
+        await owner.release();
+        const rows = await fixture.runtime.client.execute({
+            sql: 'SELECT payload_json FROM session_events WHERE session_id = ?',
+            args: [fixture.sessionId],
+        });
+        const observable = JSON.stringify(rows.rows);
+        expect(observable).toContain('[REDACTED_CREDENTIAL]');
+        expect(observable).not.toContain(credential);
+        await fixture.close();
+    });
+
+    it('redacts configured credentials before operator-stop Run updates reach SQLite', async () => {
+        const credential = ['operator', 'stop', 'run', 'credential'].join('_');
+        const observabilityRedactor = createObservabilityRedactor({ secrets: [credential] });
+        const fixture = await createFixture('session-stop-run-redaction', observabilityRedactor);
+        const run = RunSchema.parse({
+            id: 'run-stop-redaction',
+            missionId: 'mission-stop-redaction',
+            sessionId: fixture.sessionId,
+            status: 'running',
+            prompt: `run contains ${credential}`,
+        });
+        await writeRunToDb(fixture.dataDir, run);
+        const token = await fixture.host.acquire(fixture.sessionId);
+
+        await fixture.service.stopExact({
+            sessionId: fixture.sessionId,
+            requestId: 'request-stop-run-redaction',
+            operationId: 'operation-stop-run-redaction',
+            ownerId: token.ownerId,
+            ownerEpoch: token.epoch,
+            timeoutMs: 1_000,
+        });
+        const persisted = await readRunFromDb(fixture.dataDir, run.id);
+
+        expect(JSON.stringify(persisted)).toContain('[REDACTED_CREDENTIAL]');
+        expect(JSON.stringify(persisted)).not.toContain(credential);
+        await fixture.close();
+    });
+
     it('stops the exact blocked run, settles live handles, and emits one finalizer plus one marker', async () => {
         const fixture = await createFixture('session-blocked');
         await appendBlockedEvents(fixture.store, fixture.sessionId);
@@ -239,8 +352,12 @@ describe('SessionStopService', () => {
     });
 });
 
-async function createFixture(sessionId: string): Promise<{
+async function createFixture(
+    sessionId: string,
+    observabilityRedactor?: ReturnType<typeof createObservabilityRedactor>,
+): Promise<{
     readonly sessionId: string;
+    readonly dataDir: string;
     readonly runtime: LocalLibsqlDb;
     readonly store: LocalSessionEventStore;
     readonly host: SessionControlHost;
@@ -251,7 +368,11 @@ async function createFixture(sessionId: string): Promise<{
     directories.push(dataDir);
     await mkdir(join(dataDir, '.omo'), { recursive: true });
     const runtime = await openLocalLibsqlDb({ url: missionControlDbUrl(dataDir) });
-    const store = await openLocalSessionEventStore({ dataDir, sessionId });
+    const store = await openLocalSessionEventStore({
+        dataDir,
+        sessionId,
+        ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
+    });
     const publisher: SessionControlHostPublisher = async (input) => {
         const lease = (
             await acquireSessionControlLease({
@@ -283,15 +404,18 @@ async function createFixture(sessionId: string): Promise<{
         ownerId: 'service-owner',
         publisher,
         startRenewer: () => ({ stop: () => undefined }),
+        ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
     });
     const service = new SessionStopService({
         runtime,
         host,
         missionRoot: dataDir,
         openStore: (targetSessionId) => openLocalSessionEventStore({ dataDir, sessionId: targetSessionId }),
+        ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
     });
     return {
         sessionId,
+        dataDir,
         runtime,
         store,
         host,
@@ -303,6 +427,12 @@ async function createFixture(sessionId: string): Promise<{
         },
     };
 }
+
+const unusedProvider = {
+    streamTurn: async function* () {
+        yield* [];
+    },
+};
 
 async function appendBlockedEvents(store: LocalSessionEventStore, sessionId: string): Promise<void> {
     const events: readonly AgentEvent[] = [

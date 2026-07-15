@@ -9,15 +9,16 @@ import type {
 } from '@mission-control/protocol';
 import type { Blackboard } from '../memory/blackboard.js';
 import { createBlackboard } from '../memory/blackboard.js';
-import type { ToolRegistry } from '../tools/tool-registry.js';
+import {
+    createObservabilityRedactor,
+    type ObservabilityRedactor,
+} from '../providers/observability-redactor.js';
 import { createAbgEmitSignal, resetEmitSequence } from './abg-emit.js';
 import type { AuthorableAbgGraph } from './authorable-graph.js';
 import type { CostLedger } from './budget/cost-ledger.js';
 import { createCostLedger } from './budget/cost-ledger.js';
 import type { AbgGraphRunnerInput } from './graph-runner.js';
 import type { LoopSafetyNodeState } from './loop-safety.js';
-import type { AbgNodeRegistry, AbgObservedGraphEvent } from './node-registry.js';
-import type { LlmActorModel } from './nodes/llm-actor/llm-actor-node.js';
 import { projectAbgSignalToEvent } from './signals.js';
 
 const defaultRetryLimit = 2;
@@ -52,6 +53,7 @@ export type CoordinatorState = {
      * budget ceiling nor a pricing table is configured (the common no-cost case).
      */
     readonly budgetLedger?: CostLedger;
+    readonly observabilityRedactor: ObservabilityRedactor;
 };
 
 export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGraphRunnerInput): CoordinatorState {
@@ -62,6 +64,7 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
     // constructed from the blackboard. Deferred via a holder so the closure captures a stable
     // reference that is populated once state is built.
     let stateHolder: CoordinatorState | undefined;
+    const observabilityRedactor = input.observabilityRedactor ?? createObservabilityRedactor();
     const blackboard = createBlackboard({
         onMutation: (kind, payload) => {
             if (stateHolder === undefined) return;
@@ -78,6 +81,7 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
                     sessionId: input.sessionId,
                     timestamp: input.now(),
                     signal,
+                    observabilityRedactor,
                 }),
             );
         },
@@ -105,72 +109,11 @@ export function createCoordinatorState(graph: AuthorableAbgGraph, input: AbgGrap
         shellConcurrency: input.shellConcurrency ?? defaultShellConcurrency,
         totalNodeRuns: 0,
         blackboard,
+        observabilityRedactor,
         ...(budgetLedger !== undefined ? { budgetLedger } : {}),
     };
     stateHolder = state;
     return state;
-}
-
-export function runContext(
-    graph: AuthorableAbgGraph,
-    registry: AbgNodeRegistry,
-    input: AbgGraphRunnerInput,
-    state: CoordinatorState,
-) {
-    const nodes = Object.fromEntries(graph.nodes.map((node) => [node.id, node]));
-    const model = graph.defaults?.model ?? runtimeModel(input.modelProviderSelection);
-    const sdkModel = input.resolveSdkModel !== undefined ? input.resolveSdkModel(model) : undefined;
-    return {
-        graphId: graph.id,
-        now: input.now,
-        registry,
-        nodes,
-        policies: graph.policies,
-        model,
-        ...(sdkModel !== undefined ? { sdkModel } : {}),
-        blackboard: state.blackboard,
-        ...(state.budgetLedger !== undefined ? { budgetLedger: state.budgetLedger } : {}),
-        ...(input.toolRegistry !== undefined ? { toolRegistry: input.toolRegistry } : {}),
-        ...(input.abortSignal !== undefined ? { abortSignal: input.abortSignal } : {}),
-        ...(input.controlEpoch !== undefined ? { controlEpoch: input.controlEpoch } : {}),
-        ...(input.graphInput?.events !== undefined ? { observedEvents: input.graphInput.events } : {}),
-        ...(input.graphInput?.input !== undefined ? { input: input.graphInput.input } : {}),
-        // Lets a node forward a tool's own events (file.diff.applied, ...) into the graph stream —
-        // session-scoped so they replay like the flat loop's settleToolCalls events.
-        emitEvent: (event) => {
-            state.events.push({
-                ...event,
-                sessionId: input.sessionId,
-                modelProviderSelection: input.modelProviderSelection,
-            });
-        },
-        ...(input.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
-        ...(input.serializeToolExecution === true ? { serializeToolExecution: true } : {}),
-        ...(input.systemPromptEnv !== undefined ? { systemPromptEnv: input.systemPromptEnv } : {}),
-        ...(input.projectInstructionResources !== undefined
-            ? { projectInstructionResources: input.projectInstructionResources }
-            : {}),
-    } satisfies {
-        readonly graphId: string;
-        readonly now: () => string;
-        readonly registry: AbgNodeRegistry;
-        readonly nodes: Readonly<Record<string, AbgNodeSpec | undefined>>;
-        readonly policies: readonly AbgPolicySpec[];
-        readonly model: AbgNodeModelOptions;
-        readonly sdkModel?: LlmActorModel;
-        readonly blackboard: Blackboard;
-        readonly budgetLedger?: CostLedger;
-        readonly toolRegistry?: ToolRegistry;
-        readonly abortSignal?: AbortSignal;
-        readonly controlEpoch?: import('../runtime/session-control-cancellation.js').SessionControlEpoch;
-        readonly observedEvents?: readonly AbgObservedGraphEvent[];
-        readonly input?: Readonly<Record<string, unknown>>;
-        readonly emitEvent: (event: AgentEvent) => void;
-        readonly haltOnFailedToolSettlement?: boolean;
-        readonly serializeToolExecution?: boolean;
-        readonly systemPromptEnv?: import('../context/system-prompt.js').SystemPromptEnvironment;
-        readonly projectInstructionResources?: readonly import('../context/project-context-messages.js').ProjectInstructionResource[];
-    };
 }
 
 export function nextAttempt(attemptsByNodeId: Map<string, number>, nodeId: string): number {

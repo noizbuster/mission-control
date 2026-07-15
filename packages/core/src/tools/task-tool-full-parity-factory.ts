@@ -23,8 +23,13 @@ import { z } from 'zod';
 import { AgentParseError, parseAgentFile } from '../agents/agent-parser.js';
 import { AgentIndex } from '../agents/agent-registry.js';
 import { BUNDLED_AGENT_TEMPLATES } from '../agents/bundled/index.js';
-import { type ModelPattern, resolveAgentModel } from '../agents/model-resolver.js';
-import { type ModelRole, parseModelAlias } from '../agents/model-roles.js';
+import {
+    DEFAULT_ROLE_CONFIG,
+    type ModelPattern,
+    type ResolveAgentModelInput,
+    resolveAgentModel,
+} from '../agents/model-resolver.js';
+import type { ModelRole } from '../agents/model-roles.js';
 import { ConcreteTaskToolRuntime, type TaskToolRuntimeServices } from '../agents/task-tool-runtime.js';
 import type { ChildHostCallbacks } from '../behavior/subagents/spawn-child.js';
 import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
@@ -42,7 +47,10 @@ export type FullParityTaskToolOptions = {
     readonly workspaceRoot: string;
     readonly requestPermission: (request: PermissionRequest) => PermissionDecision | Promise<PermissionDecision>;
     readonly resolveSdkModel: SdkModelResolver;
+    /** Session-default model used when no parent or agent-specific tier resolves. */
     readonly model: AbgNodeModelOptions;
+    /** Active parent model, when it differs from the session default. */
+    readonly parentActiveModel?: AbgNodeModelOptions;
     readonly parentToolRegistry: ToolRegistry;
     readonly parentSessionId?: string;
     readonly summaryLimit?: number;
@@ -60,42 +68,38 @@ export type FullParityTaskToolOptions = {
 };
 
 /**
- * Model-resolution closure for the full-parity task tool. The `mctrl/task`
- * skip-guard below runs BEFORE roleConfig consultation and is the authoritative
- * enforcement of the task-role invariant on the spawn path. When `roleConfig`
- * is populated, alias tiers (`mctrl/<role>` and legacy `opus`/`sonnet`) route
- * through {@linkcode resolveAgentModel}, which mirrors the same skip-guard at
- * the field level (`resolveAgentModelField`). Extracted pure so the
- * override/role-config/skip/fallthrough logic is unit-testable without spawning.
+ * Model-resolution closure for the full-parity task tool. All precedence,
+ * including exact `mctrl/task` inheritance, is owned by
+ * {@linkcode resolveAgentModel}; this adapter only supplies factory inputs.
  */
 export function buildResolveModelFn(options: {
     readonly model: AbgNodeModelOptions;
+    readonly parentActiveModel?: AbgNodeModelOptions;
     readonly agentModelOverrides?: ReadonlyMap<string, ModelPattern>;
     readonly roleConfig?: Partial<Record<ModelRole, ModelPattern>>;
 }): (agent: AgentDefinition) => ModelPattern {
-    const parentModel: ModelPattern = {
-        providerID: options.model.providerID,
-        modelID: options.model.modelID,
-        ...(options.model.variantID !== undefined ? { variantID: options.model.variantID } : {}),
-    };
-    const overrides = options.agentModelOverrides;
-    const roleConfig = options.roleConfig;
+    const sessionDefault = toModelPattern(options.model);
+    const parentActiveModel =
+        options.parentActiveModel === undefined ? undefined : toModelPattern(options.parentActiveModel);
     return (agent: AgentDefinition): ModelPattern => {
-        if (typeof agent.model === 'string' && parseModelAlias(agent.model) === 'task') {
-            return parentModel;
-        }
-        if (roleConfig !== undefined && typeof agent.model === 'string') {
-            const resolved = resolveAgentModel({
-                agent,
-                roleConfig,
-                sessionDefault: parentModel,
-                parentActiveModel: parentModel,
-            });
-            if (resolved !== parentModel) return resolved;
-        }
-        const override = overrides?.get(agent.name);
-        if (override !== undefined) return override;
-        return parentModel;
+        const agentModelOverride = options.agentModelOverrides?.get(agent.name);
+        const resolverInput = {
+            agent,
+            sessionDefault,
+            roleConfig: options.roleConfig ?? DEFAULT_ROLE_CONFIG,
+            ...(parentActiveModel !== undefined ? { parentActiveModel } : {}),
+        } satisfies ResolveAgentModelInput;
+        return resolveAgentModel(
+            agentModelOverride === undefined ? resolverInput : { ...resolverInput, agentModelOverride },
+        );
+    };
+}
+
+function toModelPattern(model: AbgNodeModelOptions): ModelPattern {
+    return {
+        providerID: model.providerID,
+        modelID: model.modelID,
+        ...(model.variantID !== undefined ? { variantID: model.variantID } : {}),
     };
 }
 
@@ -115,6 +119,7 @@ export async function createFullParityTaskToolRegistrationForCli(
         description: 'Mission Control coding agent',
         systemPrompt: '',
         source: 'bundled',
+        spawns: '*',
     };
     const resolveModel = buildResolveModelFn(options);
 

@@ -1,4 +1,5 @@
 import type { ProviderStreamChunk } from '@mission-control/protocol';
+import { localOutputForSystemContract } from './local-output-contract.js';
 import type { ProviderAdapter, ProviderAdapterContext, ProviderTurnRequest } from './provider-turn-types.js';
 
 export function createLocalCodingProvider(): ProviderAdapter {
@@ -20,6 +21,13 @@ function chunksForPrompt(
     context: ProviderAdapterContext,
     prompt: string,
 ): readonly ProviderStreamChunk[] {
+    const contractOutput = localOutputForSystemContract(lastSystemPrompt(request), prompt);
+    if (contractOutput !== undefined) {
+        return [
+            textChunk(request, context.attempt, contractOutput),
+            completedChunk(request, context.attempt + 1, contractOutput),
+        ];
+    }
     if (hasToolResultMessage(request)) {
         return [completedChunk(request, context.attempt, 'local deterministic coding turn complete')];
     }
@@ -52,6 +60,10 @@ function chunksForPrompt(
 
 function lastUserPrompt(request: ProviderTurnRequest): string {
     return [...request.messages].reverse().find((message) => message.role === 'user')?.content ?? '';
+}
+
+function lastSystemPrompt(request: ProviderTurnRequest): string {
+    return [...request.messages].reverse().find((message) => message.role === 'system')?.content ?? '';
 }
 
 function hasToolResultMessage(request: ProviderTurnRequest): boolean {

@@ -3,251 +3,62 @@
  *
  * Extends the existing simple `task` tool (`../task-tool.ts`) with category
  * routing, skill injection, session resume, and background execution. The tool
- * validates parameters, resolves the category preset, derives child permissions
- * via `deriveChildPermissions` (Task 1.2), and delegates session lifecycle to an
+ * validates parameters, resolves the category preset, derives child permissions,
+ * and delegates session lifecycle to an
  * injected `TaskToolRuntime` — keeping the tool itself free of real provider
  * calls so tests can mock everything.
  *
- * Child safety is enforced at TWO layers (defense in depth):
- * 1. **Registry layer** — `createChildToolRegistry` (reused from `../task-tool.ts`)
- *    structurally omits the `task` tool and destructive/network capabilities.
- * 2. **Policy layer** — `deriveChildPermissions` injects a trailing
- *    `{action:'subagent', effect:'deny'}` rule so even if the tool existed it
- *    would be denied at the policy gate.
+ * Child authority is completed by `buildChildToolSurface` in the concrete runtime. It intersects
+ * category and agent tool allowlists, omits `task`/`job`, applies hard capability drops, adds
+ * `yield`, and enforces category plus derived agent path-policy rules at invocation time. Task
+ * routing appends the nested-subagent deny independently.
  *
  * Batch mode (todo 24): `tasks[]` fan-out alongside single-spawn `prompt`.
  * Schema enforces XOR between batch and single-spawn; children run in parallel
  * via Promise.all; `context` propagates as `parentContext` to every child.
  */
-// allow: SIZE_OK — single responsibility (the full-parity task tool registration);
-// the LOC growth comes from two mutually-exclusive execution modes (single-spawn
-// XOR batch) that share routing/permission helpers. Splitting along the batch
-// axis would fragment the schema and the ToolRegistration factory, which are
-// inseparable. Tracked for revisit if a third mode is added.
-import type { PolicyEffectRule, PolicyEffectRuleSet } from '@mission-control/protocol';
-import { z } from 'zod';
-import { deriveChildPermissions } from '../../permissions/rule-derive.js';
-import type { SessionControlEpoch } from '../../runtime/session-control-cancellation.js';
 import { TASK_TOOL_NAME } from '../task-tool.js';
 import type { ToolRegistration } from '../tool-registry-types.js';
 import { ToolExecutionError } from '../tool-registry-types.js';
-import { type CategoryDefinition, getCategory } from './category-catalog.js';
+import {
+    type BatchResultItem,
+    type BatchTaskItem,
+    type ChildSpawnResult,
+    type CreateFullParityTaskToolOptions,
+    type TaskToolParams,
+    type TaskToolResult,
+    type TaskToolRuntime,
+    taskToolInputSchema,
+    taskToolOutputSchema,
+} from './task-tool-contract.js';
+import {
+    buildBatchRequest,
+    buildChildPermissions,
+    buildRequest,
+    resolveRouting,
+    resolveRoutingFromAgent,
+} from './task-tool-routing.js';
 
-// --- Schemas + public types ------------------------------------------------
+export type {
+    BatchResultItem,
+    BatchTaskItem,
+    ChildSpawnRequest,
+    ChildSpawnResult,
+    CreateFullParityTaskToolOptions,
+    TaskToolBackgroundHandle,
+    TaskToolParams,
+    TaskToolResult,
+    TaskToolRuntime,
+} from './task-tool-contract.js';
+export { batchTaskItemSchema, taskToolBaseObjectSchema, taskToolInputSchema } from './task-tool-contract.js';
 
-export const batchTaskItemSchema = z
-    .object({
-        agent: z.string().min(1),
-        assignment: z.string().min(1),
-        role: z.string().optional(),
-    })
-    .strict();
-
-export const taskToolBaseObjectSchema = z
-    .object({
-        category: z.string().min(1).optional(),
-        subagent_type: z.string().min(1).optional(),
-        agent: z.string().min(1).optional(),
-        load_skills: z.array(z.string().min(1)).default([]),
-        prompt: z.string().min(1).optional(),
-        assignment: z.string().min(1).optional(),
-        run_in_background: z.boolean().optional(),
-        task_id: z.string().min(1).optional(),
-        tasks: z.array(batchTaskItemSchema).optional(),
-        context: z.string().optional(),
-    })
-    .strict();
-
-export const taskToolInputSchema = taskToolBaseObjectSchema
-    .refine((data) => !(data.category !== undefined && data.subagent_type !== undefined), {
-        message: "Provide either 'category' or 'subagent_type', not both",
-    })
-    .refine((data) => [data.category, data.subagent_type, data.agent].filter((v) => v !== undefined).length <= 1, {
-        message: "Provide at most one of 'category', 'subagent_type', or 'agent'",
-    })
-    .refine((data) => !(data.prompt !== undefined && data.assignment !== undefined), {
-        message: "Provide either 'prompt' or 'assignment', not both",
-    })
-    .refine(
-        (data) => {
-            const hasBatch = data.tasks !== undefined;
-            const hasSingle = data.prompt !== undefined || data.assignment !== undefined;
-            return hasBatch !== hasSingle;
-        },
-        { message: "Provide either 'tasks' (batch) or 'prompt'/'assignment' (single), not both" },
-    )
-    .refine((data) => data.tasks === undefined || data.tasks.length > 0, {
-        message: "'tasks' must contain at least one entry",
-    });
-
-const batchResultItemSchema = z
-    .object({
-        role: z.string().optional(),
-        sessionId: z.string().min(1),
-        status: z.enum(['completed', 'failed']),
-        output: z.string(),
-    })
-    .strict();
-
-const taskToolOutputSchema = z
-    .object({
-        sessionId: z.string().min(1),
-        backgroundId: z.string().min(1).optional(),
-        status: z.enum(['running', 'completed', 'failed']),
-        output: z.string().optional(),
-        batch: z.array(batchResultItemSchema).optional(),
-    })
-    .strict();
-
-export type TaskToolParams = z.infer<typeof taskToolInputSchema>;
-export type TaskToolResult = z.infer<typeof taskToolOutputSchema>;
-export type BatchTaskItem = z.infer<typeof batchTaskItemSchema>;
-export type BatchResultItem = z.infer<typeof batchResultItemSchema>;
-
-// --- Runtime abstraction (mockable) ----------------------------------------
-
-export interface ChildSpawnRequest {
-    readonly sessionId: string;
-    readonly prompt: string;
-    readonly category?: CategoryDefinition;
-    readonly subagentType?: string;
-    readonly loadSkills: readonly string[];
-    readonly childPermissions: readonly PolicyEffectRule[];
-    readonly parentContext?: string;
-    readonly signal?: AbortSignal;
-    readonly controlEpoch?: SessionControlEpoch;
-}
-
-export interface ChildSpawnResult {
-    readonly sessionId: string;
-    readonly status: 'completed' | 'failed';
-    readonly output: string;
-}
-
-export interface TaskToolBackgroundHandle {
-    readonly sessionId: string;
-    readonly backgroundId: string;
-}
-
-/**
- * Abstracts `AgentRuntime` session operations so the tool has no direct
- * dependency on provider calls. Tests inject a recording double; the real
- * runtime wires this to `AgentRuntime.start`/`runGraph`/session resume.
- */
-export interface TaskToolRuntime {
-    readonly runChildSession: (request: ChildSpawnRequest) => Promise<ChildSpawnResult>;
-    readonly startBackgroundSession: (request: ChildSpawnRequest) => TaskToolBackgroundHandle;
-    readonly resumeChildSession: (sessionId: string, request: ChildSpawnRequest) => Promise<ChildSpawnResult>;
-    readonly sessionExists: (sessionId: string) => boolean;
-    readonly generateSessionId: () => string;
-}
-
-export interface CreateFullParityTaskToolOptions {
-    readonly runtime: TaskToolRuntime;
-    readonly parentAgentRules?: PolicyEffectRuleSet;
-    readonly parentSessionRules?: PolicyEffectRuleSet;
-}
-
-const EMPTY_RULESET: PolicyEffectRuleSet = { rules: [] };
 const OUTPUT_LIMIT = { maxModelOutputChars: 8000 } as const;
-
-// --- Routing + permission derivation ---------------------------------------
-
-interface RoutingResolution {
-    readonly category?: CategoryDefinition;
-    readonly subagentType?: string;
-}
-
-function resolveRoutingFromAgent(agent: string): RoutingResolution {
-    const matched = getCategory(agent);
-    return matched !== undefined ? { category: matched, subagentType: agent } : { subagentType: agent };
-}
-
-function resolveRouting(params: TaskToolParams): RoutingResolution {
-    if (params.category !== undefined) {
-        const category = getCategory(params.category);
-        if (category === undefined) {
-            throw new ToolExecutionError({
-                code: 'schema_invalid',
-                message: `unknown category: ${params.category}`,
-                retryable: true,
-            });
-        }
-        return { category };
-    }
-    if (params.subagent_type !== undefined) {
-        return resolveRoutingFromAgent(params.subagent_type);
-    }
-    if (params.agent !== undefined) {
-        return resolveRoutingFromAgent(params.agent);
-    }
-    const fallback = getCategory('deep');
-    return fallback !== undefined ? { category: fallback } : {};
-}
-
-function buildChildPermissions(
-    category: CategoryDefinition | undefined,
-    parentAgent: PolicyEffectRuleSet,
-    parentSession: PolicyEffectRuleSet,
-): readonly PolicyEffectRule[] {
-    const derived = deriveChildPermissions(parentAgent, parentSession);
-    // Category rules first; derived denies last (last-match-wins → inherited
-    // restrictions always override category allows).
-    return [...(category?.permissions ?? []), ...derived.rules];
-}
-
-function buildRequest(
-    params: TaskToolParams,
-    routing: RoutingResolution,
-    sessionId: string,
-    childPermissions: readonly PolicyEffectRule[],
-    parentContext?: string,
-    signal?: AbortSignal,
-    controlEpoch?: SessionControlEpoch,
-): ChildSpawnRequest {
-    return {
-        sessionId,
-        prompt: params.prompt ?? params.assignment ?? '',
-        loadSkills: params.load_skills,
-        childPermissions,
-        ...(routing.category !== undefined ? { category: routing.category } : {}),
-        ...(routing.subagentType !== undefined ? { subagentType: routing.subagentType } : {}),
-        ...(parentContext !== undefined ? { parentContext } : {}),
-        ...(signal !== undefined ? { signal } : {}),
-        ...(controlEpoch !== undefined ? { controlEpoch } : {}),
-    };
-}
-
-function buildBatchRequest(
-    item: BatchTaskItem,
-    sessionId: string,
-    childPermissions: readonly PolicyEffectRule[],
-    parentContext: string | undefined,
-    signal: AbortSignal,
-    controlEpoch?: SessionControlEpoch,
-): ChildSpawnRequest {
-    const routing = resolveRoutingFromAgent(item.agent);
-    return {
-        sessionId,
-        prompt: item.assignment,
-        loadSkills: [],
-        childPermissions,
-        ...(routing.category !== undefined ? { category: routing.category } : {}),
-        ...(routing.subagentType !== undefined ? { subagentType: routing.subagentType } : {}),
-        ...(parentContext !== undefined ? { parentContext } : {}),
-        signal,
-        ...(controlEpoch !== undefined ? { controlEpoch } : {}),
-    };
-}
 
 // --- Registration factory --------------------------------------------------
 
 export function createFullParityTaskToolRegistration(
     options: CreateFullParityTaskToolOptions,
 ): ToolRegistration<TaskToolParams, TaskToolResult> {
-    const parentAgent = options.parentAgentRules ?? EMPTY_RULESET;
-    const parentSession = options.parentSessionRules ?? EMPTY_RULESET;
-
     return {
         name: TASK_TOOL_NAME,
         description:
@@ -302,11 +113,11 @@ export function createFullParityTaskToolRegistration(
         outputLimit: OUTPUT_LIMIT,
         execute: async (input, context) => {
             if (input.tasks !== undefined) {
-                return executeBatch(input.tasks, input.context, parentAgent, parentSession, options.runtime, context);
+                return executeBatch(input.tasks, input.context, options.runtime, context);
             }
 
             const routing = resolveRouting(input);
-            const childPermissions = buildChildPermissions(routing.category, parentAgent, parentSession);
+            const childPermissions = buildChildPermissions(routing.category);
 
             if (input.task_id !== undefined) {
                 if (!options.runtime.sessionExists(input.task_id)) {
@@ -318,29 +129,27 @@ export function createFullParityTaskToolRegistration(
                 }
                 const result = await options.runtime.resumeChildSession(
                     input.task_id,
-                    buildRequest(
-                        input,
+                    buildRequest({
+                        params: input,
                         routing,
-                        input.task_id,
+                        sessionId: input.task_id,
                         childPermissions,
-                        undefined,
-                        context.signal,
-                        context.controlEpoch,
-                    ),
+                        signal: context.signal,
+                        ...(context.controlEpoch !== undefined ? { controlEpoch: context.controlEpoch } : {}),
+                    }),
                 );
                 return toToolResult(result, context.signal);
             }
 
             const sessionId = options.runtime.generateSessionId();
-            const request = buildRequest(
-                input,
+            const request = buildRequest({
+                params: input,
                 routing,
                 sessionId,
                 childPermissions,
-                undefined,
-                context.signal,
-                context.controlEpoch,
-            );
+                signal: context.signal,
+                ...(context.controlEpoch !== undefined ? { controlEpoch: context.controlEpoch } : {}),
+            });
 
             if (input.run_in_background === true) {
                 const handle = options.runtime.startBackgroundSession(request);
@@ -381,43 +190,45 @@ export function createFullParityTaskToolRegistration(
 async function executeBatch(
     tasks: readonly BatchTaskItem[],
     context: string | undefined,
-    parentAgent: PolicyEffectRuleSet,
-    parentSession: PolicyEffectRuleSet,
     runtime: TaskToolRuntime,
     toolContext: import('../tool-registry-types.js').ToolExecutionContext,
 ): Promise<TaskToolResult> {
-    const items = await Promise.all(
-        tasks.map(async (item): Promise<BatchResultItem> => {
-            const sessionId = runtime.generateSessionId();
-            const routing = resolveRoutingFromAgent(item.agent);
-            const childPermissions = buildChildPermissions(routing.category, parentAgent, parentSession);
-            const request = buildBatchRequest(
-                item,
-                sessionId,
-                childPermissions,
-                context,
-                toolContext.signal,
-                toolContext.controlEpoch,
-            );
-            try {
-                const result = await runtime.runChildSession(request);
-                return {
-                    sessionId: result.sessionId,
-                    status: result.status,
-                    output: result.output,
-                    ...(item.role !== undefined ? { role: item.role } : {}),
-                };
-            } catch (error: unknown) {
-                const message = error instanceof Error ? error.message : String(error);
-                return {
+    const items: BatchResultItem[] = [];
+    for (let waveStart = 0; waveStart < tasks.length; waveStart += 4) {
+        const waveItems = await Promise.all(
+            tasks.slice(waveStart, waveStart + 4).map(async (item): Promise<BatchResultItem> => {
+                const sessionId = runtime.generateSessionId();
+                const routing = resolveRoutingFromAgent(item.agent);
+                const childPermissions = buildChildPermissions(routing.category);
+                const request = buildBatchRequest({
+                    item,
                     sessionId,
-                    status: 'failed',
-                    output: message,
-                    ...(item.role !== undefined ? { role: item.role } : {}),
-                };
-            }
-        }),
-    );
+                    childPermissions,
+                    parentContext: context,
+                    signal: toolContext.signal,
+                    ...(toolContext.controlEpoch !== undefined ? { controlEpoch: toolContext.controlEpoch } : {}),
+                });
+                try {
+                    const result = await runtime.runChildSession(request);
+                    return {
+                        sessionId: result.sessionId,
+                        status: result.status,
+                        output: result.output,
+                        ...(item.role !== undefined ? { role: item.role } : {}),
+                    };
+                } catch (error: unknown) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    return {
+                        sessionId,
+                        status: 'failed',
+                        output: message,
+                        ...(item.role !== undefined ? { role: item.role } : {}),
+                    };
+                }
+            }),
+        );
+        items.push(...waveItems);
+    }
     return {
         sessionId: items[0]?.sessionId ?? 'batch_empty',
         status: 'completed',

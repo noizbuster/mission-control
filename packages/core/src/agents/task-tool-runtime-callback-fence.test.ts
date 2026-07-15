@@ -18,6 +18,7 @@ import { AsyncJobManager } from './async-job-manager.js';
 import { AgentLifecycleManager } from './lifecycle-manager.js';
 import { RuntimeAgentRegistry } from './runtime-registry.js';
 import { ConcreteTaskToolRuntime } from './task-tool-runtime.js';
+import { QuarantinedChildSettlementError } from './task-tool-runtime-control.js';
 
 afterEach(cleanupOperationTestRuntimes);
 
@@ -72,7 +73,7 @@ describe('ConcreteTaskToolRuntime callback fencing', () => {
         await acquireOperationTestLease(db, 'owner-child-new', 2_000);
 
         release?.({ sessionId: childSessionId, status: 'completed', output: 'late' });
-        await childResult;
+        await expect(childResult).rejects.toBeInstanceOf(QuarantinedChildSettlementError);
         await mirror.flush();
 
         expect(runtimeRegistry.lookup(childSessionId)?.status).toBe('running');
@@ -98,6 +99,7 @@ function buildRuntime(input: {
         description: 'parent',
         systemPrompt: 'parent',
         source: 'bundled',
+        spawns: '*',
     };
     const index = new AgentIndex();
     index.register(child);

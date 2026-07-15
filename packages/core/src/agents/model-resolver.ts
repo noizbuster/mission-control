@@ -1,16 +1,19 @@
 /**
- * Per-agent model resolution with 4-tier precedence.
+ * Per-agent model resolution with one task-inheritance special case and four
+ * normal precedence tiers.
  *
  * Resolution order (highest to lowest):
- *   1. `settingsOverride` — caller-injected override (e.g. CLI flag, session setting)
+ *   1. `agentModelOverride` (or compatible `settingsOverride`) — named override for this agent
  *   2. `agent.model` — the agent's own frontmatter field, resolved through
  *      `mctrl/<role>` aliases, legacy category aliases, or a concrete object
  *   3. `parentActiveModel` — the model of the parent agent that spawned this one
  *   4. `sessionDefault` — the session's baseline model
  *
- * `mctrl/task` is a special case: the `task` role always inherits the session
- * default, regardless of `roleConfig.task`. Legacy aliases (`opus`, `sonnet`)
- * map onto the new role set via {@linkcode LEGACY_CATEGORY_MODEL_ALIASES}.
+ * Exact `mctrl/task` is a special case evaluated before those tiers: it
+ * inherits the parent active model, or the session default when no parent is
+ * active. Named and role overrides cannot replace that inheritance. Legacy
+ * aliases (`opus`, `sonnet`) map onto the new role set via
+ * {@linkcode LEGACY_CATEGORY_MODEL_ALIASES}.
  *
  * No provider/model values are hardcoded — every concrete `ModelPattern` comes
  * from the caller's `roleConfig` or input.
@@ -29,9 +32,16 @@ export interface ResolveAgentModelInput {
     readonly agent: AgentDefinition;
     readonly parentActiveModel?: ModelPattern;
     readonly sessionDefault: ModelPattern;
+    readonly agentModelOverride?: ModelPattern;
     readonly settingsOverride?: ModelPattern;
     readonly roleConfig: Partial<Record<ModelRole, ModelPattern>>;
 }
+
+type AgentModelSelection =
+    | { readonly kind: 'inherit' }
+    | { readonly kind: 'task-inherit' }
+    | { readonly kind: 'role'; readonly role: ModelRole }
+    | { readonly kind: 'concrete'; readonly model: ModelPattern };
 
 /**
  * Empty role configuration. All roles are undefined by default; callers must
@@ -51,40 +61,36 @@ function resolveLegacyAlias(model: string): ModelRole | undefined {
     }
 }
 
-/**
- * Resolve the `agent.model` field alone. Returns `undefined` when the field is
- * absent, when an alias resolves to a role not present in `roleConfig`, or when
- * the string is unrecognized — in all those cases the caller falls through to
- * the next precedence tier.
- */
-function resolveAgentModelField(input: ResolveAgentModelInput): ModelPattern | undefined {
-    const { agent, roleConfig, sessionDefault } = input;
-
-    if (agent.model === undefined) return undefined;
-
-    if (typeof agent.model === 'string') {
-        const parsedRole = parseModelAlias(agent.model);
-
-        if (parsedRole === 'task') return sessionDefault;
-
-        if (parsedRole !== undefined) return roleConfig[parsedRole];
-
-        const legacyRole = resolveLegacyAlias(agent.model);
-        if (legacyRole !== undefined) return roleConfig[legacyRole];
-
-        return undefined;
+function classifyAgentModel(model: AgentDefinition['model']): AgentModelSelection {
+    if (model === undefined) return { kind: 'inherit' };
+    if (typeof model !== 'string') {
+        return { kind: 'concrete', model: { providerID: model.providerID, modelID: model.modelID } };
     }
-
-    return { providerID: agent.model.providerID, modelID: agent.model.modelID };
+    const parsedRole = parseModelAlias(model);
+    if (parsedRole === 'task') return { kind: 'task-inherit' };
+    if (parsedRole !== undefined) return { kind: 'role', role: parsedRole };
+    const legacyRole = resolveLegacyAlias(model);
+    return legacyRole === undefined ? { kind: 'inherit' } : { kind: 'role', role: legacyRole };
 }
 
 export function resolveAgentModel(input: ResolveAgentModelInput): ModelPattern {
-    if (input.settingsOverride !== undefined) return input.settingsOverride;
+    const inherited = input.parentActiveModel ?? input.sessionDefault;
+    const agentModelOverride = input.agentModelOverride ?? input.settingsOverride;
+    const selection = classifyAgentModel(input.agent.model);
+    switch (selection.kind) {
+        case 'task-inherit':
+            return inherited;
+        case 'concrete':
+            return agentModelOverride ?? selection.model;
+        case 'role':
+            return agentModelOverride ?? input.roleConfig[selection.role] ?? inherited;
+        case 'inherit':
+            return agentModelOverride ?? inherited;
+        default:
+            return assertNever(selection);
+    }
+}
 
-    const fromAgent = resolveAgentModelField(input);
-    if (fromAgent !== undefined) return fromAgent;
-
-    if (input.parentActiveModel !== undefined) return input.parentActiveModel;
-
-    return input.sessionDefault;
+function assertNever(selection: never): never {
+    throw new TypeError(`Unhandled agent model selection: ${JSON.stringify(selection)}`);
 }

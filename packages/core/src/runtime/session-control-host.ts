@@ -1,5 +1,7 @@
+// allow: SIZE_OK -- HEAD 398 -> current 409 pure LOC; one leased session-control ownership and attachment state machine.
 import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
 import { openLocalSessionEventStore } from '../memory/local-session-store.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
 import { acquireSessionChildSpawnBarrier, type SessionChildSpawnBarrier } from './session-child-spawn-barrier.js';
 import {
     assertUniqueSessionControlHandles,
@@ -52,6 +54,7 @@ export class SessionControlHost {
     private readonly startRenewer: typeof startSessionControlLeaseRenewer;
     private readonly fenceGraceMs: number;
     private readonly dataDir: string | undefined;
+    private readonly observabilityRedactor: ObservabilityRedactor | Promise<ObservabilityRedactor> | undefined;
     private readonly ownerPaths: Omit<ResolvePosixSessionControlPathsInput, 'dbIdentity' | 'sessionId'> | undefined;
     private readonly ownerControlDeadline:
         | {
@@ -73,6 +76,7 @@ export class SessionControlHost {
         readonly startRenewer?: typeof startSessionControlLeaseRenewer;
         readonly fenceGraceMs?: number;
         readonly dataDir?: string;
+        readonly observabilityRedactor?: ObservabilityRedactor | Promise<ObservabilityRedactor>;
         readonly ownerPaths?: Omit<ResolvePosixSessionControlPathsInput, 'dbIdentity' | 'sessionId'>;
         readonly ownerControlDeadline?: {
             readonly now?: () => Date;
@@ -88,6 +92,7 @@ export class SessionControlHost {
         this.startRenewer = input.startRenewer ?? startSessionControlLeaseRenewer;
         this.fenceGraceMs = input.fenceGraceMs ?? SESSION_CONTROL_FENCE_GRACE_MS;
         this.dataDir = input.dataDir;
+        this.observabilityRedactor = input.observabilityRedactor;
         this.ownerPaths = input.ownerPaths;
         this.ownerControlDeadline = input.ownerControlDeadline;
     }
@@ -320,6 +325,7 @@ export class SessionControlHost {
         };
         if (this.dataDir !== undefined) {
             const dataDir = this.dataDir;
+            const observabilityRedactor = await this.observabilityRedactor;
             controlServer = new SessionOwnerControlServer({
                 sessionId,
                 host: this,
@@ -327,7 +333,13 @@ export class SessionControlHost {
                     runtime: this.runtime,
                     host: this,
                     missionRoot: this.dataDir,
-                    openStore: (targetSessionId) => openLocalSessionEventStore({ dataDir, sessionId: targetSessionId }),
+                    openStore: (targetSessionId) =>
+                        openLocalSessionEventStore({
+                            dataDir,
+                            sessionId: targetSessionId,
+                            ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
+                        }),
+                    ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
                     ...(this.ownerControlDeadline?.now !== undefined ? { now: this.ownerControlDeadline.now } : {}),
                     ...(this.ownerControlDeadline?.monotonicNow !== undefined
                         ? { monotonicNow: this.ownerControlDeadline.monotonicNow }

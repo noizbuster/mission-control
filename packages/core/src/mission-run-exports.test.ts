@@ -1,6 +1,9 @@
 import {
     ALLOWED_RUN_TRANSITIONS,
     assertRunTransition,
+    attachRunSessionOwner,
+    blockRun,
+    cancelRun,
     completeRun,
     createMission,
     createRun,
@@ -13,6 +16,8 @@ import {
     readMission,
     readRun,
     resolveOmoRoot,
+    settleMissionRunSessionOwner,
+    settleRunSessionOwner,
     startRun,
     TERMINAL_RUN_STATUSES,
     updateMission,
@@ -39,9 +44,14 @@ describe('mission-run and .omo persistence public exports', () => {
         ['ALLOWED_RUN_TRANSITIONS', ALLOWED_RUN_TRANSITIONS],
         ['TERMINAL_RUN_STATUSES', TERMINAL_RUN_STATUSES],
         ['assertRunTransition', assertRunTransition],
+        ['attachRunSessionOwner', attachRunSessionOwner],
+        ['settleRunSessionOwner', settleRunSessionOwner],
+        ['settleMissionRunSessionOwner', settleMissionRunSessionOwner],
         ['materializeMission', materializeMission],
         ['normalizeMissionRunStoreLocation', normalizeMissionRunStoreLocation],
         ['startRun', startRun],
+        ['blockRun', blockRun],
+        ['cancelRun', cancelRun],
         ['completeRun', completeRun],
         ['failRun', failRun],
         ['resolveOmoRoot', resolveOmoRoot],
@@ -68,6 +78,9 @@ describe('mission-run and .omo persistence public exports', () => {
         expect(typeof createMission).toBe('function');
         expect(typeof materializeMission).toBe('function');
         expect(typeof startRun).toBe('function');
+        expect(typeof blockRun).toBe('function');
+        expect(typeof cancelRun).toBe('function');
+        expect(typeof settleMissionRunSessionOwner).toBe('function');
         expect(typeof assertRunTransition).toBe('function');
         expect(typeof resolveOmoRoot).toBe('function');
         expect(typeof ensureOmoDirs).toBe('function');

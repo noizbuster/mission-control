@@ -1,21 +1,23 @@
 /**
  * Spawn a child coding-agent run (ABG §10.6, Phase 6 deferred item).
  *
- * Wires the `task` tool's `spawn` contract to the real runtime: builds a CHILD permission
- * policy (destructive kinds dropped) + a CHILD tool registry (the `task` tool absent — the
- * registry-layer recursion guard), then runs the coding-agent graph with the parent's model
- * resolver. The child's final assistant message becomes the task's `summary`.
+ * Wires a resolved child context to the coding-agent graph. The caller supplies the child tool
+ * registry: the full-parity path constructs it with `buildChildToolSurface`, while the deprecated
+ * simple-task factory supplies its compatibility-filtered registry. This module does not derive
+ * authority from parent/session permission rules. The child's final assistant message becomes the
+ * task's `summary`.
  *
  * This is the runtime half of the `task` tool pair: `tools/task-tool.ts` is the model-facing
  * contract + recursion guard; this module is the runtime that knows how to build a graph.
  */
 import type { AbgNodeModelOptions, AbgSignal, AgentEvent } from '@mission-control/protocol';
 import type { ModelMessage } from 'ai';
+import type { ObservabilityRedactor } from '../../providers/observability-redactor.js';
+import { createObservabilityRedactor } from '../../providers/observability-redactor.js';
 import type { SessionControlEpoch } from '../../runtime/session-control-cancellation.js';
 import type { AskUserQuestionRequest } from '../../tools/ask-user-schemas.js';
 import { ASK_USER_BLOCKED_ANSWER, createAskUserToolRegistration } from '../../tools/ask-user-tool.js';
 import type { TaskOutput } from '../../tools/task-tool.js';
-import { createChildToolRegistry } from '../../tools/task-tool.js';
 import type { ToolRegistry } from '../../tools/tool-registry.js';
 import { createCodingAgentGraph } from '../coding-agent-graph.js';
 import { createCodingAgentNodeRegistry } from '../coding-agent-registry.js';
@@ -40,6 +42,7 @@ export type ChildHostCallbacks = {
     };
     readonly onSignal?: (signal: AbgSignal) => void | Promise<void>;
     readonly onDurableEvent?: (event: AgentEvent) => void;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 export type SpawnChildInput = {
@@ -48,13 +51,6 @@ export type SpawnChildInput = {
     /** Resolves the child's model the same way the parent's is resolved. */
     readonly resolveSdkModel: (options: AbgNodeModelOptions) => LlmActorModel;
     readonly model: AbgNodeModelOptions;
-    /**
-     * The parent's tool registry — filtered to a child-safe, task-free surface via
-     * `createChildToolRegistry`. Child safety is enforced HERE (the registry layer): the
-     * child cannot see destructive tools OR the `task` tool, so neither a prompt nor a
-     * permission rule can re-enable them (ABG §10.6).
-     */
-    readonly parentToolRegistry: ToolRegistry;
     readonly now: () => string;
     readonly signal?: AbortSignal;
     readonly controlEpoch?: SessionControlEpoch;
@@ -62,12 +58,11 @@ export type SpawnChildInput = {
     readonly sessionId: string;
     readonly summaryLimit?: number;
     /**
-     * Pre-built child tool registry from `ConcreteTaskToolRuntime.buildChildToolSurface`
-     * (already drops `task`/`job`, adds `yield`, filters denied capabilities). When
-     * provided, `createChildToolRegistry` is SKIPPED — the resolved surface is trusted
-     * as-is so child identity is not double-derived.
+     * Pre-built child tool registry. The full-parity runtime supplies the result of
+     * `buildChildToolSurface` (drops `task`/`job`, hard-drops orchestration/network classes,
+     * adds `yield`, and enforces category plus path-policy rules at invocation time).
      */
-    readonly childToolRegistry?: ToolRegistry;
+    readonly childToolRegistry: ToolRegistry;
     /**
      * Child system prompt built from the agent body (delegation directive + role +
      * agent systemPrompt + parent context). When provided, it is injected into the
@@ -85,8 +80,10 @@ export type SpawnChildInput = {
 
 /** Build + run the child graph and return its outcome as a `TaskOutput`. */
 export async function spawnChildCodingAgent(input: SpawnChildInput): Promise<TaskOutput> {
-    const childToolRegistry = input.childToolRegistry ?? createChildToolRegistry(input.parentToolRegistry);
-    registerChildAskUserTool(childToolRegistry, input.sessionId, input.hostCallbacks);
+    const childToolRegistry = input.childToolRegistry;
+    if (childToolRegistry.advertise().some((tool) => tool.name === 'ask_user')) {
+        registerChildAskUserTool(childToolRegistry, input.sessionId, input.hostCallbacks);
+    }
 
     const graph = createCodingAgentGraph({ model: input.model });
     if (input.systemPrompt !== undefined) {
@@ -108,9 +105,15 @@ export async function spawnChildCodingAgent(input: SpawnChildInput): Promise<Tas
         ...(input.signal !== undefined ? { abortSignal: input.signal } : {}),
         ...(input.controlEpoch !== undefined ? { controlEpoch: input.controlEpoch } : {}),
         ...(input.hostCallbacks?.onSignal !== undefined ? { onSignal: input.hostCallbacks.onSignal } : {}),
+        ...(input.hostCallbacks?.observabilityRedactor !== undefined
+            ? { observabilityRedactor: input.hostCallbacks.observabilityRedactor }
+            : {}),
     });
 
-    const summary = latestAssistantText(result.finalMessages ?? [], input.summaryLimit ?? 4000);
+    const observabilityRedactor = input.hostCallbacks?.observabilityRedactor ?? createObservabilityRedactor();
+    const summary = observabilityRedactor.redactText(
+        latestAssistantText(result.finalMessages ?? [], input.summaryLimit ?? 4000),
+    );
     return {
         description: input.description,
         status: result.status === 'completed' ? 'completed' : 'failed',

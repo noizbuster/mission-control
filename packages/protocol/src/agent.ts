@@ -12,9 +12,9 @@ export type AgentSource = z.infer<typeof AgentSourceSchema>;
 
 /**
  * Approval weight an agent carries (Task A5). `read` agents only observe, `write` agents mutate
- * workspace state with approval, `exec` agents run commands and spawn children. Tier replaces the
- * older `permissions: PermissionKind[]` field; pair with {@linkcode AgentDefinitionSchema}'s
- * `pathPolicies` for fine-grained resource gates.
+ * workspace state with approval, and `exec` agents run commands. Tier metadata does not grant
+ * child-spawn authority. Tier replaces the older `permissions: PermissionKind[]` field; pair with
+ * {@linkcode AgentDefinitionSchema}'s `pathPolicies` for fine-grained resource gates.
  */
 export const AGENT_TIERS = ['read', 'write', 'exec'] as const;
 export const AgentTierSchema = z.enum(AGENT_TIERS);
@@ -31,7 +31,8 @@ export type AgentThinkingLevel = z.infer<typeof AgentThinkingLevelSchema>;
  * `.agents/`, or plugins (see {@linkcode AgentSourceSchema}).
  *
  * Required: `name`, `description`, `systemPrompt`, `source`. Approval weighting uses `tier` +
- * `pathPolicies` (Task A5), not a `permissions` array. `recursion: -1` means unlimited nesting.
+ * `pathPolicies` (Task A5), not a `permissions` array. `recursion` is preserved compatibility
+ * metadata for imported/displayed declarations; it does not grant nested production task routing.
  */
 export const AgentDefinitionSchema = z
     .object({
@@ -48,6 +49,7 @@ export const AgentDefinitionSchema = z
         autoloadSkills: z.array(z.string()).optional(),
         readSummarize: z.boolean().optional(),
         maxTurns: z.number().int().positive().optional(),
+        // Compatibility metadata only. Production child sessions never receive task/job.
         recursion: z.union([z.literal(-1), z.number().int().min(0)]).optional(),
         role: z.string().optional(),
         tier: AgentTierSchema.optional(),

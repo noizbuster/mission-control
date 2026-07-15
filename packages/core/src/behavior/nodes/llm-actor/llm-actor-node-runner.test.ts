@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 939 -> current 943 pure LOC; one LLM actor node state-machine matrix spanning stream and tool settlements.
 /**
  * Regression test for the coding-agent "acts like a chatbot" failure mode.
  *
@@ -17,7 +18,8 @@ import { type Blackboard, createBlackboard } from '../../../memory/blackboard.js
 import * as skillLoaderModule from '../../../skills/skill-loader.js';
 import { ToolRegistry } from '../../../tools/tool-registry.js';
 import type { AbgNodeRunContext } from '../../node-registry.js';
-import { _testResetSkillCache, bustSkillCache, runLlmActorNode } from './llm-actor-node-runner.js';
+import { runLlmActorNode } from './llm-actor-node-runner.js';
+import { _testResetSkillCache, bustSkillCache } from './llm-actor-skill-cache.js';
 import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -441,7 +443,7 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         expect(blackboard.get('intent.classification')).toBe('exploratory-research');
     });
 
-    it('substitutes outputDefault when the parsed value is out-of-enum prose', async () => {
+    it('does not substitute outputDefault for out-of-enum prose', async () => {
         const blackboard = seedBlackboard();
         const context: AbgNodeRunContext = {
             graphId: 'g_enum_default',
@@ -459,9 +461,10 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
             },
         } as const;
 
-        await collectSignals(runLlmActorNode(node, context));
+        const signals = await collectSignals(runLlmActorNode(node, context));
 
-        expect(blackboard.get('intent.classification')).toBe('ambiguous');
+        expect(blackboard.has('intent.classification')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
     });
 
     it('fails closed when an out-of-enum value has no outputDefault', async () => {
@@ -511,7 +514,7 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
     });
 
-    it('substitutes outputDefault true for a boolean gate when the model returns prose', async () => {
+    it('does not substitute outputDefault true for a boolean gate when the model returns prose', async () => {
         const blackboard = seedBlackboard();
         const context: AbgNodeRunContext = {
             graphId: 'g_bool_default_true',
@@ -531,11 +534,11 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
 
         const signals = await collectSignals(runLlmActorNode(node, context));
 
-        expect(blackboard.get('guard.cleared')).toBe(true);
-        expect(signals.some((signal) => signal.type === 'failure')).toBe(false);
+        expect(blackboard.has('guard.cleared')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
     });
 
-    it('substitutes outputDefault false for a boolean gate when parsing fails', async () => {
+    it('does not substitute outputDefault false for a boolean gate when parsing fails', async () => {
         const blackboard = seedBlackboard();
         const context: AbgNodeRunContext = {
             graphId: 'g_bool_default_false',
@@ -555,8 +558,8 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
 
         const signals = await collectSignals(runLlmActorNode(node, context));
 
-        expect(blackboard.get('evidence.verified')).toBe(false);
-        expect(signals.some((signal) => signal.type === 'failure')).toBe(false);
+        expect(blackboard.has('evidence.verified')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
     });
 
     it('fails closed for a boolean gate with no outputDefault when parsing fails', async () => {
@@ -584,7 +587,7 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
     });
 
-    it('auto-defaults to empty array for an array node with no outputDefault when parsing fails', async () => {
+    it('does not default an array node to empty when parsing fails', async () => {
         const blackboard = seedBlackboard();
         const context: AbgNodeRunContext = {
             graphId: 'g_array_no_default',
@@ -603,8 +606,8 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
 
         const signals = await collectSignals(runLlmActorNode(node, context));
 
-        expect(blackboard.get('plan.todos')).toEqual([]);
-        expect(signals.some((signal) => signal.type === 'failure')).toBe(false);
+        expect(blackboard.has('plan.todos')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
     });
 
     it('fails closed for an object node with no outputDefault when parsing fails', async () => {
@@ -630,7 +633,7 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
     });
 
-    it('writes true for no-text turns (completion signal backwards compat)', async () => {
+    it('does not write true for no-text turns', async () => {
         const blackboard = seedBlackboard();
         const context: AbgNodeRunContext = {
             graphId: 'g_empty',
@@ -640,9 +643,10 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         };
         const node = { id: 'wave', kind: 'llm', config: { outputKey: 'wave.complete' } } as const;
 
-        await collectSignals(runLlmActorNode(node, context));
+        const signals = await collectSignals(runLlmActorNode(node, context));
 
-        expect(blackboard.get('wave.complete')).toBe(true);
+        expect(blackboard.has('wave.complete')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
     });
 
     function registryWithProbe(): ToolRegistry {
@@ -732,7 +736,7 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
         expect(blackboard.get('llm.loop_active')).toBe(true);
     });
 
-    it('writes explore.complete true and clears loop when last line is true with no tools', async () => {
+    it('rejects explore.complete when true appears only on the last line', async () => {
         const blackboard = seedBlackboard();
         const context: AbgNodeRunContext = {
             graphId: 'g_bool_true_complete',
@@ -746,9 +750,10 @@ describe('runLlmActorNode — outputKey structured-output persistence', () => {
             config: { outputKey: 'explore.complete', outputShape: 'boolean' },
         };
 
-        await collectSignals(runLlmActorNode(node, context));
+        const signals = await collectSignals(runLlmActorNode(node, context));
 
-        expect(blackboard.get('explore.complete')).toBe(true);
+        expect(blackboard.has('explore.complete')).toBe(false);
+        expect(signals.some((signal) => signal.type === 'failure')).toBe(true);
         expect(blackboard.get('llm.loop_active')).toBe(false);
     });
 

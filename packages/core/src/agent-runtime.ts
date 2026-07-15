@@ -18,14 +18,11 @@ import {
     createRuntimeApprovalGate,
     createRuntimeSession,
     createRuntimeSidecarClient,
-    emitRuntimeEnvelope,
     ensureRuntimeSession,
     runtimeModelProviderSelection,
     sessionStartedEvent,
     sessionStoppedEvent,
     stopRuntimeSession,
-    taskCompletedEvent,
-    taskStartedEvent,
 } from './agent-runtime-support.js';
 import { type ApprovalUpdateInput, PermissionGate } from './approval-gate.js';
 import type { PricingTable } from './behavior/budget/cost-ledger.js';
@@ -38,6 +35,12 @@ import type { SystemPromptEnvironment } from './context/system-prompt.js';
 import { EventBus } from './event-bus.js';
 import type { PersistentMemoryStore } from './memory/persistent-memory-store.js';
 import type { SidecarClient } from './native/sidecar-client.js';
+import {
+    composeObservabilityRedactors,
+    createObservabilityRedactor,
+    type ObservabilityRedactor,
+    redactAgentEventForObservability,
+} from './providers/observability-redactor.js';
 import { SessionEventLog } from './session-log.js';
 import type { ToolRegistry } from './tools/tool-registry.js';
 
@@ -45,12 +48,10 @@ export type { AgentRuntimeOptions } from './agent-runtime-options.js';
 export type { SkillInvocationTaskInput };
 
 /**
- * Extra inputs for `AgentRuntime.runGraph` that wire the real Phase 1/2 coding-agent path:
- * the real node `registry`, an SDK-model resolver, the tool surface, and the seed
- * conversation. When omitted, `runGraph` uses the default (mock) registry and no tools —
- * the legacy behavior. The CLI supplies these once providers speak the AI-SDK model API
- * (Phase 5); until then the flat loop remains the default execution authority (strangler
- * fig, ABG pre-mortem #1).
+ * Extra inputs for `AgentRuntime.runGraph` that wire the coding-agent path: the real node
+ * `registry`, an SDK-model resolver, the tool surface, and the seed conversation. Current CLI
+ * prompt execution supplies these inputs and runs through the graph engine. Omitting them retains
+ * the low-level mock/no-tool fallback; the flat provider loop is only a limited fallback path.
  */
 export type RunGraphOptions = {
     readonly registry?: AbgNodeRegistry;
@@ -76,6 +77,7 @@ export type RunGraphOptions = {
      * absent by default (the ledger stays `undefined` and no budget events fire).
      */
     readonly pricingTable?: PricingTable;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 export class AgentRuntime {
@@ -85,6 +87,7 @@ export class AgentRuntime {
     private readonly sidecarClient: SidecarClient;
     private readonly approvalGate: PermissionGate;
     private readonly persistentStore: PersistentMemoryStore | undefined;
+    private readonly observabilityRedactor: ObservabilityRedactor;
     private modelProviderSelection: ModelProviderSelection;
     private session: AgentSession | undefined;
     private frozenSnapshot: AgentSnapshot | undefined = undefined;
@@ -94,6 +97,7 @@ export class AgentRuntime {
         this.options = options;
         this.modelProviderSelection = runtimeModelProviderSelection(options);
         this.sidecarClient = createRuntimeSidecarClient(options);
+        this.observabilityRedactor = options.observabilityRedactor ?? createObservabilityRedactor();
         this.approvalGate = createRuntimeApprovalGate(options, (event) => {
             this.emit(event);
         });
@@ -159,6 +163,11 @@ export class AgentRuntime {
 
     async runGraph(graph: unknown, graphInput?: AbgGraphInput, options?: RunGraphOptions): Promise<AbgGraphRunResult> {
         const session = ensureRuntimeSession(this.session);
+        const observabilityRedactor = composeObservabilityRedactors(
+            options?.observabilityRedactor === undefined
+                ? [this.observabilityRedactor]
+                : [this.observabilityRedactor, options.observabilityRedactor],
+        );
         const result = await runAbgGraph({
             graph,
             sessionId: session.id,
@@ -177,6 +186,7 @@ export class AgentRuntime {
                 ? { projectInstructionResources: options.projectInstructionResources }
                 : {}),
             ...(options?.pricingTable !== undefined ? { pricingTable: options.pricingTable } : {}),
+            observabilityRedactor,
         });
         for (const event of result.events) {
             this.emit(event);
@@ -229,8 +239,9 @@ export class AgentRuntime {
     }
 
     private emit(event: AgentEvent): void {
-        this.log.append(event);
-        this.bus.emit(event);
+        const observableEvent = redactAgentEventForObservability(event, this.observabilityRedactor);
+        this.log.append(observableEvent);
+        this.bus.emit(observableEvent);
     }
 
     private createPromptTaskId(): string {

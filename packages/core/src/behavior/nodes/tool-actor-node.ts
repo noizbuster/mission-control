@@ -17,6 +17,7 @@ import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
 import type { ToolInvocationInput } from '../../tools/tool-registry.js';
 import { createAbgEmitSignal } from '../abg-emit.js';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
+import { randomUUID } from 'node:crypto';
 
 function nodeError(code: string, message: string): { code: string; message: string } {
     return { code, message };
@@ -64,14 +65,13 @@ export const runToolActorNode: AbgNodeRunner = async function* (
     context: AbgNodeRunContext,
 ): AsyncIterable<AbgSignal> {
     yield started(node, context);
+    const toolCallId = context.toolCallId ?? randomUUID();
 
     if (context.toolRegistry === undefined) {
-        yield emit(
-            node,
-            context,
-            'tool.failed',
-            nodeError('tool_registry_unavailable', 'ToolRegistry not available in context'),
-        );
+        yield emit(node, context, 'tool.failed', {
+            ...nodeError('tool_registry_unavailable', 'ToolRegistry not available in context'),
+            toolCallId,
+        });
         yield failure(node.id, context.graphId, {
             code: 'tool_registry_unavailable',
             message: 'ToolRegistry not available in context',
@@ -80,16 +80,13 @@ export const runToolActorNode: AbgNodeRunner = async function* (
     }
 
     const toolName = node.config?.['tool'];
-    const toolCallId = node.config?.['toolCallId'] ?? node.id;
     const argumentsValue = node.config?.['arguments'] ?? {};
 
     if (typeof toolName !== 'string' || toolName.length === 0) {
-        yield emit(
-            node,
-            context,
-            'tool.failed',
-            nodeError('tool_name_required', 'Tool name must be a non-empty string'),
-        );
+        yield emit(node, context, 'tool.failed', {
+            ...nodeError('tool_name_required', 'Tool name must be a non-empty string'),
+            toolCallId,
+        });
         yield failure(node.id, context.graphId, {
             code: 'tool_name_required',
             message: 'Tool name must be a non-empty string',
@@ -100,7 +97,7 @@ export const runToolActorNode: AbgNodeRunner = async function* (
     const advertisement = context.toolRegistry.advertise().find((a) => a.name === toolName);
     if (advertisement === undefined) {
         const error = nodeError('tool_unknown', `Unknown tool: ${toolName}`);
-        yield emit(node, context, 'tool.failed', { ...error, toolName });
+        yield emit(node, context, 'tool.failed', { ...error, toolName, toolCallId });
         yield failure(node.id, context.graphId, {
             code: error.code,
             toolName,

@@ -11,6 +11,7 @@
 import type { AbgNodeModelOptions } from '@mission-control/protocol';
 import { spawnChildCodingAgent } from '../behavior/subagents/spawn-child.js';
 import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
+import { createObservabilityRedactor } from '../providers/observability-redactor.js';
 import type { ChildSpawnResult } from '../tools/task/task-tool.js';
 import { createYieldToolRegistration } from '../tools/yield-tool/yield-tool.js';
 import type { ChildSpawnContext } from './task-tool-runtime.js';
@@ -18,17 +19,18 @@ import type { ChildSpawnContext } from './task-tool-runtime.js';
 /**
  * Capability classes ALWAYS dropped from child tool surfaces, regardless of path
  * policies. `subagent` (nested task recursion — ABG §10.6), `workflow` (self-invokable
- * workflow graph recursion), and `network` (webfetch/mcp reaching beyond the
- * workspace). Destructive kinds (bash/write/patch) are intentionally excluded — they
+ * workflow graph recursion), `network` (webfetch/mcp reaching beyond the workspace),
+ * and `team` (child-created orchestration groups). Destructive kinds
+ * (bash/write/patch) are intentionally excluded — they
  * are policy-controlled via `deriveChildPathPolicies` so a `deep` agent keeps
  * write/bash while a `planner` loses them.
  */
-const CHILD_HARD_DROPPED_CAPABILITY_KINDS: readonly string[] = ['subagent', 'workflow', 'network'];
+const CHILD_HARD_DROPPED_CAPABILITY_KINDS = new Set<string>(['subagent', 'workflow', 'network', 'team']);
+const DEFAULT_CHILD_SUMMARY_LIMIT = 4000;
+const DEGRADED_SALVAGE_LABEL = '[degraded salvage] ';
 
 export function hasHardDroppedCapability(capabilities: readonly string[]): boolean {
-    return capabilities.some((capability) =>
-        CHILD_HARD_DROPPED_CAPABILITY_KINDS.some((kind) => capability.includes(kind)),
-    );
+    return capabilities.some((capability) => CHILD_HARD_DROPPED_CAPABILITY_KINDS.has(capability));
 }
 
 export interface ChildGraphSpawnDeps {
@@ -36,18 +38,18 @@ export interface ChildGraphSpawnDeps {
     readonly summaryLimit?: number;
 }
 
-export function defaultSpawnFn(context: ChildSpawnContext): Promise<ChildSpawnResult> {
-    void context;
+export function defaultSpawnFn(): Promise<ChildSpawnResult> {
     return Promise.reject(new Error('spawnFn not wired: provide resolveSdkModel or an explicit spawnFn'));
 }
 
 /**
  * Build the default spawn fn: runs a bounded child coding-agent graph from the
  * resolved context. The child gets its OWN identity (agent body via `systemPrompt`),
- * the pre-built child tool surface (yield present, task absent), and yolo approval
- * semantics (the parent's `task()` call is the authorization boundary). The yielded
+ * the pre-built child tool surface (yield present, task absent). Cloned effectful tools
+ * retain their original permission callbacks, while the child invocation policy enforces
+ * derived path rules. The yielded
  * result (captured via the `onYield` callback) becomes the child's `output`; if the
- * child never calls `yield`, the last assistant text is the fallback.
+ * child never calls `yield`, a bounded degraded salvage summary is returned with failed status.
  */
 export function createChildGraphSpawnFn(
     deps: ChildGraphSpawnDeps,
@@ -75,7 +77,6 @@ export function createChildGraphSpawnFn(
             prompt: context.prompt,
             resolveSdkModel: deps.resolveSdkModel,
             model: modelOptions,
-            parentToolRegistry: context.childToolRegistry,
             childToolRegistry: context.childToolRegistry,
             systemPrompt: context.systemPrompt,
             now: () => new Date().toISOString(),
@@ -86,9 +87,24 @@ export function createChildGraphSpawnFn(
             ...(context.hostCallbacks !== undefined ? { hostCallbacks: context.hostCallbacks } : {}),
         });
 
-        const output = yieldedResult !== undefined ? stringifyYieldResult(yieldedResult.value) : taskOutput.summary;
-        return { sessionId: context.sessionId, status: taskOutput.status, output };
+        const observabilityRedactor = context.hostCallbacks?.observabilityRedactor ?? createObservabilityRedactor();
+        const rawOutput =
+            yieldedResult === undefined
+                ? boundedDegradedSalvage(
+                      observabilityRedactor.redactText(taskOutput.summary),
+                      deps.summaryLimit ?? DEFAULT_CHILD_SUMMARY_LIMIT,
+                  )
+                : stringifyYieldResult(yieldedResult.value);
+        return {
+            sessionId: context.sessionId,
+            status: yieldedResult === undefined ? 'failed' : taskOutput.status,
+            output: observabilityRedactor.redactText(rawOutput),
+        };
     };
+}
+
+function boundedDegradedSalvage(summary: string, limit: number): string {
+    return `${DEGRADED_SALVAGE_LABEL}${summary}`.slice(0, Math.max(0, limit));
 }
 
 function stringifyYieldResult(value: unknown): string {

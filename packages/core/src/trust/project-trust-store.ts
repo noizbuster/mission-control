@@ -41,6 +41,8 @@ export type ProjectTrustStoreOptions = {
     readonly lockMaxAttempts?: number;
 };
 
+export type ProjectTrustReader = Pick<ProjectTrustStore, 'getDecision'>;
+
 type TrustFileReadResult =
     | {
           readonly state: 'missing' | 'valid';
@@ -97,6 +99,17 @@ export class ProjectTrustStore {
 
     async resetDecision(workspaceRoot: string): Promise<ProjectTrustLookup> {
         return this.setDecision(workspaceRoot, 'unknown');
+    }
+}
+
+export async function resolveProjectTrustDecision(
+    workspaceRoot: string,
+    trustStore: ProjectTrustReader = new ProjectTrustStore(),
+): Promise<ProjectTrustDecision> {
+    try {
+        return (await trustStore.getDecision(workspaceRoot)).decision;
+    } catch {
+        return 'unknown';
     }
 }
 

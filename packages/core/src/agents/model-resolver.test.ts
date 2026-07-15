@@ -16,8 +16,8 @@ function makeAgent(overrides?: Partial<AgentDefinition>): AgentDefinition {
 const SESSION_DEFAULT: ModelPattern = { providerID: 'session-provider', modelID: 'session-model' };
 
 describe('resolveAgentModel', () => {
-    describe('tier 1 — settingsOverride (highest)', () => {
-        it('returns settingsOverride when present, winning over agent.model', () => {
+    describe('tier 1 — named agent override', () => {
+        it('accepts settingsOverride as the compatible named-override input', () => {
             const input: ResolveAgentModelInput = {
                 agent: makeAgent({ model: 'mctrl/slow' }),
                 sessionDefault: SESSION_DEFAULT,
@@ -27,11 +27,11 @@ describe('resolveAgentModel', () => {
             expect(resolveAgentModel(input)).toEqual({ providerID: 'override', modelID: 'model' });
         });
 
-        it('returns settingsOverride even when agent.model is a concrete object', () => {
+        it('returns agentModelOverride even when agent.model is a concrete object', () => {
             const input: ResolveAgentModelInput = {
                 agent: makeAgent({ model: { providerID: 'a', modelID: 'b' } }),
                 sessionDefault: SESSION_DEFAULT,
-                settingsOverride: { providerID: 'override', modelID: 'model' },
+                agentModelOverride: { providerID: 'override', modelID: 'model' },
                 roleConfig: {},
             };
             expect(resolveAgentModel(input)).toEqual({ providerID: 'override', modelID: 'model' });
@@ -198,14 +198,14 @@ describe('resolveAgentModel', () => {
             expect(resolveAgentModel(input)).toEqual({ providerID: 'a', modelID: 'b' });
         });
 
-        it('returns the session default for mctrl/task even when roleConfig.task is set (skip-guard)', () => {
+        it('returns the parent model for mctrl/task even when roleConfig.task is set (skip-guard)', () => {
             const input: ResolveAgentModelInput = {
                 agent: makeAgent({ model: 'mctrl/task' }),
                 sessionDefault: SESSION_DEFAULT,
                 parentActiveModel: PARENT,
                 roleConfig: { task: { providerID: 'should-not-be-used', modelID: 'no' } },
             };
-            expect(resolveAgentModel(input)).toEqual(SESSION_DEFAULT);
+            expect(resolveAgentModel(input)).toEqual(PARENT);
         });
 
         it('returns the parent model when roleConfig is empty and the model is any mctrl alias', () => {

@@ -59,6 +59,25 @@ export const LspConfigSchema = z
     .strict();
 export type LspConfig = z.infer<typeof LspConfigSchema>;
 
+const BrowserHttpConfigSchema = z
+    .object({
+        browserURL: z.url().refine((value) => ['http:', 'https:'].includes(new URL(value).protocol), {
+            message: 'browserURL must use http or https',
+        }),
+    })
+    .strict();
+
+const BrowserWebSocketConfigSchema = z
+    .object({
+        browserWSEndpoint: z.url().refine((value) => ['ws:', 'wss:'].includes(new URL(value).protocol), {
+            message: 'browserWSEndpoint must use ws or wss',
+        }),
+    })
+    .strict();
+
+export const BrowserConfigSchema = z.union([BrowserHttpConfigSchema, BrowserWebSocketConfigSchema]);
+export type BrowserConfig = z.infer<typeof BrowserConfigSchema>;
+
 /**
  * The mission-control global `config.json` top-level shape. Only the global/user config defines
  * `mcp_env_allowlist` (omo security rule: walked project `.mcp.json` files cannot extend the
@@ -69,6 +88,7 @@ export const MissionControlConfigSchema = z
         mcp: McpConfigSchema.optional(),
         mcp_env_allowlist: z.array(z.string()).optional(),
         lsp: LspConfigSchema.optional(),
+        browser: BrowserConfigSchema.optional(),
     })
     .strict();
 export type MissionControlConfig = z.infer<typeof MissionControlConfigSchema>;

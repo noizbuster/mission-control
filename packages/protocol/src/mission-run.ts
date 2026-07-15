@@ -7,8 +7,9 @@
  * durable event timeline (sessionId), accumulated cost, and lifecycle status.
  *
  * Mission is to Run what a program is to a process. Missions are versioned + reusable;
- * Runs are ephemeral records (one per `runAbgGraph` invocation) that a Mission-Control
- * surface (Inspector/CLI) projects into an observable timeline.
+ * Runs are durable SQL records, one per graph execution, stored in `mission_runs`.
+ * A Run can link to a session event timeline, while JSONL remains a replay/import/export
+ * compatibility format and is not authoritative Run storage.
  */
 import { z } from 'zod';
 import {
@@ -104,8 +105,9 @@ export const RunSchema = z.object({
     id: z.string().min(1),
     missionId: z.string().min(1),
     status: RunStatusSchema.default('pending'),
-    /** Links this Run to its durable event timeline (the JSONL session store). */
+    /** Links this durable SQL Run to its session event timeline, not an authoritative JSONL Run store. */
     sessionId: z.string().min(1).optional(),
+    sessionRunId: z.string().min(1).optional(),
     graphId: z.string().min(1).optional(),
     /** The initiating user prompt for this Run, persisted so `/retry` can re-invoke it. */
     prompt: z.string().optional(),

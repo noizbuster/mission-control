@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 343 -> current 373 pure LOC; one graph-turn adapter and coordinator-seam integration matrix.
 /**
  * Tests for the graph turn runner + the coordinator's pluggable-turn-runner seam. This is the
  * headless proof that the session queue/steer/resume machinery can drive the ABG coding-agent
@@ -13,12 +14,19 @@
  * AI-SDK provider) and the interactive TUI approval broker. Those are flagged in the plan.
  */
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
-import type { AbgEmbeddedEvent, AgentEvent, AgentMessage, ModelProviderSelection } from '@mission-control/protocol';
+import type {
+    AbgEmbeddedEvent,
+    AbgSignal,
+    AgentEvent,
+    AgentMessage,
+    ModelProviderSelection,
+} from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createCodingAgentGraph } from '../behavior/coding-agent-graph.js';
 import { createCodingAgentNodeRegistry } from '../behavior/coding-agent-registry.js';
 import { approvalGraph } from '../behavior/graph-coordinator-test-support.js';
+import { createObservabilityRedactor } from '../providers/observability-redactor.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import {
     agentMessagesToSeedModelMessages,
@@ -247,6 +255,35 @@ describe('createGraphTurnRunner', () => {
         // The graph's AgentEvents flowed through the coordinator's durable sink.
         expect(persisted.length).toBeGreaterThan(0);
         expect(persisted.some((event) => (event.message ?? '').includes('llm.turn.completed'))).toBe(true);
+    });
+
+    it('redacts configured credentials from live signals and persisted graph metadata', async () => {
+        // Given
+        const credential = ['configured', 'graph', 'metadata'].join('_');
+        const model = buildScriptedModel();
+        const baseGraph = createCodingAgentGraph({ model: MODEL_SELECTION });
+        const observedSignals: AbgSignal[] = [];
+        const runner = createGraphTurnRunner({
+            ...buildGraphWiring(model),
+            graph: { ...baseGraph, id: `graph-${credential}` },
+            modelProviderSelection: {
+                providerID: `provider-${credential}`,
+                modelID: `model-${credential}`,
+            },
+            onSignal: (signal) => {
+                observedSignals.push(signal);
+            },
+            observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
+        });
+        const { context, persisted } = buildStubContext([{ role: 'user', content: 'just answer' }]);
+
+        // When
+        await runner(context);
+        const observable = JSON.stringify({ observedSignals, persisted });
+
+        // Then
+        expect(observable).toContain('[REDACTED_CREDENTIAL]');
+        expect(observable).not.toContain(credential);
     });
 
     it('reports interrupted when the drain aborts the run mid-graph', async () => {

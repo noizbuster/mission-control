@@ -20,128 +20,21 @@
  * complementing the bridge's synchronous SDK-contract gate.
  */
 import type { AbgNodeSpec, AbgSignal } from '@mission-control/protocol';
-import type { ModelMessage } from 'ai';
-import type { ConversationSummary } from '../../../context/compaction.js';
 import { packContext } from '../../../context/context-packer.js';
 import { assembleSystemPrompt, type SystemPromptSkill } from '../../../context/system-prompt.js';
-import type { Blackboard } from '../../../memory/blackboard.js';
-import { discoverSkills, resolveUserConfigDir } from '../../../skills/skill-loader.js';
-import { defaultReadOnlyRepoToolDenylist, toPosixPath } from '../../../tools/read-tools-paths.js';
-import type { ToolAdvertisement } from '../../../tools/tool-registry-types.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../../node-registry.js';
-import {
-    type ParseStructuredOutputResult,
-    parseStructuredOutput,
-    type StructuredOutputShape,
-} from '../../structured-blackboard.js';
+import { type ParseStructuredOutputResult, parseStructuredOutput } from '../../structured-blackboard.js';
 import { bridgeAdvertisementsToAiSdk, createAbgToolSettlementLedger } from './abg-tool-bridge.js';
 import { type LlmActorTurnResult, runLlmActor } from './llm-actor-node.js';
-import type { Dirent } from 'node:fs';
-import { readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
-
-// Skill discovery session cache (todo 13). Keyed on the per-run Blackboard (WeakMap → GC-safe,
-// no cross-session leak). Invalidation is a recursive per-file mtime+size manifest, NOT root-only
-// dir mtime (which misses file edits + deep adds — Metis F2). SIZE_OK: plan mandates this lives
-// module-level here; extraction to a sibling is forbidden.
-
-type SkillManifest = Map<string, readonly [mtimeMs: number, size: number]>;
-type SkillCacheEntry = { readonly skills: readonly SystemPromptSkill[]; readonly manifest: SkillManifest };
-
-const MAX_MANIFEST_WALK_DEPTH = 10;
-
-let skillCache = new WeakMap<Blackboard, SkillCacheEntry>();
-
-/** @internal Test-only: drops every cached entry so spy call-counts are isolated per test. */
-export function _testResetSkillCache(): void {
-    skillCache = new WeakMap();
-}
-
-/**
- * Drops every cached skill-discovery entry so the next `runLlmActorNode` turn re-runs
- * `discoverSkills` regardless of the file manifest. Called by the `/skills reload` and
- * `/agents reload` chat actions so an explicit reload always serves fresh skills.
- */
-export function bustSkillCache(): void {
-    skillCache = new WeakMap();
-}
-
-const manifestDenylistNeedles: readonly string[] = defaultReadOnlyRepoToolDenylist.map((entry) => entry.toLowerCase());
-const manifestDenylistDirNames: ReadonlySet<string> = new Set(
-    defaultReadOnlyRepoToolDenylist.filter((entry) => !entry.includes('/')).map((entry) => entry.toLowerCase()),
-);
-
-function pathMatchesDenylist(absolutePath: string): boolean {
-    const posix = toPosixPath(absolutePath).toLowerCase();
-    return manifestDenylistNeedles.some((needle) =>
-        needle.length === 0 ? false : posix === needle || posix.includes(`/${needle}/`) || posix.endsWith(`/${needle}`),
-    );
-}
-
-/** MUST mirror `discoverSkills` scope resolution (global-user, project-mctrl, project-agents). */
-function resolveSkillScopeRoots(workspaceRoot: string): readonly string[] {
-    const roots: string[] = [join(resolveUserConfigDir({}), 'skills')];
-    if (!pathMatchesDenylist(workspaceRoot)) {
-        roots.push(join(workspaceRoot, '.mctrl', 'skills'));
-        roots.push(join(workspaceRoot, '.agents', 'skills'));
-    }
-    return roots;
-}
-
-/** MUST mirror `walkSkillFiles`: depth-bounded, symlink-safe, denylist-pruned. Stat-only (no read/parse). */
-async function walkSkillManifestFiles(scopeRoot: string): Promise<readonly string[]> {
-    const results: string[] = [];
-    const queue: Array<{ readonly dir: string; readonly depth: number }> = [{ dir: scopeRoot, depth: 0 }];
-    while (queue.length > 0) {
-        const item = queue.shift();
-        if (item === undefined || item.depth > MAX_MANIFEST_WALK_DEPTH) continue;
-        let entries: readonly Dirent[];
-        try {
-            entries = await readdir(item.dir, { withFileTypes: true });
-        } catch {
-            continue;
-        }
-        for (const entry of entries) {
-            if (entry.isSymbolicLink()) continue;
-            const fullPath = join(item.dir, entry.name);
-            if (entry.isDirectory()) {
-                if (manifestDenylistDirNames.has(entry.name.toLowerCase())) continue;
-                queue.push({ dir: fullPath, depth: item.depth + 1 });
-                continue;
-            }
-            if (entry.isFile() && entry.name === 'SKILL.md') {
-                results.push(fullPath);
-            }
-        }
-    }
-    return results.sort();
-}
-
-async function buildSkillManifest(workspaceRoot: string): Promise<SkillManifest> {
-    const manifest: SkillManifest = new Map();
-    for (const scopeRoot of resolveSkillScopeRoots(workspaceRoot)) {
-        for (const filePath of await walkSkillManifestFiles(scopeRoot)) {
-            try {
-                const stats = await stat(filePath);
-                manifest.set(filePath, [stats.mtimeMs, stats.size] as const);
-            } catch {
-                // File vanished between walk and stat — discovery will skip it too.
-            }
-        }
-    }
-    return manifest;
-}
-
-function manifestsEqual(a: SkillManifest, b: SkillManifest): boolean {
-    if (a.size !== b.size) return false;
-    for (const [path, [mtimeMs, size]] of a) {
-        const entry = b.get(path);
-        if (entry === undefined) return false;
-        if (entry[0] !== mtimeMs || entry[1] !== size) return false;
-    }
-    return true;
-}
+import {
+    applyEnumConstraint,
+    filterByCapabilities,
+    readOutputShape,
+    readPriorSummary,
+    readStringConfig,
+} from './llm-actor-node-helpers.js';
+import { discoverPromptSkills } from './llm-actor-skill-cache.js';
 
 export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
     const nodeId = node.id;
@@ -274,12 +167,15 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         now: context.now,
         ...(context.toolRegistry !== undefined ? { settlementLedger } : {}),
         ...(context.haltOnFailedToolSettlement === true ? { haltOnFailedToolSettlement: true } : {}),
+        ...(context.observabilityRedactor !== undefined
+            ? { observabilityRedactor: context.observabilityRedactor }
+            : {}),
+        captureRawTurnResult: (result) => {
+            turnResult = result;
+        },
     })) {
         if (signal.type === 'emit' && signal.event.type === 'llm.tool_call.proposed') {
             proposedToolCalls += 1;
-        }
-        if (signal.type === 'success') {
-            turnResult = extractTurnResult(signal.result);
         }
         yield signal;
     }
@@ -294,24 +190,14 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
         blackboard.appendMessages(turnResult.responseMessages);
         const outputKey = readStringConfig(node, 'outputKey');
         if (outputKey !== undefined) {
-            // Empty text is only a completion signal when the model did NOT propose tools.
-            // Tool-only turns (empty text + tool calls) must keep llm.loop_active so the
-            // graph re-enters for multi-turn research; free-text without a parseable value
-            // also fails closed into the leave-loop path when tools keep the loop open.
-            const text = turnResult.text.trim();
+            // Empty text and prose are not completion signals for a declared outputKey.
+            // Tool-only turns keep the loop active so the graph can re-enter for another turn.
             const parsed: ParseStructuredOutputResult =
-                text.length > 0
-                    ? parseStructuredOutput(text, readOutputShape(node))
-                    : proposedToolCalls > 0
-                      ? { ok: false, error: 'empty text with tool calls is not a completion signal' }
-                      : { ok: true, value: true };
+                turnResult.text.trim().length > 0
+                    ? parseStructuredOutput(turnResult.text, readOutputShape(node))
+                    : { ok: false, error: 'empty structured output' };
             const constrained = applyEnumConstraint(node, parsed);
-            // While tools keep the loop open, do not shape-default a failed parse into a
-            // completion value (boolean→false / array→[]). That would clear loop_active and
-            // kill multi-turn research on free-text like "I'll explore...".
-            const outputResult = loopActive
-                ? constrained
-                : applyShapeDefaultFallback(node, constrained, readOutputShape(node));
+            const outputResult = constrained;
             if (outputResult.ok) {
                 blackboard.set(outputKey, outputResult.value);
                 yield createAbgEmitSignal({
@@ -375,202 +261,6 @@ export async function* runLlmActorNode(node: AbgNodeSpec, context: AbgNodeRunCon
             }
         }
     }
-}
-
-function readStringConfig(node: AbgNodeSpec, key: string): string | undefined {
-    const value = node.config?.[key];
-    return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-/**
- * Filter tool advertisements by the node's declared capabilities.
- *
- * - `undefined` capabilities → all tools (backward compat: undeclared = inherit).
- * - `[]` capabilities → no tools (handled earlier by `capabilitiesExplicitlyEmpty`).
- * - Non-empty capabilities → only tools whose `capabilityClasses` intersect.
- */
-function filterByCapabilities(
-    advertisements: readonly ToolAdvertisement[],
-    capabilities: readonly string[] | undefined,
-): readonly ToolAdvertisement[] {
-    if (capabilities === undefined) {
-        return advertisements;
-    }
-    if (capabilities.length === 0) {
-        return [];
-    }
-    const capabilitySet = new Set(capabilities);
-    return advertisements.filter((ad) => ad.capabilityClasses.some((cls) => capabilitySet.has(cls)));
-}
-
-function readOutputShape(node: AbgNodeSpec): StructuredOutputShape {
-    const value = readStringConfig(node, 'outputShape');
-    if (value === 'object' || value === 'array' || value === 'boolean' || value === 'string' || value === 'any') {
-        return value;
-    }
-    return 'any';
-}
-
-function readOutputEnum(node: AbgNodeSpec): readonly string[] | undefined {
-    const value = node.config?.['outputEnum'];
-    if (!Array.isArray(value)) {
-        return undefined;
-    }
-    const entries = value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
-    return entries.length > 0 ? entries : undefined;
-}
-
-function readOutputDefault(node: AbgNodeSpec): string | undefined {
-    return readStringConfig(node, 'outputDefault');
-}
-
-// Substitutes outputDefault (when in-enum) for an out-of-enum value so a
-// classifier node degrades to a routable branch instead of silently stalling.
-function applyEnumConstraint(node: AbgNodeSpec, parsed: ParseStructuredOutputResult): ParseStructuredOutputResult {
-    if (!parsed.ok) {
-        return parsed;
-    }
-    const outputEnum = readOutputEnum(node);
-    if (outputEnum === undefined) {
-        return parsed;
-    }
-    if (typeof parsed.value === 'string' && outputEnum.includes(parsed.value)) {
-        return parsed;
-    }
-    const fallback = readOutputDefault(node);
-    if (fallback !== undefined && outputEnum.includes(fallback)) {
-        return { ok: true, value: fallback };
-    }
-    return {
-        ok: false,
-        error: `output for outputKey not in declared outputEnum ${JSON.stringify(outputEnum)}: ${JSON.stringify(parsed.value)}`,
-    };
-}
-
-/**
- * Graceful degradation: when structured-output parsing failed (and no enum
- * constraint rescued it), fall back to a safe value so a single misbehaving
- * LLM turn cannot kill the entire graph run.
- *
- * Resolution order:
- *   1. explicit `outputDefault` coerced to the expected shape
- *   2. shape-specific safe default: `array` → `[]`, `boolean` → `false`
- *   3. original `{ ok: false, error }` (fail-closed) for shapes without an
- *      unambiguous safe default (`object`, `string`, `any`)
- */
-function applyShapeDefaultFallback(
-    node: AbgNodeSpec,
-    parsed: ParseStructuredOutputResult,
-    shape: StructuredOutputShape,
-): ParseStructuredOutputResult {
-    if (parsed.ok) {
-        return parsed;
-    }
-    if (readOutputEnum(node) !== undefined) {
-        return parsed;
-    }
-    const fallback = readOutputDefault(node);
-    if (fallback !== undefined) {
-        const coerced = coerceDefaultToShape(fallback, shape);
-        if (coerced !== null) {
-            return { ok: true, value: coerced };
-        }
-    }
-    if (shape === 'array') {
-        return { ok: true, value: [] };
-    }
-    // Boolean without explicit outputDefault fails closed so free-text synthesis can retry
-    // (and eventually hit force-complete → true) instead of writing false and dead-ending
-    // with no matching edge (no final-respond).
-    return parsed;
-}
-
-function coerceDefaultToShape(raw: string, shape: StructuredOutputShape): unknown | null {
-    if (shape === 'boolean') {
-        const lower = raw.trim().toLowerCase();
-        if (lower === 'true' || lower === 'yes') return true;
-        if (lower === 'false' || lower === 'no') return false;
-        return null;
-    }
-    if (shape === 'object' || shape === 'array') {
-        try {
-            const parsed = JSON.parse(raw);
-            if (shape === 'object' ? !Array.isArray(parsed) && typeof parsed === 'object' : Array.isArray(parsed)) {
-                return parsed;
-            }
-            return null;
-        } catch {
-            return null;
-        }
-    }
-    return raw;
-}
-
-/**
- * Discover skills and project them to the system-prompt shape (name + description + location),
- * cached per graph run (WeakMap keyed on the per-run Blackboard). Hides skills with
- * `disableModelInvocation`. Never throws — a discovery failure yields an empty list so one bad
- * skill file cannot break every LLM turn. When `blackboard` is undefined (test fixtures), the
- * cache is bypassed.
- */
-async function discoverPromptSkills(
-    workspaceRoot: string,
-    blackboard: Blackboard | undefined,
-): Promise<readonly SystemPromptSkill[]> {
-    if (blackboard === undefined) {
-        return loadPromptSkillsUncached(workspaceRoot);
-    }
-    const freshManifest = await buildSkillManifest(workspaceRoot);
-    const cached = skillCache.get(blackboard);
-    if (cached !== undefined && manifestsEqual(cached.manifest, freshManifest)) {
-        return cached.skills;
-    }
-    const skills = await loadPromptSkillsUncached(workspaceRoot);
-    skillCache.set(blackboard, { skills, manifest: freshManifest });
-    return skills;
-}
-
-async function loadPromptSkillsUncached(workspaceRoot: string): Promise<readonly SystemPromptSkill[]> {
-    try {
-        const result = await discoverSkills({ workspaceRoot });
-        return result.skills
-            .filter((skill) => !skill.disableModelInvocation)
-            .map((skill) => ({
-                name: skill.name,
-                description: skill.description,
-                ...(skill.filePath.length > 0 ? { location: skill.filePath } : {}),
-            }));
-    } catch {
-        return [];
-    }
-}
-
-/** Read the prior compaction summary from the Blackboard (written on a previous context.packed). */
-function readPriorSummary(blackboard: Blackboard): ConversationSummary | undefined {
-    const value = blackboard.get('context.summary');
-    if (value === undefined || value === null || typeof value !== 'object') {
-        return undefined;
-    }
-    if (!('goal' in value) || !('summarizedMessageCount' in value)) {
-        return undefined;
-    }
-    return value as ConversationSummary;
-}
-
-function extractTurnResult(result: unknown): LlmActorTurnResult | undefined {
-    if (result === null || typeof result !== 'object' || !('responseMessages' in result)) {
-        return undefined;
-    }
-    const candidate = result as { text?: unknown; usage?: unknown; responseMessages?: unknown };
-    const responseMessages = candidate.responseMessages;
-    if (!Array.isArray(responseMessages)) {
-        return undefined;
-    }
-    return {
-        text: typeof candidate.text === 'string' ? candidate.text : '',
-        usage: candidate.usage,
-        responseMessages: responseMessages as readonly ModelMessage[],
-    };
 }
 
 export type { AbgNodeRunner };

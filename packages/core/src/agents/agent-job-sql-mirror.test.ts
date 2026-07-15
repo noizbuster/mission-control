@@ -24,6 +24,7 @@ describe('SqlAgentJobMirror', () => {
                 displayName: 'research child',
                 kind: 'sub',
                 parentId: 'Main',
+                authorityFingerprint: 'authority-v1',
                 status: 'running',
                 sessionId: 'child-session-1',
                 activity: 'researching',
@@ -43,6 +44,7 @@ describe('SqlAgentJobMirror', () => {
             expect(ref?.sessionId).toBe('child-session-1');
             expect(ref?.displayName).toBe('research child');
             expect(ref?.sessionFile).toBe('/tmp/child-session-1.jsonl');
+            expect(ref?.authorityFingerprint).toBe('authority-v1');
         });
     });
 

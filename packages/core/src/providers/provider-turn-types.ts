@@ -8,6 +8,7 @@ import type {
     ToolDefinition,
 } from '@mission-control/protocol';
 import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
+import type { ObservabilityRedactor } from './observability-redactor.js';
 
 export type { ProviderStreamChunk };
 
@@ -45,6 +46,7 @@ export type ProviderTurnRunInput = ProviderTurnRequest & {
     readonly controlEpoch?: SessionControlEpoch;
     readonly writeEnvelope?: ProviderTurnEventWriter;
     readonly onEnvelope?: ProviderTurnEnvelopeObserver;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 export type ProviderTurnRunResult =

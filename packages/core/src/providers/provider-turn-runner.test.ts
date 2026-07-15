@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 446 -> current 472 pure LOC; one provider-turn retry and settlement state-machine regression matrix.
 import type { ProviderStreamChunk } from '@mission-control/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
@@ -488,6 +489,34 @@ describe('ProviderTurnRunner', () => {
 
         expect(result).toMatchObject({ status: 'completed', attempts: 5 });
         expect(elapsed).toBeGreaterThanOrEqual(540);
+    });
+
+    it('fails with a credential-free error before stream state reads a hostile chunk accessor', async () => {
+        const credential = ['runner', 'hostile', 'credential'].join('_');
+        const chunk = {
+            kind: 'text_delta',
+            requestId: 'request_hostile_completed',
+            sequence: 1,
+            delta: '',
+        } satisfies ProviderStreamChunk;
+        Object.defineProperty(chunk, 'delta', {
+            enumerable: true,
+            get: () => {
+                throw new Error(`getter exposed ${credential}`);
+            },
+        });
+        const provider: ProviderAdapter = {
+            streamTurn: async function* () {
+                yield chunk;
+            },
+        };
+        const runner = new ProviderTurnRunner({ provider, retryLimit: 0 });
+        const result = await runner.runTurn(turnInput('session_hostile_completed', 'request_hostile_completed'));
+
+        expect(result.status).toBe('failed');
+        if (result.status !== 'failed') throw new Error('Expected a failed provider turn');
+        expect(result.error).toMatchObject({ message: 'Provider stream chunk could not be redacted' });
+        expect(JSON.stringify(result)).not.toContain(credential);
     });
 });
 

@@ -2,7 +2,6 @@ import type { PermissionDecision, PermissionRequest } from '@mission-control/pro
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { TaskSpawnFn } from './task-tool.js';
-import { createChildToolRegistry } from './task-tool.js';
 import { createTaskSpawnFn, registerTaskTool, type TaskToolSpawnContext } from './task-tool-factory.js';
 import { ToolRegistry } from './tool-registry.js';
 
@@ -13,19 +12,6 @@ function readTool(name: string) {
         name,
         description: `read tool ${name}`,
         capabilityClasses: ['read'],
-        parametersJsonSchema: { type: 'object', additionalProperties: false },
-        inputSchema: okSchema,
-        outputSchema: okSchema,
-        outputLimit: { maxModelOutputChars: 100 },
-        execute: async () => ({ ok: true }),
-    };
-}
-
-function toolWithCaps(name: string, capabilityClasses: readonly string[]) {
-    return {
-        name,
-        description: `tool ${name}`,
-        capabilityClasses,
         parametersJsonSchema: { type: 'object', additionalProperties: false },
         inputSchema: okSchema,
         outputSchema: okSchema,
@@ -142,27 +128,7 @@ describe('task self-gating factory (graph-path permission gate)', () => {
     }
 });
 
-describe('createTaskSpawnFn + child registry (network/subagent/destructive blocklist)', () => {
-    it('a parent containing task/webfetch/mcp/shell yields a child with NONE of them', () => {
-        const parent = new ToolRegistry();
-        parent.register(readTool('repo.read'));
-        parent.register(toolWithCaps('webfetch', ['network']));
-        parent.register(toolWithCaps('mcp__srv__tool', ['network']));
-        parent.register(toolWithCaps('mcp', ['network']));
-        parent.register(toolWithCaps('shell', ['bash']));
-        parent.register(toolWithCaps('task', ['subagent']));
-
-        const child = createChildToolRegistry(parent);
-        const names = child.advertise().map((tool) => tool.name);
-
-        expect(names).toContain('repo.read');
-        expect(names).not.toContain('webfetch');
-        expect(names).not.toContain('mcp__srv__tool');
-        expect(names).not.toContain('mcp');
-        expect(names).not.toContain('shell');
-        expect(names).not.toContain('task');
-    });
-
+describe('createTaskSpawnFn', () => {
     it('createTaskSpawnFn returns a spawn function that captures the parent registry for child-surface derivation', () => {
         const parent = new ToolRegistry();
         parent.register(readTool('repo.read'));

@@ -81,6 +81,9 @@ export function redactProviderChunk(chunk: ProviderStreamChunk): ProviderStreamC
                 message: {
                     ...chunk.message,
                     content: redactCredentialText(chunk.message.content),
+                    ...(chunk.message.reasoning !== undefined
+                        ? { reasoning: redactCredentialText(chunk.message.reasoning) }
+                        : {}),
                     ...redactedProviderToolCalls(chunk.message.providerToolCalls),
                     ...redactionField(redactions),
                 },

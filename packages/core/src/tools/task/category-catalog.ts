@@ -8,13 +8,11 @@
  * runtime, which resolves the model alias and builds the child tool surface.
  *
  * Permission semantics (last-match-wins, Task 1.2):
- * - Category rules are prepended to the derived child denies, so inherited
- *   denies always win. A category can narrow its own surface but cannot escape
- *   parent restrictions.
- * - The nested-subagent deny injected by `deriveChildPermissions` is always
- *   last, so no category can re-enable nested `task` calls via policy alone.
- *   The registry layer (`createChildToolRegistry`) provides a second guard by
- *   structurally omitting the `task` tool from the child surface.
+ * - Category rules narrow the child's tool surface. Parent agent path-policy
+ *   denies are applied independently by `ConcreteTaskToolRuntime`.
+ * - The nested-subagent deny injected by task routing is always last, so no category can
+ *   re-enable nested calls via policy alone. `buildChildToolSurface` independently omits the
+ *   `task` tool from the child registry.
  */
 import type { PolicyEffectRule } from '@mission-control/protocol';
 

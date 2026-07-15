@@ -1,3 +1,50 @@
+export const desktopApprovalEffectsTableSql = `
+            CREATE TABLE IF NOT EXISTS desktop_approval_effects (
+                session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+                approval_id TEXT NOT NULL,
+                run_id TEXT NOT NULL,
+                tool_call_id TEXT NOT NULL,
+                tool_name TEXT NOT NULL,
+                arguments_json TEXT NOT NULL,
+                workspace_root TEXT NOT NULL,
+                state TEXT NOT NULL CHECK (state IN ('pending', 'executing', 'settled', 'unknown')),
+                execution_token TEXT,
+                lease_expires_at TEXT,
+                outcome TEXT CHECK (outcome IS NULL OR outcome IN ('completed', 'failed')),
+                requested_at TEXT NOT NULL,
+                executing_at TEXT,
+                settled_at TEXT,
+                unknown_at TEXT,
+                resolved_at TEXT,
+                PRIMARY KEY (session_id, approval_id),
+                CHECK (
+                    (state = 'pending' AND execution_token IS NULL AND lease_expires_at IS NULL AND executing_at IS NULL
+                        AND outcome IS NULL AND settled_at IS NULL AND unknown_at IS NULL AND resolved_at IS NULL)
+                    OR (state = 'executing' AND execution_token IS NOT NULL AND lease_expires_at IS NOT NULL
+                        AND executing_at IS NOT NULL AND outcome IS NULL AND settled_at IS NULL
+                        AND unknown_at IS NULL AND resolved_at IS NULL)
+                    OR (state = 'settled' AND execution_token IS NOT NULL AND lease_expires_at IS NOT NULL
+                        AND executing_at IS NOT NULL AND outcome IS NOT NULL AND settled_at IS NOT NULL
+                        AND unknown_at IS NULL AND resolved_at IS NULL)
+                    OR (state = 'unknown' AND execution_token IS NOT NULL AND lease_expires_at IS NOT NULL
+                        AND executing_at IS NOT NULL AND settled_at IS NULL AND unknown_at IS NOT NULL
+                        AND ((outcome IS NULL AND resolved_at IS NULL) OR (outcome IS NOT NULL AND resolved_at IS NOT NULL)))
+                )
+            );
+        `;
+
+export const desktopToolProposalsTableSql = `
+            CREATE TABLE IF NOT EXISTS desktop_tool_proposals (
+                session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+                tool_call_id TEXT NOT NULL,
+                tool_name TEXT NOT NULL,
+                arguments_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                conflicted INTEGER NOT NULL DEFAULT 0 CHECK (conflicted IN (0, 1)),
+                PRIMARY KEY (session_id, tool_call_id)
+            );
+        `;
+
 export const sessionProjectionSchemaSql = [
     `
             CREATE TABLE IF NOT EXISTS session_messages (
@@ -57,21 +104,8 @@ export const sessionProjectionSchemaSql = [
                 applied_files_json TEXT
             );
         `,
-    `
-            CREATE TABLE IF NOT EXISTS desktop_approval_effects (
-                session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
-                approval_id TEXT NOT NULL,
-                run_id TEXT NOT NULL,
-                tool_call_id TEXT NOT NULL,
-                tool_name TEXT NOT NULL,
-                arguments_json TEXT NOT NULL,
-                workspace_root TEXT NOT NULL,
-                state TEXT NOT NULL,
-                requested_at TEXT NOT NULL,
-                settled_at TEXT,
-                PRIMARY KEY (session_id, approval_id)
-            );
-        `,
+    desktopToolProposalsTableSql,
+    desktopApprovalEffectsTableSql,
     `
             CREATE TABLE IF NOT EXISTS provider_failures (
                 failure_id TEXT PRIMARY KEY NOT NULL,

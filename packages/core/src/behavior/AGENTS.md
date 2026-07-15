@@ -15,7 +15,7 @@
 | Node execution | `graph-coordinator-node-runner.ts`, `node-registry.ts` | Registry dispatch and node result handling. |
 | Approval gates | `graph-approval-gates.ts` | Permission and approval lifecycle events. |
 | Signals and events | `signals.ts`, `graph-runner-events.ts`, `timeline.ts` | Projection into protocol events and timeline rows. |
-| Node implementations | `nodes/`, `composite-nodes.ts`, `leaf-nodes.test.ts` | Deterministic scaffold node behavior. |
+| Node implementations | `nodes/`, `composite-nodes.ts`, `leaf-nodes.test.ts` | Deterministic scaffold node behavior. `parallel-static.ts` owns bounded static children; `parallel-fan-out.ts` owns blackboard-driven fan-out; `race-node.ts` owns process-local Race cleanup. |
 
 ## Conventions
 
@@ -25,12 +25,16 @@
 - Use `AbgSignal` and protocol event metadata for graph output; do not invent local event shapes.
 - Approval and policy blocks must emit observable lifecycle events, not silent booleans.
 - Keep model metadata as observability/control data unless an implemented provider path is explicitly wired.
+- An `llm` node with `outputKey` accepts only a whole exact structured representation. It does not parse a reasoning tail, select a last line, or invent a default when parsing fails.
+- A static `parallel` node without `config.fanOutKey` runs declared `children` in waves. A positive integer `config.concurrency` selects its local bound, defaulting to 2; aggregate signals and child results remain in declaration order. A rejected child iterator emits failure and fails normal all-child completion.
+- `fanOutKey` is a distinct blackboard-array path with a template child. Do not describe it as static `children` parallelism.
+- `race` starts at most 4 children and rejects excess authoring before branch creation. It chooses the earliest valid completion within the current process. Cooperative branches drain through `.return()` during cleanup (5000ms default; positive integer `cleanupTimeoutMs` capped at 30000ms). Cleanup timeout, return rejection, or `next()`/pump rejection fails the Race even after a valid winner; ordinary child failure signals may lose without poisoning that winner. Arbitrary work is not forcibly terminated. Durable committed-order arbitration is deferred.
 
 ## Tests
 
 - Validation and graph shape: `action-graph.test.ts`, `coding-agent-graph-fixtures.test.ts`.
 - Coordinator behavior: `graph-coordinator*.test.ts`, `watch-statechart-nodes.test.ts`.
-- Node registry and node behavior: `node-registry.ts`, `composite-nodes.test.ts`, `leaf-nodes.test.ts`.
+- Node registry and node behavior: `node-registry.ts`, `parallel-fan-out.test.ts`, `static-parallel.test.ts`, `selector.test.ts`, `join.test.ts`, `parallel-verdict.test.ts`, `nodes/race-node*.test.ts`, `leaf-nodes.test.ts`.
 - When example graph behavior changes, update `examples/abg/*.graph.json` and root ABG/readme contract tests as needed.
 
 ## Anti-Patterns
@@ -47,7 +51,7 @@ Beyond the scaffold above, the behavior package now hosts the **real** coding-ag
 - **Graph + registry:** `coding-agent-graph.ts` (Observe→Decide→Act loop; `llm-actor` self-edge gated by `blackboard.value.equals llm.loop_active`), `coding-agent-registry.ts` (real node runners in a SEPARATE registry — the mock registry still serves fixtures/flat-loop, strangler-fig).
 - **Real nodes:** `nodes/llm-actor/` (`runLlmActorNode` = graph↔AI-SDK bridge, pins `stopWhen: stepCountIs(1)` so the GRAPH owns the loop), `nodes/tool-actor-node.ts`, `nodes/memory-node.ts`, `nodes/policy-gate-node.ts` (3-state, emits `policy.evaluated`), `nodes/human-approval-node.ts`, `nodes/critic-node.ts` (Draft→Critic→QualityGate, sets `critic.passed`).
 - **Coordinator re-entry:** `enqueueSelectedTargets` feeds the node's `lastEventType` / live `blackboard` / `lastPolicyDecision` into rule evaluation (carried per-result, concurrency-safe), so runtime-condition edges fire. `escalate`/`fallback` signals + `node.escalated`/`node.fallback` events exist.
-- **Subagents + replay:** `subagents/child-policy.ts` (child allow-list minus destructive kinds), `replay/recorded-llm-replay.ts` (deterministic turn replay from recorded envelopes, ABG §7.5).
+- **Subagents + replay:** `../agents/task-tool-runtime-authority.ts` (`buildChildToolSurface`: category/tool allowlists, agent `pathPolicies`, hard drops, and invocation policy), `subagents/spawn-child.ts` (runs the supplied child surface), `replay/recorded-llm-replay.ts` (deterministic turn replay from recorded envelopes, ABG §7.5). `subagents/child-policy.ts` is retained only for deprecated simple-task compatibility filtering.
 - **Event vocabulary** (emit `event.type` strings): `llm.turn.started`, `llm.text.delta`, `llm.reasoning.delta`, `llm.tool_call.proposed`, `llm.turn.completed`, `llm.error`, `tool.started`/`tool.completed`/`tool.failed`/`tool.denied`, `policy.evaluated`, `context.packed`, `critic.evaluated`. These are free-form emit types (not the `AgentEventType` enum); the projection in `signals.ts` maps the signal `type` to the durable `AgentEvent` type.
 
 **Hard constraint (pre-mortem #4):** every `streamText` in `runLlmActor` pins `stopWhen: stepCountIs(1)` — the graph, never the SDK, owns the observe→decide→act loop.
@@ -68,8 +72,9 @@ Beyond the scaffold above, the behavior package now hosts the **real** coding-ag
   (`stopThreshold`). Losers are abandoned via `.return()` on early-stop.
 - **`task` tool + child spawn (`tools/task-tool.ts`, `subagents/spawn-child.ts`):** the `task`
   tool delegates to an injected `spawn` fn; `spawnChildCodingAgent` builds a child coding-agent
-  run. Child safety is enforced at the TOOL-REGISTRY layer (`ToolRegistry.cloneWithFilter`
-  drops `task` + destructive capabilities) — the registry-layer recursion guard (ABG §10.6).
+  run from a caller-supplied child registry. The full-parity path uses `buildChildToolSurface` to
+  omit `task`/`job`, hard-drop `subagent`/`workflow`/`network`/`team`, add `yield`, and install
+  category plus derived path-policy invocation checks. Destructive tools remain policy-controlled.
 - **`lsp`/`mcp` tools (`tools/lsp-tool.ts`, `tools/mcp-tool.ts`):** client-seam tools
   (`LspClient`/`McpClient`) with in-process clients for tests; real stdio/JSON-RPC transport
   sits behind the seam.
@@ -84,4 +89,3 @@ Beyond the scaffold above, the behavior package now hosts the **real** coding-ag
 **Still deferred (larger engineering, needs explicit approval):** per-adapter SSE-parsing
 deletion (the risky final cutover — delete only after the CLI defaults to the graph + e2e
 verified); full Inspector UI surfaces (separate app package).
-

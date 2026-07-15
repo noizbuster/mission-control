@@ -1,8 +1,9 @@
+// allow: SIZE_OK -- HEAD 460 -> current 452 pure LOC; one declarative default-workflow graph whose node and edge tables stay together.
 /**
  * The default workflow graph: the no-`#` fallback that replaces the coding-agent graph as
  * the default prompt path (plan Task 2.5, ABG Round 8 decomposition; richness port Task 11).
  *
- *   intent-gate (verbalize + classify into 5 classes) -> {
+ *   intent-gate (classify into 5 classes) -> {
  *     trivial                  -> direct-respond (llm self-loop)
  *     exploratory-research     -> research-explore (read-only, NO edits) -> final-respond
  *     open-ended-planning      -> route-planner (route to #planner or ask ONE question;
@@ -19,8 +20,7 @@
  *   }
  *
  * Ported Sisyphus behavioral semantics (reference only; no reference code imported):
- *   - Intent verbalization: the gate states its chosen intent + reasoning before emitting
- *     the classification (Sisyphus Phase 0 intent_verbalization).
+ *   - Intent verbalization is deferred: the gate emits one exact class without prose.
  *   - Richer intent classes: trivial / exploratory-research / open-ended-planning /
  *     explicit-implementation / ambiguous (Sisyphus Step 1 classify request type).
  *   - Codebase maturity assessment: before following patterns, classify the codebase as
@@ -80,7 +80,7 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
             {
                 id: 'intent-gate',
                 kind: 'llm',
-                label: 'Intent gate — verbalize intent, then classify into 5 classes',
+                label: 'Intent gate: classify into 5 classes',
                 config: {
                     systemPrompt:
                         "You are the intent gate for the default workflow. Map the user's surface request to its true " +
@@ -97,8 +97,7 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         'Mis-routing an open-ended request to explicit-implementation silently implements when the ' +
                         'user wanted to be consulted first — when genuinely unsure between open-ended-planning and ' +
                         'explicit-implementation, prefer open-ended-planning.\n\n' +
-                        'First briefly state your reasoning (1-3 sentences). Then on the LAST line, output EXACTLY ' +
-                        'one class name — no quotes, no formatting, no extra text:\n' +
+                        'Output ONLY one class name — no quotes, no formatting, no extra text:\n' +
                         '- trivial\n' +
                         '- exploratory-research\n' +
                         '- open-ended-planning\n' +
@@ -112,7 +111,6 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         'explicit-implementation',
                         'ambiguous',
                     ],
-                    outputDefault: 'ambiguous',
                 },
             },
             {
@@ -140,8 +138,7 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         'is NOT explored ground — it tells you nothing about whether the file exists elsewhere.\n' +
                         'Multi-turn: keep calling tools until you have enough grounded evidence for a complete ' +
                         'answer. While exploring, call tools and do NOT output true. When ready, synthesize the ' +
-                        'answer, then on the LAST line output EXACTLY `true` (boolean) — no quotes, no formatting, ' +
-                        'no extra text.',
+                        'answer. Output ONLY the JSON boolean `true` when complete — no prose, no formatting, no extra text.',
                     outputKey: 'explore.complete',
                     outputShape: 'boolean',
                 },
@@ -210,13 +207,11 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         'to do directly with certainty? Is there an existing pattern to follow (per the maturity ' +
                         'check)? Default bias is DELEGATE for non-trivial work, but trivial single-file work ' +
                         'you can do correctly yourself should be done directly rather than over-delegated.\n' +
-                        'First briefly state your reasoning (1-3 sentences). Then on the LAST line, output ' +
-                        'EXACTLY `true` or `false` — no quotes, no formatting, no extra text. Output `true` ' +
+                        'Output ONLY the JSON boolean `true` or `false` — no prose, no formatting, no extra text. Output `true` ' +
                         'when both checks pass and the plan may proceed to todo planning; output `false` ' +
                         'otherwise.',
                     outputKey: 'guard.cleared',
                     outputShape: 'boolean',
-                    outputDefault: 'true',
                 },
             },
             {
@@ -270,12 +265,10 @@ export function createDefaultWorkflowGraph(options: DefaultWorkflowGraphOptions 
                         'test run passing, expected file changes present, command output matching. Confirm the ' +
                         'work followed MUST DO / MUST NOT DO requirements and existing codebase patterns. ' +
                         'NO EVIDENCE = NOT COMPLETE.\n' +
-                        'First briefly state your reasoning (1-3 sentences). Then on the LAST line, output ' +
-                        'EXACTLY `true` or `false` — no quotes, no formatting, no extra text. Output `true` ' +
+                        'Output ONLY the JSON boolean `true` or `false` — no prose, no formatting, no extra text. Output `true` ' +
                         'only when concrete evidence confirms the work; output `false` to trigger a bounded retry.',
                     outputKey: 'evidence.verified',
                     outputShape: 'boolean',
-                    outputDefault: 'false',
                 },
             },
             {

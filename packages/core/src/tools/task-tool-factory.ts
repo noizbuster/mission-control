@@ -10,11 +10,9 @@
  * child. The flat-path interactive preflight covers only the preview; this execute gate is what
  * blocks on the graph path and in noninteractive `--no-tui` runs.
  *
- * `createTaskSpawnFn` wires the runtime half: it builds a `TaskSpawnFn` from
- * `spawnChildCodingAgent`, capturing the parent tool registry so the child surface is derived
- * via `createChildToolRegistry` (registry-layer recursion guard — the child never sees `task`
- * itself, and after the child-policy blocklist extension it never sees network/subagent caps
- * either).
+ * `createTaskSpawnFn` wires the deprecated compatibility runtime half. It captures the parent
+ * registry and lazily clones the simple path's task-free capability-filtered child surface before
+ * calling `spawnChildCodingAgent`.
  *
  * The full-parity factory (`registerFullParityTaskTool`) lives in
  * `task-tool-full-parity-factory.ts`; the simple `createTaskToolRegistration` here stays
@@ -30,6 +28,7 @@ import { spawnChildCodingAgent } from '../behavior/subagents/spawn-child.js';
 import type { SdkModelResolver } from '../providers/ai-sdk/model-resolver.js';
 import {
     type CreateTaskToolInput,
+    createChildToolRegistry,
     createTaskToolRegistration,
     type TaskInput,
     type TaskOutput,
@@ -104,9 +103,9 @@ function taskFailure(code: 'approval_denied' | 'approval_required', message: str
 }
 
 /**
- * Context for building a real `TaskSpawnFn` over `spawnChildCodingAgent`. The
- * `parentToolRegistry` is captured by reference; the child surface is derived lazily at spawn
- * time via `createChildToolRegistry`, so it reflects the fully-populated parent registry.
+ * Context for building a compatibility `TaskSpawnFn` over `spawnChildCodingAgent`. The parent
+ * registry is captured by reference so the task-free capability-filtered child surface reflects
+ * the fully populated registry at spawn time.
  */
 export type TaskToolSpawnContext = {
     readonly resolveSdkModel: SdkModelResolver;
@@ -126,12 +125,13 @@ export function createTaskSpawnFn(context: TaskToolSpawnContext): TaskSpawnFn {
     const prefix = context.parentSessionId ?? 'task';
     return async (input, spawnContext) => {
         childCounter += 1;
+        const childToolRegistry = createChildToolRegistry(context.parentToolRegistry);
         return spawnChildCodingAgent({
             description: input.description,
             prompt: input.prompt,
             resolveSdkModel: context.resolveSdkModel,
             model: context.model,
-            parentToolRegistry: context.parentToolRegistry,
+            childToolRegistry,
             now: () => new Date().toISOString(),
             sessionId: `${prefix}_child_${childCounter}`,
             ...(context.summaryLimit !== undefined ? { summaryLimit: context.summaryLimit } : {}),

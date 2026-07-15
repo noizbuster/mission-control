@@ -17,7 +17,7 @@
  *   (a) bare JSON   — `{"k":1}` or `[1,2]`           -> parsed object/array
  *   (b) fenced JSON — ```json\n{...}\n```             -> parsed object/array
  *   (c) plain boolean — `true` / `false`              -> boolean
- *   (d) single-line string — `explicit`               -> string (backwards compat)
+ *   (d) single-line string — `explicit`               -> string
  *
  * Anything else (malformed JSON, empty output) returns { ok: false, error }.
  */
@@ -65,7 +65,7 @@ export function parseStructuredOutput(
     }
 
     const fenced = extractFencedBlock(trimmed);
-    const looksJson = fenced !== null || firstNonWhitespaceIs(trimmed, '{', '[');
+    const looksJson = fenced !== null || trimmed.startsWith('{') || trimmed.startsWith('[');
 
     if (looksJson) {
         const candidate = fenced ?? trimmed;
@@ -79,67 +79,18 @@ export function parseStructuredOutput(
         return validateShape(parsed, expectedShape);
     }
 
-    const lower = trimmed.toLowerCase();
-    if (lower === 'true') {
+    if (trimmed === 'true') {
         return validateShape(true, expectedShape);
     }
-    if (lower === 'false') {
+    if (trimmed === 'false') {
         return validateShape(false, expectedShape);
     }
 
-    const lastLine = getLastNonEmptyLine(trimmed);
-    if (lastLine !== null) {
-        const lowerLast = lastLine.toLowerCase();
-        if (lowerLast === 'true' || lowerLast === 'yes') {
-            return validateShape(true, expectedShape);
-        }
-        if (lowerLast === 'false' || lowerLast === 'no') {
-            return validateShape(false, expectedShape);
-        }
-        const booleanToken = parseBooleanToken(lowerLast);
-        if (booleanToken !== null) {
-            return validateShape(booleanToken, expectedShape);
-        }
+    if (/[\r\n]/.test(trimmed)) {
+        return { ok: false, error: 'structured output must be a single line' };
     }
 
-    const stringLine = extractStringLine(trimmed);
-    if (stringLine.length === 0) {
-        return { ok: false, error: 'empty output' };
-    }
-    return validateShape(stringLine, expectedShape);
-}
-
-/**
- * Recognize natural-language boolean tokens a model commonly emits instead of
- * the literal `true`/`false`. Returns `true`/`false` for an unambiguous token
- * or `null` when the line is not a clean boolean token.
- *
- * Recognized forms (case-insensitive, whole-line match only):
- *   - `yes` / `no`
- *   - `key=true`, `key: true`, `key=false`, `key: false` — the dotted outputKey
- *     assignment pattern (e.g. `guard.cleared=true`)
- */
-function parseBooleanToken(line: string): boolean | null {
-    if (line === 'yes') return true;
-    if (line === 'no') return false;
-    const match = line.match(/^[a-z][a-z0-9_.-]*\s*[:=]\s*(true|false|yes|no)$/);
-    if (match !== null) {
-        const value = match[1];
-        if (value === undefined) return null;
-        return value === 'true' || value === 'yes';
-    }
-    return null;
-}
-
-function getLastNonEmptyLine(text: string): string | null {
-    const lines = text.split('\n');
-    for (let i = lines.length - 1; i >= 0; i--) {
-        const line = (lines[i] ?? '').trim();
-        if (line.length > 0) {
-            return line;
-        }
-    }
-    return null;
+    return validateShape(trimmed, expectedShape);
 }
 
 function validateShape(value: unknown, expected: StructuredOutputShape): ParseStructuredOutputResult {
@@ -153,57 +104,19 @@ function validateShape(value: unknown, expected: StructuredOutputShape): ParseSt
     return { ok: false, error: `expected shape '${expected}', got '${actual}'` };
 }
 
-function shapeOf(value: unknown): Exclude<StructuredOutputShape, 'any'> {
+type ActualStructuredOutputShape = Exclude<StructuredOutputShape, 'any'> | 'null' | 'number';
+
+function shapeOf(value: unknown): ActualStructuredOutputShape {
+    if (value === null) return 'null';
     if (typeof value === 'boolean') return 'boolean';
     if (typeof value === 'string') return 'string';
     if (Array.isArray(value)) return 'array';
+    if (typeof value === 'number') return 'number';
     return 'object';
 }
 
-/** Extract the content of the first markdown fenced code block, or null. */
+/** Extract the content of a whole-output markdown fenced code block, or null. */
 function extractFencedBlock(text: string): string | null {
-    const match = text.match(/```[^\n]*\n([\s\S]*?)```/);
+    const match = text.match(/^```(?:json)?\r?\n([\s\S]*?)\r?\n```$/);
     return match !== null && match[1] !== undefined ? match[1].trim() : null;
-}
-
-/** True when the first non-whitespace character of `text` is one of `chars`. */
-function firstNonWhitespaceIs(text: string, ...chars: readonly string[]): boolean {
-    for (const ch of text) {
-        if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
-            continue;
-        }
-        return chars.includes(ch);
-    }
-    return false;
-}
-
-/**
- * Extract the best string line from multi-line LLM output. Prefers the last
- * non-empty line when it is a clean single token and the first is not.
- */
-function extractStringLine(text: string): string {
-    const lines = text
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0);
-    if (lines.length === 0) return '';
-    const first = lines[0] ?? '';
-    if (lines.length === 1) return first;
-    const last = lines[lines.length - 1] ?? '';
-    if (isCleanToken(last) && !isCleanToken(first)) {
-        return last;
-    }
-    return first;
-}
-
-/** A clean classification token: single word, no prose, no markdown markers. */
-function isCleanToken(line: string): boolean {
-    return (
-        line.length > 0 &&
-        line.length <= 80 &&
-        !line.includes(' ') &&
-        !line.includes('**') &&
-        !line.includes('`') &&
-        !line.includes(':')
-    );
 }

@@ -4,6 +4,7 @@ import type {
     RunCoordinatorEventMetadata,
     RunCoordinatorState,
 } from '@mission-control/protocol';
+import { redactCredentialText } from '../providers/redaction-handler.js';
 
 export type RunCoordinatorResult = {
     readonly status: 'idle' | 'running' | 'completed' | 'interrupted' | 'failed' | 'blocked_on_approval';
@@ -93,30 +94,56 @@ export async function finalizeProviderTurnResult(input: {
             }
             return { status: 'interrupted', runId, turns };
         case 'failed':
-            await appendRunEvent('run.failed', command, 'failed', result.reason, {
-                runId,
-                reason: result.reason,
-                errorCode: result.errorCode,
-            });
-            return { status: 'failed', runId, turns, reason: result.reason, errorCode: result.errorCode };
+            return finalizeFailedResult(result, command, runId, turns, appendRunEvent);
         case 'blocked_on_approval':
-            await appendRunEvent('run.blocked', command, 'blocked_on_approval', result.reason, {
-                runId,
-                reason: result.reason,
-                errorCode: result.errorCode,
-                ...(result.toolCallId !== undefined ? { toolCallId: result.toolCallId } : {}),
-            });
-            return {
-                status: 'blocked_on_approval',
-                runId,
-                turns,
-                reason: result.reason,
-                errorCode: result.errorCode,
-                ...(result.toolCallId !== undefined ? { toolCallId: result.toolCallId } : {}),
-            };
+            return finalizeBlockedResult(result, command, runId, turns, appendRunEvent);
         default:
             return assertNeverProviderResult(result);
     }
+}
+
+async function finalizeFailedResult(
+    result: Extract<RunCoordinatorProviderTurnResult, { readonly status: 'failed' }>,
+    command: RunCoordinatorCommand,
+    runId: string,
+    turns: number,
+    appendRunEvent: AppendRunCoordinatorEvent,
+): Promise<RunCoordinatorResult> {
+    const reason = safeRunReason(result.reason);
+    await appendRunEvent('run.failed', command, 'failed', reason, {
+        runId,
+        reason,
+        errorCode: result.errorCode,
+    });
+    return { status: 'failed', runId, turns, reason, errorCode: result.errorCode };
+}
+
+async function finalizeBlockedResult(
+    result: Extract<RunCoordinatorProviderTurnResult, { readonly status: 'blocked_on_approval' }>,
+    command: RunCoordinatorCommand,
+    runId: string,
+    turns: number,
+    appendRunEvent: AppendRunCoordinatorEvent,
+): Promise<RunCoordinatorResult> {
+    const reason = safeRunReason(result.reason);
+    await appendRunEvent('run.blocked', command, 'blocked_on_approval', reason, {
+        runId,
+        reason,
+        errorCode: result.errorCode,
+        ...(result.toolCallId !== undefined ? { toolCallId: result.toolCallId } : {}),
+    });
+    return {
+        status: 'blocked_on_approval',
+        runId,
+        turns,
+        reason,
+        errorCode: result.errorCode,
+        ...(result.toolCallId !== undefined ? { toolCallId: result.toolCallId } : {}),
+    };
+}
+
+export function safeRunReason(reason: string): string {
+    return redactCredentialText(reason).slice(0, 4096);
 }
 
 function assertNeverProviderResult(value: never): never {

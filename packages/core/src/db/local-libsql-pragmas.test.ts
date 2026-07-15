@@ -44,6 +44,38 @@ describe('local libSQL initialization baseline', () => {
         // Then: memory initialization does not require file-only WAL mode.
         expect(journalMode.rows).toEqual([{ journal_mode: 'memory' }]);
     });
+
+    it.each(['memory', 'file'] as const)('enables and enforces foreign keys for a %s database', async (kind) => {
+        // Given: a real database opened through the normal memory or file path.
+        const { openLocalLibsqlDb } = await import('./local-libsql-db.js');
+        const url = kind === 'memory' ? ':memory:' : `file:${join(await makeTempDirectory(), 'foreign-keys.db')}`;
+        const runtime = await openLocalLibsqlDb({ url });
+
+        // When: the connection reports its setting and an orphaned approval effect is inserted.
+        const foreignKeys = await runtime.client.execute('PRAGMA foreign_keys');
+        const orphanInsert = runtime.client.execute({
+            sql:
+                'INSERT INTO desktop_approval_effects ' +
+                '(session_id,approval_id,run_id,tool_call_id,tool_name,arguments_json,workspace_root,state,requested_at) ' +
+                'VALUES (?,?,?,?,?,?,?,?,?)',
+            args: [
+                'missing_session',
+                'approval_orphan',
+                'run_orphan',
+                'call_orphan',
+                'command.run',
+                '{}',
+                '/',
+                'pending',
+                new Date().toISOString(),
+            ],
+        });
+
+        // Then: foreign keys are active and the orphan is rejected by SQLite itself.
+        expect(foreignKeys.rows).toEqual([{ foreign_keys: 1 }]);
+        await expect(orphanInsert).rejects.toThrow(/FOREIGN KEY constraint failed/u);
+        runtime.close();
+    });
 });
 
 describe('local libSQL file PRAGMAs', () => {
@@ -61,6 +93,8 @@ describe('local libSQL file PRAGMAs', () => {
         // Then: the bounded client is configured and PRAGMAs precede schema writes.
         expect(fixture.createClient).toHaveBeenCalledWith({ url: canonicalUrl, timeout: 5000 });
         expect(trace).toEqual([
+            'PRAGMA foreign_keys=ON',
+            'PRAGMA foreign_keys',
             'PRAGMA journal_mode=WAL',
             'PRAGMA synchronous=NORMAL',
             'PRAGMA journal_mode',
@@ -160,6 +194,7 @@ async function installMockedDatabaseModules(options: MockedDatabaseOptions) {
                 if (sql === 'PRAGMA journal_mode=WAL' || sql === 'PRAGMA journal_mode') {
                     return { rows: [{ 0: walMode, journal_mode: walMode, length: 1 }] };
                 }
+                if (sql === 'PRAGMA foreign_keys') return { rows: [{ foreign_keys: 1 }] };
                 if (sql === 'PRAGMA synchronous') return { rows: [{ synchronous: options.synchronous ?? 1 }] };
                 if (sql === 'PRAGMA busy_timeout') return { rows: [{ timeout: 5000 }] };
                 return { rows: [] };

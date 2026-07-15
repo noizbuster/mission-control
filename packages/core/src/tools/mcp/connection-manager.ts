@@ -17,10 +17,12 @@
  *   processes or HTTP connections) so no MCP server leaks on `stop()`.
  */
 
+import { createObservabilityRedactor, type ObservabilityRedactor } from '../../providers/observability-redactor.js';
+import type { ProjectTrustDecision } from '../../trust/project-trust-store.js';
 import type { McpToolInfo } from '../mcp-tool.js';
-import { loadResolvedMcpConfig, type ResolvedMcpServer } from './config.js';
-import { RemoteMcpClient } from './http-client.js';
-import { StdioMcpClient } from './stdio-client.js';
+import { loadRuntimeMcpConfig, type McpConfigScope, type ResolvedMcpServer } from './config.js';
+import { McpConnectionLifecycle } from './connection-lifecycle.js';
+import { createDefaultMcpClient } from './default-client.js';
 
 /** Cap total namespaced MCP tools so the model context is not exhausted. */
 const MAX_TOTAL_NAMESPACED_TOOLS = 50;
@@ -35,82 +37,106 @@ export type ManagedMcpClient = {
 
 export type ConnectedMcpServer = {
     readonly name: string;
+    readonly scope: McpConfigScope;
     readonly client: ManagedMcpClient;
     readonly tools: readonly McpToolInfo[];
 };
 
 export type McpConnectionManagerOptions = {
     readonly workspaceRoot: string;
+    readonly projectTrustDecision: ProjectTrustDecision;
     readonly userConfigPath?: string;
     readonly projectConfigPath?: string;
     readonly profileName?: string;
     readonly env?: Readonly<Record<string, string | undefined>>;
 };
 
+export type McpConnectionManagerDependencies = {
+    readonly clientFactory?: (server: ResolvedMcpServer, secrets: readonly string[]) => ManagedMcpClient;
+};
+
 /**
  * Session-scoped connection manager. Owns `McpClient` instances and their child processes.
- * Call `connectAll()` once at session start, then `disconnectAll()` on teardown.
+ * Call `connectAll()` at session start, then `disconnectAll()` on teardown. Repeated calls are idempotent.
  */
 export class McpConnectionManager {
     private readonly servers: ConnectedMcpServer[] = [];
     private readonly warnings: string[] = [];
-    private closed = false;
+    private observabilityRedactor = createObservabilityRedactor();
+    private readonly lifecycle = new McpConnectionLifecycle();
+    private readonly clientFactory:
+        | ((server: ResolvedMcpServer, secrets: readonly string[]) => ManagedMcpClient)
+        | undefined;
+
+    constructor(dependencies: McpConnectionManagerDependencies = {}) {
+        this.clientFactory = dependencies.clientFactory;
+    }
 
     /**
      * Connect to all enabled MCP servers, list their tools, and cache the results.
      * On a per-server failure (crash OR hang/deadline), emit a warning and skip that
      * server — the session continues with the remaining servers' tools.
      */
-    async connectAll(options?: McpConnectionManagerOptions): Promise<void> {
-        if (this.closed) {
-            return;
-        }
-        const configOptions: McpConnectionManagerOptions = options ?? { workspaceRoot: process.cwd() };
-        const config = await loadResolvedMcpConfig(configOptions);
+    connectAll(options: McpConnectionManagerOptions): Promise<void> {
+        return this.lifecycle.connect(() => this.connectAllOnce(options));
+    }
+
+    private async connectAllOnce(configOptions: McpConnectionManagerOptions): Promise<void> {
+        const config = await loadRuntimeMcpConfig(configOptions);
+        this.observabilityRedactor = createObservabilityRedactor({ secrets: config.expandedSecrets });
         for (const error of config.errors) {
-            this.warnings.push(`mcp config: ${error.source}: ${error.message}`);
+            this.warnings.push(this.observabilityRedactor.redactText(`mcp config: ${error.source}: ${error.message}`));
         }
         let totalTools = 0;
         for (const server of config.servers) {
-            if (!server.enabled) {
+            if (!server.enabled || this.lifecycle.isClosed() || this.lifecycle.isScopeQuarantined(server.scope)) {
                 continue;
             }
             if (totalTools >= MAX_TOTAL_NAMESPACED_TOOLS) {
                 this.warnings.push(`mcp: reached tool cap (${MAX_TOTAL_NAMESPACED_TOOLS}), skipping remaining servers`);
                 break;
             }
-            const connected = await this.connectServer(server, config.expandedSecrets);
+            const connected = await this.connectServer(server, config.expandedSecrets, configOptions.workspaceRoot);
             if (connected === undefined) {
+                continue;
+            }
+            if (this.lifecycle.isClosed() || this.lifecycle.isScopeQuarantined(server.scope)) {
+                await connected.client.close().catch(() => undefined);
                 continue;
             }
             const toolsToRegister = Math.min(connected.tools.length, MAX_TOTAL_NAMESPACED_TOOLS - totalTools);
             if (toolsToRegister < connected.tools.length) {
                 this.warnings.push(
-                    `mcp server "${server.name}": ${connected.tools.length} tools exceed cap, registering first ${toolsToRegister}`,
+                    this.observabilityRedactor.redactText(
+                        `mcp server "${server.name}": ${connected.tools.length} tools exceed cap, registering first ${toolsToRegister}`,
+                    ),
                 );
             }
-            this.servers.push({
-                name: server.name,
-                client: connected.client,
-                tools: connected.tools.slice(0, toolsToRegister),
-            });
+            this.servers.push(this.observableServer(server, connected, toolsToRegister));
             totalTools += toolsToRegister;
         }
     }
 
     /** Tear down all MCP server connections. Safe to call multiple times. */
-    async disconnectAll(): Promise<void> {
-        if (this.closed) {
-            return;
-        }
-        this.closed = true;
-        const disconnects = this.servers.map((server) =>
-            server.client.close().catch(() => {
-                // best-effort: the server may already be dead
-            }),
-        );
-        await Promise.all(disconnects);
+    disconnectAll(): Promise<void> {
+        return this.lifecycle.disconnectAll(() => this.disconnectAllOwned());
+    }
+
+    private async disconnectAllOwned(): Promise<void> {
+        const disconnected = this.servers.splice(0);
+        await closeServers(disconnected);
+    }
+
+    disconnectScope(scope: McpConfigScope): Promise<void> {
+        return this.lifecycle.disconnectScope(scope, () => this.disconnectScopeOwned(scope));
+    }
+
+    private async disconnectScopeOwned(scope: McpConfigScope): Promise<void> {
+        const disconnected = this.servers.filter((server) => server.scope === scope);
+        const retained = this.servers.filter((server) => server.scope !== scope);
         this.servers.length = 0;
+        this.servers.push(...retained);
+        await closeServers(disconnected);
     }
 
     /** Connected servers and their listed tools. Empty before `connectAll()`. */
@@ -123,39 +149,105 @@ export class McpConnectionManager {
         return this.warnings;
     }
 
+    getObservabilityRedactor(): ObservabilityRedactor {
+        return this.observabilityRedactor;
+    }
+
+    private observableServer(
+        server: ResolvedMcpServer,
+        connected: { readonly client: ManagedMcpClient; readonly tools: readonly McpToolInfo[] },
+        toolsToRegister: number,
+    ): ConnectedMcpServer {
+        const executionNames = new Map<string, string>();
+        const usedNames = new Set<string>();
+        const tools = connected.tools.slice(0, toolsToRegister).map((tool) => {
+            const redactedName = this.observabilityRedactor.redactText(tool.name) || 'tool';
+            const name = uniqueObservableName(redactedName, usedNames);
+            usedNames.add(name);
+            executionNames.set(name, tool.name);
+            return {
+                name,
+                ...(tool.description !== undefined
+                    ? { description: this.observabilityRedactor.redactText(tool.description) }
+                    : {}),
+                ...(tool.inputSchema !== undefined
+                    ? { inputSchema: this.observabilityRedactor.redactValue(tool.inputSchema) }
+                    : {}),
+            };
+        });
+        let active = true;
+        let closePromise: Promise<void> | undefined;
+        const client: ManagedMcpClient = {
+            connect: () => connected.client.connect(),
+            listTools: async () => tools,
+            callTool: (input) =>
+                active
+                    ? connected.client.callTool({
+                          ...input,
+                          name: executionNames.get(input.name) ?? input.name,
+                      })
+                    : Promise.reject(new McpConnectionClosedError()),
+            close: () => {
+                if (closePromise !== undefined) {
+                    return closePromise;
+                }
+                active = false;
+                closePromise = connected.client.close();
+                return closePromise;
+            },
+        };
+        return {
+            name: this.observabilityRedactor.redactText(server.name) || 'server',
+            scope: server.scope,
+            client,
+            tools,
+        };
+    }
+
     private async connectServer(
         server: ResolvedMcpServer,
         expandedSecrets: readonly string[],
+        workspaceRoot: string,
     ): Promise<{ readonly client: ManagedMcpClient; readonly tools: readonly McpToolInfo[] } | undefined> {
+        let client: ManagedMcpClient | undefined;
         try {
-            const client = this.createClient(server, expandedSecrets);
+            client =
+                this.clientFactory === undefined
+                    ? createDefaultMcpClient(server, expandedSecrets, workspaceRoot)
+                    : this.clientFactory(server, expandedSecrets);
             await client.connect();
             const tools = await client.listTools();
             return { client, tools };
         } catch (error: unknown) {
+            await client?.close().catch(() => undefined);
             const message = error instanceof Error ? error.message : String(error);
-            this.warnings.push(`mcp server "${server.name}": failed to connect — ${message}`);
+            this.warnings.push(
+                this.observabilityRedactor.redactText(`mcp server "${server.name}": failed to connect — ${message}`),
+            );
             return undefined;
         }
     }
+}
 
-    private createClient(server: ResolvedMcpServer, secrets: readonly string[]): ManagedMcpClient {
-        if (server.type === 'local') {
-            const args = server.command.length > 1 ? server.command.slice(1) : undefined;
-            return new StdioMcpClient({
-                command: server.command[0] ?? '',
-                ...(args !== undefined ? { args } : {}),
-                ...(server.environment !== undefined ? { env: server.environment } : {}),
-                cwd: process.cwd(),
-                ...(server.timeoutMs !== undefined ? { timeoutMs: server.timeoutMs } : {}),
-                secrets,
-            });
-        }
-        return new RemoteMcpClient({
-            url: server.url,
-            ...(server.headers !== undefined ? { headers: server.headers } : {}),
-            ...(server.timeoutMs !== undefined ? { timeoutMs: server.timeoutMs } : {}),
-            secrets,
-        });
+class McpConnectionClosedError extends Error {
+    readonly name = 'McpConnectionClosedError';
+
+    constructor() {
+        super('MCP connection is closed');
     }
+}
+
+async function closeServers(servers: readonly ConnectedMcpServer[]): Promise<void> {
+    await Promise.all(servers.map((server) => server.client.close().catch(() => undefined)));
+}
+
+function uniqueObservableName(base: string, used: ReadonlySet<string>): string {
+    if (!used.has(base)) {
+        return base;
+    }
+    let suffix = 2;
+    while (used.has(`${base}_${suffix}`)) {
+        suffix += 1;
+    }
+    return `${base}_${suffix}`;
 }

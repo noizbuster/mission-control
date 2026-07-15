@@ -6,6 +6,7 @@ import type {
     SessionStopOutcome,
 } from '@mission-control/protocol';
 import type { LocalLibsqlWriteTarget } from '../db/local-libsql-db.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
 import type { SessionControlAttachedHandle } from './session-control-host.js';
 import { SessionControlFencedError } from './session-control-host.js';
 import { settleSessionControlOperationHandle } from './session-control-operation.js';
@@ -29,6 +30,7 @@ export async function appendStopCancellationEvents(
     mutation: StopMutationResult,
     existingEvents: readonly AgentEvent[],
     timestamp: string,
+    observabilityRedactor?: ObservabilityRedactor,
 ): Promise<void> {
     for (const pending of mutation.inputs) {
         await appendFencedSessionStopEvent({
@@ -45,6 +47,7 @@ export async function appendStopCancellationEvents(
                     reason: 'operator_aborted',
                 },
             },
+            ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
         });
     }
     for (const approvalId of mutation.approvalIds) {
@@ -59,6 +62,7 @@ export async function appendStopCancellationEvents(
                 sessionId: input.sessionId,
                 approvalRecord: { ...record, state: 'cancelled', decidedAt: timestamp, reason: 'operator_aborted' },
             },
+            ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
         });
     }
 }

@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 747 -> current 987 pure LOC; one MCP configuration resolution and atomic write boundary integration matrix.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
     loadResolvedMcpConfig,
@@ -133,6 +134,35 @@ describe('loadResolvedMcpConfig env expansion allowlist', () => {
         expect(resolved.expandedSecrets).toContain('super-secret-value');
     });
 
+    it('collects literal environment and header values as secrets', async () => {
+        await writeRaw(
+            dirs.userConfigPath,
+            JSON.stringify({
+                mcp: {
+                    local: {
+                        type: 'local',
+                        command: ['local-mcp'],
+                        environment: { API_TOKEN: 'literal-local-secret' },
+                    },
+                    remote: {
+                        type: 'remote',
+                        url: 'https://mcp.example.test',
+                        headers: { Authorization: 'Bearer literal-remote-secret' },
+                    },
+                },
+            }),
+        );
+
+        const resolved = await loadResolvedMcpConfig({
+            userConfigPath: dirs.userConfigPath,
+            projectConfigPath: dirs.projectConfigPath,
+            env: {},
+        });
+
+        expect(resolved.expandedSecrets).toContain('literal-local-secret');
+        expect(resolved.expandedSecrets).toContain('Bearer literal-remote-secret');
+    });
+
     it('leaves a non-allowlisted secret ref unexpanded and never emits its value', async () => {
         await writeRaw(
             dirs.userConfigPath,
@@ -259,6 +289,65 @@ describe('mcp config write/read round-trips', () => {
         expect(scope.allowlist).toEqual(['KEEP_ME']);
     });
 
+    it('preserves every validated user field when adding a server', async () => {
+        await writeRaw(
+            dirs.userConfigPath,
+            JSON.stringify({
+                browser: { browserURL: 'http://127.0.0.1:9222' },
+                lsp: { command: ['rust-analyzer'], environment: { RUST_LOG: 'debug' }, timeoutMs: 1200 },
+                mcp_env_allowlist: ['KEEP_ME'],
+                mcp: { existing: { type: 'local', command: ['existing-mcp'] } },
+            }),
+        );
+
+        await writeUserMcpServer(
+            'added',
+            { type: 'local', command: ['added-mcp'] },
+            { userConfigPath: dirs.userConfigPath, projectConfigPath: dirs.projectConfigPath },
+        );
+
+        const onDisk = JSON.parse(await readFile(dirs.userConfigPath, 'utf8'));
+        expect(onDisk).toEqual({
+            browser: { browserURL: 'http://127.0.0.1:9222' },
+            lsp: { command: ['rust-analyzer'], environment: { RUST_LOG: 'debug' }, timeoutMs: 1200 },
+            mcp_env_allowlist: ['KEEP_ME'],
+            mcp: {
+                existing: { type: 'local', command: ['existing-mcp'] },
+                added: { type: 'local', command: ['added-mcp'] },
+            },
+        });
+    });
+
+    it('preserves every validated user field when removing a server', async () => {
+        await writeRaw(
+            dirs.userConfigPath,
+            JSON.stringify({
+                browser: { browserURL: 'http://127.0.0.1:9222' },
+                lsp: { command: ['rust-analyzer'], environment: { RUST_LOG: 'debug' }, timeoutMs: 1200 },
+                mcp_env_allowlist: ['KEEP_ME'],
+                mcp: {
+                    keep: { type: 'local', command: ['keep-mcp'] },
+                    remove: { type: 'local', command: ['remove-mcp'] },
+                },
+            }),
+        );
+
+        expect(
+            await removeUserMcpServer('remove', {
+                userConfigPath: dirs.userConfigPath,
+                projectConfigPath: dirs.projectConfigPath,
+            }),
+        ).toBe(true);
+
+        const onDisk = JSON.parse(await readFile(dirs.userConfigPath, 'utf8'));
+        expect(onDisk).toEqual({
+            browser: { browserURL: 'http://127.0.0.1:9222' },
+            lsp: { command: ['rust-analyzer'], environment: { RUST_LOG: 'debug' }, timeoutMs: 1200 },
+            mcp_env_allowlist: ['KEEP_ME'],
+            mcp: { keep: { type: 'local', command: ['keep-mcp'] } },
+        });
+    });
+
     it('writes a project server atomically and reads it back', async () => {
         await writeProjectMcpServer(
             'web',
@@ -276,6 +365,119 @@ describe('mcp config write/read round-trips', () => {
         });
         const serverName = 'web';
         expect(scope.servers[serverName]?.type).toBe('remote');
+    });
+
+    it('preserves every validated project field when adding a server', async () => {
+        await writeRaw(
+            dirs.projectConfigPath,
+            JSON.stringify({ mcpServers: { existing: { type: 'local', command: ['existing-mcp'] } } }),
+        );
+
+        await writeProjectMcpServer(
+            'added',
+            { type: 'local', command: ['added-mcp'] },
+            { userConfigPath: dirs.userConfigPath, projectConfigPath: dirs.projectConfigPath },
+        );
+
+        const onDisk = JSON.parse(await readFile(dirs.projectConfigPath, 'utf8'));
+        expect(onDisk).toEqual({
+            mcpServers: {
+                existing: { type: 'local', command: ['existing-mcp'] },
+                added: { type: 'local', command: ['added-mcp'] },
+            },
+        });
+    });
+
+    it('preserves every validated project field when removing a server', async () => {
+        await writeRaw(
+            dirs.projectConfigPath,
+            JSON.stringify({
+                mcpServers: {
+                    keep: { type: 'local', command: ['keep-mcp'] },
+                    remove: { type: 'local', command: ['remove-mcp'] },
+                },
+            }),
+        );
+
+        expect(
+            await removeProjectMcpServer('remove', {
+                userConfigPath: dirs.userConfigPath,
+                projectConfigPath: dirs.projectConfigPath,
+            }),
+        ).toBe(true);
+
+        const onDisk = JSON.parse(await readFile(dirs.projectConfigPath, 'utf8'));
+        expect(onDisk).toEqual({ mcpServers: { keep: { type: 'local', command: ['keep-mcp'] } } });
+    });
+
+    it('rejects unknown fields before user add', async () => {
+        await writeRaw(dirs.userConfigPath, JSON.stringify({ unknown: true }));
+        await expect(
+            writeUserMcpServer(
+                'srv',
+                { type: 'local', command: ['x'] },
+                { userConfigPath: dirs.userConfigPath, projectConfigPath: dirs.projectConfigPath },
+            ),
+        ).rejects.toThrow(/config validation failed/);
+    });
+
+    it('rejects unknown fields before project add', async () => {
+        await writeRaw(dirs.projectConfigPath, JSON.stringify({ unknown: true }));
+        await expect(
+            writeProjectMcpServer(
+                'srv',
+                { type: 'local', command: ['x'] },
+                { userConfigPath: dirs.userConfigPath, projectConfigPath: dirs.projectConfigPath },
+            ),
+        ).rejects.toThrow(/config validation failed/);
+    });
+
+    it('rejects malformed user config before remove and leaves bytes untouched', async () => {
+        const contents = '{ "unknown": true }';
+        await writeRaw(dirs.userConfigPath, contents);
+        await expect(
+            removeUserMcpServer('missing', {
+                userConfigPath: dirs.userConfigPath,
+                projectConfigPath: dirs.projectConfigPath,
+            }),
+        ).rejects.toThrow(/config validation failed/);
+        expect(await readFile(dirs.userConfigPath, 'utf8')).toBe(contents);
+    });
+
+    it('leaves user config bytes untouched when removing an absent server', async () => {
+        const contents = '{\n  "mcp": {},\n  "mcp_env_allowlist": ["KEEP_ME"]\n}\n';
+        await writeRaw(dirs.userConfigPath, contents);
+        await expect(
+            removeUserMcpServer('missing', {
+                userConfigPath: dirs.userConfigPath,
+                projectConfigPath: dirs.projectConfigPath,
+            }),
+        ).resolves.toBe(false);
+        expect(await readFile(dirs.userConfigPath, 'utf8')).toBe(contents);
+    });
+
+    it('leaves project config bytes untouched when removing an absent server', async () => {
+        const contents = '{\n  "mcpServers": {}\n}\n';
+        await writeRaw(dirs.projectConfigPath, contents);
+        await expect(
+            removeProjectMcpServer('missing', {
+                userConfigPath: dirs.userConfigPath,
+                projectConfigPath: dirs.projectConfigPath,
+            }),
+        ).resolves.toBe(false);
+        expect(await readFile(dirs.projectConfigPath, 'utf8')).toBe(contents);
+    });
+
+    it('rejects malformed project config before remove and leaves bytes untouched', async () => {
+        const contents = '{ "unknown": true }';
+        await writeRaw(dirs.projectConfigPath, contents);
+        await expect(
+            removeProjectMcpServer('missing', {
+                userConfigPath: dirs.userConfigPath,
+                projectConfigPath: dirs.projectConfigPath,
+            }),
+        ).rejects.toThrow(/config validation failed/);
+        expect(await readFile(dirs.projectConfigPath, 'utf8')).toBe(contents);
     });
 
     it('removes a user server and reports false when absent', async () => {
@@ -747,6 +949,72 @@ describe('profile-aware user-scope writes', () => {
         expect(removed).toBe(true);
         const onDisk = JSON.parse(await readFile(profilePath, 'utf8'));
         expect(Object.keys(onDisk.mcp)).toEqual(['keep']);
+    });
+
+    it('preserves parsed profile JSONC fields when adding a server', async () => {
+        const profilePath = join(dirs.userConfigDir, 'mission-control.dev.jsonc');
+        await writeRaw(
+            profilePath,
+            [
+                '{',
+                '  // parsed values survive, comments do not need to',
+                '  "browser": { "browserURL": "http://127.0.0.1:9222" },',
+                '  "lsp": { "command": ["rust-analyzer"], "environment": { "RUST_LOG": "debug" }, "timeoutMs": 1200 },',
+                '  "mcp_env_allowlist": ["KEEP_ME"],',
+                '  "mcp": { "existing": { "type": "local", "command": ["existing-mcp"] } }',
+                '}',
+            ].join('\n'),
+        );
+
+        await writeUserMcpServer(
+            'added',
+            { type: 'local', command: ['added-mcp'] },
+            { profileName: 'dev', userConfigDir: dirs.userConfigDir, projectConfigPath: dirs.projectConfigPath },
+        );
+
+        expect(JSON.parse(await readFile(profilePath, 'utf8'))).toEqual({
+            browser: { browserURL: 'http://127.0.0.1:9222' },
+            lsp: { command: ['rust-analyzer'], environment: { RUST_LOG: 'debug' }, timeoutMs: 1200 },
+            mcp_env_allowlist: ['KEEP_ME'],
+            mcp: {
+                existing: { type: 'local', command: ['existing-mcp'] },
+                added: { type: 'local', command: ['added-mcp'] },
+            },
+        });
+    });
+
+    it('preserves parsed profile JSONC fields when removing a server', async () => {
+        const profilePath = join(dirs.userConfigDir, 'mission-control.dev.jsonc');
+        await writeRaw(
+            profilePath,
+            [
+                '{',
+                '  /* parsed values survive */',
+                '  "browser": { "browserURL": "http://127.0.0.1:9222" },',
+                '  "lsp": { "command": ["rust-analyzer"], "environment": { "RUST_LOG": "debug" }, "timeoutMs": 1200 },',
+                '  "mcp_env_allowlist": ["KEEP_ME"],',
+                '  "mcp": {',
+                '    "keep": { "type": "local", "command": ["keep-mcp"] },',
+                '    "remove": { "type": "local", "command": ["remove-mcp"] }',
+                '  }',
+                '}',
+            ].join('\n'),
+        );
+
+        await expect(
+            removeUserMcpServer('remove', {
+                profileName: 'dev',
+                userConfigDir: dirs.userConfigDir,
+                projectConfigPath: dirs.projectConfigPath,
+            }),
+        ).resolves.toBe(true);
+
+        expect(JSON.parse(await readFile(profilePath, 'utf8'))).toEqual({
+            browser: { browserURL: 'http://127.0.0.1:9222' },
+            lsp: { command: ['rust-analyzer'], environment: { RUST_LOG: 'debug' }, timeoutMs: 1200 },
+            mcp_env_allowlist: ['KEEP_ME'],
+            mcp: { keep: { type: 'local', command: ['keep-mcp'] } },
+        });
     });
 
     it('project-scope writes ignore the profile and always target .mcp.json', async () => {

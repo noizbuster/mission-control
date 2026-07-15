@@ -55,13 +55,22 @@ describe('parseStructuredOutput', () => {
             }
         });
 
-        it('extracts the fenced block when surrounded by prose', () => {
+        it('rejects a fenced block when surrounded by prose', () => {
             const result = parseStructuredOutput('Here is the plan:\n```json\n{"ready":true}\n```\nDone.');
-            expect(result).toEqual({ ok: true, value: { ready: true } });
+            expect(result.ok).toBe(false);
         });
 
         it('fails closed on invalid fenced JSON', () => {
             expect(parseStructuredOutput('```json\n{not valid}\n```').ok).toBe(false);
+        });
+
+        it('rejects fenced JSON surrounded by prose', () => {
+            expect(parseStructuredOutput('Here is the object:\n```json\n{"k":1}\n```').ok).toBe(false);
+            expect(parseStructuredOutput('```json\n{"k":1}\n```\nThat is all.').ok).toBe(false);
+        });
+
+        it('rejects fenced JSON with an arbitrary language tag', () => {
+            expect(parseStructuredOutput('```yaml\n{"k":1}\n```').ok).toBe(false);
         });
     });
 
@@ -84,18 +93,15 @@ describe('parseStructuredOutput', () => {
             expect(parseStructuredOutput('explicit')).toEqual({ ok: true, value: 'explicit' });
         });
 
-        it('returns the first line when it is a clean token', () => {
-            expect(parseStructuredOutput('APPROVE\n(because all critics passed)')).toEqual({
-                ok: true,
-                value: 'APPROVE',
-            });
+        it('rejects multiline output even when the first line is a clean token', () => {
+            expect(parseStructuredOutput('APPROVE\n(because all critics passed)')).toMatchObject({ ok: false });
         });
 
         it('keeps a plain category label as a string', () => {
             expect(parseStructuredOutput('trivial')).toEqual({ ok: true, value: 'trivial' });
         });
 
-        it('extracts the last line when reasoning precedes the classification', () => {
+        it('rejects a last-line classification after reasoning', () => {
             const verbose = [
                 'Intent: **explicit-implementation**',
                 '',
@@ -103,66 +109,51 @@ describe('parseStructuredOutput', () => {
                 '',
                 'explicit-implementation',
             ].join('\n');
-            expect(parseStructuredOutput(verbose)).toEqual({
-                ok: true,
-                value: 'explicit-implementation',
-            });
+            expect(parseStructuredOutput(verbose)).toMatchObject({ ok: false });
         });
 
-        it('extracts the last line for a multi-class verbose output', () => {
+        it('rejects a last-line classification in verbose output', () => {
             const verbose = 'After analysis, this is exploratory.\n\nexploratory-research';
-            expect(parseStructuredOutput(verbose)).toEqual({
-                ok: true,
-                value: 'exploratory-research',
-            });
+            expect(parseStructuredOutput(verbose)).toMatchObject({ ok: false });
         });
 
-        it('coerces last-line "true" to boolean from multi-line verbose output', () => {
+        it('rejects a guessed boolean on the last line after prose', () => {
             const verbose = 'The anti-dup check passes. No prior exploration duplicated.\n\ntrue';
-            expect(parseStructuredOutput(verbose, 'boolean')).toEqual({
-                ok: true,
-                value: true,
-            });
+            expect(parseStructuredOutput(verbose, 'boolean')).toMatchObject({ ok: false });
         });
 
-        it('coerces last-line "false" to boolean from multi-line verbose output', () => {
+        it('rejects a guessed false boolean on the last line after prose', () => {
             const verbose = 'Evidence is insufficient. Tests not passing.\n\nfalse';
-            expect(parseStructuredOutput(verbose, 'boolean')).toEqual({
-                ok: true,
-                value: false,
-            });
+            expect(parseStructuredOutput(verbose, 'boolean')).toMatchObject({ ok: false });
         });
 
-        it('coerces bare last-line true without expectedShape', () => {
+        it('rejects a bare last-line boolean without expectedShape', () => {
             const verbose = 'Reasoning here.\n\ntrue';
-            expect(parseStructuredOutput(verbose)).toEqual({
-                ok: true,
-                value: true,
-            });
+            expect(parseStructuredOutput(verbose)).toMatchObject({ ok: false });
         });
     });
 
     describe('natural-language boolean tokens', () => {
-        it('parses bare yes as boolean true', () => {
-            expect(parseStructuredOutput('yes', 'boolean')).toEqual({ ok: true, value: true });
+        it('rejects bare yes as a guessed boolean', () => {
+            expect(parseStructuredOutput('yes', 'boolean')).toMatchObject({ ok: false });
         });
 
-        it('parses bare no as boolean false', () => {
-            expect(parseStructuredOutput('no', 'boolean')).toEqual({ ok: true, value: false });
+        it('rejects bare no as a guessed boolean', () => {
+            expect(parseStructuredOutput('no', 'boolean')).toMatchObject({ ok: false });
         });
 
-        it('parses a key=value assignment on the last line as boolean', () => {
+        it('rejects a key=value boolean assignment', () => {
             const verbose = 'Both checks pass, delegation is appropriate.\n\nguard.cleared=true';
-            expect(parseStructuredOutput(verbose, 'boolean')).toEqual({ ok: true, value: true });
+            expect(parseStructuredOutput(verbose, 'boolean')).toMatchObject({ ok: false });
         });
 
-        it('parses a key: false assignment as boolean false', () => {
+        it('rejects a key: false boolean assignment', () => {
             const verbose = 'Evidence is insufficient.\n\nguard.cleared: false';
-            expect(parseStructuredOutput(verbose, 'boolean')).toEqual({ ok: true, value: false });
+            expect(parseStructuredOutput(verbose, 'boolean')).toMatchObject({ ok: false });
         });
 
-        it('parses key=yes as boolean true', () => {
-            expect(parseStructuredOutput('guard.cleared=yes', 'boolean')).toEqual({ ok: true, value: true });
+        it('rejects key=yes as a guessed boolean', () => {
+            expect(parseStructuredOutput('guard.cleared=yes', 'boolean')).toMatchObject({ ok: false });
         });
 
         it('does not coerce a sentence containing yes as substring', () => {
@@ -170,8 +161,8 @@ describe('parseStructuredOutput', () => {
             expect(result.ok).toBe(false);
         });
 
-        it('parses yes with expectedShape any as boolean', () => {
-            expect(parseStructuredOutput('yes')).toEqual({ ok: true, value: true });
+        it('keeps yes as a string with expectedShape any', () => {
+            expect(parseStructuredOutput('yes')).toEqual({ ok: true, value: 'yes' });
         });
     });
 
@@ -204,6 +195,14 @@ describe('parseStructuredOutput', () => {
 
         it('rejects an object when expectedShape is array', () => {
             expect(parseStructuredOutput('{"k":1}', 'array').ok).toBe(false);
+        });
+
+        it('rejects null when expectedShape is object', () => {
+            expect(parseStructuredOutput('```json\nnull\n```', 'object').ok).toBe(false);
+        });
+
+        it('rejects a number when expectedShape is object', () => {
+            expect(parseStructuredOutput('```json\n42\n```', 'object').ok).toBe(false);
         });
 
         it('accepts a boolean when expectedShape is boolean', () => {

@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 440 -> current 441 pure LOC; one declarative planner-workflow graph whose routing tables are reviewed together.
 /**
  * The planner workflow graph (plan Task 7 — Prometheus planner mechanics).
  *
@@ -16,8 +17,9 @@
  *
  * Ported Prometheus semantics: sticky plan mode (never implements), explore-
  * before-asking, two-filter routing, approval-gated draft state, scaffold-
- * compatible output, planner-readonly child consultations. See the reference
- * ulw-plan skill for the behavioral spec; no reference code is imported.
+ * compatible output, and independently constrained read-only child
+ * consultations. See the reference ulw-plan skill for the behavioral spec; no
+ * reference code is imported.
  *
  * allow: SIZE_OK — indivisible declarative graph spec. The factory returns one
  * object that `planner-workflow-graph.test.ts` asserts is byte-identical to
@@ -121,12 +123,13 @@ export const PLANNER_REVIEW_GAP_ANALYSIS_PROMPT =
     'prompt reject empty drafts, drafts that cite no file:line evidence, and non-answers; a ' +
     'draft that is non-empty, cites real references, and is a genuine plan passes.';
 
-/** Context injected into explore/research prompts for planner-readonly children. */
+/** Context injected into explore/research prompts before read-only delegation. */
 export const PLANNER_READONLY_CHILD_CONTEXT =
-    'You are operating under planner-readonly. Any child agent you delegate to ' +
-    '(explore/librarian) INHERITS the planner-readonly boundary: it may NOT write outside ' +
-    '.omo/plans/**, .omo/specs/**, and .omo/drafts/**. Frame child prompts as read-only research ' +
-    '(TASK / DELIVERABLE / SCOPE / VERIFY) and treat subagent output as claims until verified.';
+    'Planner-readonly applies to these workflow nodes after mode materialization. Spawned child ' +
+    'agents do NOT inherit workflow PolicyEffectRule sets; their authority is independently ' +
+    'constrained by the selected read-only category and AgentDefinition.pathPolicies. Delegate only ' +
+    'to explore/librarian, frame child prompts as read-only research (TASK / DELIVERABLE / SCOPE / ' +
+    'VERIFY), and treat subagent output as claims until verified.';
 
 export type PlannerWorkflowGraphOptions = {
     /**
@@ -205,8 +208,8 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                         'Cite file:line evidence for every claim. ' +
                         PLANNER_READONLY_CHILD_CONTEXT +
                         ' Multi-turn: keep calling tools until exploration is grounded. While exploring, ' +
-                        'call tools and do NOT output true. When ready, synthesize findings, then on the ' +
-                        'LAST line output EXACTLY `true` (boolean) — no quotes, no formatting, no extra text.',
+                        'call tools and do NOT output true. When ready, synthesize findings. Output ONLY the ' +
+                        'JSON boolean `true` when complete — no prose, no formatting, no extra text.',
                     outputKey: 'explore.complete',
                     outputShape: 'boolean',
                 },
@@ -223,8 +226,8 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                         'defaults (industry standard or repo convention) with rationale. ' +
                         PLANNER_READONLY_CHILD_CONTEXT +
                         ' Multi-turn: keep calling tools until research is grounded. While researching, ' +
-                        'call tools and do NOT output true. When ready, synthesize findings, then on the ' +
-                        'LAST line output EXACTLY `true` (boolean) — no quotes, no formatting, no extra text.',
+                        'call tools and do NOT output true. When ready, synthesize findings. Output ONLY the ' +
+                        'JSON boolean `true` when complete — no prose, no formatting, no extra text.',
                     outputKey: 'research.complete',
                     outputShape: 'boolean',
                 },
@@ -291,9 +294,8 @@ export function createPlannerWorkflowGraph(options: PlannerWorkflowGraphOptions 
                         "Then WAIT for the user's explicit okay. Approval authorizes writing the plan " +
                         "ONLY — it is NEVER authorization to implement. Read the user's next reply as " +
                         'a decision: approve, scope-change (revise the draft, re-present), or still-unclear ' +
-                        '(emit one short line, do not re-explore). ' +
-                        'On the LAST line, output EXACTLY `true` when the user explicitly approves, or ' +
-                        '`false` otherwise — no quotes, no formatting, no extra text.',
+                        '(emit one short line, do not re-explore). Output ONLY the JSON boolean `true` when the ' +
+                        'user explicitly approves, or `false` otherwise — no prose, no formatting, no extra text.',
                     outputKey: 'plan.ready',
                     outputShape: 'boolean',
                 },

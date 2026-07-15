@@ -102,4 +102,27 @@ describe('redactProviderChunk idempotency', () => {
         expect(redacted).not.toEqual(chunk);
         expect(JSON.stringify(redacted)).not.toContain(SECRET);
     });
+
+    it('redacts reasoning copied into a completed provider message', () => {
+        // Given
+        const chunk: ProviderStreamChunk = {
+            kind: 'response_completed',
+            requestId: 'req_reasoning',
+            sequence: 1,
+            message: {
+                messageId: 'msg_reasoning',
+                role: 'assistant',
+                content: 'ordinary response',
+                reasoning: `private reasoning ${SECRET}`,
+            },
+            finishReason: 'stop',
+        };
+
+        // When
+        const redacted = redactProviderChunk(chunk);
+
+        // Then
+        expect(JSON.stringify(redacted)).toContain('[REDACTED_CREDENTIAL]');
+        expect(JSON.stringify(redacted)).not.toContain(SECRET);
+    });
 });

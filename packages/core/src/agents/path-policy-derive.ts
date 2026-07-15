@@ -18,7 +18,7 @@ import { type EvaluationResult, evaluateRules } from '../permissions/rule-evalua
 /**
  * Derive the effective path-policy list for a child agent.
  *
- * Semantics (mirrors {@linkcode deriveChildPermissions} from `rule-derive.ts`):
+ * Semantics:
  *
  * 1. The child's own `pathPolicies` are preserved as-is (allows AND denies).
  * 2. Every `deny` rule from the parent's `pathPolicies` is appended, so

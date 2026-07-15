@@ -1,10 +1,12 @@
+// allow: SIZE_OK -- HEAD 328 -> current 342 pure LOC; one provider-turn retry, timeout, and tool-loop state machine.
 import type { AgentEventEnvelope, ProtocolError, ProviderStreamChunk } from '@mission-control/protocol';
 import {
-    eventForProviderChunk,
-    redactProviderChunk,
-    responseFailedChunk,
-    responseStartedChunk,
-} from './provider-turn-events.js';
+    guardProviderChunkForObservability,
+    redactProviderChunkForObservability,
+} from './observability-provider-chunk.js';
+import { createObservabilityRedactor, redactAgentEventEnvelopeForObservability } from './observability-redactor.js';
+import { createProviderStreamObservability } from './provider-stream-observability.js';
+import { eventForProviderChunk, responseFailedChunk, responseStartedChunk } from './provider-turn-events.js';
 import { closeProviderChunkIterator, nextProviderChunk } from './provider-turn-timeout.js';
 import {
     ProviderTurnError,
@@ -45,6 +47,7 @@ export class ProviderTurnRunner {
 
     async runTurn(input: ProviderTurnRunInput): Promise<ProviderTurnRunResult> {
         const state = createEmitterState(input.startSequence);
+        const observabilityRedactor = input.observabilityRedactor ?? createObservabilityRedactor();
         if (input.controlEpoch?.callbackFence !== undefined && input.writeEnvelope === undefined) {
             return quarantinedProviderResult(state, 0);
         }
@@ -61,7 +64,7 @@ export class ProviderTurnRunner {
                 // single source of truth for event redaction. The completed chunk is returned in
                 // ProviderTurnRunResult.message, so its content must be redacted here too.
                 // This double-redacts vs eventForProviderChunk, but only once per turn (idempotent).
-                const completedChunk = redactProviderChunk(result.chunk);
+                const completedChunk = redactProviderChunkForObservability(result.chunk, observabilityRedactor);
                 if (completedChunk.kind !== 'response_completed') {
                     throw new TypeError(`Unexpected completed provider chunk kind: ${completedChunk.kind}`);
                 }
@@ -80,8 +83,9 @@ export class ProviderTurnRunner {
                 };
             }
             if (!result.error.retryable || attempt === maxAttempts) {
-                const failedChunk = redactProviderChunk(
+                const failedChunk = redactProviderChunkForObservability(
                     responseFailedChunk(input, state.nextProviderSequence, result.error),
+                    observabilityRedactor,
                 );
                 if (failedChunk.kind !== 'response_failed') {
                     throw new TypeError(`Unexpected failed provider chunk kind: ${failedChunk.kind}`);
@@ -98,8 +102,9 @@ export class ProviderTurnRunner {
             }
             await sleepBeforeRetry(signal, attempt, this.options.retryBaseDelayMs, this.options.maxRetryDelayMs);
             if (signal.aborted) {
-                const failedChunk = redactProviderChunk(
+                const failedChunk = redactProviderChunkForObservability(
                     responseFailedChunk(input, state.nextProviderSequence, abortedProviderError()),
+                    observabilityRedactor,
                 );
                 if (failedChunk.kind !== 'response_failed') {
                     throw new TypeError(`Unexpected failed provider chunk kind: ${failedChunk.kind}`);
@@ -133,6 +138,9 @@ export class ProviderTurnRunner {
     ): Promise<ProviderAttemptResult> {
         let toolCallCount = 0;
         const attemptAbort = new AbortController();
+        const streamObservability = createProviderStreamObservability(
+            input.observabilityRedactor ?? createObservabilityRedactor(),
+        );
         const removeOuterAbort = forwardAbort(signal, attemptAbort);
         let iterator: AsyncIterator<ProviderStreamChunk> | undefined;
         try {
@@ -159,26 +167,28 @@ export class ProviderTurnRunner {
                 if (next.done === true) {
                     break;
                 }
-                const chunk = next.value;
-                state.nextProviderSequence = Math.max(state.nextProviderSequence, chunk.sequence + 1);
-                if (chunk.kind === 'response_completed') {
-                    return { kind: 'completed', chunk };
-                }
-                if (chunk.kind === 'response_failed') {
-                    return { kind: 'failed', error: chunk.error };
-                }
-                if (chunk.kind === 'tool_call_completed') {
-                    toolCallCount += 1;
-                    if (toolCallCount > this.options.toolCallLoopLimit) {
-                        return { kind: 'failed', error: toolLoopLimitError(this.options.toolCallLoopLimit) };
+                const guardedChunk = guardProviderChunkForObservability(next.value);
+                for (const chunk of streamObservability.transform(guardedChunk)) {
+                    state.nextProviderSequence = Math.max(state.nextProviderSequence, chunk.sequence + 1);
+                    if (chunk.kind === 'response_completed') {
+                        return { kind: 'completed', chunk };
                     }
+                    if (chunk.kind === 'response_failed') {
+                        return { kind: 'failed', error: chunk.error };
+                    }
+                    if (chunk.kind === 'tool_call_completed') {
+                        toolCallCount += 1;
+                        if (toolCallCount > this.options.toolCallLoopLimit) {
+                            return { kind: 'failed', error: toolLoopLimitError(this.options.toolCallLoopLimit) };
+                        }
+                    }
+                    await this.emitEnvelope(
+                        input,
+                        state,
+                        chunk,
+                        chunk.kind === 'tool_call_completed' ? 'durable' : 'ephemeral',
+                    );
                 }
-                await this.emitEnvelope(
-                    input,
-                    state,
-                    chunk,
-                    chunk.kind === 'tool_call_completed' ? 'durable' : 'ephemeral',
-                );
             }
             return { kind: 'failed', error: unknownProviderError('provider stream ended before completion') };
         } catch (error: unknown) {
@@ -198,17 +208,22 @@ export class ProviderTurnRunner {
         durability: 'durable' | 'ephemeral',
     ): Promise<boolean> {
         const createdAt = this.now();
-        const event = eventForProviderChunk(input, chunk, createdAt);
+        const observabilityRedactor = input.observabilityRedactor ?? createObservabilityRedactor();
+        const observableChunk = redactProviderChunkForObservability(chunk, observabilityRedactor);
+        const event = eventForProviderChunk(input, observableChunk, createdAt);
         const sequence = durability === 'durable' ? state.nextDurableSequence : state.nextEphemeralSequence;
-        const envelope: AgentEventEnvelope = {
-            eventId: this.createEventId(event, sequence),
-            sequence,
-            createdAt,
-            sessionId: input.sessionId,
-            durability,
-            correlationId: input.requestId,
-            event,
-        };
+        const envelope: AgentEventEnvelope = redactAgentEventEnvelopeForObservability(
+            {
+                eventId: this.createEventId(event, sequence),
+                sequence,
+                createdAt,
+                sessionId: input.sessionId,
+                durability,
+                correlationId: input.requestId,
+                event,
+            },
+            observabilityRedactor,
+        );
         const observe = (): void => {
             input.onEnvelope?.(envelope);
             if (durability === 'durable') {

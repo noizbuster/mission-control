@@ -1,5 +1,6 @@
 import type { Client, InStatement } from '@libsql/client';
 import { agentJobRelationSchemaSql } from './local-libsql-schema-agent-jobs.js';
+import { rebuildLegacyDesktopApprovalEffects } from './local-libsql-schema-approval-effects.js';
 import { sessionEventStoreSchemaSql } from './local-libsql-schema-events.js';
 import { memoryEntriesSchemaSql } from './local-libsql-schema-memory.js';
 import { sessionProjectionSchemaSql } from './local-libsql-schema-projections.js';
@@ -18,6 +19,7 @@ export const localDbSchemaSql = [
 export async function ensureLocalDbSchema(client: Client): Promise<void> {
     const statements: InStatement[] = localDbSchemaSql.map((sql) => ({ sql }));
     await client.batch(statements, 'write');
+    await rebuildLegacyDesktopApprovalEffects(client);
     await migrateLegacyProjectionTables(client);
 }
 

@@ -1,6 +1,7 @@
 import type { AgentEventEnvelope } from '@mission-control/protocol';
 import { resolveMissionControlDataDir } from '../memory/data-dir.js';
 import { openLocalSessionProjectionStore, readLocalSessionReplay } from '../memory/local-session-store.js';
+import { REDACTED_CREDENTIAL } from '../providers/redaction-handler.js';
 import type { ReplayDiagnostic, SessionReplayProjection } from '../session-replay-types.js';
 
 export const SESSION_SEARCH_TIMEOUT_MS = 60_000;
@@ -135,7 +136,7 @@ export function redactSessionText(text: string): string {
     if (text.length === 0) {
         return text;
     }
-    let redacted = text;
+    let redacted = text.replaceAll(REDACTED_CREDENTIAL, SESSION_REDACTED);
     for (const pattern of SECRET_PATTERNS) {
         redacted = redacted.replace(pattern, SESSION_REDACTED);
     }

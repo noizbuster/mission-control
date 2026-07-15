@@ -1,7 +1,9 @@
+// allow: SIZE_OK -- HEAD 294 -> current 303 pure LOC; one session run-owner lifecycle and durable settlement state machine.
 import type { ModelProviderSelection } from '@mission-control/protocol';
 import type { ProjectContextMessageOptions } from '../context/project-context-messages.js';
 import type { JsonlSessionEventIdFactory } from '../memory/jsonl-session-event-store.js';
 import { type LocalSessionEventStore, openLocalSessionEventStore } from '../memory/local-session-store.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
 import type { ProviderAdapter } from '../providers/provider-turn-types.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import { type RunCoordinatorResult, SessionRunCoordinator } from './run-coordinator.js';
@@ -47,6 +49,7 @@ export type SessionRunOwnerOptions = {
     readonly projectContext?: ProjectContextMessageOptions;
     readonly toolRegistry?: ToolRegistry;
     readonly createId?: (prefix: string, index: number) => string;
+    readonly observabilityRedactor?: ObservabilityRedactor;
     readonly readMessages?: RunCoordinatorReadMessages;
     /**
      * Engine selector. Omit (default) to drive the flat provider tool loop. Inject a turn runner
@@ -75,6 +78,7 @@ export type SessionRunOwnerRegistryOptions = {
     readonly toolRegistry?: ToolRegistry;
     readonly createEventId?: JsonlSessionEventIdFactory;
     readonly createId?: (prefix: string, index: number) => string;
+    readonly observabilityRedactor?: ObservabilityRedactor | Promise<ObservabilityRedactor>;
     /**
      * Engine selector forwarded to every owner built by this registry. Omit for the flat provider
      * tool loop; inject a turn runner (e.g. `createGraphTurnRunner`) to drive the ABG graph.
@@ -129,6 +133,9 @@ export class SessionRunOwner {
             ...(options.projectContext !== undefined ? { projectContext: options.projectContext } : {}),
             ...(options.toolRegistry !== undefined ? { toolRegistry: options.toolRegistry } : {}),
             ...(options.createId !== undefined ? { createId: options.createId } : {}),
+            ...(options.observabilityRedactor !== undefined
+                ? { observabilityRedactor: options.observabilityRedactor }
+                : {}),
             ...(options.readMessages !== undefined ? { readMessages: options.readMessages } : {}),
             ...(options.runProviderTurn !== undefined ? { runProviderTurn: options.runProviderTurn } : {}),
             ...(options.onDurableEvent !== undefined ? { onDurableEvent: options.onDurableEvent } : {}),
@@ -258,11 +265,13 @@ export class SessionRunOwnerRegistry {
     }
 
     private async createEntry(input: SessionRunOwnerLeaseInput): Promise<OwnerEntry> {
+        const observabilityRedactor = await this.options.observabilityRedactor;
         const store = await openLocalSessionEventStore({
             sessionId: input.sessionId,
             ...(this.options.dataDir !== undefined ? { dataDir: this.options.dataDir } : {}),
             ...(this.options.now !== undefined ? { now: this.options.now } : {}),
             ...(this.options.createEventId !== undefined ? { createEventId: this.options.createEventId } : {}),
+            ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
         });
         try {
             const modelProviderSelection =
@@ -302,6 +311,7 @@ export class SessionRunOwnerRegistry {
                 ...(this.options.projectContext !== undefined ? { projectContext: this.options.projectContext } : {}),
                 ...(this.options.toolRegistry !== undefined ? { toolRegistry: this.options.toolRegistry } : {}),
                 ...(this.options.createId !== undefined ? { createId: this.options.createId } : {}),
+                ...(observabilityRedactor !== undefined ? { observabilityRedactor } : {}),
                 ...(input.readMessages !== undefined ? { readMessages: input.readMessages } : {}),
                 ...(turnRunner !== undefined ? { runProviderTurn: turnRunner } : {}),
                 ...(this.options.onDurableEvent !== undefined ? { onDurableEvent: this.options.onDurableEvent } : {}),

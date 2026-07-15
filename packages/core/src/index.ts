@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 508 -> current 551 pure LOC; explicit public API export barrel retained for compatibility review.
 export * from './abg-overlay/index.js';
 export type { AgentRuntimeOptions, RunGraphOptions } from './agent-runtime.js';
 export { AgentRuntime } from './agent-runtime.js';
@@ -46,7 +47,7 @@ export {
     createDefaultAbgNodeRegistry,
     runAbgNode,
 } from './behavior/node-registry.js';
-export { bustSkillCache } from './behavior/nodes/llm-actor/llm-actor-node-runner.js';
+export { bustSkillCache } from './behavior/nodes/llm-actor/llm-actor-skill-cache.js';
 export type { AbgRuleEvaluationInput, CompiledAbgRule } from './behavior/rule-compiler.js';
 export { AbgGraphValidationError, compileAbgRule } from './behavior/rule-compiler.js';
 export type { AbgSignalProjectionInput } from './behavior/signals.js';
@@ -109,6 +110,20 @@ export {
 } from './context/system-prompt.js';
 export { runLocalLibsqlWrite } from './db/local-libsql-db.js';
 export {
+    DESKTOP_APPROVAL_EFFECT_OUTCOMES,
+    type DesktopApprovalEffect,
+    type DesktopApprovalEffectClaimInput,
+    type DesktopApprovalEffectClaimResult,
+    type DesktopApprovalEffectExecutingRecord,
+    type DesktopApprovalEffectOutcome,
+    type DesktopApprovalEffectPendingRecord,
+    type DesktopApprovalEffectRecord,
+    type DesktopApprovalEffectResolutionInput,
+    type DesktopApprovalEffectSettledRecord,
+    type DesktopApprovalEffectSettlementInput,
+    type DesktopApprovalEffectUnknownRecord,
+} from './desktop-approval-effect.js';
+export {
     hasPendingDesktopApprovals,
     prepareSessionCompaction,
     projectApprovalContinuationMessages,
@@ -119,6 +134,9 @@ export {
 } from './desktop-approval-transcript.js';
 export {
     createDesktopSessionCommandService,
+    type DesktopApprovalEffectQueryInput,
+    type DesktopApprovalEffectResolutionCommandInput,
+    type DesktopApprovalEffectResolutionReceipt,
     type DesktopCommandReceipt,
     type DesktopPromptCommandInput,
     type DesktopRunCommandInput,
@@ -180,6 +198,7 @@ export {
     type ProviderCredentialResolutionErrorCode,
     type ProviderCredentialResolveInput,
     type ProviderCredentialResolver,
+    REDACTED_CREDENTIAL,
     redactCredentialText,
     summarizeResolvedProviderCredential,
 } from './providers/credential-resolver.js';
@@ -197,6 +216,20 @@ export {
     type GeminiGenerateContentTransportRequest,
 } from './providers/google/gemini-generate-content-provider.js';
 export { createLocalCodingProvider } from './providers/local-coding-provider.js';
+export {
+    composeObservabilityRedactors,
+    createObservabilityRedactor,
+    OBSERVABILITY_CIRCULAR,
+    OBSERVABILITY_REDACTION_MAX_BYTES,
+    OBSERVABILITY_REDACTION_MAX_DEPTH,
+    OBSERVABILITY_REDACTION_MAX_ENTRIES,
+    OBSERVABILITY_TRUNCATED,
+    type ObservabilityRedactor,
+    type ObservabilityRedactorOptions,
+    redactAbgSignalForObservability,
+    redactAgentEventEnvelopeForObservability,
+    redactAgentEventForObservability,
+} from './providers/observability-redactor.js';
 export {
     createNodeOpenAIResponsesTransport,
     createOpenAIResponsesProvider,
@@ -217,6 +250,7 @@ export {
 } from './providers/openai-compatible/openai-compatible-provider.js';
 export {
     createProviderAuthStoreCredentialResolver,
+    createProviderAuthStoreObservabilityRedactor,
     type ProviderAuthStoreCredentialResolverAuthStore,
     redactProviderAuthStoreCredentialText,
     summarizeProviderCredential,
@@ -260,9 +294,12 @@ export type { AgentExecutor } from './runtime/executor.js';
 export { createGraphTurnRunner, type GraphTurnRunnerWiring } from './runtime/graph-coordinator-turn.js';
 export { openCanonicalRuntimeDb } from './runtime/local-runtime-db.js';
 export {
+    blockRun,
+    cancelRun,
     completeRun,
     failRun,
     materializeMission,
+    settleMissionRunSessionOwner,
     startRun,
 } from './runtime/mission-run/mission-run-service.js';
 export {
@@ -276,6 +313,12 @@ export {
     readMission,
     updateMission,
 } from './runtime/mission-run/mission-store.js';
+export {
+    attachRunSessionOwner,
+    type RunSessionOwnerAttachment,
+    type RunSessionOwnerSettlement,
+    settleRunSessionOwner,
+} from './runtime/mission-run/run-session-owner-store.js';
 export {
     ALLOWED_RUN_TRANSITIONS,
     appendChildSession,
@@ -297,6 +340,7 @@ export {
     SessionRunCoordinator,
     type SessionRunCoordinatorOptions,
 } from './runtime/run-coordinator.js';
+export { findResumableBlockedRun } from './runtime/run-coordinator-drain.js';
 export {
     SessionRunOwner,
     type SessionRunOwnerLeaseInput,

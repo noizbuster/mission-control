@@ -197,7 +197,7 @@ describe('AgentDefinitionSchema', () => {
         expect(agent.thinkingLevel).toBe('high');
     });
 
-    it('parses recursion as -1 (unlimited) and as a non-negative int', () => {
+    it('preserves -1 and non-negative recursion compatibility metadata', () => {
         expect(AgentDefinitionSchema.parse({ ...minimalValid, recursion: -1 }).recursion).toBe(-1);
         expect(AgentDefinitionSchema.parse({ ...minimalValid, recursion: 0 }).recursion).toBe(0);
         expect(AgentDefinitionSchema.parse({ ...minimalValid, recursion: 5 }).recursion).toBe(5);

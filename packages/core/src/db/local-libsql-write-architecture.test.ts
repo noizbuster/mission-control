@@ -37,7 +37,7 @@ describe('local libSQL write architecture', () => {
             },
             {
                 path: 'memory/read-path.ts',
-                source: 'await ensureLegacySessionImportTables(client);',
+                source: 'await ensureLocalDbSchema(client);',
             },
         ];
 
@@ -101,9 +101,10 @@ function auditWriteArchitecture(files: readonly SourceFile[]): readonly Architec
             violations.push({ code: 'public_test_constructor_export', path: file.path });
         }
         if (
+            file.path !== 'db/local-libsql-db.ts' &&
+            file.path !== 'db/local-libsql-schema.ts' &&
             file.path !== 'memory/session-import.ts' &&
-            file.path !== 'memory/session-import-sql.ts' &&
-            /ensureLegacySessionImportTables\s*\(/u.test(file.source)
+            /ensureLocalDbSchema\s*\(/u.test(file.source)
         ) {
             violations.push({ code: 'read_path_schema_initialization', path: file.path });
         }

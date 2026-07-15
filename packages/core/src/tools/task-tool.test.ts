@@ -41,39 +41,57 @@ const readRegistration: ToolRegistration<{ q: string }, { a: string }> = {
     outputLimit: { maxModelOutputChars: 1000 },
     execute: async () => ({ a: 'found' }),
 };
-const bashRegistration: ToolRegistration<{ cmd: string }, { out: string }> = {
-    name: 'shell',
-    description: 'Run a shell command.',
-    capabilityClasses: ['bash.run'],
-    parametersJsonSchema: {
-        type: 'object',
-        properties: { cmd: { type: 'string' } },
-        required: ['cmd'],
-        additionalProperties: false,
-    },
-    inputSchema: z.object({ cmd: z.string() }),
-    outputSchema: z.object({ out: z.string() }),
-    outputLimit: { maxModelOutputChars: 1000 },
-    execute: async () => ({ out: 'ok' }),
-};
 
-function buildParentRegistry(): ToolRegistry {
+function capabilityRegistration(
+    name: string,
+    capabilityClasses: readonly string[],
+): ToolRegistration<{ readonly q: string }, { readonly a: string }> {
+    return {
+        name,
+        description: `${name} tool`,
+        capabilityClasses,
+        parametersJsonSchema: {
+            type: 'object',
+            properties: { q: { type: 'string' } },
+            required: ['q'],
+            additionalProperties: false,
+        },
+        inputSchema: z.object({ q: z.string() }),
+        outputSchema: z.object({ a: z.string() }),
+        outputLimit: { maxModelOutputChars: 1000 },
+        execute: async () => ({ a: 'ok' }),
+    };
+}
+
+function buildChildRegistry(): ToolRegistry {
     const registry = new ToolRegistry();
     registry.register(readRegistration);
-    registry.register(bashRegistration);
-    registry.register(
-        createTaskToolRegistration({ spawn: async () => ({ description: 'd', status: 'completed', summary: 's' }) }),
-    );
     return registry;
 }
 
-describe('createChildToolRegistry (recursion guard)', () => {
-    it('keeps read-safe tools and drops the task tool + destructive tools', () => {
-        const child = createChildToolRegistry(buildParentRegistry());
-        const names = child.advertise().map((a) => a.name);
-        expect(names).toContain('lookup');
-        expect(names).not.toContain('shell');
-        expect(names).not.toContain(TASK_TOOL_NAME);
+describe('createChildToolRegistry (compatibility safety filter)', () => {
+    it('keeps read tools and drops task, destructive, network, MCP, workflow, and team tools', () => {
+        const parent = new ToolRegistry();
+        parent.register(readRegistration);
+        for (const [name, capabilities] of [
+            ['file.edit', ['edit']],
+            ['file.write', ['write']],
+            ['file.patch', ['patch']],
+            ['bash.run', ['bash']],
+            ['webfetch', ['network']],
+            ['mcp__server__lookup', ['network']],
+            ['mcp', ['network']],
+            ['task', ['subagent']],
+            ['workflow', ['workflow']],
+            ['team', ['team']],
+        ] as const) {
+            parent.register(capabilityRegistration(name, capabilities));
+        }
+
+        const child = createChildToolRegistry(parent);
+
+        expect(child.advertise().map((advertisement) => advertisement.name)).toEqual(['lookup']);
+        expect(child.advertise().some((advertisement) => advertisement.name === TASK_TOOL_NAME)).toBe(false);
     });
 });
 
@@ -121,34 +139,11 @@ describe('spawnChildCodingAgent (end-to-end child run)', () => {
             prompt: 'What is the answer?',
             resolveSdkModel: () => model,
             model: MODEL,
-            parentToolRegistry: buildParentRegistry(),
+            childToolRegistry: buildChildRegistry(),
             now: () => NOW,
             sessionId: 'session_child_spawn',
         });
         expect(output.status).toBe('completed');
         expect(output.summary).toBe('The answer is 42.');
-    });
-
-    it('the child tool surface excludes task + destructive tools (recursion + safety guard)', async () => {
-        const model = new MockLanguageModelV3({
-            provider: MODEL.providerID,
-            modelId: MODEL.modelID,
-            doStream: async () => ({ stream: convertArrayToReadableStream(textChunks('done')) }),
-        });
-        // The child built from a parent that includes task + shell advertises ONLY lookup.
-        const childRegistry = createChildToolRegistry(buildParentRegistry());
-        expect(childRegistry.advertise().map((a) => a.name)).toEqual(['lookup']);
-
-        // And the child run still completes.
-        const output = await spawnChildCodingAgent({
-            description: 'noop',
-            prompt: 'finish',
-            resolveSdkModel: () => model,
-            model: MODEL,
-            parentToolRegistry: buildParentRegistry(),
-            now: () => NOW,
-            sessionId: 'session_child_guard',
-        });
-        expect(output.status).toBe('completed');
     });
 });

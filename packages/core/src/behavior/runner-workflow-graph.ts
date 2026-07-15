@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 552 -> current 552 pure LOC; one declarative runner graph with inseparable retry and verdict routing tables.
 /**
  * The runner workflow graph: executes a plan produced by the planner workflow
  * (plan Task 3.4, ABG Round 8 decomposition).
@@ -67,8 +68,8 @@ export const RUNNER_PLAN_ADMISSION_PROMPT =
     'A missing, malformed, or unapproved plan must never reach delegate-wave — the graph ' +
     'routes a rejected plan to plan-rejected-terminal which emits a clear failure event ' +
     'and stops.\n' +
-    'On the LAST line, output EXACTLY `true` if every check passes, or `false` if any check ' +
-    'fails — no quotes, no formatting, no extra text.';
+    'Output ONLY the JSON boolean `true` if every check passes, or `false` if any check fails — ' +
+    'no prose, no formatting, no extra text.';
 
 /** Terminal failure prompt for a plan rejected at admission. */
 export const RUNNER_PLAN_REJECTED_PROMPT =
@@ -323,8 +324,8 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 config: {
                     systemPrompt:
                         'Inspect the section-scoped plan checklist (plan.todos). If unchecked tasks ' +
-                        "remain, output 'true' on the last line. If all tasks are checked, output " +
-                        "'false' on the last line.",
+                        'remain, output ONLY the JSON boolean `true`. If all tasks are checked, output ' +
+                        'ONLY the JSON boolean `false` — no prose, no formatting, no extra text.',
                     outputKey: 'wave.pending',
                     outputShape: 'boolean',
                 },
@@ -393,7 +394,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 label: 'F1 — Goal verification critic',
                 config: {
                     systemPrompt:
-                        'F1: Verify the implementation achieves the plan stated goal. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.',
+                        'F1: Verify the implementation achieves the plan stated goal. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
                     outputKey: 'final.f1',
                 },
             },
@@ -403,7 +404,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 label: 'F2 — Constraint verification critic',
                 config: {
                     systemPrompt:
-                        'F2: Verify all explicit constraints were honored. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.',
+                        'F2: Verify all explicit constraints were honored. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
                     outputKey: 'final.f2',
                 },
             },
@@ -413,7 +414,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 label: 'F3 — Test verification critic',
                 config: {
                     systemPrompt:
-                        'F3: Verify all tests pass. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.',
+                        'F3: Verify all tests pass. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
                     outputKey: 'final.f3',
                 },
             },
@@ -423,7 +424,7 @@ export function createRunnerWorkflowGraph(options: RunnerWorkflowGraphOptions = 
                 label: 'F4 — Code quality verification critic',
                 config: {
                     systemPrompt:
-                        'F4: Verify the code is clean and well-structured. On the LAST line output EXACTLY one verdict — APPROVE or REJECT.',
+                        'F4: Verify the code is clean and well-structured. Output ONLY one verdict — APPROVE or REJECT — with no prose or formatting.',
                     outputKey: 'final.f4',
                 },
             },

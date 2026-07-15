@@ -74,6 +74,7 @@ function buildRuntime(runtimeRegistry: RuntimeAgentRegistry): ConcreteTaskToolRu
         description: 'parent',
         systemPrompt: 'parent',
         source: 'bundled',
+        spawns: '*',
     };
     const index = new AgentIndex();
     index.register(child);

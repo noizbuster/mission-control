@@ -2,20 +2,13 @@
  * `task` tool — delegate a sub-task to a CHILD coding-agent graph run (ABG §10.6, Phase 6
  * deferred item).
  *
- * The tool itself is a thin contract: it validates the delegation prompt and forwards it to
- * an injected `spawn` function. The spawn function (wired by the runtime, which holds the
- * model resolver + tool list) builds the child graph with a CHILD permission policy
- * (`subagents/child-policy.ts` drops destructive `bash`/`write`/`patch`) and a CHILD tool
- * registry built via `createChildToolRegistry` — which always EXCLUDES the `task` tool. That
- * exclusion is the registry-layer recursion guard (ABG §10.6): a delegated subagent cannot
- * spawn further subagents, and unlike a permission rule it cannot be bypassed by a prompt.
- *
- * The `task` tool is therefore never present in a child's tool surface, so the depth is
- * structurally bounded at one level regardless of what the model emits.
+ * The tool itself is a deprecated thin contract: it validates the delegation prompt and forwards
+ * it to an injected `spawn` function. Child authority belongs to the injected runtime, not this
+ * registration. Production CLI roots use the full-parity task runtime.
  */
 import { z } from 'zod';
 import { isChildSafeCapability } from '../behavior/subagents/child-policy.js';
-import { ToolRegistry } from './tool-registry.js';
+import type { ToolRegistry } from './tool-registry.js';
 import type { ToolRegistration } from './tool-registry-types.js';
 import { ToolExecutionError } from './tool-registry-types.js';
 import { truncateOutput, withContinuationHint } from './truncate.js';
@@ -96,13 +89,8 @@ export function createTaskToolRegistration(input: CreateTaskToolInput): ToolRegi
 export const TASK_TOOL_NAME = 'task';
 
 /**
- * Build a CHILD tool registry from the parent registry: every tool whose capability set is
- * child-safe (no destructive kind) EXCEPT the `task` tool itself. This is the registry-layer
- * recursion guard — the `task` tool is structurally absent from children, so a delegated
- * subagent cannot spawn further subagents regardless of what it emits.
- *
- * Operates on the type-erased registry (clones entries directly) so a heterogeneous parent
- * surface is filtered without re-asserting each registration's Input/Output generics.
+ * Build a compatibility child registry from a parent registry. The simple task path keeps only
+ * child-safe tools and structurally removes the task tool so delegated children cannot recurse.
  */
 export function createChildToolRegistry(parentRegistry: ToolRegistry): ToolRegistry {
     return parentRegistry.cloneWithFilter(

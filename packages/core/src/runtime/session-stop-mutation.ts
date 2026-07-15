@@ -2,6 +2,7 @@ import type { Client } from '@libsql/client';
 import type { SessionAbortAffectedCounts } from '@mission-control/protocol';
 import { z } from 'zod';
 import { refreshSessionAwaitingFromPendingWaits } from '../memory/session-awaiting-sql.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
 import { updateRunStatusWithClient } from './mission-run/run-store.js';
 
 const inputRowSchema = z.object({ input_id: z.string(), delivery: z.enum(['steer', 'queue']) });
@@ -14,6 +15,7 @@ export type StopMutationInput = {
     readonly client: Client;
     readonly sessionId: string;
     readonly timestamp: string;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 export type StopMutationResult = {
@@ -84,7 +86,12 @@ export async function applyStopMutation(input: StopMutationInput): Promise<StopM
             runId,
             'cancelled',
             { terminalReason: 'operator_aborted' },
-            { now: () => input.timestamp },
+            {
+                now: () => input.timestamp,
+                ...(input.observabilityRedactor !== undefined
+                    ? { observabilityRedactor: input.observabilityRedactor }
+                    : {}),
+            },
         );
     }
     await input.client.execute({

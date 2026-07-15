@@ -8,9 +8,9 @@
  * cancellation is an anti-pattern (AGENTS.md) and is rejected by the strict schema
  * (unknown keys fail validation, and a dedicated test pins the rejection).
  *
- * Capability class `'subagent'` groups it with the task tool, and
- * {@linkcode ConcreteTaskToolRuntime.buildChildToolSurface} drops it by name alongside
- * `task` — children never get control over the parent's job manager.
+ * Capability class `'subagent'` groups it with the task tool. The standalone
+ * `buildChildToolSurface` authority builder drops both names, so children never control the
+ * parent's job manager.
  *
  * The tool holds an injected {@linkcode AsyncJobManager} handle (the same instance the
  * runtime services share) and performs NO provider calls, so tests inject a real manager

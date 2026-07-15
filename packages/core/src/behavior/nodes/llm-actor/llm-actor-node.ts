@@ -21,15 +21,20 @@
 import type { AbgSignal } from '@mission-control/protocol';
 import type { ModelMessage, ToolSet } from 'ai';
 import { stepCountIs, streamText } from 'ai';
-import { redactCredentialText } from '../../../providers/redaction-handler.js';
+import { createObservabilityRedactor, type ObservabilityRedactor } from '../../../providers/observability-redactor.js';
 import { errorToString } from '../../../util/error-to-string.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
+import type { AbgToolSettlementLedger } from './abg-tool-bridge.js';
+import { abgSignalsFromStreamPart, createStreamPartObservabilityState } from './ai-sdk-adapter.js';
 import {
-    type AbgToolSettlement,
-    type AbgToolSettlementLedger,
-    isApprovalRequiredSettlement,
-} from './abg-tool-bridge.js';
-import { abgSignalsFromStreamPart } from './ai-sdk-adapter.js';
+    approvalBlockFailure,
+    extractProviderErrorCode,
+    extractProviderErrorRetryable,
+    extractProviderRetryExhausted,
+    extractToolCallId,
+    firstApprovalBlockedSettlementInProposalOrder,
+    terminalToolFailure,
+} from './llm-actor-settlements.js';
 
 type StreamTextParameters = Parameters<typeof streamText>[0];
 
@@ -60,15 +65,20 @@ export type LlmActorRunInput = {
     readonly now: () => string;
     readonly settlementLedger?: AbgToolSettlementLedger;
     readonly haltOnFailedToolSettlement?: boolean;
+    readonly observabilityRedactor?: ObservabilityRedactor;
+    readonly captureRawTurnResult?: (result: LlmActorTurnResult) => void;
 };
 
 export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSignal> {
     const { nodeId, now } = input;
+    const observabilityRedactor = input.observabilityRedactor ?? createObservabilityRedactor();
     const adapterContext = {
         graphId: input.graphId,
         nodeId,
         now,
         ...(input.settlementLedger !== undefined ? { settlementLedger: input.settlementLedger } : {}),
+        observabilityRedactor,
+        observabilityStreams: createStreamPartObservabilityState(),
     };
     const graphIdPart = input.graphId !== undefined ? { graphId: input.graphId } : {};
 
@@ -86,6 +96,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         system: input.system,
         messages: input.messages,
         stopWhen: stepCountIs(1),
+        onError: () => undefined,
         ...(input.tools !== undefined ? { tools: input.tools } : {}),
         ...(input.signal !== undefined ? { abortSignal: input.signal } : {}),
     });
@@ -110,18 +121,14 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             }
         }
         const [text, usage, response] = await Promise.all([result.text, result.usage, result.response]);
-        // Redact credentials from the assistant text BEFORE it flows into the `llm.turn.completed`
-        // emit (persisted + rendered) and the turn result — parity with the flat path, which redacts
-        // provider message content at the provider-event layer. Without this the graph path would
-        // stream + persist raw credentials in assistant text.
-        turnText = redactCredentialText(text);
+        turnText = text;
         turnUsage = usage;
         turnResponseMessages = response.messages;
     } catch (error) {
         // Redact credentials from the surfaced error message (parity with the flat path, which
         // redacts provider error messages at the provider-event layer) so a provider failure
         // carrying a secret does not leak into the `llm.error` emit (rendered + persisted).
-        const message = redactCredentialText(errorToString(error));
+        const message = observabilityRedactor.redactText(errorToString(error));
         const errorCode = extractProviderErrorCode(error);
         const retryable = extractProviderErrorRetryable(error);
         const retryExhausted = extractProviderRetryExhausted(error);
@@ -131,7 +138,10 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             source: 'llm-actor',
             eventType: 'llm.error',
             timestamp: now(),
-            payload: { error: message, ...(errorCode !== undefined ? { errorCode } : {}) },
+            payload: observabilityRedactor.redactValue({
+                error: message,
+                ...(errorCode !== undefined ? { errorCode } : {}),
+            }),
         });
         // Carry the structured provider error code in the failure signal so the graph runner can
         // surface it on the result and the turn-runner mapping can distinguish an abort
@@ -141,7 +151,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             type: 'failure',
             nodeId,
             ...graphIdPart,
-            error:
+            error: observabilityRedactor.redactValue(
                 errorCode !== undefined
                     ? {
                           message,
@@ -151,6 +161,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                           ...(retryExhausted ? { retryExhausted: true } : {}),
                       }
                     : message,
+            ),
         };
         return;
     }
@@ -168,7 +179,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
             type: 'failure',
             nodeId,
             ...graphIdPart,
-            error: approvalBlockFailure(approvalBlock),
+            error: observabilityRedactor.redactValue(approvalBlockFailure(approvalBlock)),
         };
         return;
     }
@@ -192,7 +203,7 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
                 type: 'failure',
                 nodeId,
                 ...graphIdPart,
-                error: terminalToolFailure(terminalFailure),
+                error: observabilityRedactor.redactValue(terminalToolFailure(terminalFailure)),
             };
             return;
         }
@@ -204,138 +215,18 @@ export async function* runLlmActor(input: LlmActorRunInput): AsyncIterable<AbgSi
         source: 'llm-actor',
         eventType: 'llm.turn.completed',
         timestamp: now(),
-        payload: { text: turnText, usage: turnUsage },
+        payload: observabilityRedactor.redactValue({ text: turnText, usage: turnUsage }),
     });
-    const turnResult: LlmActorTurnResult = {
+    const rawTurnResult: LlmActorTurnResult = {
         text: turnText,
         usage: turnUsage,
         responseMessages: turnResponseMessages,
     };
-    yield { type: 'success', nodeId, ...graphIdPart, result: turnResult };
-}
-
-/**
- * Find the first-PROPOSED settlement (by stream order) that is approval-blocked, falling back to
- * the ledger's first-recorded approval block when no proposal order is available. The proposal
- * order is deterministic (it mirrors the model's tool-call stream); the ledger's insertion order
- * follows the SDK's execute-dispatch order, which under a serialized batch is FIFO on
- * microtask-scheduled acquires — non-deterministic across runs. Falls back when the ledger is
- * absent or no proposals were tracked (preserves prior behavior for those callers).
- */
-function firstApprovalBlockedSettlementInProposalOrder(
-    ledger: AbgToolSettlementLedger | undefined,
-    proposedToolCallIds: readonly string[],
-): AbgToolSettlement | undefined {
-    if (ledger === undefined) {
-        return undefined;
-    }
-    for (const toolCallId of proposedToolCallIds) {
-        const settlement = ledger.lookup(toolCallId);
-        if (settlement !== undefined && isApprovalRequiredSettlement(settlement)) {
-            return settlement;
-        }
-    }
-    return ledger.approvalBlockedSettlement();
-}
-
-function extractToolCallId(payload: unknown): string | undefined {
-    if (typeof payload !== 'object' || payload === null || !('toolCallId' in payload)) {
-        return undefined;
-    }
-    const value = (payload as { readonly toolCallId?: unknown }).toolCallId;
-    return typeof value === 'string' ? value : undefined;
-}
-
-/**
- * Extract a provider error code from a thrown error so the graph can preserve the abort/fail
- * distinction. Flat-bridge and provider-turn errors carry a `ProtocolError` under a nested `.error`
- * field; some carry `.code` directly. Uses `in`/`typeof` narrowing (no casts) so the helper stays
- * cast-free. Returns `undefined` for errors with no recognizable code (the common case).
- */
-function extractProviderErrorCode(error: unknown): string | undefined {
-    if (hasField(error, 'error')) {
-        const nested = codeOfString(error.error);
-        if (nested !== undefined) {
-            return nested;
-        }
-    }
-    return codeOfString(error);
-}
-
-function extractProviderErrorRetryable(error: unknown): boolean | undefined {
-    if (hasField(error, 'error')) {
-        const nested = retryableOf(error.error);
-        if (nested !== undefined) {
-            return nested;
-        }
-    }
-    return retryableOf(error);
-}
-
-function extractProviderRetryExhausted(error: unknown): boolean {
-    return hasField(error, 'retryExhausted') && error.retryExhausted === true;
-}
-
-function retryableOf(value: unknown): boolean | undefined {
-    if (typeof value === 'object' && value !== null && hasField(value, 'retryable')) {
-        return typeof value.retryable === 'boolean' ? value.retryable : undefined;
-    }
-    return undefined;
-}
-
-function codeOfString(value: unknown): string | undefined {
-    if (typeof value === 'object' && value !== null && hasField(value, 'code') && typeof value.code === 'string') {
-        return value.code;
-    }
-    return undefined;
-}
-
-function hasField<T extends string>(value: unknown, field: T): value is Record<T, unknown> {
-    return typeof value === 'object' && value !== null && field in value;
-}
-
-/**
- * Shape the LLMActor puts in a `failure` signal when a tool settled as `approval_required`, so the
- * coordinator can settle the graph as `blocked` (resumable) and the turn-runner mapping can thread
- * the `toolCallId` into the `blocked_on_approval` result — parity with the flat run coordinator's
- * approval-block detection. `code: 'tool_approval_blocked'` is the discriminator the node runner
- * recognizes; the rest carries the block context.
- */
-function approvalBlockFailure(settlement: AbgToolSettlement): {
-    readonly code: 'tool_approval_blocked';
-    readonly toolCallId: string;
-    readonly toolName: string;
-    readonly approvalCode: string;
-    readonly message: string;
-} {
-    return {
-        code: 'tool_approval_blocked',
-        toolCallId: settlement.toolCallId,
-        toolName: settlement.toolName,
-        approvalCode: 'approval_required',
-        message: settlement.error?.message ?? 'tool blocked pending approval',
-    };
-}
-
-/**
- * Shape the LLMActor puts in a `failure` signal when a tool settled `failed` for a non-approval
- * reason (under `haltOnFailedToolSettlement`), so the coordinator fails the run immediately (no
- * retry) with the toolCallId — parity with the flat run coordinator's `terminalFailedSettlement`
- * for a non-approval tool failure. `code: 'tool_settlement_failed'` is the discriminator the node
- * runner recognizes as terminal (no retry); `retryable: false` mirrors the flat result's errorCode.
- */
-function terminalToolFailure(settlement: AbgToolSettlement): {
-    readonly code: 'tool_settlement_failed';
-    readonly retryable: false;
-    readonly toolCallId: string;
-    readonly toolName: string;
-    readonly message: string;
-} {
-    return {
-        code: 'tool_settlement_failed',
-        retryable: false,
-        toolCallId: settlement.toolCallId,
-        toolName: settlement.toolName,
-        message: settlement.error?.message ?? 'tool failed',
+    input.captureRawTurnResult?.(rawTurnResult);
+    yield {
+        type: 'success',
+        nodeId,
+        ...graphIdPart,
+        result: observabilityRedactor.redactValue(rawTurnResult),
     };
 }

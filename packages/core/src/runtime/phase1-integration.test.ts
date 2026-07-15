@@ -131,11 +131,11 @@ describe('Phase 1 integration: workflow lifecycle', () => {
         // Step 4 — Materialize the workflow as a Mission and start a Run (Task 1.4).
         const mission = materializeMission(workflowSpec);
         await createMission(missionRunLocation, mission);
-        const run = await startRun(missionRunLocation, mission.id, 'run the demo workflow');
+        const sessionId = 'session_phase1_demo';
+        const run = await startRun(missionRunLocation, mission.id, 'run the demo workflow', { sessionId });
         expect(run.status).toBe('running');
         expect((await readMission(missionRunLocation, mission.id)).status).toBe('active');
-        const sessionId = run.sessionId;
-        if (sessionId === undefined) throw new Error('run has no session id');
+        expect(run.sessionId).toBe(sessionId);
 
         // Step 5 — Deliver a steer + queued input and coordinate a drain (Task 1.5).
         const delivery = new SessionInputDelivery();

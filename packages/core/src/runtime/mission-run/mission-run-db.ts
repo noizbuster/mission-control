@@ -64,15 +64,20 @@ export async function listMissionsFromDb(dataDir: string): Promise<readonly Miss
     }
 }
 
-export async function writeRunToDb(dataDir: string, run: Run): Promise<void> {
+export async function writeRunToDb(
+    dataDir: string,
+    run: Run,
+    options: { readonly conflict?: 'replace' | 'ignore' } = {},
+): Promise<boolean> {
     const validated = RunSchema.parse(run);
     const runtime = await openMissionRunRuntime(dataDir);
     const timestamp = new Date().toISOString();
     try {
-        await runLocalLibsqlWrite(runtime, async (client) => {
-            await runLocalLibsqlClientTransaction(client, async () => {
-                await writeRunRow(client, validated, timestamp);
-                await refreshRunSessions(client, [validated.sessionId], timestamp);
+        return await runLocalLibsqlWrite(runtime, async (client) => {
+            return runLocalLibsqlClientTransaction(client, async () => {
+                const written = await writeRunRow(client, validated, timestamp, options.conflict ?? 'replace');
+                if (written) await refreshRunSessions(client, [validated.sessionId], timestamp);
+                return written;
             });
         });
     } finally {
@@ -106,7 +111,9 @@ export async function mutateRunWithClient(
 ): Promise<Run | undefined> {
     const existing = await selectRun(client, runId);
     if (existing === undefined) return undefined;
-    const updated = RunSchema.parse(mutate(existing));
+    const candidate = mutate(existing);
+    if (candidate === existing) return existing;
+    const updated = RunSchema.parse(candidate);
     await writeRunRow(client, updated, timestamp);
     await refreshRunSessions(client, [existing.sessionId, updated.sessionId], timestamp);
     return updated;
@@ -161,19 +168,28 @@ async function selectRun(client: Client, runId: string): Promise<Run | undefined
     return row === undefined ? undefined : RunSchema.parse(JSON.parse(runRowSchema.parse(row).passthrough_json));
 }
 
-async function writeRunRow(client: Client, run: Run, timestamp: string): Promise<void> {
-    await client.execute({
+async function writeRunRow(
+    client: Client,
+    run: Run,
+    timestamp: string,
+    conflict: 'replace' | 'ignore' = 'replace',
+): Promise<boolean> {
+    const conflictClause =
+        conflict === 'ignore'
+            ? 'ON CONFLICT(run_id) DO NOTHING'
+            : 'ON CONFLICT(run_id) DO UPDATE SET mission_id = excluded.mission_id, parent_run_id = excluded.parent_run_id, ' +
+              'session_id = excluded.session_id, child_agent_kind = excluded.child_agent_kind, child_agent_id = excluded.child_agent_id, ' +
+              'child_session_ids_json = excluded.child_session_ids_json, retry_state_json = excluded.retry_state_json, ' +
+              'status = excluded.status, prompt = excluded.prompt, updated_at = excluded.updated_at, started_at = excluded.started_at, ' +
+              'ended_at = excluded.ended_at, completed_at = excluded.completed_at, failed_at = excluded.failed_at, ' +
+              'cancelled_at = excluded.cancelled_at, passthrough_json = excluded.passthrough_json';
+    const result = await client.execute({
         sql:
             'INSERT INTO mission_runs (run_id, mission_id, parent_run_id, session_id, child_agent_kind, ' +
             'child_agent_id, child_session_ids_json, retry_state_json, status, prompt, created_at, updated_at, ' +
             'started_at, ended_at, completed_at, failed_at, cancelled_at, passthrough_json) ' +
             'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
-            'ON CONFLICT(run_id) DO UPDATE SET mission_id = excluded.mission_id, parent_run_id = excluded.parent_run_id, ' +
-            'session_id = excluded.session_id, child_agent_kind = excluded.child_agent_kind, child_agent_id = excluded.child_agent_id, ' +
-            'child_session_ids_json = excluded.child_session_ids_json, retry_state_json = excluded.retry_state_json, ' +
-            'status = excluded.status, prompt = excluded.prompt, updated_at = excluded.updated_at, started_at = excluded.started_at, ' +
-            'ended_at = excluded.ended_at, completed_at = excluded.completed_at, failed_at = excluded.failed_at, ' +
-            'cancelled_at = excluded.cancelled_at, passthrough_json = excluded.passthrough_json',
+            conflictClause,
         args: [
             run.id,
             run.missionId,
@@ -195,6 +211,7 @@ async function writeRunRow(client: Client, run: Run, timestamp: string): Promise
             JSON.stringify(run),
         ],
     });
+    return result.rowsAffected > 0;
 }
 
 async function refreshRunSessions(

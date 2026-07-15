@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 349 -> current 352 pure LOC; one queue, steer, resume, and interrupt drain-loop state machine.
 import type { Client } from '@libsql/client';
 import type {
     AgentEvent,
@@ -284,6 +285,9 @@ export class SessionRunCoordinator {
                     reason: 'operator_aborted',
                 },
             },
+            ...(this.options.observabilityRedactor !== undefined
+                ? { observabilityRedactor: this.options.observabilityRedactor }
+                : {}),
         });
     }
 

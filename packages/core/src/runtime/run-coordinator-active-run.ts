@@ -4,6 +4,7 @@ import type {
     RunCoordinatorResult,
     RunCoordinatorRunEventType,
 } from './run-coordinator-lifecycle.js';
+import { safeRunReason } from './run-coordinator-lifecycle.js';
 
 export function statusFromActiveRun(activeRun: RunCoordinatorActiveRun | undefined): RunCoordinatorResult {
     if (activeRun === undefined) {
@@ -43,7 +44,7 @@ export async function interruptActiveRun(input: {
         input.activeRun?.kind === 'running' ? 'running' : (input.activeRun?.kind ?? 'idle'),
         'run command: interrupt',
         {
-            reason: input.reason,
+            reason: safeRunReason(input.reason),
             ...(active?.runId !== undefined ? { runId: active.runId } : {}),
         },
     );

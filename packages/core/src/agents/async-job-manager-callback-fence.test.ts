@@ -95,6 +95,46 @@ describe('AsyncJobManager callback fencing', () => {
         expect(terminalStatuses).toEqual(['cancelled']);
     });
 
+    it('keeps default controlled cancellation unfenced until execution settles', async () => {
+        const runtime = await createOperationTestRuntime();
+        const lease = await acquireOperationTestLease(runtime, 'owner-default-cancel', 1_000);
+        const terminalClients: Array<Client | undefined> = [];
+        const manager = new AsyncJobManager(1, {
+            mirror: {
+                recordJob: (handle, client) => {
+                    if (isTerminal(handle)) terminalClients.push(client);
+                },
+            },
+        });
+        const handle = manager.startJob({
+            sessionId: lease.sessionId,
+            controlEpoch: controlEpoch(runtime, lease, 'operation-default-cancel'),
+            execute: (signal) =>
+                new Promise((_resolve, reject) => {
+                    signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+                }),
+        });
+        await createSessionControlOperation({
+            runtime,
+            lease,
+            operationId: 'operation-default-cancel',
+            barrierKind: 'all_mutations',
+            deadlineWallMs: 20_000,
+            capturedHandleIds: [`job:${handle.jobId}`],
+            nowWallMs: 1_100,
+        });
+
+        manager.cancelJob(handle.jobId);
+
+        expect(handle.status).toBe('running');
+        expect(terminalClients).toEqual([]);
+        const settled = await manager.awaitJob(handle.jobId);
+        expect(settled.status).toBe('cancelled');
+        expect(terminalClients).toHaveLength(1);
+        expect(terminalClients[0]).toBeDefined();
+        runtime.close();
+    });
+
     it('quarantines stale queued cancellation without durable write and settles the local handle', async () => {
         const runtime = await createOperationTestRuntime();
         const oldLease = await acquireOperationTestLease(runtime, 'owner-queued-old', 1_000);

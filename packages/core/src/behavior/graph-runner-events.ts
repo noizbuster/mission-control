@@ -8,6 +8,7 @@ import type {
     ApprovalRecord,
     PermissionDecision,
 } from '@mission-control/protocol';
+import { createObservabilityRedactor } from '../providers/observability-redactor.js';
 import type { AbgGraphRunnerInput } from './graph-runner.js';
 
 export function graphEvent(
@@ -17,11 +18,12 @@ export function graphEvent(
     message: string,
     abg?: Omit<AbgEventMetadata, 'graphId'>,
 ): AgentEvent {
+    const redactor = input.observabilityRedactor ?? createObservabilityRedactor();
     return {
         type,
         timestamp: input.now(),
         sessionId: input.sessionId,
-        message,
+        message: redactor.redactText(message),
         durability: 'durable',
         nativeSidecarStatus: 'mock',
         modelProviderSelection: input.modelProviderSelection,
@@ -38,6 +40,7 @@ export function attemptEvent(
     maxAttempts: number,
     error?: AbgRuntimeError,
 ): AgentEvent {
+    const redactor = input.observabilityRedactor ?? createObservabilityRedactor();
     return {
         type,
         timestamp: input.now(),
@@ -52,7 +55,7 @@ export function attemptEvent(
             nodeKind: node.kind,
             attempt,
             maxAttempts,
-            ...(error !== undefined ? { error } : {}),
+            ...(error !== undefined ? { error: { ...error, message: redactor.redactText(error.message) } } : {}),
         },
     };
 }
@@ -63,11 +66,12 @@ export function nodeWaitingEvent(
     input: AbgGraphRunnerInput,
     reason: string,
 ): AgentEvent {
+    const redactor = input.observabilityRedactor ?? createObservabilityRedactor();
     return {
         type: 'node.waiting',
         timestamp: input.now(),
         sessionId: input.sessionId,
-        message: `node waiting: ${node.id} (${reason})`,
+        message: redactor.redactText(`node waiting: ${node.id} (${reason})`),
         durability: 'durable',
         nativeSidecarStatus: 'mock',
         modelProviderSelection: input.modelProviderSelection,
@@ -87,11 +91,12 @@ export function approvalLifecycleEvent(
     approvalRecord: ApprovalRecord,
     message: string,
 ): AgentEvent {
+    const redactor = input.observabilityRedactor ?? createObservabilityRedactor();
     return {
         type,
         timestamp: input.now(),
         sessionId: input.sessionId,
-        message,
+        message: redactor.redactText(message),
         durability: 'durable',
         nativeSidecarStatus: 'mock',
         modelProviderSelection: input.modelProviderSelection,
@@ -117,7 +122,10 @@ export function modelCallEvent(
      */
     finalText?: string,
 ): AgentEvent {
-    const message = type === 'model.call.completed' && finalText !== undefined ? finalText : `${type}: ${node.id}`;
+    const redactor = input.observabilityRedactor ?? createObservabilityRedactor();
+    const message = redactor.redactText(
+        type === 'model.call.completed' && finalText !== undefined ? finalText : `${type}: ${node.id}`,
+    );
     return {
         type,
         timestamp: input.now(),
@@ -143,13 +151,15 @@ export function toolLifecycleEvent(
     node: AbgNodeSpec,
     input: AbgGraphRunnerInput,
     message: string,
+    toolCallId: string,
 ): AgentEvent {
+    const redactor = input.observabilityRedactor ?? createObservabilityRedactor();
     return {
         type,
         timestamp: input.now(),
         sessionId: input.sessionId,
-        taskId: node.id,
-        message,
+        taskId: toolCallId,
+        message: redactor.redactText(message),
         durability: 'durable',
         nativeSidecarStatus: 'mock',
         modelProviderSelection: input.modelProviderSelection,
@@ -167,6 +177,7 @@ export function permissionEvent(
     policy: AbgPolicySpec,
     input: AbgGraphRunnerInput,
 ): AgentEvent {
+    const redactor = input.observabilityRedactor ?? createObservabilityRedactor();
     const requestId = `permission_${graphId}_${node.id}`;
     return {
         type: 'permission.requested',
@@ -179,9 +190,9 @@ export function permissionEvent(
         permissionRequest: {
             id: requestId,
             action: policy.capability,
-            reason: policy.reason ?? `ABG policy ${policy.id}`,
+            reason: redactor.redactText(policy.reason ?? `ABG policy ${policy.id}`),
         },
-        permissionDecision: deniedDecision(requestId, policy),
+        permissionDecision: deniedDecision(requestId, policy, redactor.redactText),
         abg: {
             graphId,
             nodeId: node.id,
@@ -196,11 +207,12 @@ export function policyBlockedEvent(
     policy: AbgPolicySpec,
     input: AbgGraphRunnerInput,
 ): AgentEvent {
+    const redactor = input.observabilityRedactor ?? createObservabilityRedactor();
     return {
         type: 'policy.blocked',
         timestamp: input.now(),
         sessionId: input.sessionId,
-        message: policy.reason ?? `ABG policy blocked capability: ${policy.capability}`,
+        message: redactor.redactText(policy.reason ?? `ABG policy blocked capability: ${policy.capability}`),
         durability: 'durable',
         nativeSidecarStatus: 'mock',
         modelProviderSelection: input.modelProviderSelection,
@@ -212,10 +224,14 @@ export function policyBlockedEvent(
     };
 }
 
-function deniedDecision(requestId: string, policy: AbgPolicySpec): PermissionDecision {
+function deniedDecision(
+    requestId: string,
+    policy: AbgPolicySpec,
+    redactText: (text: string) => string,
+): PermissionDecision {
     return {
         requestId,
         status: policy.decision,
-        ...(policy.reason !== undefined ? { reason: policy.reason } : {}),
+        ...(policy.reason !== undefined ? { reason: redactText(policy.reason) } : {}),
     };
 }

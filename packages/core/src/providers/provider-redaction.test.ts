@@ -1,4 +1,4 @@
-import type { ProviderStreamChunk } from '@mission-control/protocol';
+import type { AgentEventEnvelope, ProviderStreamChunk } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { JsonlSessionEventStore } from '../memory/jsonl-session-event-store.js';
 import { projectSessionReplay } from '../session-replay.js';
@@ -102,6 +102,48 @@ describe('provider output redaction', () => {
             },
         ]);
         expect(JSON.stringify(result)).not.toContain(secret);
+    });
+
+    it('does not leak a credential split across live provider text chunks', async () => {
+        // Given
+        const secret = ['sk', 'split_provider_stream_123'].join('-');
+        const split = Math.floor(secret.length / 2);
+        const liveEnvelopes: AgentEventEnvelope[] = [];
+        const runner = new ProviderTurnRunner({
+            provider: createDeterministicProvider([
+                { kind: 'text_delta', delta: `visible ${secret.slice(0, split)}` },
+                { kind: 'text_delta', delta: `${secret.slice(split)} tail` },
+                { kind: 'response_completed', content: `visible ${secret} tail` },
+            ]),
+            now: fixedNow,
+            createEventId: (_event, sequence) => `event_${sequence}`,
+        });
+
+        // When
+        const result = await runner.runTurn({
+            sessionId: 'session_provider_split_redaction',
+            turnId: 'turn_provider_split_redaction',
+            requestId: 'request_provider_split_redaction',
+            providerID: 'local',
+            modelID: 'deterministic',
+            messages: [{ role: 'user', content: 'redact a split provider stream' }],
+            startSequence: 0,
+            onEnvelope: (envelope) => {
+                liveEnvelopes.push(envelope);
+            },
+        });
+
+        // Then
+        expect(result.status).toBe('completed');
+        const streamedText = liveEnvelopes
+            .flatMap((envelope) =>
+                envelope.event.providerStreamChunk?.kind === 'text_delta'
+                    ? [envelope.event.providerStreamChunk.delta]
+                    : [],
+            )
+            .join('');
+        expect(streamedText).toBe('visible [REDACTED_CREDENTIAL] tail');
+        expect(streamedText).not.toContain(secret);
     });
 });
 

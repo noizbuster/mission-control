@@ -60,7 +60,7 @@ export function evalParametersJsonSchema(): Readonly<Record<string, unknown>> {
             cells: {
                 type: 'array',
                 description:
-                    'JavaScript cells to execute in a persistent sandbox. State persists across cells within one call.',
+                    'JavaScript or Python cells to execute in persistent local runtimes. These runtimes are not security sandboxes. State persists across cells within one call.',
                 items: {
                     type: 'object',
                     properties: {
@@ -72,7 +72,7 @@ export function evalParametersJsonSchema(): Readonly<Record<string, unknown>> {
                         },
                         code: {
                             type: 'string',
-                            description: 'JavaScript source to evaluate.',
+                            description: 'Raw JavaScript or Python source to evaluate, according to language.',
                         },
                         timeoutMs: {
                             type: 'integer',

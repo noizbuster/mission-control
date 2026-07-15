@@ -1,6 +1,7 @@
 import type { AgentEvent, PermissionDecision, PermissionRequest } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { AgentRuntime } from './agent-runtime.js';
+import { createObservabilityRedactor } from './providers/observability-redactor.js';
 
 describe('AgentRuntime', () => {
     it('runDemoTask emits start/progress/completed events and snapshot', async () => {
@@ -145,6 +146,32 @@ describe('AgentRuntime', () => {
         expect(runtime.getEvents().map((event) => event.type)).toEqual(
             expect.arrayContaining(['permission.requested', 'approval.blocked']),
         );
+    });
+
+    it('redacts configured credentials before approval events enter the public runtime log', async () => {
+        const credential = ['runtime', 'approval', 'credential'].join('_');
+        const observed: AgentEvent[] = [];
+        const runtime = new AgentRuntime({
+            useNative: false,
+            permissionDecisionResolver: allowAllPermissions,
+            observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
+        });
+        runtime.onEvent((event) => observed.push(event));
+
+        await runtime.start();
+        await runtime.requestPermission({
+            id: 'permission_runtime_redaction',
+            action: 'command.run',
+            reason: `execute with ${credential}`,
+        });
+
+        const observable = JSON.stringify({
+            events: runtime.getEvents(),
+            snapshot: runtime.getSnapshot(),
+            observed,
+        });
+        expect(observable).toContain('[REDACTED_CREDENTIAL]');
+        expect(observable).not.toContain(credential);
     });
 
     it('freezes the final snapshot and clears live events on stop', async () => {

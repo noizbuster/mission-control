@@ -1,9 +1,10 @@
-import type { WorkflowSpec } from '@mission-control/protocol';
+// allow: SIZE_OK -- HEAD 320 -> current 348 pure LOC; one workflow discovery security and first-wins integration matrix.
+import { type WorkflowSpec, WorkflowSpecSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { stripJsoncComments } from './jsonc-parser.js';
 import { DEFAULT_MAX_WORKFLOW_FILE_BYTES, type DiscoverWorkflowsResult, discoverWorkflows } from './workflow-loader.js';
 import { WorkflowRegistry } from './workflow-registry.js';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -63,6 +64,39 @@ describe('stripJsoncComments', () => {
 
     it('handles unterminated block comment gracefully', () => {
         expect(stripJsoncComments('{"a": 1 /* never closed')).toBe('{"a": 1 ');
+    });
+});
+
+describe('custom workflow example', () => {
+    it('requires a whole boolean readiness signal before the user-facing response', async () => {
+        const fixturePath = join(process.cwd(), 'examples', 'abg', 'custom-example.workflow.jsonc');
+        const fixture = await readFile(fixturePath, 'utf8');
+        const parsed = WorkflowSpecSchema.safeParse(JSON.parse(stripJsoncComments(fixture)));
+        const outputKey = 'outputKey';
+        const outputShape = 'outputShape';
+        const systemPrompt = 'systemPrompt';
+
+        expect(parsed.success).toBe(true);
+        if (!parsed.success) return;
+
+        const research = parsed.data.graph.nodes.find((node) => node.id === 'research');
+        expect(research?.config).toMatchObject({ tool: 'repo.list', arguments: { path: '.' } });
+
+        const readiness = parsed.data.graph.nodes.find((node) => node.id === 'answer');
+        expect(readiness?.kind).toBe('llm');
+        expect(readiness?.config?.[outputKey]).toBe('answer.ready');
+        expect(readiness?.config?.[outputShape]).toBe('boolean');
+        expect(readiness?.config?.[systemPrompt]).toMatch(/output only the json boolean `true` when complete/i);
+
+        const response = parsed.data.graph.nodes.find((node) => node.id === 'respond');
+        expect(response?.kind).toBe('llm');
+        expect(response?.capabilities).toEqual(['repo.list']);
+        expect(response?.config?.[outputKey]).toBeUndefined();
+        expect(response?.config?.[systemPrompt]).toContain('normal user-facing prose');
+        const responseEdge = parsed.data.graph.edges.find(
+            (edge) => edge.source === 'answer' && edge.target === 'respond',
+        );
+        expect(responseEdge).toMatchObject({ condition: 'answer-ready' });
     });
 });
 

@@ -1,28 +1,13 @@
-import {
-    type AbgNodeModelOptions,
-    type AbgNodeSpec,
-    type AbgPolicyDecision,
-    AbgPolicyDecisionSchema,
-    type AbgRuntimeError,
-    type AbgSignal,
-} from '@mission-control/protocol';
+import type { AbgNodeSpec, AbgPolicyDecision, AbgSignal } from '@mission-control/protocol';
 import type { AuthorableAbgGraph } from './authorable-graph.js';
 import { evaluateApprovalGate } from './graph-approval-gates.js';
-import {
-    type CoordinatorState,
-    findBlockingPolicy,
-    nextAttempt,
-    nodeModel,
-    nodeStatusForSignal,
-    runContext,
-} from './graph-coordinator-helpers.js';
+import { type CoordinatorState, findBlockingPolicy, nextAttempt, nodeModel } from './graph-coordinator-helpers.js';
+import { runApprovedHumanApprovalNode, runNodeAttempt } from './graph-coordinator-node-execution.js';
+import { attemptFailureError } from './graph-coordinator-node-signals.js';
 import type { AbgGraphRunnerInput } from './graph-runner.js';
-import { attemptEvent, modelCallEvent, toolLifecycleEvent } from './graph-runner-events.js';
+import { attemptEvent } from './graph-runner-events.js';
 import type { ToolActionFingerprint } from './loop-safety.js';
-import { toolActionFromEmit } from './loop-safety.js';
 import type { AbgNodeRegistry } from './node-registry.js';
-import { runAbgNode } from './node-registry.js';
-import { projectAbgSignalToEvent } from './signals.js';
 
 export type QueuedNodeResult =
     | {
@@ -43,22 +28,7 @@ export type QueuedNodeResult =
           readonly terminal?: boolean;
           readonly toolActions?: readonly ToolActionFingerprint[];
       }
-    | {
-          readonly kind: 'blocked';
-          readonly lastSignal?: AbgSignal;
-      };
-
-type NodeRunResult = {
-    readonly status: 'completed' | 'failed' | 'blocked';
-    readonly lastSignal?: AbgSignal;
-    readonly lastEventType?: string;
-    readonly lastPolicyDecision?: AbgPolicyDecision;
-    readonly finalText?: string;
-    readonly terminal?: boolean;
-    readonly hadOnlyRetryableToolFailures?: boolean;
-    readonly hadProductiveToolUse?: boolean;
-    readonly toolActions: readonly ToolActionFingerprint[];
-};
+    | { readonly kind: 'blocked'; readonly lastSignal?: AbgSignal };
 
 export async function runQueuedNode(
     graph: AuthorableAbgGraph,
@@ -70,9 +40,7 @@ export async function runQueuedNode(
     const policy = findBlockingPolicy(node, graph.policies);
     const gate = evaluateApprovalGate({ graphId: graph.id, node, ...(policy !== undefined ? { policy } : {}), input });
     state.events.push(...gate.events);
-    if (gate.kind === 'blocked') {
-        return { kind: 'blocked' };
-    }
+    if (gate.kind === 'blocked') return { kind: 'blocked' };
 
     const attempt = nextAttempt(state.attemptsByNodeId, node.id);
     state.totalNodeRuns += 1;
@@ -80,7 +48,7 @@ export async function runQueuedNode(
     state.events.push(attemptEvent('attempt.started', graph.id, node, input, attempt, state.maxAttempts));
     const runResult = gate.approvedHumanApproval
         ? runApprovedHumanApprovalNode(graph, node, input, state, model, attempt)
-        : await runAttempt(graph, node, registry, input, state, model, attempt);
+        : await runNodeAttempt(graph, node, registry, input, state, model, attempt);
     if (runResult.status === 'failed') {
         state.events.push(
             attemptEvent(
@@ -103,10 +71,6 @@ export async function runQueuedNode(
         };
     }
     if (runResult.status === 'blocked') {
-        // An approval-block short-circuit (a tool settled `approval_required`): settle the node as
-        // blocked — no attempt.completed/attempt.failed, no retry. The terminal failure signal
-        // carries the toolCallId/approval context so the coordinator can surface it on the graph
-        // result and the turn-runner mapping can thread it into `blocked_on_approval`.
         return {
             kind: 'blocked',
             ...(runResult.lastSignal !== undefined ? { lastSignal: runResult.lastSignal } : {}),
@@ -123,312 +87,4 @@ export async function runQueuedNode(
         ...(runResult.hadProductiveToolUse === true ? { hadProductiveToolUse: true } : {}),
         ...(runResult.toolActions.length > 0 ? { toolActions: runResult.toolActions } : {}),
     };
-}
-
-async function runAttempt(
-    graph: AuthorableAbgGraph,
-    node: AbgNodeSpec,
-    registry: AbgNodeRegistry,
-    input: AbgGraphRunnerInput,
-    state: CoordinatorState,
-    model: AbgNodeModelOptions,
-    attempt: number,
-): Promise<NodeRunResult> {
-    if (node.kind === 'llm') {
-        state.events.push(modelCallEvent('model.call.started', graph.id, node, input, model));
-    }
-    if (node.kind === 'tool') {
-        state.events.push(toolLifecycleEvent('tool.started', graph.id, node, input, `tool started: ${node.id}`));
-    }
-    const result = await runNode(graph, node, registry, input, state, model, attempt);
-    if (node.kind === 'llm') {
-        // Carry the turn's final assistant text as the message so consumers (e.g. the session
-        // owner's final-message capture) see the model's actual output, matching the flat loop.
-        state.events.push(modelCallEvent('model.call.completed', graph.id, node, input, model, result.finalText));
-    }
-    if (node.kind === 'tool') {
-        state.events.push(
-            toolLifecycleEvent(
-                result.status === 'completed' ? 'tool.completed' : 'tool.failed',
-                graph.id,
-                node,
-                input,
-                result.status === 'completed' ? `tool completed: ${node.id}` : `tool failed: ${node.id}`,
-            ),
-        );
-    }
-    return result;
-}
-
-function runApprovedHumanApprovalNode(
-    graph: AuthorableAbgGraph,
-    node: AbgNodeSpec,
-    input: AbgGraphRunnerInput,
-    state: CoordinatorState,
-    model: AbgNodeModelOptions,
-    attempt: number,
-): NodeRunResult {
-    const startedSignal = { type: 'started', graphId: graph.id, nodeId: node.id } satisfies AbgSignal;
-    const successSignal = {
-        type: 'success',
-        graphId: graph.id,
-        nodeId: node.id,
-        result: { approved: true },
-    } satisfies AbgSignal;
-    const signals: readonly AbgSignal[] = [startedSignal, successSignal];
-    for (const signal of signals) {
-        state.nodeStatuses[signal.nodeId] = nodeStatusForSignal(signal);
-        state.events.push(
-            projectAbgSignalToEvent({
-                graphId: graph.id,
-                sessionId: input.sessionId,
-                timestamp: input.now(),
-                signal,
-                nodeKind: node.kind,
-                model,
-                attempt,
-                maxAttempts: state.maxAttempts,
-            }),
-        );
-    }
-    return { status: 'completed', lastSignal: successSignal, toolActions: [] };
-}
-
-async function runNode(
-    graph: AuthorableAbgGraph,
-    node: AbgNodeSpec,
-    registry: AbgNodeRegistry,
-    input: AbgGraphRunnerInput,
-    state: CoordinatorState,
-    model: AbgNodeModelOptions,
-    attempt: number,
-): Promise<NodeRunResult> {
-    let lastSignal: AbgSignal | undefined;
-    let failed = false;
-    let blocked = false;
-    let lastEventType: string | undefined;
-    let lastPolicyDecision: AbgPolicyDecision | undefined;
-    let finalText: string | undefined;
-    let terminal = false;
-    let retryableToolFailures = 0;
-    let completedTools = 0;
-    const toolActions: ToolActionFingerprint[] = [];
-    // Map proposed toolCallId → inputDigest so completed/failed emits (no input field) still fingerprint.
-    const proposedInputByCallId = new Map<string, string>();
-    for await (const signal of runAbgNode(registry, node, runContext(graph, registry, input, state))) {
-        await input.onSignal?.(signal);
-        lastSignal = signal;
-        state.nodeStatuses[signal.nodeId] = nodeStatusForSignal(signal);
-        if (signal.type === 'failure') {
-            if (isToolApprovalBlockedError(signal.error)) {
-                blocked = true;
-            } else {
-                failed = true;
-                if (isTerminalToolFailureError(signal.error) || isTerminalProviderError(signal.error)) {
-                    terminal = true;
-                }
-            }
-        }
-        if (signal.type === 'emit') {
-            lastEventType = signal.event.type;
-            const policyDecision = extractPolicyDecision(signal);
-            if (policyDecision !== undefined) {
-                lastPolicyDecision = policyDecision;
-            }
-            const turnText = extractTurnText(signal);
-            if (turnText !== undefined) {
-                finalText = turnText;
-            }
-            if (signal.event.type === 'tool.completed') {
-                completedTools += 1;
-            }
-            if (signal.event.type === 'tool.failed' && isRetryableToolFailurePayload(signal.event.payload)) {
-                retryableToolFailures += 1;
-            }
-            rememberProposedInput(signal.event.type, signal.event.payload, proposedInputByCallId);
-            const action = toolActionFromEmitWithProposedInput(
-                signal.event.type,
-                signal.event.payload,
-                proposedInputByCallId,
-            );
-            if (action !== undefined) {
-                toolActions.push(action);
-            }
-        }
-        state.events.push(
-            projectAbgSignalToEvent({
-                graphId: graph.id,
-                sessionId: input.sessionId,
-                timestamp: input.now(),
-                signal,
-                nodeKind: node.kind,
-                model: nodeModel(graph, signal.nodeId, input.modelProviderSelection) ?? model,
-                attempt,
-                maxAttempts: state.maxAttempts,
-            }),
-        );
-    }
-    const hadOnlyRetryableToolFailures = !failed && !blocked && retryableToolFailures > 0 && completedTools === 0;
-    const hadProductiveToolUse = completedTools > 0;
-    return {
-        status: blocked ? 'blocked' : failed ? 'failed' : 'completed',
-        toolActions,
-        ...(lastSignal !== undefined ? { lastSignal } : {}),
-        ...(lastEventType !== undefined ? { lastEventType } : {}),
-        ...(lastPolicyDecision !== undefined ? { lastPolicyDecision } : {}),
-        ...(finalText !== undefined ? { finalText } : {}),
-        ...(terminal ? { terminal: true } : {}),
-        ...(hadOnlyRetryableToolFailures ? { hadOnlyRetryableToolFailures: true } : {}),
-        ...(hadProductiveToolUse ? { hadProductiveToolUse: true } : {}),
-    };
-}
-
-function rememberProposedInput(
-    eventType: string,
-    payload: unknown,
-    proposedInputByCallId: Map<string, string>,
-): void {
-    if (eventType !== 'llm.tool_call.proposed' || typeof payload !== 'object' || payload === null) {
-        return;
-    }
-    const record = payload as Record<string, unknown>;
-    const toolCallId = typeof record['toolCallId'] === 'string' ? record['toolCallId'] : undefined;
-    if (toolCallId === undefined) {
-        return;
-    }
-    const action = toolActionFromEmit(eventType, payload);
-    if (action !== undefined) {
-        proposedInputByCallId.set(toolCallId, action.inputDigest);
-    }
-}
-
-function toolActionFromEmitWithProposedInput(
-    eventType: string,
-    payload: unknown,
-    proposedInputByCallId: Map<string, string>,
-): ToolActionFingerprint | undefined {
-    const action = toolActionFromEmit(eventType, payload);
-    if (action === undefined) {
-        return undefined;
-    }
-    if (action.inputDigest.length > 0 || typeof payload !== 'object' || payload === null) {
-        return action;
-    }
-    const toolCallId = (payload as Record<string, unknown>)['toolCallId'];
-    if (typeof toolCallId !== 'string') {
-        return action;
-    }
-    const digest = proposedInputByCallId.get(toolCallId);
-    if (digest === undefined) {
-        return action;
-    }
-    return { ...action, inputDigest: digest };
-}
-
-/**
- * Pull the model's final assistant text off an `llm.turn.completed` emit so `model.call.completed`
- * can carry the model's actual output as its message (parity with the flat run loop). The payload
- * is `unknown`; narrowed with `in`/`typeof` — no cast. Returns `undefined` for other emits.
- */
-function extractTurnText(signal: AbgSignal): string | undefined {
-    if (signal.type !== 'emit' || signal.event.type !== 'llm.turn.completed') {
-        return undefined;
-    }
-    const payload = signal.event.payload;
-    if (typeof payload !== 'object' || payload === null || !('text' in payload)) {
-        return undefined;
-    }
-    const text = payload.text;
-    return typeof text === 'string' ? text : undefined;
-}
-
-/**
- * Recognize the LLMActor's approval-block failure (a tool settled `approval_required`) so the
- * node settles as `blocked` rather than `failed`. The `error` is `unknown` (the failure signal
- * contract), narrowed with `in`/typeof — no cast.
- */
-function isToolApprovalBlockedError(error: unknown): boolean {
-    if (typeof error !== 'object' || error === null || !('code' in error)) {
-        return false;
-    }
-    return error.code === 'tool_approval_blocked';
-}
-
-/**
- * Recognize a terminal tool-settlement failure the LLMActor short-circuited on (a
- * `command_not_allowed` under `haltOnFailedToolSettlement`) so the node settles as a NON-retryable
- * `failed`. The `error` is `unknown` (the failure signal contract); narrowed with `in`/typeof — no
- * cast. Matches the codes `terminalToolFailure` emits.
- *
- * A denial (`approval_denied`) is intentionally NOT terminal — the LLMActor surfaces it to the
- * model so the run can adapt instead of dying on the first denied tool.
- *
- * `provider_aborted` is intentionally NOT terminal here. A provider-side stream drop (network
- * blip, the server closing the connection mid-flight) surfaces as `provider_aborted` even when
- * the user did NOT cancel — classifying it as terminal killed the whole graph on attempt 1 of
- * `maxAttempts` whenever a provider stream dropped. User-initiated interrupts are handled
- * separately and do NOT depend on this classification: the graph coordinator short-circuits on
- * `abortSignal.aborted` at the top of its loop (prompt cancellation, no wasted retries), and the
- * graph turn runner maps any aborted run to `interrupted` regardless of how the graph settled.
- * With `provider_aborted` retryable here, a transient provider stream drop retries up to
- * `maxAttempts` like any other retryable failure; a persistent drop still fails via
- * `node_retry_exhausted`.
- */
-function isTerminalToolFailureError(error: unknown): boolean {
-    if (typeof error !== 'object' || error === null || !('code' in error)) {
-        return false;
-    }
-    return error.code === 'tool_settlement_failed';
-}
-
-function isTerminalProviderError(error: unknown): boolean {
-    if (typeof error !== 'object' || error === null || !('providerError' in error) || error.providerError !== true) {
-        return false;
-    }
-    const retryExhausted = 'retryExhausted' in error && error.retryExhausted === true;
-    const explicitlyNonRetryable = 'retryable' in error && error.retryable === false;
-    return retryExhausted || explicitlyNonRetryable;
-}
-
-/**
- * Pull a policy decision out of a `policy.evaluated` emit signal so rule-gated edges
- * can match on it via `policy.decision.equals`. Validated with the schema (never trusts
- * an arbitrary payload shape).
- */
-function extractPolicyDecision(signal: AbgSignal): AbgPolicyDecision | undefined {
-    if (signal.type !== 'emit' || signal.event.type !== 'policy.evaluated') {
-        return undefined;
-    }
-    const payload = signal.event.payload;
-    if (payload === undefined || payload === null || typeof payload !== 'object' || !('decision' in payload)) {
-        return undefined;
-    }
-    const candidate = (payload as { decision: unknown }).decision;
-    const parsed = AbgPolicyDecisionSchema.safeParse(candidate);
-    return parsed.success ? parsed.data : undefined;
-}
-
-function attemptFailureError(
-    node: AbgNodeSpec,
-    attempt: number,
-    maxAttempts: number,
-    terminal: boolean,
-): AbgRuntimeError {
-    const retryable = !terminal && attempt < maxAttempts;
-    return {
-        code: retryable ? 'node_attempt_failed' : 'node_retry_exhausted',
-        message: retryable ? `ABG node attempt failed: ${node.id}` : `ABG node retry limit exhausted: ${node.id}`,
-        retryable,
-    };
-}
-
-function isRetryableToolFailurePayload(payload: unknown): boolean {
-    if (typeof payload !== 'object' || payload === null || !('error' in payload)) {
-        return false;
-    }
-    const error = (payload as { readonly error?: unknown }).error;
-    if (typeof error !== 'object' || error === null || !('retryable' in error)) {
-        return false;
-    }
-    return (error as { readonly retryable?: unknown }).retryable === true;
 }

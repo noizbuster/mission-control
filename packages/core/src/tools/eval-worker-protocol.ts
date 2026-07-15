@@ -2,10 +2,10 @@
  * Eval Worker IPC protocol.
  *
  * Defines the message shapes exchanged between the eval context manager (host)
- * and the isolated `worker_threads` worker that owns a persistent `vm` context.
+ * and the `worker_threads` worker that owns a persistent `vm` context.
  * Ported from oh-my-pi's `worker-protocol.ts`, simplified to the surface the
- * sandbox MVP needs. Tool re-entry (`tool-call` / `tool-reply`) is declared here
- * so the worker boundary is stable, but the simplified manager does not drive it.
+ * eval runtime needs. Tool re-entry (`tool-call` / `tool-reply`) is declared here
+ * and driven by the context manager across the worker boundary.
  */
 
 export type EvalWorkerInbound =

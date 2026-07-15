@@ -9,6 +9,7 @@ import type {
 import type { ProjectInstructionResource } from '../context/project-context-messages.js';
 import type { SystemPromptEnvironment } from '../context/system-prompt.js';
 import type { Blackboard } from '../memory/blackboard.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import type { CostLedger } from './budget/cost-ledger.js';
 import { createCompositeNodeRunners } from './nodes/composite-nodes.js';
@@ -22,6 +23,7 @@ export type AbgObservedGraphEvent = {
 export type AbgNodeRunContext = {
     readonly graphId: string;
     readonly now: () => string;
+    readonly toolCallId?: string;
     readonly registry?: AbgNodeRegistry;
     readonly nodes?: Readonly<Record<string, AbgNodeSpec | undefined>>;
     readonly observedEvents?: readonly AbgObservedGraphEvent[];
@@ -105,6 +107,7 @@ export type AbgNodeRunContext = {
      * The graph never loads these itself; the caller owns trust-aware discovery.
      */
     readonly projectInstructionResources?: readonly ProjectInstructionResource[];
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 export type AbgNodeRunner = (node: AbgNodeSpec, context: AbgNodeRunContext) => AsyncIterable<AbgSignal>;

@@ -9,6 +9,8 @@ import type {
 import type { ModelMessage } from 'ai';
 import type { ProjectInstructionResource } from '../context/project-context-messages.js';
 import type { SystemPromptEnvironment } from '../context/system-prompt.js';
+import { redactGraphRunResultForObservability } from '../providers/graph-run-result-observability.js';
+import { createObservabilityRedactor, type ObservabilityRedactor } from '../providers/observability-redactor.js';
 import type { SessionControlEpoch } from '../runtime/session-control-cancellation.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
 import type { AgentModelLookup } from './agent-model-resolver.js';
@@ -28,6 +30,7 @@ export type AbgGraphRunnerInput = {
     readonly graphNodeConcurrency?: number;
     readonly providerToolCallConcurrency?: number;
     readonly shellConcurrency?: number;
+    readonly createToolCallId?: () => string;
     /**
      * Real tool surface. When provided, `ToolActor` nodes resolve + invoke tools through
      * it; otherwise the coding-agent graph cannot perform real work.
@@ -107,6 +110,7 @@ export type AbgGraphRunnerInput = {
      * discovery (see `loadProjectResources`).
      */
     readonly projectInstructionResources?: readonly ProjectInstructionResource[];
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 export type AbgGraphRunResult = {
@@ -151,5 +155,9 @@ export type AbgGraphTerminalError = {
 };
 
 export async function runAbgGraph(input: AbgGraphRunnerInput): Promise<AbgGraphRunResult> {
-    return runBoundedAbgGraph(input);
+    const observabilityRedactor = input.observabilityRedactor ?? createObservabilityRedactor();
+    return redactGraphRunResultForObservability(
+        await runBoundedAbgGraph({ ...input, observabilityRedactor }),
+        observabilityRedactor,
+    );
 }

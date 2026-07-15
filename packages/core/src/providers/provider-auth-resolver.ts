@@ -5,6 +5,7 @@ import {
     redactCredentialText,
     summarizeResolvedProviderCredential,
 } from './credential-resolver.js';
+import { createObservabilityRedactor, type ObservabilityRedactor } from './observability-redactor.js';
 import type { ProviderAuthStore } from './provider-auth-store.js';
 
 export type ProviderAuthStoreCredentialResolverAuthStore = Pick<ProviderAuthStore, 'readAuthFile'>;
@@ -15,6 +16,13 @@ export async function redactProviderAuthStoreCredentialText(
 ): Promise<string> {
     const authFile = await authStore.readAuthFile();
     return redactCredentialText(text, credentialSecretsFromAuthFile(authFile));
+}
+
+export async function createProviderAuthStoreObservabilityRedactor(
+    authStore: ProviderAuthStoreCredentialResolverAuthStore,
+): Promise<ObservabilityRedactor> {
+    const authFile = await authStore.readAuthFile();
+    return createObservabilityRedactor({ secrets: credentialSecretsFromAuthFile(authFile) });
 }
 
 export function createProviderAuthStoreCredentialResolver(

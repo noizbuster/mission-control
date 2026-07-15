@@ -35,6 +35,7 @@ describe('projectAbgSignalToEvent — emit payload preservation', () => {
     it('persists the type + payload for the other coding-step boundary emits', () => {
         const cases = [
             ['llm.tool_call.proposed', { toolCallId: 'call_1', toolName: 'file.patch', input: {} }],
+            ['tool.started', { toolCallId: 'call_1', toolName: 'file.patch' }],
             ['tool.completed', { toolCallId: 'call_1', toolName: 'file.patch' }],
             ['tool.failed', { toolCallId: 'call_1', toolName: 'file.patch' }],
             ['llm.error', { error: 'boom' }],

@@ -16,10 +16,8 @@ import type {
 } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
-import { AgentParseError } from '../agents/agent-parser.js';
 import type { ModelPattern } from '../agents/model-resolver.js';
 import {
-    buildBundledAgentIndexFromTemplates,
     buildResolveModelFn,
     createFullParityTaskToolRegistrationForCli,
 } from './task-tool-full-parity-factory.js';
@@ -211,40 +209,6 @@ describe('buildResolveModelFn', () => {
     });
 });
 
-describe('buildBundledAgentIndexFromTemplates', () => {
-    it('records recoverable bundled agent parse failures and keeps valid agents', () => {
-        const recoverableErrors: AgentParseError[] = [];
-
-        const index = buildBundledAgentIndexFromTemplates({
-            templates: ['valid', 'invalid'],
-            parseAgent: (template) => {
-                if (template === 'invalid') {
-                    throw new AgentParseError('test parse failure', '<bundled>');
-                }
-                return agent('deep', 'mctrl/task');
-            },
-            onRecoverableError: (error) => recoverableErrors.push(error),
-        });
-
-        expect(index.names()).toEqual(['deep']);
-        expect(recoverableErrors).toHaveLength(1);
-        expect(recoverableErrors[0]?.message).toBe('test parse failure');
-    });
-
-    it('rethrows unexpected bundled agent parse errors', () => {
-        const unexpected = new TypeError('parser invariant broken');
-
-        expect(() =>
-            buildBundledAgentIndexFromTemplates({
-                templates: ['broken'],
-                parseAgent: () => {
-                    throw unexpected;
-                },
-            }),
-        ).toThrow(unexpected);
-    });
-});
-
 describe('createFullParityTaskToolRegistrationForCli end-to-end spawn', () => {
     function buildUsage() {
         return {
@@ -305,7 +269,9 @@ describe('createFullParityTaskToolRegistrationForCli end-to-end spawn', () => {
     it('spawns a bundled child agent via the default spawn and resolves with text output', async () => {
         const callCount = { value: 0 };
         const registration = await createFullParityTaskToolRegistrationForCli(
-            buildFactoryOptions(callCount, () => textChunks('factory child done')),
+            buildFactoryOptions(callCount, (call) =>
+                call === 1 ? yieldChunks('factory child done') : textChunks('done'),
+            ),
         );
 
         const result = await registration.execute(

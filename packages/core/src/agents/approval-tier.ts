@@ -13,9 +13,11 @@
  * mode: `prompt` and `deny` force an approval prompt regardless of mode,
  * while `allow` defers to the standard mode tier comparison.
  *
- * Child task sessions are FORCED to `yolo` mode by `ConcreteTaskToolRuntime`
- * (todo 22) — the parent's `task()` approval IS the authorization boundary.
- * This module does not enforce that; it only provides the resolution logic.
+ * Child task sessions do not force this resolver to `yolo`. The parent `task()`
+ * invocation is permission-gated, and retained child tools preserve their workspace
+ * approval callbacks. Category restrictions, `AgentDefinition.pathPolicies`, and
+ * structural hard drops constrain child authority independently. A resumed child must
+ * also match its stored authority fingerprint. This module only provides tier resolution.
  *
  * This is a separate dimension from the workflow `PolicyEffectRule`
  * (action/resource/effect) and the workspace `PermissionRule`

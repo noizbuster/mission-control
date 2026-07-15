@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createObservabilityRedactor } from '../../providers/observability-redactor.js';
 import { materializeMission } from './mission-run-service.js';
 import { makeMissionRunTestLocation, makeTestWorkflowSpec } from './mission-run-test-support.js';
 import {
@@ -78,6 +79,27 @@ describe('mission-store', () => {
         writeFileSync(filePath, JSON.stringify(mission));
 
         await expect(readMission(location, 'requested-mission')).rejects.toMatchObject({ code: 'mission_corrupt' });
+    });
+
+    it('redacts configured credentials while importing an on-demand compatible Mission', async () => {
+        const baseLocation = makeMissionRunTestLocation();
+        const credential = ['compatible', 'mission', 'credential'].join('_');
+        const location = {
+            ...baseLocation,
+            observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
+        };
+        const mission = materializeMission({
+            ...makeTestWorkflowSpec(),
+            description: `mission ${credential}`,
+        });
+        const filePath = missionFilePath(location.omoRoot, mission.id);
+        mkdirSync(join(filePath, '..'), { recursive: true });
+        writeFileSync(filePath, JSON.stringify(mission));
+
+        const imported = await readMission(location, mission.id);
+
+        expect(imported.description).toContain('[REDACTED_CREDENTIAL]');
+        expect(imported.description).not.toContain(credential);
     });
 
     it('updates a Mission with a patch and refreshes updatedAt', async () => {

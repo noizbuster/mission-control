@@ -82,6 +82,7 @@ function buildRuntime(
             description: 'Parent agent',
             systemPrompt: 'You are the parent.',
             source: 'bundled',
+            spawns: '*',
         },
         spawnFn: async (context) => {
             const result = await spawnImpl();

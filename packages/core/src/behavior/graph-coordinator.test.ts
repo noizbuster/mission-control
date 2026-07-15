@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 732 -> current 732 pure LOC; one graph-coordinator state-machine matrix with shared deterministic fixtures.
 import type { AbgNodeSpec, AbgSignal, AgentEvent } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
 import { createAbgEmitSignal } from './abg-emit.js';
@@ -184,9 +185,9 @@ describe('bounded ABG graph coordinator', () => {
 
         expect(result.status).toBe('completed');
         expect(runs).toBe(7);
-        expect(result.events.some((e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_loop_soft_landed')).toBe(
-            true,
-        );
+        expect(
+            result.events.some((e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_loop_soft_landed'),
+        ).toBe(true);
         expect(result.events.some((e) => e.type === 'graph.completed')).toBe(true);
     });
 
@@ -262,9 +263,9 @@ describe('bounded ABG graph coordinator', () => {
 
         expect(result.status).toBe('completed');
         expect(researchRuns).toBe(7);
-        expect(result.events.some((e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_loop_soft_landed')).toBe(
-            true,
-        );
+        expect(
+            result.events.some((e) => e.type === 'node.failed' && e.abg?.error?.code === 'node_loop_soft_landed'),
+        ).toBe(true);
         expect(result.events.some((e) => e.type === 'node.completed' && e.abg?.nodeId === 'final')).toBe(true);
     });
 

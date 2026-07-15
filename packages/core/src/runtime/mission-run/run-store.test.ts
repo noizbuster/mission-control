@@ -1,5 +1,8 @@
+// allow: SIZE_OK -- HEAD 334 -> current 449 pure LOC; one durable Run-store transition and compatibility-import state-machine matrix.
 import { type Run, RunSchema } from '@mission-control/protocol';
 import { describe, expect, it } from 'vitest';
+import { createObservabilityRedactor } from '../../providers/observability-redactor.js';
+import { readRunFromDb, writeRunToDb } from './mission-run-db.js';
 import type { MissionRunStoreLocation } from './mission-run-store-location.js';
 import { makeTempRoot, seedOmoRoot } from './mission-run-test-support.js';
 import {
@@ -71,6 +74,64 @@ describe('run-store', () => {
         const read = await readRun(root, run.id);
 
         expect(read).toEqual(run);
+    });
+
+    it('redacts terminal reasons at direct store boundaries and clears them from nonterminal Runs', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const pending = RunSchema.parse({
+            id: crypto.randomUUID(),
+            missionId: 'mission-safe-reason',
+            status: 'pending',
+            terminalReason: 'Bearer secret-token-value',
+        });
+        const created = await createRun(root, pending);
+        await updateRunStatus(root, created.id, 'running');
+
+        const failed = await updateRunStatus(root, created.id, 'failed', {
+            terminalReason: `Bearer secret-token-value ${'x'.repeat(5000)}`,
+        });
+
+        expect(created.terminalReason).toBeUndefined();
+        expect(failed.terminalReason).not.toContain('secret-token-value');
+        expect(failed.terminalReason).toContain('[REDACTED_CREDENTIAL]');
+        expect(failed.terminalReason).toHaveLength(4096);
+    });
+
+    it('redacts configured credentials before persisting Run updates', async () => {
+        const credential = ['run', 'update', 'credential'].join('_');
+        const root = seedOmoRoot(makeTempRoot());
+        const location = {
+            ...root,
+            observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
+        };
+        const pending = await seedRun(location, 'mission-update-redaction');
+        await updateRunStatus(location, pending.id, 'running');
+
+        await updateRunStatus(location, pending.id, 'failed', {
+            terminalReason: `failed with ${credential}`,
+        });
+        const rawPersisted = await readRunFromDb(location.dataDir, pending.id);
+
+        expect(JSON.stringify(rawPersisted)).toContain('[REDACTED_CREDENTIAL]');
+        expect(JSON.stringify(rawPersisted)).not.toContain(credential);
+    });
+
+    it('sanitizes canonical rows on read and same-status no-op returns', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const raw = RunSchema.parse({
+            id: crypto.randomUUID(),
+            missionId: 'mission-canonical-safe-reason',
+            status: 'failed',
+            terminalReason: `Bearer secret-token-value ${'x'.repeat(5000)}`,
+        });
+        await writeRunToDb(root.dataDir, raw);
+
+        const read = await readRun(root, raw.id);
+        const duplicate = await updateRunStatus(root, raw.id, 'failed');
+
+        expect(read.terminalReason).not.toContain('secret-token-value');
+        expect(read.terminalReason).toHaveLength(4096);
+        expect(duplicate).toEqual(read);
     });
 
     it('throws RunStoreError(run_missing) for unknown id', async () => {
@@ -167,6 +228,54 @@ describe('run-store', () => {
         expect(readFileSync(filePath, 'utf8')).toBe(source);
     });
 
+    it('redacts configured credentials while importing an on-demand compatible Run', async () => {
+        const baseLocation = seedOmoRoot(makeTempRoot());
+        const credential = ['compatible', 'run', 'credential'].join('_');
+        const location = {
+            ...baseLocation,
+            observabilityRedactor: createObservabilityRedactor({ secrets: [credential] }),
+        };
+        const filePath = runFilePath(location.omoRoot, 'json-redacted');
+        mkdirSync(join(filePath, '..'), { recursive: true });
+        const source = JSON.stringify({
+            id: 'json-redacted',
+            missionId: 'mission-redacted',
+            status: 'failed',
+            prompt: `retry ${credential}`,
+            terminalReason: `failed ${credential}`,
+            endedAt: '2026-07-01T00:00:00.000Z',
+        });
+        writeFileSync(filePath, source, 'utf8');
+
+        const imported = await readRun(location, 'json-redacted');
+
+        expect(JSON.stringify(imported)).toContain('[REDACTED_CREDENTIAL]');
+        expect(JSON.stringify(imported)).not.toContain(credential);
+        expect(readFileSync(filePath, 'utf8')).toContain(credential);
+    });
+
+    it('does not overwrite a canonical row when a compatibility import loses a race', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const canonical = RunSchema.parse({
+            id: 'json-import-race',
+            missionId: 'mission-1',
+            status: 'running',
+            sessionId: 'session-import-race',
+            sessionRunId: 'owner-canonical',
+        });
+        const staleCompatibleRecord = RunSchema.parse({
+            id: canonical.id,
+            missionId: canonical.missionId,
+            status: 'running',
+            sessionId: canonical.sessionId,
+        });
+        await writeRunToDb(root.dataDir, canonical);
+
+        await writeRunToDb(root.dataDir, staleCompatibleRecord, { conflict: 'ignore' });
+
+        expect((await readRun(root, canonical.id)).sessionRunId).toBe('owner-canonical');
+    });
+
     it('auto-sets startedAt on first running transition', async () => {
         const root = seedOmoRoot(makeTempRoot());
         const run = await seedRun(root, 'mission-1', 'pending');
@@ -210,6 +319,31 @@ describe('run-store', () => {
         );
 
         expect(completed.endedAt).toBe('2026-01-01T12:00:00.000Z');
+    });
+
+    it('keeps same-status terminal transitions as true idempotent no-ops', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const run = await seedRun(root, 'mission-1', 'pending');
+        await updateRunStatus(root, run.id, 'running');
+        const cancelled = await updateRunStatus(
+            root,
+            run.id,
+            'cancelled',
+            { terminalReason: 'operator_aborted' },
+            { now: () => '2026-01-01T12:00:00.000Z' },
+        );
+
+        const duplicate = await updateRunStatus(
+            root,
+            run.id,
+            'cancelled',
+            { terminalReason: 'run interrupted' },
+            { now: () => '2026-01-01T13:00:00.000Z' },
+        );
+
+        expect(duplicate).toEqual(cancelled);
+        expect(duplicate.terminalReason).toBe('operator_aborted');
+        expect(duplicate.endedAt).toBe('2026-01-01T12:00:00.000Z');
     });
 
     it('serializes concurrent terminal transitions without overwriting the winner', async () => {

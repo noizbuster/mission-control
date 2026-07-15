@@ -1,12 +1,8 @@
-import type { PermissionDecision, PermissionRequest, ToolResult } from '@mission-control/protocol';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SessionEventLog } from '../../session-log.js';
-import { createChildToolRegistry } from '../task-tool.js';
+import type { PermissionDecision, PermissionRequest } from '@mission-control/protocol';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ProjectTrustStore } from '../../trust/project-trust-store.js';
 import { ToolRegistry } from '../tool-registry.js';
-import { completedToolEvent } from '../tool-settlement-events.js';
-import { McpConnectionManager } from './connection-manager.js';
-import { createSecretRedactor } from './secret-redaction.js';
-import { mcpToolName, registerNamespacedMcpTools, sanitizeMcpName } from './surfacing.js';
+import { registerNamespacedMcpTools } from './surfacing.js';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,48 +10,24 @@ import { join } from 'node:path';
 const fixturePath = new URL('./fixtures/stdio-fixture-server.mjs', import.meta.url).pathname;
 const LONG_TIMEOUT = 15000;
 
-describe('sanitizeMcpName', () => {
-    it('keeps alphanumeric and underscores unchanged', () => {
-        expect(sanitizeMcpName('my_server_01')).toBe('my_server_01');
-    });
-
-    it('collapses non-alphanumeric runs into a single underscore', () => {
-        expect(sanitizeMcpName('my-server.name')).toBe('my_server_name');
-    });
-
-    it('strips leading and trailing separators', () => {
-        expect(sanitizeMcpName('---hello---')).toBe('hello');
-    });
-
-    it('strips leading separators (e.g. @ in package scopes)', () => {
-        expect(sanitizeMcpName('@scope/server')).toBe('scope_server');
-    });
-
-    it('returns empty string for fully non-alphanumeric input', () => {
-        expect(sanitizeMcpName('---')).toBe('');
-    });
-});
-
-describe('mcpToolName', () => {
-    it('produces mcp__ prefix with sanitized server and tool names', () => {
-        expect(mcpToolName('my-server', 'read_file')).toBe('mcp__my_server__read_file');
-    });
-
-    it('handles dot-scoped server names', () => {
-        expect(mcpToolName('@acme/mcp', 'search')).toBe('mcp__acme_mcp__search');
-    });
-});
-
 describe('registerNamespacedMcpTools', () => {
     let workspaceRoot: string;
+    let dataDir: string;
 
     beforeEach(async () => {
         workspaceRoot = join(tmpdir(), `mctrl-surfacing-test-${Date.now()}`);
-        await mkdir(workspaceRoot, { recursive: true });
+        dataDir = `${workspaceRoot}-data`;
+        await Promise.all([mkdir(workspaceRoot, { recursive: true }), mkdir(dataDir, { recursive: true })]);
+        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
+        await new ProjectTrustStore({ dataDir }).setDecision(workspaceRoot, 'trusted');
     });
 
     afterEach(async () => {
-        await rm(workspaceRoot, { recursive: true, force: true });
+        vi.unstubAllEnvs();
+        await Promise.all([
+            rm(workspaceRoot, { recursive: true, force: true }),
+            rm(dataDir, { recursive: true, force: true }),
+        ]);
     });
 
     it(
@@ -96,6 +68,43 @@ describe('registerNamespacedMcpTools', () => {
                     expect(ad.capabilityClasses).toContain('network');
                     expect(ad.guideline).toContain('test-fixture');
                 }
+            } finally {
+                await manager.disconnectAll();
+            }
+        },
+        LONG_TIMEOUT,
+    );
+
+    it(
+        'keeps tools from colliding server names independently addressable',
+        async () => {
+            // Given
+            await writeFile(
+                join(workspaceRoot, '.mcp.json'),
+                JSON.stringify({
+                    mcpServers: {
+                        'foo-bar': { type: 'local', command: [process.execPath, fixturePath, 'normal'] },
+                        foo_bar: { type: 'local', command: [process.execPath, fixturePath, 'normal'] },
+                    },
+                }),
+            );
+            const registry = new ToolRegistry();
+
+            // When
+            const manager = await registerNamespacedMcpTools(registry, {
+                workspaceRoot,
+                requestPermission: async (request) => ({ requestId: request.id, status: 'allow' }),
+            });
+
+            try {
+                const names = registry
+                    .advertise()
+                    .map((advertisement) => advertisement.name)
+                    .filter((name) => name.startsWith('mcp__foo_bar__'));
+
+                // Then
+                expect(names).toHaveLength(6);
+                expect(new Set(names).size).toBe(6);
             } finally {
                 await manager.disconnectAll();
             }
@@ -202,24 +211,25 @@ describe('registerNamespacedMcpTools', () => {
     );
 
     it(
-        'child registry excludes mcp__* tools (network capability dropped by child-policy)',
+        'redacts injected MCP credentials echoed through tool descriptions and schema keys',
         async () => {
+            // Given
+            const secret = ['mcp', 'metadata', 'credential'].join('_');
             const mcpJson = JSON.stringify({
                 mcpServers: {
-                    'child-exclude': {
+                    'metadata-test': {
                         type: 'local',
-                        command: [process.execPath, fixturePath, 'normal'],
+                        command: [process.execPath, fixturePath, 'metadata-secret'],
+                        environment: { MCP_TEST_SECRET: secret },
                         timeoutMs: 4000,
                     },
                 },
             });
             await writeFile(join(workspaceRoot, '.mcp.json'), mcpJson);
-
             const registry = new ToolRegistry();
-            const alwaysAllow = async (_request: PermissionRequest): Promise<PermissionDecision> => ({
-                requestId: _request.id,
+            const alwaysAllow = async (request: PermissionRequest): Promise<PermissionDecision> => ({
+                requestId: request.id,
                 status: 'allow',
-                reason: 'test',
             });
             const manager = await registerNamespacedMcpTools(registry, {
                 workspaceRoot,
@@ -227,151 +237,16 @@ describe('registerNamespacedMcpTools', () => {
             });
 
             try {
-                const parentNames = registry.advertise().map((a) => a.name);
-                expect(parentNames).toContain('mcp__child_exclude__echo');
+                // When
+                const observable = JSON.stringify(registry.advertise());
 
-                const child = createChildToolRegistry(registry);
-                const childNames = child.advertise().map((a) => a.name);
-                expect(childNames).not.toContain('mcp__child_exclude__echo');
-                expect(childNames).not.toContain('mcp__child_exclude__greet');
+                // Then
+                expect(observable).toContain('[REDACTED_CREDENTIAL]');
+                expect(observable).not.toContain(secret);
             } finally {
                 await manager.disconnectAll();
             }
         },
         LONG_TIMEOUT,
     );
-
-    it(
-        'gracefully handles a crashing server — registers no tools from that server',
-        async () => {
-            const mcpJson = JSON.stringify({
-                mcpServers: {
-                    'crash-server': {
-                        type: 'local',
-                        command: [process.execPath, fixturePath, 'crash'],
-                        timeoutMs: 4000,
-                    },
-                },
-            });
-            await writeFile(join(workspaceRoot, '.mcp.json'), mcpJson);
-
-            const registry = new ToolRegistry();
-            const alwaysAllow = async (_request: PermissionRequest): Promise<PermissionDecision> => ({
-                requestId: _request.id,
-                status: 'allow',
-                reason: 'test',
-            });
-            const manager = await registerNamespacedMcpTools(registry, {
-                workspaceRoot,
-                requestPermission: alwaysAllow,
-            });
-
-            try {
-                const mcpTools = registry.advertise().filter((a) => a.name.startsWith('mcp__'));
-                expect(mcpTools).toHaveLength(0);
-                expect(manager.getWarnings().length).toBeGreaterThan(0);
-                expect(manager.getWarnings()[0]).toContain('crash-server');
-            } finally {
-                await manager.disconnectAll();
-            }
-        },
-        LONG_TIMEOUT,
-    );
-
-    it(
-        'gracefully skips a hung server — other servers still register',
-        async () => {
-            const mcpJson = JSON.stringify({
-                mcpServers: {
-                    'hung-server': {
-                        type: 'local',
-                        command: [process.execPath, fixturePath, 'hung'],
-                        timeoutMs: 2000,
-                    },
-                    'normal-server': {
-                        type: 'local',
-                        command: [process.execPath, fixturePath, 'normal'],
-                        timeoutMs: 4000,
-                    },
-                },
-            });
-            await writeFile(join(workspaceRoot, '.mcp.json'), mcpJson);
-
-            const registry = new ToolRegistry();
-            const alwaysAllow = async (_request: PermissionRequest): Promise<PermissionDecision> => ({
-                requestId: _request.id,
-                status: 'allow',
-                reason: 'test',
-            });
-            const manager = await registerNamespacedMcpTools(registry, {
-                workspaceRoot,
-                requestPermission: alwaysAllow,
-            });
-
-            try {
-                const mcpTools = registry.advertise().filter((a) => a.name.startsWith('mcp__'));
-                const hungTools = mcpTools.filter((a) => a.name.startsWith('mcp__hung_server__'));
-                const normalTools = mcpTools.filter((a) => a.name.startsWith('mcp__normal_server__'));
-
-                expect(hungTools).toHaveLength(0);
-                expect(normalTools.length).toBeGreaterThan(0);
-                expect(manager.getWarnings().some((w) => w.includes('hung-server'))).toBe(true);
-            } finally {
-                await manager.disconnectAll();
-            }
-        },
-        LONG_TIMEOUT,
-    );
-
-    it('mcp__* tool result projects through SessionEventLog with secrets masked', () => {
-        const secret = 'PROJECTION_SECRET_xyz';
-        const toolName = 'mcp__proj_server__echo';
-
-        // Redact via the real production redactor (not a hand .replace).
-        const redactor = createSecretRedactor([secret]);
-        const rawResult = { result: `echo: hello ${secret} world` };
-        const redactedResult = redactor.redactValue(rawResult);
-
-        // Build the ToolResult the settlement would carry.
-        const toolResult: ToolResult = {
-            toolCallId: 'tc_proj_mask_1',
-            status: 'completed',
-            output: JSON.stringify(redactedResult),
-        };
-
-        // Build the tool.completed event via the real event builder.
-        const event = completedToolEvent('tc_proj_mask_1', toolName, toolResult);
-
-        // Push through the real SessionEventLog projection surface.
-        const log = new SessionEventLog();
-        log.append(event);
-
-        // Assert projection: the event flows through getEvents().
-        const events = log.getEvents();
-        expect(events).toHaveLength(1);
-        const projected = events[0];
-        if (projected === undefined) {
-            throw new Error('expected one projected event');
-        }
-        expect(projected.type).toBe('tool.completed');
-        expect(projected.message).toContain(toolName);
-
-        // Assert masking: [REDACTED] present, raw secret absent.
-        const outputJson = projected.toolResult?.output ?? '';
-        expect(outputJson).toContain('[REDACTED]');
-        expect(outputJson).not.toContain(secret);
-    });
-});
-
-describe('asToolRegistryWithMcp', () => {
-    it('wraps a plain ToolRegistry with an empty manager', async () => {
-        const { asToolRegistryWithMcp } = await import('./surfacing.js');
-        const registry = new ToolRegistry();
-        const wrapped = asToolRegistryWithMcp(registry);
-
-        expect(wrapped.registry).toBe(registry);
-        expect(wrapped.mcpConnectionManager).toBeInstanceOf(McpConnectionManager);
-        expect(wrapped.mcpConnectionManager.getServers()).toHaveLength(0);
-        await wrapped.mcpConnectionManager.disconnectAll();
-    });
 });

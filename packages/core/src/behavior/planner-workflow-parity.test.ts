@@ -1,3 +1,4 @@
+// allow: SIZE_OK -- HEAD 336 -> current 336 pure LOC; one byte-parity and behavior contract for the declarative planner workflow graph.
 /**
  * Planner workflow Prometheus-mechanics parity suite (plan Task 7).
  *
@@ -11,8 +12,8 @@
  *      (plan.ready === true); approval-gate self-loops while awaiting.
  *   5. Scaffold-compatible output — write-plan emits the scaffold headers and
  *      the Todos carry `- [ ]` checkbox fields.
- *   6. Planner-readonly child consultations — explore/research prompts warn
- *      that delegated children inherit the planner-readonly boundary.
+ *   6. Child authority — explore/research prompts keep workflow mode policy
+ *      graph-scoped and require independently read-only category/path policy.
  *   7. Runtime — the llm-actor outputKey seam writes plan.drafted and
  *      plan.ready to the blackboard from a real model turn.
  */
@@ -263,12 +264,12 @@ describe('planner workflow parity: scaffold-compatible plan output', () => {
     });
 });
 
-describe('planner workflow parity: planner-readonly child consultations', () => {
-    it('PLANNER_READONLY_CHILD_CONTEXT names the inherited boundary and the three roots', () => {
-        expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/INHERITS.*planner-readonly/i);
-        expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/\.omo\/plans\/\*\*/);
-        expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/\.omo\/specs\/\*\*/);
-        expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/\.omo\/drafts\/\*\*/);
+describe('planner workflow parity: independently constrained child consultations', () => {
+    it('PLANNER_READONLY_CHILD_CONTEXT keeps workflow policy graph-scoped and names child authority', () => {
+        expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/workflow nodes.*mode materialization/i);
+        expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/do NOT inherit workflow PolicyEffectRule/i);
+        expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/selected read-only category/i);
+        expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/AgentDefinition\.pathPolicies/);
         expect(PLANNER_READONLY_CHILD_CONTEXT).toMatch(/read-only research/i);
     });
 

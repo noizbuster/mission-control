@@ -14,7 +14,12 @@
 
 import type { AbgSignal } from '@mission-control/protocol';
 import type { TextStreamPart, ToolSet } from 'ai';
-import { redactCredentialText } from '../../../providers/redaction-handler.js';
+import { observableToolInput } from '../../../providers/model-message-observability.js';
+import {
+    createObservabilityRedactor,
+    type ObservabilityRedactor,
+    type ObservabilityTextStream,
+} from '../../../providers/observability-redactor.js';
 import { errorToString } from '../../../util/error-to-string.js';
 import { createAbgEmitSignal } from '../../abg-emit.js';
 import type { AbgToolSettlementLedger } from './abg-tool-bridge.js';
@@ -30,16 +35,30 @@ export type StreamPartAdapterContext = {
      * or a provider-executed tool), the emit falls back to the part's own `output`/`error`.
      */
     readonly settlementLedger?: AbgToolSettlementLedger;
+    readonly observabilityRedactor?: ObservabilityRedactor;
+    readonly observabilityStreams?: StreamPartObservabilityState;
 };
 
+export type StreamPartObservabilityState = {
+    readonly text: Map<string, ObservabilityTextStream>;
+    readonly reasoning: Map<string, ObservabilityTextStream>;
+};
+
+const defaultObservabilityRedactor = createObservabilityRedactor();
+
+export function createStreamPartObservabilityState(): StreamPartObservabilityState {
+    return { text: new Map(), reasoning: new Map() };
+}
+
 function emit(ctx: StreamPartAdapterContext, eventType: string, payload?: unknown): AbgSignal {
+    const redactor = ctx.observabilityRedactor ?? defaultObservabilityRedactor;
     return createAbgEmitSignal({
         graphId: ctx.graphId,
         nodeId: ctx.nodeId,
         source: 'llm-actor',
         eventType,
         timestamp: ctx.now(),
-        payload,
+        ...(payload !== undefined ? { payload: redactor.redactValue(payload) } : {}),
     });
 }
 
@@ -52,19 +71,32 @@ export function abgSignalsFromStreamPart(
     ctx: StreamPartAdapterContext,
 ): readonly AbgSignal[] {
     switch (part.type) {
+        case 'text-start':
+            ctx.observabilityStreams?.text.set(part.id, redactorFor(ctx).createTextStream());
+            return [];
         case 'text-delta':
-            // Redact credentials from each streamed delta so an interactive caller rendering the
-            // `llm.text.delta` tap (the graph's token stream) never writes raw credentials — parity
-            // with the flat path, which redacts provider text deltas at the provider-event layer.
-            return [emit(ctx, 'llm.text.delta', { delta: redactCredentialText(part.text) })];
+            return streamDeltaSignals(ctx, ctx.observabilityStreams?.text, part.id, part.text, 'llm.text.delta');
+        case 'text-end':
+            return flushStreamSignals(ctx, ctx.observabilityStreams?.text, part.id, 'llm.text.delta');
+        case 'reasoning-start':
+            ctx.observabilityStreams?.reasoning.set(part.id, redactorFor(ctx).createTextStream());
+            return [];
         case 'reasoning-delta':
-            return [emit(ctx, 'llm.reasoning.delta', { delta: part.text })];
+            return streamDeltaSignals(
+                ctx,
+                ctx.observabilityStreams?.reasoning,
+                part.id,
+                part.text,
+                'llm.reasoning.delta',
+            );
+        case 'reasoning-end':
+            return flushStreamSignals(ctx, ctx.observabilityStreams?.reasoning, part.id, 'llm.reasoning.delta');
         case 'tool-call':
             return [
                 emit(ctx, 'llm.tool_call.proposed', {
                     toolCallId: part.toolCallId,
                     toolName: part.toolName,
-                    input: part.input,
+                    input: observableToolInput(part.toolName, part.input),
                 }),
             ];
         case 'tool-result': {
@@ -113,10 +145,63 @@ export function abgSignalsFromStreamPart(
         case 'tool-output-denied':
             return [emit(ctx, 'tool.denied', { toolCallId: part.toolCallId, toolName: part.toolName })];
         case 'error':
-            return [emit(ctx, 'llm.error', { error: redactCredentialText(errorToString(part.error)) })];
+            return [
+                ...flushAllStreams(ctx),
+                emit(ctx, 'llm.error', { error: redactorFor(ctx).redactText(errorToString(part.error)) }),
+            ];
+        case 'abort':
+        case 'finish':
+            return flushAllStreams(ctx);
         default:
             // start-step / finish-step / finish / text-start / text-end / tool-input-* etc.
             // are intentionally quiet in Phase 0; turn boundaries are emitted by the node.
             return [];
     }
+}
+
+function streamDeltaSignals(
+    ctx: StreamPartAdapterContext,
+    streams: Map<string, ObservabilityTextStream> | undefined,
+    id: string,
+    delta: string,
+    eventType: 'llm.text.delta' | 'llm.reasoning.delta',
+): readonly AbgSignal[] {
+    if (streams === undefined) {
+        return [emit(ctx, eventType, { delta: redactorFor(ctx).redactText(delta) })];
+    }
+    let stream = streams.get(id);
+    if (stream === undefined) {
+        stream = redactorFor(ctx).createTextStream();
+        streams.set(id, stream);
+    }
+    return stream.push(delta).map((safeDelta) => emit(ctx, eventType, { delta: safeDelta }));
+}
+
+function flushStreamSignals(
+    ctx: StreamPartAdapterContext,
+    streams: Map<string, ObservabilityTextStream> | undefined,
+    id: string,
+    eventType: 'llm.text.delta' | 'llm.reasoning.delta',
+): readonly AbgSignal[] {
+    const stream = streams?.get(id);
+    if (stream === undefined) {
+        return [];
+    }
+    streams?.delete(id);
+    return stream.flush().map((safeDelta) => emit(ctx, eventType, { delta: safeDelta }));
+}
+
+function flushAllStreams(ctx: StreamPartAdapterContext): readonly AbgSignal[] {
+    const signals: AbgSignal[] = [];
+    for (const id of [...(ctx.observabilityStreams?.text.keys() ?? [])]) {
+        signals.push(...flushStreamSignals(ctx, ctx.observabilityStreams?.text, id, 'llm.text.delta'));
+    }
+    for (const id of [...(ctx.observabilityStreams?.reasoning.keys() ?? [])]) {
+        signals.push(...flushStreamSignals(ctx, ctx.observabilityStreams?.reasoning, id, 'llm.reasoning.delta'));
+    }
+    return signals;
+}
+
+function redactorFor(ctx: StreamPartAdapterContext): ObservabilityRedactor {
+    return ctx.observabilityRedactor ?? defaultObservabilityRedactor;
 }

@@ -7,6 +7,12 @@ import {
     type AgentSnapshot,
 } from '@mission-control/protocol';
 import type { AbgTimelineEntry } from '../behavior/timeline.js';
+import {
+    createObservabilityRedactor,
+    type ObservabilityRedactor,
+    redactAgentEventEnvelopeForObservability,
+    redactAgentEventForObservability,
+} from '../providers/observability-redactor.js';
 import { SessionEventLog } from '../session-log.js';
 import { jsonlStoreError } from './jsonl-errors.js';
 import { sessionMismatch } from './jsonl-session-event-errors.js';
@@ -28,11 +34,13 @@ export type JsonlSessionEventIdFactory = (event: AgentEvent, sequence: number) =
 export type JsonlSessionEventStoreOpenOptions = Omit<OpenJsonlSessionFileOptions, 'now'> & {
     readonly now?: () => string;
     readonly createEventId?: JsonlSessionEventIdFactory;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 type JsonlSessionEventStoreInput = OpenedJsonlSessionFile & {
     readonly now: () => string;
     readonly createEventId: JsonlSessionEventIdFactory;
+    readonly observabilityRedactor: ObservabilityRedactor;
 };
 
 export class JsonlSessionEventStore implements MemoryStore {
@@ -42,6 +50,7 @@ export class JsonlSessionEventStore implements MemoryStore {
     private readonly log: SessionEventLog;
     private readonly now: () => string;
     private readonly createEventId: JsonlSessionEventIdFactory;
+    private readonly observabilityRedactor: ObservabilityRedactor;
     private nextSequence: number;
     private appendQueue: Promise<void> = Promise.resolve();
     private closed = false;
@@ -50,7 +59,11 @@ export class JsonlSessionEventStore implements MemoryStore {
         this.sessionId = input.sessionId;
         this.filePath = input.filePath;
         this.fileHandle = input.fileHandle;
-        this.log = input.log;
+        this.log = new SessionEventLog();
+        this.observabilityRedactor = input.observabilityRedactor;
+        for (const event of input.log.getEvents()) {
+            this.log.append(redactAgentEventForObservability(event, this.observabilityRedactor));
+        }
         this.now = input.now;
         this.createEventId = input.createEventId;
         this.nextSequence = input.nextSequence;
@@ -65,11 +78,12 @@ export class JsonlSessionEventStore implements MemoryStore {
             ...openedFile,
             now,
             createEventId,
+            observabilityRedactor: options.observabilityRedactor ?? createObservabilityRedactor(),
         });
     }
 
     async append(event: AgentEvent): Promise<void> {
-        const parsedEvent = AgentEventSchema.parse(event);
+        const parsedEvent = AgentEventSchema.parse(redactAgentEventForObservability(event, this.observabilityRedactor));
         this.ensureWritableEvent(parsedEvent);
         await this.enqueueAppend(async () => {
             const sequence = this.nextSequence;
@@ -86,7 +100,9 @@ export class JsonlSessionEventStore implements MemoryStore {
     }
 
     async appendEnvelope(envelope: AgentEventEnvelope): Promise<void> {
-        const parsedEnvelope = AgentEventEnvelopeSchema.parse(envelope);
+        const parsedEnvelope = AgentEventEnvelopeSchema.parse(
+            redactAgentEventEnvelopeForObservability(envelope, this.observabilityRedactor),
+        );
         if (parsedEnvelope.durability === 'ephemeral') {
             return;
         }
@@ -94,7 +110,9 @@ export class JsonlSessionEventStore implements MemoryStore {
     }
 
     async appendEnvelopeWithStoreSequence(envelope: AgentEventEnvelope): Promise<void> {
-        const parsedEnvelope = AgentEventEnvelopeSchema.parse(envelope);
+        const parsedEnvelope = AgentEventEnvelopeSchema.parse(
+            redactAgentEventEnvelopeForObservability(envelope, this.observabilityRedactor),
+        );
         if (parsedEnvelope.durability === 'ephemeral') {
             return;
         }

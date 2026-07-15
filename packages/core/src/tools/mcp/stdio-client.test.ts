@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createMcpToolRegistration } from '../mcp-tool.js';
 import { ToolExecutionError } from '../tool-registry-types.js';
 import { StdioMcpClient } from './stdio-client.js';
@@ -97,23 +97,26 @@ describe('StdioMcpClient (loopback stdio fixture)', () => {
         async () => {
             const deadlineMs = 1200;
             const client = makeClient({ mode: 'hung', timeoutMs: deadlineMs });
-            const startedAt = Date.now();
             let caught: unknown;
             try {
                 await client.connect();
-                await client.listTools();
-            } catch (error) {
-                caught = error;
+                vi.useFakeTimers();
+                const pending = client.listTools().then(
+                    () => undefined,
+                    (error: unknown) => {
+                        caught = error;
+                    },
+                );
+                await vi.advanceTimersByTimeAsync(deadlineMs);
+                await pending;
             } finally {
+                vi.useRealTimers();
                 await client.close();
             }
-            const elapsed = Date.now() - startedAt;
             expect(caught).toBeInstanceOf(ToolExecutionError);
             if (caught instanceof ToolExecutionError) {
                 expect(caught.error.retryable).toBe(true);
             }
-            // PRIMARY adversarial proof: the call surfaces near the deadline, not after an infinite hang.
-            expect(elapsed).toBeLessThan(deadlineMs + 4000);
             // The child is torn down: a follow-up call fails because the client is no longer connected.
             await expect(client.listTools()).rejects.toBeInstanceOf(ToolExecutionError);
         },
@@ -130,7 +133,7 @@ describe('StdioMcpClient (loopback stdio fixture)', () => {
                 const result = await client.callTool({ name: 'echo', arguments: { text: secret } });
                 const serialized = JSON.stringify(result);
                 expect(serialized).not.toContain(secret);
-                expect(serialized).toContain('[REDACTED]');
+                expect(serialized).toContain('[REDACTED_CREDENTIAL]');
             } finally {
                 await client.close();
             }
@@ -157,7 +160,7 @@ describe('StdioMcpClient (loopback stdio fixture)', () => {
             expect(caught).toBeInstanceOf(ToolExecutionError);
             if (caught instanceof ToolExecutionError) {
                 expect(caught.error.message).not.toContain(secret);
-                expect(caught.error.message).toContain('[REDACTED]');
+                expect(caught.error.message).toContain('[REDACTED_CREDENTIAL]');
             }
         },
         SPAWN_TIMEOUT,

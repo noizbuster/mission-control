@@ -7,6 +7,7 @@ import {
     readCompatibilityJsonFile,
 } from '../../persistence/json-compatibility-file.js';
 import { OmoPersistenceError } from '../../persistence/paths.js';
+import { runWithoutSessionOwnerAuthority } from './run-session-owner-authority.js';
 
 const RUNS_DIR = 'runs';
 
@@ -62,7 +63,7 @@ export async function readCompatibleRunJsonRecord(root: string, runId: string): 
         if (run.id !== runId) {
             throw new RunStoreError(`Run ${runId} at ${filePath} has a mismatched id`, 'legacy_run_corrupt', filePath);
         }
-        return run;
+        return runWithoutSessionOwnerAuthority(run);
     } catch (error: unknown) {
         if (!(error instanceof ZodError)) throw error;
         const firstIssue = error.issues[0]?.message ?? 'unknown schema issue';

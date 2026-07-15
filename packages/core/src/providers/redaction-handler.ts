@@ -8,39 +8,70 @@ const PRIVATE_KEY_END_PATTERN = /-----END [A-Z0-9 ]*PRIVATE KEY-----/;
 
 type CredentialPattern = {
     readonly pattern: RegExp;
-    readonly replacement: string;
+    readonly replacement: (marker: string) => string;
 };
+
+const CREDENTIAL_MARKER_CANDIDATES = [REDACTED_CREDENTIAL, '[MASKED_CREDENTIAL]', '[HIDDEN_CREDENTIAL]', ''] as const;
 
 const DEFAULT_CREDENTIAL_PATTERNS: readonly CredentialPattern[] = [
     {
         pattern: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
-        replacement: REDACTED_CREDENTIAL,
+        replacement: (marker) => marker,
     },
-    { pattern: /\bgithub_pat_[A-Za-z0-9_]{10,}\b/g, replacement: REDACTED_CREDENTIAL },
-    { pattern: /\bghp_[A-Za-z0-9_]{10,}\b/g, replacement: REDACTED_CREDENTIAL },
-    { pattern: /\bAKIA[A-Z0-9]{16}\b/g, replacement: REDACTED_CREDENTIAL },
-    { pattern: /\b(Bearer)\s+[A-Za-z0-9._~+/=-]{10,}\b/gi, replacement: `$1 ${REDACTED_CREDENTIAL}` },
+    { pattern: /\bgithub_pat_[A-Za-z0-9_]{10,}\b/g, replacement: (marker) => marker },
+    { pattern: /\bghp_[A-Za-z0-9_]{10,}\b/g, replacement: (marker) => marker },
+    { pattern: /\bAKIA[A-Z0-9]{16}\b/g, replacement: (marker) => marker },
+    { pattern: /\b(Bearer)\s+[A-Za-z0-9._~+/=-]{10,}\b/gi, replacement: (marker) => `$1 ${marker}` },
     {
         pattern: /\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\b/g,
-        replacement: REDACTED_CREDENTIAL,
+        replacement: (marker) => marker,
     },
-    { pattern: /\bAIza[0-9A-Za-z_-]{10,}\b/g, replacement: REDACTED_CREDENTIAL },
-    { pattern: /\bsk-[A-Za-z0-9_-]{6,}\b/g, replacement: REDACTED_CREDENTIAL },
+    { pattern: /\bAIza[0-9A-Za-z_-]{10,}\b/g, replacement: (marker) => marker },
+    { pattern: /\bsk-[A-Za-z0-9_-]{6,}\b/g, replacement: (marker) => marker },
 ];
 
 export function redactCredentialText(text: string, secrets: readonly string[] = []): string {
+    return createCredentialTextRedactor(secrets)(text);
+}
+
+export function createCredentialTextRedactor(secrets: readonly string[] = []): (text: string) => string {
     const exactSecrets = [...new Set(secrets.filter((secret) => secret.length > 0))].sort(
         (left, right) => right.length - left.length,
     );
-    const exactRedacted = exactSecrets.reduce(
-        (current, secret) => current.split(secret).join(REDACTED_CREDENTIAL),
-        text,
-    );
+    const marker =
+        CREDENTIAL_MARKER_CANDIDATES.find((candidate) => exactSecrets.every((secret) => !candidate.includes(secret))) ??
+        '';
+    const redactExact = createExactSecretTextRedactor(exactSecrets, marker);
+    const redactSegment = (segment: string): string => {
+        const exactRedacted = redactExact(segment);
+        return DEFAULT_CREDENTIAL_PATTERNS.reduce(
+            (current, credentialPattern) =>
+                current.replace(credentialPattern.pattern, credentialPattern.replacement(marker)),
+            exactRedacted,
+        );
+    };
+    if (marker.length === 0) {
+        return redactSegment;
+    }
+    return (value) =>
+        value
+            .split(marker)
+            .map((segment) => redactSegment(segment))
+            .join(marker);
+}
 
-    return DEFAULT_CREDENTIAL_PATTERNS.reduce(
-        (current, credentialPattern) => current.replace(credentialPattern.pattern, credentialPattern.replacement),
-        exactRedacted,
+export function createExactSecretTextRedactor(
+    secrets: readonly string[],
+    replacement?: string,
+): (text: string) => string {
+    const exactSecrets = [...new Set(secrets.filter((secret) => secret.length > 0))].sort(
+        (left, right) => right.length - left.length,
     );
+    const marker =
+        replacement ??
+        CREDENTIAL_MARKER_CANDIDATES.find((candidate) => exactSecrets.every((secret) => !candidate.includes(secret))) ??
+        '';
+    return (text) => exactSecrets.reduce((current, secret) => current.split(secret).join(marker), text);
 }
 
 export type RedactedCredentialLine = {

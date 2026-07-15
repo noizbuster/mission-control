@@ -1,5 +1,6 @@
 import type { LocalLibsqlDb } from '../db/local-libsql-db.js';
 import { resolveMissionControlDataDir } from '../memory/data-dir.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
 import { openCanonicalRuntimeDb } from '../runtime/local-runtime-db.js';
 import { SessionControlHost } from '../runtime/session-control-host.js';
 import { type AgentJobRecoveryReport, SqlAgentJobMirror } from './agent-job-sql-mirror.js';
@@ -11,9 +12,11 @@ import type { TaskToolRuntimeServices } from './task-tool-runtime.js';
 export type SqlTaskRuntimeServicesOptions = {
     readonly maxConcurrency?: number;
     readonly recoverActiveJobs?: boolean;
+    readonly observabilityRedactor?: ObservabilityRedactor | Promise<ObservabilityRedactor>;
 };
 
 export type SqlTaskRuntimeServices = TaskToolRuntimeServices & {
+    readonly sessionControlHost: SessionControlHost;
     readonly mirror: SqlAgentJobMirror;
     readonly flush: () => Promise<void>;
     readonly recoverJobs: () => Promise<AgentJobRecoveryReport>;
@@ -40,6 +43,9 @@ export async function createSqlTaskRuntimeServices(
             runtime,
             dbIdentity: identity.dbIdentity,
             dataDir: canonicalDataDir,
+            ...(options.observabilityRedactor !== undefined
+                ? { observabilityRedactor: options.observabilityRedactor }
+                : {}),
         });
         const jobManager = new AsyncJobManager(options.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY, {
             mirror,

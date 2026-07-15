@@ -1,18 +1,12 @@
-import { MissionSchema, RunSchema } from '@mission-control/protocol';
-import { describe, expect, it, vi } from 'vitest';
+import { RunSchema } from '@mission-control/protocol';
+import { describe, expect, it } from 'vitest';
 import { openLocalLibsqlDb } from '../../db/local-libsql-db.js';
 import { openMissionControlDb } from '../../db/mission-control-db.js';
 import { localSessionDbPath, localSessionDbUrl } from '../../memory/local-session-store-paths.js';
 import { TursoPersistentStore } from '../../memory/turso-persistent-store.js';
-import { completeRun, failRun, materializeMission, startRun } from './mission-run-service.js';
-import { normalizeMissionRunStoreLocation } from './mission-run-store-location.js';
-import {
-    makeCategorizedWorkflowSpec,
-    makeTempRoot,
-    makeTestWorkflowSpec,
-    seedOmoRoot,
-} from './mission-run-test-support.js';
-import { createMission, listMissions, missionFilePath, readMission } from './mission-store.js';
+import { blockRun, cancelRun, completeRun, failRun, materializeMission, startRun } from './mission-run-service.js';
+import { makeTempRoot, makeTestWorkflowSpec, seedOmoRoot } from './mission-run-test-support.js';
+import { createMission, missionFilePath, readMission } from './mission-store.js';
 import {
     createRun,
     findMostRecentFailedRun,
@@ -22,114 +16,8 @@ import {
     runFilePath,
     updateRunStatus,
 } from './run-store.js';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
-
-const retiredDatabaseFilename = ['memory', 'db'].join('.');
-
-describe('materializeMission', () => {
-    it('creates a valid draft Mission from a WorkflowSpec', () => {
-        const spec = makeTestWorkflowSpec();
-
-        const mission = materializeMission(spec);
-
-        expect(mission.id).toHaveLength(36);
-        expect(mission.name).toBe('test-workflow');
-        expect(mission.description).toBe('A test workflow');
-        expect(mission.status).toBe('draft');
-        expect(mission.graph).toBeDefined();
-        expect(mission.graph?.id).toBe('test-graph');
-        expect(mission.workflowName).toBe('test-workflow');
-        expect(mission.createdAt).toBeDefined();
-        expect(mission.updatedAt).toBeDefined();
-        expect(mission.capabilities).toEqual({ allow: [], deny: [] });
-        expect(() => MissionSchema.parse(mission)).not.toThrow();
-    });
-
-    it('derives capabilities from categories and modeDeclarations from modes', () => {
-        const spec = makeCategorizedWorkflowSpec();
-
-        const mission = materializeMission(spec);
-
-        expect(mission.capabilities.allow).toContain('read');
-        expect(mission.capabilities.allow).toContain('edit');
-        expect(mission.modeDeclarations).toEqual([{ modeId: 'autopilot', active: true }]);
-    });
-
-    it('generates unique ids on repeated calls', () => {
-        const spec = makeTestWorkflowSpec();
-
-        const mission1 = materializeMission(spec);
-        const mission2 = materializeMission(spec);
-
-        expect(mission1.id).not.toBe(mission2.id);
-    });
-});
-
-describe('Mission/Run SQL location', () => {
-    it('treats a string as the project root and resolves only the SQL data dir', () => {
-        const tempRoot = makeTempRoot();
-        const dataDir = join(tempRoot, 'environment-data');
-        vi.stubEnv('MCTRL_DATA_DIR', dataDir);
-
-        const location = normalizeMissionRunStoreLocation(join(tempRoot, 'project'));
-
-        expect(location).toEqual({ omoRoot: join(tempRoot, 'project'), dataDir });
-    });
-
-    it('writes only to an explicit data dir when the project root is separate', async () => {
-        const tempRoot = makeTempRoot();
-        const omoRoot = join(tempRoot, 'workspace');
-        const dataDir = join(tempRoot, 'product-data');
-        const defaultDataDir = join(tempRoot, 'environment-data');
-        mkdirSync(omoRoot, { recursive: true });
-        seedOmoRoot(omoRoot);
-        vi.stubEnv('MCTRL_DATA_DIR', defaultDataDir);
-        const mission = materializeMission(makeTestWorkflowSpec());
-
-        await createMission({ omoRoot, dataDir }, mission);
-
-        expect(existsSync(localSessionDbPath(dataDir))).toBe(true);
-        expect(existsSync(localSessionDbPath(defaultDataDir))).toBe(false);
-        expect(existsSync(join(omoRoot, retiredDatabaseFilename))).toBe(false);
-        expect(existsSync(join(omoRoot, '.omo', retiredDatabaseFilename))).toBe(false);
-        expect(existsSync(localSessionDbPath(omoRoot))).toBe(false);
-    });
-
-    it('does not probe a pre-existing workspace SQL file', async () => {
-        const tempRoot = makeTempRoot();
-        const omoRoot = join(tempRoot, 'workspace');
-        const dataDir = join(tempRoot, 'product-data');
-        mkdirSync(omoRoot, { recursive: true });
-        seedOmoRoot(omoRoot);
-        const retiredDatabasePath = join(omoRoot, retiredDatabaseFilename);
-        const retiredMission = materializeMission(makeTestWorkflowSpec());
-        const retiredDb = await openLocalLibsqlDb({ url: pathToFileURL(retiredDatabasePath).href });
-        await retiredDb.client.execute({
-            sql:
-                'INSERT INTO missions (mission_id, status, workflow_name, created_at, updated_at, payload_json) ' +
-                'VALUES (?, ?, ?, ?, ?, ?)',
-            args: [
-                retiredMission.id,
-                retiredMission.status,
-                retiredMission.workflowName ?? null,
-                retiredMission.createdAt,
-                retiredMission.updatedAt,
-                JSON.stringify(retiredMission),
-            ],
-        });
-        await retiredDb.client.execute('PRAGMA wal_checkpoint(TRUNCATE)');
-        retiredDb.close();
-        const retiredDatabaseBytes = readFileSync(retiredDatabasePath);
-
-        const missions = await listMissions({ omoRoot, dataDir });
-
-        expect(missions).toEqual([]);
-        expect(existsSync(localSessionDbPath(dataDir))).toBe(true);
-        expect(readFileSync(retiredDatabasePath)).toEqual(retiredDatabaseBytes);
-    });
-});
 
 describe('mission-run lifecycle', () => {
     it('transitions pending -> running -> completed with cost and terminal reason', async () => {
@@ -137,7 +25,7 @@ describe('mission-run lifecycle', () => {
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
 
-        const runningRun = await startRun(root, mission.id, 'do the thing');
+        const runningRun = await startRun(root, mission.id, 'do the thing', { sessionId: 'session_lifecycle' });
 
         expect(runningRun.status).toBe('running');
         expect(runningRun.missionId).toBe(mission.id);
@@ -172,18 +60,43 @@ describe('mission-run lifecycle', () => {
         expect(failedRun.endedAt).toBeDefined();
     });
 
-    it('persists the initiating prompt on the Run so /retry can recover it', async () => {
+    it('redacts and bounds terminal reasons at the Run persistence boundary', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const mission = materializeMission(makeTestWorkflowSpec());
+        await createMission(root, mission);
+        const runningRun = await startRun(root, mission.id, 'try and fail safely');
+
+        const failedRun = await failRun(root, runningRun.id, `Bearer secret-token-value ${'x'.repeat(5000)}`);
+
+        expect(failedRun.terminalReason).not.toContain('secret-token-value');
+        expect(failedRun.terminalReason).toContain('[REDACTED_CREDENTIAL]');
+        expect(failedRun.terminalReason).toHaveLength(4096);
+    });
+
+    it('transitions running -> cancelled with terminal reason', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const mission = materializeMission(makeTestWorkflowSpec());
+        await createMission(root, mission);
+        const runningRun = await startRun(root, mission.id, 'start then cancel');
+
+        const cancelledRun = await cancelRun(root, runningRun.id, 'operator interrupted workflow');
+
+        expect(cancelledRun.status).toBe('cancelled');
+        expect(cancelledRun.terminalReason).toBe('operator interrupted workflow');
+        expect(cancelledRun.endedAt).toBeDefined();
+    });
+
+    it('persists the initiating prompt on the Run so retry can recover it', async () => {
         const root = seedOmoRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
 
         const runningRun = await startRun(root, mission.id, 'fix the @-autocomplete bug');
 
-        const reloaded = await readRun(root, runningRun.id);
-        expect(reloaded.prompt).toBe('fix the @-autocomplete bug');
+        expect((await readRun(root, runningRun.id)).prompt).toBe('fix the @-autocomplete bug');
     });
 
-    it('persists mission and run records in the shared local Mission Control DB across reopen', async () => {
+    it('persists records in the shared local Mission Control DB across reopen', async () => {
         const root = seedOmoRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
@@ -224,11 +137,13 @@ describe('mission-run lifecycle', () => {
         expect(runs[0]?.terminalReason).toBe('done after reopen');
     });
 
-    it('findMostRecentFailedRun returns the latest failed run by endedAt', async () => {
+    it('finds the most recent failed Run and ignores completed Runs', async () => {
         const root = seedOmoRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
-
+        expect(await findMostRecentFailedRun(root)).toBeUndefined();
+        const completed = await startRun(root, mission.id, 'completed attempt');
+        await completeRun(root, completed.id);
         const first = await startRun(root, mission.id, 'first attempt');
         await failRun(root, first.id, 'boom');
         const second = await startRun(root, mission.id, 'second attempt');
@@ -241,40 +156,34 @@ describe('mission-run lifecycle', () => {
         expect(latest?.prompt).toBe('second attempt');
     });
 
-    it('findMostRecentFailedRun ignores completed runs and returns undefined when none failed', async () => {
+    it('returns no recent failed Run when only completed Runs exist', async () => {
         const root = seedOmoRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
-
-        expect(await findMostRecentFailedRun(root)).toBeUndefined();
         const run = await startRun(root, mission.id, 'succeeds');
         await completeRun(root, run.id);
 
         expect(await findMostRecentFailedRun(root)).toBeUndefined();
     });
 
-    it('throws MissionRunTransitionError on invalid transition from pending to completed', async () => {
+    it('rejects an invalid pending -> completed transition', async () => {
         const root = seedOmoRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
-        const run = RunSchema.parse({
-            id: crypto.randomUUID(),
-            missionId: mission.id,
-            status: 'pending' as const,
-        });
-        await createRun(root, run);
+        const pending = RunSchema.parse({ id: crypto.randomUUID(), missionId: mission.id, status: 'pending' as const });
+        await createRun(root, pending);
 
-        await expect(updateRunStatus(root, run.id, 'completed')).rejects.toBeInstanceOf(MissionRunTransitionError);
+        await expect(updateRunStatus(root, pending.id, 'completed')).rejects.toBeInstanceOf(MissionRunTransitionError);
     });
 
-    it('throws MissionRunTransitionError when transitioning from a terminal state', async () => {
+    it('rejects transitions from a terminal state', async () => {
         const root = seedOmoRoot(makeTempRoot());
         const mission = materializeMission(makeTestWorkflowSpec());
         await createMission(root, mission);
-        const runningRun = await startRun(root, mission.id, 'complete then try to resume');
-        await completeRun(root, runningRun.id);
+        const running = await startRun(root, mission.id, 'complete then try to resume');
+        await completeRun(root, running.id);
 
-        await expect(updateRunStatus(root, runningRun.id, 'running')).rejects.toBeInstanceOf(MissionRunTransitionError);
+        await expect(updateRunStatus(root, running.id, 'running')).rejects.toBeInstanceOf(MissionRunTransitionError);
     });
 
     it('supports blocked -> running transition', async () => {
@@ -283,10 +192,63 @@ describe('mission-run lifecycle', () => {
         await createMission(root, mission);
         const runningRun = await startRun(root, mission.id, 'will block');
 
-        const blockedRun = await updateRunStatus(root, runningRun.id, 'blocked');
-        const resumedRun = await updateRunStatus(root, runningRun.id, 'running');
+        expect((await updateRunStatus(root, runningRun.id, 'blocked')).status).toBe('blocked');
+        expect((await updateRunStatus(root, runningRun.id, 'running')).status).toBe('running');
+    });
 
-        expect(blockedRun.status).toBe('blocked');
-        expect(resumedRun.status).toBe('running');
+    it('links an explicitly supplied session and leaves a Run unlinked otherwise', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const mission = materializeMission(makeTestWorkflowSpec());
+        await createMission(root, mission);
+
+        const linked = await startRun(root, mission.id, 'linked', { sessionId: 'session_actual' });
+        const unlinked = await startRun(root, mission.id, 'unlinked');
+
+        expect(linked.sessionId).toBe('session_actual');
+        expect(unlinked.sessionId).toBeUndefined();
+    });
+
+    it('blocks a running Run without terminal metadata', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const mission = materializeMission(makeTestWorkflowSpec());
+        await createMission(root, mission);
+        const running = await startRun(root, mission.id, 'await approval', { sessionId: 'session_blocked' });
+
+        await blockRun(root, running.id);
+        const blocked = await readRun(root, running.id);
+        expect(blocked.status).toBe('blocked');
+        expect(blocked.terminalReason).toBeUndefined();
+        expect(blocked.sessionId).toBe('session_blocked');
+    });
+
+    it('rejects a blocked transition that tries to replace the attached owner', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const mission = materializeMission(makeTestWorkflowSpec());
+        await createMission(root, mission);
+        const running = await startRun(root, mission.id, 'preserve owner', { sessionId: 'session_owner' });
+        await blockRun(root, running.id, { sessionId: 'session_owner', sessionRunId: 'owner_first' });
+        await updateRunStatus(root, running.id, 'running');
+
+        await expect(
+            blockRun(root, running.id, { sessionId: 'session_owner', sessionRunId: 'owner_second' }),
+        ).rejects.toMatchObject({ code: 'run_session_owner_mismatch' });
+        expect(await readRun(root, running.id)).toMatchObject({
+            status: 'running',
+            sessionRunId: 'owner_first',
+        });
+    });
+
+    it('does not retain an approval reason after a blocked Run resumes and completes', async () => {
+        const root = seedOmoRoot(makeTempRoot());
+        const mission = materializeMission(makeTestWorkflowSpec());
+        await createMission(root, mission);
+        const running = await startRun(root, mission.id, 'resume after approval');
+
+        await blockRun(root, running.id);
+        await updateRunStatus(root, running.id, 'running');
+        await completeRun(root, running.id);
+        const completed = await readRun(root, running.id);
+        expect(completed.status).toBe('completed');
+        expect(completed.terminalReason).toBeUndefined();
     });
 });

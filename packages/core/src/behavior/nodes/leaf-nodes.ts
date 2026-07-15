@@ -17,11 +17,7 @@ export function createLeafNodeRunners(): readonly (readonly [string, AbgNodeRunn
 
 async function* runConditionNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
     yield started(node, context);
-    if (readBooleanConfig(node, 'pass') === false) {
-        yield failure(node, context, { code: 'condition_failed' });
-        return;
-    }
-    yield success(node, context, { passed: true });
+    yield success(node, context, { passed: readBooleanConfig(node, 'pass') !== false });
 }
 
 async function* runActionNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {

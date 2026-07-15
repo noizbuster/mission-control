@@ -55,6 +55,8 @@ export {
     exportLegacySessionJsonl,
     importLegacySessionCompatibilityWindow,
     type LegacySessionExportResult,
+    type LegacySessionImportConflictCode,
+    LegacySessionImportConflictError,
     type LegacySessionImportResult,
     listLegacySessionImportLedger,
 } from './session-import.js';

@@ -1,17 +1,16 @@
 /**
  * Eval tool re-entry bridge (Task 21).
  *
- * Allows the eval sandbox to call host agent tools (read, grep, etc.) from inside
+ * Allows an eval runtime to call host agent tools (read, grep, etc.) from inside
  * the VM. The bridge sits between the worker's `tool-call` messages and the host
  * tool registry, enforcing the same recursion guard as the `task` subagent: no
  * `eval`, no `task`, no `mcp__*`. Only read-only tools are surfaced.
  *
- * Standalone in this iteration: Task 20's context manager does not yet drive
- * `tool-call`/`tool-reply` over the worker boundary, so the bridge is a pure
- * policy + dispatch module that Task 23 will wire into the eval execution path.
+ * The context manager drives `tool-call`/`tool-reply` over the worker and Python
+ * kernel boundaries while this module owns the re-entry policy and dispatch.
  */
 
-/** Read-only tools the sandbox may re-enter. Mirrors the read-class tool surface. */
+/** Read-only tools an eval runtime may re-enter. Mirrors the read-class tool surface. */
 const ALLOWED_READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
     'read',
     'ls',

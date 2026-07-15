@@ -73,6 +73,17 @@ describe('Run schema (Phase 7)', () => {
         expect(run.cost.cents).toBe(12);
     });
 
+    it('parses the exact session coordinator Run binding', () => {
+        const run = RunSchema.parse({
+            id: 'run-bound',
+            missionId: 'mission-1',
+            sessionId: 'session-1',
+            sessionRunId: 'owner-run-1',
+        });
+
+        expect(run.sessionRunId).toBe('owner-run-1');
+    });
+
     it('RUN_STATUSES covers the full lifecycle', () => {
         expect(RUN_STATUSES).toEqual(['pending', 'running', 'blocked', 'completed', 'failed', 'cancelled']);
     });

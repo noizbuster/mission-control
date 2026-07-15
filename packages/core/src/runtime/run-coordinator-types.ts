@@ -6,6 +6,7 @@ import type {
     ToolCall,
 } from '@mission-control/protocol';
 import type { ProjectContextMessageOptions } from '../context/project-context-messages.js';
+import type { ObservabilityRedactor } from '../providers/observability-redactor.js';
 import type { ProviderAdapter } from '../providers/provider-turn-types.js';
 import type { AdmitPromptInput, SessionAdmissionEventStore } from '../session-admission-types.js';
 import type { ToolInvocationSettlement, ToolRegistry } from '../tools/tool-registry.js';
@@ -75,6 +76,7 @@ export type SessionRunCoordinatorOptions = {
     readonly onToolCall?: RunCoordinatorToolCallObserver;
     readonly onToolSettlement?: RunCoordinatorToolSettlementObserver;
     readonly sessionControlHost?: SessionControlHost;
+    readonly observabilityRedactor?: ObservabilityRedactor;
     /**
      * Engine selector. Omit (default) to drive the flat provider tool loop. Inject a runner
      * (e.g. `createGraphTurnRunner`) to drive the ABG coding-agent graph instead. The flat path

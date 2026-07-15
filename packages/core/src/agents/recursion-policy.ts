@@ -1,10 +1,11 @@
 /**
- * Recursion-depth policy for child-agent delegation.
+ * Standalone recursion-depth compatibility utility.
  *
- * Determines whether an agent at a given `taskDepth` may still spawn children
- * (i.e. whether it still holds the `task` tool). Mirrors oh-my-pi's
- * `canSpawnAtDepth` gate (`task/types.ts:214`) with one extension: a hard cap
- * that bounds even unlimited configurations so recursion cannot run away.
+ * Models an abstract depth gate compatible with imported agent declarations.
+ * Production `task()` routing does not consult this utility: child sessions
+ * structurally omit `task` and `job` regardless of recursion metadata. Mirrors
+ * oh-my-pi's `canSpawnAtDepth` gate (`task/types.ts:214`) with one extension: a
+ * hard cap that bounds even unlimited standalone configurations.
  *
  * Semantics:
  *   - `maxRecursionDepth >= 0`: spawning is allowed while
@@ -17,9 +18,8 @@
  */
 
 /**
- * Default maximum recursion depth. A value of 2 means a root agent (depth 0)
- * may spawn a child (depth 1), and that child may spawn one more grandchild
- * (depth 2 is the boundary, blocked).
+ * Default depth for standalone compatibility calculations. A value of 2 means
+ * depth 0 and depth 1 pass while depth 2 is the blocked boundary.
  */
 export const DEFAULT_MAX_RECURSION_DEPTH = 2;
 
@@ -31,7 +31,7 @@ export const DEFAULT_MAX_RECURSION_DEPTH = 2;
 export const HARD_RECURSION_CAP = 10;
 
 /**
- * Whether an agent at `taskDepth` may still spawn children.
+ * Whether an abstract chain at `taskDepth` remains below its compatibility cap.
  *
  * - `maxRecursionDepth < 0` disables the user-configured cap; only
  *   {@linkcode HARD_RECURSION_CAP} applies.
@@ -49,9 +49,8 @@ export function canSpawnAtDepth(maxRecursionDepth: number, taskDepth: number): b
  * Stateless depth bookkeeper for a spawn chain.
  *
  * Wraps {@linkcode canSpawnAtDepth} with a fixed `maxDepth` so callers thread
- * only the current depth through spawn boundaries. `childDepth` computes the
- * depth a newly spawned child would live at, so a parent can decide whether to
- * spawn and propagate the correct depth in one step.
+ * only the current depth through standalone calculations. `childDepth`
+ * computes the next abstract depth.
  */
 export class RecursionTracker {
     private readonly maxDepth: number;
@@ -60,12 +59,12 @@ export class RecursionTracker {
         this.maxDepth = maxDepth;
     }
 
-    /** Whether an agent at `currentDepth` may spawn a child. */
+    /** Whether `currentDepth` remains below the configured compatibility cap. */
     canSpawn(currentDepth: number): boolean {
         return canSpawnAtDepth(this.maxDepth, currentDepth);
     }
 
-    /** The depth a child spawned by an agent at `parentDepth` would live at. */
+    /** The next depth after `parentDepth`. */
     childDepth(parentDepth: number): number {
         return parentDepth + 1;
     }

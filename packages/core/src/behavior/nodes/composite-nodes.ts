@@ -3,7 +3,6 @@ import { createAbgEmitSignal } from '../abg-emit.js';
 import type { AbgNodeRunContext, AbgNodeRunner } from '../node-registry.js';
 import {
     cancel,
-    cancelled,
     failure,
     findMatchedTransition,
     isFailureSignal,
@@ -17,9 +16,10 @@ import {
     uniqueStrings,
 } from './composite-node-utils.js';
 import { runParallelFanOut } from './parallel-fan-out.js';
+import { collectStaticParallelOutcomes } from './parallel-static.js';
+import { runAllApproveVerdict } from './parallel-verdict.js';
+import { createRaceNodeRunner } from './race-node.js';
 import { runSpeculativeNode } from './speculative-node.js';
-
-const parallelAnySuccessMode = `a${'ny'}-success`;
 
 export class AbgCompositeNodeError extends Error {
     constructor(message: string) {
@@ -33,7 +33,7 @@ export function createCompositeNodeRunners(): readonly (readonly [string, AbgNod
         ['sequence', runSequenceNode],
         ['selector', runSelectorNode],
         ['parallel', runParallelNode],
-        ['race', runRaceNode],
+        ['race', createRaceNodeRunner(runChild)],
         ['join', runJoinNode],
         ['watch', runWatchNode],
         ['statechart', runStatechartNode],
@@ -66,7 +66,7 @@ async function* runSelectorNode(node: AbgNodeSpec, context: AbgNodeRunContext): 
     for (const childId of orderedChildren(node)) {
         let selected = false;
         for await (const signal of runChild(childId, context)) {
-            if (signal.type === 'success') {
+            if (signal.type === 'success' && isValidSelectorResult(signal.result)) {
                 selected = true;
             }
             yield signal;
@@ -76,7 +76,7 @@ async function* runSelectorNode(node: AbgNodeSpec, context: AbgNodeRunContext): 
             return;
         }
     }
-    yield failure(node, context, { code: 'selector_no_child_matched' });
+    yield success(node, context, { selection: 'none', reason: 'no child matched' });
 }
 
 async function* runParallelNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
@@ -86,24 +86,21 @@ async function* runParallelNode(node: AbgNodeSpec, context: AbgNodeRunContext): 
         yield* runParallelFanOut(node, context, fanOutKey, runChild);
         return;
     }
+    const outcomes = await collectStaticParallelOutcomes(node, context, runChild);
     const completedChildren: string[] = [];
     const failedChildren: string[] = [];
-    for (const childId of node.children ?? []) {
-        let childFailed = false;
-        for await (const signal of runChild(childId, context)) {
-            if (signal.type === 'success') {
-                completedChildren.push(childId);
-            }
-            if (isFailureSignal(signal)) {
-                childFailed = true;
-            }
+    for (const outcome of outcomes) {
+        for (const signal of outcome.signals) {
             yield signal;
         }
-        if (childFailed) {
-            failedChildren.push(childId);
+        if (outcome.succeeded) {
+            completedChildren.push(outcome.childId);
+        }
+        if (outcome.failed) {
+            failedChildren.push(outcome.childId);
         }
     }
-    if (readStringConfig(node, 'completion') === parallelAnySuccessMode) {
+    if (readStringConfig(node, 'completion') === 'any-success') {
         if (completedChildren.length > 0) {
             yield success(node, context, { completedChildren, failedChildren });
             return;
@@ -127,23 +124,36 @@ async function* runParallelNode(node: AbgNodeSpec, context: AbgNodeRunContext): 
             payload: { key: completionKey, value: true },
         });
     }
-    yield success(node, context, { completedChildren });
-}
-
-async function* runRaceNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
-    yield started(node, context);
-    const [winnerId, ...loserIds] = node.children ?? [];
-    if (winnerId === undefined) {
-        yield failure(node, context, { code: 'race_requires_children' });
+    const verdict = runAllApproveVerdict(node, context);
+    if (verdict !== undefined) {
+        const verdictWrites = [
+            ...(verdict.verdictKey !== undefined ? [{ key: verdict.verdictKey, value: verdict.value }] : []),
+            ...(verdict.aggregateKey !== undefined ? [{ key: verdict.aggregateKey, value: verdict.values }] : []),
+        ];
+        if (context.blackboard !== undefined) {
+            for (const write of verdictWrites) {
+                context.blackboard.set(write.key, write.value);
+                yield createAbgEmitSignal({
+                    graphId: context.graphId,
+                    nodeId: node.id,
+                    source: 'parallel',
+                    eventType: 'blackboard.set',
+                    timestamp: context.now(),
+                    payload: write,
+                });
+            }
+        }
+        yield success(node, context, {
+            completedChildren,
+            verdict: verdict.value,
+            verdicts: verdict.values,
+            verdictStrategy: 'all-approve',
+            verdictSources: verdict.sources,
+            ...(verdict.aggregateKey !== undefined ? { aggregateKey: verdict.aggregateKey } : {}),
+        });
         return;
     }
-    for await (const signal of runChild(winnerId, context)) {
-        yield signal;
-    }
-    for (const loserId of loserIds) {
-        yield cancelled(loserId, context, 'race loser cancelled');
-    }
-    yield success(node, context, { winnerChild: winnerId });
+    yield success(node, context, { completedChildren });
 }
 
 async function* runJoinNode(node: AbgNodeSpec, context: AbgNodeRunContext): AsyncIterable<AbgSignal> {
@@ -195,4 +205,17 @@ async function* runChild(childId: string, context: AbgNodeRunContext): AsyncIter
         throw new AbgCompositeNodeError('ABG composite nodes require a node registry in context');
     }
     yield* registry.resolve(child.implementation ?? child.kind)(child, context);
+}
+
+function isValidSelectorResult(result: unknown): boolean {
+    if (typeof result !== 'object' || result === null) {
+        return true;
+    }
+    if ('passed' in result && result.passed === false) {
+        return false;
+    }
+    if ('valid' in result && result.valid === false) {
+        return false;
+    }
+    return true;
 }

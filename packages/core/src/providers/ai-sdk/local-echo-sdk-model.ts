@@ -28,6 +28,7 @@ import {
     type LanguageModelV3TextPart,
     UnsupportedFunctionalityError,
 } from '@ai-sdk/provider';
+import { localOutputForSystemContract } from '../local-output-contract.js';
 
 export type LocalEchoSdkModelOptions = {
     readonly provider?: string;
@@ -66,6 +67,10 @@ export function createLocalEchoSdkModel(options: LocalEchoSdkModelOptions = {}):
  * presence of a tool-result message marks a resumed multi-step turn).
  */
 function chunksForLocalEcho(prompt: readonly LanguageModelV3Message[]): readonly LanguageModelV3StreamPart[] {
+    const contractOutput = localOutputForSystemContract(lastSystemPromptText(prompt), lastUserPromptText(prompt));
+    if (contractOutput !== undefined) {
+        return [...textChunks(contractOutput), finishChunk('stop')];
+    }
     if (prompt.some((message) => message.role === 'tool')) {
         return finalizeChunks('local deterministic coding turn complete');
     }
@@ -98,6 +103,16 @@ function lastUserPromptText(prompt: readonly LanguageModelV3Message[]): string {
         const message = prompt[index];
         if (message !== undefined && message.role === 'user') {
             return contentToText(message.content);
+        }
+    }
+    return '';
+}
+
+function lastSystemPromptText(prompt: readonly LanguageModelV3Message[]): string {
+    for (let index = prompt.length - 1; index >= 0; index -= 1) {
+        const message = prompt[index];
+        if (message !== undefined && message.role === 'system') {
+            return message.content;
         }
     }
     return '';

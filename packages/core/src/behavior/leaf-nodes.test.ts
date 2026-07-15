@@ -21,6 +21,32 @@ const context = {
 } satisfies AbgNodeRunContext;
 
 describe('ABG leaf nodes', () => {
+    it('condition false is a successful routing result, not a failure', async () => {
+        const registry = createDefaultAbgNodeRegistry();
+
+        const signals = await collectSignals(
+            runAbgNode(
+                registry,
+                {
+                    id: 'condition-no-match',
+                    kind: 'condition',
+                    config: { pass: false },
+                },
+                context,
+            ),
+        );
+
+        expect(signals).toEqual([
+            { type: 'started', graphId: 'graph_leaf', nodeId: 'condition-no-match' },
+            {
+                type: 'success',
+                graphId: 'graph_leaf',
+                nodeId: 'condition-no-match',
+                result: { passed: false },
+            },
+        ]);
+    });
+
     it('llm node emits model metadata', async () => {
         const registry = createDefaultAbgNodeRegistry();
 

@@ -8,14 +8,15 @@
  * direct field mutation is intentionally not exposed.
  *
  * Transition map (Task 1.4 contract):
- *   pending → running
+ *   pending → { running | cancelled }
  *   running → { blocked | completed | failed | cancelled }
- *   blocked → running
+ *   blocked → { running | cancelled }
  *   terminal states (completed | failed | cancelled) have no outgoing edges.
  */
 
 import type { Client } from '@libsql/client';
 import { type Run, type RunCost, RunSchema, type RunStatus, type TaskRetryState } from '@mission-control/protocol';
+import type { ObservabilityRedactor } from '../../providers/observability-redactor.js';
 import { findMostRecentFailedRunRecord } from './failed-run-store.js';
 import { listRunsFromDb, mutateRunInDb, mutateRunWithClient, readRunFromDb, writeRunToDb } from './mission-run-db.js';
 import { type MissionRunStoreLocation, normalizeMissionRunStoreLocation } from './mission-run-store-location.js';
@@ -25,6 +26,8 @@ import {
     RunStoreError,
     readCompatibleRunJsonRecord,
 } from './run-json-compatibility.js';
+import { sanitizeRunForPersistence, sanitizeTerminalReason } from './run-persistence-sanitization.js';
+import { runWithoutSessionOwnerAuthority } from './run-session-owner-authority.js';
 import {
     ALLOWED_RUN_TRANSITIONS,
     assertRunTransition,
@@ -66,8 +69,9 @@ export function runFilePath(root: string, runId: string): string {
  */
 export async function createRun(location: MissionRunStoreLocation, run: Run): Promise<Run> {
     const normalized = normalizeMissionRunStoreLocation(location);
-    const validated = RunSchema.parse(run);
-    await writeRunToDb(normalized.dataDir, validated);
+    const validated = sanitizeRunForPersistence(runWithoutSessionOwnerAuthority(run), normalized.observabilityRedactor);
+    const created = await writeRunToDb(normalized.dataDir, validated, { conflict: 'ignore' });
+    if (!created) throw new RunStoreError(`Run ${validated.id} already exists`, 'run_exists');
     return validated;
 }
 
@@ -80,11 +84,22 @@ export async function readRun(location: MissionRunStoreLocation, runId: string):
     const normalized = normalizeMissionRunStoreLocation(location);
     const dbRun = await readRunFromDb(normalized.dataDir, runId);
     if (dbRun !== undefined) {
-        return dbRun;
+        return sanitizeRunForPersistence(dbRun, normalized.observabilityRedactor);
     }
-    const jsonRun = await readCompatibleRunJsonRecord(normalized.omoRoot, runId);
-    await writeRunToDb(normalized.dataDir, jsonRun);
-    return jsonRun;
+    const jsonRun = sanitizeRunForPersistence(
+        await readCompatibleRunJsonRecord(normalized.omoRoot, runId),
+        normalized.observabilityRedactor,
+    );
+    await writeRunToDb(normalized.dataDir, jsonRun, { conflict: 'ignore' });
+    const imported = await readRunFromDb(normalized.dataDir, runId);
+    if (imported === undefined) {
+        throw new RunStoreError(
+            `Run ${runId} could not be imported`,
+            'run_missing',
+            runFilePath(normalized.omoRoot, runId),
+        );
+    }
+    return sanitizeRunForPersistence(imported, normalized.observabilityRedactor);
 }
 
 /**
@@ -101,7 +116,7 @@ export async function updateRunStatus(
     options: { readonly now?: () => string } = {},
 ): Promise<Run> {
     const now = options.now?.() ?? new Date().toISOString();
-    return mutateStoredRun(location, runId, (existing) => transitionedRun(existing, status, patch, now));
+    return mutateStoredRun(location, runId, (existing) => transitionStoredRun(existing, status, patch, now));
 }
 
 export async function updateRunStatusWithClient(
@@ -109,10 +124,17 @@ export async function updateRunStatusWithClient(
     runId: string,
     status: RunStatus,
     patch: RunPatch = {},
-    options: { readonly now?: () => string } = {},
+    options: { readonly now?: () => string; readonly observabilityRedactor?: ObservabilityRedactor } = {},
 ): Promise<Run | undefined> {
     const now = options.now?.() ?? new Date().toISOString();
-    return mutateRunWithClient(client, runId, (existing) => transitionedRun(existing, status, patch, now), now);
+    const updated = await mutateRunWithClient(
+        client,
+        runId,
+        (existing) =>
+            sanitizeRunForPersistence(transitionStoredRun(existing, status, patch, now), options.observabilityRedactor),
+        now,
+    );
+    return updated === undefined ? undefined : sanitizeRunForPersistence(updated, options.observabilityRedactor);
 }
 
 /**
@@ -177,40 +199,60 @@ export async function recordTaskRetry(
     });
 }
 
-async function mutateStoredRun(
+export async function mutateStoredRun(
     location: MissionRunStoreLocation,
     runId: string,
     mutate: (run: Run) => Run,
 ): Promise<Run> {
     const normalized = normalizeMissionRunStoreLocation(location);
-    let updated = await mutateRunInDb(normalized.dataDir, runId, mutate);
-    if (updated !== undefined) return updated;
-    const jsonRun = await readCompatibleRunJsonRecord(normalized.omoRoot, runId);
-    await writeRunToDb(normalized.dataDir, jsonRun);
-    updated = await mutateRunInDb(normalized.dataDir, runId, mutate);
-    if (updated !== undefined) return updated;
+    const sanitizeMutation = (run: Run) => sanitizeRunForPersistence(mutate(run), normalized.observabilityRedactor);
+    let updated = await mutateRunInDb(normalized.dataDir, runId, sanitizeMutation);
+    if (updated !== undefined) return sanitizeRunForPersistence(updated, normalized.observabilityRedactor);
+    const jsonRun = sanitizeRunForPersistence(
+        await readCompatibleRunJsonRecord(normalized.omoRoot, runId),
+        normalized.observabilityRedactor,
+    );
+    await writeRunToDb(normalized.dataDir, jsonRun, { conflict: 'ignore' });
+    updated = await mutateRunInDb(normalized.dataDir, runId, sanitizeMutation);
+    if (updated !== undefined) return sanitizeRunForPersistence(updated, normalized.observabilityRedactor);
     throw new RunStoreError(`Run ${runId} could not be loaded`, 'run_missing', runFilePath(normalized.omoRoot, runId));
 }
 
 async function listAllRuns(location: MissionRunStoreLocation): Promise<readonly Run[]> {
     const normalized = normalizeMissionRunStoreLocation(location);
-    const runs = [...(await listRunsFromDb(normalized.dataDir))];
+    const runs = (await listRunsFromDb(normalized.dataDir)).map((run) =>
+        sanitizeRunForPersistence(run, normalized.observabilityRedactor),
+    );
     const seenIds = new Set(runs.map((run) => run.id));
-    for (const run of await listCompatibleRunJsonRecords(normalized.omoRoot, seenIds)) {
-        await writeRunToDb(normalized.dataDir, run);
-        runs.push(run);
-        seenIds.add(run.id);
+    for (const compatibleRun of await listCompatibleRunJsonRecords(normalized.omoRoot, seenIds)) {
+        const run = sanitizeRunForPersistence(compatibleRun, normalized.observabilityRedactor);
+        await writeRunToDb(normalized.dataDir, run, { conflict: 'ignore' });
+        const imported = await readRunFromDb(normalized.dataDir, run.id);
+        if (imported === undefined) {
+            throw new RunStoreError(
+                `Run ${run.id} could not be imported`,
+                'run_missing',
+                runFilePath(normalized.omoRoot, run.id),
+            );
+        }
+        const canonical = sanitizeRunForPersistence(imported, normalized.observabilityRedactor);
+        runs.push(canonical);
+        seenIds.add(canonical.id);
     }
     return runs;
 }
 
-function transitionedRun(existing: Run, status: RunStatus, patch: RunPatch, now: string): Run {
+export function transitionStoredRun(existing: Run, status: RunStatus, patch: RunPatch, now: string): Run {
     assertRunTransition(existing.status, status);
+    if (existing.status === status) return existing;
+    const { terminalReason: _terminalReason, ...base } = existing;
     return RunSchema.parse({
-        ...existing,
+        ...base,
         ...(patch.cost !== undefined ? { cost: patch.cost } : {}),
         ...(patch.model !== undefined ? { model: patch.model } : {}),
-        ...(patch.terminalReason !== undefined ? { terminalReason: patch.terminalReason } : {}),
+        ...(TERMINAL_RUN_STATUSES.has(status) && patch.terminalReason !== undefined
+            ? { terminalReason: sanitizeTerminalReason(patch.terminalReason) }
+            : {}),
         ...(patch.sessionId !== undefined ? { sessionId: patch.sessionId } : {}),
         ...(patch.graphId !== undefined ? { graphId: patch.graphId } : {}),
         ...(patch.attempt !== undefined ? { attempt: patch.attempt } : {}),

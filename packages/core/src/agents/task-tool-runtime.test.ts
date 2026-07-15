@@ -1,8 +1,10 @@
+// allow: SIZE_OK -- HEAD 437 -> current 484 pure LOC; one child-session authority and spawn state-machine regression matrix.
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import type { AgentDefinition } from '@mission-control/protocol';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { createObservabilityRedactor } from '../providers/observability-redactor.js';
 import type { ChildSpawnRequest } from '../tools/task/task-tool.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import type { ToolRegistration } from '../tools/tool-registry-types.js';
@@ -45,6 +47,7 @@ function makeParentAgent(overrides?: Partial<AgentDefinition>): AgentDefinition 
         description: 'Parent agent',
         systemPrompt: 'You are the parent.',
         source: 'bundled',
+        spawns: '*',
         ...overrides,
     };
 }
@@ -212,10 +215,11 @@ describe('ConcreteTaskToolRuntime', () => {
         it('delegates to spawnFn with the provided sessionId', async () => {
             const { runtime, captured } = buildRuntime();
 
-            const result = await runtime.resumeChildSession('sess-resume-1', makeRequest());
+            await runtime.runChildSession(makeRequest());
+            const result = await runtime.resumeChildSession('sess-test-1', makeRequest());
 
             expect(result.status).toBe('completed');
-            expect(captured.context?.sessionId).toBe('sess-resume-1');
+            expect(captured.context?.sessionId).toBe('sess-test-1');
         });
     });
 
@@ -457,6 +461,8 @@ describe('ConcreteTaskToolRuntime', () => {
         function buildDefaultSpawnRuntime(
             modelCallCount: { value: number },
             chunksFor: (call: number) => LanguageModelV3StreamPart[],
+            summaryLimit?: number,
+            knownCredential?: string,
         ): ConcreteTaskToolRuntime {
             const child = makeAgent({ systemPrompt: 'You are a deep coding agent. Explore, decide, act.' });
             const parent = makeParentAgent();
@@ -482,17 +488,26 @@ describe('ConcreteTaskToolRuntime', () => {
                 parentToolRegistry: parentRegistry,
                 parentAgent: parent,
                 resolveSdkModel: () => mockModel,
+                ...(summaryLimit !== undefined ? { summaryLimit } : {}),
+                ...(knownCredential !== undefined
+                    ? {
+                          hostCallbacks: {
+                              observabilityRedactor: createObservabilityRedactor({ secrets: [knownCredential] }),
+                          },
+                      }
+                    : {}),
             });
         }
 
-        it('resolves rather than rejecting when resolveSdkModel is provided', async () => {
+        it('returns failed salvage when resolveSdkModel is provided without a yield', async () => {
             const callCount = { value: 0 };
-            const runtime = buildDefaultSpawnRuntime(callCount, (call) => textOnlyChunks('child completed'));
+            const runtime = buildDefaultSpawnRuntime(callCount, () => textOnlyChunks('child completed'));
 
             const result = await runtime.runChildSession(makeRequest());
 
-            expect(result.status).toBe('completed');
+            expect(result.status).toBe('failed');
             expect(result.sessionId).toBe('sess-test-1');
+            expect(result.output).toMatch(/^\[degraded salvage\] /);
             expect(result.output).toContain('child completed');
         });
 
@@ -526,17 +541,62 @@ describe('ConcreteTaskToolRuntime', () => {
             await expect(runtime.runChildSession(makeRequest())).rejects.toThrow(/spawnFn not wired/);
         });
 
-        it('child system prompt contains the agent body text', async () => {
+        it('marks a child without yield as failed while salvaging the final assistant text', async () => {
             const callCount = { value: 0 };
-            const agentBody = 'You are a deep coding agent. Explore, decide, act.';
-            const runtime = buildDefaultSpawnRuntime(callCount, (call) => textOnlyChunks('done'));
+            const runtime = buildDefaultSpawnRuntime(callCount, () => textOnlyChunks('x'.repeat(200)), 64);
 
-            await runtime.runChildSession({
+            const result = await runtime.runChildSession({
                 ...makeRequest(),
                 prompt: 'explore the codebase',
             });
 
             expect(callCount.value).toBeGreaterThanOrEqual(1);
+            expect(result.status).toBe('failed');
+            expect(result.output).toMatch(/^\[degraded salvage\] /);
+            expect(result.output.length).toBeLessThanOrEqual(64);
+        });
+
+        it('redacts credentials from degraded child salvage output', async () => {
+            // Given
+            const knownCredential = ['known', 'degraded', 'child', 'credential'].join('_');
+            const callCount = { value: 0 };
+            const runtime = buildDefaultSpawnRuntime(
+                callCount,
+                () => textOnlyChunks(`keep-this-salvage ${knownCredential}`),
+                undefined,
+                knownCredential,
+            );
+
+            // When
+            const result = await runtime.runChildSession(makeRequest());
+
+            // Then
+            expect(result.status).toBe('failed');
+            expect(result.output).toContain('keep-this-salvage');
+            expect(result.output).toContain('[REDACTED_CREDENTIAL]');
+            expect(result.output).not.toContain(knownCredential);
+        });
+
+        it('redacts credentials from yielded child output', async () => {
+            // Given
+            const knownCredential = ['known', 'yielded', 'child', 'credential'].join('_');
+            const yieldedValue = `keep-this-yield ${knownCredential}`;
+            const callCount = { value: 0 };
+            const runtime = buildDefaultSpawnRuntime(
+                callCount,
+                (call) => (call === 1 ? yieldCallChunks(yieldedValue) : textOnlyChunks('acknowledged')),
+                undefined,
+                knownCredential,
+            );
+
+            // When
+            const result = await runtime.runChildSession(makeRequest());
+
+            // Then
+            expect(result.status).toBe('completed');
+            expect(result.output).toContain('keep-this-yield');
+            expect(result.output).toContain('[REDACTED_CREDENTIAL]');
+            expect(result.output).not.toContain(knownCredential);
         });
     });
 });

@@ -6,6 +6,12 @@ import type {
     AgentEvent,
 } from '@mission-control/protocol';
 import { AgentEventTypeSchema } from '@mission-control/protocol';
+import {
+    createObservabilityRedactor,
+    type ObservabilityRedactor,
+    redactAbgSignalForObservability,
+    redactAgentEventForObservability,
+} from '../providers/observability-redactor.js';
 
 export type AbgSignalProjectionInput = {
     readonly graphId: string;
@@ -18,6 +24,7 @@ export type AbgSignalProjectionInput = {
     readonly model?: AbgNodeModelOptions;
     readonly attempt?: number;
     readonly maxAttempts?: number;
+    readonly observabilityRedactor?: ObservabilityRedactor;
 };
 
 /**
@@ -32,6 +39,7 @@ export type AbgSignalProjectionInput = {
 const EMIT_TYPES_WITH_PERSISTED_PAYLOAD: ReadonlySet<string> = new Set([
     'llm.turn.completed',
     'llm.tool_call.proposed',
+    'tool.started',
     'tool.completed',
     'tool.failed',
     'llm.error',
@@ -47,27 +55,30 @@ const EMIT_TYPES_WITH_PERSISTED_PAYLOAD: ReadonlySet<string> = new Set([
 ]);
 
 export function projectAbgSignalToEvent(input: AbgSignalProjectionInput): AgentEvent {
-    return {
-        type: eventTypeForSignal(input.signal),
+    const observabilityRedactor = input.observabilityRedactor ?? createObservabilityRedactor();
+    const signal = redactAbgSignalForObservability(input.signal, observabilityRedactor);
+    const event: AgentEvent = {
+        type: eventTypeForSignal(signal),
         timestamp: input.timestamp,
         durability: 'durable',
         sessionId: input.sessionId,
-        message: messageForSignal(input.signal),
+        message: messageForSignal(signal),
         abg: {
             graphId: input.graphId,
-            nodeId: input.signal.nodeId,
+            nodeId: signal.nodeId,
             ...(input.nodeKind !== undefined ? { nodeKind: input.nodeKind } : {}),
-            signalType: input.signal.type,
+            signalType: signal.type,
             ...(input.causationId !== undefined ? { causationId: input.causationId } : {}),
             ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
             ...(input.model !== undefined ? { model: input.model } : {}),
             ...(input.attempt !== undefined ? { attempt: input.attempt } : {}),
             ...(input.maxAttempts !== undefined ? { maxAttempts: input.maxAttempts } : {}),
-            ...(emitMetadataForSignal(input.signal) ?? {}),
+            ...(emitMetadataForSignal(signal) ?? {}),
         },
-        ...(toolResultForEmit(input.signal) ?? {}),
+        ...(toolFieldsForEmit(signal) ?? {}),
         ...(modelProviderSelection(input.model) ?? {}),
     };
+    return redactAgentEventForObservability(event, observabilityRedactor);
 }
 
 /**
@@ -88,27 +99,17 @@ function emitMetadataForSignal(signal: AbgSignal): { readonly emit: AbgEmitMetad
     };
 }
 
-/**
- * Synthesize `event.toolResult` for a graph tool-lifecycle emit (tool.completed/tool.failed from
- * the LLMActor adapter) so the toolCallId travels as a first-class field — exactly like the flat
- * run loop's tool events, which set `toolResult`. The graph's adapter emits carry the toolCallId
- * only in `abg.emit.payload`; without this, downstream projections keyed on `event.toolResult`
- * (the JSON renderer's `toolState.toolCallId`, session-replay tool outcomes) never see it, so a
- * graph run's `session.stopped`/replay misses the toolCallId a flat run surfaces. Payload is
- * `unknown`; narrowed with `in`/`typeof` — no cast. Returns `undefined` for non-tool emits or
- * payloads without a string toolCallId.
- */
-function toolResultForEmit(signal: AbgSignal):
+function toolFieldsForEmit(signal: AbgSignal):
     | {
-          readonly toolResult: { readonly toolCallId: string; readonly status: 'completed' | 'failed' };
           readonly taskId: string;
+          readonly toolResult?: { readonly toolCallId: string; readonly status: 'completed' | 'failed' };
       }
     | undefined {
     if (signal.type !== 'emit') {
         return undefined;
     }
     const eventType = signal.event.type;
-    if (eventType !== 'tool.completed' && eventType !== 'tool.failed') {
+    if (eventType !== 'tool.started' && eventType !== 'tool.completed' && eventType !== 'tool.failed') {
         return undefined;
     }
     const payload = signal.event.payload;
@@ -119,9 +120,9 @@ function toolResultForEmit(signal: AbgSignal):
     if (typeof toolCallId !== 'string') {
         return undefined;
     }
-    // `taskId` mirrors the flat run loop's tool events (which set `taskId` to the toolCallId) so a
-    // graph run's `tool.completed`/`tool.failed` events are observable on the SAME field downstream
-    // (engine-agnostic assertions, session replay) — not only on `toolResult.toolCallId`.
+    if (eventType === 'tool.started') {
+        return { taskId: toolCallId };
+    }
     return {
         toolResult: { toolCallId, status: eventType === 'tool.completed' ? 'completed' : 'failed' },
         taskId: toolCallId,
